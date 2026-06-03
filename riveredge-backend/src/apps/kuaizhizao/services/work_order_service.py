@@ -1139,6 +1139,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         work_center_id: Optional[int] = None,
         assigned_worker_id: Optional[int] = None,
         keyword: Optional[str] = None,
+        sales_order_code: Optional[str] = None,
         planned_start_from: Optional[str] = None,
         planned_start_to: Optional[str] = None,
         planned_end_from: Optional[str] = None,
@@ -1163,7 +1164,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             status: 工单状态
             workshop_id: 车间ID
             work_center_id: 工作中心ID
-            keyword: 关键词搜索（工单编码、名称、产品名称）
+            keyword: 关键词搜索（工单编码、名称、产品、来源订单号等）
+            sales_order_code: 来源订单号（销售订单编码，模糊）
             planned_start_from/to: 计划开始日期范围
             planned_end_from/to: 计划结束日期范围
             order_by: 排序，如 code、-created_at
@@ -1211,10 +1213,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 query = query.filter(id__in=wo_id_set)
             else:
                 query = query.filter(id__in=[])  # 无匹配
+        if sales_order_code and str(sales_order_code).strip():
+            query = query.filter(sales_order_code__icontains=str(sales_order_code).strip())
         if keyword and str(keyword).strip():
             kw = keyword.strip()
             query = query.filter(
-                Q(code__icontains=kw) | Q(name__icontains=kw) | Q(product_name__icontains=kw) | Q(product_code__icontains=kw)
+                Q(code__icontains=kw)
+                | Q(name__icontains=kw)
+                | Q(product_name__icontains=kw)
+                | Q(product_code__icontains=kw)
+                | Q(sales_order_code__icontains=kw)
+                | Q(sales_order_name__icontains=kw)
             )
         if planned_start_from:
             try:

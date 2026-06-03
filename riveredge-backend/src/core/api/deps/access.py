@@ -12,7 +12,9 @@ from fastapi import Depends, HTTPException, Request, status
 from loguru import logger
 
 from core.api.deps.deps import get_current_tenant
+from core.config.permission_contract import validate_permission_code
 from core.services.authorization.access_control_service import AccessControlService
+from core.services.authorization.menu_resource_resolver import parse_permission_code
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 
@@ -145,10 +147,92 @@ def require_access(
     return dependency
 
 
+def require_permission_codes(
+    *permission_codes: str,
+    require_all: bool = False,
+    check_abac: bool = False,
+    require_tenant: bool = True,
+):
+    """
+    【推荐】显式权限码鉴权：只校验 manifest 已声明的完整权限码，不推断 URL。
+
+    - RBAC：required_permissions 与角色授予的 codes 精确匹配
+    - check_abac 默认 False，避免用泛化 resource/action 误拦应用内细粒度授权
+    """
+    codes = [c.strip() for c in permission_codes if (c or "").strip()]
+    for code in codes:
+        err = validate_permission_code(code)
+        if err:
+            raise ValueError(f"无效权限码：{err}")
+
+    async def dependency(
+        request: Request,
+        auth: AuthContext = Depends(get_auth_context),
+        tenant_id: Optional[int] = Depends(get_current_tenant),
+    ) -> AuthContext:
+        if require_tenant and tenant_id is None:
+            _make_error(
+                http_status=status.HTTP_400_BAD_REQUEST,
+                code="TENANT_CONTEXT_REQUIRED",
+                message="组织上下文未设置",
+                request_id=auth.request_id,
+                reason="missing_tenant",
+            )
+        if tenant_id is None:
+            _make_error(
+                http_status=status.HTTP_400_BAD_REQUEST,
+                code="TENANT_CONTEXT_REQUIRED",
+                message="请求缺少租户上下文",
+                request_id=auth.request_id,
+                reason="tenant_none",
+            )
+        parsed = parse_permission_code(codes[0]) if codes else None
+        resource = f"{parsed[0]}:{parsed[1]}" if parsed else ""
+        action = parsed[2] if parsed else ""
+        env = {
+            "method": request.method,
+            "path": request.url.path,
+            "client_ip": request.client.host if request.client else None,
+        }
+        decision = await AccessControlService.check_access(
+            user_id=auth.user_id,
+            tenant_id=tenant_id,
+            resource=resource,
+            action=action,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+            check_abac=check_abac,
+            require_all=require_all,
+            required_permissions=codes,
+            env=env,
+        )
+        if not decision.allowed:
+            _make_error(
+                http_status=status.HTTP_403_FORBIDDEN,
+                code="ACCESS_DENIED",
+                message="权限不足",
+                request_id=auth.request_id,
+                reason=decision.reason,
+                required=decision.required,
+            )
+        auth.tenant_id = tenant_id
+        return auth
+
+    return dependency
+
+
 def _resolve_action_by_request(method: str, path: str) -> str:
+    """
+    【遗留】根据 HTTP 方法与路径片段推断 action，仅服务于 require_module_access。
+
+    新路由禁止使用此推断表达业务语义；请改用 require_permission_codes 或在
+    require_module_access 上配置 collection_create_permissions 等显式列表。
+    """
     m = (method or "").upper()
     p = (path or "").lower()
     if m == "GET":
+        if "/print/" in p:
+            return "print"
         return "read"
     if m in {"PUT", "PATCH"}:
         return "update"
@@ -165,10 +249,19 @@ def _resolve_action_by_request(method: str, path: str) -> str:
         return "audit"
     if any(k in p for k in ["/submit"]):
         return "submit"
+    # 模具等单据「撤销审核」与通过/驳回同属审核权，勿映射为独立 revoke（manifest 常无 revoke 码）
+    if "/revoke-approval" in p:
+        return "audit"
     if any(k in p for k in ["/revoke", "/cancel", "/withdraw"]):
         return "revoke"
     if any(k in p for k in ["/execute", "/confirm", "/checkin", "/checkout"]):
         return "execute"
+    if "/mark-adjustment-complete" in p:
+        return "confirm_adjustment"
+    if "/recall" in p:
+        return "recall"
+    if "/dispatch" in p:
+        return "dispatch"
     return "create"
 
 
@@ -179,13 +272,15 @@ def require_module_access(
     check_abac: bool = True,
     require_tenant: bool = True,
     collection_create_permissions: list[str] | None = None,
+    route_permission_codes: list[str] | None = None,
 ):
     """
-    按模块统一鉴权：依据 HTTP 方法与路径推断 action，并校验
-    `{app_code}:{module_code}:{action}`。
+    按模块鉴权（标准 CRUD 列表页/REST）。
 
-    collection_create_permissions：集合 POST 创建时改为「满足其一」的权限码列表
-    （例如完修单 create 或来源维保单 complete）。
+    - 默认仍用 _resolve_action_by_request 推断 action（遗留，逐步淘汰）
+    - route_permission_codes：若提供，则完全改用显式权限码（推荐用于子路径 API）
+
+    collection_create_permissions：集合 POST 且推断为 create 时，满足其一即可。
     """
     resource = f"{(app_code or '').strip()}:{(module_code or '').strip()}".strip(":")
 
@@ -211,15 +306,30 @@ def require_module_access(
                 reason="tenant_none",
             )
 
-        action = _resolve_action_by_request(request.method, request.url.path)
-        if (
-            collection_create_permissions
-            and (request.method or "").upper() == "POST"
-            and action == "create"
-        ):
-            required = list(collection_create_permissions)
+        if route_permission_codes:
+            required = [c.strip() for c in route_permission_codes if (c or "").strip()]
+            for code in required:
+                err = validate_permission_code(code)
+                if err:
+                    _make_error(
+                        http_status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        code="INVALID_PERMISSION_CONFIG",
+                        message=err,
+                        request_id=auth.request_id,
+                        reason="invalid_route_permission_code",
+                    )
+            parsed = parse_permission_code(required[0]) if required else None
+            action = parsed[2] if parsed else ""
         else:
-            required = [AccessControlService.build_permission_code(resource, action)]
+            action = _resolve_action_by_request(request.method, request.url.path)
+            if (
+                collection_create_permissions
+                and (request.method or "").upper() == "POST"
+                and action == "create"
+            ):
+                required = list(collection_create_permissions)
+            else:
+                required = [AccessControlService.build_permission_code(resource, action)]
         env = {
             "method": request.method,
             "path": request.url.path,

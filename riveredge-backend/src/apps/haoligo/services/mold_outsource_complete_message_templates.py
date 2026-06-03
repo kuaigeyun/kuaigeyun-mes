@@ -27,12 +27,12 @@ HAOLIGO_MOLD_OUTSOURCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] =
         "name": "外协维保完修单待审核提醒",
         "code": HAOLIGO_MOLD_OUTSOURCE_COMPLETE_PENDING,
         "type": "internal",
-        "description": "外协维保完修单提交待审时通知外协单位绑定用户",
-        "subject": "【外协完修单·待处理】{sheet_no}",
+        "description": "外协单位提交维修完成（完修单）时通知申请人及来源维保单相关人员",
+        "subject": "【外协维修完成】{sheet_no}",
         "content": (
             "您好，\n\n"
-            "外协维保完修单 {sheet_no} 已提交，来源单号：{source_order_no}，外协单位：{outsourced_unit_name}，申请人：{applicant_name}。\n\n"
-            "请登录系统 → {detail_path} 查看并跟进。\n"
+            "外协单位已提交维修完成单 {sheet_no}，来源单号：{source_order_no}，外协单位：{outsourced_unit_name}，申请人：{applicant_name}。\n\n"
+            "请登录系统 → {detail_path} 查看完修单并审核。\n"
         ),
         "variables": {**OUTSOURCE_COMPLETE_COMMON_VARIABLES},
         "is_active": True,

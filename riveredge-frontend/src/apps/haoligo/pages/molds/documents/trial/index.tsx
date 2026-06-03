@@ -109,6 +109,7 @@ import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheet
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { hasPermission } from '../../../../../../utils/permission';
 import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { hasModulePermission } from '../../../../../../utils/permissionContract';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 
 const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
@@ -324,7 +325,7 @@ function canMarkAdjustmentComplete(record: MoldTrialSheetRow): boolean {
   const fh = (record.failure_handling || '').trim();
   const unqualified =
     isProductionTrialUnqualified(record) ||
-    (record.trial_result === '不合格' && !record.production_trial_result);
+    (record.trial_result === '不合格' && !(record.production_trial_result || '').trim());
   return (
     unqualified &&
     (fh === TRIAL_FAILURE_DISPATCHED || fh === TRIAL_FAILURE_REPAIR) &&
@@ -751,6 +752,18 @@ const MoldTrialSheetsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const canDispatchTrial = useMemo(
+    () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'dispatch'),
+    [currentUser],
+  );
+  const canRecallTrial = useMemo(
+    () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'recall'),
+    [currentUser],
+  );
+  const canConfirmAdjustmentTrial = useMemo(
+    () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'confirm_adjustment'),
+    [currentUser],
+  );
 
   const { data: businessConfigRes } = useQuery({
     queryKey: ['businessConfig'],
@@ -935,8 +948,12 @@ const MoldTrialSheetsPage: React.FC = () => {
 
   useEffect(() => {
     void getMoldTrialViewerContext()
-      .then((ctx) => setIsExternalPartner(Boolean(ctx.is_external_partner)))
-      .catch(() => setIsExternalPartner(false));
+      .then((ctx) => {
+        setIsExternalPartner(Boolean(ctx.is_external_partner));
+      })
+      .catch(() => {
+        setIsExternalPartner(false);
+      });
   }, []);
 
   const canCreateFromPo = useMemo(() => {
@@ -2354,6 +2371,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       render: (_, record) => {
         const approved = isMoldSheetApproved(record.sheet_status);
         const canUpdateTrial = hasPermission(currentUser, buildPermissionCode(HAOLIGO_TRIAL_RESOURCE, 'update'));
+        const canShowMarkAdjustment = canConfirmAdjustmentTrial && canMarkAdjustmentComplete(record);
         const auditHandlers = {
           onApprove: () => approveMoldTrialSheet(record.id),
           onReject: () => rejectMoldTrialSheet(record.id),
@@ -2363,37 +2381,41 @@ const MoldTrialSheetsPage: React.FC = () => {
           <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>,
-          <Button
-            key="edit"
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            disabled={approved}
-            onClick={() => void handleEdit(record)}
-          >
-            编辑
-          </Button>,
-          <Button
-            key="delete"
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={approved}
-            onClick={() => handleDeleteOne(record)}
-          >
-            删除
-          </Button>,
-          ...buildMoldSheetAuditActionElements({
-            canAudit: canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE),
-            sheetStatus: record.sheet_status,
-            handlers: auditHandlers,
-            messageApi,
-            reload: () => actionRef.current?.reload(),
-            revokeOnly: isTrialSheetHandlingClosed(record),
-          }),
         ];
-        if (canUpdateTrial && !isExternalPartner && canDispatchTrialSheet(record)) {
+        if (!isExternalPartner) {
+          actions.push(
+            <Button
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              disabled={approved}
+              onClick={() => void handleEdit(record)}
+            >
+              编辑
+            </Button>,
+            <Button
+              key="delete"
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              disabled={approved}
+              onClick={() => handleDeleteOne(record)}
+            >
+              删除
+            </Button>,
+            ...buildMoldSheetAuditActionElements({
+              canAudit: canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE),
+              sheetStatus: record.sheet_status,
+              handlers: auditHandlers,
+              messageApi,
+              reload: () => actionRef.current?.reload(),
+              revokeOnly: isTrialSheetHandlingClosed(record),
+            }),
+          );
+        }
+        if (canDispatchTrial && canDispatchTrialSheet(record)) {
           actions.push(
             <Button
               key="dispatch"
@@ -2406,7 +2428,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>,
           );
         }
-        if (canUpdateTrial && canMarkAdjustmentComplete(record)) {
+        if (canShowMarkAdjustment) {
           actions.push(
             <Button
               key="adjustment-done"
@@ -2417,8 +2439,9 @@ const MoldTrialSheetsPage: React.FC = () => {
               onClick={() => {
                 Modal.confirm({
                   title: '确认调整完成？',
-                  content:
-                    '表示维修/调整已完成（立即送修或已发出后），模具仍在外部仓；本公司到厂后由本公司人员确认收回。',
+                  content: isExternalPartner
+                    ? '确认维修/调整已完成；模具仍在外协仓，待本公司到厂后由本公司人员确认收回。'
+                    : '表示维修/调整已完成（立即送修或已发出后），模具仍在外部仓；本公司到厂后由本公司人员确认收回。',
                   okText: '确认',
                   cancelText: '取消',
                   onOk: () => handleMarkAdjustmentComplete(record),
@@ -2429,7 +2452,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>,
           );
         }
-        if (canUpdateTrial && !isExternalPartner && canConfirmRecallTrialSheet(record)) {
+        if (canRecallTrial && canConfirmRecallTrialSheet(record)) {
           actions.push(
             <Button
               key="recall"

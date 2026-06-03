@@ -15,6 +15,8 @@ class PermissionDefinition:
     source_type: str
     source_app: str | None = None
     source_path: str | None = None
+    """在 manifest.permissions 数组中的下标；角色矩阵按此排序（越小越靠前）。"""
+    manifest_index: int | None = None
 
 
 class PermissionRegistryService:
@@ -153,6 +155,19 @@ class PermissionRegistryService:
 
         return definitions
 
+    @classmethod
+    async def manifest_permission_order(cls, tenant_id: int) -> dict[str, int]:
+        """权限码 → manifest.permissions 数组下标（角色功能矩阵展示顺序唯一真源）。"""
+        definitions = await cls.collect_definitions(tenant_id=tenant_id)
+        order: dict[str, int] = {}
+        for code, spec in definitions.items():
+            if spec.manifest_index is None:
+                continue
+            norm = (code or "").strip().lower()
+            if norm:
+                order[norm] = spec.manifest_index
+        return order
+
     @staticmethod
     def _load_manifest_permissions(enabled_apps: set[str]) -> list[PermissionDefinition]:
         out: dict[str, PermissionDefinition] = {}
@@ -179,15 +194,19 @@ class PermissionRegistryService:
             if app_code not in normalized_enabled:
                 continue
 
-            for raw_code in data.get("permissions", []) or []:
+            for idx, raw_code in enumerate(data.get("permissions", []) or []):
                 code = PermissionRegistryService._clean_code(raw_code)
                 if not code:
+                    continue
+                prev = out.get(code)
+                if prev is not None and prev.manifest_index is not None:
                     continue
                 out[code] = PermissionDefinition(
                     code=code,
                     source_type="manifest",
                     source_app=app_code,
                     source_path=f"{app_code}/manifest.json:permissions",
+                    manifest_index=idx,
                 )
 
             menu_cfg = data.get("menu_config")

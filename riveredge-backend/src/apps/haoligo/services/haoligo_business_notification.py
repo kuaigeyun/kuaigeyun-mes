@@ -30,6 +30,7 @@ ACTION_CREATED = "created"
 ACTION_REMEDIATED = "remediated"
 ACTION_TRIAL_FAILURE_PENDING = "trial_failure_pending"
 ACTION_TRIAL_FAILURE_REPAIR = "trial_failure_repair"
+ACTION_TRIAL_ADJUSTMENT_COMPLETE = "trial_adjustment_complete"
 
 
 async def _scope_supplier_bound(tenant_id: int, context: Dict[str, Any]) -> List[int]:

@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from typing import List
+
+from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
+from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from apps.haoligo.services.notification_context import with_form_notify_user_ids
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.services.haoligo_business_notification import (
     ACTION_APPROVED,
     ACTION_REJECTED,
@@ -30,6 +36,18 @@ def _message_variables(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> dic
     }
 
 
+def _merge_notify_user_ids(*groups: List[int]) -> List[int]:
+    seen: set[int] = set()
+    out: List[int] = []
+    for group in groups:
+        for uid in group:
+            if uid < 1 or uid in seen:
+                continue
+            seen.add(uid)
+            out.append(uid)
+    return out
+
+
 def _notification_context(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> dict:
     ctx: dict = {
         "outsourced_unit_name": (row.outsourced_unit_name or "").strip(),
@@ -38,6 +56,35 @@ def _notification_context(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> 
     if row.applicant_user_id and int(row.applicant_user_id) > 0:
         ctx["creator_user_id"] = int(row.applicant_user_id)
     return ctx
+
+
+async def _outsource_complete_submitted_notification_context(
+    tenant_id: int,
+    row: HaoligoMoldOutsourceMaintenanceCompleteSheet,
+) -> dict:
+    """
+    外协提交维修完成：通知完修单申请人，及来源外协维保单当时的申请人/审核人（负责人）。
+    """
+    ctx = _notification_context(row)
+    notify_ids: List[int] = []
+    src_id = row.source_outsource_maintenance_sheet_id
+    if src_id:
+        src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(
+            id=int(src_id),
+        ).first()
+        if src:
+            if src.applicant_user_id and int(src.applicant_user_id) > 0:
+                applicant = int(src.applicant_user_id)
+                ctx["creator_user_id"] = applicant
+                notify_ids.append(applicant)
+            if src.audited_by_user_id and int(src.audited_by_user_id) > 0:
+                notify_ids.append(int(src.audited_by_user_id))
+    if row.applicant_user_id and int(row.applicant_user_id) > 0:
+        uid = int(row.applicant_user_id)
+        ctx.setdefault("creator_user_id", uid)
+        notify_ids.append(uid)
+    merged = _merge_notify_user_ids(normalize_report_user_ids(notify_ids))
+    return with_form_notify_user_ids(ctx, merged)
 
 
 async def send_outsource_complete_submitted_messages(
@@ -50,7 +97,7 @@ async def send_outsource_complete_submitted_messages(
         trigger_document=DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE,
         trigger_action=ACTION_SUBMITTED,
         variables=_message_variables(row),
-        context=_notification_context(row),
+        context=await _outsource_complete_submitted_notification_context(tenant_id, row),
     )
 
 

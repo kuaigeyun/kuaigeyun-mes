@@ -211,7 +211,7 @@ class PermissionSyncService:
                 spec = desired_definitions[code]
                 resource, action = cls._split_code(code)
                 permission_type = cls._infer_permission_type(code)
-                desired_name = cls._build_permission_name(resource, action, permission_type)
+                desired_name = cls._build_permission_name(code, resource, action, permission_type)
                 existing = existing_by_code.get(code)
                 if not existing:
                     create_rows.append(
@@ -759,26 +759,16 @@ class PermissionSyncService:
         return summary
 
     @staticmethod
-    def _build_permission_name(resource: str, action: str, permission_type: str) -> str:
-        action_text = {
-            "create": "创建",
-            "read": "查看",
-            "view": "查看",
-            "update": "编辑",
-            "delete": "删除",
-            "assign": "分配",
-            "approve": "审批",
-            "audit": "审核",
-            "submit": "提交",
-            "export": "导出",
-            "import": "导入",
-            "print": "打印",
-            "display": "展示",
-            "execute": "执行",
-            "complete": "完修",
-            "reject": "驳回",
-            "revoke": "撤销",
-        }.get(action.lower(), action)
+    def _build_permission_name(code: str, resource: str, action: str, permission_type: str) -> str:
+        from core.config.permission_contract import display_label_for_permission_code
+
+        if permission_type == "function":
+            short = display_label_for_permission_code(code)
+            if short:
+                return short
+        from core.config.permission_action_spec import action_display_label
+
+        action_text = action_display_label(action)
         type_text = {"function": "功能", "data": "数据", "field": "字段"}.get(permission_type, "权限")
         return f"{action_text}{resource}（{type_text}）"
 

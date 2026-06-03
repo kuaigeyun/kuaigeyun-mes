@@ -35,6 +35,8 @@ import {
 } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
+import { HAOLIGO_RESOURCE_EQUIPMENT_SPOT_CHECK } from '../../../../constants/documentPermissionResources';
+import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../../components/uni-table';
@@ -156,6 +158,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const reload = useCallback(() => actionRef.current?.reload(), []);
 
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const canPrintSpotCheck = canPrintHaoligoDocument(currentUser, HAOLIGO_RESOURCE_EQUIPMENT_SPOT_CHECK);
 
   const searchReportNotifyUsers = useCallback(
     async (keyword?: string) => {
@@ -429,18 +432,22 @@ const SpotCheckDocumentsPage: React.FC = () => {
           <Button key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>,
-          <Button
-            key="p"
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => {
-              setPrintRowId(row.id);
-              setPrintOpen(true);
-            }}
-          >
-            {t('app.haoligo.print.printButton')}
-          </Button>,
+          ...(canPrintSpotCheck
+            ? [
+                <Button
+                  key="p"
+                  type="link"
+                  size="small"
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    setPrintRowId(row.id);
+                    setPrintOpen(true);
+                  }}
+                >
+                  {t('app.haoligo.print.printButton')}
+                </Button>,
+              ]
+            : []),
           <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>,

@@ -53,7 +53,11 @@ const HaoligoDocumentPrintModal: React.FC<HaoligoDocumentPrintModalProps> = ({
     void (async () => {
       setLoading(true);
       try {
-        await loadHaoligoPrintTemplatePresets();
+        try {
+          await loadHaoligoPrintTemplatePresets();
+        } catch {
+          // 无任一连单据 print 权时跳过预设写入，仍可使用已有模板
+        }
         let data = await getPrintTemplateList({ is_active: true, document_type: documentType });
         const code = DOCUMENT_TYPE_TO_CODE[documentType];
         if (!data.length && code) {

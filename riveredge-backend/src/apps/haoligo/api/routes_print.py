@@ -5,15 +5,19 @@ from __future__ import annotations
 import base64
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+from apps.haoligo.api._print_access import (
+    assert_haoligo_document_print_access,
+    assert_haoligo_print_preset_loader,
+)
 from apps.haoligo.services.print_service import (
     DOCUMENT_TEMPLATE_CODES,
     HaoligoDocumentPrintService,
     SUPPORTED_DOCUMENT_TYPES,
 )
-from core.api.deps.access import require_module_access
+from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -21,7 +25,6 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/print",
     tags=["App · HaoliGO · 打印"],
-    dependencies=[Depends(require_module_access("haoligo", "workspace"))],
 )
 
 def _print_user_label(user: User) -> str:
@@ -35,8 +38,10 @@ def _print_user_label(user: User) -> str:
 async def print_haoligo_document(
     document_type: str,
     document_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
     template_code: Optional[str] = Query(None, description="打印模板 code"),
     template_uuid: Optional[str] = Query(None, description="打印模板 UUID"),
     output_format: str = Query("html", description="html 或 pdf"),
@@ -47,6 +52,13 @@ async def print_haoligo_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不支持的单据类型，可选：{', '.join(sorted(SUPPORTED_DOCUMENT_TYPES))}",
         )
+    await assert_haoligo_document_print_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        document_type=document_type,
+        document_id=document_id,
+    )
     svc = HaoligoDocumentPrintService()
     try:
         result = await svc.print_document(
@@ -86,14 +98,23 @@ async def print_haoligo_document(
 async def get_haoligo_print_variables(
     document_type: str,
     document_id: int,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
     if document_type not in SUPPORTED_DOCUMENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不支持的单据类型，可选：{', '.join(sorted(SUPPORTED_DOCUMENT_TYPES))}",
         )
+    await assert_haoligo_document_print_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        document_type=document_type,
+        document_id=document_id,
+    )
     svc = HaoligoDocumentPrintService()
     try:
         variables = await svc.get_document_variables_for_print(
@@ -116,9 +137,16 @@ async def get_haoligo_print_variables(
 
 @router.post("/load-presets", summary="加载好力 GO 维保完成单打印模板预设")
 async def load_haoligo_print_presets(
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
+    await assert_haoligo_print_preset_loader(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+    )
     from apps.haoligo.services.print_template_presets import load_haoligo_print_template_presets
 
     created = await load_haoligo_print_template_presets(tenant_id)

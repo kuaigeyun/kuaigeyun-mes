@@ -28,6 +28,8 @@ export function filterActionsByResourcePermission(
         return gates.canUpdate;
       case 'delete':
         return gates.canDelete;
+      case 'print':
+        return gates.canPrint;
       case 'common':
         if (isCreateLikeAction(text)) return gates.canCreate;
         return true;

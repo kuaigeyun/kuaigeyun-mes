@@ -64,6 +64,7 @@ import {
   HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
 } from '../../../../constants/documentPermissionResources';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import {
   canAuditMoldSheet,
@@ -235,6 +236,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const completeResource = HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE;
   const canUpdateComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'update'));
   const canDeleteComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'delete'));
+  const canPrintComplete = canPrintHaoligoDocument(currentUser, completeResource);
   const actionRef = useRef<ActionType>(null);
   const reloadTableAndMoldLedger = useCallback(() => {
     invalidateHaoligoMoldLedgerTableCache(queryClient);
@@ -872,18 +874,22 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
           </Button>,
-          <Button
-            key="print"
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => {
-              setPrintRowId(record.id);
-              setPrintOpen(true);
-            }}
-          >
-            打印报告
-          </Button>,
+          ...(canPrintComplete
+            ? [
+                <Button
+                  key="print"
+                  type="link"
+                  size="small"
+                  icon={<PrinterOutlined />}
+                  onClick={() => {
+                    setPrintRowId(record.id);
+                    setPrintOpen(true);
+                  }}
+                >
+                  打印报告
+                </Button>,
+              ]
+            : []),
           <Button
             key="edit"
             type="link"

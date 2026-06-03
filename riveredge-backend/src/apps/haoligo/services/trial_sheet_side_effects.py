@@ -431,14 +431,41 @@ async def _trial_failure_message_variables(
     }
 
 
+def _trial_applicant_user_id(row: HaoligoMoldTrialSheet) -> int | None:
+    """试模单申请人：以试模人员为准（开单时指定的试模执行人）。"""
+    if row.trial_user_id and int(row.trial_user_id) > 0:
+        return int(row.trial_user_id)
+    return None
+
+
+def _trial_document_notify_user_ids(row: HaoligoMoldTrialSheet) -> List[int]:
+    """单据开单时指定的消息提醒人员（待审 + 待处理，去重）。"""
+    return _merge_user_ids(
+        normalize_report_user_ids(getattr(row, "pending_notify_user_ids", None)),
+        normalize_report_user_ids(getattr(row, "submitted_notify_user_ids", None)),
+    )
+
+
 def _trial_notification_context(row: HaoligoMoldTrialSheet) -> dict:
     from apps.haoligo.services.notification_context import with_form_notify_user_ids
 
     ctx: dict = {"supplier_name": (row.supplier_name or "").strip()}
-    if row.trial_user_id and int(row.trial_user_id) > 0:
-        ctx["trial_user_id"] = int(row.trial_user_id)
-        ctx.setdefault("creator_user_id", int(row.trial_user_id))
+    applicant = _trial_applicant_user_id(row)
+    if applicant:
+        ctx["trial_user_id"] = applicant
+        ctx["creator_user_id"] = applicant
     return with_form_notify_user_ids(ctx, getattr(row, "pending_notify_user_ids", None))
+
+
+def _trial_adjustment_complete_notification_context(row: HaoligoMoldTrialSheet) -> dict:
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {"supplier_name": (row.supplier_name or "").strip()}
+    applicant = _trial_applicant_user_id(row)
+    if applicant:
+        ctx["trial_user_id"] = applicant
+        ctx["creator_user_id"] = applicant
+    return with_form_notify_user_ids(ctx, _trial_document_notify_user_ids(row))
 
 
 def _trial_submitted_notification_context(row: HaoligoMoldTrialSheet) -> dict:
@@ -499,6 +526,23 @@ async def send_trial_rejected_messages(tenant_id: int, row: HaoligoMoldTrialShee
         trigger_action=ACTION_REJECTED,
         variables=await _trial_failure_message_variables(row),
         context=_trial_notification_context(row),
+    )
+
+
+async def send_trial_adjustment_complete_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_TRIAL_ADJUSTMENT_COMPLETE,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_TRIAL_ADJUSTMENT_COMPLETE,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_adjustment_complete_notification_context(row),
     )
 
 
@@ -755,6 +799,7 @@ async def mark_trial_adjustment_complete(
         )
     row.failure_handling = TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE
     await row.save(update_fields=["failure_handling", "updated_at"])
+    await send_trial_adjustment_complete_messages(tenant_id, row)
 
 
 async def recall_trial_failure_sheet(

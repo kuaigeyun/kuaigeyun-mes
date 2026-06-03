@@ -19,11 +19,8 @@ from apps.haoligo.constants.mold_inhouse_maintenance_permissions import (
 )
 from core.api.deps.access import AuthContext, _resolve_action_by_request, get_auth_context
 from core.api.deps.deps import get_current_tenant
+from core.config.permission_contract import build_permission_code
 from core.services.authorization.access_control_service import AccessControlService
-
-
-def _haoligo_permission(module: str, action: str) -> str:
-    return AccessControlService.build_permission_code(f"haoligo:{module}", action)
 
 
 async def assert_haoligo_module_access(
@@ -34,11 +31,12 @@ async def assert_haoligo_module_access(
     module_codes: List[str],
     action: Optional[str] = None,
     required_permissions: Optional[List[str]] = None,
+    check_abac: bool = True,
 ) -> None:
     act = (action or _resolve_action_by_request(request.method, request.url.path)).strip().lower()
     perms = list(required_permissions or [])
     if not perms:
-        perms = [_haoligo_permission(m, act) for m in module_codes if m]
+        perms = [build_permission_code("haoligo", m, act) for m in module_codes if m]
     if not perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")
     env = {
@@ -53,7 +51,7 @@ async def assert_haoligo_module_access(
         action=act,
         is_infra_admin=auth.is_infra_admin,
         is_tenant_admin=auth.is_tenant_admin,
-        check_abac=True,
+        check_abac=check_abac,
         require_all=False,
         required_permissions=perms,
         env=env,
@@ -128,8 +126,8 @@ def require_inhouse_maintenance_sheet_list_access():
                     request=request,
                     module_codes=[],
                     required_permissions=[
-                        _haoligo_permission(mod, "read"),
-                        _haoligo_permission(mod, "complete"),
+                        build_permission_code("haoligo", mod, "read"),
+                        build_permission_code("haoligo", mod, "complete"),
                     ],
                 )
             else:

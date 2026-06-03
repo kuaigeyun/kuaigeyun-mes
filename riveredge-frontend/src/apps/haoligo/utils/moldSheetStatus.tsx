@@ -1,7 +1,7 @@
 import React from 'react';
 import { Tag } from 'antd';
 import type { CurrentUser } from '../../../types/api';
-import { hasAnyPermission, resolveUserForMenuPermission } from '../../../utils/permission';
+import { hasReviewPermission, reviewPermissionCodes } from '../../../utils/permissionContract';
 
 export function normalizeMoldSheetAuditStatus(status: string | null | undefined): string {
   const s = (status || '待审核').trim();
@@ -15,18 +15,15 @@ export function moldSheetAuditStatusTag(status: string | null | undefined): Reac
   return <Tag color={color}>{s}</Tag>;
 }
 
+/** @deprecated 使用 reviewPermissionCodes(resource) */
+export const moldSheetReviewPermissionCodes = reviewPermissionCodes;
+
 /**
  * 模具单据简易审核权限（非平台审批流）。
- * 组织管理员 bypass；业务上具备 update（可维护单据）或 audit/approve/reject 即可显示审核操作。
+ * 仅 audit / approve / reject；与「编辑」update 分离。
  */
 export function canAuditMoldSheet(user: CurrentUser | undefined, resource: string): boolean {
-  const resolved = resolveUserForMenuPermission(user);
-  return hasAnyPermission(resolved, [
-    `${resource}:audit`,
-    `${resource}:approve`,
-    `${resource}:reject`,
-    `${resource}:update`,
-  ]);
+  return hasReviewPermission(user, resource);
 }
 
 export function isMoldSheetApproved(status: string | null | undefined): boolean {

@@ -17,6 +17,8 @@ router = APIRouter(prefix="/config", tags=["App · HaoliGO · 配置"])
 class LoadNotificationRulePresetsOut(BaseModel):
     created: int = Field(description="本次新增规则数")
     updated: int = Field(description="本次合并预设收件范围的已有规则数")
+    repaired_templates: int = Field(default=0, description="本次为已有规则补绑消息模板的条数")
+    templates_created: int = Field(default=0, description="本次新建的消息模板预设条数")
     skipped_duplicate: int = Field(description="因已存在同单据+动作而跳过")
     skipped_missing_template: int = Field(description="因缺少消息模板而跳过")
     total_rules: int = Field(description="加载后规则总数")

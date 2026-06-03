@@ -472,6 +472,8 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       let lastRes: {
         created: number;
         updated?: number;
+        repaired_templates?: number;
+        templates_created?: number;
         total_rules: number;
         skipped_missing_template?: number;
       } | null = null;
@@ -484,23 +486,31 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
       notificationTableActionRef.current?.reload?.();
       const res = lastRes || { created: 0, updated: 0, total_rules: 0 };
       const updated = res.updated ?? 0;
-      if (res.created > 0 || updated > 0) {
+      const repairedTemplates = res.repaired_templates ?? 0;
+      const templatesCreated = res.templates_created ?? 0;
+      if (res.created > 0 || updated > 0 || repairedTemplates > 0 || templatesCreated > 0) {
         messageApi.success(
-          updated > 0 && res.created > 0
-            ? t('pages.system.configCenter.notification.preset.loadedAndUpdated', {
-                created: res.created,
-                updated,
+          repairedTemplates > 0 || templatesCreated > 0
+            ? t('pages.system.configCenter.notification.preset.repairedTemplates', {
+                templatesCreated,
+                repaired: repairedTemplates,
                 total: res.total_rules,
               })
-            : updated > 0
-              ? t('pages.system.configCenter.notification.preset.scopesUpdated', {
+            : updated > 0 && res.created > 0
+              ? t('pages.system.configCenter.notification.preset.loadedAndUpdated', {
+                  created: res.created,
                   updated,
                   total: res.total_rules,
                 })
-              : t('pages.system.configCenter.notification.preset.loaded', {
-                  created: res.created,
-                  total: res.total_rules,
-                }),
+              : updated > 0
+                ? t('pages.system.configCenter.notification.preset.scopesUpdated', {
+                    updated,
+                    total: res.total_rules,
+                  })
+                : t('pages.system.configCenter.notification.preset.loaded', {
+                    created: res.created,
+                    total: res.total_rules,
+                  }),
         );
       } else if ((res.skipped_missing_template ?? 0) > 0) {
         messageApi.warning(t('pages.system.configCenter.notification.preset.missingTemplate'));

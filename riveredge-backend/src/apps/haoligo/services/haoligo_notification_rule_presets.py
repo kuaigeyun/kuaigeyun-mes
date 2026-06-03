@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set, Tuple
+from uuid import UUID
 
 from loguru import logger
 
@@ -21,6 +22,7 @@ from apps.haoligo.constants.message_template_codes import (
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_APPROVED,
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_PENDING,
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REJECTED,
+    HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
     HAOLIGO_MOLD_TRIAL_APPROVED,
     HAOLIGO_MOLD_TRIAL_FAILURE_PENDING,
     HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
@@ -37,6 +39,7 @@ from apps.haoligo.services.haoligo_business_notification import (
     ACTION_REPORTED,
     ACTION_SUBMITTED,
     ACTION_TRIAL_FAILURE_PENDING,
+    ACTION_TRIAL_ADJUSTMENT_COMPLETE,
     ACTION_TRIAL_FAILURE_REPAIR,
     DOC_EQUIPMENT_ROUTE_PATROL,
     DOC_EQUIPMENT_SPOT_CHECK,
@@ -107,6 +110,14 @@ HAOLIGO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
         "recipient_scopes": ["trial_operator", "supplier_bound", "user_specified"],
     },
     {
+        "id": "haoligo_preset_trial_adjustment_complete",
+        "scene_name": "试模单·调整完成",
+        "trigger_document": DOC_MOLD_TRIAL,
+        "trigger_action": ACTION_TRIAL_ADJUSTMENT_COMPLETE,
+        "template_code": HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
+        "recipient_scopes": ["creator", "user_specified"],
+    },
+    {
         "id": "haoligo_preset_spot_check_reported",
         "scene_name": "设备点检·上报",
         "trigger_document": DOC_EQUIPMENT_SPOT_CHECK,
@@ -164,11 +175,11 @@ HAOLIGO_NOTIFICATION_RULE_PRESETS: List[Dict[str, Any]] = [
     },
     {
         "id": "haoligo_preset_outsource_complete_submitted",
-        "scene_name": "外协完修单·提交待审",
+        "scene_name": "外协维修完成",
         "trigger_document": DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE,
         "trigger_action": ACTION_SUBMITTED,
         "template_code": HAOLIGO_MOLD_OUTSOURCE_COMPLETE_PENDING,
-        "recipient_scopes": ["supplier_bound"],
+        "recipient_scopes": ["creator", "user_specified"],
     },
     {
         "id": "haoligo_preset_outsource_complete_approved",
@@ -279,12 +290,29 @@ async def _template_uuid_by_code(tenant_id: int, code: str) -> Optional[str]:
     return str(row.uuid)
 
 
+async def _rule_template_ref_invalid(tenant_id: int, rule: dict) -> bool:
+    """规则引用的模板 UUID 为空或指向已删除/不存在的模板。"""
+    ref = str(rule.get("template_uuid") or rule.get("template") or "").strip()
+    if not ref:
+        return True
+    try:
+        template_uuid = UUID(ref)
+    except ValueError:
+        return True
+    return not await MessageTemplate.filter(
+        tenant_id=tenant_id,
+        uuid=str(template_uuid),
+        deleted_at__isnull=True,
+    ).exists()
+
+
 async def load_haoligo_notification_rule_presets(tenant_id: int) -> Dict[str, int]:
     """
     补齐好力 GO 消息提醒规则到 parameters.notifications.rules。
-    已存在相同「单据类型 + 触发动作」的规则时：仅合并预设里缺失的 recipient_scopes，不覆盖模板与其它字段。
+    已存在相同「单据类型 + 触发动作」的规则时：合并预设里缺失的 recipient_scopes；
+    若消息模板缺失则按预设 template_code 补绑（需先写入消息模板表）。
     """
-    await load_haoligo_message_template_presets(tenant_id)
+    templates_created = await load_haoligo_message_template_presets(tenant_id)
 
     cfg = await BusinessConfigService().get_business_config(tenant_id)
     existing = _normalize_rules((cfg.get("parameters") or {}).get("notifications"))
@@ -293,6 +321,7 @@ async def load_haoligo_notification_rule_presets(tenant_id: int) -> Dict[str, in
     preset_index = _preset_by_document_action()
 
     updated = 0
+    repaired_templates = 0
     for rule in existing:
         preset = preset_index.get(_rule_identity(rule))
         if not preset:
@@ -304,6 +333,17 @@ async def load_haoligo_notification_rule_presets(tenant_id: int) -> Dict[str, in
         if changed:
             rule["recipient_scopes"] = merged_scopes
             updated += 1
+        preset_scene = str(preset.get("scene_name") or "").strip()
+        if preset_scene and str(rule.get("scene_name") or "").strip() != preset_scene:
+            rule["scene_name"] = preset_scene
+            updated += 1
+        template_code = str(preset.get("template_code") or "").strip()
+        if template_code and await _rule_template_ref_invalid(tenant_id, rule):
+            template_uuid = await _template_uuid_by_code(tenant_id, template_code)
+            if template_uuid:
+                rule["template_uuid"] = template_uuid
+                rule["template"] = template_uuid
+                repaired_templates += 1
 
     created = 0
     skipped_missing_template = 0
@@ -351,7 +391,7 @@ async def load_haoligo_notification_rule_presets(tenant_id: int) -> Dict[str, in
             existing_ids.add(preset_id)
         created += 1
 
-    if created > 0 or updated > 0:
+    if created > 0 or updated > 0 or repaired_templates > 0:
         await BusinessConfigService().batch_update_process_parameters(
             tenant_id,
             {"notifications": {"rules": existing}},
@@ -360,6 +400,8 @@ async def load_haoligo_notification_rule_presets(tenant_id: int) -> Dict[str, in
     return {
         "created": created,
         "updated": updated,
+        "repaired_templates": repaired_templates,
+        "templates_created": templates_created,
         "skipped_duplicate": skipped_duplicate,
         "skipped_missing_template": skipped_missing_template,
         "total_rules": len(existing),

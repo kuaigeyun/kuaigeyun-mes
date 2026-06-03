@@ -56,6 +56,7 @@ import {
   inhouseSheetResourceForServiceType,
   type InhouseMaintenanceServiceType,
 } from '../../../../constants/documentPermissionResources';
+import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { hasPermission } from '../../../../../../utils/permission';
 import { buildPermissionCode } from '../../../../../../utils/permissionResource';
 
@@ -212,6 +213,7 @@ export function MoldMaintenanceCompleteSheetPage({
   const currentUser = useGlobalStore((s) => s.currentUser);
   const canUpdateComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'update'));
   const canDeleteComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'delete'));
+  const canPrintComplete = canPrintHaoligoDocument(currentUser, completeResource);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const {
@@ -907,17 +909,19 @@ export function MoldMaintenanceCompleteSheetPage({
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => {
-              setPrintRowId(record.id);
-              setPrintOpen(true);
-            }}
-          >
-            打印报告
-          </Button>
+          {canPrintComplete ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => {
+                setPrintRowId(record.id);
+                setPrintOpen(true);
+              }}
+            >
+              打印报告
+            </Button>
+          ) : null}
           <Button
             type="link"
             size="small"

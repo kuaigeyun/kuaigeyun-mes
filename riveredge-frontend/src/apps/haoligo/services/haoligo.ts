@@ -1668,7 +1668,9 @@ export function revokeMoldTrialSheetApproval(rowId: number): Promise<MoldTrialSh
   return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/revoke-approval`, { method: 'POST' });
 }
 
-export function getMoldTrialViewerContext(): Promise<{ is_external_partner: boolean }> {
+export function getMoldTrialViewerContext(): Promise<{
+  is_external_partner: boolean;
+}> {
   return apiRequest(`${PREFIX}/molds/trial-sheets/viewer-context`);
 }
 

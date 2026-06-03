@@ -8,6 +8,7 @@ from apps.haoligo.constants.message_template_codes import (
     HAOLIGO_MOLD_TRIAL_APPROVED,
     HAOLIGO_MOLD_TRIAL_FAILURE_PENDING,
     HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
+    HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
     HAOLIGO_MOLD_TRIAL_REJECTED,
     HAOLIGO_MOLD_TRIAL_SUBMITTED,
 )
@@ -120,6 +121,26 @@ HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
         "is_active": True,
     },
     {
+        "name": "试模单调整完成通知",
+        "code": HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
+        "type": "internal",
+        "description": "外协厂商或本公司确认调整完成时，通知申请人（试模人员）及开单时指定的消息提醒人员",
+        "subject": "【试模单·调整完成】{sheet_no}",
+        "content": (
+            "您好，\n\n"
+            "试模单 {sheet_no} 外协已确认维修/调整完成，模具仍在外部仓，待本公司到厂后确认收回。\n\n"
+            "采购订单号：{purchase_order_no}\n"
+            "模具代号：{mold_code}\n"
+            "模具名称：{mold_name}\n"
+            "供应商：{supplier_name}\n"
+            "试模人员：{trial_user_name}\n"
+            "处理方式：{failure_handling}\n\n"
+            "请登录系统 → {detail_path} 查看试模单明细。"
+        ),
+        "variables": {**TRIAL_FAILURE_COMMON_VARIABLES},
+        "is_active": True,
+    },
+    {
         "name": "试模不合格立即送修通知",
         "code": HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
         "type": "internal",
@@ -146,5 +167,6 @@ async def ensure_haoligo_trial_message_templates(tenant_id: int) -> None:
             HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR,
             HAOLIGO_MOLD_TRIAL_APPROVED,
             HAOLIGO_MOLD_TRIAL_REJECTED,
+            HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
         },
     )

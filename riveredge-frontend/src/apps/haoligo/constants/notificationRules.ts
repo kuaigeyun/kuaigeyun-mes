@@ -42,7 +42,7 @@ export const HAOLIGO_NOTIFICATION_DOCUMENT_OPTIONS = [
 
     labelKey: 'app.haoligo.settings.notifications.document.outsource_maintenance_complete',
 
-    fallback: '外协维保完修单',
+    fallback: '外协维修完成单',
 
   },
 
@@ -145,6 +145,16 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_failure_repair',
 
       fallback: '试模不合格·立即送修',
+
+    },
+
+    {
+
+      value: 'trial_adjustment_complete',
+
+      labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_adjustment_complete',
+
+      fallback: '调整完成',
 
     },
 
@@ -260,7 +270,7 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
 
       labelKey: 'app.haoligo.settings.notifications.action.outsource_complete.submitted',
 
-      fallback: '提交待审',
+      fallback: '外协维修完成',
 
     },
 

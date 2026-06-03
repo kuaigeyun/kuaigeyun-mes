@@ -627,6 +627,8 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 默认 false：保留拼音首字母与当前页数据组合的旧行为。
    */
   skipFuzzyPinyinClientFilter?: boolean
+  /** 模糊搜索框占位文案（传给 UniSearch） */
+  fuzzySearchPlaceholder?: string
   /**
    * 是否显示高级搜索按钮（默认：true）
    */
@@ -1112,6 +1114,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   rowKey = 'id',
   showFuzzySearch = true, // 默认显示模糊搜索
   skipFuzzyPinyinClientFilter = false,
+  fuzzySearchPlaceholder,
   showAdvancedSearch = true, // 默认显示高级搜索
   beforeSearchButtons,
   betweenFuzzyAndAdvancedButtons,
@@ -2794,6 +2797,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                 ) : null
               }
               showFuzzySearch={showFuzzySearch}
+              fuzzyPlaceholder={fuzzySearchPlaceholder}
               fuzzyValue={fuzzySearchKeyword}
               onFuzzyChange={handleFuzzySearch}
               onFuzzyPressEnter={(v) => handleFuzzySearch(v)}

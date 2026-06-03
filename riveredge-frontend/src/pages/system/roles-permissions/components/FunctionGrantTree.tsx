@@ -5,39 +5,12 @@ import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
 import { translateGrantMenuTitle } from './functionGrantTreeFilters';
 
-function simpleActionLabel(
-  action: FunctionGrantAction,
-  t: (key: string, opts?: { defaultValue?: string }) => string
-): string {
-  const raw = (action.action || '').toLowerCase().trim();
-  const map: Record<string, string> = {
-    create: t('permission.action.create', { defaultValue: '创建' }),
-    read: t('permission.action.read', { defaultValue: '查看' }),
-    view: t('permission.action.view', { defaultValue: '查看' }),
-    list: t('permission.action.list', { defaultValue: '查看' }),
-    query: t('permission.action.query', { defaultValue: '查看' }),
-    detail: t('permission.action.detail', { defaultValue: '查看' }),
-    update: t('permission.action.update', { defaultValue: '编辑' }),
-    edit: t('permission.action.edit', { defaultValue: '编辑' }),
-    delete: t('permission.action.delete', { defaultValue: '删除' }),
-    import: t('permission.action.import', { defaultValue: '导入' }),
-    export: t('permission.action.export', { defaultValue: '导出' }),
-    submit: t('permission.action.submit', { defaultValue: '提交' }),
-    approve: t('permission.action.approve', { defaultValue: '审核' }),
-    audit: t('permission.action.audit', { defaultValue: '审核' }),
-    reject: t('permission.action.reject', { defaultValue: '审核' }),
-    revoke: t('permission.action.revoke', { defaultValue: '撤销' }),
-    assign: t('permission.action.assign', { defaultValue: '分配' }),
-    execute: t('permission.action.execute', { defaultValue: '执行' }),
-    print: t('permission.action.print', { defaultValue: '打印' }),
-  };
-  if (map[raw]) return map[raw];
-
-  const tr = t(`permission.action.${raw}`, { defaultValue: '' });
-  if (tr && tr !== `permission.action.${raw}`) return tr;
-
-  // 默认动作文案，避免直接展示后端原始 label
-  return t('pages.system.roles.permissionLabel', { defaultValue: '权限' });
+/** 角色矩阵操作文案：仅用后端 grant API 的 label（真源 permission_action_spec + 权限同步） */
+function grantActionLabel(action: FunctionGrantAction): string {
+  const label = (action.label || '').trim();
+  if (label) return label;
+  const act = (action.action || '').trim();
+  return act || '—';
 }
 
 export function codesFromAction(action: FunctionGrantAction): string[] {
@@ -70,7 +43,7 @@ function actionMatchesSearch(
   if ((action.code || '').toLowerCase().includes(kw)) return true;
   if ((action.label || '').toLowerCase().includes(kw)) return true;
   if ((action.action || '').toLowerCase().includes(kw)) return true;
-  if (simpleActionLabel(action, t).toLowerCase().includes(kw)) return true;
+  if (grantActionLabel(action).toLowerCase().includes(kw)) return true;
   return (action.merged_codes || []).some((c) => c.toLowerCase().includes(kw));
 }
 
@@ -203,7 +176,7 @@ export const FunctionGrantTree: React.FC<Props> = ({
                       checked={checked}
                       onChange={(e) => onToggle(codesFromAction(item), e.target.checked)}
                     />
-                    <span style={{ whiteSpace: 'nowrap' }}>{simpleActionLabel(item, t)}</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item)}</span>
                   </label>
                 );
               })}

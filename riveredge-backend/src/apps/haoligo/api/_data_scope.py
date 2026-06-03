@@ -6,11 +6,14 @@ from fastapi import HTTPException, status
 from tortoise.expressions import Q
 
 from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
+from apps.haoligo.api._mold_sheet_audit import effective_sheet_status
 from apps.haoligo.constants.mold_trial_failure_handling import (
     TRIAL_FAILURE_HANDLING_ADJUSTMENT_DONE,
     TRIAL_FAILURE_HANDLING_DISPATCHED,
     TRIAL_FAILURE_HANDLING_REPAIR,
+    TRIAL_FAILURE_HANDLING_VENDOR_ADJUSTABLE,
 )
+from apps.haoligo.services.trial_sheet_side_effects import _effective_unqualified_result
 from core.services.authorization.data_scope_constants import DIMENSION_SUPPLIER
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
@@ -95,19 +98,47 @@ async def assert_trial_row_visible(row, *, tenant_id: int, user: User, resource:
         )
 
 
-async def assert_trial_internal_operator(tenant_id: int, user: User) -> None:
-    if await user_is_external_partner(tenant_id, user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="该操作仅限本公司人员",
-        )
-
-
 async def assert_trial_external_operator(tenant_id: int, user: User) -> None:
     if not await user_is_external_partner(tenant_id, user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="该操作仅限外协厂商账号",
+        )
+
+
+def trial_row_mark_adjustment_eligible(row) -> bool:
+    """单据业务状态是否允许「调整完成」。"""
+    if row is None:
+        return False
+    if _effective_unqualified_result(row) != "不合格":
+        return False
+    if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
+        return False
+    mode = (getattr(row, "failure_handling", None) or "").strip()
+    return mode in TRIAL_FAILURE_HANDLING_VENDOR_ADJUSTABLE
+
+
+async def assert_trial_mark_adjustment_operator(
+    tenant_id: int,
+    user: User,
+    row,
+    *,
+    resource: str = RESOURCE_TRIAL_SHEET,
+) -> None:
+    """确认调整完成：RBAC 由路由校验 confirm_adjustment；此处仅校验业务状态与数据范围。"""
+    if not trial_row_mark_adjustment_eligible(row):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="当前单据状态不可确认调整完成",
+        )
+    if await user_is_external_partner(tenant_id, user) and not trial_row_visible_to_external_partner(row):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "ACCESS_DENIED",
+                "message": "权限不足",
+                "details": {"reason": "trial_vendor_visibility_denied", "resource": resource},
+            },
         )
 
 

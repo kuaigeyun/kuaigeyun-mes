@@ -14,6 +14,7 @@ export type ResourcePermissionGates = {
   canDelete: boolean;
   canImport: boolean;
   canExport: boolean;
+  canPrint: boolean;
 };
 
 const ALL_ALLOWED: ResourcePermissionGates = {
@@ -24,6 +25,7 @@ const ALL_ALLOWED: ResourcePermissionGates = {
   canDelete: true,
   canImport: true,
   canExport: true,
+  canPrint: true,
 };
 
 export type ResourcePermissionOptions = {
@@ -60,6 +62,7 @@ export function useResourcePermissions(
       canDelete: check('delete'),
       canImport: check('import'),
       canExport: check('export'),
+      canPrint: check('print'),
     };
   }, [currentUser, resource, completeSource]);
 }

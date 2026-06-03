@@ -13,7 +13,7 @@ from apps.haoligo.api._data_scope import (
     RESOURCE_TRIAL_RECORD,
     RESOURCE_TRIAL_SHEET,
     apply_trial_sheet_scope,
-    assert_trial_internal_operator,
+    assert_trial_mark_adjustment_operator,
     assert_trial_row_visible,
     assert_trial_supplier_code_writable,
     user_is_external_partner,
@@ -48,6 +48,7 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     list_trial_repair_notify_preview,
     resolve_supplier_by_name,
     revert_trial_failure_side_effects_on_revoke,
+    send_trial_approved_messages,
     set_mold_ledger_status_ready,
     validate_failure_handling_payload,
 )
@@ -233,7 +234,7 @@ class MoldTrialRecallRetrialOut(BaseModel):
 
 
 class MoldTrialViewerContextOut(BaseModel):
-    is_external_partner: bool = Field(description="当前用户是否为外协厂商角色")
+    is_external_partner: bool = Field(description="当前用户是否为外协厂商角色（列表 UI 与数据范围，非操作权限替代）")
 
 
 class MoldTrialDatasetBindingOut(BaseModel):
@@ -905,10 +906,6 @@ async def approve_trial_sheet(
     else:
         row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
         if row:
-            from apps.haoligo.constants.mold_trial_workflow_phase import WORKFLOW_PHASE_CLOSED
-            from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
-            from apps.haoligo.services.trial_sheet_side_effects import send_trial_approved_messages
-
             if (
                 (row.sheet_status or "").strip() == SHEET_STATUS_APPROVED
                 and (getattr(row, "workflow_phase", None) or "").strip() == WORKFLOW_PHASE_CLOSED
@@ -963,7 +960,6 @@ async def dispatch_trial_sheet(
     if not row:
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
-    await assert_trial_internal_operator(tenant_id, user)
     await dispatch_trial_pending_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     return await _serialize(row)
@@ -983,6 +979,7 @@ async def mark_trial_sheet_adjustment_complete(
     if not row:
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
+    await assert_trial_mark_adjustment_operator(tenant_id, user, row, resource=RESOURCE_TRIAL_SHEET)
     await mark_trial_adjustment_complete(tenant_id, row)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     return await _serialize(row)
@@ -999,7 +996,6 @@ async def recall_trial_sheet(
     if not row:
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
-    await assert_trial_internal_operator(tenant_id, user)
     await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     return await _serialize(row)
@@ -1020,7 +1016,6 @@ async def recall_trial_sheet_and_retrial(
     if not row:
         await _not_found()
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
-    await assert_trial_internal_operator(tenant_id, user)
     await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     try:

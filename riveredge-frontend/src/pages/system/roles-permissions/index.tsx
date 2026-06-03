@@ -136,28 +136,11 @@ function permissionLeafDisplayLabel(
     return scopeSeg;
   }
 
+  const syncedName = (permission.name || '').trim();
+  if (syncedName) return syncedName;
+
   const actionSeg = parts[n - 1] || permission.action || '';
-  const actionKey = `permission.action.${String(actionSeg).toLowerCase()}`;
-  const tr = t(actionKey, { defaultValue: '' });
-  if (tr && tr !== actionKey) return tr;
-  const actionFallback: Record<string, string> = {
-    create: t('permission.action.create', { defaultValue: '新建' }),
-    read: t('permission.action.read', { defaultValue: '查看' }),
-    update: t('permission.action.update', { defaultValue: '编辑' }),
-    delete: t('permission.action.delete', { defaultValue: '删除' }),
-    import: t('permission.action.import', { defaultValue: '导入' }),
-    export: t('permission.action.export', { defaultValue: '导出' }),
-    submit: t('permission.action.submit', { defaultValue: '提交' }),
-    approve: t('permission.action.approve', { defaultValue: '审批通过' }),
-    reject: t('permission.action.reject', { defaultValue: '审批驳回' }),
-    revoke: t('permission.action.revoke', { defaultValue: '撤销' }),
-    audit: t('permission.action.audit', { defaultValue: '审核' }),
-    assign: t('permission.action.assign', { defaultValue: '派工/分配' }),
-    execute: t('permission.action.execute', { defaultValue: '执行' }),
-    complete: t('permission.action.complete', { defaultValue: '完修' }),
-    print: t('permission.action.print', { defaultValue: '打印' }),
-  };
-  return actionFallback[String(actionSeg).toLowerCase()] || actionSeg;
+  return actionSeg;
 }
 
 function fieldNameDisplayLabel(item: FieldPermissionPolicy): string {

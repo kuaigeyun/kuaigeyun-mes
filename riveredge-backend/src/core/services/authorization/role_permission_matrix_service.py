@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Set
 
 from core.config.permission_action_spec import canonical_action
+from core.config.permission_contract import display_label_for_permission_code
 from core.models.permission import Permission, PermissionType
 from core.models.role import Role
 from core.models.role_permission import RolePermission
@@ -31,7 +32,16 @@ from infra.exceptions.exceptions import AuthorizationError, NotFoundError, Valid
 from core.timezone_utils import now_utc
 
 
+_MANIFEST_ORDER_FALLBACK = 10_000_000
+
+
 class RolePermissionMatrixService:
+    @staticmethod
+    def _manifest_order_for_codes(codes: List[str], code_order: Dict[str, int]) -> int:
+        if not codes:
+            return _MANIFEST_ORDER_FALLBACK
+        return min(code_order.get(c, _MANIFEST_ORDER_FALLBACK) for c in codes)
+
     @staticmethod
     async def _load_function_permission_pool(tenant_id: int) -> List[Permission]:
         desired = await PermissionRegistryService.collect_definitions(tenant_id=tenant_id)
@@ -105,6 +115,7 @@ class RolePermissionMatrixService:
     def _build_action_schemas(
         matched: List[Permission],
         granted_codes: Set[str],
+        code_order: Dict[str, int],
     ) -> List[FunctionGrantActionSchema]:
         preferred: Dict[str, Permission] = {}
         for p in matched:
@@ -139,14 +150,14 @@ class RolePermissionMatrixService:
                 FunctionGrantActionSchema(
                     action="audit",
                     code=codes[0],
-                    label="审核",
+                    label=display_label_for_permission_code(codes[0]) or "审核",
                     uuid=perms[0].uuid,
                     granted=granted,
                     merged_codes=codes,
                 )
             )
 
-        for action_key, p in sorted(preferred.items(), key=lambda kv: kv[0]):
+        for action_key, p in preferred.items():
             norm = normalize_permission_code(p.code or "")
             if not norm or norm in merged_review_codes:
                 continue
@@ -154,11 +165,20 @@ class RolePermissionMatrixService:
                 FunctionGrantActionSchema(
                     action=action_key,
                     code=norm,
-                    label=(p.name or action_key),
+                    label=display_label_for_permission_code(norm) or action_key,
                     uuid=p.uuid,
                     granted=norm in granted_codes,
                 )
             )
+        actions_out.sort(
+            key=lambda a: (
+                RolePermissionMatrixService._manifest_order_for_codes(
+                    list(a.merged_codes or []) or ([a.code] if a.code else []),
+                    code_order,
+                ),
+                a.code or "",
+            ),
+        )
         return actions_out
 
     @staticmethod
@@ -168,6 +188,7 @@ class RolePermissionMatrixService:
         pool_by_code: Dict[str, Permission],
         granted_codes: Set[str],
         visible_granted: Set[str],
+        code_order: Dict[str, int],
     ) -> List[FunctionGrantMenuNodeSchema]:
         nodes: List[FunctionGrantMenuNodeSchema] = []
         for menu in sorted(menus, key=lambda m: m.sort_order or 0):
@@ -177,9 +198,12 @@ class RolePermissionMatrixService:
                 pool_by_code,
                 granted_codes,
                 visible_granted,
+                code_order,
             )
             matched = RolePermissionMatrixService._permissions_for_menu_node(menu, pool_by_code, pool)
-            actions = RolePermissionMatrixService._build_action_schemas(matched, granted_codes)
+            actions = RolePermissionMatrixService._build_action_schemas(
+                matched, granted_codes, code_order
+            )
             for a in actions:
                 if a.granted:
                     visible_granted.add(a.code)
@@ -231,8 +255,9 @@ class RolePermissionMatrixService:
             cache_key_suffix="",
         )
         visible_granted: Set[str] = set()
+        code_order = await PermissionRegistryService.manifest_permission_order(tenant_id)
         tree = RolePermissionMatrixService._build_menu_tree_nodes(
-            menus, pool, pool_by_code, granted_codes, visible_granted
+            menus, pool, pool_by_code, granted_codes, visible_granted, code_order
         )
 
         all_pool_codes = set(pool_by_code.keys())

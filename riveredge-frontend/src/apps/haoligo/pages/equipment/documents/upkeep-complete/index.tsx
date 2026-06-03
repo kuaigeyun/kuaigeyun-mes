@@ -20,7 +20,10 @@ import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tabs, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
+import { HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE } from '../../../../constants/documentPermissionResources';
+import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { useTranslation } from 'react-i18next';
+import { useGlobalStore } from '../../../../../../stores';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
@@ -109,6 +112,11 @@ function SourceUpkeepPickerTrigger({
 const EquipmentUpkeepCompletePage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canPrintUpkeepComplete = canPrintHaoligoDocument(
+    currentUser,
+    HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE,
+  );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const {
@@ -582,17 +590,19 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => {
-              setPrintRowId(record.id);
-              setPrintOpen(true);
-            }}
-          >
-            {t('app.haoligo.print.printButton')}
-          </Button>
+          {canPrintUpkeepComplete ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => {
+                setPrintRowId(record.id);
+                setPrintOpen(true);
+              }}
+            >
+              {t('app.haoligo.print.printButton')}
+            </Button>
+          ) : null}
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>

@@ -5131,10 +5131,11 @@ const WorkOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '销售订单',
+      title: '来源订单号',
       dataIndex: 'sales_order_code',
       hideInTable: true,
       hideInSearch: false,
+      fieldProps: { placeholder: '销售订单编号，如 XS202605280002' },
     },
     {
       title: '优先级',
@@ -5738,6 +5739,8 @@ const WorkOrdersPage: React.FC = () => {
           rowKey={getWorkOrderListRowKey}
           columns={columns}
           showAdvancedSearch={true}
+          skipFuzzyPinyinClientFilter
+          fuzzySearchPlaceholder="工单/产品/来源订单号"
           rowClassName={workOrderTableRowClassName}
           components={workOrderTableComponents}
           expandable={workOrderTableExpandable}
