@@ -15,12 +15,12 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography } from 'antd';
+import { Modal, Tabs, App, Table, Button, Form, Input, Select, Collapse, Row, Col, Alert, Tag, Space, Switch, Card, theme, Upload, Typography, Tooltip } from 'antd';
 import { useCustomFields } from '../../../hooks/useCustomFields';
 import { CustomFieldsFormSection } from '../../../components/custom-fields';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
-import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined, LinkOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { ProForm, ProFormInstance, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDigit, ProFormDependency, ProFormUploadButton, ProFormItem } from '@ant-design/pro-components';
 import {
   formatMaterialGroupLabel,
@@ -65,7 +65,6 @@ import {
   normalizeStagesInput,
   stagesFromLegacy,
 } from './InspectionStagesEditor';
-
 const { Panel } = Collapse;
 
 /** 物料附件：图片 + PDF + DWG（与上传校验、后端白名单一致） */
@@ -882,7 +881,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       }
       
       // 处理默认工艺路线：写入 defaults 供展示，并准备 process_route_id 供后端物料表保存
-      let processRouteIdForSubmit: number | undefined;
+      let processRouteIdForSubmit: number | null | undefined;
       const defaultProcessRouteUuid = formDefaults.defaultProcessRouteUuid;
       if (defaultProcessRouteUuid) {
         const route = processRoutes.find(pr => pr.uuid === defaultProcessRouteUuid);
@@ -891,7 +890,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           processedDefaults.defaultProcessRouteUuid = route.uuid;
           processRouteIdForSubmit = route.id;
         }
-        // 路线列表未加载时仍保留 UUID 在 defaults，后端会从 defaults 同步 process_route_id
+        // 路线列表未加载时仍保留 UUID in defaults，后端会从 defaults 同步 process_route_id
+      } else if (sourceType === 'Make') {
+        delete processedDefaults.defaultProcessRoute;
+        delete processedDefaults.defaultProcessRouteUuid;
+        processRouteIdForSubmit = null;
       }
       
       // 过滤空值
@@ -927,7 +930,15 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         main_code: omitMainCodeForRuleEngine ? undefined : trimmedMainCode || undefined,
         name: restValues.name,
         group_id: restValues.groupId,
-        process_route_id: sourceType === 'Make' ? (processRouteIdForSubmit ?? (material as any)?.process_route_id ?? (material as any)?.processRouteId ?? null) : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
+        process_route_id:
+          sourceType === 'Make'
+            ? defaultProcessRouteUuid
+              ? (processRouteIdForSubmit ??
+                (material as any)?.process_route_id ??
+                (material as any)?.processRouteId ??
+                null)
+              : null
+            : ((material as any)?.process_route_id ?? (material as any)?.processRouteId),
         specification: restValues.specification,
         base_unit: restValues.baseUnit, // 关键：转换为 base_unit
         units: restValues.units,
@@ -1239,6 +1250,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
                     operationsLoading={operationsLoading}
                     sourceTypeOptions={sourceTypeOptions}
                     suspendedModalReturnPath={suspendedModalReturnPath}
+                    materialUuid={isEdit && material ? material.uuid : undefined}
                   />
                   <BasicInfoTab 
                     part={2} 
@@ -2749,6 +2761,7 @@ interface MaterialSourceTabProps {
   operationsLoading: boolean;
   sourceTypeOptions: Array<{ label: string; value: string }>;
   suspendedModalReturnPath?: string;
+  materialUuid?: string;
 }
 
 const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
@@ -2762,6 +2775,7 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   operationsLoading,
   sourceTypeOptions,
   suspendedModalReturnPath,
+  materialUuid,
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -2871,28 +2885,37 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
                       <ProFormSelect
                         name="defaults.defaultProcessRouteUuid"
                         label={
-                          <Space>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                             <span>{t('app.master-data.source.defaultProcessRoute')}</span>
-                            <Button
-                              type="link"
-                              size="small"
-                              icon={<LinkOutlined />}
-                              onClick={handleGotoProcessRoutes}
-                              title={t('app.master-data.source.gotoRoutes')}
-                              style={{ padding: 0, height: 'auto' }}
+                            <Tooltip title={t('app.master-data.source.defaultProcessRouteMaterialHint')}>
+                              <QuestionCircleOutlined
+                                style={{ color: 'rgba(0,0,0,.45)', fontSize: 14, cursor: 'help' }}
+                              />
+                            </Tooltip>
+                            <Typography.Link
+                              style={{ fontSize: 12 }}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                const q = materialUuid
+                                  ? `?materialUuid=${encodeURIComponent(materialUuid)}`
+                                  : '';
+                                navigate(`/apps/master-data/process/product-process${q}`);
+                              }}
                             >
-                              {t('app.master-data.source.routes')}
-                            </Button>
-                          </Space>
+                              {t('app.master-data.menu.process.product-process')}
+                            </Typography.Link>
+                          </span>
                         }
                         placeholder={t('app.master-data.source.selectProcessRoute')}
-                        options={processRoutes.map(pr => ({ label: `${pr.code} - ${pr.name}`, value: pr.uuid }))}
+                        options={processRoutes.map((pr) => ({
+                          label: `${pr.code} - ${pr.name}`,
+                          value: pr.uuid,
+                        }))}
                         fieldProps={{
-                          loading: processRoutesLoading,
-                          showSearch: true,
-                          filterOption: (input: string, option: any) =>
-                            (option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
                           allowClear: true,
+                          showSearch: true,
+                          loading: processRoutesLoading,
+                          optionFilterProp: 'label',
                         }}
                       />
                     </Col>

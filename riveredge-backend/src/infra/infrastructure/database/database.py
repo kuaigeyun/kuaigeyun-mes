@@ -224,6 +224,7 @@ TORTOISE_ORM = {
                 "apps.master_data.models.factory",  # 工厂数据模型（车间、产线、工位）
                 "apps.master_data.models.warehouse",  # 仓库数据模型（仓库、库区、库位）
                 "apps.master_data.models.material",  # 物料数据模型（物料分组、物料、BOM）
+                "apps.master_data.models.material_product_process",  # 物料产品工艺（单表）
                 "apps.master_data.models.material_code_alias",  # 物料编码别名模型（主编码和部门编码映射）
                 "apps.master_data.models.material_code_mapping",  # 物料编码映射模型（外部编码映射到内部编码）
                 "apps.master_data.models.material_batch",  # 物料批号模型

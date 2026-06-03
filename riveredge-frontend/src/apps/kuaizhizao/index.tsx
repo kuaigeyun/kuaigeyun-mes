@@ -141,7 +141,6 @@ const ShiftRostersPage = lazy(() => import('./pages/performance/shift-rosters'))
 const PerformanceCenterDashboardPage = lazy(() => import('./pages/performance/dashboard'));
 const SkillsPage = lazy(() => import('./pages/performance/skills'));
 const EmployeeConfigsPage = lazy(() => import('./pages/performance/employee-configs'));
-const PieceRatesPage = lazy(() => import('./pages/performance/piece-rates'));
 const HourlyRatesPage = lazy(() => import('./pages/performance/hourly-rates'));
 const KpiDefinitionsPage = lazy(() => import('./pages/performance/kpi-definitions'));
 const SummariesPage = lazy(() => import('./pages/performance/summaries'));
@@ -338,7 +337,6 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="performance/shift-rosters" element={withPageSuspense(ShiftRostersPage)} />
       <Route path="performance/skills" element={withPageSuspense(SkillsPage)} />
       <Route path="performance/employee-configs" element={withPageSuspense(EmployeeConfigsPage)} />
-      <Route path="performance/piece-rates" element={withPageSuspense(PieceRatesPage)} />
       <Route path="performance/hourly-rates" element={withPageSuspense(HourlyRatesPage)} />
       <Route path="performance/kpi-definitions" element={withPageSuspense(KpiDefinitionsPage)} />
       <Route path="performance/summaries" element={withPageSuspense(SummariesPage)} />

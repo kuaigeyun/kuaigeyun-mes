@@ -3,9 +3,24 @@
  * 支持拖拽排序、添加工序、替换工序、删除工序
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Tag, Space, Modal, message, Select, Table, Empty, Typography, Switch, InputNumber } from 'antd';
+import {
+  Button,
+  Tag,
+  Space,
+  Modal,
+  message,
+  Select,
+  Table,
+  Empty,
+  Typography,
+  Switch,
+  InputNumber,
+  Input,
+  Checkbox,
+  Radio,
+} from 'antd';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
 import { PlusOutlined, HolderOutlined } from '@ant-design/icons';
@@ -14,6 +29,151 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities';
 import { operationApi } from '../services/process';
 import type { Operation } from '../types/process';
+
+const operationPickModalStyles = {
+  body: { paddingTop: 8, paddingBottom: 12 },
+};
+
+function filterOperationList(ops: Operation[], keyword: string): Operation[] {
+  const q = keyword.trim().toLowerCase();
+  if (!q) return ops;
+  return ops.filter((op) =>
+    `${op.code ?? ''} ${op.name ?? ''} ${op.description ?? ''}`.toLowerCase().includes(q),
+  );
+}
+
+type OperationPickPanelProps = {
+  operations: Operation[];
+  loading: boolean;
+  mode: 'multiple' | 'single';
+  multipleValue?: string[];
+  onMultipleChange?: (uuids: string[]) => void;
+  singleValue?: string;
+  onSingleChange?: (uuid: string | undefined) => void;
+  searchPlaceholder: string;
+};
+
+const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
+  operations,
+  loading,
+  mode,
+  multipleValue = [],
+  onMultipleChange,
+  singleValue,
+  onSingleChange,
+  searchPlaceholder,
+}) => {
+  const { t } = useTranslation();
+  const [keyword, setKeyword] = useState('');
+  const filtered = useMemo(() => filterOperationList(operations, keyword), [operations, keyword]);
+
+  const handleSelectAllFiltered = () => {
+    if (mode !== 'multiple' || !onMultipleChange) return;
+    const ids = filtered.map((o) => o.uuid);
+    const allOn = ids.length > 0 && ids.every((id) => multipleValue.includes(id));
+    if (allOn) {
+      onMultipleChange(multipleValue.filter((id) => !ids.includes(id)));
+    } else {
+      onMultipleChange([...new Set([...multipleValue, ...ids])]);
+    }
+  };
+
+  const listBorder = '1px solid var(--river-border-color, #f0f0f0)';
+
+  return (
+    <div>
+      <Input.Search
+        allowClear
+        placeholder={searchPlaceholder}
+        value={keyword}
+        onChange={(e) => setKeyword(e.target.value)}
+        style={{ marginBottom: 8 }}
+      />
+      {mode === 'multiple' ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('app.master-data.operationSequence.pickSelected', { count: multipleValue.length })}
+          </Typography.Text>
+          <Space size={0}>
+            <Button type="link" size="small" disabled={!filtered.length} onClick={handleSelectAllFiltered}>
+              {t('app.master-data.operationSequence.pickSelectAll')}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              disabled={!multipleValue.length}
+              onClick={() => onMultipleChange?.([])}
+            >
+              {t('app.master-data.operationSequence.pickClear')}
+            </Button>
+          </Space>
+        </div>
+      ) : null}
+      <div
+        style={{
+          maxHeight: 280,
+          overflow: 'auto',
+          border: listBorder,
+          borderRadius: 6,
+          padding: '8px 12px',
+        }}
+      >
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+            {t('app.master-data.operationSequence.loading')}
+          </div>
+        ) : filtered.length === 0 ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t('app.master-data.operationSequence.noAvailableOperations')}
+          />
+        ) : mode === 'multiple' ? (
+          <Checkbox.Group
+            value={multipleValue}
+            onChange={(v) => onMultipleChange?.(v as string[])}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              {filtered.map((op) => (
+                <Checkbox key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
+                  <span style={{ fontWeight: 500 }}>
+                    {op.code} - {op.name}
+                  </span>
+                  {op.description ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                      {op.description}
+                    </Typography.Text>
+                  ) : null}
+                </Checkbox>
+              ))}
+            </Space>
+          </Checkbox.Group>
+        ) : (
+          <Radio.Group
+            value={singleValue}
+            onChange={(e) => onSingleChange?.(e.target.value)}
+            style={{ width: '100%' }}
+          >
+            <Space direction="vertical" style={{ width: '100%' }} size={6}>
+              {filtered.map((op) => (
+                <Radio key={op.uuid} value={op.uuid} style={{ width: '100%', marginInlineStart: 0 }}>
+                  <span style={{ fontWeight: 500 }}>
+                    {op.code} - {op.name}
+                  </span>
+                  {op.description ? (
+                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block' }}>
+                      {op.description}
+                    </Typography.Text>
+                  ) : null}
+                </Radio>
+              ))}
+            </Space>
+          </Radio.Group>
+        )}
+      </div>
+    </div>
+  );
+};
 
 export interface OperationItem {
   uuid: string;
@@ -26,6 +186,10 @@ export interface OperationItem {
   /** 工序级超报（写入路线 JSON；none+0 可不提交键以继承路线默认） */
   overReportMode?: 'none' | 'fixed' | 'percent';
   overReportValue?: number;
+  /** 标准工时（小时/件），写入路线 operation_sequence */
+  standardTime?: number;
+  /** 准备时间（小时） */
+  setupTime?: number;
 }
 
 export interface OperationSequenceEditorProps {
@@ -33,12 +197,15 @@ export interface OperationSequenceEditorProps {
   onChange?: (operations: OperationItem[]) => void;
   /** 为 true 时显示「节点工序」列（与路线「允许工序跳转」联动） */
   showNodeOperationColumn?: boolean;
+  /** 产品工艺 Tab：显示标准工时、准备时间列 */
+  showTimeColumns?: boolean;
 }
 
 export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = ({
   value = [],
   onChange,
   showNodeOperationColumn = false,
+  showTimeColumns = false,
 }) => {
   const { t } = useTranslation();
   const [operations, setOperations] = useState<OperationItem[]>(value);
@@ -145,6 +312,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     onChange?.(newOperations);
   };
 
+  const patchTime = (uuid: string, patch: Partial<Pick<OperationItem, 'standardTime' | 'setupTime'>>) => {
+    const newOperations = operations.map((op) => (op.uuid === uuid ? { ...op, ...patch } : op));
+    setOperations(newOperations);
+    onChange?.(newOperations);
+  };
+
   const handleOpenReplaceModal = (uuid: string) => {
     setReplacingOperationUuid(uuid);
     setReplacementOperationUuid(undefined);
@@ -200,8 +373,9 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
     return allOperations.filter((op) => op.uuid === excludeUuid || !operations.some((a) => a.uuid === op.uuid));
   };
 
-  const tableColSpan = showNodeOperationColumn ? 5 : 4;
-  const actionTdIndex = showNodeOperationColumn ? 4 : 3;
+  const tableColSpan =
+    4 + (showNodeOperationColumn ? 1 : 0) + (showTimeColumns ? 2 : 0);
+  const actionTdIndex = tableColSpan - 1;
 
   const columns = [
     {
@@ -250,6 +424,42 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                 size="small"
                 checked={!!record.isNodeOperation}
                 onChange={(c) => toggleNodeOperation(record.uuid, c)}
+              />
+            ),
+          },
+        ]
+      : []),
+    ...(showTimeColumns
+      ? [
+          {
+            title: t('app.master-data.manufacturing.standardTime'),
+            key: 'standardTime',
+            width: 120,
+            render: (_: unknown, record: OperationItem) => (
+              <InputNumber
+                size="small"
+                min={0}
+                precision={2}
+                style={{ width: '100%' }}
+                placeholder="0"
+                value={record.standardTime}
+                onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
+              />
+            ),
+          },
+          {
+            title: t('app.master-data.manufacturing.setupTime'),
+            key: 'setupTime',
+            width: 120,
+            render: (_: unknown, record: OperationItem) => (
+              <InputNumber
+                size="small"
+                min={0}
+                precision={2}
+                style={{ width: '100%' }}
+                placeholder="0"
+                value={record.setupTime}
+                onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}
               />
             ),
           },
@@ -523,54 +733,84 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         </DragOverlay>
       </DndContext>
 
-      <Modal title={t('app.master-data.operationSequence.selectOperation')} open={addModalVisible} onOk={handleAddOperation} onCancel={() => { setAddModalVisible(false); setSelectedOperationUuids([]); }} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} cancelText={t('common.cancel')} okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}>
-        <Select
+      <Modal
+        title={t('app.master-data.operationSequence.selectOperation')}
+        open={addModalVisible}
+        centered
+        width={520}
+        destroyOnHidden
+        styles={operationPickModalStyles}
+        onOk={handleAddOperation}
+        onCancel={() => {
+          setAddModalVisible(false);
+          setSelectedOperationUuids([]);
+        }}
+        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: !selectedOperationUuids?.length || loading }}
+      >
+        <OperationPickPanel
+          key={addModalVisible ? 'add-open' : 'add-closed'}
           mode="multiple"
-          placeholder={t('app.master-data.operationSequence.selectOperationPlaceholder')}
-          options={availableOperations.map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid, title: op.description || `${op.code} - ${op.name}` }))}
-          value={selectedOperationUuids}
-          onChange={setSelectedOperationUuids}
-          style={{ width: '100%' }}
+          operations={availableOperations}
           loading={loading}
-          showSearch
-          allowClear
-          maxTagCount="responsive"
-          filterOption={(input: string, option: any) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={loading ? t('app.master-data.operationSequence.loading') : t('app.master-data.operationSequence.noAvailableOperations')}
+          multipleValue={selectedOperationUuids}
+          onMultipleChange={setSelectedOperationUuids}
+          searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
         />
         {availableOperations.length === 0 && !loading && (
-          <div style={{ marginTop: 16 }}>
-            <Typography.Text type="danger" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.createOperationFirst')}</Typography.Text>
-          </div>
+          <Typography.Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+            {t('app.master-data.operationSequence.createOperationFirst')}
+          </Typography.Text>
         )}
       </Modal>
 
-      <Modal title={t('app.master-data.operationSequence.replaceOperation')} open={replaceModalVisible} onOk={handleReplaceOperation} onCancel={() => { setReplaceModalVisible(false); setReplacingOperationUuid(null); setReplacementOperationUuid(undefined); }} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} cancelText={t('common.cancel')} okButtonProps={{ disabled: !replacementOperationUuid || loading }}>
-        <div style={{ marginBottom: 16 }}>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.currentOperation')}</Typography.Text>
+      <Modal
+        title={t('app.master-data.operationSequence.replaceOperation')}
+        open={replaceModalVisible}
+        centered
+        width={520}
+        destroyOnHidden
+        styles={operationPickModalStyles}
+        onOk={handleReplaceOperation}
+        onCancel={() => {
+          setReplaceModalVisible(false);
+          setReplacingOperationUuid(null);
+          setReplacementOperationUuid(undefined);
+        }}
+        okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ disabled: !replacementOperationUuid || loading }}
+      >
+        <div style={{ marginBottom: 12 }}>
+          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            {t('app.master-data.operationSequence.currentOperation')}
+          </Typography.Text>
           <div style={{ marginTop: 4 }}>
-            {replacingOperationUuid && (() => {
-              const currentOp = operations.find((op) => op.uuid === replacingOperationUuid);
-              return currentOp ? <Tag color="blue">{currentOp.code} - {currentOp.name}</Tag> : null;
-            })()}
+            {replacingOperationUuid &&
+              (() => {
+                const currentOp = operations.find((op) => op.uuid === replacingOperationUuid);
+                return currentOp ? (
+                  <Tag color="blue">
+                    {currentOp.code} - {currentOp.name}
+                  </Tag>
+                ) : null;
+              })()}
           </div>
         </div>
-        <Select
-          placeholder={t('app.master-data.operationSequence.selectReplacePlaceholder')}
-          options={getAvailableForReplace(replacingOperationUuid).map((op) => ({ label: `${op.code} - ${op.name}`, value: op.uuid, title: op.description || `${op.code} - ${op.name}` }))}
-          value={replacementOperationUuid}
-          onChange={setReplacementOperationUuid}
-          style={{ width: '100%' }}
+        <OperationPickPanel
+          key={replaceModalVisible ? 'replace-open' : 'replace-closed'}
+          mode="single"
+          operations={getAvailableForReplace(replacingOperationUuid)}
           loading={loading}
-          showSearch
-          allowClear
-          filterOption={(input: string, option: any) => (option?.label || '').toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={loading ? t('app.master-data.operationSequence.loading') : t('app.master-data.operationSequence.noAvailableOperations')}
+          singleValue={replacementOperationUuid}
+          onSingleChange={setReplacementOperationUuid}
+          searchPlaceholder={t('app.master-data.operationSequence.pickSearchPlaceholder')}
         />
         {getAvailableForReplace(replacingOperationUuid).length === 0 && !loading && (
-          <div style={{ marginTop: 16 }}>
-            <Typography.Text type="danger" style={{ fontSize: 12 }}>{t('app.master-data.operationSequence.createOperationFirst')}</Typography.Text>
-          </div>
+          <Typography.Text type="danger" style={{ fontSize: 12, display: 'block', marginTop: 12 }}>
+            {t('app.master-data.operationSequence.createOperationFirst')}
+          </Typography.Text>
         )}
       </Modal>
     </div>

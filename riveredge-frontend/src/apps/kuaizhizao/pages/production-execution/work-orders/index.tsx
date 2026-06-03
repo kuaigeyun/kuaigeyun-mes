@@ -143,6 +143,7 @@ import {
 import { listDemands, getDemand } from '../../../services/demand'
 import { listDemandComputations, getPushOptions, generateOrdersFromComputation } from '../../../services/demand-computation'
 import { operationApi, processRouteApi, unwrapProcessPagedList } from '../../../../master-data/services/process'
+import { productProcessApi } from '../../../../master-data/services/productProcess'
 import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain'
 import {
   workshopApi,
@@ -1149,6 +1150,7 @@ const WorkOrdersPage: React.FC = () => {
   const [resourceOptions, setResourceOptions] = useState<any[]>([])
   // 选中的工序列表（用于创建工单时）
   const [selectedOperations, setSelectedOperations] = useState<any[]>([])
+  const [createAddOperationId, setCreateAddOperationId] = useState<number | undefined>()
   // 当前选中产品的物料来源信息
   const [selectedMaterialSourceInfo, setSelectedMaterialSourceInfo] = useState<{
     sourceType?: string
@@ -1157,40 +1159,101 @@ const WorkOrdersPage: React.FC = () => {
     canCreateWorkOrder?: boolean
   } | null>(null)
 
-  /** 根据物料加载其绑定的工艺路线并填充工序 */
+  /** 按统一优先级加载生效工艺（产品工艺 API 已聚合路线与工序行） */
   const loadProcessRouteForMaterial = useCallback(async (materialUuid: string) => {
     try {
-      const route = await processRouteApi.getProcessRouteForMaterial(materialUuid)
-      if (!route) {
-        formRef.current?.setFieldsValue({ process_route_id: undefined })
+      const pp = await productProcessApi.get(materialUuid)
+      const routeId = pp.processRouteId
+      if (!routeId) {
+        formRef.current?.setFieldsValue({
+          process_route_id: undefined,
+          allow_operation_jump: false,
+          operations: undefined,
+        })
         setSelectedOperations([])
-        formRef.current?.setFieldsValue({ operations: undefined })
         return
       }
-      const routeDetail = await processRouteApi.get(route.uuid)
-      const routeJump =
-        (routeDetail as any)?.allow_operation_jump ?? (routeDetail as any)?.allowOperationJump ?? false
+
       formRef.current?.setFieldsValue({
-        process_route_id: route.id,
-        allow_operation_jump: routeJump,
+        process_route_id: routeId,
+        allow_operation_jump: pp.allowOperationJump ?? false,
       })
-      const operations = parseOperationSequence(routeDetail?.operation_sequence, operationList)
-      if (operations.length > 0) {
-        setSelectedOperations(operations)
+
+      const mapLinesToOperations = () =>
+        (pp.lines ?? [])
+          .map((ln, index) => {
+            const op =
+              operationList.find((o: any) => o.id === ln.operationId) ??
+              operationList.find((o: any) => (o.uuid ?? '') === ln.operationUuid)
+            if (!op) return null
+            return {
+              operation_id: op.id,
+              operation_code: ln.code ?? op.code,
+              operation_name: ln.name ?? op.name,
+              sequence: index + 1,
+              is_node_operation: Boolean(ln.isNodeOperation),
+              reporting_type:
+                ln.reportingType ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+              over_report_mode: ln.overReportMode ?? 'none',
+              over_report_value: ln.overReportValue ?? 0,
+            }
+          })
+          .filter(Boolean) as ReturnType<typeof parseOperationSequence>
+
+      const fromLines = mapLinesToOperations()
+      if (fromLines.length > 0) {
+        setSelectedOperations(fromLines)
         formRef.current?.setFieldsValue({
-          operations: operations.map((o: any) => o.operation_id),
+          operations: fromLines.map((o) => o.operation_id),
         })
-        messageApi.success(`已加载工艺路线及 ${operations.length} 个工序`)
-      } else {
-        setSelectedOperations([])
-        formRef.current?.setFieldsValue({ operations: undefined })
+        messageApi.success(`已加载产品工艺及 ${fromLines.length} 个工序`)
+        return
       }
+
+      setSelectedOperations([])
+      formRef.current?.setFieldsValue({ operations: undefined })
+      messageApi.info('已指派工艺路线，暂无工序行；请手工添加工序或到产品工艺页维护')
     } catch (e: any) {
-      console.warn('加载工艺路线失败:', e)
+      console.warn('加载产品工艺失败:', e)
       formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined })
       setSelectedOperations([])
     }
   }, [operationList, messageApi])
+
+  const handleAppendCreateOperation = useCallback(() => {
+    if (createAddOperationId == null) {
+      messageApi.warning('请先选择要添加的工序')
+      return
+    }
+    const operationDetail = operationList.find((op: any) => op.id === createAddOperationId)
+    if (!operationDetail) {
+      messageApi.error('工序不存在')
+      return
+    }
+    if (selectedOperations.some((o: any) => o.operation_id === createAddOperationId)) {
+      messageApi.warning('该工序已在清单中')
+      return
+    }
+    const nextSeq = selectedOperations.length + 1
+    const row = {
+      operation_id: operationDetail.id,
+      operation_code: operationDetail.code,
+      operation_name: operationDetail.name,
+      sequence: nextSeq,
+      is_node_operation: false,
+      reporting_type:
+        operationDetail.reportingType ?? (operationDetail as any).reporting_type ?? 'quantity',
+      over_report_mode: 'none',
+      over_report_value: 0,
+    }
+    const newOps = [...selectedOperations, row]
+    setSelectedOperations(newOps)
+    formRef.current?.setFieldsValue({
+      operations: newOps.map((o: any) => o.operation_id),
+    })
+    setCreateAddOperationId(undefined)
+    messageApi.success('已添加工序')
+  }, [createAddOperationId, operationList, selectedOperations, messageApi])
   // 只显示自制件
   const [onlyShowMake, setOnlyShowMake] = useState(false)
   // 从文档加载的产品列表（销售订单/销售预测/需求）
@@ -6607,6 +6670,26 @@ const WorkOrdersPage: React.FC = () => {
             paddingRight: 8,
           }}
         >
+          {!isEdit && (
+            <Space style={{ marginBottom: 12 }} wrap>
+              <Select
+                showSearch
+                allowClear
+                placeholder="选择工序添加到清单"
+                style={{ minWidth: 280 }}
+                value={createAddOperationId}
+                onChange={(v) => setCreateAddOperationId(v as number | undefined)}
+                optionFilterProp="label"
+                options={operationList.map((op: any) => ({
+                  label: `${op.code} - ${op.name}`,
+                  value: op.id,
+                }))}
+              />
+              <Button type="dashed" icon={<PlusOutlined />} onClick={handleAppendCreateOperation}>
+                添加工序
+              </Button>
+            </Space>
+          )}
           <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
             <Suspense
               fallback={

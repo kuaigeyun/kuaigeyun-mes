@@ -89,7 +89,11 @@ export interface Operation {
   default_operator_uuids?: string[];
   defaultOperatorNames?: string[];
   default_operator_names?: string[];
+  defaultOperatorIds?: number[];
+  default_operator_ids?: number[];
   defaultTeamIds?: number[];
+  default_team_ids?: number[];
+  default_workshop_ids?: number[];
   defaultWorkshopIds?: number[];
   defaultWorkCenterIds?: number[];
   defaultStationIds?: number[];

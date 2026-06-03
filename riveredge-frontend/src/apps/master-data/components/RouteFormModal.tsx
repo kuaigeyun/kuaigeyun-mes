@@ -15,6 +15,10 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import type { ProcessRoute, ProcessRouteCreate, ProcessRouteUpdate } from '../types/process';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { OperationSequenceEditor, type OperationItem } from './OperationSequenceEditor';
+import {
+  buildOperationSequencePayload,
+  parseOperationSequenceFromRoute,
+} from '../utils/processRouteSequenceUtils';
 import { routeFormSchema } from '../schemas/route';
 
 const PAGE_CODE = 'master-data-process-route';
@@ -166,132 +170,11 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           overReportValue: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
         });
         const seq = detail.operation_sequence ?? (detail as any).operationSequence;
-        if (seq) {
-          let sequenceData: any[] = [];
-          if (Array.isArray(seq)) {
-            sequenceData = seq;
-          } else if (typeof seq === 'object' && seq !== null) {
-            const seqObj = seq as Record<string, any>;
-            if (seqObj.operations && Array.isArray(seqObj.operations)) {
-              sequenceData = seqObj.operations;
-            } else if (seqObj.sequence && Array.isArray(seqObj.sequence)) {
-              const { operationApi, unwrapProcessPagedList } = await import('../services/process');
-              const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000 }));
-              for (const uuid of seqObj.sequence) {
-                const op = allOps.find((o) => o.uuid === uuid);
-                if (op) {
-                  sequenceData.push({
-                    uuid: op.uuid,
-                    code: op.code,
-                    name: op.name,
-                    description: op.description,
-                    reportingType: op.reportingType ?? (op as any).reporting_type,
-                    isNodeOperation: op.isNodeOperation ?? (op as any).is_node_operation,
-                    overReportMode: (op as any).overReportMode ?? (op as any).over_report_mode ?? 'none',
-                    overReportValue: Number((op as any).overReportValue ?? (op as any).over_report_value ?? 0) || 0,
-                  });
-                }
-              }
-            }
-          }
-          if (sequenceData.length > 0) {
-            const { operationApi, unwrapProcessPagedList } = await import('../services/process');
-            const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000 }));
-            const ops: OperationItem[] = [];
-            for (const item of sequenceData) {
-              let opItem: OperationItem | null = null;
-              const toOpItem = (op: {
-                uuid: string;
-                code?: string;
-                name?: string;
-                description?: string;
-                reportingType?: string;
-                reporting_type?: string;
-                isNodeOperation?: boolean;
-                is_node_operation?: boolean;
-                overReportMode?: string;
-                over_report_mode?: string;
-                overReportValue?: number;
-                over_report_value?: number;
-              }) => ({
-                uuid: op.uuid,
-                code: op.code || '',
-                name: op.name || '',
-                description: op.description,
-                reportingType: (op.reportingType ?? op.reporting_type ?? 'quantity') as 'quantity' | 'status',
-                isNodeOperation: op.isNodeOperation ?? op.is_node_operation ?? false,
-                overReportMode: (op.overReportMode ?? op.over_report_mode ?? 'none') as OperationItem['overReportMode'],
-                overReportValue: Number(op.overReportValue ?? op.over_report_value ?? 0) || 0,
-              });
-              if (typeof item === 'string') {
-                const op = allOps.find((o) => o.uuid === item);
-                opItem = op
-                  ? toOpItem(op)
-                  : {
-                      uuid: item,
-                      code: item.substring(0, 8),
-                      name: t('field.route.operationSequence'),
-                      reportingType: 'quantity' as const,
-                      isNodeOperation: false,
-                      overReportMode: 'none',
-                      overReportValue: 0,
-                    };
-              } else if (item && typeof item === 'object') {
-                const uuid = item.uuid ?? item.operation_uuid;
-                const code = item.code ?? '';
-                const name = item.name ?? '';
-                if (uuid) {
-                  const op = allOps.find((o) => o.uuid === uuid);
-                  if (op) {
-                    opItem = {
-                      ...toOpItem(op),
-                      reportingType: (item.reportingType ?? item.reporting_type ?? op.reportingType ?? (op as any).reporting_type ?? 'quantity') as 'quantity' | 'status',
-                      isNodeOperation:
-                        item.isNodeOperation ??
-                        item.is_node_operation ??
-                        op.isNodeOperation ??
-                        (op as any).is_node_operation ??
-                        false,
-                      overReportMode: (item.overReportMode ??
-                        item.over_report_mode ??
-                        op.overReportMode ??
-                        (op as any).over_report_mode ??
-                        'none') as OperationItem['overReportMode'],
-                      overReportValue:
-                        Number(item.overReportValue ?? item.over_report_value ?? op.overReportValue ?? (op as any).over_report_value ?? 0) || 0,
-                    };
-                  } else if (code || name) {
-                    opItem = {
-                      uuid,
-                      code: code || uuid.substring(0, 8),
-                      name: name || t('field.route.operationSequence'),
-                      description: item.description,
-                      reportingType: (item.reportingType ?? item.reporting_type ?? 'quantity') as 'quantity' | 'status',
-                      isNodeOperation: item.isNodeOperation ?? item.is_node_operation ?? false,
-                      overReportMode: (item.overReportMode ?? item.over_report_mode ?? 'none') as OperationItem['overReportMode'],
-                      overReportValue: Number(item.overReportValue ?? item.over_report_value ?? 0) || 0,
-                    };
-                  } else {
-                    opItem = {
-                      uuid,
-                      code: uuid.substring(0, 8),
-                      name: t('field.route.operationSequence'),
-                      reportingType: 'quantity' as const,
-                      isNodeOperation: false,
-                      overReportMode: 'none',
-                      overReportValue: 0,
-                    };
-                  }
-                } else if (item.operation_id && allOps.length > 0) {
-                  const op = allOps.find((o) => o.id === item.operation_id);
-                  if (op) opItem = toOpItem(op);
-                }
-              }
-              if (opItem) ops.push(opItem);
-            }
-            if (ops.length > 0) setOperationSequence(ops);
-          }
-        }
+        const { operationApi, unwrapProcessPagedList } = await import('../services/process');
+        const ops = await parseOperationSequenceFromRoute(seq, t, async () =>
+          unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true })),
+        );
+        if (ops.length > 0) setOperationSequence(ops);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.routes.getDetailFailed'));
@@ -315,25 +198,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       }
 
       const allowJump = !!values.allowOperationJump;
-      const operationSequenceData = {
-        sequence: operationSequence.map((op) => op.uuid),
-        operations: operationSequence.map((op) => {
-          const row: Record<string, any> = {
-            uuid: op.uuid,
-            code: op.code,
-            name: op.name,
-            reportingType: op.reportingType ?? 'quantity',
-            isNodeOperation: allowJump ? (op.isNodeOperation ?? false) : false,
-          };
-          const om = op.overReportMode ?? 'none';
-          const ov = Number(op.overReportValue) || 0;
-          if (om !== 'none' || ov > 0) {
-            row.overReportMode = om;
-            row.overReportValue = ov;
-          }
-          return row;
-        }),
-      };
+      const operationSequenceData = buildOperationSequencePayload(operationSequence, allowJump);
 
       let finalCode = values.code.trim();
       if (!isEdit) {

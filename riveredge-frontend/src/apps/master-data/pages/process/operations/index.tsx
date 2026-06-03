@@ -510,22 +510,6 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: '启用状态',
-      dataIndex: 'isActive',
-      width: 100,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
-      },
-      render: (_: any, record: Operation) => (
-        <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
-        </Tag>
-      ),
-      sorter: true,
-    },
-    {
       title: '绑定不良品项',
       dataIndex: ['defect_types', 'defectTypes'],
       width: 180,
@@ -564,6 +548,22 @@ const OperationsPage: React.FC = () => {
           </Space>
         );
       },
+    },
+    {
+      title: '启用状态',
+      dataIndex: 'isActive',
+      width: 100,
+      valueType: 'select',
+      valueEnum: {
+        true: { text: '启用', status: 'Success' },
+        false: { text: '禁用', status: 'Default' },
+      },
+      render: (_: any, record: Operation) => (
+        <Tag color={record.isActive ? 'success' : 'default'}>
+          {record.isActive ? '启用' : '禁用'}
+        </Tag>
+      ),
+      sorter: true,
     },
     {
       title: '创建时间',

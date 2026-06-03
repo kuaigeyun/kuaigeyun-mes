@@ -221,6 +221,8 @@ class RolePermissionMatrixService:
         granted_codes = await RolePermissionMatrixService._granted_function_codes_for_role(
             tenant_id, role, pool
         )
+        all_pool_codes = set(pool_by_code.keys())
+        granted_codes = granted_codes & all_pool_codes
 
         menus = await MenuService.get_menu_tree(
             tenant_id=tenant_id,
@@ -271,15 +273,26 @@ class RolePermissionMatrixService:
             normalize_permission_code(p.code or ""): p for p in pool if p.code
         }
 
+        pool_keys = set(pool_by_code.keys())
+        current_granted = await RolePermissionMatrixService._granted_function_codes_for_role(
+            tenant_id, role, pool
+        )
+
         normalized_in: Set[str] = set()
         for raw in codes or []:
             norm = normalize_permission_code(raw)
             if norm:
                 normalized_in.add(norm)
 
-        unknown = sorted(c for c in normalized_in if c not in pool_by_code)
-        if unknown:
-            raise ValidationError(f"部分功能权限 code 不存在或未同步: {unknown[:5]}{'...' if len(unknown) > 5 else ''}")
+        unknown_in_request = normalized_in - pool_keys
+        invalid_new = sorted(unknown_in_request - current_granted)
+        if invalid_new:
+            sample = invalid_new[:5]
+            suffix = "..." if len(invalid_new) > 5 else ""
+            raise ValidationError(
+                f"部分功能权限 code 不存在或未同步: {sample}{suffix}"
+            )
+        normalized_in = normalized_in & pool_keys
 
         desired_function_ids: Set[int] = {pool_by_code[c].id for c in normalized_in}
 

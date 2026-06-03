@@ -88,6 +88,7 @@ import {
   translateMenuName,
 } from '../../../utils/menuTranslation';
 import { KUAIZHIZAO_PRICING_VIEW } from '../../../utils/kuaizhizaoPricingPermission';
+import { getApiErrorMessage } from '../../../utils/errorHandler';
 import './roles-permissions.less';
 import {
   FunctionGrantTree,
@@ -1402,7 +1403,9 @@ const RolesPermissionsPage: React.FC = () => {
         useGlobalStore.getState().incrementApplicationMenuVersion();
       }
     } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.roles.assignFailed'));
+      messageApi.error(
+        getApiErrorMessage(error, t('pages.system.roles.assignFailed', { defaultValue: '权限保存失败' }))
+      );
     } finally {
       setSavingPermissions(false);
     }

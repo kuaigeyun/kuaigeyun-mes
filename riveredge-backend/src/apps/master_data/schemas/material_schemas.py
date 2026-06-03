@@ -68,7 +68,12 @@ class MaterialGroupBase(BaseModel):
 
 class MaterialGroupCreate(MaterialGroupBase):
     """创建物料分组 Schema"""
-    pass
+
+    process_route_id: Optional[int] = Field(
+        None,
+        alias="processRouteId",
+        description="默认工艺路线ID（组内物料未单独指派时使用）",
+    )
 
 
 class MaterialGroupUpdate(BaseModel):
@@ -80,6 +85,11 @@ class MaterialGroupUpdate(BaseModel):
     parent_id: Optional[int] = Field(None, alias="parentId", description="父分组ID")
     description: Optional[str] = Field(None, description="描述")
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
+    process_route_id: Optional[int] = Field(
+        None,
+        alias="processRouteId",
+        description="默认工艺路线ID；传 null 可清空",
+    )
     
     model_config = ConfigDict(
         populate_by_name=True,  # 允许同时使用字段名和别名

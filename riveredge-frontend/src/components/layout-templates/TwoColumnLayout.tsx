@@ -62,6 +62,8 @@ export interface LeftPanelConfig {
     placeholder?: string;
     value?: string;
     onChange?: (value: string) => void;
+    /** 回车或点击搜索图标时触发（提供后使用 Input.Search） */
+    onSearch?: (value: string) => void;
     allowClear?: boolean;
   };
   /**
@@ -70,9 +72,13 @@ export interface LeftPanelConfig {
    */
   actions?: ReactNode[];
   /**
-   * 树形结构配置（必需）
+   * 自定义左侧内容（与 tree 二选一，用于扁平列表等非树场景）
    */
-  tree: {
+  leftContent?: ReactNode;
+  /**
+   * 树形结构配置（与 leftContent 二选一）
+   */
+  tree?: {
     /**
      * 树数据
      */
@@ -212,6 +218,7 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
   const {
     search,
     actions = [],
+    leftContent,
     tree,
     width = TWO_COLUMN_LAYOUT.LEFT_PANEL_WIDTH,
     minWidth = TWO_COLUMN_LAYOUT.LEFT_PANEL_MIN_WIDTH,
@@ -226,23 +233,40 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
     contentPadding = 16,
   } = rightPanel;
 
-  // 提取树组件的属性
-  const {
-    treeData,
-    selectedKeys,
-    expandedKeys,
-    onSelect,
-    onExpand,
-    showIcon = false,
-    blockNode = false,
-    onRightClick,
-    className: treeClassName,
-    loading = false,
-    loadingTip,
-    height: _treeHeightIgnored,
-    virtual: _treeVirtualIgnored,
-    ...treeRestProps
-  } = tree;
+  const treeProps = tree
+    ? (() => {
+        const {
+          treeData,
+          selectedKeys,
+          expandedKeys,
+          onSelect,
+          onExpand,
+          showIcon = false,
+          blockNode = false,
+          onRightClick,
+          className: treeClassName,
+          loading = false,
+          loadingTip,
+          height: _treeHeightIgnored,
+          virtual: _treeVirtualIgnored,
+          ...treeRestProps
+        } = tree;
+        return {
+          treeData,
+          selectedKeys,
+          expandedKeys,
+          onSelect,
+          onExpand,
+          showIcon,
+          blockNode,
+          onRightClick,
+          treeClassName,
+          loading,
+          loadingTip,
+          treeRestProps,
+        };
+      })()
+    : null;
 
   return (
     <div
@@ -297,14 +321,25 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
               lineHeight: '32px',
             }}
           >
-            <Input
-              placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
-              prefix={<SearchOutlined />}
-              value={search.value}
-              onChange={(e) => search.onChange?.(e.target.value)}
-              allowClear={search.allowClear !== false}
-              size="middle"
-            />
+            {search.onSearch ? (
+              <Input.Search
+                placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
+                value={search.value}
+                onChange={(e) => search.onChange?.(e.target.value)}
+                onSearch={(v) => search.onSearch?.(v)}
+                allowClear={search.allowClear !== false}
+                size="middle"
+              />
+            ) : (
+              <Input
+                placeholder={search.placeholder || t('components.layoutTemplates.twoColumn.searchPlaceholder')}
+                prefix={<SearchOutlined />}
+                value={search.value}
+                onChange={(e) => search.onChange?.(e.target.value)}
+                allowClear={search.allowClear !== false}
+                size="middle"
+              />
+            )}
           </div>
         )}
 
@@ -319,35 +354,43 @@ export const TwoColumnLayout: React.FC<TwoColumnLayoutProps> = ({
           </div>
         )}
 
-        {/* 树形结构：整区在外层滚动（与编号规则左侧列表一致），避免虚拟列表内部滚动条 */}
-        <div
-          className="two-column-layout-left-tree scrollbar-like-modal"
-          style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
-        >
-          {loading ? (
-            <div style={{ textAlign: 'center', padding: '40px' }}>
-              <Spin size="large" />
-              {loadingTip ? (
-                <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>{loadingTip}</div>
-              ) : null}
-            </div>
-          ) : (
-            <Tree
-              motion={null}
-              className={treeClassName}
-              treeData={treeData}
-              selectedKeys={selectedKeys}
-              expandedKeys={expandedKeys}
-              onSelect={onSelect}
-              onExpand={onExpand}
-              showIcon={showIcon}
-              blockNode={blockNode}
-              onRightClick={onRightClick}
-              {...treeRestProps}
-              virtual={false}
-            />
-          )}
-        </div>
+        {leftContent ? (
+          <div
+            className="two-column-layout-left-custom scrollbar-like-modal"
+            style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', flexDirection: 'column' }}
+          >
+            {leftContent}
+          </div>
+        ) : treeProps ? (
+          <div
+            className="two-column-layout-left-tree scrollbar-like-modal"
+            style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}
+          >
+            {treeProps.loading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <Spin size="large" />
+                {treeProps.loadingTip ? (
+                  <div style={{ marginTop: '16px', color: token.colorTextSecondary }}>{treeProps.loadingTip}</div>
+                ) : null}
+              </div>
+            ) : (
+              <Tree
+                motion={null}
+                className={treeProps.treeClassName}
+                treeData={treeProps.treeData}
+                selectedKeys={treeProps.selectedKeys}
+                expandedKeys={treeProps.expandedKeys}
+                onSelect={treeProps.onSelect}
+                onExpand={treeProps.onExpand}
+                showIcon={treeProps.showIcon}
+                blockNode={treeProps.blockNode}
+                onRightClick={treeProps.onRightClick}
+                {...treeProps.treeRestProps}
+                virtual={false}
+              />
+            )}
+          </div>
+        ) : null}
       </div>
 
       {/* 右侧主内容区 */}

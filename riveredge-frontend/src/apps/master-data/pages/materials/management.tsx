@@ -432,6 +432,8 @@ const MaterialsManagementPage: React.FC = () => {
   const [batchProcessRouteSubmitting, setBatchProcessRouteSubmitting] = useState(false)
   const [processRoutesForBulk, setProcessRoutesForBulk] = useState<ProcessRoute[]>([])
   const [processRoutesForBulkLoading, setProcessRoutesForBulkLoading] = useState(false)
+  const [processRoutesForGroup, setProcessRoutesForGroup] = useState<ProcessRoute[]>([])
+  const [processRoutesForGroupLoading, setProcessRoutesForGroupLoading] = useState(false)
   const [batchSourceTypeOpen, setBatchSourceTypeOpen] = useState(false)
   const [batchSourceTypeValue, setBatchSourceTypeValue] = useState<string | undefined>(undefined)
   const [batchSourceTypeSubmitting, setBatchSourceTypeSubmitting] = useState(false)
@@ -1056,15 +1058,38 @@ const MaterialsManagementPage: React.FC = () => {
     [messageApi, loadMaterialGroups]
   )
 
+  const loadProcessRoutesForGroup = useCallback(() => {
+    setProcessRoutesForGroupLoading(true)
+    processRouteApi
+      .list({ limit: 1000, isActive: true })
+      .then((result) => {
+        const list = Array.isArray(result) ? result : result?.data ?? []
+        setProcessRoutesForGroup(list)
+      })
+      .catch(() => {
+        messageApi.error(t('app.master-data.materialForm.fetchProcessRoutesFailed'))
+        setProcessRoutesForGroup([])
+      })
+      .finally(() => setProcessRoutesForGroupLoading(false))
+  }, [messageApi, t])
+
+  useEffect(() => {
+    if (groupModalVisible) loadProcessRoutesForGroup()
+  }, [groupModalVisible, loadProcessRoutesForGroup])
+
   const handleGroupSubmit = async (values: any) => {
     try {
       setGroupFormLoading(true)
+      const payload = {
+        ...values,
+        processRouteId: values.processRouteId ?? null,
+      }
 
       if (groupIsEdit && currentGroup) {
-        await materialGroupApi.update(currentGroup.uuid, values as MaterialGroupUpdate)
+        await materialGroupApi.update(currentGroup.uuid, payload as MaterialGroupUpdate)
         messageApi.success(t('common.updateSuccess'))
       } else {
-        await materialGroupApi.create(values as MaterialGroupCreate)
+        await materialGroupApi.create(payload as MaterialGroupCreate)
         messageApi.success(t('common.createSuccess'))
       }
 
@@ -3461,6 +3486,10 @@ const MaterialsManagementPage: React.FC = () => {
                 parentId: currentGroup.parentId,
                 description: currentGroup.description,
                 isActive: currentGroup.isActive,
+                processRouteId:
+                  currentGroup.processRouteId ??
+                  (currentGroup as { process_route_id?: number }).process_route_id ??
+                  null,
               }
             : {
                 isActive: true,
@@ -3515,6 +3544,22 @@ const MaterialsManagementPage: React.FC = () => {
           rules={[
             { max: 100, message: t('app.master-data.materials.groupAliasMax') },
           ]}
+        />
+        <SafeProFormSelect
+          name="processRouteId"
+          label={t('app.master-data.source.defaultProcessRoute')}
+          placeholder={t('app.master-data.source.selectProcessRoute')}
+          tooltip={t('app.master-data.source.defaultProcessRouteGroupHint')}
+          options={processRoutesForGroup.map((r) => ({
+            label: `${r.code} ${r.name}`.trim(),
+            value: r.id,
+          }))}
+          fieldProps={{
+            allowClear: true,
+            showSearch: true,
+            loading: processRoutesForGroupLoading,
+            optionFilterProp: 'label',
+          }}
         />
         <ProFormTextArea
           name="description"

@@ -7,6 +7,7 @@
 from .factory import Plant, Workshop, ProductionLine, Workstation
 from .warehouse import Warehouse, StorageArea, StorageLocation
 from .material import MaterialGroup, Material, BOM
+from .material_product_process import MaterialProductProcess
 from .bom_change import BOMChange
 from .material_code_mapping import MaterialCodeMapping
 from .material_batch import MaterialBatch
@@ -38,6 +39,7 @@ __all__ = [
     "StorageLocation",
     "MaterialGroup",
     "Material",
+    "MaterialProductProcess",
     "BOM",
     "BOMChange",
     "MaterialCodeMapping",

@@ -1318,33 +1318,27 @@
             "sort_order": 5
           },
           {
-            "title": "app.kuaizhizao.menu.performance-management.piece-rates",
-            "path": "/apps/kuaizhizao/performance/piece-rates",
-            "permission": "kuaizhizao:performance-piece-rates:read",
-            "sort_order": 6
-          },
-          {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaizhizao/performance/hourly-rates",
             "permission": "kuaizhizao:performance-hourly-rates:read",
-            "sort_order": 7
+            "sort_order": 6
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",
             "path": "/apps/kuaizhizao/performance/kpi-definitions",
             "permission": "kuaizhizao:performance-kpi-definitions:read",
-            "sort_order": 8
+            "sort_order": 7
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.summaries",
             "path": "/apps/kuaizhizao/performance/summaries",
             "permission": "kuaizhizao:performance-summaries:read",
-            "sort_order": 9
+            "sort_order": 8
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.reports",
             "icon": "fileText",
-            "sort_order": 10,
+            "sort_order": 9,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.employee-efficiency-ranking",

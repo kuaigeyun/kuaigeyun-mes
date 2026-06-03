@@ -936,16 +936,10 @@
             "sort_order": 3
           },
           {
-            "title": "app.kuaizhizao.menu.performance-management.piece-rates",
-            "path": "/apps/kuaimes/performance/piece-rates",
-            "permission": "kuaizhizao:performance-piece-rates:read",
-            "sort_order": 4
-          },
-          {
             "title": "app.kuaizhizao.menu.performance-management.hourly-rates",
             "path": "/apps/kuaimes/performance/hourly-rates",
             "permission": "kuaizhizao:performance-hourly-rates:read",
-            "sort_order": 5
+            "sort_order": 4
           },
           {
             "title": "app.kuaizhizao.menu.performance-management.kpi-definitions",

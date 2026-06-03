@@ -29,6 +29,11 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeCreate, ProcessRouteChangeUpdate, ProcessRouteChangeResponse,
     ProcessRouteChangeListResponse,
 )
+from apps.master_data.schemas.material_product_process_schemas import (
+    MaterialProductProcessResponse,
+    MaterialProductProcessSave,
+)
+from apps.master_data.services.material_product_process_service import MaterialProductProcessService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 router = APIRouter(
@@ -916,6 +921,41 @@ async def get_bound_materials(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
+@router.get(
+    "/materials/{material_uuid}/product-process",
+    response_model=MaterialProductProcessResponse,
+    summary="Get material product process config",
+)
+async def get_material_product_process(
+    material_uuid: str,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await MaterialProductProcessService.get_for_material(tenant_id, material_uuid)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.put(
+    "/materials/{material_uuid}/product-process",
+    response_model=MaterialProductProcessResponse,
+    summary="Save material product process config",
+)
+async def save_material_product_process(
+    material_uuid: str,
+    data: MaterialProductProcessSave,
+    current_user: Annotated[User, Depends(get_current_user)],
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+):
+    try:
+        return await MaterialProductProcessService.save_for_material(tenant_id, material_uuid, data)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
 @router.get("/materials/{material_uuid}/process-route", response_model=Optional[ProcessRouteResponse], summary="Get process route matched to material")
 async def get_process_route_for_material(
     material_uuid: str,
@@ -923,18 +963,10 @@ async def get_process_route_for_material(
     tenant_id: Annotated[int, Depends(get_current_tenant)]
 ):
     """
-    获取物料匹配的工艺路线（按优先级）
-    
-    根据《工艺路线和标准作业流程优化设计规范.md》设计。
-    优先级从高到低：
-    1. 物料主数据中的工艺路线关联（最高优先级）
-    2. 物料绑定工艺路线（第二优先级）
-    3. 物料分组绑定工艺路线（第三优先级）
-    4. 默认工艺路线（最低优先级，如果配置了）
-    
-    - **material_uuid**: 物料UUID
-    
-    返回匹配的工艺路线，如果没有则返回null。
+    获取物料生效的工艺路线。
+
+    优先级：产品工艺指派 > 物料 FK/defaults > 物料分组 > source_config。
+    无绑定返回 null（开单时手工选择路线）。
     """
     try:
         return await ProcessService.get_process_route_for_material(tenant_id, material_uuid)

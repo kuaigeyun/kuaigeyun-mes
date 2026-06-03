@@ -2563,68 +2563,30 @@ class ProcessService:
         material_uuid: str
     ) -> Optional[ProcessRouteResponse]:
         """
-        获取物料匹配的工艺路线（按优先级）
-        
-        根据《工艺路线和标准作业流程优化设计规范.md》设计。
-        优先级从高到低：
-        1. 物料 process_route_id（主表外键）
-        1b. 物料 defaults 中的默认工艺路线（与表单一致，未同步外键时仍生效）
-        2. 物料分组绑定工艺路线
-        3. 默认工艺路线（最低优先级，如果配置了）
-        
-        Args:
-            tenant_id: 租户ID
-            material_uuid: 物料UUID
-            
-        Returns:
-            Optional[ProcessRouteResponse]: 匹配的工艺路线，如果没有则返回None
+        获取物料匹配的工艺路线。
+
+        优先级：产品工艺指派 > 物料 FK/defaults > 物料分组 > source_config。
         """
-        from apps.master_data.models.material import Material, MaterialGroup
-        
-        # 获取物料
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.material_product_process_service import (
+            MaterialProductProcessService,
+        )
+
         material = await Material.filter(
             tenant_id=tenant_id,
             uuid=material_uuid,
-            deleted_at__isnull=True
-        ).prefetch_related("process_route", "group").first()
-        
+            deleted_at__isnull=True,
+        ).first()
+
         if not material:
             raise NotFoundError(f"物料 {material_uuid} 不存在")
-        
-        # 优先级1：物料主数据中的工艺路线关联（最高优先级）
-        if material.process_route_id:
-            process_route = await ProcessRoute.filter(
-                id=material.process_route_id,
-                deleted_at__isnull=True,
-                is_active=True
-            ).first()
-            if process_route:
-                return await ProcessService._to_process_route_response(process_route)
-        
-        # 优先级1b：defaults 中的默认工艺路线（历史数据可能仅写入 JSON，未同步 process_route_id）
-        defaults_pr = await ProcessService._process_route_from_material_defaults(tenant_id, material)
-        if defaults_pr:
-            return await ProcessService._to_process_route_response(defaults_pr)
-        
-        # 优先级2：物料分组绑定工艺路线
-        if material.group_id:
-            material_group = await MaterialGroup.filter(
-                id=material.group_id,
-                deleted_at__isnull=True
-            ).prefetch_related("process_route").first()
-            
-            if material_group and material_group.process_route_id:
-                process_route = await ProcessRoute.filter(
-                    id=material_group.process_route_id,
-                    deleted_at__isnull=True,
-                    is_active=True
-                ).first()
-                if process_route:
-                    return await ProcessService._to_process_route_response(process_route)
-        
-        # 优先级3：默认工艺路线（如果配置了）
-        # TODO: 实现默认工艺路线配置
-        
+
+        process_route = await MaterialProductProcessService.resolve_process_route_for_material(
+            tenant_id, material.id
+        )
+        if process_route:
+            return await ProcessService._to_process_route_response(process_route)
+
         return None
     
     @staticmethod

@@ -1,0 +1,269 @@
+/**
+ * 产品工艺配置面板：路线指派 + 单表工序行（序列 / 工时 / 资源 / 计件）
+ */
+
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Alert, Button, Select, Space, Typography, App } from 'antd';
+import { PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import type { Material } from '../types/material';
+import type { ProcessRoute } from '../types/process';
+import { processRouteApi, operationApi, unwrapProcessPagedList } from '../services/process';
+import { productProcessApi } from '../services/productProcess';
+import { materialApi } from '../services/material';
+import { ProductProcessLinesTable } from './ProductProcessLinesTable';
+import { RouteFormModal } from './RouteFormModal';
+import type { ProductProcessLine } from '../types/productProcess';
+import {
+  enrichLineFromOperation,
+  linesFromProcessRoute,
+  snapshotProductProcessState,
+} from '../utils/productProcessLineUtils';
+import { searchUserDisplay } from '../../../services/user';
+import { resolveEffectiveProcessRouteUuid } from '../utils/productProcessMaterialUtils';
+
+export type ProductProcessPanelProps = {
+  material: Material;
+  processRoutes: ProcessRoute[];
+  processRoutesLoading: boolean;
+  onMaterialUpdated?: (material: Material) => void;
+  /** 两栏布局页不展示物料标题 */
+  hideMaterialHeading?: boolean;
+  /** 不展示顶部说明条 */
+  hidePanelHint?: boolean;
+};
+
+export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
+  material,
+  processRoutes,
+  processRoutesLoading,
+  onMaterialUpdated,
+  hideMaterialHeading = false,
+  hidePanelHint = false,
+}) => {
+  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+
+  const [routeUuid, setRouteUuid] = useState<string | undefined>();
+  const [allowOperationJump, setAllowOperationJump] = useState(false);
+  const [lines, setLines] = useState<ProductProcessLine[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [createRouteOpen, setCreateRouteOpen] = useState(false);
+
+  const baselineRef = useRef('');
+  const routeImportRef = useRef<string | undefined>();
+
+  const isDirty =
+    snapshotProductProcessState({
+      processRouteUuid: routeUuid,
+      allowOperationJump,
+      lines,
+    }) !== baselineRef.current;
+
+  const canSave = isDirty && !loading && !saving;
+
+  const applyConfig = useCallback(
+    (processRouteUuid: string | undefined, jump: boolean, nextLines: ProductProcessLine[]) => {
+      setRouteUuid(processRouteUuid);
+      setAllowOperationJump(jump);
+      setLines(nextLines);
+      baselineRef.current = snapshotProductProcessState({
+        processRouteUuid: processRouteUuid,
+        allowOperationJump: jump,
+        lines: nextLines,
+      });
+    },
+    [],
+  );
+
+  const buildUserIdToUuidMap = useCallback(async () => {
+    const usersRes = await searchUserDisplay({ page: 1, page_size: 200 });
+    const map = new Map<number, string>();
+    (usersRes?.items ?? []).forEach((u) => map.set(u.id, u.uuid));
+    return map;
+  }, []);
+
+  const loadConfig = useCallback(async () => {
+    if (!material.uuid) return;
+    setLoading(true);
+    try {
+      const data = await productProcessApi.get(material.uuid);
+      routeImportRef.current = data.processRouteUuid ?? '__cleared__';
+      const userIdToUuid = await buildUserIdToUuidMap();
+      const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true }));
+      const byUuid: Record<string, (typeof allOps)[0]> = {};
+      for (const o of allOps) byUuid[o.uuid] = o;
+      const enriched = (data.lines ?? []).map((ln) =>
+        enrichLineFromOperation(ln, byUuid[ln.operationUuid], userIdToUuid),
+      );
+      applyConfig(data.processRouteUuid, data.allowOperationJump, enriched);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.loadFailed'));
+      const fallbackRoute = resolveEffectiveProcessRouteUuid(material, processRoutes);
+      applyConfig(fallbackRoute, false, []);
+    } finally {
+      setLoading(false);
+    }
+  }, [material, processRoutes, applyConfig, messageApi, t, buildUserIdToUuidMap]);
+
+  useEffect(() => {
+    if (processRoutesLoading) return;
+    routeImportRef.current = undefined;
+    void loadConfig();
+  }, [material.uuid, processRoutesLoading, loadConfig]);
+
+  const importLinesFromRoute = useCallback(
+    async (uuid: string) => {
+      const detail = await processRouteApi.get(uuid);
+      const jump = Boolean(
+        (detail as { allow_operation_jump?: boolean }).allow_operation_jump ??
+          (detail as { allowOperationJump?: boolean }).allowOperationJump,
+      );
+      const userIdToUuid = await buildUserIdToUuidMap();
+      const nextLines = await linesFromProcessRoute(
+        detail.operation_sequence ?? (detail as { operationSequence?: unknown }).operationSequence,
+        jump,
+        t,
+        async () => unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true })),
+        userIdToUuid,
+      );
+      setAllowOperationJump(jump);
+      setLines(nextLines);
+    },
+    [t, buildUserIdToUuidMap],
+  );
+
+  useEffect(() => {
+    if (!routeUuid || loading) return;
+    if (routeImportRef.current === routeUuid) return;
+    const importing = routeUuid;
+    routeImportRef.current = importing;
+    void importLinesFromRoute(importing).catch(() => {
+      messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
+    });
+  }, [routeUuid, loading, importLinesFromRoute, messageApi, t]);
+
+  const handleRouteSelect = (uuid: string | undefined) => {
+    routeImportRef.current = '';
+    setRouteUuid(uuid);
+    if (!uuid) {
+      setLines([]);
+      setAllowOperationJump(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!material.uuid || !canSave) return;
+    if (routeUuid && lines.length === 0) {
+      messageApi.warning(t('app.master-data.routes.operationRequired'));
+      return;
+    }
+    setSaving(true);
+    try {
+      const saved = await productProcessApi.save(material.uuid, {
+        processRouteUuid: routeUuid,
+        allowOperationJump,
+        lines,
+      });
+      applyConfig(saved.processRouteUuid, saved.allowOperationJump, saved.lines ?? []);
+      messageApi.success(t('app.master-data.productProcess.saved'));
+      const refreshed = await materialApi.get(material.uuid);
+      onMaterialUpdated?.(refreshed);
+    } catch (e: unknown) {
+      messageApi.error((e as Error).message || t('common.saveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRouteCreated = (route: ProcessRoute) => {
+    routeImportRef.current = '';
+    setRouteUuid(route.uuid);
+    setCreateRouteOpen(false);
+  };
+
+  return (
+    <>
+      {hideMaterialHeading ? null : (
+        <Typography.Title level={5} style={{ marginTop: 0 }}>
+          {material.code ?? ''} — {material.name ?? ''}
+        </Typography.Title>
+      )}
+      {hidePanelHint ? null : (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={t('app.master-data.productProcess.panelHint')}
+        />
+      )}
+
+      <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }} size="middle">
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
+          }}
+        >
+          <Space direction="vertical" size="middle" style={{ flex: 1, minWidth: 280 }}>
+            <Typography.Text strong>{t('app.master-data.manufacturing.sectionRoute')}</Typography.Text>
+            <Space wrap>
+              <Select
+                style={{ minWidth: 280 }}
+                placeholder={t('app.master-data.source.selectProcessRoute')}
+                loading={processRoutesLoading || loading}
+                value={routeUuid}
+                allowClear
+                showSearch
+                optionFilterProp="label"
+                options={processRoutes.map((pr) => ({
+                  label: `${pr.code} - ${pr.name}`,
+                  value: pr.uuid,
+                }))}
+                onChange={handleRouteSelect}
+              />
+              <Button icon={<PlusOutlined />} onClick={() => setCreateRouteOpen(true)}>
+                {t('app.master-data.manufacturing.newRoute')}
+              </Button>
+            </Space>
+          </Space>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            loading={saving}
+            disabled={!canSave}
+            onClick={() => void handleSave()}
+          >
+            {t('app.master-data.productProcess.save')}
+          </Button>
+        </div>
+      </Space>
+
+      <Typography.Text strong style={{ display: 'block', marginBottom: 12 }}>
+        {t('app.master-data.productProcess.unifiedTableTitle')}
+      </Typography.Text>
+      {routeUuid ? (
+        <ProductProcessLinesTable
+          lines={lines}
+          onChange={setLines}
+          allowOperationJump={allowOperationJump}
+          onAllowOperationJumpChange={setAllowOperationJump}
+          disabled={loading}
+        />
+      ) : (
+        <Alert type="info" showIcon message={t('app.master-data.manufacturing.selectRouteFirst')} />
+      )}
+
+      <RouteFormModal
+        open={createRouteOpen}
+        onClose={() => setCreateRouteOpen(false)}
+        editUuid={null}
+        onSuccess={handleRouteCreated}
+      />
+    </>
+  );
+};

@@ -449,6 +449,33 @@ class MaterialService:
     """物料数据服务"""
     
     # ==================== 物料分组相关方法 ====================
+
+    @staticmethod
+    async def _validate_material_group_process_route_id(
+        tenant_id: int,
+        process_route_id: Optional[int],
+    ) -> None:
+        if process_route_id is None:
+            return
+        from apps.master_data.models.process import ProcessRoute
+
+        route = await ProcessRoute.filter(
+            id=int(process_route_id),
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).first()
+        if not route:
+            raise ValidationError("所选默认工艺路线不存在、已删除或未启用")
+
+    @staticmethod
+    async def _material_group_to_response(material_group: MaterialGroup) -> MaterialGroupResponse:
+        group_data = MaterialGroupResponse.model_validate(material_group)
+        group_data.process_route_id = getattr(material_group, "process_route_id", None)
+        pr = getattr(material_group, "process_route", None)
+        if pr:
+            group_data.process_route_name = getattr(pr, "name", None)
+        return group_data
     
     @staticmethod
     async def create_material_group(
@@ -488,14 +515,18 @@ class MaterialService:
         
         if existing:
             raise ValidationError(f"物料分组编码 {data.code} 已存在")
+
+        await MaterialService._validate_material_group_process_route_id(
+            tenant_id, data.process_route_id
+        )
         
         # 创建物料分组
         material_group = await MaterialGroup.create(
             tenant_id=tenant_id,
             **data.dict()
         )
-        
-        return MaterialGroupResponse.model_validate(material_group)
+        await material_group.fetch_related("process_route")
+        return await MaterialService._material_group_to_response(material_group)
     
     @staticmethod
     async def get_material_group_by_uuid(
@@ -670,12 +701,16 @@ class MaterialService:
         
         # 更新字段
         update_data = data.dict(exclude_unset=True)
+        if "process_route_id" in update_data:
+            await MaterialService._validate_material_group_process_route_id(
+                tenant_id, update_data.get("process_route_id")
+            )
         for key, value in update_data.items():
             setattr(material_group, key, value)
         
         await material_group.save()
-        
-        return MaterialGroupResponse.model_validate(material_group)
+        await material_group.fetch_related("process_route")
+        return await MaterialService._material_group_to_response(material_group)
     
     @staticmethod
     async def delete_material_group(

@@ -58,6 +58,9 @@ from apps.kuaizhizao.models.scrap_record import ScrapRecord
 from apps.kuaizhizao.services.document_timing_service import DocumentTimingService
 from apps.master_data.models.material import Material, MaterialGroup
 from apps.master_data.models.process import ProcessRoute, Operation, SOP
+from apps.master_data.services.material_product_process_service import (
+    MaterialProductProcessService,
+)
 from apps.master_data.models.factory import Workshop, WorkCenter, Workstation, WorkGroup
 from apps.kuaizhizao.models.equipment import Equipment
 from apps.master_data.services.process_service import batch_get_operation_defect_types_via_table
@@ -226,74 +229,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         material_id: int
     ) -> Optional[ProcessRoute]:
         """
-        为物料自动匹配工艺路线
-        
-        匹配规则（优先级从高到低）：
-        1. 物料直接绑定的工艺路线（process_route_id）
-        2. 物料所属分组绑定的工艺路线（material_group.process_route_id）
-        3. 物料来源配置中的工艺路线（source_config.process_route_id）
-        
-        Args:
-            tenant_id: 组织ID
-            material_id: 物料ID
-            
-        Returns:
-            Optional[ProcessRoute]: 匹配到的工艺路线，如果未匹配到则返回None
+        为物料自动匹配工艺路线（与 MaterialProductProcessService.resolve_process_route_for_material 一致）。
         """
-        # 1. 优先检查物料直接绑定的工艺路线
         material = await Material.get_or_none(
             id=material_id,
             tenant_id=tenant_id,
-            deleted_at__isnull=True
+            deleted_at__isnull=True,
         )
-        
         if not material:
             return None
-        
-        if material.process_route_id:
-            process_route = await ProcessRoute.get_or_none(
-                id=material.process_route_id,
-                tenant_id=tenant_id,
-                is_active=True,
-                deleted_at__isnull=True
+
+        process_route = await MaterialProductProcessService.resolve_process_route_for_material(
+            tenant_id, material_id
+        )
+        if process_route:
+            logger.info(
+                f"物料 {material.main_code or material.code} 匹配工艺路线: {process_route.code}"
             )
-            if process_route:
-                logger.info(f"物料 {material.main_code or material.code} 使用直接绑定的工艺路线: {process_route.code}")
-                return process_route
-        
-        # 2. 检查物料分组绑定的工艺路线
-        if material.group_id:
-            material_group = await MaterialGroup.get_or_none(
-                id=material.group_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
-            )
-            
-            if material_group and material_group.process_route_id:
-                process_route = await ProcessRoute.get_or_none(
-                    id=material_group.process_route_id,
-                    tenant_id=tenant_id,
-                    is_active=True,
-                    deleted_at__isnull=True
-                )
-                if process_route:
-                    logger.info(f"物料 {material.main_code or material.code} 使用分组绑定的工艺路线: {process_route.code}")
-                    return process_route
-        
-        # 3. 检查 source_config 中的工艺路线（物料来源配置可能单独存储）
-        source_config = material.source_config or {}
-        pr_id = source_config.get("process_route_id")
-        if pr_id:
-            process_route = await ProcessRoute.get_or_none(
-                id=pr_id,
-                tenant_id=tenant_id,
-                is_active=True,
-                deleted_at__isnull=True
-            )
-            if process_route:
-                logger.info(f"物料 {material.main_code or material.code} 使用 source_config 中的工艺路线: {process_route.code}")
-                return process_route
-        
+            return process_route
+
         logger.warning(f"物料 {material.main_code or material.code} 未找到匹配的工艺路线")
         return None
 
@@ -302,29 +256,36 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         tenant_id: int,
         work_order: WorkOrder,
         process_route: ProcessRoute,
-        created_by: int
+        created_by: int,
+        *,
+        operation_sequence: Optional[Any] = None,
     ) -> List[WorkOrderOperation]:
         """
-        根据工艺路线自动生成工单工序单
+        根据工艺路线（或物料产品工艺序列）自动生成工单工序单
         
         Args:
             tenant_id: 组织ID
             work_order: 工单对象
             process_route: 工艺路线对象
             created_by: 创建人ID
+            operation_sequence: 优先使用的产品工艺/覆盖序列；缺省则用路线模板
             
         Returns:
             List[WorkOrderOperation]: 生成的工单工序单列表
         """
-        if not process_route.operation_sequence:
-            logger.warning(f"工艺路线 {process_route.code} 没有工序序列")
+        sequence_data = (
+            operation_sequence
+            if operation_sequence is not None
+            else process_route.operation_sequence
+        )
+        if not sequence_data:
+            logger.warning(f"工艺路线 {process_route.code} 没有可用工序序列")
             return []
         
         # 获取创建人信息
         user_info = await self.get_user_info(created_by)
         
         # 解析工序序列（支持多种前端保存格式）
-        sequence_data = process_route.operation_sequence
         operation_list = []
         
         if isinstance(sequence_data, list):
@@ -825,11 +786,25 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     material_id=product_id,
                 )
 
+            resolved_operation_sequence: Optional[Any] = None
+            resolved_allow_jump = False
+            if process_route_resolved and not has_manual_ops:
+                resolved_operation_sequence, resolved_allow_jump = (
+                    await MaterialProductProcessService.resolve_sequence_for_material(
+                        tenant_id,
+                        product_id,
+                        process_route_resolved,
+                    )
+                )
+
             wo_jump_req = getattr(work_order_data, "allow_operation_jump", None)
             if wo_jump_req is None:
-                wo_allow_jump = bool(
-                    getattr(process_route_resolved, "allow_operation_jump", False)
-                ) if process_route_resolved else False
+                if process_route_resolved and not has_manual_ops:
+                    wo_allow_jump = resolved_allow_jump
+                else:
+                    wo_allow_jump = bool(
+                        getattr(process_route_resolved, "allow_operation_jump", False)
+                    ) if process_route_resolved else False
             else:
                 wo_allow_jump = bool(wo_jump_req)
 
@@ -1039,7 +1014,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             tenant_id=tenant_id,
                             work_order=work_order,
                             process_route=process_route_resolved,
-                            created_by=created_by
+                            created_by=created_by,
+                            operation_sequence=resolved_operation_sequence,
                         )
                         logger.info(
                             f"工单 {work_order.code} 已自动生成工序单（基于工艺路线: {process_route_resolved.code}）"
@@ -1630,6 +1606,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                         )
                         if not pr:
                             raise NotFoundError(f"工艺路线不存在: id={new_pr_id}")
+                        seq_data, _jump = (
+                            await MaterialProductProcessService.resolve_sequence_for_material(
+                                tenant_id,
+                                work_order.product_id,
+                                pr,
+                            )
+                        )
                         now = now_utc()
                         for op in existing_ops:
                             op.deleted_at = now
@@ -1639,6 +1622,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             work_order=work_order,
                             process_route=pr,
                             created_by=updated_by,
+                            operation_sequence=seq_data,
                         )
                     update_data["process_route_id"] = new_pr_id
                 else:

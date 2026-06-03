@@ -14,6 +14,10 @@ export interface MaterialGroup {
   parentId?: number;
   description?: string;
   isActive: boolean;
+  processRouteId?: number;
+  processRouteName?: string;
+  process_route_id?: number;
+  process_route_name?: string;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -44,6 +48,7 @@ export interface MaterialGroupCreate {
   parentId?: number;
   description?: string;
   isActive?: boolean;
+  processRouteId?: number | null;
 }
 
 export interface MaterialGroupUpdate {
@@ -53,6 +58,7 @@ export interface MaterialGroupUpdate {
   parentId?: number;
   description?: string;
   isActive?: boolean;
+  processRouteId?: number | null;
 }
 
 export interface MaterialGroupListParams {
@@ -288,6 +294,8 @@ export interface MaterialUpdate {
   // 物料来源控制
   sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
+  /** 自制件默认工艺路线 FK（产品工艺页保存） */
+  process_route_id?: number | null;
 }
 
 export interface MaterialListParams {
