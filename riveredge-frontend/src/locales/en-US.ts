@@ -5291,6 +5291,7 @@ export default {
   'app.master-data.manufacturing.colOperators': 'Operators',
   'app.master-data.manufacturing.colEquipment': 'Equipment',
   'app.master-data.manufacturing.newRoute': 'New route',
+  'app.master-data.manufacturing.editRoute': 'Edit process route',
   'app.master-data.manufacturing.saveRoute': 'Save sequence',
   'app.master-data.manufacturing.routeSaved': 'Operation sequence saved to route',
   'app.master-data.manufacturing.selectRouteFirst': 'Select a process route first',

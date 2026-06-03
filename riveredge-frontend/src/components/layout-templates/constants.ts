@@ -62,6 +62,11 @@ export const MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET = 100;
 export const MODAL_NESTED_ABOVE_PARENT_OFFSET = 10;
 
 /**
+ * 全屏文件预览（PDF / STEP / DWG）：挂 body，须高于 BasicLayout 浮层(≈1200)、业务 Modal 抬升层。
+ */
+export const FILE_PREVIEW_OVERLAY_Z_INDEX = 2000;
+
+/**
  * 表单布局配置
  */
 export const FORM_LAYOUT = {

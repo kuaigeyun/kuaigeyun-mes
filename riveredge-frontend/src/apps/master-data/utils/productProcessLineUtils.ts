@@ -88,12 +88,21 @@ export function enrichLineFromOperation(
   userIdToUuid?: Map<number, string>,
 ): ProductProcessLine {
   const fromOp = resourcesFromOperation(op, userIdToUuid);
+  const o = op as (Operation & Record<string, unknown>) | undefined;
+  const opOverMode =
+    o != null
+      ? String(o.overReportMode ?? o.over_report_mode ?? 'none')
+      : 'none';
+  const opOverValue =
+    o != null ? Number(o.overReportValue ?? o.over_report_value ?? 0) || 0 : 0;
   return {
     ...line,
     workshopIds: hasIdList(line.workshopIds) ? line.workshopIds : fromOp.workshopIds,
     operatorIds: hasIdList(line.operatorIds) ? line.operatorIds : fromOp.operatorIds,
     teamIds: hasIdList(line.teamIds) ? line.teamIds : fromOp.teamIds,
     equipmentIds: hasIdList(line.equipmentIds) ? line.equipmentIds : fromOp.equipmentIds,
+    overReportMode: line.overReportMode ?? opOverMode,
+    overReportValue: line.overReportValue ?? opOverValue,
   };
 }
 

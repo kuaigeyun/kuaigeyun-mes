@@ -264,6 +264,7 @@ const ProductProcessPage: React.FC = () => {
                     setSelectedMaterial(m);
                     setMaterials((prev) => prev.map((row) => (row.uuid === m.uuid ? { ...row, ...m } : row)));
                   }}
+                  onProcessRoutesRefresh={loadProcessRoutes}
                 />
               ) : (
                 <Empty

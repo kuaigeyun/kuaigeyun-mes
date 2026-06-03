@@ -1,6 +1,8 @@
 import React, { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Alert, Spin } from 'antd';
 import { CloseOutlined } from '@ant-design/icons';
+import { FILE_PREVIEW_OVERLAY_Z_INDEX } from '../layout-templates/constants';
 
 export interface PreviewOverlayToolButtonProps {
   children: React.ReactNode;
@@ -45,6 +47,8 @@ export interface UniPreviewOverlayProps {
   inset?: number;
   extra?: React.ReactNode;
   children: React.ReactNode;
+  /** 默认 FILE_PREVIEW_OVERLAY_Z_INDEX，挂到 document.body */
+  zIndex?: number;
 }
 
 /** 全屏预览壳层（文件管理 PDF 预览同款） */
@@ -55,6 +59,7 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
   inset = 16,
   extra,
   children,
+  zIndex = FILE_PREVIEW_OVERLAY_Z_INDEX,
 }) => {
   useEffect(() => {
     if (!open) return;
@@ -67,7 +72,7 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
 
   if (!open) return null;
 
-  return (
+  const overlay = (
     <div
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -75,7 +80,7 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 1000,
+        zIndex,
         background: 'rgba(0, 0, 0, 0.45)',
       }}
     >
@@ -140,6 +145,8 @@ export const UniPreviewOverlay: React.FC<UniPreviewOverlayProps> = ({
       </div>
     </div>
   );
+
+  return createPortal(overlay, document.body);
 };
 
 export interface UniPdfPreviewProps {

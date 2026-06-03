@@ -32,12 +32,19 @@ import { workshopApi, workGroupApi, factoryListItems } from '../services/factory
 import { equipmentApi } from '../../kuaizhizao/services/equipment';
 import { searchUserDisplay } from '../../../services/user';
 import { operationApi, unwrapProcessPagedList } from '../services/process';
+import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import {
   enrichLineFromOperation,
   lineToPersonnelConfigs,
   parsePersonnelConfigs,
   resourcesFromOperation,
 } from '../utils/productProcessLineUtils';
+
+const OVER_REPORT_MODE_OPTIONS = [
+  { value: 'none' as const },
+  { value: 'fixed' as const },
+  { value: 'percent' as const },
+];
 
 export type ProductProcessLinesTableProps = {
   lines: ProductProcessLine[];
@@ -275,6 +282,17 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         name: op.name,
         ...res,
         reportingType: op.reportingType ?? (op as { reporting_type?: string }).reporting_type ?? 'quantity',
+        isNodeOperation: false,
+        overReportMode:
+          (op as { overReportMode?: string }).overReportMode ??
+          (op as { over_report_mode?: string }).over_report_mode ??
+          'none',
+        overReportValue:
+          Number(
+            (op as { overReportValue?: number }).overReportValue ??
+              (op as { over_report_value?: number }).over_report_value ??
+              0,
+          ) || 0,
       },
     ]);
     setAddOpUuid(undefined);
@@ -339,16 +357,17 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         ),
       },
       {
-        title: t('field.operation.code'),
-        dataIndex: 'code',
-        width: 100,
-        ellipsis: true,
-      },
-      {
         title: t('field.operation.name'),
-        dataIndex: 'name',
-        width: 120,
+        key: 'operation',
+        width: 148,
         ellipsis: true,
+        render: (_: unknown, row: ProductProcessLine) => (
+          <UniTableStackedPrimaryCell
+            primary={row.name?.trim() || row.code?.trim() || '—'}
+            secondary={row.code?.trim() || '—'}
+            secondaryCopyable={Boolean(row.code?.trim())}
+          />
+        ),
       },
       {
         title: t('app.master-data.manufacturing.standardTime'),
@@ -448,8 +467,9 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       ...(allowOperationJump
         ? [
             {
-              title: t('field.operation.isNodeOperation'),
-              width: 88,
+              title: t('app.master-data.operationSequence.nodeOperation'),
+              width: 72,
+              align: 'center' as const,
               render: (_: unknown, row: ProductProcessLine, index: number) => (
                 <Switch
                   size="small"
@@ -461,6 +481,48 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             },
           ]
         : []),
+      {
+        title: t('field.operation.overReportMode'),
+        key: 'overReport',
+        width: 196,
+        render: (_: unknown, row: ProductProcessLine, index: number) => (
+          <Space
+            size={4}
+            style={{ width: '100%', flexWrap: 'nowrap' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Select
+              size="small"
+              style={{ width: 96, flexShrink: 0 }}
+              disabled={disabled}
+              value={row.overReportMode ?? 'none'}
+              options={OVER_REPORT_MODE_OPTIONS.map((o) => ({
+                value: o.value,
+                label:
+                  o.value === 'none'
+                    ? t('field.operation.overReportModeNone')
+                    : o.value === 'fixed'
+                      ? t('field.operation.overReportModeFixed')
+                      : t('field.operation.overReportModePercent'),
+              }))}
+              onChange={(v) =>
+                patchLine(index, {
+                  overReportMode: v,
+                  overReportValue: v === 'none' ? 0 : row.overReportValue ?? 0,
+                })
+              }
+            />
+            <InputNumber
+              size="small"
+              min={0}
+              style={{ width: 80, flexShrink: 0 }}
+              disabled={disabled || (row.overReportMode ?? 'none') === 'none'}
+              value={row.overReportValue ?? 0}
+              onChange={(v) => patchLine(index, { overReportValue: v ?? 0 })}
+            />
+          </Space>
+        ),
+      },
       {
         title: t('common.actions'),
         key: 'actions',
@@ -518,7 +580,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       size="small"
       rowKey="operationUuid"
       pagination={false}
-      scroll={{ x: 1280 }}
+      scroll={{ x: allowOperationJump ? 1420 : 1340 }}
       locale={{ emptyText: t('app.master-data.productProcess.noLines') }}
       dataSource={lines}
       columns={columns}
@@ -582,11 +644,13 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
                   boxShadow: '0 4px 12px rgba(24, 144, 255, 0.25)',
                 }}
               >
-                <Space>
-                  <HolderOutlined style={{ color: '#1890ff' }} />
-                  <span>
-                    {activeLine.code} — {activeLine.name}
-                  </span>
+                <Space align="start">
+                  <HolderOutlined style={{ color: '#1890ff', marginTop: 2 }} />
+                  <UniTableStackedPrimaryCell
+                    primary={activeLine.name?.trim() || activeLine.code?.trim() || '—'}
+                    secondary={activeLine.code?.trim() || '—'}
+                    secondaryCopyable={Boolean(activeLine.code?.trim())}
+                  />
                 </Space>
               </div>
             ) : null}

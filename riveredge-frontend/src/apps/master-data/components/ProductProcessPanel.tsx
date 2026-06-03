@@ -5,7 +5,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Alert, Button, Select, Space, Typography, App } from 'antd';
-import { PlusOutlined, SaveOutlined } from '@ant-design/icons';
+import { EditOutlined, PlusOutlined, SaveOutlined } from '@ant-design/icons';
 import type { Material } from '../types/material';
 import type { ProcessRoute } from '../types/process';
 import { processRouteApi, operationApi, unwrapProcessPagedList } from '../services/process';
@@ -27,6 +27,8 @@ export type ProductProcessPanelProps = {
   processRoutes: ProcessRoute[];
   processRoutesLoading: boolean;
   onMaterialUpdated?: (material: Material) => void;
+  /** 路线模板保存后刷新下拉列表（编号/名称等） */
+  onProcessRoutesRefresh?: () => void | Promise<void>;
   /** 两栏布局页不展示物料标题 */
   hideMaterialHeading?: boolean;
   /** 不展示顶部说明条 */
@@ -38,6 +40,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   processRoutes,
   processRoutesLoading,
   onMaterialUpdated,
+  onProcessRoutesRefresh,
   hideMaterialHeading = false,
   hidePanelHint = false,
 }) => {
@@ -49,7 +52,8 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
   const [lines, setLines] = useState<ProductProcessLine[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [createRouteOpen, setCreateRouteOpen] = useState(false);
+  const [routeFormOpen, setRouteFormOpen] = useState(false);
+  const [routeFormEditUuid, setRouteFormEditUuid] = useState<string | null>(null);
 
   const baselineRef = useRef('');
   const routeImportRef = useRef<string | undefined>();
@@ -177,10 +181,26 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     }
   };
 
-  const handleRouteCreated = (route: ProcessRoute) => {
-    routeImportRef.current = '';
-    setRouteUuid(route.uuid);
-    setCreateRouteOpen(false);
+  const openCreateRouteModal = () => {
+    setRouteFormEditUuid(null);
+    setRouteFormOpen(true);
+  };
+
+  const openEditRouteModal = () => {
+    if (!routeUuid) return;
+    setRouteFormEditUuid(routeUuid);
+    setRouteFormOpen(true);
+  };
+
+  const handleRouteFormSuccess = async (route: ProcessRoute) => {
+    const editingUuid = routeFormEditUuid;
+    setRouteFormOpen(false);
+    setRouteFormEditUuid(null);
+    await onProcessRoutesRefresh?.();
+    if (!editingUuid) {
+      routeImportRef.current = '';
+      setRouteUuid(route.uuid);
+    }
   };
 
   return (
@@ -226,8 +246,15 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
                 }))}
                 onChange={handleRouteSelect}
               />
-              <Button icon={<PlusOutlined />} onClick={() => setCreateRouteOpen(true)}>
+              <Button icon={<PlusOutlined />} onClick={openCreateRouteModal}>
                 {t('app.master-data.manufacturing.newRoute')}
+              </Button>
+              <Button
+                icon={<EditOutlined />}
+                disabled={!routeUuid || loading}
+                onClick={openEditRouteModal}
+              >
+                {t('app.master-data.manufacturing.editRoute')}
               </Button>
             </Space>
           </Space>
@@ -259,10 +286,13 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       )}
 
       <RouteFormModal
-        open={createRouteOpen}
-        onClose={() => setCreateRouteOpen(false)}
-        editUuid={null}
-        onSuccess={handleRouteCreated}
+        open={routeFormOpen}
+        onClose={() => {
+          setRouteFormOpen(false);
+          setRouteFormEditUuid(null);
+        }}
+        editUuid={routeFormEditUuid}
+        onSuccess={(route) => void handleRouteFormSuccess(route)}
       />
     </>
   );

@@ -5336,6 +5336,7 @@ export default {
   'app.master-data.manufacturing.colOperators': '操作员',
   'app.master-data.manufacturing.colEquipment': '设备',
   'app.master-data.manufacturing.newRoute': '新建路线',
+  'app.master-data.manufacturing.editRoute': '编辑工艺路线',
   'app.master-data.manufacturing.saveRoute': '保存工序序列',
   'app.master-data.manufacturing.routeSaved': '工序序列已保存到工艺路线',
   'app.master-data.manufacturing.selectRouteFirst': '请先选择工艺路线',
