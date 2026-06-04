@@ -36,7 +36,6 @@ from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
 from apps.kuaizhizao.services.report_service import ReportService
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
-from apps.kuaizhizao.services.scheduling_scenario_service import SchedulingScenarioService
 
 # 初始化服务实例
 work_order_service = WorkOrderService()
@@ -51,7 +50,6 @@ disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
 report_service = ReportService()
-scheduling_scenario_service = SchedulingScenarioService()
 from apps.kuaizhizao.services.quality_service import (
     IncomingInspectionService,
     ProcessInspectionService,
@@ -65,7 +63,6 @@ from apps.kuaizhizao.services.sales_service import (
 )
 # BOM管理已移至master_data APP，不再需要BOMService
 from apps.kuaizhizao.services.planning_service import ProductionPlanningService
-from apps.kuaizhizao.services.advanced_scheduling_service import AdvancedSchedulingService
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
@@ -249,18 +246,6 @@ from apps.kuaizhizao.schemas.planning import (
     ProductionPlanCreate,
     ProductionPlanUpdate,
     ProductionPlanItemResponse,
-    # 高级排产
-    IntelligentSchedulingRequest,
-    IntelligentSchedulingResponse,
-    OptimizeScheduleRequest,
-    OptimizeScheduleResponse,
-    ImpactedRescheduleRequest,
-    ImpactedRescheduleResponse,
-    SchedulingScenarioCreate,
-    SchedulingScenarioUpdate,
-    SchedulingScenarioRunRequest,
-    SchedulingScenarioResponse,
-    SchedulingScenarioListResponse,
 )
 
 from .work_orders import router as work_orders_router
@@ -271,6 +256,26 @@ from .quality_execution import router as quality_execution_router
 from .quality_improvement import router as quality_improvement_router
 from .document_relations_legacy import router as document_relations_legacy_router
 from ..station.station import router as station_router
+
+def _scheduling_deep_link(work_order_id: int) -> str:
+    return f"/apps/kuaizhizao/plan-management/scheduling?work_order_ids={work_order_id}"
+
+
+def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust_actions: set):
+    """计划类异常处理后引导至可视排产页手工调整，不再自动重排。"""
+    work_order_id = handled.get("work_order_id") if isinstance(handled, dict) else getattr(handled, "work_order_id", None)
+    if action not in plan_adjust_actions or not work_order_id:
+        return handled
+    link = _scheduling_deep_link(int(work_order_id))
+    notice = "请在可视排产中手工调整计划日期"
+    if isinstance(handled, dict):
+        handled["scheduling_deep_link"] = link
+        handled["scheduling_notice"] = notice
+        return handled
+    if hasattr(handled, "model_copy"):
+        return handled.model_copy(update={"scheduling_deep_link": link, "scheduling_notice": notice})
+    return handled
+
 
 # 创建路由
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
@@ -1659,166 +1664,6 @@ async def push_production_plan_to_work_orders(
         )
 
 
-# ============ 高级排产 API ============
-
-@router.post("/scheduling/intelligent", response_model=IntelligentSchedulingResponse, summary="Intelligent scheduling")
-async def intelligent_scheduling(
-    request: IntelligentSchedulingRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> IntelligentSchedulingResponse:
-    """
-    智能排产
-    
-    根据多个约束条件（优先级、交期、工作中心能力、设备可用性等）进行智能排产。
-    
-    - **work_order_ids**: 工单ID列表（可选，如果不提供则对所有待排产工单进行排产）
-    - **constraints**: 约束条件
-        - priority_weight: 优先级权重（0-1）
-        - due_date_weight: 交期权重（0-1）
-        - capacity_weight: 产能权重（0-1）
-        - setup_time_weight: 换线时间权重（0-1）
-        - optimize_objective: 优化目标（min_makespan/min_total_time/min_setup_time）
-    """
-    service = AdvancedSchedulingService()
-    result = await service.intelligent_scheduling(
-        tenant_id=tenant_id,
-        work_order_ids=request.work_order_ids,
-        constraints=request.constraints.model_dump() if request.constraints else None,
-        apply_results=request.apply_results,
-        updated_by=current_user.id,
-    )
-    return IntelligentSchedulingResponse(**result)
-
-
-@router.post("/scheduling/optimize", response_model=OptimizeScheduleResponse, summary="Optimize schedule")
-async def optimize_schedule(
-    request: OptimizeScheduleRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> OptimizeScheduleResponse:
-    """
-    优化排产计划
-    
-    对已有的排产计划进行优化，调整工单排产时间以优化目标函数。
-    
-    - **schedule_id**: 排产计划ID（可选）
-    - **optimization_params**: 优化参数
-        - max_iterations: 最大迭代次数
-        - convergence_threshold: 收敛阈值
-        - optimization_objective: 优化目标
-    """
-    service = AdvancedSchedulingService()
-    result = await service.optimize_schedule(
-        tenant_id=tenant_id,
-        schedule_id=request.schedule_id,
-        optimization_params=request.optimization_params.model_dump() if request.optimization_params else None,
-        updated_by=current_user.id,
-    )
-    return OptimizeScheduleResponse(**result)
-
-
-@router.post("/scheduling/recalculate-impacted", response_model=ImpactedRescheduleResponse, summary="Recalculate impacted schedule")
-async def recalculate_impacted_schedule(
-    request: ImpactedRescheduleRequest,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> ImpactedRescheduleResponse:
-    """异常/事件驱动的局部重排入口。"""
-    service = AdvancedSchedulingService()
-    result = await service.reschedule_impacted_orders(
-        tenant_id=tenant_id,
-        trigger_type=request.trigger_type,
-        seed_work_order_ids=request.work_order_ids,
-        updated_by=current_user.id,
-        lookahead_hours=request.lookahead_hours,
-        apply_results=request.apply_results,
-    )
-    return ImpactedRescheduleResponse(**result)
-
-
-@router.get("/scheduling/scenarios", response_model=SchedulingScenarioListResponse, summary="List scheduling scenarios")
-async def list_scheduling_scenarios(
-    skip: int = Query(0, ge=0, description="跳过数量"),
-    limit: int = Query(20, ge=1, le=100, description="限制数量"),
-    status: Optional[str] = Query(None, description="场景状态"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioListResponse:
-    return await scheduling_scenario_service.list_scenarios(
-        tenant_id=tenant_id,
-        skip=skip,
-        limit=limit,
-        status=status,
-    )
-
-
-@router.post("/scheduling/scenarios", response_model=SchedulingScenarioResponse, summary="Create scheduling scenario")
-async def create_scheduling_scenario(
-    body: SchedulingScenarioCreate,
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioResponse:
-    return await scheduling_scenario_service.create_scenario(
-        tenant_id=tenant_id,
-        payload=body,
-        created_by=current_user.id,
-    )
-
-
-@router.get("/scheduling/scenarios/{scenario_id}", response_model=SchedulingScenarioResponse, summary="Get scheduling scenario")
-async def get_scheduling_scenario(
-    scenario_id: int = Path(..., description="场景ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioResponse:
-    return await scheduling_scenario_service.get_scenario(tenant_id=tenant_id, scenario_id=scenario_id)
-
-
-@router.put("/scheduling/scenarios/{scenario_id}", response_model=SchedulingScenarioResponse, summary="Update scheduling scenario")
-async def update_scheduling_scenario(
-    body: SchedulingScenarioUpdate,
-    scenario_id: int = Path(..., description="场景ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioResponse:
-    return await scheduling_scenario_service.update_scenario(
-        tenant_id=tenant_id,
-        scenario_id=scenario_id,
-        payload=body,
-        updated_by=current_user.id,
-    )
-
-
-@router.post("/scheduling/scenarios/{scenario_id}/run", response_model=SchedulingScenarioResponse, summary="Run scheduling scenario")
-async def run_scheduling_scenario(
-    body: SchedulingScenarioRunRequest,
-    scenario_id: int = Path(..., description="场景ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioResponse:
-    return await scheduling_scenario_service.run_scenario(
-        tenant_id=tenant_id,
-        scenario_id=scenario_id,
-        updated_by=current_user.id,
-        constraints_override=body.constraints_override.model_dump() if body.constraints_override else None,
-        apply_objective=body.apply_objective,
-    )
-
-
-@router.post("/scheduling/scenarios/{scenario_id}/publish", response_model=SchedulingScenarioResponse, summary="Publish scheduling scenario")
-async def publish_scheduling_scenario(
-    scenario_id: int = Path(..., description="场景ID"),
-    current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-) -> SchedulingScenarioResponse:
-    return await scheduling_scenario_service.publish_scenario(
-        tenant_id=tenant_id,
-        scenario_id=scenario_id,
-        updated_by=current_user.id,
-    )
-
-
 # ============ 采购订单管理 API ============
 # 注意：采购订单API已移至 purchase.py，此处不再重复实现
 # 请使用 /purchase-orders 路径访问采购订单API
@@ -1875,20 +1720,11 @@ async def handle_material_shortage_exception(
         alternative_material_id=alternative_material_id,
         remarks=remarks,
     )
-    try:
-        trigger_types = {"purchase", "substitute", "adjust_plan", "expedite", "increase_resources"}
-        work_order_id = handled.get("work_order_id") if isinstance(handled, dict) else getattr(handled, "work_order_id", None)
-        if action in trigger_types and work_order_id:
-            await AdvancedSchedulingService().reschedule_impacted_orders(
-                tenant_id=tenant_id,
-                trigger_type="material_shortage",
-                seed_work_order_ids=[int(work_order_id)],
-                updated_by=current_user.id,
-                apply_results=True,
-            )
-    except Exception as e:
-        logger.warning(f"缺料异常触发局部重排失败 exception_id={exception_id}: {e}")
-    return handled
+    return _attach_visual_scheduling_guidance(
+        handled,
+        action=action,
+        plan_adjust_actions={"purchase", "substitute", "adjust_plan", "expedite", "increase_resources"},
+    )
 
 
 @router.post("/work-orders/{work_order_id}/detect-shortage", response_model=List[MaterialShortageExceptionResponse], summary="Detect work order shortage")
@@ -1949,20 +1785,11 @@ async def handle_delivery_delay_exception(
         action=action,
         remarks=remarks,
     )
-    try:
-        trigger_types = {"adjust_plan", "increase_resources", "expedite"}
-        work_order_id = handled.get("work_order_id") if isinstance(handled, dict) else getattr(handled, "work_order_id", None)
-        if action in trigger_types and work_order_id:
-            await AdvancedSchedulingService().reschedule_impacted_orders(
-                tenant_id=tenant_id,
-                trigger_type="delivery_delay",
-                seed_work_order_ids=[int(work_order_id)],
-                updated_by=current_user.id,
-                apply_results=True,
-            )
-    except Exception as e:
-        logger.warning(f"延期异常触发局部重排失败 exception_id={exception_id}: {e}")
-    return handled
+    return _attach_visual_scheduling_guidance(
+        handled,
+        action=action,
+        plan_adjust_actions={"adjust_plan", "increase_resources", "expedite"},
+    )
 
 
 @router.post("/work-orders/{work_order_id}/detect-delay", response_model=List[DeliveryDelayExceptionResponse], summary="Detect work order delay")

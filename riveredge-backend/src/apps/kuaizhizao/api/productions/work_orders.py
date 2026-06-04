@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from core.api.deps.access import require_module_access, require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
@@ -19,11 +19,17 @@ from apps.kuaizhizao.services.work_order_service import WorkOrderService
 from apps.kuaizhizao.services.rework_order_service import ReworkOrderService
 from apps.kuaizhizao.services.demand_source_chain_service import DemandSourceChainService
 from apps.kuaizhizao.services.outsource_service import OutsourceService
+from apps.kuaizhizao.schemas.visual_scheduling import (
+    OperationBatchUpdateDatesResult,
+    OperationBatchUpdateStationsResult,
+    WorkOrderBatchUpdateDatesResult,
+)
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
     WorkOrderUpdate,
     WorkOrderBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateDatesRequest,
+    WorkOrderOperationBatchUpdateStationsRequest,
     WorkOrderResponse,
     MaterialShortageResponse,
     WorkOrderFreezeRequest,
@@ -805,42 +811,64 @@ async def update_work_order(
     )
 
 
-@router.put("/work-orders/batch-update-dates", summary="Batch update work order planned dates")
+@router.put(
+    "/work-orders/batch-update-dates",
+    response_model=WorkOrderBatchUpdateDatesResult,
+    summary="Batch update work order planned dates",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
 async def batch_update_work_order_dates(
     request: WorkOrderBatchUpdateDatesRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量更新工单计划日期（甘特图拖拽后持久化）
-
-    - **updates**: 更新项列表，每项包含 work_order_id、planned_start_date、planned_end_date
-    """
-    await WorkOrderService().batch_update_dates(
+) -> WorkOrderBatchUpdateDatesResult:
+    """批量更新工单计划日期（甘特图拖拽后持久化）。"""
+    raw = await WorkOrderService().batch_update_dates(
         tenant_id=tenant_id,
         updates=request.updates,
         updated_by=current_user.id,
     )
-    return {"success": True, "message": "更新成功"}
+    return WorkOrderBatchUpdateDatesResult(**raw)
 
 
-@router.put("/work-orders/batch-update-operation-dates", summary="Batch update operation planned dates")
+@router.put(
+    "/work-orders/batch-update-operation-dates",
+    response_model=OperationBatchUpdateDatesResult,
+    summary="Batch update operation planned dates",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
 async def batch_update_work_order_operation_dates(
     request: WorkOrderOperationBatchUpdateDatesRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    批量更新工序计划日期（工序级派工，甘特图拖拽工序后持久化）
-
-    - **updates**: 更新项列表，每项包含 operation_id、planned_start_date、planned_end_date
-    """
-    await WorkOrderService().batch_update_operation_dates(
+) -> OperationBatchUpdateDatesResult:
+    """批量更新工序计划日期（工序级派工，甘特图拖拽工序后持久化）。"""
+    raw = await WorkOrderService().batch_update_operation_dates(
         tenant_id=tenant_id,
         updates=request.updates,
         updated_by=current_user.id,
     )
-    return {"success": True, "message": "更新成功"}
+    return OperationBatchUpdateDatesResult(**raw)
+
+
+@router.put(
+    "/work-orders/batch-update-operation-stations",
+    response_model=OperationBatchUpdateStationsResult,
+    summary="Batch update operation assigned stations",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def batch_update_work_order_operation_stations(
+    request: WorkOrderOperationBatchUpdateStationsRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OperationBatchUpdateStationsResult:
+    """批量更新工序指派工位（可视排产跨工位改派）。"""
+    raw = await WorkOrderService().batch_update_operation_stations(
+        tenant_id=tenant_id,
+        updates=request.updates,
+        updated_by=current_user.id,
+    )
+    return OperationBatchUpdateStationsResult(**raw)
 
 
 @router.delete("/work-orders/{work_order_id:int}", summary="Delete work order")

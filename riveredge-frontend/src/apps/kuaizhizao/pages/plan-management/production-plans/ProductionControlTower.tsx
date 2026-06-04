@@ -128,7 +128,7 @@ const ProductionControlTower: React.FC = () => {
   const kpiShortcuts: ModuleShortcutDef[] = useMemo(
     () => [
       { key: 'demand', title: '需求运算', icon: <RocketOutlined style={{ fontSize: 20, color: '#1890ff' }} />, path: '/apps/kuaizhizao/plan-management/demand-computation' },
-      { key: 'scheduling', title: '主生产排程', icon: <AppstoreOutlined style={{ fontSize: 20, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/plan-management/scheduling' },
+      { key: 'scheduling', title: '可视排产', icon: <AppstoreOutlined style={{ fontSize: 20, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/plan-management/scheduling' },
       { key: 'plans', title: '生产计划', icon: <ScheduleOutlined style={{ fontSize: 20, color: '#722ed1' }} />, path: '/apps/kuaizhizao/plan-management/production-plans' },
       { key: 'work-orders', title: '工单下放', icon: <SafetyOutlined style={{ fontSize: 20, color: '#52c41a' }} />, path: '/apps/kuaizhizao/production-execution/work-orders' },
       { key: 'shortage', title: '缺料预警', icon: <AlertOutlined style={{ fontSize: 20, color: '#ff4d4f' }} />, path: '/apps/kuaizhizao/plan-management/reports/material-shortage-alert' },

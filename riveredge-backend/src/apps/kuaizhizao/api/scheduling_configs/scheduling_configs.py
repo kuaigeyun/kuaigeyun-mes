@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTT
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
 from apps.kuaizhizao.schemas.scheduling_config import (
@@ -96,7 +97,11 @@ async def list_scheduling_configs(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询排程配置列表失败")
 
 
-@router.get("/default", summary="Get default scheduling config")
+@router.get(
+    "/default",
+    summary="Get default scheduling config",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:read"))],
+)
 async def get_default_scheduling_config(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -112,7 +117,12 @@ async def get_default_scheduling_config(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取默认排程配置失败")
 
 
-@router.put("/default", response_model=SchedulingConfigResponse, summary="Upsert default scheduling config")
+@router.put(
+    "/default",
+    response_model=SchedulingConfigResponse,
+    summary="Upsert default scheduling config",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
 async def upsert_default_scheduling_config(
     constraints: SchedulingConstraints,
     current_user: User = Depends(get_current_user),

@@ -1,0 +1,45 @@
+.scheduling-prep-station-grid {
+  margin-bottom: 16px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  overflow: hidden;
+
+  &__head,
+  &__row {
+    display: grid;
+    grid-template-columns: 96px minmax(148px, 1fr) minmax(168px, 1fr) minmax(168px, 1fr);
+    gap: 8px;
+    align-items: center;
+    padding: 6px 8px;
+  }
+
+  &__head {
+    background: #fafafa;
+    border-bottom: 1px solid #f0f0f0;
+    font-weight: 500;
+    color: rgba(0, 0, 0, 0.88);
+  }
+
+  &__row {
+    border-bottom: 1px solid #f0f0f0;
+
+    &:last-child {
+      border-bottom: none;
+    }
+  }
+
+  &__op {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .ant-form-item {
+    margin-bottom: 0;
+  }
+
+  .ant-picker {
+    width: 100%;
+  }
+}

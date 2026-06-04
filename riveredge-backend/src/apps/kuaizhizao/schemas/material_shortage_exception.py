@@ -78,6 +78,8 @@ class MaterialShortageExceptionResponse(MaterialShortageExceptionBase):
     updated_at: datetime = Field(..., description="更新时间")
     picking_score: Optional[float] = Field(None, description="关联工单备料场景综合分")
     picking_rank_band: Optional[str] = Field(None, description="备料等级带 A/B/C")
+    scheduling_deep_link: Optional[str] = Field(None, description="可视排产页深链")
+    scheduling_notice: Optional[str] = Field(None, description="排产操作提示")
 
 
 class MaterialShortageExceptionListResponse(MaterialShortageExceptionResponse):

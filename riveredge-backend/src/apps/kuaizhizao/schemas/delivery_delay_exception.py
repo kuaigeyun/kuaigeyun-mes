@@ -67,6 +67,8 @@ class DeliveryDelayExceptionResponse(DeliveryDelayExceptionBase):
     handled_at: Optional[datetime] = Field(None, description="处理时间")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+    scheduling_deep_link: Optional[str] = Field(None, description="可视排产页深链")
+    scheduling_notice: Optional[str] = Field(None, description="排产操作提示")
 
 
 class DeliveryDelayExceptionListResponse(DeliveryDelayExceptionResponse):

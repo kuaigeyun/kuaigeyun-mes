@@ -249,7 +249,7 @@ const STAGE_GROUPS: { key: string; label: string; stageKeys: string[] }[] = [
   { key: 'purchase', label: '采购', stageKeys: ['purchase_follow', 'purchase_receipt'] },
   { key: 'warehouse', label: '仓储委外', stageKeys: ['outsource'] },
   { key: 'kitting', label: '物控齐套', stageKeys: ['kitting'] },
-  { key: 'scheduling', label: '计划排程', stageKeys: ['scheduling'] },
+  { key: 'scheduling', label: '可视排产', stageKeys: ['scheduling'] },
   { key: 'production', label: '生产执行', stageKeys: ['release', 'production'] },
 ];
 

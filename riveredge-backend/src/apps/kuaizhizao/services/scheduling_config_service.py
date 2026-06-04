@@ -22,6 +22,19 @@ from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
 
+def _normalize_constraints_payload(raw) -> dict:
+    if raw is None:
+        return SchedulingConstraints().model_dump()
+    if hasattr(raw, "model_dump"):
+        data = raw.model_dump()
+    elif isinstance(raw, dict):
+        data = dict(raw)
+    else:
+        return SchedulingConstraints().model_dump()
+    cleaned = SchedulingConstraints.strip_legacy_keys(data)
+    return SchedulingConstraints.model_validate(cleaned).model_dump()
+
+
 class SchedulingConfigService(AppBaseService[SchedulingConfig]):
     """
     排程配置服务
@@ -44,7 +57,7 @@ class SchedulingConfigService(AppBaseService[SchedulingConfig]):
                 tenant_id=tenant_id,
                 is_default=True,
             )
-            constraints_dict = constraints.model_dump()
+            constraints_dict = _normalize_constraints_payload(constraints)
             if current_default:
                 current_default.constraints = constraints_dict
                 current_default.is_active = True

@@ -11,47 +11,67 @@ export { warehouseApi } from './warehouse-execution';
 export { qualityApi, inspectionPlanApi } from './quality-execution';
 export { planningApi } from './planning';
 
-export type SchedulingObjective =
-  | 'min_makespan'
-  | 'min_total_time'
-  | 'min_setup_time'
-  | 'min_tardiness';
-
 export interface SchedulingConstraints {
-  priority_weight: number;
-  due_date_weight: number;
-  capacity_weight: number;
-  setup_time_weight: number;
-  optimize_objective: SchedulingObjective;
   consider_human: boolean;
   consider_equipment: boolean;
   consider_material: boolean;
   consider_mold_tool: boolean;
-  scheduling_window_days?: number;
   daily_capacity_hours?: number;
   freeze_horizon_days?: number;
   rolling_horizon_days?: number;
-  bottleneck_first?: boolean;
-  bottleneck_work_center_ids?: number[];
-  consider_setup_family?: boolean;
   setup_changeover_hours?: number;
-  local_reschedule_hours?: number;
+  bottleneck_work_center_ids?: number[];
 }
 
-export interface SchedulingScenario {
-  id: number;
-  name: string;
-  description?: string;
-  status: 'draft' | 'simulated' | 'published' | string;
-  objective: SchedulingObjective | string;
-  work_order_ids: number[];
-  constraints: SchedulingConstraints;
-  metrics: Record<string, any>;
-  result_snapshot: Record<string, any>;
-  published_at?: string | null;
-  published_by?: number | null;
-  created_at: string;
-  updated_at: string;
+export interface VisualSchedulingConflict {
+  type: string;
+  work_order_id?: number;
+  work_order_code?: string;
+  operation_id?: number;
+  task_id?: string;
+  station_id?: number;
+  resource_id?: number;
+  message: string;
+}
+
+export interface VisualSchedulingMaterialIssue {
+  work_order_id: number;
+  work_order_code: string;
+  readiness_rate?: number;
+  message: string;
+}
+
+export interface VisualSchedulingBoardScan {
+  conflicts: VisualSchedulingConflict[];
+  unscheduled_orders: Array<{ work_order_id: number; work_order_code: string; reason: string }>;
+  material_issues?: VisualSchedulingMaterialIssue[];
+  load_by_work_center: Array<{
+    work_center_id: number;
+    work_center_name: string;
+    day: string;
+    hours: number;
+    rate: number;
+    overloaded: boolean;
+  }>;
+  load_by_station?: Array<{
+    station_id: number;
+    station_name: string;
+    day: string;
+    hours: number;
+    rate: number;
+    overloaded: boolean;
+  }>;
+  conflict_count: number;
+  unscheduled_count: number;
+  material_issue_count?: number;
+  overloaded_station_count?: number;
+}
+
+export interface BatchUpdateResult {
+  updated: number[];
+  skipped_frozen: number[];
+  skipped_freeze_window: number[];
+  failed: Array<{ id: number; reason: string }>;
 }
 
 
@@ -441,72 +461,37 @@ export const schedulingConfigApi = {
   },
 };
 
-// 高级排产相关接口
-export const advancedSchedulingApi = {
-  // 智能排产
-  intelligentScheduling: async (data: {
+export const visualSchedulingApi = {
+  boardScan: async (params?: {
     work_order_ids?: number[];
-    constraints?: Partial<SchedulingConstraints>;
+    work_center_id?: number;
+    horizon_days?: number;
   }) => {
-    return apiRequest('/apps/kuaizhizao/scheduling/intelligent', { method: 'POST', data });
+    const query: Record<string, string | number> = {};
+    if (params?.horizon_days != null) query.horizon_days = params.horizon_days;
+    if (params?.work_center_id != null) query.work_center_id = params.work_center_id;
+    if (params?.work_order_ids?.length) query.work_order_ids = params.work_order_ids.join(',');
+    return apiRequest<VisualSchedulingBoardScan>('/apps/kuaizhizao/scheduling/board-scan', {
+      method: 'GET',
+      params: query,
+    });
   },
-
-  // 优化排产计划
-  optimizeSchedule: async (data: {
-    schedule_id?: number;
-    optimization_params?: {
-      max_iterations?: number;
-      convergence_threshold?: number;
-      optimization_objective?: SchedulingObjective;
-    };
+  validateAdjustments: async (data: {
+    work_order_updates?: Array<{
+      work_order_id: number;
+      planned_start_date: string;
+      planned_end_date: string;
+    }>;
+    operation_updates?: Array<{
+      operation_id: number;
+      planned_start_date: string;
+      planned_end_date: string;
+    }>;
+    operation_station_updates?: Array<{ operation_id: number; assigned_station_id: number }>;
   }) => {
-    return apiRequest('/apps/kuaizhizao/scheduling/optimize', { method: 'POST', data });
-  },
-  recalculateImpacted: async (data: {
-    trigger_type: string;
-    work_order_ids: number[];
-    lookahead_hours?: number;
-    apply_results?: boolean;
-  }) => {
-    return apiRequest('/apps/kuaizhizao/scheduling/recalculate-impacted', { method: 'POST', data });
-  },
-};
-
-export const schedulingScenarioApi = {
-  list: async (params?: { skip?: number; limit?: number; status?: string }) => {
-    return apiRequest('/apps/kuaizhizao/scheduling/scenarios', { method: 'GET', params });
-  },
-  create: async (data: {
-    name: string;
-    description?: string;
-    work_order_ids: number[];
-    constraints: SchedulingConstraints;
-    objective: SchedulingObjective | string;
-  }) => {
-    return apiRequest('/apps/kuaizhizao/scheduling/scenarios', { method: 'POST', data });
-  },
-  update: async (
-    id: number,
-    data: Partial<{
-      name: string;
-      description?: string;
-      work_order_ids: number[];
-      constraints: SchedulingConstraints;
-      objective: SchedulingObjective | string;
-    }>
-  ) => {
-    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}`, { method: 'PUT', data });
-  },
-  run: async (
-    id: number,
-    data?: Partial<{
-      constraints_override: SchedulingConstraints;
-      apply_objective: SchedulingObjective | string;
-    }>
-  ) => {
-    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}/run`, { method: 'POST', data: data || {} });
-  },
-  publish: async (id: number) => {
-    return apiRequest(`/apps/kuaizhizao/scheduling/scenarios/${id}/publish`, { method: 'POST' });
+    return apiRequest<{ valid: boolean; conflicts: VisualSchedulingConflict[]; conflict_count: number }>(
+      '/apps/kuaizhizao/scheduling/validate-adjustments',
+      { method: 'POST', data }
+    );
   },
 };

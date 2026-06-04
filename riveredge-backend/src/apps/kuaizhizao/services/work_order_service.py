@@ -1364,8 +1364,13 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                                 "id": op.id,
                                 "operation_name": op.operation_name,
                                 "sequence": op.sequence,
+                                "work_center_id": op.work_center_id,
+                                "work_center_name": op.work_center_name,
                                 "planned_start_date": op.planned_start_date,
                                 "planned_end_date": op.planned_end_date,
+                                "assigned_station_id": op.assigned_station_id,
+                                "assigned_station_name": op.assigned_station_name,
+                                "assigned_equipment_id": op.assigned_equipment_id,
                                 "assigned_equipment_name": op.assigned_equipment_name,
                                 "assigned_mold_name": op.assigned_mold_name,
                                 "assigned_tool_name": op.assigned_tool_name,
@@ -1678,35 +1683,51 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         tenant_id: int,
         updates: list,
         updated_by: int,
-    ) -> None:
+    ) -> Dict[str, Any]:
         """
         批量更新工单计划日期（甘特图拖拽后持久化）
 
-        Args:
-            tenant_id: 组织ID
-            updates: 更新项列表，每项包含 work_order_id、planned_start_date、planned_end_date
-            updated_by: 更新人ID
+        Returns:
+            updated / skipped_frozen / skipped_freeze_window / failed
         """
+        from apps.kuaizhizao.services.scheduling_freeze import freeze_lock_reason
+        from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
+
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "skipped_freeze_window": [],
+            "failed": [],
+        }
         if not updates:
-            return
+            return result
+        constraints = await VisualSchedulingService()._load_constraints(tenant_id)
+        freeze_days = int(constraints.get("freeze_horizon_days", 0))
         updated_wo_ids: List[int] = []
         async with in_transaction():
-            for item in updates[:50]:  # 单次最多 50 条
+            for item in updates[:50]:
                 wo_id = item.work_order_id if hasattr(item, 'work_order_id') else item.get('work_order_id')
                 start = item.planned_start_date if hasattr(item, 'planned_start_date') else item.get('planned_start_date')
                 end = item.planned_end_date if hasattr(item, 'planned_end_date') else item.get('planned_end_date')
                 if not wo_id or not start or not end:
                     continue
                 wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=wo_id)
-                if wo:
-                    if wo.is_frozen:
-                        logger.warning(f"工单 {wo.code} 已冻结，忽略日期批量更新")
-                        continue
-                    wo.planned_start_date = start
-                    wo.planned_end_date = end
-                    wo.updated_by = updated_by
-                    await wo.save()
-                    updated_wo_ids.append(int(wo_id))
+                if not wo:
+                    result["failed"].append({"id": int(wo_id), "reason": "工单不存在"})
+                    continue
+                lock = freeze_lock_reason(wo, freeze_days)
+                if lock == "frozen":
+                    result["skipped_frozen"].append(int(wo_id))
+                    continue
+                if lock == "freeze_window":
+                    result["skipped_freeze_window"].append(int(wo_id))
+                    continue
+                wo.planned_start_date = start
+                wo.planned_end_date = end
+                wo.updated_by = updated_by
+                await wo.save()
+                updated_wo_ids.append(int(wo_id))
+                result["updated"].append(int(wo_id))
 
         if updated_wo_ids:
             from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
@@ -1714,23 +1735,30 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
             for wo_id in updated_wo_ids:
                 await dispatch_work_order_score_recalc(wo_id, include_kitting=False)
+        return result
 
     async def batch_update_operation_dates(
         self,
         tenant_id: int,
         updates: list,
         updated_by: int,
-    ) -> None:
+    ) -> Dict[str, Any]:
         """
         批量更新工序计划日期（工序级派工，甘特图拖拽工序后持久化）
-
-        Args:
-            tenant_id: 组织ID
-            updates: 更新项列表，每项包含 operation_id、planned_start_date、planned_end_date
-            updated_by: 更新人ID
         """
+        from apps.kuaizhizao.services.scheduling_freeze import freeze_lock_reason, is_planned_start_in_freeze_window
+        from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
+
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "skipped_freeze_window": [],
+            "failed": [],
+        }
         if not updates:
-            return
+            return result
+        constraints = await VisualSchedulingService()._load_constraints(tenant_id)
+        freeze_days = int(constraints.get("freeze_horizon_days", 0))
         updated_wo_ids: set[int] = set()
         async with in_transaction():
             for item in updates[:50]:
@@ -1740,36 +1768,51 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if not op_id or not start or not end:
                     continue
                 op = await WorkOrderOperation.get_or_none(tenant_id=tenant_id, id=op_id)
-                if op:
-                    wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
-                    if wo and wo.is_frozen:
-                        logger.warning(f"工单 {wo.code} 已冻结，忽略工序日期批量更新")
-                        continue
-                    await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
-                        planned_start_date=start,
-                        planned_end_date=end,
+                if not op:
+                    result["failed"].append({"id": int(op_id), "reason": "工序不存在"})
+                    continue
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id)
+                if not wo:
+                    result["failed"].append({"id": int(op_id), "reason": "工单不存在"})
+                    continue
+                lock = freeze_lock_reason(wo, freeze_days)
+                if lock == "frozen":
+                    if int(wo.id) not in result["skipped_frozen"]:
+                        result["skipped_frozen"].append(int(wo.id))
+                    continue
+                is_first_schedule = op.planned_start_date is None or op.planned_end_date is None
+                if (
+                    not is_first_schedule
+                    and is_planned_start_in_freeze_window(start, freeze_days)
+                ):
+                    if int(wo.id) not in result["skipped_freeze_window"]:
+                        result["skipped_freeze_window"].append(int(wo.id))
+                    continue
+                await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
+                    planned_start_date=start,
+                    planned_end_date=end,
+                )
+                result["updated"].append(int(op_id))
+                ops = await WorkOrderOperation.filter(
+                    tenant_id=tenant_id,
+                    work_order_id=op.work_order_id,
+                    deleted_at__isnull=True,
+                ).order_by("sequence").all()
+                wo_start = min(
+                    (o.planned_start_date for o in ops if o.planned_start_date),
+                    default=wo.planned_start_date,
+                )
+                wo_end = max(
+                    (o.planned_end_date for o in ops if o.planned_end_date),
+                    default=wo.planned_end_date,
+                )
+                if wo_start and wo_end:
+                    await WorkOrder.filter(tenant_id=tenant_id, id=op.work_order_id).update(
+                        planned_start_date=wo_start,
+                        planned_end_date=wo_end,
+                        updated_by=updated_by,
                     )
-                    if wo:
-                        ops = await WorkOrderOperation.filter(
-                            tenant_id=tenant_id,
-                            work_order_id=op.work_order_id,
-                            deleted_at__isnull=True,
-                        ).order_by("sequence").all()
-                        wo_start = min(
-                            (o.planned_start_date for o in ops if o.planned_start_date),
-                            default=wo.planned_start_date,
-                        )
-                        wo_end = max(
-                            (o.planned_end_date for o in ops if o.planned_end_date),
-                            default=wo.planned_end_date,
-                        )
-                        if wo_start and wo_end:
-                            await WorkOrder.filter(tenant_id=tenant_id, id=op.work_order_id).update(
-                                planned_start_date=wo_start,
-                                planned_end_date=wo_end,
-                                updated_by=updated_by,
-                            )
-                            updated_wo_ids.add(int(op.work_order_id))
+                    updated_wo_ids.add(int(op.work_order_id))
 
         if updated_wo_ids:
             from apps.kuaizhizao.workflows.functions.work_order_score_workflow import (
@@ -1777,6 +1820,56 @@ class WorkOrderService(AppBaseService[WorkOrder]):
             )
             for wo_id in updated_wo_ids:
                 await dispatch_work_order_score_recalc(wo_id, include_kitting=False)
+        return result
+
+    async def batch_update_operation_stations(
+        self,
+        tenant_id: int,
+        updates: list,
+        updated_by: int,
+    ) -> Dict[str, Any]:
+        """批量更新工序指派工位（可视排产跨工位改派）。"""
+        from apps.master_data.models.factory import Workstation
+
+        result: Dict[str, Any] = {
+            "updated": [],
+            "skipped_frozen": [],
+            "failed": [],
+        }
+        if not updates:
+            return result
+        async with in_transaction():
+            for item in updates[:50]:
+                op_id = item.operation_id if hasattr(item, "operation_id") else item.get("operation_id")
+                station_id = (
+                    item.assigned_station_id
+                    if hasattr(item, "assigned_station_id")
+                    else item.get("assigned_station_id")
+                )
+                if not op_id or not station_id:
+                    continue
+                op = await WorkOrderOperation.get_or_none(tenant_id=tenant_id, id=op_id, deleted_at__isnull=True)
+                if not op:
+                    result["failed"].append({"id": int(op_id), "reason": "工序不存在"})
+                    continue
+                wo = await WorkOrder.get_or_none(tenant_id=tenant_id, id=op.work_order_id, deleted_at__isnull=True)
+                if not wo:
+                    result["failed"].append({"id": int(op_id), "reason": "工单不存在"})
+                    continue
+                if wo.is_frozen:
+                    if int(wo.id) not in result["skipped_frozen"]:
+                        result["skipped_frozen"].append(int(wo.id))
+                    continue
+                station = await Workstation.get_or_none(tenant_id=tenant_id, id=int(station_id), deleted_at__isnull=True)
+                station_name = station.name if station else f"工位{station_id}"
+                await WorkOrderOperation.filter(tenant_id=tenant_id, id=op_id).update(
+                    assigned_station_id=int(station_id),
+                    assigned_station_name=station_name,
+                )
+                wo.updated_by = updated_by
+                await wo.save(update_fields=["updated_by", "updated_at"])
+                result["updated"].append(int(op_id))
+        return result
 
     async def delete_work_order(
         self,

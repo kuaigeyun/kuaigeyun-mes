@@ -35,7 +35,7 @@ import type {
 
 /** 列表行数据（兼容旧调用方仍传入数组的情况） */
 export function factoryListItems<T>(res: FactoryPaginatedList<T> | T[]): T[] {
-  return Array.isArray(res) ? res : res.items;
+  return Array.isArray(res) ? res : (res.items ?? []);
 }
 
 /** UniTable 工具栏关键词 → 查询参数 keyword */

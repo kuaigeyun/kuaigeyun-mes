@@ -1236,7 +1236,7 @@ class PlanReliabilityMetricsResponse(BaseModel):
     schedule_adherence_rate: float = Field(0, description="按计划开工率（%）")
     freeze_violation_count: int = Field(0, description="冻结违规次数")
     rolling_adjustment_count_24h: int = Field(0, description="滚动窗计划调整次数（24h）")
-    reschedule_events_24h: int = Field(0, description="重排事件数（24h）")
+    reschedule_events_24h: int = Field(0, description="手工计划调整次数（24h）")
 
 
 @router.get("/management-metrics", response_model=ManagementMetricsResponse, summary="Management metrics")

@@ -2863,7 +2863,7 @@ export default {
   /** Route segment is production-control-tower; path-derived i18n key must match */
   'app.kuaizhizao.menu.plan-management.production-control-tower': 'Planning Center',
   'app.kuaizhizao.menu.plan-management.production-plans': 'Production Plans',
-  'app.kuaizhizao.menu.plan-management.scheduling': 'Scheduling',
+  'app.kuaizhizao.menu.plan-management.scheduling': 'Visual Scheduling',
   'app.kuaizhizao.menu.plan-management.computation-history': 'Computation History',
   'app.kuaizhizao.menu.production-execution': 'Production Execution',
   'app.kuaizhizao.menu.production-execution.dashboard': 'Manufacturing Center',

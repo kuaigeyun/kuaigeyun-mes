@@ -1,7 +1,7 @@
 """
-排程约束统一 DTO
+可视排产规则 DTO
 
-用于智能排产、优化排产、排程配置持久化等场景，避免前后端字段漂移。
+用于排程配置持久化与甘特诊断，避免前后端字段漂移。
 """
 
 from typing import Any, List
@@ -12,56 +12,40 @@ from core.schemas.base import BaseSchema
 
 
 class SchedulingConstraints(BaseSchema):
-    """统一排产约束条件。"""
+    """可视排产规则（非自动求解参数）。"""
 
-    priority_weight: float = Field(0.3, ge=0, le=1, description="优先级权重（0-1）")
-    due_date_weight: float = Field(0.3, ge=0, le=1, description="交期权重（0-1）")
-    capacity_weight: float = Field(0.2, ge=0, le=1, description="产能权重（0-1）")
-    setup_time_weight: float = Field(0.2, ge=0, le=1, description="换线时间权重（0-1）")
-    optimize_objective: str = Field(
-        "min_makespan",
-        description="优化目标（min_makespan/min_total_time/min_setup_time/min_tardiness）",
-    )
+    consider_human: bool = Field(True, description="冲突检测是否考虑工位时间重叠")
+    consider_equipment: bool = Field(True, description="冲突检测是否考虑设备")
+    consider_material: bool = Field(True, description="是否提示物料齐套")
+    consider_mold_tool: bool = Field(True, description="冲突检测是否考虑模具/工装")
 
-    # 4M
-    consider_human: bool = Field(True, description="是否考虑人员约束")
-    consider_equipment: bool = Field(True, description="是否考虑设备约束")
-    consider_material: bool = Field(True, description="是否考虑物料齐套")
-    consider_mold_tool: bool = Field(True, description="是否考虑模具/工装占用")
-
-    # 可选窗口
-    scheduling_window_days: int = Field(14, ge=1, le=90, description="排程搜索窗口天数")
-    daily_capacity_hours: float = Field(24.0, ge=1.0, le=24.0, description="默认每日可用工时")
-    freeze_horizon_days: int = Field(2, ge=0, le=30, description="冻结窗口天数（窗口内不自动改动）")
-    rolling_horizon_days: int = Field(14, ge=1, le=120, description="滚动排程窗口天数")
-    bottleneck_first: bool = Field(True, description="是否启用瓶颈优先排程")
-    bottleneck_work_center_ids: List[int] = Field(default_factory=list, description="瓶颈工作中心ID列表（为空时自动识别）")
-    consider_setup_family: bool = Field(True, description="是否考虑换型族连续排产")
-    setup_changeover_hours: float = Field(1.0, ge=0, le=12, description="换型切换追加工时（小时）")
-    local_reschedule_hours: int = Field(72, ge=1, le=240, description="异常局部重排影响窗口（小时）")
+    daily_capacity_hours: float = Field(24.0, ge=1.0, le=24.0, description="负荷计算基准每日工时")
+    freeze_horizon_days: int = Field(2, ge=0, le=30, description="冻结窗口天数（窗口内禁止拖拽）")
+    rolling_horizon_days: int = Field(14, ge=1, le=120, description="滚动关注窗口天数（看板展示）")
+    setup_changeover_hours: float = Field(1.0, ge=0, le=12, description="换型切换参考工时（小时）")
+    bottleneck_work_center_ids: List[int] = Field(default_factory=list, description="重点关注的工作中心ID")
 
     @model_validator(mode="before")
     @classmethod
-    def normalize_weights(cls, data: Any):
-        if not isinstance(data, dict):
-            return data
-        payload = dict(data)
-        total = (
-            float(payload.get("priority_weight", 0.3))
-            + float(payload.get("due_date_weight", 0.3))
-            + float(payload.get("capacity_weight", 0.2))
-            + float(payload.get("setup_time_weight", 0.2))
-        )
-        if total <= 0:
-            payload["priority_weight"] = 0.3
-            payload["due_date_weight"] = 0.3
-            payload["capacity_weight"] = 0.2
-            payload["setup_time_weight"] = 0.2
-            return payload
+    def coerce_legacy_payload(cls, data: Any):
+        if isinstance(data, dict):
+            return cls.strip_legacy_keys(data)
+        return data
 
-        # 自动归一化，保证配置容错
-        payload["priority_weight"] = round(float(payload.get("priority_weight", 0.3)) / total, 6)
-        payload["due_date_weight"] = round(float(payload.get("due_date_weight", 0.3)) / total, 6)
-        payload["capacity_weight"] = round(float(payload.get("capacity_weight", 0.2)) / total, 6)
-        payload["setup_time_weight"] = round(float(payload.get("setup_time_weight", 0.2)) / total, 6)
-        return payload
+    @classmethod
+    def strip_legacy_keys(cls, data: Any) -> dict:
+        """从旧配置 JSON 中剥离已删除的自动排程字段。"""
+        if not isinstance(data, dict):
+            return {}
+        legacy = {
+            "priority_weight",
+            "due_date_weight",
+            "capacity_weight",
+            "setup_time_weight",
+            "optimize_objective",
+            "scheduling_window_days",
+            "bottleneck_first",
+            "consider_setup_family",
+            "local_reschedule_hours",
+        }
+        return {k: v for k, v in data.items() if k not in legacy}

@@ -16,7 +16,7 @@ class SchedulingConfigBase(BaseModel):
     """排程配置基础Schema"""
     config_code: str = Field(..., max_length=50, description="配置编码")
     config_name: str = Field(..., max_length=200, description="配置名称")
-    constraints: SchedulingConstraints = Field(..., description="排程约束（含4M开关及权重）")
+    constraints: SchedulingConstraints = Field(..., description="可视排产规则")
     is_default: bool = Field(False, description="是否为默认配置")
     is_active: bool = Field(True, description="是否启用")
     description: Optional[str] = Field(None, description="配置描述")

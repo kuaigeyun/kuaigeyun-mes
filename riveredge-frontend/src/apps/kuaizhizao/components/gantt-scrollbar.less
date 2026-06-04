@@ -14,6 +14,12 @@
   contain: layout paint;
 }
 
+/* 可视排产（RiverGantt）：不限高，按行数自然撑开 */
+.gantt-chart-wrapper--visual {
+  max-height: none;
+  overflow: visible;
+}
+
 /* 尺寸与轨道 */
 .gantt-chart-wrapper ::-webkit-scrollbar,
 .gantt-chart-wrapper *::-webkit-scrollbar {
@@ -54,14 +60,14 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 1px;
+  gap: 0;
   min-width: 0;
-  line-height: 1.25;
+  line-height: 1.2;
   pointer-events: none;
 }
 
 .gantt-chart-wrapper .gantt-task-label-primary {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   white-space: nowrap;
   overflow: hidden;
@@ -77,13 +83,77 @@
   text-overflow: ellipsis;
 }
 
-/* 左侧列表允许多行展示 */
+.gantt-chart-wrapper .gantt-task-label--station-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 4px;
+}
+
+.gantt-chart-wrapper .gantt-task-label--station-row .gantt-task-label-primary {
+  flex: 1;
+  min-width: 0;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge {
+  flex-shrink: 0;
+  max-width: 68px;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 14px;
+  border-radius: 3px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge--count {
+  min-width: 16px;
+  max-width: 28px;
+  padding: 0 5px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空闲：可用产能 */
+.gantt-chart-wrapper .gantt-station-status-badge--idle {
+  color: #389e0d;
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+/* 已排工序：占用中（琥珀色，与右侧蓝色工序条区分） */
+.gantt-chart-wrapper .gantt-station-status-badge--busy {
+  color: #d48806;
+  background: #fff7e6;
+  border-color: #ffd591;
+}
+
+/* 冲突：需处理 */
+.gantt-chart-wrapper .gantt-station-status-badge--conflict {
+  color: #cf1322;
+  background: #fff1f0;
+  border-color: #ffa39e;
+}
+
+.gantt-chart-wrapper .gantt-station-status-badge--default {
+  color: #8c8c8c;
+  background: #fafafa;
+  border-color: #d9d9d9;
+}
+
+/* 左侧工位列表 */
 .gantt-chart-wrapper .wx-text.wx-pqc08MHU:has(.gantt-task-label) {
   white-space: normal;
   overflow: hidden;
-  align-items: flex-start;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.gantt-chart-wrapper .wx-text.wx-pqc08MHU:has(.gantt-task-label--station-row) {
+  align-items: center;
 }
 
 /* 时间轴任务条内标签 */
@@ -93,7 +163,7 @@
   overflow: hidden;
   display: flex;
   align-items: center;
-  padding: 0 6px;
+  padding: 0 4px;
 }
 
 .gantt-task-blue .gantt-task-label-code,

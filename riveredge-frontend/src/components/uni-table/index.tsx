@@ -634,6 +634,10 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   showAdvancedSearch?: boolean
   /**
+   * uni-search 位置：`searchRow` 为表格上方独立搜索行（默认）；`toolbarLeft` 为表格工具栏左侧（模糊/高级/重置不拆分）
+   */
+  searchPlacement?: 'searchRow' | 'toolbarLeft'
+  /**
    * 高级搜索按钮前的自定义按钮
    */
   beforeSearchButtons?: ReactNode
@@ -1116,6 +1120,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   skipFuzzyPinyinClientFilter = false,
   fuzzySearchPlaceholder,
   showAdvancedSearch = true, // 默认显示高级搜索
+  searchPlacement = 'searchRow',
   beforeSearchButtons,
   betweenFuzzyAndAdvancedButtons,
   afterSearchButtons,
@@ -2595,12 +2600,110 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [enableRowSelection, selectedRowKeys.length, currentViewType, isMobile])
 
   const showSearchToolbarRow =
-    showFuzzySearch ||
-    showAdvancedSearch ||
-    Boolean(beforeSearchButtons) ||
-    Boolean(afterSearchButtons) ||
-    Boolean(betweenFuzzyAndAdvancedButtons) ||
-    (isMobile && gatedShowCreateButton && onCreate)
+    searchPlacement === 'searchRow'
+      ? showFuzzySearch ||
+        showAdvancedSearch ||
+        Boolean(beforeSearchButtons) ||
+        Boolean(afterSearchButtons) ||
+        Boolean(betweenFuzzyAndAdvancedButtons) ||
+        (isMobile && gatedShowCreateButton && onCreate)
+      : (!isMobile && viewTypes && viewTypes.length > 1) ||
+        (isMobile && gatedShowCreateButton && onCreate)
+
+  const effectiveToolbarButtonSize =
+    toolBarButtonSize ?? (searchPlacement === 'toolbarLeft' ? 'small' : 'middle')
+
+  const memoizedUniSearch = React.useMemo(
+    () => (
+      <UniSearch
+        beforeSearch={beforeSearchButtons}
+        betweenFuzzyAndAdvanced={
+          betweenFuzzyAndAdvancedButtons || (isMobile && gatedShowCreateButton && onCreate) ? (
+            <>
+              {betweenFuzzyAndAdvancedButtons}
+              {isMobile && gatedShowCreateButton && onCreate ? (
+                <Button
+                  key="mobile-create"
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={onCreate}
+                  size={effectiveToolbarButtonSize}
+                  style={{ flexShrink: 0 }}
+                >
+                  {createButtonText ?? t('components.uniTable.create')}
+                </Button>
+              ) : null}
+            </>
+          ) : null
+        }
+        showFuzzySearch={showFuzzySearch}
+        fuzzyPlaceholder={fuzzySearchPlaceholder}
+        fuzzyValue={fuzzySearchKeyword}
+        onFuzzyChange={handleFuzzySearch}
+        onFuzzyPressEnter={(v) => handleFuzzySearch(v)}
+        onFuzzyFocus={warmupPinyinIfNeeded}
+        showAdvancedSearch={showAdvancedSearch}
+        advancedSearchTableProps={{
+          columns: processedColumns,
+          formRef: formRef as React.MutableRefObject<ProFormInstance>,
+          actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
+          searchParamsRef,
+          pinnedSearchUiEpoch,
+          onSearchParamsApplied: () => setPinnedSearchUiEpoch((e) => e + 1),
+        }}
+        afterSearch={afterSearchButtons}
+        showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}
+        onReset={handleSearchReset}
+        isMobile={isMobile}
+        toolBarButtonSize={effectiveToolbarButtonSize}
+      />
+    ),
+    [
+      afterSearchButtons,
+      beforeSearchButtons,
+      betweenFuzzyAndAdvancedButtons,
+      createButtonText,
+      effectiveToolbarButtonSize,
+      formRef,
+      fuzzySearchKeyword,
+      fuzzySearchPlaceholder,
+      gatedShowCreateButton,
+      handleFuzzySearch,
+      handleSearchReset,
+      isMobile,
+      onCreate,
+      pinnedSearchUiEpoch,
+      processedColumns,
+      searchParamsRef,
+      showAdvancedSearch,
+      showFuzzySearch,
+      t,
+      warmupPinyinIfNeeded,
+    ],
+  )
+
+  const memoizedHeaderTitle = React.useMemo(() => {
+    const leftActions = memoizedHeaderActions || headerTitle
+    if (searchPlacement === 'toolbarLeft') {
+      return (
+        <div
+          className="uni-table-toolbar-left"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            flexWrap: 'nowrap',
+            minWidth: 0,
+            width: '100%',
+          }}
+        >
+          {memoizedUniSearch}
+          {leftActions ? <div style={{ flexShrink: 0 }}>{leftActions}</div> : null}
+        </div>
+      )
+    }
+    return leftActions || undefined
+  }, [headerTitle, memoizedHeaderActions, memoizedUniSearch, searchPlacement])
 
   return (
     <>
@@ -2775,48 +2878,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               minWidth: 0,
             }}
           >
-            <UniSearch
-              beforeSearch={beforeSearchButtons}
-              betweenFuzzyAndAdvanced={
-                betweenFuzzyAndAdvancedButtons || (isMobile && gatedShowCreateButton && onCreate) ? (
-                  <>
-                    {betweenFuzzyAndAdvancedButtons}
-                    {isMobile && gatedShowCreateButton && onCreate ? (
-                      <Button
-                        key="mobile-create"
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={onCreate}
-                        size={toolBarButtonSize}
-                        style={{ flexShrink: 0 }}
-                      >
-                        {createButtonText ?? t('components.uniTable.create')}
-                      </Button>
-                    ) : null}
-                  </>
-                ) : null
-              }
-              showFuzzySearch={showFuzzySearch}
-              fuzzyPlaceholder={fuzzySearchPlaceholder}
-              fuzzyValue={fuzzySearchKeyword}
-              onFuzzyChange={handleFuzzySearch}
-              onFuzzyPressEnter={(v) => handleFuzzySearch(v)}
-              onFuzzyFocus={warmupPinyinIfNeeded}
-              showAdvancedSearch={showAdvancedSearch}
-              advancedSearchTableProps={{
-                columns: processedColumns,
-                formRef: formRef as React.MutableRefObject<ProFormInstance>,
-                actionRef: actionRefForProTable as React.MutableRefObject<ActionType>,
-                searchParamsRef,
-                pinnedSearchUiEpoch,
-                onSearchParamsApplied: () => setPinnedSearchUiEpoch((e) => e + 1),
-              }}
-              afterSearch={afterSearchButtons}
-              showReset={!isMobile && (showFuzzySearch || showAdvancedSearch)}
-              onReset={handleSearchReset}
-              isMobile={isMobile}
-              toolBarButtonSize={toolBarButtonSize}
-            />
+            {searchPlacement === 'searchRow' ? memoizedUniSearch : null}
             {!isMobile && viewTypes && viewTypes.length > 1 ? (
               <div style={{ flexShrink: 0, marginLeft: 8 }}>
                 <UniView
@@ -2847,7 +2909,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
             >
               <ProTable<T>
               key={`uni-pt-cols-${String(columnsPersistenceFullKey ?? 'np')}-${columnsStatePatchEpoch}`}
-              headerTitle={memoizedHeaderActions || headerTitle || undefined}
+              headerTitle={memoizedHeaderTitle}
               actionRef={actionRefForProTable}
               formRef={formRef}
               columns={effectiveTableColumns}

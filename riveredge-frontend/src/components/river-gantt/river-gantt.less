@@ -1,0 +1,249 @@
+/**
+ * RiverGantt 自建甘特图样式。
+ * 颜色类（gantt-task-blue/red/yellow/gray）与分段类（gantt-delfoi-segment）复用既有样式，
+ * 此处仅补充自建 DOM 的布局/定位/手柄/刻度/网格等结构样式。
+ */
+
+.river-gantt,
+.river-gantt * {
+  box-sizing: border-box;
+}
+
+.river-gantt {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  font-size: 12px;
+  color: #1f1f1f;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+  overflow: hidden;
+  user-select: none;
+}
+
+.river-gantt__header-row {
+  display: flex;
+  flex: 0 0 auto;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.river-gantt__corner {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+  border-right: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+
+.river-gantt__corner-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  color: #595959;
+  box-sizing: border-box;
+  padding: 0 4px;
+}
+
+.river-gantt__scale-scroll {
+  flex: 1 1 auto;
+  overflow: hidden;
+  background: #fafafa;
+}
+
+.river-gantt-scale {
+  position: relative;
+}
+
+.river-gantt-scale__row {
+  position: relative;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.river-gantt-scale__row:last-child {
+  border-bottom: none;
+}
+
+.river-gantt-scale__cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-right: 1px solid #f5f5f5;
+  font-size: 11px;
+  color: #8c8c8c;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.river-gantt__body-row {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.river-gantt__grid-scroll {
+  flex: 0 0 auto;
+  overflow: hidden;
+  border-right: 1px solid #f0f0f0;
+}
+
+.river-gantt-grid__body {
+  position: relative;
+}
+
+.river-gantt-grid__row {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.river-gantt-grid__cell {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0 6px;
+  overflow: hidden;
+}
+
+.river-gantt-grid__cell--center {
+  justify-content: center;
+}
+
+.river-gantt-grid__cell--right {
+  justify-content: flex-end;
+}
+
+.river-gantt-grid__indent {
+  flex: 0 0 auto;
+  display: inline-block;
+}
+
+.river-gantt-grid__toggle {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  margin-right: 2px;
+  color: #8c8c8c;
+  cursor: pointer;
+}
+
+.river-gantt__timeline {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  position: relative;
+  cursor: grab;
+}
+
+.river-gantt__timeline.is-panning {
+  cursor: grabbing;
+}
+
+.river-gantt__content {
+  position: relative;
+}
+
+.river-gantt__row {
+  position: absolute;
+  left: 0;
+  right: 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.river-gantt__row--drop-target {
+  background: rgba(22, 119, 255, 0.08);
+  outline: 1px dashed rgba(22, 119, 255, 0.5);
+  outline-offset: -1px;
+}
+
+/* —— 单条任务条 —— */
+.river-gantt-bar {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  border-radius: 3px;
+  background: #bfbfbf;
+  color: #1f1f1f;
+  overflow: hidden;
+  cursor: grab;
+}
+
+.river-gantt-bar:active {
+  cursor: grabbing;
+}
+
+.river-gantt-bar__progress {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  background: rgba(0, 0, 0, 0.18);
+  pointer-events: none;
+}
+
+.river-gantt-bar__content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0 6px;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* —— 分段定位（颜色/状态样式复用 delfoi-style.less） —— */
+.river-gantt .gantt-delfoi-segment {
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+}
+
+/* —— 拖拽手柄 —— */
+.river-gantt-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.river-gantt-handle--start {
+  left: 0;
+}
+
+.river-gantt-handle--end {
+  right: 0;
+}
+
+/* —— 依赖连线 —— */
+.river-gantt-links {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 4;
+  overflow: visible;
+}
+
+.river-gantt-link-line {
+  stroke: #595959;
+  stroke-width: 1px;
+  fill: none;
+  opacity: 0.9;
+}

@@ -146,6 +146,17 @@ class WorkOrderOperationBatchUpdateDatesRequest(BaseModel):
     updates: list[WorkOrderOperationBatchUpdateDatesItem] = Field(..., description="更新项列表")
 
 
+class WorkOrderOperationBatchUpdateStationsItem(BaseModel):
+    """批量更新工序指派工位项"""
+    operation_id: int = Field(..., description="工序ID")
+    assigned_station_id: int = Field(..., description="工位ID")
+
+
+class WorkOrderOperationBatchUpdateStationsRequest(BaseModel):
+    """批量更新工序指派工位请求"""
+    updates: list[WorkOrderOperationBatchUpdateStationsItem] = Field(..., description="更新项列表")
+
+
 class WorkOrderUpdate(BaseModel):
     """
     工单更新Schema
@@ -209,8 +220,13 @@ class WorkOrderOperationMinimalForGantt(BaseModel):
     id: Optional[int] = None
     operation_name: Optional[str] = None
     sequence: Optional[int] = None
+    work_center_id: Optional[int] = None
+    work_center_name: Optional[str] = None
     planned_start_date: Optional[datetime] = None
     planned_end_date: Optional[datetime] = None
+    assigned_station_id: Optional[int] = None
+    assigned_station_name: Optional[str] = None
+    assigned_equipment_id: Optional[int] = None
     assigned_equipment_name: Optional[str] = None
     assigned_mold_name: Optional[str] = None
     assigned_tool_name: Optional[str] = None

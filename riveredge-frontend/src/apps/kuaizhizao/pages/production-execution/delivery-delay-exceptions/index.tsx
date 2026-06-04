@@ -86,11 +86,23 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         params.remarks = values.remarks;
       }
 
-      await apiRequest(`/apps/kuaizhizao/exceptions/delivery-delay/${currentRecord.id}/handle`, {
+      const handled = await apiRequest<{
+        scheduling_deep_link?: string;
+        scheduling_notice?: string;
+      }>(`/apps/kuaizhizao/exceptions/delivery-delay/${currentRecord.id}/handle`, {
         method: 'POST',
         params,
       });
-      messageApi.success('处理成功');
+      if (handled?.scheduling_deep_link) {
+        messageApi.success(
+          <span>
+            {handled.scheduling_notice || '处理成功'}，
+            <a href={handled.scheduling_deep_link}>前往可视排产</a>
+          </span>
+        );
+      } else {
+        messageApi.success('处理成功');
+      }
       setHandleModalVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');

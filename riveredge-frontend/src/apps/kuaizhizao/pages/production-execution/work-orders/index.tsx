@@ -2807,32 +2807,36 @@ const WorkOrdersPage: React.FC = () => {
                     已领 {operation.material_picked_count} 种物料
                   </div>
                 )}
-                <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <strong>{isOutsourced ? '委外供应商: ' : '分配人员: '}</strong>
-                  {isOutsourced
-                    ? operation.outsource_supplier_name || '-'
-                    : operation.assigned_worker_name || '-'}
-                </div>
                 {!isOutsourced ? (
                   <>
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <strong>设备: </strong>
-                      {operation.assigned_equipment_name || '-'}
+                      <strong>人员: </strong>
+                      {operation.assigned_worker_name || operation.assigned_team_name || '-'}
                     </div>
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <strong>车间: </strong>
                       {operation.workshop_name || '-'}
                     </div>
                     <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <strong>工作中心: </strong>
-                      {operation.work_center_name || '-'}
+                      <strong>工位: </strong>
+                      {operation.assigned_station_name || '-'}
+                    </div>
+                    <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <strong>设备: </strong>
+                      {operation.assigned_equipment_name || '-'}
                     </div>
                   </>
                 ) : (
-                  <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    <strong>委外单号: </strong>
-                    {operation.outsource_order_code || '-'}
-                  </div>
+                  <>
+                    <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <strong>委外供应商: </strong>
+                      {operation.outsource_supplier_name || '-'}
+                    </div>
+                    <div style={{ marginBottom: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <strong>委外单号: </strong>
+                      {operation.outsource_order_code || '-'}
+                    </div>
+                  </>
                 )}
                 <div style={{ marginBottom: 2, whiteSpace: 'nowrap' }}>
                   <strong>计划时间: </strong>

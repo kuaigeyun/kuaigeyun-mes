@@ -235,7 +235,7 @@
             "path": "/apps/kuaizhizao/plan-management/scheduling",
             "sort_order": 4,
             "meta": {
-              "module": "demand"
+              "module": "plan-management-scheduling"
             },
             "permission": "kuaizhizao:plan-management-scheduling:read"
           },
@@ -1745,16 +1745,7 @@
     "kuaizhizao:plan-management-reports-production-delay-analysis:read",
     "kuaizhizao:plan-management-reports-production-plan-comparison:read",
     "kuaizhizao:plan-management-reports-purchase-plan-comparison:read",
-    "kuaizhizao:plan-management-scheduling:approve",
-    "kuaizhizao:plan-management-scheduling:audit",
-    "kuaizhizao:plan-management-scheduling:create",
-    "kuaizhizao:plan-management-scheduling:delete",
-    "kuaizhizao:plan-management-scheduling:export",
-    "kuaizhizao:plan-management-scheduling:import",
     "kuaizhizao:plan-management-scheduling:read",
-    "kuaizhizao:plan-management-scheduling:reject",
-    "kuaizhizao:plan-management-scheduling:revoke",
-    "kuaizhizao:plan-management-scheduling:submit",
     "kuaizhizao:plan-management-scheduling:update",
     "kuaizhizao:production-execution-dashboard:read",
     "kuaizhizao:production-execution-reporting-statistics:read",
@@ -2297,7 +2288,6 @@
     "kuaizhizao:demand:print",
     "kuaizhizao:plan-management-demand-management:print",
     "kuaizhizao:plan-management-demand-computation:print",
-    "kuaizhizao:plan-management-scheduling:print",
     "kuaizhizao:plan-management-reports-demand-plan-detail:print",
     "kuaizhizao:plan-management-reports-demand-plan-detail:export",
     "kuaizhizao:plan-management-reports-production-plan-comparison:print",

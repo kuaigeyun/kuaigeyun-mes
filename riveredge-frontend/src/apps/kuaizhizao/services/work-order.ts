@@ -170,11 +170,24 @@ export const workOrderApi = {
   batchSetPriority: async (data: { work_order_ids: number[]; priority: string }) =>
     apiRequest('/apps/kuaizhizao/work-orders/batch-priority', { method: 'PUT', data }),
   batchUpdateDates: async (updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>) =>
-    apiRequest('/apps/kuaizhizao/work-orders/batch-update-dates', { method: 'PUT', data: { updates } }),
+    apiRequest<import('./production').BatchUpdateResult>('/apps/kuaizhizao/work-orders/batch-update-dates', {
+      method: 'PUT',
+      data: { updates },
+    }),
   batchUpdateOperationDates: async (
     updates: Array<{ operation_id: number; planned_start_date: string; planned_end_date: string }>
   ) =>
-    apiRequest('/apps/kuaizhizao/work-orders/batch-update-operation-dates', { method: 'PUT', data: { updates } }),
+    apiRequest<import('./production').BatchUpdateResult>('/apps/kuaizhizao/work-orders/batch-update-operation-dates', {
+      method: 'PUT',
+      data: { updates },
+    }),
+  batchUpdateOperationStations: async (
+    updates: Array<{ operation_id: number; assigned_station_id: number }>
+  ) =>
+    apiRequest<{ updated: number[]; skipped_frozen: number[]; failed: Array<{ id: number; reason: string }> }>(
+      '/apps/kuaizhizao/work-orders/batch-update-operation-stations',
+      { method: 'PUT', data: { updates } }
+    ),
   merge: async (data: { work_order_ids: number[]; remarks?: string }) =>
     apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data }),
   mergeIntoGroup: async (data: {
