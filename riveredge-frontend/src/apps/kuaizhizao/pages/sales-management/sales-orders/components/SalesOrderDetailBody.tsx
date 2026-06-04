@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { NavigateFunction } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { AmountDisplay } from '../../../../../../components/permission';
+import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../../constants/fieldPermissionResources';
 import { DictionaryLabel } from '../../../../../../components/dictionary-label';
 import { MaterialBomIndicator } from '../../../../components/MaterialBomIndicator';
 import { MaterialInventoryIndicator } from '../../../../components/MaterialInventoryIndicator';
@@ -314,12 +315,12 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         {
           key: 'total_amount',
           label: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
-          children: <AmountDisplay resource="sales_order" value={order.total_amount ?? 0} />,
+          children: <AmountDisplay resource={SO} fieldName="total_amount" value={order.total_amount ?? 0} />,
         },
         {
           key: 'total_fee_amount',
           label: '总费用金额',
-          children: <AmountDisplay resource="sales_order" value={order.total_fee_amount ?? 0} />,
+          children: <AmountDisplay resource={SO} fieldName="amount" value={order.total_fee_amount ?? 0} />,
         },
         { key: 'notes', label: t('app.kuaizhizao.salesOrder.notes'), children: order.notes || '-', span: 3 },
       ]}
@@ -471,7 +472,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                   dataIndex: 'amount',
                   width: 120,
                   align: 'right',
-                  render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
+                  render: (val: number) => <AmountDisplay resource={SO} fieldName="amount" value={val} />,
                 },
                 {
                   title: '承担方',
@@ -526,7 +527,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 dataIndex: 'unit_price',
                 width: 100,
                 align: 'right' as const,
-                render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
+                render: (val: number) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} />,
               },
               {
                 title: t('app.kuaizhizao.salesOrder.taxRate'),
@@ -540,7 +541,7 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
                 dataIndex: 'item_amount',
                 width: 120,
                 align: 'right' as const,
-                render: (val: number) => <AmountDisplay resource="sales_order" value={val} />,
+                render: (val: number) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} />,
               },
               { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
               {

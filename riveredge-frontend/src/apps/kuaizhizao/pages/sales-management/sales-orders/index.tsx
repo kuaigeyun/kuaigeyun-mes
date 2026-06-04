@@ -69,6 +69,7 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { Area } from '@ant-design/charts';
 import {
   listSalesOrders,
@@ -2155,7 +2156,7 @@ const SalesOrdersPage: React.FC = () => {
       },
     },
     { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
-    { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource="sales_order" value={r.total_amount} /> },
+    { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} /> },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryProgress'),
       dataIndex: 'delivery_progress',
@@ -2354,9 +2355,9 @@ const SalesOrdersPage: React.FC = () => {
         </span>
       ),
     },
-    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: any) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const, render: (val: any) => <AmountDisplay resource={SO} fieldName="unit_price" value={val} /> },
     { title: t('app.kuaizhizao.salesOrder.taxRate'), dataIndex: 'tax_rate', width: 70, align: 'right' as const, render: (val: any) => val ?? 0 },
-    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: any) => <AmountDisplay resource="sales_order" value={val} /> },
+    { title: t('app.kuaizhizao.salesOrder.inclAmount'), dataIndex: 'item_amount', width: 100, align: 'right' as const, render: (val: any) => <AmountDisplay resource={SO} fieldName="amount_with_tax" value={val} /> },
     {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
@@ -2891,7 +2892,7 @@ const SalesOrdersPage: React.FC = () => {
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                  return <AmountDisplay resource={SO} fieldName="amount_without_tax" value={line.excl} />;
                                 }}
                               </AntForm.Item>
                             ),
@@ -2944,7 +2945,7 @@ const SalesOrdersPage: React.FC = () => {
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                  return <AmountDisplay resource={SO} fieldName="tax_amount" value={line.tax} />;
                                 }}
                               </AntForm.Item>
                             ),
@@ -2971,7 +2972,7 @@ const SalesOrdersPage: React.FC = () => {
                               priceType,
                             );
                             if (!showTaxColumns) {
-                              return <AmountDisplay resource="sales_order" value={line.excl} />;
+                              return <AmountDisplay resource={SO} fieldName="amount_without_tax" value={line.excl} />;
                             }
                             const totalIncl = line.incl;
                             const isEditing = editingIncl?.index === index;

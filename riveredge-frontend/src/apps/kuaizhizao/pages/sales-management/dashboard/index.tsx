@@ -37,9 +37,12 @@ import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
 import salesContractApi from '../../../services/sales-contract';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useThemeStore } from '../../../../../stores/themeStore';
 import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
+import { useUserFieldMasks } from '../../../../../hooks/useUserFieldMasks';
+import { resolveAmountFieldVisibility } from '../../../../../utils/fieldMaskPermission';
 import { getStatusDisplay } from '../../../constants/documentStatus';
 import {
   ModuleKpiRow,
@@ -110,7 +113,9 @@ const SalesDashboard: React.FC = () => {
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
   const isPlain = isModuleDashboardPlain(themeStyle);
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const showMoney = canViewKuaizhizaoPricing(currentUser);
+  const fieldMasks = useUserFieldMasks();
+  const showMoney =
+    resolveAmountFieldVisibility(fieldMasks, SO, 'total_amount', canViewKuaizhizaoPricing(currentUser)) === 'show';
 
   // 看板控制状态
   const [trendType, setTrendType] = useState<'revenue' | 'quantity'>(showMoney ? 'revenue' : 'quantity');
@@ -443,7 +448,8 @@ const SalesDashboard: React.FC = () => {
         title: '本月销售额 (元)',
         value: (
           <AmountDisplay
-            resource="sales_order"
+            resource={SO}
+            fieldName="total_amount"
             value={s?.total_amount != null ? Number(s.total_amount) : null}
             prefix=""
             suffix=""
@@ -836,7 +842,7 @@ const SalesDashboard: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                             <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              {item.orderCount}单 | <AmountDisplay resource="sales_order" value={item.amount} />
+                              {item.orderCount}单 | <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
                             </Text>
                           </div>
                           <Progress

@@ -7,7 +7,8 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from core.api.deps.access import require_access
-from core.api.deps.deps import get_current_tenant
+from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.models.user import User
 from core.schemas.permission_policy import (
     DataPermissionPolicyResponse,
     DataPermissionPolicyUpsert,
@@ -20,6 +21,18 @@ from tortoise.exceptions import IntegrityError
 from infra.exceptions.exceptions import ValidationError
 
 router = APIRouter(prefix="/permission-policies", tags=["Core · Permission Policies"])
+
+
+@router.get("/me/field-masks")
+async def get_my_field_masks(
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """当前登录用户的有效字段掩码（供前端 AmountDisplay 等按字段展示）。"""
+    return await PermissionPolicyService.get_user_effective_field_masks(
+        tenant_id=tenant_id,
+        user_id=current_user.id,
+    )
 
 
 @router.get("/roles/{role_uuid}/data", response_model=List[DataPermissionPolicyResponse])

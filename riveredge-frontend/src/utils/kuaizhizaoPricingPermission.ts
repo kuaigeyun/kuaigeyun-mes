@@ -1,7 +1,6 @@
 /**
- * 快制造应用内「价格/金额是否可见」统一权限点。
- * 角色勾选 kuaizhizao:pricing:view 后，所有使用 AmountDisplay / canViewKuaizhizaoPricing 的金额展示可见。
- * 仍兼容历史码 {resource}:view:amount（如 sales_order:view:amount）。
+ * 快制造应用内「价格/金额是否可见」历史权限点（kuaizhizao:pricing:view）。
+ * 当角色「字段权限」已配置某资源某字段时，AmountDisplay 以字段策略为准；无字段策略时才回退本权限。
  */
 
 import type { CurrentUser } from '../types/api';

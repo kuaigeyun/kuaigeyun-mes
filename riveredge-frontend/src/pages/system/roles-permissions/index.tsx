@@ -105,11 +105,16 @@ import {
   collectDataAppPickOptions,
   collectDataModulePickOptions,
   filterDataResourceOptions,
-  permissionCodeToResourceKey,
   type DataPermissionFilterMode,
   type ResourceOption,
 } from './components/dataPermissionFilters';
-import { filterVisibleFieldPolicyIndexes } from './components/fieldPermissionFilters';
+import { filterVisibleFieldPolicyIndexes, upsertFieldPolicyMask } from './components/fieldPermissionFilters';
+import {
+  buildFunctionScopedResourceOptions,
+  collectGrantedResourceKeys,
+  isGenericPolicyResourceCode,
+  normalizeResourceKey,
+} from './components/roleGrantedResourceScope';
 
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
@@ -230,19 +235,9 @@ function permissionUuidsFromCodes(codes: Iterable<string>, pool: Permission[]): 
   return [...new Set(uuids)];
 }
 
-function normalizeResourceKey(resource: string): string {
-  return resource.trim().toLowerCase();
-}
-
 /** 分组/占位菜单码（非页面级资源，不得用前缀吞并子菜单权限） */
 function isGenericMenuPermissionCode(norm: string): boolean {
-  if (!norm) return true;
-  const parts = norm.split(':').filter(Boolean);
-  if (parts.length >= 3 && parts[parts.length - 1] === 'read') {
-    const resource = parts.slice(1, -1).join(':');
-    if (resource === 'workspace' || resource === parts[0]) return true;
-  }
-  return false;
+  return isGenericPolicyResourceCode(norm);
 }
 
 function appCodeFromMenu(menu: MenuTree): string | null {
@@ -869,40 +864,17 @@ const RolesPermissionsPage: React.FC = () => {
       });
   }, [resourceLabelMap, t]);
 
-  /** 功能权限已勾选 code 推导出的数据资源键（app:resource） */
-  const grantedDataResourceKeys = useMemo(() => {
-    const keys = new Set<string>();
-    for (const code of grantedCodes) {
-      const norm = normalizeFunctionPermissionCode(code);
-      if (isGenericMenuPermissionCode(norm)) continue;
-      const key = permissionCodeToResourceKey(code);
-      if (key) keys.add(key);
-    }
-    return keys;
-  }, [grantedCodes]);
+  /** 功能权限已勾选 code 推导出的数据/字段权限资源键（唯一前端范围推导） */
+  const grantedDataResourceKeys = useMemo(
+    () => collectGrantedResourceKeys(grantedCodes),
+    [grantedCodes]
+  );
 
-  /** 数据权限仅展示已授予功能权限对应的资源 */
-  const functionScopedResourceOptions = useMemo((): ResourceOption[] => {
-    if (grantedDataResourceKeys.size === 0) return [];
-    const byKey = new Map<string, ResourceOption>();
-    for (const opt of resourceOptions) {
-      const nk = normalizeResourceKey(opt.value);
-      if (grantedDataResourceKeys.has(nk)) {
-        byKey.set(nk, opt);
-      }
-    }
-    for (const key of grantedDataResourceKeys) {
-      if (byKey.has(key)) continue;
-      const [app, ...rest] = key.split(':');
-      const resource = rest.join(':');
-      const appName = getAppDisplayName(app, t, app);
-      byKey.set(key, {
-        value: key,
-        label: `${appName} / ${resource}`,
-      });
-    }
-    return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
-  }, [resourceOptions, grantedDataResourceKeys, t]);
+  /** 数据/字段权限页共用的已授权资源选项（带菜单文案） */
+  const functionScopedResourceOptions = useMemo(
+    () => buildFunctionScopedResourceOptions(grantedDataResourceKeys, resourceOptions, t),
+    [grantedDataResourceKeys, resourceOptions, t]
+  );
 
   useEffect(() => {
     setSelectedDataResources((prev) =>
@@ -1006,6 +978,13 @@ const RolesPermissionsPage: React.FC = () => {
     setSelectedFieldIndexes((prev) => prev.filter((i) => visible.has(i)));
   }, [visibleFieldPolicyIndexes]);
 
+  useEffect(() => {
+    if (permissionLayer !== 'field' || !selectedRole?.uuid) return;
+    void getRoleFieldPolicies(selectedRole.uuid)
+      .then(setFieldPolicies)
+      .catch(() => {});
+  }, [permissionLayer, selectedRole?.uuid, grantedCodes.length]);
+
   const defaultCustomPayloadForResource = (resource: string) => {
     if (/outsource-maintenance|outsource-complete/.test(resource)) {
       return { resolver: 'outsourced_unit' };
@@ -1089,37 +1068,49 @@ const RolesPermissionsPage: React.FC = () => {
     [selectedRole?.uuid]
   );
 
-  const applyFieldMaskToIndexes = useCallback((indexes: number[], level: FieldPermissionPolicy['mask_level']) => {
-    if (indexes.length === 0) return 0;
-    const indexSet = new Set(indexes);
-    setFieldPolicies((prev) =>
-      prev.map((item, idx) => (indexSet.has(idx) ? { ...item, mask_level: level } : item))
-    );
-    return indexes.length;
-  }, []);
+  const applyFieldMaskToIndexes = useCallback(
+    (indexes: number[], level: FieldPermissionPolicy['mask_level'], source: FieldPermissionPolicy[]) => {
+      if (indexes.length === 0) return 0;
+      setFieldPolicies((prev) => {
+        let next = prev;
+        for (const idx of indexes) {
+          const item = source[idx];
+          if (item) next = upsertFieldPolicyMask(next, item, level);
+        }
+        return next;
+      });
+      return indexes.length;
+    },
+    []
+  );
 
   const applyFieldMaskByKeywords = useCallback(
     (
       keywords: string[],
       level: FieldPermissionPolicy['mask_level'],
-      scopeIndexes: number[]
+      scopeIndexes: number[],
+      source: FieldPermissionPolicy[]
     ) => {
       const norms = keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
       if (norms.length === 0 || scopeIndexes.length === 0) return 0;
-      const indexSet = new Set(scopeIndexes);
-      let affected = 0;
-      setFieldPolicies((prev) =>
-        prev.map((item, idx) => {
-          if (!indexSet.has(idx)) return item;
-          const fieldLower = (item.field_name || '').toLowerCase();
-          const labelLower = (item.field_label || '').toLowerCase();
-          const hit = norms.some((k) => fieldLower.includes(k) || labelLower.includes(k));
-          if (!hit) return item;
-          affected += 1;
-          return { ...item, mask_level: level };
-        })
-      );
-      return affected;
+      const toUpdate: FieldPermissionPolicy[] = [];
+      for (const idx of scopeIndexes) {
+        const item = source[idx];
+        if (!item) continue;
+        const fieldLower = (item.field_name || '').toLowerCase();
+        const labelLower = (item.field_label || '').toLowerCase();
+        const hit = norms.some((k) => fieldLower.includes(k) || labelLower.includes(k));
+        if (hit) toUpdate.push(item);
+      }
+      if (toUpdate.length === 0) return 0;
+      setFieldPolicies((prev) => {
+        let next = prev;
+        for (const item of toUpdate) {
+          next = upsertFieldPolicyMask(next, item, level);
+        }
+        return next;
+      });
+      return toUpdate.length;
     },
     []
   );
@@ -1152,7 +1143,7 @@ const RolesPermissionsPage: React.FC = () => {
       );
       return;
     }
-    const n = applyFieldMaskToIndexes(targets, fieldBatchMaskLevel);
+    const n = applyFieldMaskToIndexes(targets, fieldBatchMaskLevel, fieldPolicies);
     messageApi.success(
       t('pages.system.roles.fieldMaskApplied', {
         defaultValue: '已更新 {{count}} 条字段权限',
@@ -1161,6 +1152,7 @@ const RolesPermissionsPage: React.FC = () => {
     );
   }, [
     applyFieldMaskToIndexes,
+    fieldPolicies,
     fieldBatchMaskLevel,
     messageApi,
     selectedFieldIndexes,
@@ -1335,6 +1327,8 @@ const RolesPermissionsPage: React.FC = () => {
         const refreshed = await replaceRoleFunctionGrants(selectedRole.uuid, grantedCodes);
         setFunctionGrants(refreshed);
         setGrantedCodes(refreshed.granted_codes || []);
+        const roleFieldPolicies = await getRoleFieldPolicies(selectedRole.uuid);
+        setFieldPolicies(roleFieldPolicies);
         messageApi.success(t('pages.system.roles.functionGrantSuccess', { count: refreshed.granted_codes?.length ?? 0, defaultValue: `功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项` }));
       } else if (permissionLayer === 'data') {
         const payload = dataPolicies
@@ -1359,30 +1353,33 @@ const RolesPermissionsPage: React.FC = () => {
           const fieldName = (x.field_name || '').trim();
           if (!resource || !fieldName) return;
           if (!grantedDataResourceKeys.has(normalizeResourceKey(resource))) return;
-          const key = `${resource}::${fieldName}`;
+          const key = `${normalizeResourceKey(resource)}::${fieldName}`;
           dedupMap.set(key, {
-            resource,
+            resource: normalizeResourceKey(resource),
             field_name: fieldName,
             mask_level: x.mask_level,
           });
         });
         const payload = Array.from(dedupMap.values());
-        await saveRoleFieldPolicies(
+        const savedFieldPolicies = await saveRoleFieldPolicies(
           selectedRole.uuid,
           payload
         );
+        setFieldPolicies(savedFieldPolicies);
         messageApi.success(t('pages.system.roles.fieldGrantSuccess', { count: payload.length, defaultValue: `字段权限保存成功：${payload.length} 条（已自动去重）` }));
       }
 
       // 重新加载角色列表（更新权限数）
       await loadRoles();
 
-      if (permissionLayer === 'function') {
+      if (permissionLayer === 'function' || permissionLayer === 'field') {
         try {
           await refreshCurrentUserInStore();
         } catch {
           /* 非阻塞：当前账号刷新失败时仍提示用户重新登录 */
         }
+      }
+      if (permissionLayer === 'function') {
         useGlobalStore.getState().incrementApplicationMenuVersion();
       }
     } catch (error: any) {
@@ -2116,7 +2113,8 @@ const RolesPermissionsPage: React.FC = () => {
                         const n = applyFieldMaskByKeywords(
                           ['amount', 'price', 'unit_price', 'total_amount', 'tax_amount'],
                           'masked',
-                          visibleFieldPolicyIndexes
+                          visibleFieldPolicyIndexes,
+                          fieldPolicies
                         );
                         messageApi.success(
                           t('pages.system.roles.fieldTemplateAmountApplied', {
@@ -2134,7 +2132,8 @@ const RolesPermissionsPage: React.FC = () => {
                         const n = applyFieldMaskByKeywords(
                           ['customer_name', 'customername', 'client_name', 'clientname'],
                           'masked',
-                          visibleFieldPolicyIndexes
+                          visibleFieldPolicyIndexes,
+                          fieldPolicies
                         );
                         messageApi.success(
                           t('pages.system.roles.fieldTemplateCustomerApplied', {
@@ -2152,8 +2151,9 @@ const RolesPermissionsPage: React.FC = () => {
                       {visibleFieldPolicyIndexes.map((idx) => {
                         const item = fieldPolicies[idx];
                         if (!item) return null;
+                        const rowKey = `${normalizeResourceKey(item.resource)}::${item.field_name}`;
                         return (
-                          <Flex key={`field-${idx}`} gap={8} align="center" style={{ width: '100%' }}>
+                          <Flex key={`field-${rowKey}`} gap={8} align="center" style={{ width: '100%' }}>
                             <Checkbox
                               checked={selectedFieldIndexes.includes(idx)}
                               onChange={(e) =>
@@ -2172,7 +2172,7 @@ const RolesPermissionsPage: React.FC = () => {
                               options={functionScopedResourceOptions}
                               onChange={(val) =>
                                 setFieldPolicies((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, resource: val } : x))
+                                  upsertFieldPolicyMask(prev, { ...item, resource: val }, item.mask_level)
                                 )
                               }
                             />
@@ -2180,7 +2180,7 @@ const RolesPermissionsPage: React.FC = () => {
                               item={item}
                               onChange={(val) =>
                                 setFieldPolicies((prev) =>
-                                  prev.map((x, i) => (i === idx ? { ...x, field_name: val } : x))
+                                  upsertFieldPolicyMask(prev, { ...item, field_name: val }, item.mask_level)
                                 )
                               }
                             />
@@ -2190,13 +2190,26 @@ const RolesPermissionsPage: React.FC = () => {
                               options={FIELD_MASK_OPTIONS}
                               onChange={(val) =>
                                 setFieldPolicies((prev) =>
-                                  prev.map((x, i) =>
-                                    i === idx ? { ...x, mask_level: val as FieldPermissionPolicy['mask_level'] } : x
+                                  upsertFieldPolicyMask(
+                                    prev,
+                                    item,
+                                    val as FieldPermissionPolicy['mask_level']
                                   )
                                 )
                               }
                             />
-                            <Button danger type="text" onClick={() => setFieldPolicies((prev) => prev.filter((_, i) => i !== idx))}>
+                            <Button
+                              danger
+                              type="text"
+                              onClick={() =>
+                                setFieldPolicies((prev) =>
+                                  prev.filter(
+                                    (p) =>
+                                      `${normalizeResourceKey(p.resource)}::${p.field_name}` !== rowKey
+                                  )
+                                )
+                              }
+                            >
                               {t('common.delete', { defaultValue: '删除' })}
                             </Button>
                           </Flex>

@@ -22,6 +22,19 @@ import { receivableService } from '../../apps/kuaicaiwu/services/finance/receiva
 import { payableService } from '../../apps/kuaicaiwu/services/finance/payable';
 import { purchaseInvoiceService } from '../../apps/kuaicaiwu/services/finance/purchase-invoice';
 import { AmountDisplay } from '../permission';
+import {
+  KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO,
+  KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QO,
+  KUAIZHIZAO_DEMAND_FIELD_RESOURCE as DEM,
+  KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO,
+  KUAIZHIZAO_PURCHASE_REQUISITION_FIELD_RESOURCE as PR,
+  KUAICAIWU_RECEIVABLE_FIELD_RESOURCE as AR,
+  KUAICAIWU_PAYABLE_FIELD_RESOURCE as AP,
+  KUAICAIWU_SALES_INVOICE_FIELD_RESOURCE as SI,
+  KUAICAIWU_RECEIPT_FIELD_RESOURCE as RC,
+  KUAICAIWU_PURCHASE_INVOICE_FIELD_RESOURCE as PI,
+  KUAICAIWU_PAYMENT_FIELD_RESOURCE as PAY,
+} from '../../constants/fieldPermissionResources';
 import { getMaterialUnitDisplayMapShared, resolveMaterialUnitLabel } from '../../utils/materialUnitDisplay';
 import { getStatusLabel } from '../../apps/kuaizhizao/constants/documentStatus';
 import { getDemandBusinessModeLabel } from '../../apps/kuaizhizao/utils/businessMode';
@@ -85,6 +98,11 @@ function briefBusinessMode(raw: unknown): string {
   return s === '-' ? '—' : s;
 }
 
+function briefAmount(resource: string, fieldName: string, value: unknown): React.ReactNode {
+  if (value == null || value === '') return '—';
+  return <AmountDisplay resource={resource} fieldName={fieldName} value={Number(value)} />;
+}
+
 async function loadBrief(documentType: string, documentId: number): Promise<BriefModel> {
   const unitMap = await getMaterialUnitDisplayMapShared();
   const unitCell = (code: unknown) => {
@@ -100,7 +118,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         { key: 'customer', label: '客户', value: dash(q.customer_name) },
         { key: 'status', label: '状态', value: briefDocStatus(q.status) },
         { key: 'date', label: '报价日期', value: dash(q.quotation_date) },
-        { key: 'amount', label: '总金额', value: q.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(q.total_amount)} /> : '—' },
+        { key: 'amount', label: '总金额', value: briefAmount(QO, 'total_amount', q.total_amount) },
       ];
       const rows = (q.items ?? []).map((it, i) => ({
         key: String(it.id ?? i),
@@ -128,15 +146,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(QO, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(QO, 'amount', v),
         },
         { title: '交期', dataIndex: 'delivery_date', width: 108, render: (v: string) => dash(v) },
       ];
@@ -149,7 +165,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         { key: 'customer', label: '客户', value: dash(o.customer_name) },
         { key: 'status', label: '状态', value: briefDocStatus(o.status) },
         { key: 'date', label: '订单日期', value: dash(o.order_date) },
-        { key: 'amount', label: '总金额', value: o.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(o.total_amount)} /> : '—' },
+        { key: 'amount', label: '总金额', value: briefAmount(SO, 'total_amount', o.total_amount) },
       ];
       const rows = (o.items ?? []).map((it, i) => ({
         key: String(it.id ?? i),
@@ -177,15 +193,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SO, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SO, 'amount_with_tax', v),
         },
         { title: '交期', dataIndex: 'delivery_date', width: 108, render: (v: string) => dash(v) },
       ];
@@ -226,15 +240,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(DEM, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(DEM, 'amount_with_tax', v),
         },
         { title: '交期', dataIndex: 'delivery_date', width: 108, render: (v: string) => dash(v) },
       ];
@@ -314,7 +326,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         {
           key: 'amount',
           label: '总金额',
-          value: p.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(p.total_amount)} /> : '—',
+          value: briefAmount(PO, 'total_amount', p.total_amount),
         },
       ];
       const rows = (p.items ?? []).map((it, i) => ({
@@ -343,15 +355,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(PO, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(PO, 'amount', v),
         },
         { title: '要求到货', dataIndex: 'required_date', width: 108, render: (v: string) => dash(v) },
       ];
@@ -393,8 +403,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '参考单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(PR, 'unit_price', v),
         },
         { title: '要求到货', dataIndex: 'required_date', width: 108, render: (v: string) => dash(v) },
       ];
@@ -545,7 +554,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         {
           key: 'amount',
           label: '总金额',
-          value: d.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(d.total_amount)} /> : '—',
+          value: briefAmount(SO, 'total_amount', d.total_amount),
         },
         { key: 'ship', label: '物流单号', value: dash(d.tracking_number) },
       ];
@@ -576,15 +585,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SO, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SO, 'amount', v),
         },
         { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
       ];
@@ -601,7 +608,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         {
           key: 'amount',
           label: '总金额',
-          value: pr.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pr.total_amount)} /> : '—',
+          value: briefAmount(PO, 'total_amount', pr.total_amount),
         },
         { key: 'delivery_note', label: '送货单号', value: dash(pr.delivery_note) },
       ];
@@ -639,15 +646,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '单价',
           dataIndex: 'unit_price',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(PO, 'unit_price', v),
         },
         {
           title: '金额',
           dataIndex: 'amount',
           width: 104,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="purchase_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(PO, 'amount', v),
         },
         { title: '批号', dataIndex: 'batch_number', width: 96, render: (v: string) => dash(v) },
       ];
@@ -727,8 +732,8 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         { key: 'code', label: '应收单号', value: dash(ar.receivable_code) },
         { key: 'customer', label: '客户', value: dash(ar.customer_name) },
         { key: 'status', label: '状态', value: briefDocStatus(ar.status) },
-        { key: 'total', label: '应收总额', value: ar.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(ar.total_amount)} /> : '—' },
-        { key: 'remain', label: '剩余', value: ar.remaining_amount != null ? <AmountDisplay resource="sales_order" value={Number(ar.remaining_amount)} /> : '—' },
+        { key: 'total', label: '应收总额', value: briefAmount(AR, 'total_amount', ar.total_amount) },
+        { key: 'remain', label: '剩余', value: briefAmount(AR, 'amount', ar.remaining_amount) },
         { key: 'due', label: '到期日', value: dash(ar.due_date) },
       ];
       return { basics, columns: [], rows: [] };
@@ -739,8 +744,8 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         { key: 'code', label: '应付单号', value: dash(py.payable_code) },
         { key: 'supplier', label: '供应商', value: dash(py.supplier_name) },
         { key: 'status', label: '状态', value: briefDocStatus(py.status) },
-        { key: 'total', label: '应付总额', value: py.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(py.total_amount)} /> : '—' },
-        { key: 'remain', label: '剩余', value: py.remaining_amount != null ? <AmountDisplay resource="purchase_order" value={Number(py.remaining_amount)} /> : '—' },
+        { key: 'total', label: '应付总额', value: briefAmount(AP, 'total_amount', py.total_amount) },
+        { key: 'remain', label: '剩余', value: briefAmount(AP, 'amount', py.remaining_amount) },
         { key: 'due', label: '到期日', value: dash(py.due_date) },
       ];
       return { basics, columns: [], rows: [] };
@@ -758,11 +763,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           key: 'amt',
           label: '价税合计',
           value:
-            inv.total_amount != null ? (
-              <AmountDisplay resource="sales_order" value={Number(inv.total_amount)} />
-            ) : (
-              '—'
-            ),
+            briefAmount(SI, 'total_amount', inv.total_amount),
         },
       ];
       const itemArr = (Array.isArray(inv.items) ? inv.items : []) as Record<string, unknown>[];
@@ -789,15 +790,13 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           title: '金额(不含税)',
           dataIndex: 'amount',
           width: 112,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SI, 'amount_without_tax', v),
         },
         {
           title: '税额',
           dataIndex: 'tax_amount',
           width: 96,
-          render: (v: number) =>
-            v != null ? <AmountDisplay resource="sales_order" value={Number(v)} /> : '—',
+          render: (v: number) => briefAmount(SI, 'tax_amount', v),
         },
       ];
       return { basics, columns, rows };
@@ -812,17 +811,17 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         {
           key: 'total',
           label: '收款总额',
-          value: rc.total_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.total_amount)} /> : '—',
+          value: briefAmount(RC, 'total_amount', rc.total_amount),
         },
         {
           key: 'settled',
           label: '已核销',
-          value: rc.settled_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.settled_amount)} /> : '—',
+          value: briefAmount(RC, 'amount', rc.settled_amount),
         },
         {
           key: 'unsettled',
           label: '待核销',
-          value: rc.unsettled_amount != null ? <AmountDisplay resource="sales_order" value={Number(rc.unsettled_amount)} /> : '—',
+          value: briefAmount(RC, 'amount', rc.unsettled_amount),
         },
         { key: 'method', label: '收款方式', value: dash(rc.payment_method) },
       ];
@@ -841,11 +840,7 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
           key: 'amt',
           label: '价税合计',
           value:
-            pi.total_amount != null ? (
-              <AmountDisplay resource="purchase_order" value={Number(pi.total_amount)} />
-            ) : (
-              '—'
-            ),
+            briefAmount(PI, 'total_amount', pi.total_amount),
         },
       ];
       return { basics, columns: [], rows: [] };
@@ -862,17 +857,17 @@ async function loadBrief(documentType: string, documentId: number): Promise<Brie
         {
           key: 'total',
           label: '付款总额',
-          value: pm.total_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.total_amount)} /> : '—',
+          value: briefAmount(PAY, 'total_amount', pm.total_amount),
         },
         {
           key: 'settled',
           label: '已核销',
-          value: pm.settled_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.settled_amount)} /> : '—',
+          value: briefAmount(PAY, 'amount', pm.settled_amount),
         },
         {
           key: 'unsettled',
           label: '待核销',
-          value: pm.unsettled_amount != null ? <AmountDisplay resource="purchase_order" value={Number(pm.unsettled_amount)} /> : '—',
+          value: briefAmount(PAY, 'amount', pm.unsettled_amount),
         },
         { key: 'method', label: '付款方式', value: dash(pm.payment_method) },
       ];

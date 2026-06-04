@@ -139,6 +139,7 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
@@ -2298,7 +2299,7 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'total_amount',
 
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+      render: (_, r) => <AmountDisplay resource={SC} fieldName="total_amount" value={r.total_amount} />,
 
     },
 
@@ -2308,7 +2309,7 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'released_amount',
 
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.released_amount} />,
+      render: (_, r) => <AmountDisplay resource={SC} fieldName="amount" value={r.released_amount} />,
 
     },
 
@@ -2318,7 +2319,7 @@ const SalesContractsPage: React.FC = () => {
 
       dataIndex: 'remaining_amount',
 
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.remaining_amount} />,
+      render: (_, r) => <AmountDisplay resource={SC} fieldName="amount" value={r.remaining_amount} />,
 
     },
 

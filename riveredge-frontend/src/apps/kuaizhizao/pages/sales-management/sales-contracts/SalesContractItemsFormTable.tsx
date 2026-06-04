@@ -11,6 +11,7 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import type { Material } from '../../../../master-data/types/material';
 import {
   calcContractLineAmounts,
@@ -185,7 +186,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                  return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
                                 }}
                               </Form.Item>
                             ),
@@ -251,7 +252,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                     row?.tax_rate,
                                     priceType,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                  return <AmountDisplay resource={SC} fieldName="tax_amount" value={line.tax} />;
                                 }}
                               </Form.Item>
                             ),

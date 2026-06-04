@@ -17,6 +17,7 @@ import { listPurchaseOrders } from '../../../services/purchase';
 import { listPurchaseRequisitions } from '../../../services/purchase-requisition';
 import { getPurchaseTop10 } from '../../../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO } from '../../../constants/fieldPermissionResources';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -195,7 +196,7 @@ const PurchaseDashboard: React.FC = () => {
                   align: 'right' as const,
                   render: (val) => (
                     <Text strong>
-                      <AmountDisplay resource="purchase_order" value={val != null ? Number(val) : null} />
+                      <AmountDisplay resource={PO} fieldName="total_amount" value={val != null ? Number(val) : null} />
                     </Text>
                   ),
                 },

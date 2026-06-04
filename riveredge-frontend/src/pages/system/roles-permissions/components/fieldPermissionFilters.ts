@@ -1,16 +1,37 @@
 import type { FieldPermissionPolicy } from '../../../../services/role';
 import type { MenuTree } from '../../../../services/menu';
+import { canonicalizeFieldName } from '../../../../utils/fieldMaskPermission';
 import {
   filterDataResourceOptions,
   type DataPermissionFilterMode,
   type ResourceOption,
 } from './dataPermissionFilters';
+import { normalizeResourceKey } from './roleGrantedResourceScope';
 
-function normalizeResourceKey(resource: string): string {
-  return resource.trim().toLowerCase();
+function policyRowKey(resource: string, fieldName: string): string {
+  return `${normalizeResourceKey(resource)}::${canonicalizeFieldName(fieldName)}`;
 }
 
-/** 按功能已授权资源 + 全部/APP/模块/搜索，筛选可见的字段策略行索引 */
+export function upsertFieldPolicyMask(
+  policies: FieldPermissionPolicy[],
+  item: FieldPermissionPolicy,
+  maskLevel: FieldPermissionPolicy['mask_level']
+): FieldPermissionPolicy[] {
+  const targetKey = policyRowKey(item.resource, item.field_name);
+  let found = false;
+  const next = policies.map((p) => {
+    if (policyRowKey(p.resource, p.field_name) !== targetKey) return p;
+    found = true;
+    return { ...p, mask_level: maskLevel };
+  });
+  if (found) return next;
+  return [...next, { ...item, mask_level: maskLevel }];
+}
+
+/**
+ * 按功能已授权资源 + 全部/APP/模块/搜索，筛选字段策略行索引。
+ * policies 须来自后端 GET /permission-policies/roles/{uuid}/field（含内置合成行）。
+ */
 export function filterVisibleFieldPolicyIndexes(
   policies: FieldPermissionPolicy[],
   grantedResourceKeys: Set<string>,
@@ -25,14 +46,13 @@ export function filterVisibleFieldPolicyIndexes(
 
   const resourceOpts: ResourceOption[] = [];
   const seen = new Set<string>();
-  for (const p of policies) {
-    const resource = (p.resource || '').trim();
-    const nk = normalizeResourceKey(resource);
-    if (!nk || !grantedResourceKeys.has(nk) || seen.has(nk)) continue;
+  for (const key of grantedResourceKeys) {
+    const nk = normalizeResourceKey(key);
+    if (!nk || seen.has(nk)) continue;
     seen.add(nk);
     resourceOpts.push({
-      value: resource,
-      label: resourceLabelsByKey.get(nk) || resource,
+      value: nk,
+      label: resourceLabelsByKey.get(nk) || nk,
     });
   }
 

@@ -2,6 +2,7 @@ import React, { useCallback } from 'react';
 import { Form, Typography, theme as AntdTheme } from 'antd';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import type { Material } from '../../../../master-data/types/material';
 
 export const defaultContractItem = {
@@ -151,7 +152,7 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
   const line = calcContractLineAmounts(row?.contract_quantity, row?.unit_price, row?.tax_rate, priceType);
-  return <AmountDisplay resource="sales_order" value={line.excl} />;
+  return <AmountDisplay resource={SC} fieldName="amount_without_tax" value={line.excl} />;
 };
 
 export const ContractFormSummary: React.FC = () => {
@@ -189,14 +190,14 @@ export const ContractFormSummary: React.FC = () => {
           <span>
             未税总额:{' '}
             <Typography.Text strong>
-              <AmountDisplay resource="sales_order" value={totalExcl} />
+              <AmountDisplay resource={SC} fieldName="amount_without_tax" value={totalExcl} />
             </Typography.Text>
           </span>
           {Math.abs(totalIncl - totalExcl) > 0.005 && (
             <span>
               价税合计(含税):{' '}
               <Typography.Text strong type="danger">
-                <AmountDisplay resource="sales_order" value={totalIncl} />
+                <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
               </Typography.Text>
             </span>
           )}
@@ -205,7 +206,7 @@ export const ContractFormSummary: React.FC = () => {
         <span>
           价税合计:{' '}
           <Typography.Text strong type="danger">
-            <AmountDisplay resource="sales_order" value={totalIncl} />
+            <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
           </Typography.Text>
         </span>
       )}

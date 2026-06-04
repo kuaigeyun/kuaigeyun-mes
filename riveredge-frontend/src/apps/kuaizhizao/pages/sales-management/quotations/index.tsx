@@ -103,6 +103,7 @@ import { UniPdfPreview } from '../../../../../components/uni-preview';
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
 const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
 const quotationEditPath = (id: number) => `${QUOTATION_LIST_PATH}/${id}/edit`;
+import { KUAIZHIZAO_QUOTATION_FIELD_RESOURCE as QUOTATION_FIELD_RESOURCE } from '../../../../../constants/fieldPermissionResources';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport }))
@@ -531,7 +532,13 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   const row = Form.useWatch(['items', index]);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
   const line = calcQuotationLineAmounts(row?.quote_quantity, row?.unit_price, row?.tax_rate, priceType);
-  return <AmountDisplay resource="sales_order" value={line.excl} />;
+  return (
+    <AmountDisplay
+      resource={QUOTATION_FIELD_RESOURCE}
+      fieldName="amount_without_tax"
+      value={line.excl}
+    />
+  );
 };
 
 const QuotationFormSummary: React.FC = () => {
@@ -567,14 +574,14 @@ const QuotationFormSummary: React.FC = () => {
           <span>
             未税总额:{' '}
             <Typography.Text strong>
-              <AmountDisplay resource="sales_order" value={totalExcl} />
+              <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_without_tax" value={totalExcl} />
             </Typography.Text>
           </span>
           {Math.abs(totalIncl - totalExcl) > 0.005 && (
             <span>
               价税合计(含税):{' '}
               <Typography.Text strong type="danger">
-                <AmountDisplay resource="sales_order" value={totalIncl} />
+                <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
               </Typography.Text>
             </span>
           )}
@@ -583,7 +590,7 @@ const QuotationFormSummary: React.FC = () => {
         <span>
           价税合计:{' '}
           <Typography.Text strong type="danger">
-            <AmountDisplay resource="sales_order" value={totalIncl} />
+            <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
           </Typography.Text>
         </span>
       )}
@@ -959,7 +966,7 @@ const QuotationsPage: React.FC = () => {
       width: 110,
       align: 'right',
       hideInSearch: true,
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+      render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
       title: '状态',
@@ -2183,7 +2190,7 @@ const QuotationsPage: React.FC = () => {
     {
       title: '总金额',
       dataIndex: 'total_amount',
-      render: (_, r) => <AmountDisplay resource="sales_order" value={r.total_amount} />,
+      render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
       title: '币种',
@@ -2693,7 +2700,13 @@ const QuotationsPage: React.FC = () => {
                                       row?.tax_rate,
                                       priceType,
                                     );
-                                    return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                    return (
+                                      <AmountDisplay
+                                        resource={QUOTATION_FIELD_RESOURCE}
+                                        fieldName="amount_without_tax"
+                                        value={line.excl}
+                                      />
+                                    );
                                   }}
                                 </Form.Item>
                               ),
@@ -2759,7 +2772,13 @@ const QuotationsPage: React.FC = () => {
                                       row?.tax_rate,
                                       priceType,
                                     );
-                                    return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                    return (
+                                      <AmountDisplay
+                                        resource={QUOTATION_FIELD_RESOURCE}
+                                        fieldName="tax_amount"
+                                        value={line.tax}
+                                      />
+                                    );
                                   }}
                                 </Form.Item>
                               ),
@@ -3361,7 +3380,13 @@ const QuotationsPage: React.FC = () => {
                           dataIndex: 'unit_price',
                           width: 100,
                           align: 'right' as const,
-                          render: (v: number) => <AmountDisplay resource="sales_order" value={v} />,
+                          render: (v: number) => (
+                            <AmountDisplay
+                              resource={QUOTATION_FIELD_RESOURCE}
+                              fieldName="unit_price"
+                              value={v}
+                            />
+                          ),
                         },
                         ...(showTax
                           ? [
@@ -3377,7 +3402,13 @@ const QuotationsPage: React.FC = () => {
                                     it.tax_rate,
                                     pt,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.excl} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={QUOTATION_FIELD_RESOURCE}
+                                      fieldName="amount_without_tax"
+                                      value={line.excl}
+                                    />
+                                  );
                                 },
                               },
                               {
@@ -3398,7 +3429,13 @@ const QuotationsPage: React.FC = () => {
                                     it.tax_rate,
                                     pt,
                                   );
-                                  return <AmountDisplay resource="sales_order" value={line.tax} />;
+                                  return (
+                                    <AmountDisplay
+                                      resource={QUOTATION_FIELD_RESOURCE}
+                                      fieldName="tax_amount"
+                                      value={line.tax}
+                                    />
+                                  );
                                 },
                               },
                             ]
@@ -3417,7 +3454,8 @@ const QuotationsPage: React.FC = () => {
                             );
                             return (
                               <AmountDisplay
-                                resource="sales_order"
+                                resource={QUOTATION_FIELD_RESOURCE}
+                                fieldName={showTax ? 'amount_with_tax' : 'amount_without_tax'}
                                 value={showTax ? line.incl : line.excl}
                               />
                             );

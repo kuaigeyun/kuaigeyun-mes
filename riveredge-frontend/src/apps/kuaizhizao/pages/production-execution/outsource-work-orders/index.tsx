@@ -24,6 +24,7 @@ import {
   ProFormDatePicker,
   ProFormDigit,
   ProFormTextArea,
+  ProFormDependency,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -35,6 +36,7 @@ import {
   Dropdown,
   Empty,
   Spin,
+  Form,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
@@ -67,8 +69,7 @@ import { materialApi } from '../../../../master-data/services/material';
 import { warehouseApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
-import { useGlobalStore } from '../../../../../stores/globalStore';
-import { canViewKuaizhizaoPricing } from '../../../../../utils/kuaizhizaoPricingPermission';
+import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
@@ -351,7 +352,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         render: (_, record) => {
           const price = record.unitPrice || record.unit_price;
           return price != null ? (
-            <AmountDisplay resource="outsource_order" value={Number(price)} />
+            <AmountDisplay resource={OO} fieldName="unit_price" value={Number(price)} />
           ) : (
             '-'
           );
@@ -363,7 +364,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         render: (_, record) => {
           const amount = record.totalAmount || record.total_amount;
           return amount != null ? (
-            <AmountDisplay resource="outsource_order" value={Number(amount)} />
+            <AmountDisplay resource={OO} fieldName="total_amount" value={Number(amount)} />
           ) : (
             '-'
           );
@@ -1024,7 +1025,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       render: (_, record) => {
         const price = record.unitPrice || record.unit_price;
         return price != null && !(typeof price === 'string' && price === '') ? (
-          <AmountDisplay resource="outsource_order" value={Number(price)} />
+          <AmountDisplay resource={OO} fieldName="unit_price" value={Number(price)} />
         ) : (
           '-'
         );
@@ -1037,7 +1038,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       render: (_, record) => {
         const amount = record.totalAmount || record.total_amount;
         return amount != null && !(typeof amount === 'string' && amount === '') ? (
-          <AmountDisplay resource="outsource_order" value={Number(amount)} />
+          <AmountDisplay resource={OO} fieldName="total_amount" value={Number(amount)} />
         ) : (
           '-'
         );
@@ -1327,7 +1328,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                   {selectedMaterialSourceInfo.unitPrice != null && (
                     <span style={{ marginLeft: 16 }}>
                       委外单价：
-                      <AmountDisplay resource="outsource_order" value={Number(selectedMaterialSourceInfo.unitPrice)} />
+                      <AmountDisplay resource={OO} fieldName="unit_price" value={Number(selectedMaterialSourceInfo.unitPrice)} />
                     </span>
                   )}
                 </div>
@@ -1394,20 +1395,18 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }}
           colProps={{ span: 12 }}
         />
-        <ProFormDigit
-          name="totalAmount"
-          label="委外总金额"
-          placeholder="自动计算（数量 × 单价）"
-          disabled={true}
-          colProps={{ span: 12 }}
-          fieldProps={{
-            formatter: (value) => {
-              const u = useGlobalStore.getState().currentUser;
-              if (!canViewKuaizhizaoPricing(u)) return '***';
-              return value ? `¥${Number(value).toFixed(2)}` : '¥0.00';
-            },
-          }}
-        />
+        <ProFormDigit name="totalAmount" hidden />
+        <ProFormDependency name={['quantity', 'unitPrice']}>
+          {({ quantity, unitPrice }) => (
+            <Form.Item label="委外总金额" style={{ marginBottom: 24 }}>
+              <AmountDisplay
+                resource={OO}
+                fieldName="total_amount"
+                value={(Number(quantity) || 0) * (Number(unitPrice) || 0)}
+              />
+            </Form.Item>
+          )}
+        </ProFormDependency>
 
         <ProFormSelect
           name="priority"

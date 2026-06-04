@@ -1,10 +1,8 @@
 /**
  * 金额显示组件
  *
- * 根据用户是否具有查看金额的权限，决定显示真实金额还是经过掩码处理的内容。
- *
- * @author Antigravity
- * @date 2026-02-19
+ * 优先按角色「字段权限」策略（明文/脱敏/隐藏）展示；
+ * 无字段策略时回退 kuaizhizao:pricing:view 等历史金额可见权限。
  */
 
 import React from 'react'
@@ -12,11 +10,15 @@ import { Tooltip } from 'antd'
 import { useGlobalStore } from '../../stores/globalStore'
 import { LockOutlined } from '@ant-design/icons'
 import { canViewKuaizhizaoPricing } from '../../utils/kuaizhizaoPricingPermission'
+import { resolveAmountFieldVisibility } from '../../utils/fieldMaskPermission'
+import { useUserFieldMasks } from '../../hooks/useUserFieldMasks'
 import { formatNumber } from '../../utils/format'
 
 export interface AmountDisplayProps {
-  /** 资源名称（如：sales_order）；可选，用于兼容历史权限 {resource}:view:amount */
+  /** 业务资源键（如 kuaizhizao:quotation）；与角色字段权限 resource 一致 */
   resource?: string
+  /** 字段 canonical 名（如 tax_amount、unit_price、amount_without_tax） */
+  fieldName?: string
   /** 金额数值 */
   value: number | null | undefined
   /** 小数位数（默认 2） */
@@ -35,11 +37,9 @@ export interface AmountDisplayProps {
   className?: string
 }
 
-/**
- * 金额显示组件
- */
 export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   resource,
+  fieldName,
   value,
   decimals = 2,
   prefix = '¥',
@@ -50,10 +50,20 @@ export const AmountDisplay: React.FC<AmountDisplayProps> = ({
   className,
 }) => {
   const currentUser = useGlobalStore((s) => s.currentUser)
+  const fieldMasks = useUserFieldMasks()
+  const legacyResource = resource?.includes(':') ? undefined : resource
+  const hasLegacyPricingAccess = canViewKuaizhizaoPricing(currentUser, legacyResource)
+  const visibility = resolveAmountFieldVisibility(fieldMasks, resource, fieldName, hasLegacyPricingAccess)
 
-  const hasAccess = canViewKuaizhizaoPricing(currentUser, resource)
+  if (visibility === 'hide') {
+    return (
+      <span className={className} style={{ color: 'rgba(0, 0, 0, 0.25)', ...style }}>
+        —
+      </span>
+    )
+  }
 
-  if (!hasAccess) {
+  if (visibility === 'mask') {
     return (
       <Tooltip title={maskTooltip}>
         <span

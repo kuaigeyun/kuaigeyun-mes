@@ -17,6 +17,7 @@ import dayjs from 'dayjs';
 import { getWarehouseDashboardSummary, type WarehouseDashboardSummary } from '../../../services/warehouse-dashboard';
 import { mesDashboardService } from '../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
+import { KUAIZHIZAO_WAREHOUSE_INVENTORY_FIELD_RESOURCE as INV } from '../../../constants/fieldPermissionResources';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -62,7 +63,8 @@ const WarehouseDashboard: React.FC = () => {
         title: '总库存金额 (元)',
         value: (
           <AmountDisplay
-            resource="inventory"
+            resource={INV}
+            fieldName="total_amount"
             value={s?.total_inventory_value != null ? Number(s.total_inventory_value) : null}
             prefix=""
             style={{ fontSize: 30, fontWeight: 700, color: '#fff' }}
