@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from core.api.deps import get_current_user
+from infra.api.deps.deps import oauth2_scheme
+from infra.services.auth_service import AuthService
 from infra.models.user import User
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
@@ -209,11 +211,16 @@ async def get_backup(
 @router.get("/{uuid}/download")
 async def download_backup(
     uuid: str,
-    current_user: User = Depends(get_current_user)
+    access_token: Optional[str] = Query(None, description="标准访问令牌，用于浏览器原生流式下载"),
+    header_token: Optional[str] = Depends(oauth2_scheme),
 ) -> Any:
     """
     下载备份文件（仅成功的备份可下载）
     """
+    token = header_token or access_token
+    if not token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token缺失")
+    current_user = await AuthService().get_current_user(token)
     try:
         backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
         if backup.status != "success":

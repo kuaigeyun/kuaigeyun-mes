@@ -30,7 +30,7 @@ import {
   getBackupDetail,
   restoreBackup,
   deleteBackup,
-  downloadBackup,
+  startBackupDownload,
   getBackupWorkerHealth,
   DataBackup,
   BackupWorkerHealth,
@@ -97,7 +97,6 @@ const DataBackupsPage: React.FC = () => {
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
   const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
   const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
-  const [downloadingBackupUuids, setDownloadingBackupUuids] = useState<string[]>([]);
 
   const loadWorkerHealth = React.useCallback(async (silent: boolean = true) => {
     if (!silent) {
@@ -246,42 +245,17 @@ const DataBackupsPage: React.FC = () => {
   };
 
   /**
-   * 下载备份
+   * 下载备份（浏览器原生流式下载，立即弹出保存对话框）
    */
-  const handleDownload = async (record: DataBackup) => {
-    if (downloadingBackupUuids.includes(record.uuid)) {
-      messageApi.info(t('pages.system.dataBackups.downloadPreparing'));
-      return;
-    }
-    const msgKey = `backup-download-${record.uuid}`;
-    setDownloadingBackupUuids((prev) => [...prev, record.uuid]);
-    messageApi.open({
-      key: msgKey,
-      type: 'loading',
-      duration: 0,
-      content: t('pages.system.dataBackups.downloadPreparing'),
-    });
+  const handleDownload = (record: DataBackup) => {
     try {
-      const blob = await downloadBackup(record.uuid);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${record.name || 'backup'}_${record.uuid.slice(0, 8)}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      messageApi.success({
-        key: msgKey,
-        content: t('pages.system.dataBackups.downloadStarted'),
-      });
+      startBackupDownload(
+        record.uuid,
+        `${record.name || 'backup'}_${record.uuid.slice(0, 8)}.zip`,
+      );
+      messageApi.success(t('pages.system.dataBackups.downloadStarted'));
     } catch (error: any) {
-      messageApi.error({
-        key: msgKey,
-        content: error.message || t('pages.system.dataBackups.downloadFailed'),
-      });
-    } finally {
-      setDownloadingBackupUuids((prev) => prev.filter((uuid) => uuid !== record.uuid));
+      messageApi.error(error.message || t('pages.system.dataBackups.downloadFailed'));
     }
   };
 
@@ -392,14 +366,10 @@ const DataBackupsPage: React.FC = () => {
           </Tooltip>,
           backup.status === 'success' ? (
             <Tooltip key="download" title={t('pages.system.dataBackups.downloadBackup')}>
-              {downloadingBackupUuids.includes(backup.uuid) ? (
-                <SyncOutlined spin style={{ fontSize: 16, color: '#1890ff' }} />
-              ) : (
-                <DownloadOutlined
-                  onClick={() => handleDownload(backup)}
-                  style={{ fontSize: 16, color: '#52c41a' }}
-                />
-              )}
+              <DownloadOutlined
+                onClick={() => handleDownload(backup)}
+                style={{ fontSize: 16, color: '#52c41a' }}
+              />
             </Tooltip>
           ) : null,
           backup.status === 'success' ? (
@@ -578,7 +548,6 @@ const DataBackupsPage: React.FC = () => {
               type="link"
               size="small"
               icon={<DownloadOutlined />}
-              loading={downloadingBackupUuids.includes(record.uuid)}
               onClick={() => handleDownload(record)}
             >
               {t('pages.system.dataBackups.downloadBackup')}

@@ -5,7 +5,7 @@
  */
 
 import { getToken } from '../utils/auth';
-import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
+import { updateLastActivity } from '../utils/activityUtils';
 import { apiRequest } from './api';
 
 export interface DataBackup {
@@ -144,27 +144,29 @@ export async function deleteBackup(uuid: string): Promise<void> {
 }
 
 /**
- * 下载备份文件（返回 Blob，用于触发浏览器下载）
+ * 构建备份下载 URL（浏览器原生流式下载，不经过 JS blob 缓冲）
  */
-export async function downloadBackup(uuid: string): Promise<Blob> {
-  updateLastActivity(true); // 下载发起即视为用户活动，避免长耗时下载期间被误判为无操作
-  incrementPendingRequests();
-  try {
-    const token = getToken();
-    const tenantId = localStorage.getItem('tenant_id');
-    const url = `/api/v1/core/data-backups/${uuid}/download`;
-    const headers: Record<string, string> = {};
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-    if (tenantId) headers['X-Tenant-Id'] = tenantId;
-    const res = await fetch(url, { headers });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || err.message || `下载失败: ${res.status}`);
-    }
-    return res.blob();
-  } finally {
-    updateLastActivity(true);
-    decrementPendingRequests();
-  }
+export function getBackupDownloadUrl(uuid: string): string {
+  const token = getToken();
+  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
+  const params = new URLSearchParams();
+  if (token) params.set('access_token', token);
+  const query = params.toString();
+  return `${baseUrl}/api/v1/core/data-backups/${uuid}/download${query ? `?${query}` : ''}`;
 }
 
+/**
+ * 触发浏览器原生下载（服务端 FileResponse 流式传输）
+ */
+export function startBackupDownload(uuid: string, filename: string): void {
+  updateLastActivity(true);
+  const url = getBackupDownloadUrl(uuid);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  updateLastActivity(true);
+}
