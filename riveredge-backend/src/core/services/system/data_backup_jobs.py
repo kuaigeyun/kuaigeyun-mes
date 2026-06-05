@@ -42,6 +42,86 @@ def _is_platform_level_table(table: str) -> bool:
     return any(table.startswith(prefix) for prefix in TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES)
 
 
+def _build_tenant_user_reference_subqueries(
+    *,
+    tenant_id: int,
+    export_tables: list[str],
+    env: dict[str, str],
+) -> list[str]:
+    """收集租户子表引用 core_users 的 user_id，用于导出时一并打包关联用户。"""
+    db_user = infra_settings.DB_USER
+    db_host = infra_settings.DB_HOST
+    db_port = infra_settings.DB_PORT
+    db_name = infra_settings.DB_NAME
+    fk_query = """
+        SELECT tc.table_name AS child_table, kcu.column_name AS child_column
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.table_schema = tc.table_schema
+        JOIN information_schema.columns tenant_col
+          ON tenant_col.table_schema = 'public'
+         AND tenant_col.table_name = tc.table_name
+         AND tenant_col.column_name = 'tenant_id'
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_schema = 'public'
+          AND ccu.table_name = 'core_users'
+          AND ccu.column_name = 'id'
+    """
+    cmd = [
+        "psql",
+        "-h",
+        db_host,
+        "-p",
+        str(db_port),
+        "-U",
+        db_user,
+        "-d",
+        db_name,
+        "-t",
+        "-A",
+        "-F",
+        "|",
+        "-c",
+        fk_query,
+    ]
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.warning("查询 user 外键引用失败，core_users 仍仅按 tenant_id 导出: {}", result.stderr)
+        return []
+
+    export_set = set(export_tables)
+    subqueries: list[str] = []
+    for line in result.stdout.splitlines():
+        parts = line.strip().split("|")
+        if len(parts) != 2:
+            continue
+        child_table, child_column = parts[0].strip(), parts[1].strip()
+        if not child_table or not child_column or child_table not in export_set:
+            continue
+        if child_table == "core_users":
+            continue
+        subqueries.append(
+            f'SELECT DISTINCT "{child_column}" FROM "{child_table}" '
+            f"WHERE tenant_id = {int(tenant_id)} AND \"{child_column}\" IS NOT NULL"
+        )
+    return subqueries
+
+
+def _build_tenant_table_copy_sql(table: str, tenant_id: int, user_ref_subqueries: list[str]) -> str:
+    if table == "core_users" and user_ref_subqueries:
+        refs = " UNION ".join(user_ref_subqueries)
+        return (
+            f'SELECT * FROM "core_users" WHERE tenant_id = {int(tenant_id)} '
+            f"OR id IN ({refs})"
+        )
+    return f'SELECT * FROM "{table}" WHERE tenant_id = {int(tenant_id)}'
+
+
 def run_backup_dump_and_zip_sync(
     *,
     backup_uuid: str,
@@ -114,6 +194,14 @@ def run_backup_dump_and_zip_sync(
         if skipped_tables:
             logger.info("租户隔离备份跳过表: {}", skipped_tables)
 
+        user_ref_subqueries = _build_tenant_user_reference_subqueries(
+            tenant_id=int(tenant_id),
+            export_tables=tables,
+            env=env,
+        )
+        if user_ref_subqueries:
+            logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
+
         with open(db_dump_path, "w", encoding="utf-8") as f:
             f.write("-- Tenant Isolated Backup\n")
             f.write(f"-- Tenant ID: {tenant_id}\n")
@@ -139,7 +227,8 @@ def run_backup_dump_and_zip_sync(
                     "-d",
                     db_name,
                     "-c",
-                    f'COPY (SELECT * FROM "{table}" WHERE tenant_id = {tenant_id}) TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING \'UTF8\')',
+                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries)}) '
+                    "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
                 ]
                 logger.debug(f"正在导出表: {table}")
                 table_result = subprocess.run(copy_cmd, env=env, capture_output=True, text=True)
@@ -839,6 +928,53 @@ def _append_pk_conflict_deletes(
         )
 
 
+def _append_fk_orphan_cleanup(
+    script_lines: list[str],
+    *,
+    fk_rows: list[dict[str, Any]],
+    import_tables: set[str],
+    tenant_ids: set[int],
+    table_column_map: dict[str, list[str]],
+) -> None:
+    """删除租户范围内引用已不存在父表行的孤儿数据（源库可能存在的历史脏数据）。"""
+    tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
+    for row in fk_rows:
+        child = row.get("child_table")
+        parent = row.get("parent_table")
+        child_col = row.get("child_column")
+        parent_col = row.get("parent_column")
+        if not child or not parent or not child_col or not parent_col:
+            continue
+        if child not in import_tables or parent not in import_tables:
+            continue
+        if "tenant_id" not in table_column_map.get(child, []):
+            continue
+        script_lines.append(
+            f'DELETE FROM "{child}" c WHERE c.tenant_id IN ({tenant_sql}) '
+            f'AND c."{child_col}" IS NOT NULL '
+            f'AND NOT EXISTS ('
+            f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
+            f");"
+        )
+
+
+def _append_serial_sequence_resets(
+    script_lines: list[str],
+    import_tables: set[str],
+    table_pk_map: dict[str, list[str]],
+) -> None:
+    for table in sorted(import_tables):
+        if table_pk_map.get(table) != ["id"]:
+            continue
+        script_lines.append(
+            f"DO $$ DECLARE seq regclass; BEGIN "
+            f"seq := pg_get_serial_sequence('\"{table}\"', 'id'); "
+            f"IF seq IS NOT NULL THEN "
+            f"PERFORM setval(seq, GREATEST(COALESCE((SELECT MAX(id) FROM \"{table}\"), 1), 1), true); "
+            f"END IF; END $$;"
+        )
+
+
 def _run_tenant_restore_transaction(
     *,
     delete_order: list[str],
@@ -848,16 +984,25 @@ def _run_tenant_restore_transaction(
     source_tenant_id: int,
     table_pk_map: dict[str, list[str]],
     table_column_meta: dict[str, dict[str, dict[str, Optional[str]]]],
+    table_column_map: dict[str, list[str]],
+    fk_rows: list[dict[str, Any]],
 ) -> None:
     """
     在单个 psql 事务中执行 DELETE + COPY；任一步失败则整批回滚，避免只删不导。
+
+    导入阶段关闭外键触发器（session_replication_role=replica），避免表顺序/历史脏数据
+    导致无穷无尽的 FK 错误；提交前清理租户内孤儿行并重置 serial 序列。
     """
     tenant_ids_to_clear = {int(target_tenant_id)}
     if int(source_tenant_id) != int(target_tenant_id):
         tenant_ids_to_clear.add(int(source_tenant_id))
+    import_tables = set(import_plan.keys())
 
     with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
-        script_lines: list[str] = ["BEGIN;"]
+        script_lines: list[str] = [
+            "BEGIN;",
+            "SET session_replication_role = replica;",
+        ]
         for table in delete_order:
             for tenant_id in sorted(tenant_ids_to_clear):
                 script_lines.append(
@@ -893,6 +1038,15 @@ def _run_tenant_restore_transaction(
                 f"WITH (FORMAT CSV, HEADER, ENCODING 'UTF8'{force_sql});"
             )
 
+        _append_fk_orphan_cleanup(
+            script_lines,
+            fk_rows=fk_rows,
+            import_tables=import_tables,
+            tenant_ids=tenant_ids_to_clear,
+            table_column_map=table_column_map,
+        )
+        _append_serial_sequence_resets(script_lines, import_tables, table_pk_map)
+        script_lines.append("SET session_replication_role = DEFAULT;")
         script_lines.append("COMMIT;")
         script_path = os.path.join(tmpdir, "restore.sql")
         with open(script_path, "w", encoding="utf-8") as f:
@@ -1057,11 +1211,14 @@ async def restore_tenant_backup_from_dump(
     fk_sql = """
         SELECT
             tc.table_name AS child_table,
-            ccu.table_name AS parent_table
+            kcu.column_name AS child_column,
+            ccu.table_name AS parent_table,
+            ccu.column_name AS parent_column
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu
           ON tc.constraint_name = kcu.constraint_name
          AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
         JOIN information_schema.constraint_column_usage ccu
           ON ccu.constraint_name = tc.constraint_name
          AND ccu.table_schema = tc.table_schema
@@ -1124,6 +1281,8 @@ async def restore_tenant_backup_from_dump(
         source_tenant_id=effective_source,
         table_pk_map=dict(table_pk_map),
         table_column_meta=dict(table_column_meta),
+        table_column_map=dict(table_column_map),
+        fk_rows=fk_rows if isinstance(fk_rows, list) else [],
     )
 
     logger.info(
