@@ -633,28 +633,124 @@ def _prepare_csv_for_import(
     return csv_columns, csv_text
 
 
+def _sql_literal(value: str) -> str:
+    text = value.strip()
+    if not text or text.lower() == "null":
+        return "NULL"
+    if text.lstrip("-").isdigit():
+        return text
+    return "'" + text.replace("'", "''") + "'"
+
+
+def _batched(values: list[str], size: int) -> list[list[str]]:
+    return [values[i : i + size] for i in range(0, len(values), size)]
+
+
+def _extract_csv_column_values(csv_text: str, column: str) -> list[str]:
+    columns = _csv_header_columns(csv_text)
+    if column not in columns:
+        return []
+    col_idx = columns.index(column)
+    _ensure_csv_field_limit()
+    values: list[str] = []
+    for row in csv.reader(csv_text.splitlines()[1:]):
+        if col_idx < len(row):
+            cell = row[col_idx].strip()
+            if cell:
+                values.append(cell)
+    return values
+
+
+def _append_pk_conflict_deletes(
+    script_lines: list[str],
+    table: str,
+    csv_text: str,
+    pk_columns: list[str],
+) -> None:
+    """
+    按 CSV 主键值删除已有行，避免上次失败残留（错误 tenant_id）导致 COPY 主键冲突。
+    """
+    if not pk_columns:
+        return
+
+    header = _csv_header_columns(csv_text)
+    if len(pk_columns) == 1:
+        col = pk_columns[0]
+        if col not in header:
+            return
+        values = list(dict.fromkeys(_extract_csv_column_values(csv_text, col)))
+        if not values:
+            return
+        for batch in _batched(values, 500):
+            literals = ", ".join(_sql_literal(v) for v in batch)
+            script_lines.append(f'DELETE FROM "{table}" WHERE "{col}" IN ({literals});')
+        return
+
+    missing = [col for col in pk_columns if col not in header]
+    if missing:
+        logger.warning("表 {} 备份 CSV 缺少主键列 {}，跳过按主键清理", table, missing)
+        return
+
+    _ensure_csv_field_limit()
+    col_indexes = [header.index(col) for col in pk_columns]
+    tuples: list[tuple[str, ...]] = []
+    seen: set[tuple[str, ...]] = set()
+    for row in csv.reader(csv_text.splitlines()[1:]):
+        padded = row + [""] * max(0, len(header) - len(row))
+        key = tuple(padded[idx].strip() for idx in col_indexes)
+        if any(not part for part in key) or key in seen:
+            continue
+        seen.add(key)
+        tuples.append(key)
+
+    if not tuples:
+        return
+
+    col_sql = ", ".join(f'"{col}"' for col in pk_columns)
+    for batch in _batched(list(tuples), 200):
+        value_groups = ", ".join(
+            "(" + ", ".join(_sql_literal(part) for part in key) + ")" for key in batch
+        )
+        script_lines.append(
+            f'DELETE FROM "{table}" WHERE ({col_sql}) IN ({value_groups});'
+        )
+
+
 def _run_tenant_restore_transaction(
     *,
     delete_order: list[str],
     insert_order: list[str],
     import_plan: dict[str, tuple[list[str], str]],
     target_tenant_id: int,
+    source_tenant_id: int,
+    table_pk_map: dict[str, list[str]],
 ) -> None:
     """
     在单个 psql 事务中执行 DELETE + COPY；任一步失败则整批回滚，避免只删不导。
     """
+    tenant_ids_to_clear = {int(target_tenant_id)}
+    if int(source_tenant_id) != int(target_tenant_id):
+        tenant_ids_to_clear.add(int(source_tenant_id))
+
     with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
         script_lines: list[str] = ["BEGIN;"]
         for table in delete_order:
-            script_lines.append(
-                f'DELETE FROM "{table}" WHERE tenant_id = {int(target_tenant_id)};'
-            )
+            for tenant_id in sorted(tenant_ids_to_clear):
+                script_lines.append(
+                    f'DELETE FROM "{table}" WHERE tenant_id = {int(tenant_id)};'
+                )
 
         for table in insert_order:
             payload = import_plan.get(table)
             if not payload:
                 continue
             use_columns, csv_text = payload
+            _append_pk_conflict_deletes(
+                script_lines,
+                table,
+                csv_text,
+                table_pk_map.get(table, []),
+            )
             csv_path = os.path.join(tmpdir, f"{table}.csv")
             with open(csv_path, "w", encoding="utf-8", newline="\n") as f:
                 f.write(csv_text if csv_text.endswith("\n") else f"{csv_text}\n")
@@ -836,6 +932,26 @@ async def restore_tenant_backup_from_dump(
     fk_rows = await conn.execute_query_dict(fk_sql)
     insert_order, delete_order = _build_topological_table_orders(table_names, fk_rows)
 
+    pk_sql = """
+        SELECT tc.table_name, kcu.column_name, kcu.ordinal_position
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+          AND tc.table_schema = 'public'
+          AND tc.table_name = ANY($1::text[])
+        ORDER BY tc.table_name, kcu.ordinal_position
+    """
+    pk_rows = await conn.execute_query_dict(pk_sql, [table_names])
+    table_pk_map: dict[str, list[str]] = defaultdict(list)
+    for row in pk_rows:
+        table_name = row.get("table_name")
+        column_name = row.get("column_name")
+        if table_name and column_name:
+            table_pk_map[table_name].append(column_name)
+
     import_plan: dict[str, tuple[list[str], str]] = {}
     for table in insert_order:
         csv_text = table_csv_map.get(table)
@@ -865,6 +981,8 @@ async def restore_tenant_backup_from_dump(
         insert_order=insert_order,
         import_plan=import_plan,
         target_tenant_id=target_tenant_id,
+        source_tenant_id=effective_source,
+        table_pk_map=dict(table_pk_map),
     )
 
     logger.info(
