@@ -97,7 +97,7 @@ const DataBackupsPage: React.FC = () => {
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
   const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
   const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
-  const [downloadingBackupUuid, setDownloadingBackupUuid] = useState<string | null>(null);
+  const [downloadingBackupUuids, setDownloadingBackupUuids] = useState<string[]>([]);
 
   const loadWorkerHealth = React.useCallback(async (silent: boolean = true) => {
     if (!silent) {
@@ -249,11 +249,12 @@ const DataBackupsPage: React.FC = () => {
    * 下载备份
    */
   const handleDownload = async (record: DataBackup) => {
-    if (downloadingBackupUuid) {
+    if (downloadingBackupUuids.includes(record.uuid)) {
+      messageApi.info(t('pages.system.dataBackups.downloadPreparing'));
       return;
     }
     const msgKey = `backup-download-${record.uuid}`;
-    setDownloadingBackupUuid(record.uuid);
+    setDownloadingBackupUuids((prev) => [...prev, record.uuid]);
     messageApi.open({
       key: msgKey,
       type: 'loading',
@@ -266,7 +267,9 @@ const DataBackupsPage: React.FC = () => {
       const a = document.createElement('a');
       a.href = url;
       a.download = `${record.name || 'backup'}_${record.uuid.slice(0, 8)}.zip`;
+      document.body.appendChild(a);
       a.click();
+      document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       messageApi.success({
         key: msgKey,
@@ -278,7 +281,7 @@ const DataBackupsPage: React.FC = () => {
         content: error.message || t('pages.system.dataBackups.downloadFailed'),
       });
     } finally {
-      setDownloadingBackupUuid(null);
+      setDownloadingBackupUuids((prev) => prev.filter((uuid) => uuid !== record.uuid));
     }
   };
 
@@ -389,7 +392,7 @@ const DataBackupsPage: React.FC = () => {
           </Tooltip>,
           backup.status === 'success' ? (
             <Tooltip key="download" title={t('pages.system.dataBackups.downloadBackup')}>
-              {downloadingBackupUuid === backup.uuid ? (
+              {downloadingBackupUuids.includes(backup.uuid) ? (
                 <SyncOutlined spin style={{ fontSize: 16, color: '#1890ff' }} />
               ) : (
                 <DownloadOutlined
@@ -575,7 +578,7 @@ const DataBackupsPage: React.FC = () => {
               type="link"
               size="small"
               icon={<DownloadOutlined />}
-              loading={downloadingBackupUuid === record.uuid}
+              loading={downloadingBackupUuids.includes(record.uuid)}
               onClick={() => handleDownload(record)}
             >
               {t('pages.system.dataBackups.downloadBackup')}
