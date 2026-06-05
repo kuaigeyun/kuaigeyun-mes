@@ -154,14 +154,66 @@ def _build_tenant_user_reference_subqueries(
     return subqueries
 
 
+def _load_tenant_tables_with_user_id_column(*, export_tables: list[str], env: dict[str, str]) -> set[str]:
+    """返回备份范围内声明了 user_id 列的表名。"""
+    if not export_tables:
+        return set()
+    db_user = infra_settings.DB_USER
+    db_host = infra_settings.DB_HOST
+    db_port = infra_settings.DB_PORT
+    db_name = infra_settings.DB_NAME
+    table_list = ", ".join(f"'{t}'" for t in sorted(export_tables))
+    query = f"""
+        SELECT DISTINCT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'user_id'
+          AND table_name IN ({table_list})
+    """
+    cmd = [
+        "psql",
+        "-h",
+        db_host,
+        "-p",
+        str(db_port),
+        "-U",
+        db_user,
+        "-d",
+        db_name,
+        "-t",
+        "-A",
+        "-c",
+        query,
+    ]
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.returncode != 0:
+        logger.warning("查询 user_id 列失败: {}", result.stderr)
+        return set()
+    return {line.strip() for line in result.stdout.splitlines() if line.strip()}
+
+
+def _resolve_user_ref_column_for_table(
+    table: str,
+    user_fk_children: dict[str, str],
+    tables_with_user_id: set[str],
+) -> Optional[str]:
+    if table in user_fk_children:
+        return user_fk_children[table]
+    if table in tables_with_user_id:
+        return "user_id"
+    return None
+
+
 def _build_tenant_table_copy_sql(
     table: str,
     tenant_id: int,
     user_ref_subqueries: list[str],
     user_fk_children: Optional[dict[str, str]] = None,
+    tables_with_user_id: Optional[set[str]] = None,
 ) -> str:
     tid = int(tenant_id)
     user_fk_children = user_fk_children or {}
+    tables_with_user_id = tables_with_user_id or set()
     if table == "core_users":
         if user_ref_subqueries:
             refs = " UNION ".join(user_ref_subqueries)
@@ -171,12 +223,12 @@ def _build_tenant_table_copy_sql(
             )
         return f'SELECT * FROM "core_users" WHERE tenant_id = {tid}'
 
-    if table in user_fk_children:
-        col = user_fk_children[table]
+    user_col = _resolve_user_ref_column_for_table(table, user_fk_children, tables_with_user_id)
+    if user_col:
         return (
             f'SELECT t.* FROM "{table}" t '
             f"WHERE t.tenant_id = {tid} "
-            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{col}")'
+            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{user_col}")'
         )
     return f'SELECT * FROM "{table}" WHERE tenant_id = {tid}'
 
@@ -302,6 +354,7 @@ def run_backup_dump_and_zip_sync(
             logger.info("租户隔离备份跳过表: {}", skipped_tables)
 
         user_fk_children = _load_core_user_fk_children(export_tables=tables, env=env)
+        tables_with_user_id = _load_tenant_tables_with_user_id_column(export_tables=tables, env=env)
         user_ref_subqueries = _build_tenant_user_reference_subqueries(
             tenant_id=int(tenant_id),
             user_fk_children=user_fk_children,
@@ -334,7 +387,7 @@ def run_backup_dump_and_zip_sync(
                     "-d",
                     db_name,
                     "-c",
-                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries, user_fk_children)}) '
+                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries, user_fk_children, tables_with_user_id)}) '
                     "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
                 ]
                 logger.debug(f"正在导出表: {table}")
@@ -1094,8 +1147,8 @@ def _filter_csv_rows_by_allowed_values(
     *,
     allow_empty: bool = True,
 ) -> tuple[str, int]:
-    """按列值白名单过滤 CSV 行，返回 (新 CSV, 丢弃行数)。"""
-    if not csv_text or not allowed:
+    """按列值白名单过滤 CSV 行，返回 (新 CSV, 丢弃行数)。allowed 为空时剔除该列非空行。"""
+    if not csv_text:
         return csv_text, 0
     columns = _csv_header_columns(csv_text)
     if column not in columns:
@@ -1115,7 +1168,7 @@ def _filter_csv_rows_by_allowed_values(
             else:
                 dropped += 1
             continue
-        if cell in allowed:
+        if allowed and cell in allowed:
             kept_rows.append(padded[: len(header)])
         else:
             dropped += 1
@@ -1129,38 +1182,60 @@ def _filter_csv_rows_by_allowed_values(
     return buffer.getvalue(), dropped
 
 
+def _user_ref_columns_for_table(
+    table: str,
+    csv_text: str,
+    user_fk_children: dict[str, str],
+) -> set[str]:
+    cols: set[str] = set()
+    fk_col = user_fk_children.get(table)
+    if fk_col:
+        cols.add(fk_col)
+    header = _csv_header_columns(csv_text)
+    if "user_id" in header:
+        cols.add("user_id")
+    return cols
+
+
 def _filter_tenant_backup_user_fk_csv_rows(
     table_csv_map: dict[str, str],
     user_fk_children: dict[str, str],
 ) -> dict[str, str]:
     """恢复前剔除引用备份内不存在 core_users 行的子表记录（兼容旧备份包）。"""
     users_csv = table_csv_map.get("core_users")
-    if not users_csv or not _csv_has_data_rows(users_csv):
+    if not users_csv:
         return table_csv_map
-    allowed_user_ids = set(_extract_csv_column_values(users_csv, "id"))
+    allowed_user_ids = set(_extract_csv_column_values(users_csv, "id")) if _csv_has_data_rows(users_csv) else set()
     if not allowed_user_ids:
-        return table_csv_map
+        logger.warning("备份 core_users 无有效用户 id，将剔除子表中所有 user 引用行")
 
     filtered = dict(table_csv_map)
-    for table, column in sorted(user_fk_children.items()):
+    for table in sorted(filtered.keys()):
         if table == "core_users":
             continue
         csv_text = filtered.get(table)
         if not csv_text or not _csv_has_data_rows(csv_text):
             continue
-        new_csv, dropped = _filter_csv_rows_by_allowed_values(
-            csv_text,
-            column,
-            allowed_user_ids,
-            allow_empty=False,
-        )
-        if dropped:
+        ref_columns = _user_ref_columns_for_table(table, csv_text, user_fk_children)
+        if not ref_columns:
+            continue
+        total_dropped = 0
+        current_csv = csv_text
+        for column in sorted(ref_columns):
+            current_csv, dropped = _filter_csv_rows_by_allowed_values(
+                current_csv,
+                column,
+                allowed_user_ids,
+                allow_empty=False,
+            )
+            total_dropped += dropped
+        if total_dropped:
             logger.warning(
                 "表 {} 已过滤 {} 条引用不存在用户(id)的备份行",
                 table,
-                dropped,
+                total_dropped,
             )
-            filtered[table] = new_csv
+            filtered[table] = current_csv
     return filtered
 
 

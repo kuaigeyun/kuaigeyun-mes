@@ -117,3 +117,29 @@ def test_filter_tenant_backup_user_fk_csv_rows_drops_missing_users():
     assert "user_id" in filtered["core_user_preferences"]
     assert ",1," not in filtered["core_user_preferences"]
     assert ",2," in filtered["core_user_preferences"]
+
+
+def test_filter_tenant_backup_user_fk_csv_rows_covers_saved_searches_user_id_column():
+    table_csv_map = {
+        "core_users": "id,tenant_id,username\n2,17,bob\n",
+        "core_saved_searches": (
+            "id,uuid,tenant_id,user_id,page_path,name,is_shared,is_pinned,search_params\n"
+            "1,s1,17,64,/a,n,False,False,{}\n"
+            "2,s2,17,2,/b,n,False,False,{}\n"
+        ),
+    }
+    filtered = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, {})
+    assert ",64," not in filtered["core_saved_searches"]
+    assert ",2," in filtered["core_saved_searches"]
+
+
+def test_filter_tenant_backup_user_fk_csv_rows_strips_all_when_no_users():
+    table_csv_map = {
+        "core_users": "id,tenant_id,username\n",
+        "core_saved_searches": (
+            "id,uuid,tenant_id,user_id,page_path,name,is_shared,is_pinned,search_params\n"
+            "1,s1,17,64,/a,n,False,False,{}\n"
+        ),
+    }
+    filtered = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, {})
+    assert filtered["core_saved_searches"].count("\n") == 1
