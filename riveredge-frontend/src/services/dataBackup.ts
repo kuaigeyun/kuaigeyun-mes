@@ -15,6 +15,8 @@ export interface DataBackup {
   name: string;
   backup_type: string;
   backup_scope: string;
+  /** 是否包含 uploads 附件（false=仅数据表） */
+  include_files?: boolean;
   backup_tables?: string[];
   file_path?: string;
   /** 当前 API 服务器上 zip 是否可访问 */
@@ -57,6 +59,7 @@ export interface CreateDataBackupData {
   name: string;
   backup_type: 'full' | 'incremental';
   backup_scope: 'all' | 'tenant' | 'table';
+  include_files?: boolean;
   backup_tables?: string[];
 }
 

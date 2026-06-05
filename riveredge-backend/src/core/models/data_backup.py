@@ -45,6 +45,7 @@ class DataBackup(BaseModel):
     name = fields.CharField(max_length=200, description="备份名称")
     backup_type = fields.CharField(max_length=20, default="full", description="备份类型")
     backup_scope = fields.CharField(max_length=20, default="all", description="备份范围")
+    include_files = fields.BooleanField(default=True, description="是否包含 uploads 附件")
     backup_tables = fields.JSONField(null=True, description="备份的表列表")
     
     file_path = fields.CharField(max_length=500, null=True, description="备份文件本地路径")

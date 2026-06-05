@@ -71,6 +71,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     tenant_id = event_data.get("tenant_id")
     backup_type = event_data.get("backup_type", "full")
     backup_scope = event_data.get("backup_scope", "full")
+    include_files = event_data.get("include_files")
 
     backup_dir = resolve_data_backup_dir()
     temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
@@ -81,6 +82,9 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     except Exception as e:
         logger.exception(f"备份任务无法加载记录（例如 ORM 未初始化）: {e}")
         return
+
+    if include_files is None:
+        include_files = backup.include_files
 
     try:
         backup.status = "running"
@@ -101,6 +105,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
                 tenant_id=tenant_id,
                 backup_type=backup_type,
                 backup_scope=backup_scope,
+                include_files=bool(include_files),
             )
 
         final_zip_path = await step.run("dump_and_create_zip", dump_and_create_zip)

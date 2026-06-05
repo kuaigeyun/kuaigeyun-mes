@@ -139,12 +139,14 @@ async def _execute_backup_task(tenant_id: int, scheduled_task: ScheduledTask) ->
     name = task_config.get("name", f"自动备份_{datetime.now().strftime('%Y%m%d')}")
     backup_type = task_config.get("backup_type", "full")
     backup_scope = task_config.get("backup_scope", "all")
+    include_files = task_config.get("include_files", True)
     backup_tables = task_config.get("backup_tables")
     try:
         data = DataBackupCreate(
             name=name,
             backup_type=backup_type,
             backup_scope=backup_scope,
+            include_files=bool(include_files),
             backup_tables=backup_tables,
         )
         backup = await DataBackupService.create_backup_task(tenant_id, data)

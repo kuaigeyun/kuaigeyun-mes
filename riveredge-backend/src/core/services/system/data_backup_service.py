@@ -134,6 +134,7 @@ class DataBackupService:
             name=data.name,
             backup_type=data.backup_type,
             backup_scope=data.backup_scope,
+            include_files=data.include_files,
             backup_tables=data.backup_tables,
             status="pending"
         )
@@ -154,6 +155,7 @@ class DataBackupService:
                                 "tenant_id": tenant_id,
                                 "backup_type": data.backup_type,
                                 "backup_scope": data.backup_scope,
+                                "include_files": data.include_files,
                                 "backup_tables": data.backup_tables,
                             },
                             id=str(backup.uuid),
@@ -205,15 +207,19 @@ class DataBackupService:
                 content = await file.read()
                 f.write(content)
             file_size = os.path.getsize(file_path)
-            from core.services.system.data_backup_jobs import read_backup_metadata
+            from core.services.system.data_backup_jobs import read_backup_metadata, zip_has_upload_entries
 
             metadata = read_backup_metadata(file_path)
             backup_scope = metadata.get("backup_scope", "all")
+            include_files = metadata.get("include_files")
+            if include_files is None:
+                include_files = zip_has_upload_entries(file_path)
             backup = await DataBackup.create(
                 tenant_id=tenant_id,
                 name=backup_name,
                 backup_type="full",
                 backup_scope=backup_scope,
+                include_files=bool(include_files),
                 backup_tables=None,
                 file_path=store_backup_file_path(file_path),
                 file_size=file_size,

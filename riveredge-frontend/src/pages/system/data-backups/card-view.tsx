@@ -183,13 +183,11 @@ const CardView: React.FC = () => {
     return { status: info.status, text: info.textKey ? t(info.textKey) : status };
   };
 
-  const getBackupScopeText = (scope: string): string => {
-    const scopeMap: Record<string, string> = {
-      all: t('pages.system.dataBackups.scopeAll'),
-      tenant: t('pages.system.dataBackups.scopeTenant'),
-      table: t('pages.system.dataBackups.scopeTable'),
-    };
-    return scopeMap[scope] || scope;
+  const getBackupContentScopeText = (includeFiles?: boolean | null): string => {
+    if (includeFiles === false) {
+      return t('pages.system.dataBackups.contentDataOnly');
+    }
+    return t('pages.system.dataBackups.contentDataAndFiles');
   };
 
   /**
@@ -201,8 +199,8 @@ const CardView: React.FC = () => {
     failed: backups.filter((b) => b.status === 'failed').length,
     running: backups.filter((b) => b.status === 'running').length,
     pending: backups.filter((b) => b.status === 'pending').length,
-    full: backups.filter((b) => b.backup_type === 'full').length,
-    incremental: backups.filter((b) => b.backup_type === 'incremental').length,
+    withFiles: backups.filter((b) => b.include_files !== false).length,
+    dataOnly: backups.filter((b) => b.include_files === false).length,
     totalSize: backups.reduce((sum, b) => sum + (b.file_size || 0), 0),
     successSize: backups
       .filter((b) => b.status === 'success')
@@ -270,16 +268,16 @@ const CardView: React.FC = () => {
           <Row gutter={16} style={{ marginTop: 16 }}>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title={t('pages.system.dataBackups.statFull')}
-                value={stats.full}
+                title={t('pages.system.dataBackups.contentDataAndFiles')}
+                value={stats.withFiles}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#1890ff' } }}
               />
             </Col>
             <Col xs={24} sm={12} md={6}>
               <Statistic
-                title={t('pages.system.dataBackups.statIncremental')}
-                value={stats.incremental}
+                title={t('pages.system.dataBackups.contentDataOnly')}
+                value={stats.dataOnly}
                 prefix={<DatabaseOutlined />}
                 styles={{ content: { color: '#52c41a' } }}
               />
@@ -367,7 +365,7 @@ const CardView: React.FC = () => {
                           
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelScope')}</Text>
-                            <Text style={{ fontSize: 12 }}>{getBackupScopeText(backup.backup_scope)}</Text>
+                            <Text style={{ fontSize: 12 }}>{getBackupContentScopeText(backup.include_files)}</Text>
                           </div>
                         </Space>
                       </div>
@@ -455,7 +453,7 @@ const CardView: React.FC = () => {
               </Tag>
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.system.dataBackups.columnScope')}>
-              {getBackupScopeText(currentBackup.backup_scope)}
+              {getBackupContentScopeText(currentBackup.include_files)}
             </Descriptions.Item>
             {currentBackup.backup_tables && currentBackup.backup_tables.length > 0 && (
               <Descriptions.Item label={t('pages.system.dataBackups.backupTables')}>

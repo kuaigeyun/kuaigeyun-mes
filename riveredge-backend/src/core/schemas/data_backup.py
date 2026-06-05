@@ -11,6 +11,10 @@ class DataBackupBase(BaseModel):
     name: str = Field(..., description="备份名称")
     backup_type: str = Field("full", description="备份类型 (full, incremental)")
     backup_scope: str = Field("all", description="备份范围 (all, tenant, table)")
+    include_files: bool = Field(
+        True,
+        description="是否包含 uploads 附件（false=仅数据表，可减小备份包体积）",
+    )
     backup_tables: Optional[List[str]] = Field(None, description="备份的表列表")
 
 

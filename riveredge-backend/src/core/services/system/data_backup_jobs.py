@@ -37,9 +37,44 @@ TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES = (
     "infra_",
 )
 
+# 无 tenant_id 列、但属于租户 RBAC/ABAC 的关联表（须按用户/角色/策略范围单独导出与清理）
+TENANT_JUNCTION_TABLES = frozenset(
+    {
+        "core_user_roles",
+        "core_role_permissions",
+        "core_policy_bindings",
+    }
+)
+
 
 def _is_platform_level_table(table: str) -> bool:
     return any(table.startswith(prefix) for prefix in TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES)
+
+
+def resolve_include_files(
+    *,
+    include_files: Optional[bool] = None,
+    backup_type: str = "full",
+    metadata: Optional[dict[str, Any]] = None,
+) -> bool:
+    """解析备份是否应包含 uploads；兼容旧 incremental 备份与无元数据 zip。"""
+    if include_files is not None:
+        return bool(include_files)
+    if metadata is not None and "include_files" in metadata:
+        return bool(metadata["include_files"])
+    return backup_type != "incremental"
+
+
+def zip_has_upload_entries(zip_path: str) -> bool:
+    """检测 zip 内是否含 uploads 文件条目。"""
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            return any(
+                name.startswith("uploads/") and not name.endswith("/")
+                for name in zf.namelist()
+            )
+    except Exception:
+        return False
 
 
 def _build_tenant_user_reference_subqueries(
@@ -122,6 +157,52 @@ def _build_tenant_table_copy_sql(table: str, tenant_id: int, user_ref_subqueries
     return f'SELECT * FROM "{table}" WHERE tenant_id = {int(tenant_id)}'
 
 
+def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
+    tid = int(tenant_id)
+    if table == "core_user_roles":
+        return (
+            f'SELECT ur.* FROM "core_user_roles" ur '
+            f'WHERE ur.user_id IN (SELECT id FROM "core_users" WHERE tenant_id = {tid}) '
+            f'OR ur.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id = {tid})'
+        )
+    if table == "core_role_permissions":
+        return (
+            f'SELECT rp.* FROM "core_role_permissions" rp '
+            f'WHERE rp.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id = {tid})'
+        )
+    if table == "core_policy_bindings":
+        return (
+            f'SELECT pb.* FROM "core_policy_bindings" pb '
+            f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id = {tid}) '
+            f"OR (pb.subject_type = 'user' AND pb.subject_id IN "
+            f'(SELECT id FROM "core_users" WHERE tenant_id = {tid})) '
+            f"OR (pb.subject_type = 'role' AND pb.subject_id IN "
+            f'(SELECT id FROM "core_roles" WHERE tenant_id = {tid}))'
+        )
+    raise ValueError(f"未知租户关联表: {table}")
+
+
+def _append_tenant_junction_deletes(script_lines: list[str], tenant_ids: set[int]) -> None:
+    tenant_sql = ", ".join(str(t) for t in sorted(tenant_ids))
+    script_lines.append(
+        f'DELETE FROM "core_user_roles" ur '
+        f"WHERE ur.user_id IN (SELECT id FROM \"core_users\" WHERE tenant_id IN ({tenant_sql})) "
+        f'OR ur.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql}));'
+    )
+    script_lines.append(
+        f'DELETE FROM "core_role_permissions" rp '
+        f'WHERE rp.role_id IN (SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql}));'
+    )
+    script_lines.append(
+        f'DELETE FROM "core_policy_bindings" pb '
+        f'WHERE pb.policy_id IN (SELECT id FROM "core_access_policies" WHERE tenant_id IN ({tenant_sql})) '
+        f"OR (pb.subject_type = 'user' AND pb.subject_id IN "
+        f'(SELECT id FROM "core_users" WHERE tenant_id IN ({tenant_sql}))) '
+        f"OR (pb.subject_type = 'role' AND pb.subject_id IN "
+        f'(SELECT id FROM "core_roles" WHERE tenant_id IN ({tenant_sql})));'
+    )
+
+
 def run_backup_dump_and_zip_sync(
     *,
     backup_uuid: str,
@@ -130,10 +211,12 @@ def run_backup_dump_and_zip_sync(
     tenant_id: Optional[int],
     backup_type: str,
     backup_scope: str,
+    include_files: Optional[bool] = None,
 ) -> str:
     """
     执行数据库转储并打成 zip，返回最终 zip 绝对路径。
     """
+    pack_uploads = resolve_include_files(include_files=include_files, backup_type=backup_type)
     db_user = infra_settings.DB_USER
     db_password = infra_settings.DB_PASSWORD
     db_host = infra_settings.DB_HOST
@@ -244,6 +327,43 @@ def run_backup_dump_and_zip_sync(
                     )
                 else:
                     logger.error(f"导出表 {table} 失败: {table_result.stderr}")
+
+            junction_tables = sorted(TENANT_JUNCTION_TABLES)
+            for index, table in enumerate(junction_tables, start=1):
+                logger.info(
+                    "租户隔离备份导出关联表 [{}/{}]: {}",
+                    index,
+                    len(junction_tables),
+                    table,
+                )
+                copy_cmd = [
+                    "psql",
+                    "-h",
+                    db_host,
+                    "-p",
+                    str(db_port),
+                    "-U",
+                    db_user,
+                    "-d",
+                    db_name,
+                    "-c",
+                    f'COPY ({_build_tenant_junction_copy_sql(table, int(tenant_id))}) '
+                    "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
+                ]
+                table_result = subprocess.run(copy_cmd, env=env, capture_output=True, text=True)
+                if table_result.returncode == 0:
+                    f.write(f"-- Data for table: {table}\n")
+                    f.write(f"--- TABLE: {table} ---\n")
+                    f.write(table_result.stdout)
+                    f.write("\n\n")
+                    logger.info(
+                        "租户隔离备份导出完成关联表 {}，bytes={}",
+                        table,
+                        len(table_result.stdout.encode("utf-8", errors="ignore")),
+                    )
+                else:
+                    err = (table_result.stderr or table_result.stdout or "").strip()
+                    raise RuntimeError(f"导出关联表 {table} 失败: {err[:2000]}")
     else:
         cmd = [
             "pg_dump",
@@ -272,9 +392,13 @@ def run_backup_dump_and_zip_sync(
     dump_path = db_dump_file if backup_scope != "tenant" else os.path.join(temp_dir, "db_dump.sql")
     with zipfile.ZipFile(final_zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
         zipf.write(dump_path, "database.dump")
-        metadata: dict[str, Any] = {"source_tenant_id": source_tenant_id, "backup_scope": backup_scope}
+        metadata: dict[str, Any] = {
+            "source_tenant_id": source_tenant_id,
+            "backup_scope": backup_scope,
+            "include_files": pack_uploads,
+        }
         zipf.writestr("backup_metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
-        if backup_type == "full":
+        if pack_uploads:
             upload_dir = infra_settings.FILE_UPLOAD_DIR
             if upload_dir and os.path.exists(upload_dir):
                 # 租户隔离备份：仅打包当前租户 uploads 子目录；全量备份仍保留全部 uploads。
@@ -507,6 +631,11 @@ def _build_topological_table_orders(
 
 
 def _validate_csv_header(table: str, csv_text: str) -> None:
+    if table in TENANT_JUNCTION_TABLES:
+        first_line = csv_text.splitlines()[0] if csv_text else ""
+        if not first_line:
+            raise ValueError(f"租户备份关联表 {table} 缺少 CSV 表头")
+        return
     first_line = csv_text.splitlines()[0] if csv_text else ""
     if not first_line:
         raise ValueError(f"租户备份表 {table} 缺少 CSV 表头")
@@ -1114,7 +1243,10 @@ def _run_tenant_restore_transaction(
     with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
         script_lines: list[str] = ["BEGIN;"]
         _append_drop_import_table_fk_constraints(script_lines, fk_constraints)
+        _append_tenant_junction_deletes(script_lines, tenant_ids_to_clear)
         for table in delete_order:
+            if table in TENANT_JUNCTION_TABLES:
+                continue
             for tenant_id in sorted(tenant_ids_to_clear):
                 script_lines.append(
                     f'DELETE FROM "{table}" WHERE tenant_id = {int(tenant_id)};'

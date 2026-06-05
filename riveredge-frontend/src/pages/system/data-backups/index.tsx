@@ -96,6 +96,13 @@ const DataBackupsPage: React.FC = () => {
     };
     return scopeMap[scope] || scope;
   };
+
+  const getBackupContentScopeText = (includeFiles?: boolean | null): string => {
+    if (includeFiles === false) {
+      return t('pages.system.dataBackups.contentDataOnly');
+    }
+    return t('pages.system.dataBackups.contentDataAndFiles');
+  };
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadModalVisible, setUploadModalVisible] = useState(false);
@@ -172,12 +179,14 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 创建备份
    */
-  const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'backup_type'>) => {
+  const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'include_files'>) => {
     setSubmitting(true);
     try {
       await createBackup({
-        ...values,
+        name: values.name,
+        backup_type: 'full',
         backup_scope: 'tenant',
+        include_files: values.include_files ?? true,
       });
       messageApi.success(t('pages.system.dataBackups.createSuccess'));
       setCreateModalVisible(false);
@@ -446,7 +455,7 @@ const DataBackupsPage: React.FC = () => {
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.labelScope')}</Text>
-              <Text style={{ fontSize: 12 }}>{getBackupScopeText(backup.backup_scope)}</Text>
+              <Text style={{ fontSize: 12 }}>{getBackupContentScopeText(backup.include_files)}</Text>
             </div>
           </Space>
         </div>
@@ -546,14 +555,15 @@ const DataBackupsPage: React.FC = () => {
     },
     {
       title: t('pages.system.dataBackups.columnScope'),
-      dataIndex: 'backup_scope',
-      key: 'backup_scope',
+      dataIndex: 'include_files',
+      key: 'include_files',
+      width: 120,
+      valueType: 'select',
       valueEnum: {
-        all: { text: t('pages.system.dataBackups.scopeAll') },
-        tenant: { text: t('pages.system.dataBackups.scopeTenant') },
-        table: { text: t('pages.system.dataBackups.scopeTable') },
+        true: { text: t('pages.system.dataBackups.contentDataAndFiles') },
+        false: { text: t('pages.system.dataBackups.contentDataOnly') },
       },
-      width: 100,
+      render: (_: unknown, record: DataBackup) => getBackupContentScopeText(record.include_files),
     },
     {
       title: t('pages.system.dataBackups.columnStatus'),
@@ -654,7 +664,7 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnName'), dataIndex: 'name' },
     { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (_, r) => getSourceTypeTag(r.source_type) },
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
-    { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupScopeText(r.backup_scope) },
+    { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'include_files', render: (_, r) => getBackupContentScopeText(r.include_files) },
     {
       title: t('pages.system.dataBackups.restoreSourceTenantLabel'),
       dataIndex: 'source_tenant_id',
@@ -858,14 +868,15 @@ const DataBackupsPage: React.FC = () => {
           placeholder={t('pages.system.dataBackups.namePlaceholder')}
         />
         <SafeProFormSelect
-          name="backup_type"
-          label={t('pages.system.dataBackups.labelType')}
-          rules={[{ required: true, message: t('pages.system.dataBackups.typeRequired') }]}
+          name="include_files"
+          label={t('pages.system.dataBackups.labelContentScope')}
+          rules={[{ required: true, message: t('pages.system.dataBackups.contentScopeRequired') }]}
+          initialValue={true}
           options={[
-            { label: t('pages.system.dataBackups.typeFullLabel'), value: 'full' },
-            { label: t('pages.system.dataBackups.typeIncrementalLabel'), value: 'incremental' },
+            { label: t('pages.system.dataBackups.contentDataAndFilesLabel'), value: true },
+            { label: t('pages.system.dataBackups.contentDataOnlyLabel'), value: false },
           ]}
-          placeholder={t('pages.system.dataBackups.typePlaceholder')}
+          placeholder={t('pages.system.dataBackups.contentScopePlaceholder')}
         />
       </FormModalTemplate>
 
@@ -914,6 +925,15 @@ const DataBackupsPage: React.FC = () => {
             {t('pages.system.dataBackups.preRestoreBackupHint')}
           </p>
         </div>
+
+        {restoreBackupRecord?.include_files === false && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message={t('pages.system.dataBackups.restoreDataOnlyHint')}
+          />
+        )}
 
         {isTenantBackupRestore && (
           <>
