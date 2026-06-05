@@ -945,7 +945,7 @@ def _append_fk_orphan_cleanup(
         parent_col = row.get("parent_column")
         if not child or not parent or not child_col or not parent_col:
             continue
-        if child not in import_tables or parent not in import_tables:
+        if child not in import_tables:
             continue
         if "tenant_id" not in table_column_map.get(child, []):
             continue
@@ -955,6 +955,35 @@ def _append_fk_orphan_cleanup(
             f'AND NOT EXISTS ('
             f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
             f");"
+        )
+
+
+def _append_drop_import_table_fk_constraints(
+    script_lines: list[str],
+    fk_constraints: list[dict[str, Any]],
+) -> None:
+    for row in fk_constraints:
+        child_table = row.get("child_table")
+        constraint_name = row.get("constraint_name")
+        if not child_table or not constraint_name:
+            continue
+        script_lines.append(
+            f'ALTER TABLE "{child_table}" DROP CONSTRAINT IF EXISTS "{constraint_name}";'
+        )
+
+
+def _append_restore_import_table_fk_constraints(
+    script_lines: list[str],
+    fk_constraints: list[dict[str, Any]],
+) -> None:
+    for row in fk_constraints:
+        child_table = row.get("child_table")
+        constraint_name = row.get("constraint_name")
+        constraint_def = row.get("constraint_def")
+        if not child_table or not constraint_name or not constraint_def:
+            continue
+        script_lines.append(
+            f'ALTER TABLE "{child_table}" ADD CONSTRAINT "{constraint_name}" {constraint_def};'
         )
 
 
@@ -986,12 +1015,12 @@ def _run_tenant_restore_transaction(
     table_column_meta: dict[str, dict[str, dict[str, Optional[str]]]],
     table_column_map: dict[str, list[str]],
     fk_rows: list[dict[str, Any]],
+    fk_constraints: list[dict[str, Any]],
 ) -> None:
     """
     在单个 psql 事务中执行 DELETE + COPY；任一步失败则整批回滚，避免只删不导。
 
-    导入阶段关闭外键触发器（session_replication_role=replica），避免表顺序/历史脏数据
-    导致无穷无尽的 FK 错误；提交前清理租户内孤儿行并重置 serial 序列。
+    导入前临时 DROP 导入表上的外键（无需 superuser），COPY 完成后清理孤儿行并重建外键。
     """
     tenant_ids_to_clear = {int(target_tenant_id)}
     if int(source_tenant_id) != int(target_tenant_id):
@@ -999,10 +1028,8 @@ def _run_tenant_restore_transaction(
     import_tables = set(import_plan.keys())
 
     with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
-        script_lines: list[str] = [
-            "BEGIN;",
-            "SET session_replication_role = replica;",
-        ]
+        script_lines: list[str] = ["BEGIN;"]
+        _append_drop_import_table_fk_constraints(script_lines, fk_constraints)
         for table in delete_order:
             for tenant_id in sorted(tenant_ids_to_clear):
                 script_lines.append(
@@ -1045,8 +1072,8 @@ def _run_tenant_restore_transaction(
             tenant_ids=tenant_ids_to_clear,
             table_column_map=table_column_map,
         )
+        _append_restore_import_table_fk_constraints(script_lines, fk_constraints)
         _append_serial_sequence_resets(script_lines, import_tables, table_pk_map)
-        script_lines.append("SET session_replication_role = DEFAULT;")
         script_lines.append("COMMIT;")
         script_path = os.path.join(tmpdir, "restore.sql")
         with open(script_path, "w", encoding="utf-8") as f:
@@ -1266,6 +1293,27 @@ async def restore_tenant_backup_from_dump(
     if not import_plan:
         raise ValueError("备份中没有可导入的业务数据（可能全部表为空或与目标库结构不兼容）")
 
+    fk_constraint_sql = """
+        SELECT
+            con.conname AS constraint_name,
+            rel.relname AS child_table,
+            pg_get_constraintdef(con.oid) AS constraint_def
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_namespace nsp ON nsp.oid = con.connamespace
+        WHERE con.contype = 'f'
+          AND nsp.nspname = 'public'
+          AND rel.relname = ANY($1::text[])
+        ORDER BY rel.relname, con.conname
+    """
+    fk_constraints = await conn.execute_query_dict(
+        fk_constraint_sql, [sorted(import_plan.keys())]
+    )
+    logger.info(
+        "租户级恢复将临时移除外键约束 {} 个（导入完成后重建）",
+        len(fk_constraints),
+    )
+
     logger.info(
         "租户级恢复开始: target_tenant_id={}, tables={}, importable={}",
         target_tenant_id,
@@ -1283,6 +1331,7 @@ async def restore_tenant_backup_from_dump(
         table_column_meta=dict(table_column_meta),
         table_column_map=dict(table_column_map),
         fk_rows=fk_rows if isinstance(fk_rows, list) else [],
+        fk_constraints=fk_constraints if isinstance(fk_constraints, list) else [],
     )
 
     logger.info(
