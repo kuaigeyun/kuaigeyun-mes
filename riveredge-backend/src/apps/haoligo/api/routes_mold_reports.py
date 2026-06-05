@@ -3,22 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
-from apps.haoligo.api._data_scope import (
-    RESOURCE_OUTSOURCE_COMPLETE,
-    apply_outsource_sheet_scope,
-)
-from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
-from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
-    HaoligoMoldOutsourceMaintenanceCompleteSheet,
-)
+from apps.haoligo.services.maintenance_reminder import list_mold_maintenance_reminders
+
+from apps.haoligo.services.maintenance_last_upkeep import fetch_last_upkeep_by_mold
 from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
-from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 
 router = APIRouter(
@@ -35,36 +29,6 @@ class MaintenanceUpkeepLastByMoldOut(BaseModel):
     )
 
 
-async def _is_external_partner_user(tenant_id: int, user: User) -> bool:
-    if DataScopeService._admin_bypass(user):
-        return False
-    roles = await DataScopeService._load_active_roles(user.id, tenant_id)
-    return any(
-        (getattr(role, "role_type", "") or "").strip().lower() == "external"
-        and (getattr(role, "external_partner_type", "") or "").strip()
-        for role in roles
-    )
-
-
-def _collect_latest_from_line_items(
-    items_map: dict[str, datetime],
-    *,
-    line_items: Any,
-    upkeep_at: datetime | None,
-) -> None:
-    if upkeep_at is None or not isinstance(line_items, list):
-        return
-    for elem in line_items:
-        if not isinstance(elem, dict):
-            continue
-        mold_code = str(elem.get("mold_code") or "").strip()
-        if not mold_code:
-            continue
-        prev = items_map.get(mold_code)
-        if prev is None or upkeep_at > prev:
-            items_map[mold_code] = upkeep_at
-
-
 @router.get(
     "/maintenance-upkeep-last-by-mold",
     response_model=MaintenanceUpkeepLastByMoldOut,
@@ -74,39 +38,82 @@ async def get_maintenance_upkeep_last_by_mold(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> MaintenanceUpkeepLastByMoldOut:
-    out: dict[str, datetime] = {}
-
-    # 外协角色只看其授权范围内的外协完修数据，避免报表越权透出厂内维保信息。
-    if not await _is_external_partner_user(tenant_id, current_user):
-        inhouse_rows = await HaoligoMoldMaintenanceCompleteSheet.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            service_type="保养",
-        ).all()
-        for row in inhouse_rows:
-            _collect_latest_from_line_items(
-                out,
-                line_items=getattr(row, "line_items", None),
-                upkeep_at=getattr(row, "created_at", None),
-            )
-
-    outsource_qs = HaoligoMoldOutsourceMaintenanceCompleteSheet.filter(
-        tenant_id=tenant_id,
-        deleted_at__isnull=True,
-        sheet_status="已通过",
-        service_type="保养",
-    )
-    outsource_qs = await apply_outsource_sheet_scope(
-        outsource_qs,
-        tenant_id=tenant_id,
-        user=current_user,
-        resource=RESOURCE_OUTSOURCE_COMPLETE,
-    )
-    outsource_rows = await outsource_qs.all()
-    for row in outsource_rows:
-        _collect_latest_from_line_items(
-            out,
-            line_items=getattr(row, "line_items", None),
-            upkeep_at=getattr(row, "created_at", None),
-        )
+    out = await fetch_last_upkeep_by_mold(tenant_id, current_user)
     return MaintenanceUpkeepLastByMoldOut(items=out)
+
+
+class MoldMaintenanceReminderSummaryOut(BaseModel):
+    total_ledger: int = 0
+    actionable: int = 0
+    filtered_total: int = 0
+    by_kind: dict[str, int] = Field(default_factory=dict)
+    by_level: dict[str, int] = Field(default_factory=dict)
+
+
+class MoldMaintenanceReminderItemOut(BaseModel):
+    id: int
+    mold_code: str
+    name: str
+    status: str | None = None
+    maintenance_cycle_by_yield: str | None = None
+    used_yield: str | None = None
+    total_manufacture_qty: str | None = None
+    usable_yield: str | None = None
+    alert_level: Literal["critical", "warning", "ok"]
+    alert_reasons: list[str] = Field(default_factory=list)
+    reminder_kind: Literal[
+        "manual_maintenance",
+        "cycle_plan",
+        "setup_no_cycle",
+        "setup_no_baseline",
+    ]
+    dominant_dimension: Literal["yield", "yield_total"] | None = None
+    dominant_ratio: float = 0.0
+    last_upkeep_at: str | None = None
+    yield_usage_pct: float | None = None
+    total_yield_usage_pct: float | None = None
+    remaining_yield_pct: float | None = None
+
+
+class MoldMaintenanceRemindersOut(BaseModel):
+    items: list[MoldMaintenanceReminderItemOut] = Field(default_factory=list)
+    summary: MoldMaintenanceReminderSummaryOut
+
+
+@router.get(
+    "/maintenance-reminders",
+    response_model=MoldMaintenanceRemindersOut,
+    summary="模具保养提醒列表（保养预警表 / 工作台）",
+)
+async def get_mold_maintenance_reminders(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    keyword: Annotated[str | None, Query()] = None,
+    severity_min: Annotated[str | None, Query(description="all | warning | critical")] = None,
+    actionable_only: Annotated[bool, Query()] = False,
+    reminder_kinds: Annotated[str | None, Query()] = None,
+    status: Annotated[str | None, Query(description="模具台账状态")] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    preview: Annotated[
+        bool,
+        Query(description="工作台预览：仅返回 Top N 与 actionable 汇总，跳过分项统计与全量排序"),
+    ] = False,
+) -> MoldMaintenanceRemindersOut:
+    items_raw, summary = await list_mold_maintenance_reminders(
+        tenant_id,
+        current_user,
+        keyword=keyword,
+        severity_min=severity_min,
+        actionable_only=actionable_only,
+        reminder_kinds=reminder_kinds,
+        status=status,
+        limit=limit,
+        offset=offset,
+        preview=preview,
+    )
+    items = [MoldMaintenanceReminderItemOut.model_validate(i) for i in items_raw]
+    return MoldMaintenanceRemindersOut(
+        items=items,
+        summary=MoldMaintenanceReminderSummaryOut.model_validate(summary),
+    )

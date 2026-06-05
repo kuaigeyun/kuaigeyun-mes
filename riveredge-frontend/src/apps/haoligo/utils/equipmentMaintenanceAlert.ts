@@ -2,27 +2,25 @@
  * 设备保养计划：保养完修记录 + 依产量/依天数周期（先达到者预警）。
  */
 import dayjs from 'dayjs';
-import { fetchMaintenanceUpkeepLastByEquipment, listEquipments, type EquipmentRow } from '../services/haoligo';
+import {
+  fetchEquipmentMaintenanceReminders,
+  fetchMaintenanceUpkeepLastByEquipment,
+  listEquipments,
+  type EquipmentMaintenanceReminderItem,
+  type EquipmentRow,
+  type MaintenanceReminderSummary,
+} from '../services/haoligo';
 
 export type AlertLevel = 'critical' | 'warning' | 'ok';
 export type MaintenanceAlertDimension = 'yield' | 'days';
-/** 工作台/计划表：手工保养状态 vs 完修后周期计划 */
-export type EquipmentMaintenanceReminderKind = 'manual_maintenance' | 'cycle_plan';
+export type EquipmentMaintenanceReminderKind =
+  | 'manual_maintenance'
+  | 'cycle_plan'
+  | 'setup_no_cycle'
+  | 'setup_no_baseline';
 
-/** 运行状态 value：视为「手工保养」（含数据字典扩展项） */
-const MANUAL_MAINTENANCE_STATUS_VALUES = new Set(['upkeep', 'maintenance', '保养']);
-
-export interface EquipmentMaintenanceAlertRow extends EquipmentRow {
-  alert_level: AlertLevel;
-  alert_reasons: string[];
-  dominant_dimension: MaintenanceAlertDimension | null;
-  dominant_ratio: number;
-  last_upkeep_at: string;
-  days_since_upkeep?: number;
-  yield_usage_pct?: number;
-  days_usage_pct?: number;
-  reminder_kind?: EquipmentMaintenanceReminderKind;
-}
+export type EquipmentMaintenanceAlertRow = EquipmentRow &
+  EquipmentMaintenanceReminderItem;
 
 export const severityRank: Record<AlertLevel, number> = {
   critical: 0,
@@ -30,7 +28,14 @@ export const severityRank: Record<AlertLevel, number> = {
   ok: 2,
 };
 
-const WARN_RATIO = 0.9;
+const KIND_RANK: Record<EquipmentMaintenanceReminderKind, number> = {
+  manual_maintenance: 0,
+  setup_no_baseline: 1,
+  setup_no_cycle: 2,
+  cycle_plan: 3,
+};
+
+export const WARN_RATIO = 0.9;
 
 export async function fetchAllPaged<T>(
   fetchPage: (skip: number, limit: number) => Promise<{ items: T[]; total: number }>,
@@ -62,13 +67,13 @@ function parsePositiveInt(v: number | string | null | undefined): number | undef
   return Math.trunc(n);
 }
 
-/** 累计产量 > 0（无使用记录或保养后已清零则不参与周期计划展示） */
 export function hasPositiveUsedYield(usedYield: string | number | null | undefined): boolean {
   const n = parseDec(usedYield);
   return n != null && n > 0;
 }
 
-/** 台账运行状态为「保养」（数据字典 value 或 label 含保养） */
+const MANUAL_MAINTENANCE_STATUS_VALUES = new Set(['upkeep', 'maintenance', '保养']);
+
 export function isManualMaintenanceOperationalStatus(
   status: string | null | undefined,
   labelByValue?: Record<string, string>,
@@ -78,6 +83,20 @@ export function isManualMaintenanceOperationalStatus(
   if (MANUAL_MAINTENANCE_STATUS_VALUES.has(key)) return true;
   const label = (labelByValue?.[key] ?? '').trim();
   return label.includes('保养');
+}
+
+export function equipmentHasCycle(row: Pick<EquipmentRow, 'maintenance_cycle_by_yield' | 'maintenance_cycle_by_days'>): boolean {
+  const cy = parseDec(row.maintenance_cycle_by_yield);
+  const cd = parsePositiveInt(row.maintenance_cycle_by_days);
+  return (cy != null && cy > 0) || cd != null;
+}
+
+export function equipmentNeedsTracking(
+  row: Pick<EquipmentRow, 'used_yield' | 'operational_status'>,
+): boolean {
+  if (hasPositiveUsedYield(row.used_yield)) return true;
+  const st = String(row.operational_status ?? '').trim().toLowerCase();
+  return ['running', 'repair', 'standby', 'upkeep', 'maintenance', '保养'].includes(st);
 }
 
 function normalizeAssetCode(code: string): string {
@@ -112,7 +131,7 @@ function levelFromRatio(ratio: number): AlertLevel {
   return 'ok';
 }
 
-function reasonForDimension(dim: MaintenanceAlertDimension, _ratio: number, level: AlertLevel): string {
+function reasonForDimension(dim: MaintenanceAlertDimension, level: AlertLevel): string {
   if (dim === 'yield') {
     if (level === 'critical') return '累计产量已达或超过「依产量」维保周期';
     return '累计产量已接近「依产量」维保周期（≥90%）';
@@ -133,25 +152,53 @@ export function buildManualMaintenanceReminderRow(
     alert_reasons: ['设备运行状态为保养，请安排保养作业'],
     dominant_dimension: null,
     dominant_ratio: 0,
-    last_upkeep_at: '',
+    last_upkeep_at: null,
   };
 }
 
 export function evaluateEquipmentMaintenanceAlert(
   row: EquipmentRow,
   lastUpkeepByEquipment: Map<string, string>,
+  labelByValue?: Record<string, string>,
 ): EquipmentMaintenanceAlertRow | null {
   const acode = normalizeAssetCode(String(row.asset_code || ''));
   if (!acode) return null;
 
-  if (!hasPositiveUsedYield(row.used_yield)) return null;
+  const manual = buildManualMaintenanceReminderRow(row, labelByValue);
+  if (manual) return manual;
 
+  const hasCycle = equipmentHasCycle(row);
   const lastUpkeep = lookupLastUpkeep(lastUpkeepByEquipment, acode);
-  if (!lastUpkeep) return null;
+
+  if (!hasCycle) {
+    if (!equipmentNeedsTracking(row)) return null;
+    return {
+      ...row,
+      reminder_kind: 'setup_no_cycle',
+      alert_level: 'warning',
+      alert_reasons: ['未配置保养周期（依产量或依天数），请维护设备台账'],
+      dominant_dimension: null,
+      dominant_ratio: 0,
+      last_upkeep_at: lastUpkeep ?? null,
+    };
+  }
+
+  if (!lastUpkeep) {
+    return {
+      ...row,
+      reminder_kind: 'setup_no_baseline',
+      alert_level: 'warning',
+      alert_reasons: ['已配置保养周期，但尚无保养完修记录，请完成首次保养并登记完修单'],
+      dominant_dimension: null,
+      dominant_ratio: 0,
+      last_upkeep_at: null,
+    };
+  }
 
   const cycleY = parseDec(row.maintenance_cycle_by_yield);
   const usedY = parseDec(row.used_yield ?? '') ?? 0;
   const cycleD = parsePositiveInt(row.maintenance_cycle_by_days);
+  const days = dayjs().startOf('day').diff(dayjs(lastUpkeep).startOf('day'), 'day');
 
   const candidates: {
     dim: MaintenanceAlertDimension;
@@ -161,7 +208,7 @@ export function evaluateEquipmentMaintenanceAlert(
     daysPct?: number;
   }[] = [];
 
-  if (cycleY != null && cycleY > 0) {
+  if (cycleY != null && cycleY > 0 && usedY > 0) {
     candidates.push({
       dim: 'yield',
       ratio: usedY / cycleY,
@@ -170,7 +217,6 @@ export function evaluateEquipmentMaintenanceAlert(
   }
 
   if (cycleD != null) {
-    const days = dayjs().startOf('day').diff(dayjs(lastUpkeep).startOf('day'), 'day');
     candidates.push({
       dim: 'days',
       ratio: days / cycleD,
@@ -179,7 +225,18 @@ export function evaluateEquipmentMaintenanceAlert(
     });
   }
 
-  if (candidates.length === 0) return null;
+  if (candidates.length === 0) {
+    return {
+      ...row,
+      reminder_kind: 'cycle_plan',
+      alert_level: 'ok',
+      alert_reasons: [],
+      dominant_dimension: null,
+      dominant_ratio: 0,
+      last_upkeep_at: lastUpkeep,
+      days_since_upkeep: days,
+    };
+  }
 
   const dominant = candidates.reduce((best, cur) => (cur.ratio > best.ratio ? cur : best));
   const alertLevel = levelFromRatio(dominant.ratio);
@@ -188,12 +245,13 @@ export function evaluateEquipmentMaintenanceAlert(
   for (const c of candidates) {
     const lv = levelFromRatio(c.ratio);
     if (lv === 'critical' || lv === 'warning') {
-      reasons.push(reasonForDimension(c.dim, c.ratio, lv));
+      reasons.push(reasonForDimension(c.dim, lv));
     }
   }
 
   const yieldCand = candidates.find((c) => c.dim === 'yield');
   const daysCand = candidates.find((c) => c.dim === 'days');
+  const remainingDays = cycleD != null ? Math.max(0, cycleD - days) : undefined;
 
   return {
     ...row,
@@ -203,45 +261,24 @@ export function evaluateEquipmentMaintenanceAlert(
     dominant_dimension: dominant.dim,
     dominant_ratio: dominant.ratio,
     last_upkeep_at: lastUpkeep,
-    days_since_upkeep: daysCand?.daysSince,
+    days_since_upkeep: daysCand?.daysSince ?? days,
     yield_usage_pct: yieldCand?.yieldPct,
     days_usage_pct: daysCand?.daysPct,
+    remaining_days: dominant.dim === 'days' ? remainingDays : remainingDays,
   };
 }
 
-/** 合并手工保养提醒与完修后周期计划（同一设备去重，手工优先保留） */
 export function buildEquipmentWorkbenchMaintenanceRows(
   equipments: EquipmentRow[],
   lastUpkeepByEquipment: Map<string, string>,
   labelByValue?: Record<string, string>,
 ): EquipmentMaintenanceAlertRow[] {
-  const byId = new Map<number, EquipmentMaintenanceAlertRow>();
+  const rows: EquipmentMaintenanceAlertRow[] = [];
   for (const e of equipments) {
-    const manual = buildManualMaintenanceReminderRow(e, labelByValue);
-    if (manual) byId.set(e.id, manual);
-    const cycle = evaluateEquipmentMaintenanceAlert(e, lastUpkeepByEquipment);
-    if (!cycle) continue;
-    const prev = byId.get(e.id);
-    if (!prev) {
-      byId.set(e.id, cycle);
-      continue;
-    }
-    const levels: AlertLevel[] = [prev.alert_level, cycle.alert_level];
-    const mergedLevel: AlertLevel = levels.includes('critical')
-      ? 'critical'
-      : levels.includes('warning')
-        ? 'warning'
-        : 'ok';
-    byId.set(e.id, {
-      ...prev,
-      ...cycle,
-      reminder_kind: prev.reminder_kind === 'manual_maintenance' ? 'manual_maintenance' : 'cycle_plan',
-      alert_level: mergedLevel,
-      alert_reasons: [...prev.alert_reasons, ...cycle.alert_reasons],
-      last_upkeep_at: cycle.last_upkeep_at || prev.last_upkeep_at,
-    });
+    const evaluated = evaluateEquipmentMaintenanceAlert(e, lastUpkeepByEquipment, labelByValue);
+    if (evaluated) rows.push(evaluated);
   }
-  return Array.from(byId.values());
+  return rows;
 }
 
 export function buildEquipmentMaintenanceAlertRows(
@@ -252,8 +289,28 @@ export function buildEquipmentMaintenanceAlertRows(
   return buildEquipmentWorkbenchMaintenanceRows(equipments, lastUpkeepByEquipment, labelByValue);
 }
 
+export function isActionableEquipmentMaintenanceRow(row: EquipmentMaintenanceAlertRow): boolean {
+  if (
+    row.reminder_kind === 'manual_maintenance' ||
+    row.reminder_kind === 'setup_no_cycle' ||
+    row.reminder_kind === 'setup_no_baseline'
+  ) {
+    return true;
+  }
+  return row.alert_level === 'warning' || row.alert_level === 'critical';
+}
+
+/** @deprecated 使用 isActionableEquipmentMaintenanceRow */
+export function isWorkbenchVisibleEquipmentMaintenanceRow(row: EquipmentMaintenanceAlertRow): boolean {
+  return isActionableEquipmentMaintenanceRow(row);
+}
+
 export function passesSeverityFilter(row: EquipmentMaintenanceAlertRow, min: string | undefined): boolean {
-  if (row.reminder_kind === 'manual_maintenance') {
+  if (
+    row.reminder_kind === 'manual_maintenance' ||
+    row.reminder_kind === 'setup_no_cycle' ||
+    row.reminder_kind === 'setup_no_baseline'
+  ) {
     if (!min || min === 'all') return true;
     if (min === 'critical') return false;
     return true;
@@ -266,6 +323,9 @@ export function passesSeverityFilter(row: EquipmentMaintenanceAlertRow, min: str
 }
 
 export function sortMaintenanceAlertRows(a: EquipmentMaintenanceAlertRow, b: EquipmentMaintenanceAlertRow): number {
+  const aKind = KIND_RANK[a.reminder_kind] ?? 9;
+  const bKind = KIND_RANK[b.reminder_kind] ?? 9;
+  if (aKind !== bKind) return aKind - bKind;
   const d = severityRank[a.alert_level] - severityRank[b.alert_level];
   if (d !== 0) return d;
   const ratioD = b.dominant_ratio - a.dominant_ratio;
@@ -277,16 +337,7 @@ export function sortEquipmentWorkbenchMaintenanceRows(
   a: EquipmentMaintenanceAlertRow,
   b: EquipmentMaintenanceAlertRow,
 ): number {
-  const aManual = a.reminder_kind === 'manual_maintenance' ? 0 : 1;
-  const bManual = b.reminder_kind === 'manual_maintenance' ? 0 : 1;
-  if (aManual !== bManual) return aManual - bManual;
   return sortMaintenanceAlertRows(a, b);
-}
-
-/** 工作台展示：手工保养 或 周期预警及以上 */
-export function isWorkbenchVisibleEquipmentMaintenanceRow(row: EquipmentMaintenanceAlertRow): boolean {
-  if (row.reminder_kind === 'manual_maintenance') return true;
-  return row.alert_level === 'warning' || row.alert_level === 'critical';
 }
 
 export function maintenanceProgressPercent(row: EquipmentMaintenanceAlertRow): number {
@@ -306,6 +357,22 @@ export function dominantDimensionLabel(dim: MaintenanceAlertDimension | null): s
   if (dim === 'yield') return '依产量';
   if (dim === 'days') return '依天数';
   return '—';
+}
+
+export function reminderKindLabel(kind: EquipmentMaintenanceReminderKind): string {
+  if (kind === 'manual_maintenance') return '待保养';
+  if (kind === 'setup_no_cycle') return '待配置';
+  if (kind === 'setup_no_baseline') return '待配置';
+  return '周期计划';
+}
+
+export function formatMaintenanceEmptySummary(summary: MaintenanceReminderSummary | null): string {
+  if (!summary) return '暂无设备保养计划数据';
+  const { total_ledger, actionable, by_kind } = summary;
+  const noCycle = by_kind?.setup_no_cycle ?? 0;
+  const noBaseline = by_kind?.setup_no_baseline ?? 0;
+  if (actionable > 0) return `台账 ${total_ledger} 台，当前筛选下无可展示行（可执行 ${actionable} 项）`;
+  return `台账 ${total_ledger} 台，暂无可执行保养项（未配置周期 ${noCycle}，无保养基准 ${noBaseline}）`;
 }
 
 export const WORKSPACE_EQUIPMENT_MAINTENANCE_TOP_N = 5;
@@ -332,9 +399,8 @@ export function countMaintenanceAlertWarnCritical(rows: EquipmentMaintenanceAler
   return rows.filter((r) => r.alert_level === 'warning' || r.alert_level === 'critical').length;
 }
 
-/** 工作台 KPI：含手工保养 + 周期预警及以上 */
 export function countEquipmentWorkbenchMaintenanceReminders(rows: EquipmentMaintenanceAlertRow[]): number {
-  return rows.filter(isWorkbenchVisibleEquipmentMaintenanceRow).length;
+  return rows.filter(isActionableEquipmentMaintenanceRow).length;
 }
 
 export function topMaintenanceAlertRows(
@@ -342,7 +408,23 @@ export function topMaintenanceAlertRows(
   limit = WORKSPACE_EQUIPMENT_MAINTENANCE_TOP_N,
 ): EquipmentMaintenanceAlertRow[] {
   return [...rows]
-    .filter(isWorkbenchVisibleEquipmentMaintenanceRow)
+    .filter(isActionableEquipmentMaintenanceRow)
     .sort(sortEquipmentWorkbenchMaintenanceRows)
     .slice(0, limit);
+}
+
+export async function fetchEquipmentMaintenanceRemindersPage(params?: {
+  keyword?: string;
+  severity_min?: string;
+  actionable_only?: boolean;
+  reminder_kinds?: string;
+  limit?: number;
+  offset?: number;
+  preview?: boolean;
+}): Promise<{ items: EquipmentMaintenanceAlertRow[]; summary: MaintenanceReminderSummary }> {
+  const res = await fetchEquipmentMaintenanceReminders(params);
+  return {
+    items: res.items as EquipmentMaintenanceAlertRow[],
+    summary: res.summary,
+  };
 }

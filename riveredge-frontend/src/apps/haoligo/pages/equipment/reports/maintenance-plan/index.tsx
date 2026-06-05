@@ -12,15 +12,12 @@ import { useEquipmentOperationalStatusLabels } from '../../../../utils/equipment
 import {
   type AlertLevel,
   type EquipmentMaintenanceAlertRow,
-  buildEquipmentMaintenanceAlertRows,
+  type EquipmentMaintenanceReminderKind,
   dominantDimensionLabel,
-  loadEquipmentMaintenanceAlertDataset,
-  passesSeverityFilter,
+  fetchEquipmentMaintenanceRemindersPage,
+  reminderKindLabel,
   severityRank,
-  sortMaintenanceAlertRows,
 } from '../../../../utils/equipmentMaintenanceAlert';
-
-const CACHE_TTL_MS = 45_000;
 
 function alertTag(level: AlertLevel) {
   if (level === 'critical') return <Tag color="error">紧急</Tag>;
@@ -28,12 +25,27 @@ function alertTag(level: AlertLevel) {
   return <Tag color="success">正常</Tag>;
 }
 
+function renderAlertCell(r: EquipmentMaintenanceAlertRow) {
+  if (r.reminder_kind === 'manual_maintenance') {
+    return <Tag color="processing">{reminderKindLabel(r.reminder_kind)}</Tag>;
+  }
+  if (r.reminder_kind === 'setup_no_cycle' || r.reminder_kind === 'setup_no_baseline') {
+    return <Tag color="default">{reminderKindLabel(r.reminder_kind)}</Tag>;
+  }
+  return alertTag(r.alert_level);
+}
+
+const REMINDER_KIND_OPTIONS: Record<string, { text: string }> = {
+  manual_maintenance: { text: '待保养' },
+  setup_no_cycle: { text: '待配置（无周期）' },
+  setup_no_baseline: { text: '待配置（无基准）' },
+  cycle_plan: { text: '周期计划' },
+};
+
 const EquipmentMaintenancePlanReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const cacheRef = useRef<{ at: number; rows: EquipmentMaintenanceAlertRow[] } | null>(null);
-  const { formatStatus: operationalStatusLabel, labelByValue: equipmentStatusLabels } =
-    useEquipmentOperationalStatusLabels();
+  const { formatStatus: operationalStatusLabel } = useEquipmentOperationalStatusLabels();
 
   const columns: ProColumns<EquipmentMaintenanceAlertRow>[] = [
     {
@@ -55,18 +67,21 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
       initialValue: 'all',
     },
     {
+      title: '提醒类型',
+      dataIndex: 'reminder_kind',
+      valueType: 'select',
+      hideInTable: true,
+      valueEnum: REMINDER_KIND_OPTIONS,
+      fieldProps: { allowClear: true, placeholder: '全部类型' },
+    },
+    {
       title: '预警',
       dataIndex: 'alert_level',
       width: 88,
       fixed: 'left',
       hideInSearch: true,
       sorter: (a, b) => severityRank[a.alert_level] - severityRank[b.alert_level],
-      render: (_, r) =>
-        r.reminder_kind === 'manual_maintenance' ? (
-          <Tag color="processing">待保养</Tag>
-        ) : (
-          alertTag(r.alert_level)
-        ),
+      render: (_, r) => renderAlertCell(r),
     },
     { title: '设备编号', dataIndex: 'asset_code', width: 120, ellipsis: true, hideInSearch: true },
     { title: '设备名称', dataIndex: 'name', width: 160, ellipsis: true, hideInSearch: true },
@@ -82,7 +97,7 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
       dataIndex: 'dominant_dimension',
       width: 96,
       hideInSearch: true,
-      render: (_, r) => dominantDimensionLabel(r.dominant_dimension),
+      render: (_, r) => dominantDimensionLabel(r.dominant_dimension ?? null),
     },
     {
       title: '预警说明',
@@ -121,6 +136,13 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
       render: (_, r) => (r.days_usage_pct != null ? `${r.days_usage_pct}%` : '—'),
     },
     {
+      title: '剩余天数',
+      dataIndex: 'remaining_days',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => (r.remaining_days != null ? r.remaining_days : '—'),
+    },
+    {
       title: '保养周期(产量)',
       dataIndex: 'maintenance_cycle_by_yield',
       width: 130,
@@ -155,35 +177,28 @@ const EquipmentMaintenancePlanReportPage: React.FC = () => {
         request={async (params, _sort, _filter, searchFormValues) => {
           const current = params.current ?? 1;
           const pageSize = params.pageSize ?? 20;
-          const now = Date.now();
           try {
-            let rows = cacheRef.current?.rows;
-            if (!cacheRef.current || now - cacheRef.current.at > CACHE_TTL_MS) {
-              const { equipments, lastUpkeepByEquipment } = await loadEquipmentMaintenanceAlertDataset();
-              rows = buildEquipmentMaintenanceAlertRows(
-                equipments,
-                lastUpkeepByEquipment,
-                equipmentStatusLabels,
-              );
-              cacheRef.current = { at: now, rows };
-            }
             const kw =
-              typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim().toLowerCase() : '';
+              typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : '';
             const sevMin =
               typeof searchFormValues?.severity_min === 'string' ? searchFormValues.severity_min : 'all';
+            const reminderKind = searchFormValues?.reminder_kind as
+              | EquipmentMaintenanceReminderKind
+              | undefined;
 
-            let filtered = rows!.filter((r) => {
-              if (kw) {
-                const hay = `${r.asset_code}\n${r.name}`.toLowerCase();
-                if (!hay.includes(kw)) return false;
-              }
-              return passesSeverityFilter(r, sevMin === 'all' ? 'all' : sevMin);
+            const { items, summary } = await fetchEquipmentMaintenanceRemindersPage({
+              keyword: kw || undefined,
+              severity_min: sevMin === 'all' ? undefined : sevMin,
+              reminder_kinds: reminderKind || undefined,
+              limit: pageSize,
+              offset: (current - 1) * pageSize,
             });
-            filtered = [...filtered].sort(sortMaintenanceAlertRows);
-            const total = filtered.length;
-            const start = (current - 1) * pageSize;
-            const data = filtered.slice(start, start + pageSize);
-            return { data, success: true, total };
+
+            return {
+              data: items,
+              success: true,
+              total: summary.filtered_total ?? items.length,
+            };
           } catch (e) {
             messageApi.error((e as Error).message || '加载设备保养计划失败');
             return { data: [], success: false, total: 0 };

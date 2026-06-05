@@ -8,11 +8,12 @@ from core.services.data.data_dictionary_service import DataDictionaryService
 
 HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT = "HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS"
 
-_LEGACY_ALLOWED: FrozenSet[str] = frozenset({"running", "repair", "shutdown", "standby"})
+_LEGACY_ALLOWED: FrozenSet[str] = frozenset({"running", "repair", "upkeep", "shutdown", "standby"})
 
 _LEGACY_LABELS: dict[str, str] = {
     "running": "运行",
     "repair": "维修",
+    "upkeep": "保养",
     "shutdown": "停机",
     "standby": "待机",
 }

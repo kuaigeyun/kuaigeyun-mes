@@ -147,6 +147,57 @@ export function fetchMaintenanceUpkeepLastByEquipment(): Promise<{ items: Record
   return apiRequest(`${PREFIX}/equipment/reports/maintenance-upkeep-last-by-equipment`);
 }
 
+export type MaintenanceReminderSummary = {
+  total_ledger: number;
+  actionable: number;
+  filtered_total?: number;
+  by_kind?: Record<string, number>;
+  by_level?: Record<string, number>;
+};
+
+export type EquipmentMaintenanceReminderItem = {
+  id: number;
+  asset_code: string;
+  name: string;
+  operational_status?: string | null;
+  maintenance_cycle_by_yield?: string | null;
+  maintenance_cycle_by_days?: number | null;
+  used_yield?: string | null;
+  alert_level: 'critical' | 'warning' | 'ok';
+  alert_reasons: string[];
+  reminder_kind: 'manual_maintenance' | 'cycle_plan' | 'setup_no_cycle' | 'setup_no_baseline';
+  dominant_dimension?: 'yield' | 'days' | null;
+  dominant_ratio: number;
+  last_upkeep_at?: string | null;
+  days_since_upkeep?: number | null;
+  yield_usage_pct?: number | null;
+  days_usage_pct?: number | null;
+  remaining_days?: number | null;
+};
+
+export type EquipmentOperationalStatusSummary = {
+  total: number;
+  counts: Record<string, number>;
+};
+
+/** 工作台环图：按运行状态聚合，避免分页拉全量设备台账 */
+export function fetchEquipmentOperationalStatusSummary(): Promise<EquipmentOperationalStatusSummary> {
+  return apiRequest(`${PREFIX}/equipment/reports/operational-status-summary`);
+}
+
+export function fetchEquipmentMaintenanceReminders(params?: {
+  keyword?: string;
+  severity_min?: string;
+  actionable_only?: boolean;
+  reminder_kinds?: string;
+  limit?: number;
+  offset?: number;
+  /** 工作台 Top N：后端仅排序保留最紧急若干条 */
+  preview?: boolean;
+}): Promise<{ items: EquipmentMaintenanceReminderItem[]; summary: MaintenanceReminderSummary }> {
+  return apiRequest(`${PREFIX}/equipment/reports/maintenance-reminders`, { params });
+}
+
 export function listEquipments(params?: {
   workshop_id?: number;
   level1_category?: string;
@@ -1450,6 +1501,39 @@ export function listMolds(params?: {
 /** 保养预警表：各模具最近保养完修时间（厂内 + 外协已通过） */
 export function fetchMaintenanceUpkeepLastByMold(): Promise<{ items: Record<string, string> }> {
   return apiRequest(`${PREFIX}/molds/reports/maintenance-upkeep-last-by-mold`);
+}
+
+export type MoldMaintenanceReminderItem = {
+  id: number;
+  mold_code: string;
+  name: string;
+  status?: string | null;
+  maintenance_cycle_by_yield?: string | null;
+  used_yield?: string | null;
+  total_manufacture_qty?: string | null;
+  usable_yield?: string | null;
+  alert_level: 'critical' | 'warning' | 'ok';
+  alert_reasons: string[];
+  reminder_kind: 'manual_maintenance' | 'cycle_plan' | 'setup_no_cycle' | 'setup_no_baseline';
+  dominant_dimension?: 'yield' | 'yield_total' | null;
+  dominant_ratio: number;
+  last_upkeep_at?: string | null;
+  yield_usage_pct?: number | null;
+  total_yield_usage_pct?: number | null;
+  remaining_yield_pct?: number | null;
+};
+
+export function fetchMoldMaintenanceReminders(params?: {
+  keyword?: string;
+  severity_min?: string;
+  actionable_only?: boolean;
+  reminder_kinds?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+  preview?: boolean;
+}): Promise<{ items: MoldMaintenanceReminderItem[]; summary: MaintenanceReminderSummary }> {
+  return apiRequest(`${PREFIX}/molds/reports/maintenance-reminders`, { params });
 }
 
 export function getMold(rowId: number): Promise<MoldRow> {

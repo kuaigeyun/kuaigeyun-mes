@@ -7,7 +7,9 @@ export function operationalStatusActiveBulb(status: string | null | undefined): 
   const key = (status || '').trim().toLowerCase();
   if (!key) return null;
   if (key === 'running') return 'green';
-  if (key === 'standby' || key === 'repair') return 'yellow';
+  if (key === 'standby' || key === 'repair' || key === 'upkeep' || key === 'maintenance' || key === '保养') {
+    return 'yellow';
+  }
   if (key === 'shutdown') return 'red';
   return null;
 }
@@ -36,6 +38,7 @@ export const EQUIPMENT_STATUS_LABEL_ORDER = [
   '正常运行',
   '停机',
   '维修',
+  '保养',
   '闲置备用',
   '未知',
 ] as const;
@@ -47,6 +50,7 @@ export const EQUIPMENT_STATUS_LABEL_CHART_COLORS: Record<
   正常运行: TRAFFIC_LIGHT_BULB_COLORS.green.on,
   停机: TRAFFIC_LIGHT_BULB_COLORS.red.on,
   维修: TRAFFIC_LIGHT_BULB_COLORS.yellow.on,
+  保养: TRAFFIC_LIGHT_BULB_COLORS.yellow.on,
   闲置备用: '#1677ff',
   未知: 'rgba(0, 0, 0, 0.45)',
 };

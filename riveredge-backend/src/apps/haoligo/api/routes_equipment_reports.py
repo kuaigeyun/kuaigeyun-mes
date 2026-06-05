@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
-from typing import Annotated, List, Optional
+from typing import Annotated, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+
+from apps.haoligo.services.equipment_operational_status_summary import (
+    equipment_operational_status_summary,
+)
+from apps.haoligo.services.maintenance_reminder import list_equipment_maintenance_reminders
 from tortoise.expressions import Q
 from tortoise.functions import Count, Sum
 
@@ -24,6 +29,31 @@ from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(prefix="/equipment/reports", tags=["App · HaoliGO · 设备报表"])
+
+
+class EquipmentOperationalStatusSummaryOut(BaseModel):
+    total: int = Field(description="设备台账总数")
+    counts: dict[str, int] = Field(
+        default_factory=dict,
+        description="运行状态 value（小写；空为 _unset）→ 数量",
+    )
+
+
+@router.get(
+    "/operational-status-summary",
+    response_model=EquipmentOperationalStatusSummaryOut,
+    summary="设备运行状态分布（工作台环图）",
+    dependencies=[Depends(require_module_access("haoligo", "equipment-ledger"))],
+)
+async def get_equipment_operational_status_summary(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+) -> EquipmentOperationalStatusSummaryOut:
+    raw = await equipment_operational_status_summary(tenant_id)
+    return EquipmentOperationalStatusSummaryOut(
+        total=int(raw.get("total") or 0),
+        counts=dict(raw.get("counts") or {}),
+    )
 
 
 class MaintenanceUpkeepLastByEquipmentOut(BaseModel):
@@ -67,6 +97,84 @@ async def get_maintenance_upkeep_last_by_equipment(
         if code and at is not None:
             out[code] = at
     return MaintenanceUpkeepLastByEquipmentOut(items=out)
+
+
+class MaintenanceReminderSummaryOut(BaseModel):
+    total_ledger: int = 0
+    actionable: int = 0
+    filtered_total: int = 0
+    by_kind: dict[str, int] = Field(default_factory=dict)
+    by_level: dict[str, int] = Field(default_factory=dict)
+
+
+class EquipmentMaintenanceReminderItemOut(BaseModel):
+    id: int
+    asset_code: str
+    name: str
+    operational_status: str | None = None
+    maintenance_cycle_by_yield: str | None = None
+    maintenance_cycle_by_days: int | None = None
+    used_yield: str | None = None
+    alert_level: Literal["critical", "warning", "ok"]
+    alert_reasons: list[str] = Field(default_factory=list)
+    reminder_kind: Literal[
+        "manual_maintenance",
+        "cycle_plan",
+        "setup_no_cycle",
+        "setup_no_baseline",
+    ]
+    dominant_dimension: Literal["yield", "days"] | None = None
+    dominant_ratio: float = 0.0
+    last_upkeep_at: str | None = None
+    days_since_upkeep: int | None = None
+    yield_usage_pct: float | None = None
+    days_usage_pct: float | None = None
+    remaining_days: int | None = None
+
+
+class EquipmentMaintenanceRemindersOut(BaseModel):
+    items: list[EquipmentMaintenanceReminderItemOut] = Field(default_factory=list)
+    summary: MaintenanceReminderSummaryOut
+
+
+@router.get(
+    "/maintenance-reminders",
+    response_model=EquipmentMaintenanceRemindersOut,
+    summary="设备保养提醒列表（保养计划表 / 工作台）",
+    dependencies=[Depends(require_module_access("haoligo", "equipment-reports-maintenance-plan"))],
+)
+async def get_equipment_maintenance_reminders(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    keyword: Annotated[str | None, Query()] = None,
+    severity_min: Annotated[str | None, Query(description="all | warning | critical")] = None,
+    actionable_only: Annotated[bool, Query()] = False,
+    reminder_kinds: Annotated[
+        str | None,
+        Query(description="逗号分隔：manual_maintenance,setup_no_cycle,setup_no_baseline,cycle_plan"),
+    ] = None,
+    limit: Annotated[int | None, Query(ge=1, le=500)] = None,
+    offset: Annotated[int, Query(ge=0)] = 0,
+    preview: Annotated[
+        bool,
+        Query(description="工作台预览：仅返回 Top N 与 actionable 汇总，跳过分项统计与全量排序"),
+    ] = False,
+) -> EquipmentMaintenanceRemindersOut:
+    items_raw, summary = await list_equipment_maintenance_reminders(
+        tenant_id,
+        keyword=keyword,
+        severity_min=severity_min,
+        actionable_only=actionable_only,
+        reminder_kinds=reminder_kinds,
+        limit=limit,
+        offset=offset,
+        preview=preview,
+    )
+    items = [EquipmentMaintenanceReminderItemOut.model_validate(i) for i in items_raw]
+    return EquipmentMaintenanceRemindersOut(
+        items=items,
+        summary=MaintenanceReminderSummaryOut.model_validate(summary),
+    )
 
 
 def _apply_output_record_filters(

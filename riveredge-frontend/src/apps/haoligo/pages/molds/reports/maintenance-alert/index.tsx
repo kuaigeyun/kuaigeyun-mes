@@ -12,14 +12,12 @@ import { getMoldLedgerStatusTagColor } from '../../../../constants/moldStatus';
 import {
   type AlertLevel,
   type MoldMaintenanceAlertRow,
-  buildMoldMaintenanceAlertRows,
-  loadMoldMaintenanceAlertDataset,
-  passesSeverityFilter,
+  type MoldMaintenanceReminderKind,
+  dominantDimensionLabel,
+  fetchMoldMaintenanceRemindersPage,
+  reminderKindLabel,
   severityRank,
-  sortMaintenanceAlertRows,
 } from '../../../../utils/moldMaintenanceAlert';
-
-const CACHE_TTL_MS = 45_000;
 
 function alertTag(level: AlertLevel) {
   if (level === 'critical') return <Tag color="error">紧急</Tag>;
@@ -27,10 +25,19 @@ function alertTag(level: AlertLevel) {
   return <Tag color="success">正常</Tag>;
 }
 
+function renderAlertCell(r: MoldMaintenanceAlertRow) {
+  if (r.reminder_kind === 'manual_maintenance') {
+    return <Tag color="processing">{reminderKindLabel(r.reminder_kind)}</Tag>;
+  }
+  if (r.reminder_kind === 'setup_no_cycle' || r.reminder_kind === 'setup_no_baseline') {
+    return <Tag color="default">{reminderKindLabel(r.reminder_kind)}</Tag>;
+  }
+  return alertTag(r.alert_level);
+}
+
 const MoldMaintenanceAlertReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  const cacheRef = useRef<{ at: number; rows: MoldMaintenanceAlertRow[] } | null>(null);
 
   const columns: ProColumns<MoldMaintenanceAlertRow>[] = [
     {
@@ -52,13 +59,26 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       initialValue: 'all',
     },
     {
+      title: '台账状态',
+      dataIndex: 'status',
+      valueType: 'select',
+      hideInTable: true,
+      fieldProps: { allowClear: true, placeholder: '全部状态' },
+      valueEnum: {
+        在用: { text: '在用' },
+        保养: { text: '保养' },
+        待用: { text: '待用' },
+        维修: { text: '维修' },
+      },
+    },
+    {
       title: '预警',
       dataIndex: 'alert_level',
       width: 88,
       fixed: 'left',
       hideInSearch: true,
       sorter: (a, b) => severityRank[a.alert_level] - severityRank[b.alert_level],
-      render: (_, r) => alertTag(r.alert_level),
+      render: (_, r) => renderAlertCell(r),
     },
     { title: '模具代号', dataIndex: 'mold_code', width: 120, ellipsis: true, hideInSearch: true },
     { title: '模具名称', dataIndex: 'name', width: 160, ellipsis: true, hideInSearch: true },
@@ -71,6 +91,13 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
         const c = getMoldLedgerStatusTagColor(r.status);
         return c ? <Tag color={c}>{r.status}</Tag> : <Tag>{r.status}</Tag>;
       },
+    },
+    {
+      title: '主导维度',
+      dataIndex: 'dominant_dimension',
+      width: 110,
+      hideInSearch: true,
+      render: (_, r) => dominantDimensionLabel(r.dominant_dimension ?? null),
     },
     {
       title: '预警说明',
@@ -88,11 +115,25 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       render: (_, r) => (r.last_upkeep_at ? dayjs(r.last_upkeep_at).format('YYYY-MM-DD HH:mm') : '—'),
     },
     {
-      title: '产量周期达成%',
+      title: '已用产量达成%',
       dataIndex: 'yield_usage_pct',
       width: 130,
       hideInSearch: true,
       render: (_, r) => (r.yield_usage_pct != null ? `${r.yield_usage_pct}%` : '—'),
+    },
+    {
+      title: '总制造数量达成%',
+      dataIndex: 'total_yield_usage_pct',
+      width: 140,
+      hideInSearch: true,
+      render: (_, r) => (r.total_yield_usage_pct != null ? `${r.total_yield_usage_pct}%` : '—'),
+    },
+    {
+      title: '额定产量余量%',
+      dataIndex: 'remaining_yield_pct',
+      width: 130,
+      hideInSearch: true,
+      render: (_, r) => (r.remaining_yield_pct != null ? `${r.remaining_yield_pct}%` : '—'),
     },
     {
       title: '维保周期(产量)',
@@ -108,6 +149,20 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
       hideInSearch: true,
       render: (_, r) => r.used_yield ?? '—',
     },
+    {
+      title: '总制造数量',
+      dataIndex: 'total_manufacture_qty',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => r.total_manufacture_qty ?? '—',
+    },
+    {
+      title: '额定可用产量',
+      dataIndex: 'usable_yield',
+      width: 120,
+      hideInSearch: true,
+      render: (_, r) => r.usable_yield ?? '—',
+    },
   ];
 
   return (
@@ -122,36 +177,29 @@ const MoldMaintenanceAlertReportPage: React.FC = () => {
         request={async (params, _sort, _filter, searchFormValues) => {
           const current = params.current ?? 1;
           const pageSize = params.pageSize ?? 20;
-          const now = Date.now();
           try {
-            let rows = cacheRef.current?.rows;
-            if (!cacheRef.current || now - cacheRef.current.at > CACHE_TTL_MS) {
-              const { molds, lastUpkeepByMold } = await loadMoldMaintenanceAlertDataset();
-              rows = buildMoldMaintenanceAlertRows(molds, lastUpkeepByMold);
-              cacheRef.current = { at: now, rows };
-            }
             const kw =
-              typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim().toLowerCase() : '';
+              typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim() : '';
             const st =
               typeof searchFormValues?.status === 'string' && searchFormValues.status.trim()
                 ? searchFormValues.status.trim()
-                : '';
+                : undefined;
             const sevMin =
               typeof searchFormValues?.severity_min === 'string' ? searchFormValues.severity_min : 'all';
 
-            let filtered = rows!.filter((r) => {
-              if (st && r.status !== st) return false;
-              if (kw) {
-                const hay = `${r.mold_code}\n${r.name}`.toLowerCase();
-                if (!hay.includes(kw)) return false;
-              }
-              return passesSeverityFilter(r, sevMin === 'all' ? 'all' : sevMin);
+            const { items, summary } = await fetchMoldMaintenanceRemindersPage({
+              keyword: kw || undefined,
+              severity_min: sevMin === 'all' ? undefined : sevMin,
+              status: st,
+              limit: pageSize,
+              offset: (current - 1) * pageSize,
             });
-            filtered = [...filtered].sort(sortMaintenanceAlertRows);
-            const total = filtered.length;
-            const start = (current - 1) * pageSize;
-            const data = filtered.slice(start, start + pageSize);
-            return { data, success: true, total };
+
+            return {
+              data: items,
+              success: true,
+              total: summary.filtered_total ?? items.length,
+            };
           } catch (e) {
             messageApi.error((e as Error).message || '加载保养预警失败');
             return { data: [], success: false, total: 0 };

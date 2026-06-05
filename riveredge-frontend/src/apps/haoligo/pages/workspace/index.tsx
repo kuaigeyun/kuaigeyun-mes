@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { App, Table, Tag, Progress, Empty, Typography, theme, Spin } from 'antd';
+import { App, Table, Tag, Progress, Empty, Typography, theme, Spin, Tooltip, Button, Space } from 'antd';
 import {
   AppstoreOutlined,
   AuditOutlined,
@@ -18,35 +18,33 @@ import dayjs from 'dayjs';
 import {
   getPatrolReport,
   getPatrolReportKpiSummary,
-  listEquipments,
+  fetchEquipmentOperationalStatusSummary,
   listMolds,
   listWorkshops,
-  type EquipmentRow,
-  type MoldRow,
+  type MaintenanceReminderSummary,
 } from '../../services/haoligo';
 import {
   EQUIPMENT_STATUS_LABEL_CHART_COLORS,
   EQUIPMENT_STATUS_LABEL_ORDER,
 } from '../../utils/operationalStatusTrafficLight';
 import {
-  buildMoldMaintenanceAlertRows,
-  buildLastUpkeepByMold,
-  countMaintenanceAlertWarnCritical,
+  fetchMoldMaintenanceRemindersPage,
+  formatMoldMaintenanceEmptySummary,
   maintenanceProgressColor,
   maintenanceProgressPercent,
-  topMaintenanceAlertRows,
-  fetchAllPaged,
+  dominantDimensionLabel as moldDominantDimensionLabel,
+  reminderKindLabel as moldReminderKindLabel,
   type AlertLevel,
   type MoldMaintenanceAlertRow,
 } from '../../utils/moldMaintenanceAlert';
 import {
-  buildEquipmentWorkbenchMaintenanceRows,
-  buildLastUpkeepByEquipment,
-  countEquipmentWorkbenchMaintenanceReminders,
-  topMaintenanceAlertRows as topEquipmentMaintenanceAlertRows,
+  fetchEquipmentMaintenanceRemindersPage,
+  formatMaintenanceEmptySummary,
+  dominantDimensionLabel as equipmentDominantDimensionLabel,
+  reminderKindLabel as equipmentReminderKindLabel,
   type EquipmentMaintenanceAlertRow,
 } from '../../utils/equipmentMaintenanceAlert';
-import { useEquipmentOperationalStatusLabels } from '../../utils/equipmentOperationalStatus';
+import { HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET, HAOLIGO_RESOURCE_MOLD_UPKEEP } from '../../constants/documentPermissionResources';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -56,6 +54,7 @@ import {
   ModuleChartRow,
 } from '../../../kuaizhizao/components/module-center';
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
+import { UniTableStackedPrimaryCell } from '../../../../components/uni-table/stackedPrimaryColumn';
 
 const { Text } = Typography;
 const { useToken } = theme;
@@ -64,16 +63,17 @@ const { useToken } = theme;
  * 好力 GO 整体工作台：汇总设备 / 模具 / 巡查关键数量与预警。
  */
 
-function buildEquipmentStatusChart(items: EquipmentRow[]): { type: string; value: number }[] {
+function buildEquipmentStatusChartFromCounts(counts: Record<string, number>): { type: string; value: number }[] {
   const eqMap: Record<string, number> = {};
-  items.forEach((e) => {
-    let s = e.operational_status || '未知';
+  for (const [raw, n] of Object.entries(counts)) {
+    let s = raw === '_unset' ? '未知' : raw;
     if (s === 'running') s = '正常运行';
     else if (s === 'shutdown') s = '停机';
     else if (s === 'repair') s = '维修';
+    else if (s === 'upkeep' || s === 'maintenance' || s === '保养') s = '保养';
     else if (s === 'standby') s = '闲置备用';
-    eqMap[s] = (eqMap[s] || 0) + 1;
-  });
+    eqMap[s] = (eqMap[s] || 0) + n;
+  }
   return Object.keys(eqMap).map((k) => ({ type: k, value: eqMap[k] }));
 }
 
@@ -89,6 +89,106 @@ function buildHazardTrendFromDailyPoints(
   return last7Days.map((d) => ({ date: d, count: countByDay.get(d) ?? 0 }));
 }
 
+function joinMaintenanceMeta(parts: Array<string | null | undefined>): string {
+  return parts.map((p) => (p ?? '').trim()).filter(Boolean).join(' · ');
+}
+
+function equipmentRemainingLabel(record: EquipmentMaintenanceAlertRow): string | null {
+  if (record.reminder_kind !== 'cycle_plan') return null;
+  if (record.dominant_dimension === 'days' && record.remaining_days != null) {
+    return `剩 ${record.remaining_days} 天`;
+  }
+  if (record.dominant_dimension === 'yield' && record.yield_usage_pct != null) {
+    const cycle = Number(record.maintenance_cycle_by_yield);
+    const used = Number(record.used_yield);
+    if (Number.isFinite(cycle) && Number.isFinite(used)) {
+      return `剩 ${Math.max(0, Math.round(cycle - used))}`;
+    }
+  }
+  return null;
+}
+
+function moldRemainingLabel(record: MoldMaintenanceAlertRow): string | null {
+  if (record.reminder_kind !== 'cycle_plan') return null;
+  const cycle = Number(record.maintenance_cycle_by_yield);
+  if (!Number.isFinite(cycle) || cycle <= 0) return null;
+  const used =
+    record.dominant_dimension === 'yield_total'
+      ? Number(record.total_manufacture_qty)
+      : Number(record.used_yield);
+  if (!Number.isFinite(used)) return null;
+  return `剩 ${Math.max(0, Math.round(cycle - used))}`;
+}
+
+const metaLineStyle: React.CSSProperties = {
+  display: 'block',
+  marginTop: 4,
+  fontSize: 12,
+  lineHeight: 1.25,
+  maxWidth: '100%',
+};
+
+const WorkspaceMaintenanceMetricsCell: React.FC<{
+  variant: 'equipment' | 'mold';
+  record: EquipmentMaintenanceAlertRow | MoldMaintenanceAlertRow;
+}> = ({ variant, record }) => {
+  const { token } = useToken();
+  const reasons = record.alert_reasons ?? [];
+  const reasonText = reasons.length ? reasons.join('；') : '—';
+
+  if (record.reminder_kind !== 'cycle_plan') {
+    return (
+      <Tooltip title={reasonText === '—' ? undefined : reasonText}>
+        <Text type="secondary" ellipsis style={{ ...metaLineStyle, marginTop: 0 }}>
+          {reasonText}
+        </Text>
+      </Tooltip>
+    );
+  }
+
+  const percent = maintenanceProgressPercent(record);
+  const color = maintenanceProgressColor(percent, token);
+  const status = percent >= 100 ? 'exception' : percent >= 90 ? 'normal' : 'success';
+  const dimLabel =
+    variant === 'equipment'
+      ? equipmentDominantDimensionLabel(
+          (record as EquipmentMaintenanceAlertRow).dominant_dimension ?? null,
+        )
+      : moldDominantDimensionLabel((record as MoldMaintenanceAlertRow).dominant_dimension ?? null);
+  const lastAt = record.last_upkeep_at;
+  const lastLabel = lastAt ? `上次 ${dayjs(lastAt).format('MM-DD')}` : null;
+  const remainingLabel =
+    variant === 'equipment'
+      ? equipmentRemainingLabel(record as EquipmentMaintenanceAlertRow)
+      : moldRemainingLabel(record as MoldMaintenanceAlertRow);
+  const meta = joinMaintenanceMeta([dimLabel !== '—' ? dimLabel : null, lastLabel, remainingLabel]);
+
+  return (
+    <div style={{ minWidth: 0, maxWidth: '100%' }}>
+      <Progress
+        percent={Math.min(100, percent)}
+        status={status as 'exception' | 'normal' | 'success'}
+        strokeColor={color}
+        size="small"
+        showInfo={false}
+      />
+      {meta ? (
+        <Tooltip title={reasonText === '—' ? meta : `${meta}；${reasonText}`}>
+          <Text type="secondary" ellipsis style={metaLineStyle}>
+            {meta}
+          </Text>
+        </Tooltip>
+      ) : (
+        <Tooltip title={reasonText}>
+          <Text type="secondary" ellipsis style={metaLineStyle}>
+            {reasonText}
+          </Text>
+        </Tooltip>
+      )}
+    </div>
+  );
+};
+
 const WorkspacePage: React.FC = () => {
   const { message } = App.useApp();
   const navigate = useNavigate();
@@ -99,7 +199,8 @@ const WorkspacePage: React.FC = () => {
   const canReadMaintenanceAlert = hasPermission(currentUser, 'haoligo:molds-reports-maintenance-alert:read');
   const canReadEquipmentMaintenancePlan = hasPermission(currentUser, 'haoligo:equipment-reports-maintenance-plan:read');
   const canReadHazards = hasPermission(currentUser, 'haoligo:patrol-hazards:read');
-  const { labelByValue: equipmentStatusLabels } = useEquipmentOperationalStatusLabels();
+  const canCreateEquipmentUpkeep = hasPermission(currentUser, `${HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET}:create`);
+  const canCreateMoldUpkeep = hasPermission(currentUser, `${HAOLIGO_RESOURCE_MOLD_UPKEEP}:create`);
 
   const [loading, setLoading] = useState(true);
   const [hazardTrendLoading, setHazardTrendLoading] = useState(false);
@@ -116,6 +217,9 @@ const WorkspacePage: React.FC = () => {
   const [equipmentMaintenanceAlertTotal, setEquipmentMaintenanceAlertTotal] = useState(0);
   const [moldMaintenanceAlertData, setMoldMaintenanceAlertData] = useState<MoldMaintenanceAlertRow[]>([]);
   const [moldMaintenanceAlertTotal, setMoldMaintenanceAlertTotal] = useState(0);
+  const [equipmentMaintenanceSummary, setEquipmentMaintenanceSummary] =
+    useState<MaintenanceReminderSummary | null>(null);
+  const [moldMaintenanceSummary, setMoldMaintenanceSummary] = useState<MaintenanceReminderSummary | null>(null);
 
   const loadHazardTrend = useCallback(
     async (last7Days: string[]) => {
@@ -142,41 +246,30 @@ const WorkspacePage: React.FC = () => {
     const today = dayjs();
     const last7Days = Array.from({ length: 7 }).map((_, i) => today.subtract(6 - i, 'day').format('MM-DD'));
 
-    const needFullMolds = canReadMolds && canReadMaintenanceAlert;
     const needEquipmentAlerts = canReadEquipment && canReadEquipmentMaintenancePlan;
     const needMoldAlerts = canReadMolds && canReadMaintenanceAlert;
 
     try {
-      const [
-        ws,
-        hazardKpi,
-        eqItems,
-        eqTotal,
-        moldItems,
-        moldTotal,
-        lastUpkeepByEquipment,
-        lastUpkeepByMold,
-      ] = await Promise.all([
-        listWorkshops(),
-        canReadHazards ? getPatrolReportKpiSummary() : Promise.resolve(null),
-        canReadEquipment
-          ? fetchAllPaged((skip, limit) => listEquipments({ skip, limit }))
-          : Promise.resolve([] as EquipmentRow[]),
-        canReadEquipment
-          ? listEquipments({ limit: 1, skip: 0 }).then((r) => r.total)
-          : Promise.resolve(0),
-        needFullMolds
-          ? fetchAllPaged((skip, limit) => listMolds({ skip, limit }))
-          : Promise.resolve([] as MoldRow[]),
-        canReadMolds
-          ? listMolds({ limit: 1, skip: 0 }).then((r) => r.total)
-          : Promise.resolve(0),
-        needEquipmentAlerts ? buildLastUpkeepByEquipment() : Promise.resolve(null),
-        needMoldAlerts ? buildLastUpkeepByMold() : Promise.resolve(null),
-      ]);
+      const [ws, hazardKpi, eqStatusSummary, moldTotal, equipmentReminders, moldReminders] =
+        await Promise.all([
+          listWorkshops(),
+          canReadHazards ? getPatrolReportKpiSummary() : Promise.resolve(null),
+          canReadEquipment ? fetchEquipmentOperationalStatusSummary() : Promise.resolve(null),
+          canReadMolds ? listMolds({ limit: 1, skip: 0 }).then((r) => r.total) : Promise.resolve(0),
+          needEquipmentAlerts
+            ? fetchEquipmentMaintenanceRemindersPage({
+                actionable_only: true,
+                limit: 5,
+                preview: true,
+              })
+            : Promise.resolve(null),
+          needMoldAlerts
+            ? fetchMoldMaintenanceRemindersPage({ actionable_only: true, limit: 5, preview: true })
+            : Promise.resolve(null),
+        ]);
 
       setWorkshopCount(ws.length);
-      setEquipmentTotal(eqTotal);
+      setEquipmentTotal(eqStatusSummary?.total ?? 0);
       setMoldTotal(moldTotal);
 
       if (hazardKpi) {
@@ -189,28 +282,28 @@ const WorkspacePage: React.FC = () => {
         setHazardDone(0);
       }
 
-      setEqStatusData(canReadEquipment ? buildEquipmentStatusChart(eqItems) : []);
+      setEqStatusData(
+        eqStatusSummary ? buildEquipmentStatusChartFromCounts(eqStatusSummary.counts) : [],
+      );
 
-      if (needEquipmentAlerts && lastUpkeepByEquipment) {
-        const alertRows = buildEquipmentWorkbenchMaintenanceRows(
-          eqItems,
-          lastUpkeepByEquipment,
-          equipmentStatusLabels,
-        );
-        setEquipmentMaintenanceAlertTotal(countEquipmentWorkbenchMaintenanceReminders(alertRows));
-        setEquipmentMaintenanceAlertData(topEquipmentMaintenanceAlertRows(alertRows));
+      if (equipmentReminders) {
+        setEquipmentMaintenanceAlertTotal(equipmentReminders.summary.actionable);
+        setEquipmentMaintenanceAlertData(equipmentReminders.items);
+        setEquipmentMaintenanceSummary(equipmentReminders.summary);
       } else {
         setEquipmentMaintenanceAlertTotal(0);
         setEquipmentMaintenanceAlertData([]);
+        setEquipmentMaintenanceSummary(null);
       }
 
-      if (needMoldAlerts && lastUpkeepByMold) {
-        const alertRows = buildMoldMaintenanceAlertRows(moldItems, lastUpkeepByMold);
-        setMoldMaintenanceAlertTotal(countMaintenanceAlertWarnCritical(alertRows));
-        setMoldMaintenanceAlertData(topMaintenanceAlertRows(alertRows));
+      if (moldReminders) {
+        setMoldMaintenanceAlertTotal(moldReminders.summary.actionable);
+        setMoldMaintenanceAlertData(moldReminders.items);
+        setMoldMaintenanceSummary(moldReminders.summary);
       } else {
         setMoldMaintenanceAlertTotal(0);
         setMoldMaintenanceAlertData([]);
+        setMoldMaintenanceSummary(null);
       }
     } catch (e) {
       message.error((e as Error).message || '工作台数据加载失败');
@@ -227,14 +320,15 @@ const WorkspacePage: React.FC = () => {
     canReadEquipmentMaintenancePlan,
     canReadHazards,
     loadHazardTrend,
-    equipmentStatusLabels,
   ]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const faultCount = eqStatusData.find((d) => d.type === '故障' || d.type === '维修中')?.value ?? 0;
+  const faultCount = eqStatusData
+    .filter((d) => d.type === '停机' || d.type === '维修')
+    .reduce((sum, d) => sum + d.value, 0);
   const equipmentMaintenanceAlertCount = equipmentMaintenanceAlertTotal;
   const moldMaintenanceAlertCount = moldMaintenanceAlertTotal;
 
@@ -254,7 +348,7 @@ const WorkspacePage: React.FC = () => {
         key: 'maintenance',
         title: '设备保养计划',
         value: equipmentMaintenanceAlertCount,
-        subtitle: '手工保养或周期预警',
+        subtitle: '可执行保养项',
         icon: <WarningOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/haoligo/equipment/reports/maintenance-plan'),
@@ -399,101 +493,115 @@ const WorkspacePage: React.FC = () => {
     justifyContent: 'center',
   };
 
+  const renderEquipmentAlertTag = (record: EquipmentMaintenanceAlertRow) => {
+    if (record.reminder_kind === 'manual_maintenance') {
+      return <Tag color="processing">{equipmentReminderKindLabel(record.reminder_kind)}</Tag>;
+    }
+    if (record.reminder_kind === 'setup_no_cycle' || record.reminder_kind === 'setup_no_baseline') {
+      return <Tag color="default">{equipmentReminderKindLabel(record.reminder_kind)}</Tag>;
+    }
+    const level: AlertLevel = record.alert_level;
+    if (level === 'critical') return <Tag color="error">紧急</Tag>;
+    if (level === 'warning') return <Tag color="warning">预警</Tag>;
+    return <Tag color="success">正常</Tag>;
+  };
+
   const equipmentMaintenanceAlertColumns = [
     {
-      title: '预警',
-      key: 'alert_level',
-      width: 72,
-      render: (_: unknown, record: EquipmentMaintenanceAlertRow) => {
-        if (record.reminder_kind === 'manual_maintenance') {
-          return <Tag color="processing">待保养</Tag>;
-        }
-        const level: AlertLevel = record.alert_level;
-        if (level === 'critical') return <Tag color="error">紧急</Tag>;
-        if (level === 'warning') return <Tag color="warning">预警</Tag>;
-        return <Tag color="success">正常</Tag>;
-      },
-    },
-    {
-      title: '设备编号',
-      dataIndex: 'asset_code',
-      key: 'asset_code',
-      render: (text: string) => <Text strong>{text}</Text>,
-    },
-    { title: '设备名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    {
-      title: '上次保养',
-      dataIndex: 'last_upkeep_at',
-      key: 'last_upkeep_at',
-      width: 110,
-      render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD') : '—'),
-    },
-    {
-      title: '周期进度',
-      key: 'progress',
-      width: 200,
-      render: (_: unknown, record: EquipmentMaintenanceAlertRow) => {
-        if (record.reminder_kind === 'manual_maintenance') {
-          return <Text type="secondary">—</Text>;
-        }
-        const percent = maintenanceProgressPercent(record);
-        const color = maintenanceProgressColor(percent, token);
-        const status = percent >= 100 ? 'exception' : percent >= 90 ? 'normal' : 'success';
-        return <Progress percent={Math.min(100, percent)} status={status as 'exception' | 'normal' | 'success'} strokeColor={color} size="small" />;
-      },
-    },
-    {
-      title: '预警说明',
-      dataIndex: 'alert_reasons',
-      key: 'alert_reasons',
+      title: '设备',
+      key: 'equipment',
       ellipsis: true,
-      render: (reasons: string[]) => (reasons.length ? reasons.join('；') : '—'),
+      render: (_: unknown, record: EquipmentMaintenanceAlertRow) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.asset_code ?? '').trim() || '—'}
+          secondary={String(record.name ?? '').trim() || '—'}
+          primaryExtra={renderEquipmentAlertTag(record)}
+        />
+      ),
+    },
+    {
+      title: '维保进度',
+      key: 'metrics',
+      ellipsis: true,
+      render: (_: unknown, record: EquipmentMaintenanceAlertRow) => (
+        <WorkspaceMaintenanceMetricsCell variant="equipment" record={record} />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 64,
+      align: 'center' as const,
+      render: (_: unknown, record: EquipmentMaintenanceAlertRow) =>
+        canCreateEquipmentUpkeep ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() =>
+              navigate(
+                `/apps/haoligo/equipment/documents/upkeep-sheet?service_type=${encodeURIComponent('保养')}&equipment_id=${record.id}`,
+              )
+            }
+          >
+            保养单
+          </Button>
+        ) : null,
     },
   ];
 
+  const renderMoldAlertTag = (record: MoldMaintenanceAlertRow) => {
+    if (record.reminder_kind === 'manual_maintenance') {
+      return <Tag color="processing">{moldReminderKindLabel(record.reminder_kind)}</Tag>;
+    }
+    if (record.reminder_kind === 'setup_no_cycle' || record.reminder_kind === 'setup_no_baseline') {
+      return <Tag color="default">{moldReminderKindLabel(record.reminder_kind)}</Tag>;
+    }
+    const level: AlertLevel = record.alert_level;
+    if (level === 'critical') return <Tag color="error">紧急</Tag>;
+    if (level === 'warning') return <Tag color="warning">预警</Tag>;
+    return <Tag color="success">正常</Tag>;
+  };
+
   const moldMaintenanceAlertColumns = [
     {
-      title: '预警',
-      key: 'alert_level',
-      width: 72,
-      render: (_: unknown, record: MoldMaintenanceAlertRow) => {
-        const level: AlertLevel = record.alert_level;
-        if (level === 'critical') return <Tag color="error">紧急</Tag>;
-        if (level === 'warning') return <Tag color="warning">预警</Tag>;
-        return <Tag color="success">正常</Tag>;
-      },
-    },
-    {
-      title: '模具代号',
-      dataIndex: 'mold_code',
-      key: 'mold_code',
-      render: (text: string) => <Text strong>{text}</Text>,
-    },
-    { title: '模具名称', dataIndex: 'name', key: 'name', ellipsis: true },
-    {
-      title: '上次保养',
-      dataIndex: 'last_upkeep_at',
-      key: 'last_upkeep_at',
-      width: 110,
-      render: (val: string) => (val ? dayjs(val).format('YYYY-MM-DD') : '—'),
-    },
-    {
-      title: '周期进度',
-      key: 'progress',
-      width: 200,
-      render: (_: unknown, record: MoldMaintenanceAlertRow) => {
-        const percent = maintenanceProgressPercent(record);
-        const color = maintenanceProgressColor(percent, token);
-        const status = percent >= 100 ? 'exception' : percent >= 90 ? 'normal' : 'success';
-        return <Progress percent={Math.min(100, percent)} status={status as 'exception' | 'normal' | 'success'} strokeColor={color} size="small" />;
-      },
-    },
-    {
-      title: '预警说明',
-      dataIndex: 'alert_reasons',
-      key: 'alert_reasons',
+      title: '模具',
+      key: 'mold',
       ellipsis: true,
-      render: (reasons: string[]) => (reasons.length ? reasons.join('；') : '—'),
+      render: (_: unknown, record: MoldMaintenanceAlertRow) => (
+        <UniTableStackedPrimaryCell
+          primary={String(record.mold_code ?? '').trim() || '—'}
+          secondary={String(record.name ?? '').trim() || '—'}
+          primaryExtra={renderMoldAlertTag(record)}
+        />
+      ),
+    },
+    {
+      title: '维保进度',
+      key: 'metrics',
+      ellipsis: true,
+      render: (_: unknown, record: MoldMaintenanceAlertRow) => (
+        <WorkspaceMaintenanceMetricsCell variant="mold" record={record} />
+      ),
+    },
+    {
+      title: '操作',
+      key: 'actions',
+      width: 64,
+      align: 'center' as const,
+      render: (_: unknown, record: MoldMaintenanceAlertRow) =>
+        canCreateMoldUpkeep ? (
+          <Button
+            type="link"
+            size="small"
+            onClick={() =>
+              navigate(
+                `/apps/haoligo/molds/documents/maintenance?service_type=${encodeURIComponent('保养')}&mold_code=${encodeURIComponent(record.mold_code)}`,
+              )
+            }
+          >
+            保养单
+          </Button>
+        ) : null,
     },
   ];
 
@@ -516,7 +624,17 @@ const WorkspacePage: React.FC = () => {
               rowKey="id"
               pagination={false}
               size="middle"
-              locale={{ emptyText: '暂无设备保养计划数据' }}
+              locale={{
+                emptyText: (
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary">{formatMaintenanceEmptySummary(equipmentMaintenanceSummary)}</Text>
+                    {canReadEquipmentMaintenancePlan ? (
+                      <a onClick={() => navigate('/apps/haoligo/equipment/reports/maintenance-plan')}>查看全部</a>
+                    ) : null}
+                  </Space>
+                ),
+              }}
+              tableLayout="fixed"
             />
           </ModuleActionPanel>
           <ModuleActionPanel
@@ -530,7 +648,17 @@ const WorkspacePage: React.FC = () => {
               rowKey="id"
               pagination={false}
               size="middle"
-              locale={{ emptyText: '暂无保养预警数据' }}
+              locale={{
+                emptyText: (
+                  <Space direction="vertical" size={4}>
+                    <Text type="secondary">{formatMoldMaintenanceEmptySummary(moldMaintenanceSummary)}</Text>
+                    {canReadMaintenanceAlert ? (
+                      <a onClick={() => navigate('/apps/haoligo/molds/reports/maintenance-alert')}>查看全部</a>
+                    ) : null}
+                  </Space>
+                ),
+              }}
+              tableLayout="fixed"
             />
           </ModuleActionPanel>
         </>

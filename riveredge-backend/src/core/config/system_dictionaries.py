@@ -246,8 +246,9 @@ SYSTEM_DICTIONARIES: List[Dict[str, Any]] = [
         "items": [
             {"label": "运行", "value": "running", "description": "设备正常运行", "sort_order": 1},
             {"label": "维修", "value": "repair", "description": "设备维修中", "sort_order": 2},
-            {"label": "停机", "value": "shutdown", "description": "设备停机", "sort_order": 3},
-            {"label": "待机", "value": "standby", "description": "设备待机", "sort_order": 4},
+            {"label": "保养", "value": "upkeep", "description": "设备保养中（手动调整）", "sort_order": 3},
+            {"label": "停机", "value": "shutdown", "description": "设备停机", "sort_order": 4},
+            {"label": "待机", "value": "standby", "description": "设备待机", "sort_order": 5},
         ],
     },
     {

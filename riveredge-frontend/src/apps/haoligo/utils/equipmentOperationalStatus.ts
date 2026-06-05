@@ -6,6 +6,7 @@ export const HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS_DICT = 'HAOLIGO_EQUIPMENT_OPER
 const FALLBACK_LABELS: Record<string, string> = {
   running: '运行',
   repair: '维修',
+  upkeep: '保养',
   shutdown: '停机',
   standby: '待机',
 };
