@@ -189,6 +189,67 @@ kill_backend_by_command_line() {
     kill_uvicorn_reload_tree "${BACKEND_PORT}"
 }
 
+# Windows：清理 taskiq worker / scheduler 整棵树（uv run / taskiq.exe 会 fork，仅杀 pidfile 会残留占 PG 连接的子进程）
+kill_taskiq_processes() {
+    command -v powershell.exe >/dev/null 2>&1 || return 0
+    local round=0
+    while [ "$round" -lt 3 ]; do
+        local killed
+        killed="$(powershell.exe -NoProfile -Command "
+            \$killed = @()
+            Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | ForEach-Object {
+                \$cmd = \$_.CommandLine
+                if (-not \$cmd) { return }
+                \$id = \$_.ProcessId
+                \$name = \$_.Name
+                \$shouldKill = \$false
+
+                # taskiq.exe / taskiq worker|scheduler（Windows 命令行常为 taskiq.exe\" worker ...）
+                if (\$cmd -match 'core\.tasks\.taskiq_app:(broker|scheduler)') {
+                    \$shouldKill = \$true
+                }
+                if (-not \$shouldKill -and \$cmd -match 'taskiq(\.exe)?[\"'']?\s+(worker|scheduler)') {
+                    \$shouldKill = \$true
+                }
+                if (-not \$shouldKill -and \$name -match '^(python|uv|nohup)(\.exe)?$') {
+                    if ((\$cmd -match 'riveredge-backend') -and (\$cmd -match 'taskiq (worker|scheduler)')) {
+                        \$shouldKill = \$true
+                    }
+                }
+                if (-not \$shouldKill -and \$name -match 'bash') {
+                    if ((\$cmd -match 'riveredge-backend') -and (\$cmd -match 'taskiq (worker|scheduler)')) {
+                        \$shouldKill = \$true
+                    }
+                }
+
+                if (\$shouldKill) {
+                    Stop-Process -Id \$id -Force -ErrorAction SilentlyContinue
+                    \$killed += \$id
+                }
+            }
+            if (\$killed.Count -gt 0) { Write-Output (\$killed -join ', ') }
+        " 2>/dev/null | tr -d '\r' || true)"
+        if [ -n "$killed" ]; then
+            log_warn "清理 taskiq 残留进程（第 $((round + 1)) 轮）: ${killed}"
+        else
+            break
+        fi
+        round=$((round + 1))
+        sleep 2
+    done
+    sleep 1
+}
+
+taskiq_service_running() {
+    local token=$1
+    command -v powershell.exe >/dev/null 2>&1 || return 1
+    powershell.exe -NoProfile -Command "
+        \$found = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue |
+            Where-Object { \$_.CommandLine -and (\$_.CommandLine -match 'core\.tasks\.taskiq_app:${token}') }
+        if (\$found) { exit 0 } else { exit 1 }
+    " >/dev/null 2>&1
+}
+
 cleanup_backend_processes() {
     log_info "清理后端进程 (port ${BACKEND_PORT})..."
 
@@ -217,6 +278,8 @@ start_backend() {
     fi
 
     cd riveredge-backend
+    export RIVEREDGE_DB_POOL_MIN="${RIVEREDGE_DB_POOL_MIN:-1}"
+    export RIVEREDGE_DB_POOL_MAX="${RIVEREDGE_DB_POOL_MAX:-5}"
     PYTHONPATH="src" nohup uv run --extra pdf uvicorn server.main:app --host 0.0.0.0 --port "${BACKEND_PORT}" --reload --reload-dir src > ../.logs/backend.log 2>&1 &
     local backend_launcher_pid=$!
     echo "${backend_launcher_pid}" > ../.logs/backend.pid
@@ -256,9 +319,13 @@ start_backend() {
 
 start_worker() {
     log_info "正在拉起 Taskiq Worker/Scheduler..."
+    kill_taskiq_processes
     cd riveredge-backend
     [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
-    TASKIQ_WORKERS="${TASKIQ_WORKERS:-2}"
+    # 开发环境默认 1 worker，避免 API reload + 多 worker 占满 PostgreSQL max_connections
+    TASKIQ_WORKERS="${TASKIQ_WORKERS:-1}"
+    export RIVEREDGE_TASKIQ_POOL_MIN="${RIVEREDGE_TASKIQ_POOL_MIN:-1}"
+    export RIVEREDGE_TASKIQ_POOL_MAX="${RIVEREDGE_TASKIQ_POOL_MAX:-2}"
     PYTHONPATH="src" nohup uv run --extra pdf taskiq worker \
         --app-dir src \
         --fs-discover \
@@ -275,13 +342,13 @@ start_worker() {
     echo $! > ../.logs/scheduler.pid
     local scheduler_launcher_pid=$!
 
-    sleep 3
-    if ! pid_is_alive "$worker_launcher_pid"; then
+    sleep 5
+    if ! taskiq_service_running broker; then
         cd ..
         log_error "Taskiq Worker 启动失败，请查看 .logs/worker.log"
         return 1
     fi
-    if ! pid_is_alive "$scheduler_launcher_pid"; then
+    if ! taskiq_service_running scheduler; then
         cd ..
         log_error "Taskiq Scheduler 启动失败，请查看 .logs/scheduler.log"
         return 1
@@ -304,9 +371,6 @@ start_frontend() {
 
 stop_all() {
     log_info "停止所有服务..."
-    cleanup_backend_processes || log_warn "后端清理未完全成功，请检查 .logs/backend.log"
-    kill_port "${FRONTEND_PORT}" || true
-
     for pidfile in .logs/worker.pid .logs/scheduler.pid; do
         if [ -f "$pidfile" ]; then
             local pid
@@ -315,6 +379,9 @@ stop_all() {
             rm -f "$pidfile"
         fi
     done
+    kill_taskiq_processes
+    cleanup_backend_processes || log_warn "后端清理未完全成功，请检查 .logs/backend.log"
+    kill_port "${FRONTEND_PORT}" || true
 }
 
 frontend_http_ready() {
@@ -335,8 +402,16 @@ case "$1" in
     status)
         backend_http_ready && log_success "Backend [OK] ($(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' '))" || log_warn "Backend [OFF]"
         frontend_http_ready && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
-        pidfile_alive ".logs/worker.pid" && log_success "Worker [OK]" || log_warn "Worker [OFF]"
-        pidfile_alive ".logs/scheduler.pid" && log_success "Scheduler [OK]" || log_warn "Scheduler [OFF]"
+        if pidfile_alive ".logs/worker.pid" || taskiq_service_running broker; then
+            log_success "Worker [OK]"
+        else
+            log_warn "Worker [OFF]"
+        fi
+        if pidfile_alive ".logs/scheduler.pid" || taskiq_service_running scheduler; then
+            log_success "Scheduler [OK]"
+        else
+            log_warn "Scheduler [OFF]"
+        fi
         ;;
     be) start_backend ;;
     fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;
