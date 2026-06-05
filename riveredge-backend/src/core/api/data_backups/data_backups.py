@@ -3,7 +3,6 @@
 """
 
 import asyncio
-import os
 from datetime import datetime, timedelta
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File, Form
@@ -11,12 +10,11 @@ from fastapi.responses import FileResponse
 from loguru import logger
 from pydantic import BaseModel
 from core.api.deps import get_current_user
-from infra.api.deps.deps import oauth2_scheme
-from infra.services.auth_service import AuthService
 from infra.models.user import User
 from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
 from core.services.system.data_backup_service import DataBackupService
+from core.services.system.backup_download_service import BackupDownloadService
 
 router = APIRouter(prefix="/data-backups", tags=["Core · Data Backups"])
 
@@ -29,6 +27,10 @@ class BackupWorkerHealthResponse(BaseModel):
     running_count: int
     recent_completed: int
     checked_at: datetime
+
+
+class BackupDownloadUrlResponse(BaseModel):
+    download_url: str
 
 
 async def _load_worker_health_counts(
@@ -208,40 +210,59 @@ async def get_backup(
         raise HTTPException(status_code=404, detail=str(e))
 
 
-@router.get("/{uuid}/download")
-async def download_backup(
+@router.get("/{uuid}/download-url", response_model=BackupDownloadUrlResponse)
+async def get_backup_download_url(
     uuid: str,
-    access_token: Optional[str] = Query(None, description="标准访问令牌，用于浏览器原生流式下载"),
-    header_token: Optional[str] = Depends(oauth2_scheme),
+    current_user: User = Depends(get_current_user),
 ) -> Any:
     """
-    下载备份文件（仅成功的备份可下载）
+    获取备份下载链接（短效 download_token，供浏览器原生流式下载）
     """
-    token = header_token or access_token
-    if not token:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token缺失")
-    current_user = await AuthService().get_current_user(token)
     try:
         backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
         if backup.status != "success":
             raise HTTPException(status_code=400, detail="只能下载成功的备份")
-        if not backup.file_path:
-            raise HTTPException(status_code=404, detail="备份文件不存在")
-        if not os.path.exists(backup.file_path):
-            raise HTTPException(status_code=404, detail="备份文件已丢失")
-        # 防止路径遍历：确保文件在 backups 目录下
-        abs_path = os.path.abspath(backup.file_path)
-        backups_dir = os.path.abspath("backups")
-        if not abs_path.startswith(backups_dir):
-            raise HTTPException(status_code=403, detail="无效的备份路径")
-        filename = os.path.basename(backup.file_path)
+        BackupDownloadService.resolve_backup_file(uuid, current_user.tenant_id, backup.file_path)
+        return BackupDownloadUrlResponse(
+            download_url=BackupDownloadService.build_download_url(uuid, current_user.tenant_id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@router.get("/{uuid}/download")
+async def download_backup(
+    uuid: str,
+    download_token: str = Query(..., description="短效下载 token，由 download-url 接口签发"),
+) -> Any:
+    """
+    下载备份文件（FileResponse 流式传输，仅接受 download_token）
+    """
+    try:
+        payload = BackupDownloadService.verify_download_token(download_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+
+    token_uuid = str(payload.get("backup_uuid") or "").lower()
+    if token_uuid != str(uuid).lower():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="下载链接与备份不匹配")
+
+    tenant_id = payload.get("tenant_id")
+    if tenant_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="下载链接缺少组织信息")
+
+    try:
+        backup = await DataBackupService.get_backup_by_uuid(int(tenant_id), uuid)
+        if backup.status != "success":
+            raise HTTPException(status_code=400, detail="只能下载成功的备份")
+        abs_path, filename = BackupDownloadService.resolve_backup_file(uuid, int(tenant_id), backup.file_path)
         return FileResponse(
             path=abs_path,
             filename=filename,
             media_type="application/zip",
         )
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.delete("/{uuid}")

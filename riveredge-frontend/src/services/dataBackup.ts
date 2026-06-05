@@ -4,7 +4,6 @@
  * 提供数据备份的查询、创建、恢复和删除功能。
  */
 
-import { getToken } from '../utils/auth';
 import { updateLastActivity } from '../utils/activityUtils';
 import { apiRequest } from './api';
 
@@ -144,23 +143,19 @@ export async function deleteBackup(uuid: string): Promise<void> {
 }
 
 /**
- * 构建备份下载 URL（浏览器原生流式下载，不经过 JS blob 缓冲）
+ * 获取短效下载链接（Authorization 头鉴权，仅返回 URL，不缓冲文件）
  */
-export function getBackupDownloadUrl(uuid: string): string {
-  const token = getToken();
-  const baseUrl = import.meta.env.VITE_API_BASE_URL || '';
-  const params = new URLSearchParams();
-  if (token) params.set('access_token', token);
-  const query = params.toString();
-  return `${baseUrl}/api/v1/core/data-backups/${uuid}/download${query ? `?${query}` : ''}`;
+export async function getBackupDownloadUrl(uuid: string): Promise<string> {
+  const res = await apiRequest<{ download_url: string }>(`/core/data-backups/${uuid}/download-url`);
+  return res.download_url;
 }
 
 /**
- * 触发浏览器原生下载（服务端 FileResponse 流式传输）
+ * 触发浏览器原生流式下载
  */
-export function startBackupDownload(uuid: string, filename: string): void {
+export async function startBackupDownload(uuid: string, filename: string): Promise<void> {
   updateLastActivity(true);
-  const url = getBackupDownloadUrl(uuid);
+  const url = await getBackupDownloadUrl(uuid);
   const a = document.createElement('a');
   a.href = url;
   a.download = filename;

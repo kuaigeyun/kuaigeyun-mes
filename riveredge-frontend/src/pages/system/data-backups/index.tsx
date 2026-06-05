@@ -247,9 +247,9 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 下载备份（浏览器原生流式下载，立即弹出保存对话框）
    */
-  const handleDownload = (record: DataBackup) => {
+  const handleDownload = async (record: DataBackup) => {
     try {
-      startBackupDownload(
+      await startBackupDownload(
         record.uuid,
         `${record.name || 'backup'}_${record.uuid.slice(0, 8)}.zip`,
       );
