@@ -1256,38 +1256,49 @@ ensure_pyzbar_windows_native() {
 }
 
 ensure_playwright_chromium_postinstall() {
-    # 非阻断后置补装：避免因 Playwright/Chromium 影响既有部署主流程
+    # 非阻断后置补装：后台下载 Chromium，不阻塞 start 主流程
     if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
         return 0
     fi
     ensure_logs_dir
     local marker="$LOGS_DIR/playwright-chromium.ready"
     local logf="$LOGS_DIR/playwright-install.log"
+    local pidf="$LOGS_DIR/playwright-install.pid"
     [ -f "$marker" ] && return 0
     [ -d "$BACKEND_DIR" ] || return 0
 
-    log_info "补装 Playwright Chromium 运行时（非阻断）..."
-    (
-        cd "$BACKEND_DIR"
-        export PYTHONPATH="$BACKEND_DIR/src"
-        if ! "$(resolve_uv)" run --extra pdf python -m playwright --version >/dev/null 2>&1; then
-            exit 10
+    if [ -f "$pidf" ]; then
+        local pid
+        pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            log_info "Playwright Chromium 后台补装进行中（PID $pid），详见 $logf"
+            return 0
         fi
-        "$(resolve_uv)" run --extra pdf python -m playwright install chromium
-    ) >>"$logf" 2>&1
-    local rc=$?
-    case "$rc" in
-        0)
+        rm -f "$pidf"
+    fi
+
+    local uv_bin
+    uv_bin="$(resolve_uv)"
+
+    log_info "补装 Playwright Chromium 运行时（后台执行，不阻塞启动）..."
+    (
+        cd "$BACKEND_DIR" || exit 1
+        export PYTHONPATH="$BACKEND_DIR/src"
+        if ! "$uv_bin" run --extra pdf python -m playwright --version >>"$logf" 2>&1; then
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] skip: Playwright 模块不可用" >>"$logf"
+            exit 0
+        fi
+        echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] start: playwright install chromium" >>"$logf"
+        if "$uv_bin" run --extra pdf python -m playwright install chromium >>"$logf" 2>&1; then
             date -u +%Y-%m-%dT%H:%M:%SZ > "$marker"
-            log_ok "Playwright Chromium 补装完成"
-            ;;
-        10)
-            log_warn "未检测到 Playwright Python 模块，已跳过 Chromium 补装"
-            ;;
-        *)
-            log_warn "Playwright Chromium 补装失败（不影响主流程），详见 $logf"
-            ;;
-    esac
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] ok: Playwright Chromium 补装完成" >>"$logf"
+        else
+            echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] fail: Playwright Chromium 补装失败" >>"$logf"
+        fi
+        rm -f "$pidf"
+    ) &
+    echo $! > "$pidf"
+    log_info "Playwright 补装已在后台运行（PID $(cat "$pidf")），详见 $logf"
     return 0
 }
 

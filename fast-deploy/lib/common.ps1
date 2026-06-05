@@ -658,37 +658,50 @@ function Ensure-PyzbarWindowsNative {
 }
 
 function Ensure-PlaywrightChromiumPostInstall {
-    # 非阻断后置补装：失败仅告警，不影响既有部署主流程
+    # 非阻断后置补装：后台下载 Chromium，不阻塞 start 主流程
     $enabled = if ($env:PLAYWRIGHT_POSTINSTALL_ENABLE) { $env:PLAYWRIGHT_POSTINSTALL_ENABLE } else { '1' }
     if ($enabled -eq '0') { return }
     Ensure-LogsDir
     $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
     $logFile = Join-Path $script:LogsDir 'playwright-install.log'
+    $pidf = Join-Path $script:LogsDir 'playwright-install.pid'
     if (Test-Path $marker) { return }
     if (-not (Test-Path $script:BackendDir)) { return }
 
-    Write-LogInfo '补装 Playwright Chromium 运行时（非阻断）...'
-    $uv = Resolve-Uv
-    Push-Location $script:BackendDir
-    try {
-        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
-        & $uv run --extra pdf python -m playwright --version *> $null
-        if ($LASTEXITCODE -ne 0) {
-            Write-LogWarn '未检测到 Playwright Python 模块，已跳过 Chromium 补装'
-            return
-        }
-        & $uv run --extra pdf python -m playwright install chromium *>> $logFile
-        if ($LASTEXITCODE -eq 0) {
-            Set-Content -Path $marker -Value (Get-Date -Format o) -Encoding UTF8
-            Write-LogOk 'Playwright Chromium 补装完成'
-        } else {
-            Write-LogWarn "Playwright Chromium 补装失败（不影响主流程），详见 $logFile"
-        }
-    } catch {
-        Write-LogWarn "Playwright Chromium 补装异常（不影响主流程）：$($_.Exception.Message)"
-    } finally {
-        Pop-Location
+    $running = Get-Job -Name 'RiverEdgePlaywrightInstall' -ErrorAction SilentlyContinue |
+        Where-Object { $_.State -eq 'Running' }
+    if ($running) {
+        Write-LogInfo "Playwright Chromium 后台补装进行中（Job $($running.Id)），详见 $logFile"
+        return
     }
+
+    Write-LogInfo '补装 Playwright Chromium 运行时（后台执行，不阻塞启动）...'
+    $uv = Resolve-Uv
+    $backendDir = $script:BackendDir
+    Start-Job -Name 'RiverEdgePlaywrightInstall' -ScriptBlock {
+        param($BackendDir, $Uv, $Marker, $LogFile, $PidFile)
+        $env:PYTHONPATH = Join-Path $BackendDir 'src'
+        Push-Location $BackendDir
+        try {
+            & $Uv run --extra pdf python -m playwright --version *>> $LogFile
+            if ($LASTEXITCODE -ne 0) {
+                Add-Content $LogFile "[$(Get-Date -Format o)] skip: Playwright 模块不可用"
+                return
+            }
+            Add-Content $LogFile "[$(Get-Date -Format o)] start: playwright install chromium"
+            & $Uv run --extra pdf python -m playwright install chromium *>> $LogFile
+            if ($LASTEXITCODE -eq 0) {
+                Set-Content -Path $Marker -Value (Get-Date -Format o) -Encoding UTF8
+                Add-Content $LogFile "[$(Get-Date -Format o)] ok: Playwright Chromium 补装完成"
+            } else {
+                Add-Content $LogFile "[$(Get-Date -Format o)] fail: Playwright Chromium 补装失败"
+            }
+        } finally {
+            Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
+            Pop-Location
+        }
+    } -ArgumentList $backendDir, $uv, $marker, $logFile, $pidf | Out-Null
+    Write-LogInfo "Playwright 补装已在后台运行，详见 $logFile"
 }
 
 function Sync-BackendDeps {
