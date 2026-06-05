@@ -39,6 +39,7 @@ import {
   CreateDataBackupData,
 } from '../../../services/dataBackup';
 import { useGlobalStore } from '../../../stores';
+import { getTenantId } from '../../../utils/auth';
 import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
@@ -191,15 +192,18 @@ const DataBackupsPage: React.FC = () => {
   };
 
   /**
-   * 恢复备份（上传的备份需二次确认，可指定备份中的租户ID用于替换）
+   * 恢复备份（租户级备份需确认导出租户编号）
    */
-  const handleRestore = (record: DataBackup) => {
-    setRestoreBackupRecord(record);
-    // 上传的备份默认不填（需用户指定）；系统生成的备份默认用记录中的租户ID
-    restoreForm.setFieldsValue({
-      source_tenant_id: record.source_type === 'uploaded' ? undefined : (record.tenant_id ?? undefined),
-    });
-    setRestoreModalVisible(true);
+  const handleRestore = async (record: DataBackup) => {
+    try {
+      const detail = await getBackupDetail(record.uuid);
+      setRestoreBackupRecord(detail);
+      const inferredSource = detail.source_tenant_id ?? detail.tenant_id ?? undefined;
+      restoreForm.setFieldsValue({ source_tenant_id: inferredSource });
+      setRestoreModalVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.dataBackups.getDetailFailed'));
+    }
   };
 
   const handleRestoreConfirm = async () => {
@@ -643,6 +647,11 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnSource'), dataIndex: 'source_type', render: (_, r) => getSourceTypeTag(r.source_type) },
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
     { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupScopeText(r.backup_scope) },
+    {
+      title: t('pages.system.dataBackups.restoreSourceTenantLabel'),
+      dataIndex: 'source_tenant_id',
+      render: (_, r) => (r.source_tenant_id != null ? r.source_tenant_id : '-'),
+    },
     { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
     { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status, r.restore_error_message) },
     { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
@@ -664,6 +673,20 @@ const DataBackupsPage: React.FC = () => {
       valueType: 'dateTime',
     },
   ];
+
+  const restoreTargetTenantId = currentUser?.tenant_id ?? getTenantId();
+  const restoreSourceTenantId = Form.useWatch('source_tenant_id', restoreForm);
+  const isTenantBackupRestore = restoreBackupRecord?.backup_scope === 'tenant';
+  const showMigrationHint =
+    isTenantBackupRestore
+    && restoreSourceTenantId != null
+    && restoreTargetTenantId != null
+    && Number(restoreSourceTenantId) !== Number(restoreTargetTenantId);
+  const showSameTenantHint =
+    isTenantBackupRestore
+    && restoreSourceTenantId != null
+    && restoreTargetTenantId != null
+    && Number(restoreSourceTenantId) === Number(restoreTargetTenantId);
 
   return (
     <>
@@ -862,18 +885,20 @@ const DataBackupsPage: React.FC = () => {
         </Upload.Dragger>
       </Modal>
 
-      {/* 恢复备份 Modal（含租户ID替换） */}
+      {/* 恢复备份 Modal */}
       <Modal
         title={t('pages.system.dataBackups.restoreConfirmTitle')}
         open={restoreModalVisible}
         onCancel={() => {
           setRestoreModalVisible(false);
           setRestoreBackupRecord(null);
+          restoreForm.resetFields();
         }}
         onOk={handleRestoreConfirm}
         okText={t('common.confirm')}
         cancelText={t('common.cancel')}
         destroyOnHidden
+        width={520}
       >
         <div style={{ marginBottom: 16 }}>
           <p>{restoreBackupRecord?.source_type === 'uploaded' ? t('pages.system.dataBackups.restoreUploadedConfirmContent') : t('pages.system.dataBackups.restoreConfirmContent')}</p>
@@ -881,15 +906,68 @@ const DataBackupsPage: React.FC = () => {
             {t('pages.system.dataBackups.preRestoreBackupHint')}
           </p>
         </div>
-        <Form form={restoreForm} layout="vertical">
-          <Form.Item
-            name="source_tenant_id"
-            label={t('pages.system.dataBackups.sourceTenantIdLabel')}
-            extra={t('pages.system.dataBackups.sourceTenantIdExtra')}
-          >
-            <InputNumber min={1} placeholder={t('pages.system.dataBackups.sourceTenantIdPlaceholder')} style={{ width: '100%' }} />
-          </Form.Item>
-        </Form>
+
+        {isTenantBackupRestore && (
+          <>
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={t('pages.system.dataBackups.restoreTenantMappingTitle')}
+              description={t('pages.system.dataBackups.restorePlatformSafeHint')}
+            />
+
+            <Descriptions bordered size="small" column={1} style={{ marginBottom: 16 }}>
+              <Descriptions.Item label={t('pages.system.dataBackups.restoreTargetTenantLabel')}>
+                {t('pages.system.dataBackups.restoreTargetTenantDesc', {
+                  id: restoreTargetTenantId ?? '-',
+                })}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Form form={restoreForm} layout="vertical">
+              <Form.Item
+                name="source_tenant_id"
+                label={t('pages.system.dataBackups.restoreSourceTenantLabel')}
+                extra={t('pages.system.dataBackups.restoreSourceTenantExtra')}
+                rules={[
+                  {
+                    required: true,
+                    message: t('pages.system.dataBackups.restoreSourceTenantRequired'),
+                  },
+                ]}
+              >
+                <InputNumber
+                  min={1}
+                  precision={0}
+                  placeholder={t('pages.system.dataBackups.restoreSourceTenantPlaceholder')}
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </Form>
+
+            {showMigrationHint && (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 12 }}
+                message={t('pages.system.dataBackups.restoreMigrationHint', {
+                  source: restoreSourceTenantId,
+                  target: restoreTargetTenantId,
+                })}
+              />
+            )}
+
+            {showSameTenantHint && (
+              <Alert
+                type="info"
+                showIcon
+                style={{ marginTop: 12 }}
+                message={t('pages.system.dataBackups.restoreSameTenantHint')}
+              />
+            )}
+          </>
+        )}
       </Modal>
 
       {/* 备份详情 Drawer */}

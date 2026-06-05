@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import shutil
@@ -25,7 +26,18 @@ TENANT_BACKUP_EXCLUDED_TABLES = {
     "core_operation_logs",
     "core_login_logs",
     "core_user_activities",
+    # 备份管理自身数据不参与租户业务迁移
+    "core_data_backups",
 }
+
+TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES = (
+    # 平台级基础设施表：租户级导出/恢复必须跳过，避免影响平台级数据
+    "infra_",
+)
+
+
+def _is_platform_level_table(table: str) -> bool:
+    return any(table.startswith(prefix) for prefix in TENANT_BACKUP_EXCLUDED_TABLE_PREFIXES)
 
 
 def run_backup_dump_and_zip_sync(
@@ -82,8 +94,16 @@ def run_backup_dump_and_zip_sync(
             raise RuntimeError(f"获取表列表失败: {result.stderr}")
 
         discovered_tables = [t.strip() for t in result.stdout.split("\n") if t.strip()]
-        tables = [t for t in discovered_tables if t not in TENANT_BACKUP_EXCLUDED_TABLES]
-        skipped_tables = [t for t in discovered_tables if t in TENANT_BACKUP_EXCLUDED_TABLES]
+        tables = [
+            t
+            for t in discovered_tables
+            if t not in TENANT_BACKUP_EXCLUDED_TABLES and not _is_platform_level_table(t)
+        ]
+        skipped_tables = [
+            t
+            for t in discovered_tables
+            if t in TENANT_BACKUP_EXCLUDED_TABLES or _is_platform_level_table(t)
+        ]
         logger.info(
             "租户隔离备份表统计: discovered={} export={} skipped={}",
             len(discovered_tables),
@@ -266,7 +286,7 @@ async def run_tenant_id_replacement(source_tenant_id: int, target_tenant_id: int
     tables = [
         r["table_name"]
         for r in (tables_rows if isinstance(tables_rows, list) else [])
-        if r.get("table_name")
+        if r.get("table_name") and not _is_platform_level_table(r["table_name"])
     ]
     total_updated = 0
     for table in tables:
@@ -404,7 +424,56 @@ def _validate_csv_header(table: str, csv_text: str) -> None:
         raise ValueError(f"租户备份表 {table} 不包含 tenant_id 列，无法安全恢复")
 
 
-def _run_psql_copy_from_stdin(table: str, csv_text: str) -> None:
+def _csv_header_columns(csv_text: str) -> list[str]:
+    first_line = csv_text.splitlines()[0] if csv_text else ""
+    if not first_line:
+        return []
+    return next(csv.reader([first_line]))
+
+
+def _csv_has_data_rows(csv_text: str) -> bool:
+    return len(csv_text.splitlines()) > 1
+
+
+def _project_csv_to_columns(csv_text: str, use_columns: list[str]) -> str:
+    """将 CSV 投影为指定列，保持 HEADER 与数据行一致。"""
+    if not csv_text:
+        return csv_text
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text
+
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    index_map = {name: idx for idx, name in enumerate(header)}
+    selected_indexes = [index_map[col] for col in use_columns if col in index_map]
+    if not selected_indexes:
+        return ""
+
+    out_rows: list[list[str]] = [use_columns]
+    for row in reader:
+        # 行长度不足时补空，避免索引越界导致整表失败
+        padded = row + [""] * max(0, len(header) - len(row))
+        out_rows.append([padded[idx] if idx < len(padded) else "" for idx in selected_indexes])
+
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue()
+
+
+def _run_psql_copy_from_stdin(
+    table: str,
+    csv_text: str,
+    *,
+    table_columns: Optional[list[str]] = None,
+) -> None:
+    if not _csv_has_data_rows(csv_text):
+        logger.info("表 {} 无数据行，跳过导入", table)
+        return
+
     db_user = infra_settings.DB_USER
     db_password = infra_settings.DB_PASSWORD
     db_host = infra_settings.DB_HOST
@@ -412,6 +481,28 @@ def _run_psql_copy_from_stdin(table: str, csv_text: str) -> None:
     db_name = infra_settings.DB_NAME
     env = os.environ.copy()
     env["PGPASSWORD"] = db_password
+
+    csv_columns = _csv_header_columns(csv_text)
+    if table_columns:
+        allowed = set(table_columns)
+        use_columns = [col for col in csv_columns if col in allowed]
+        skipped = [col for col in csv_columns if col not in allowed]
+        if skipped:
+            logger.warning("表 {} CSV 列在目标库不存在，已忽略: {}", table, skipped)
+        if not use_columns:
+            logger.warning("表 {} CSV 列与目标库无交集，跳过", table)
+            return
+        csv_text = _project_csv_to_columns(csv_text, use_columns)
+        if not csv_text:
+            logger.warning("表 {} CSV 投影后为空，跳过", table)
+            return
+        column_sql = ", ".join(f'"{col}"' for col in use_columns)
+        copy_sql = (
+            f'COPY "{table}" ({column_sql}) '
+            "FROM STDIN WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')"
+        )
+    else:
+        copy_sql = f'COPY "{table}" FROM STDIN WITH (FORMAT CSV, HEADER, ENCODING \'UTF8\')'
 
     cmd = [
         "psql",
@@ -426,7 +517,7 @@ def _run_psql_copy_from_stdin(table: str, csv_text: str) -> None:
         "-v",
         "ON_ERROR_STOP=1",
         "-c",
-        f'COPY "{table}" FROM STDIN WITH (FORMAT CSV, HEADER, ENCODING \'UTF8\')',
+        copy_sql,
     ]
     result = subprocess.run(
         cmd,
@@ -436,7 +527,8 @@ def _run_psql_copy_from_stdin(table: str, csv_text: str) -> None:
         text=True,
     )
     if result.returncode != 0:
-        raise RuntimeError(f"导入表 {table} 失败: {result.stderr or result.stdout}")
+        err = (result.stderr or result.stdout or "").strip()
+        raise RuntimeError(f"导入表 {table} 失败: {err[:2000]}")
 
 
 async def restore_tenant_backup_from_dump(
@@ -452,15 +544,51 @@ async def restore_tenant_backup_from_dump(
     导入后统一替换为 target_tenant_id（如 1）。目标租户在导入前会先清空。
     """
 
-    table_csv_map = _parse_tenant_dump_sections(dump_path)
+    raw_table_csv_map = _parse_tenant_dump_sections(dump_path)
+    table_csv_map = {
+        table: csv_text
+        for table, csv_text in raw_table_csv_map.items()
+        if not _is_platform_level_table(table)
+    }
+    skipped_platform_tables = sorted(set(raw_table_csv_map.keys()) - set(table_csv_map.keys()))
+    if skipped_platform_tables:
+        logger.warning("租户级恢复跳过平台级表: {}", skipped_platform_tables)
+
     if not table_csv_map:
         raise ValueError("租户备份数据为空，无法恢复")
 
     for table, csv_text in table_csv_map.items():
+        if not _csv_has_data_rows(csv_text):
+            continue
         _validate_csv_header(table, csv_text)
 
     conn = Tortoise.get_connection("default")
     table_names = sorted(table_csv_map.keys())
+
+    columns_sql = """
+        SELECT table_name, column_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = ANY($1::text[])
+        ORDER BY table_name, ordinal_position
+    """
+    column_rows = await conn.execute_query_dict(columns_sql, [table_names])
+    table_column_map: dict[str, list[str]] = defaultdict(list)
+    for row in column_rows:
+        table_name = row.get("table_name")
+        column_name = row.get("column_name")
+        if table_name and column_name:
+            table_column_map[table_name].append(column_name)
+
+    missing_tables = [table for table in table_names if table not in table_column_map]
+    if missing_tables:
+        logger.warning("目标库不存在以下备份表，已跳过: {}", missing_tables)
+        for table in missing_tables:
+            table_csv_map.pop(table, None)
+
+    table_names = sorted(table_csv_map.keys())
+    if not table_names:
+        raise ValueError("备份中的表在目标库均不存在，无法恢复")
 
     fk_sql = """
         SELECT
@@ -493,11 +621,15 @@ async def restore_tenant_backup_from_dump(
 
     for table in insert_order:
         csv_text = table_csv_map.get(table)
-        if not csv_text:
+        if not csv_text or not _csv_has_data_rows(csv_text):
             continue
         # COPY 需要以换行结束；否则最后一行偶发不被解析
         payload = csv_text if csv_text.endswith("\n") else f"{csv_text}\n"
-        _run_psql_copy_from_stdin(table, payload)
+        _run_psql_copy_from_stdin(
+            table,
+            payload,
+            table_columns=table_column_map.get(table),
+        )
 
     if source_tenant_id is not None and source_tenant_id != target_tenant_id:
         tables_updated = await run_tenant_id_replacement(source_tenant_id, target_tenant_id)

@@ -154,7 +154,7 @@ async def get_backups(
         backup_status
     )
     return {
-        "items": items,
+        "items": [DataBackupService.to_response(item) for item in items],
         "total": total,
         "page": page,
         "page_size": page_size
@@ -175,7 +175,8 @@ async def upload_backup(
     if not file.filename or not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="仅支持上传 .zip 格式的备份文件")
     backup_name = (name or file.filename or "uploaded_backup").strip() or "uploaded_backup"
-    return await DataBackupService.upload_backup_file(current_user.tenant_id, file, backup_name)
+    backup = await DataBackupService.upload_backup_file(current_user.tenant_id, file, backup_name)
+    return DataBackupService.to_response(backup)
 
 
 @router.post("", response_model=DataBackupResponse, status_code=status.HTTP_201_CREATED)
@@ -193,7 +194,8 @@ async def create_backup(
             detail="权限不足：仅平台管理员可创建全量备份（包含所有租户数据）。"
         )
         
-    return await DataBackupService.create_backup_task(current_user.tenant_id, data)
+    backup = await DataBackupService.create_backup_task(current_user.tenant_id, data)
+    return DataBackupService.to_response(backup)
 
 
 @router.get("/{uuid}", response_model=DataBackupResponse)
@@ -205,7 +207,8 @@ async def get_backup(
     获取备份详情
     """
     try:
-        return await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        return DataBackupService.to_response(backup)
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
 

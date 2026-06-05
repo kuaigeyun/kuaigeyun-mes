@@ -21,6 +21,10 @@ class DataBackupCreate(DataBackupBase):
 class DataBackupResponse(DataBackupBase):
     uuid: str
     tenant_id: Optional[int]
+    source_tenant_id: Optional[int] = Field(
+        None,
+        description="备份文件内记录的导出租户 ID（来自 backup_metadata.json，用于恢复时展示与映射）",
+    )
     file_path: Optional[str] = None
     file_uuid: Optional[str] = None
     file_size: Optional[int] = None

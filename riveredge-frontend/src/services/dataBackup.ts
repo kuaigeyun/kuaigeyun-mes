@@ -10,6 +10,8 @@ import { apiRequest } from './api';
 export interface DataBackup {
   uuid: string;
   tenant_id: number;
+  /** 备份 zip 内记录的导出租户 ID（用于恢复弹窗展示） */
+  source_tenant_id?: number | null;
   name: string;
   backup_type: string;
   backup_scope: string;

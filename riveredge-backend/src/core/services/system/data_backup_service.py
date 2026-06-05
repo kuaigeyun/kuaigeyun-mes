@@ -78,6 +78,25 @@ class DataBackupService:
         return items, total
 
     @staticmethod
+    def resolve_source_tenant_id(backup: DataBackup) -> Optional[int]:
+        """从 zip 元数据读取导出租户 ID；缺失时回退到备份记录 tenant_id。"""
+        from core.services.system.data_backup_jobs import read_backup_metadata
+
+        if backup.file_path and os.path.exists(backup.file_path):
+            meta_src = read_backup_metadata(backup.file_path).get("source_tenant_id")
+            if meta_src is not None:
+                return int(meta_src)
+        return backup.tenant_id
+
+    @staticmethod
+    def to_response(backup: DataBackup) -> "DataBackupResponse":
+        from core.schemas.data_backup import DataBackupResponse
+
+        return DataBackupResponse.model_validate(backup).model_copy(
+            update={"source_tenant_id": DataBackupService.resolve_source_tenant_id(backup)}
+        )
+
+    @staticmethod
     async def get_backup_by_uuid(tenant_id: int, uuid: str) -> DataBackup:
         """
         通过 UUID 获取备份详情
