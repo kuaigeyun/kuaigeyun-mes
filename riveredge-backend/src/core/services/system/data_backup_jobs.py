@@ -466,6 +466,121 @@ def _project_csv_to_columns(csv_text: str, use_columns: list[str]) -> str:
     return buffer.getvalue()
 
 
+def _parse_pg_column_default(raw: Optional[str]) -> Optional[str]:
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    if "nextval(" in text or "gen_random_uuid" in text:
+        return None
+    if "CURRENT_TIMESTAMP" in text.upper() or text.startswith("now("):
+        return None
+    if "::" in text:
+        literal = text.split("::", 1)[0].strip()
+        if literal.startswith("'") and literal.endswith("'"):
+            return literal[1:-1].replace("''", "'")
+        return literal
+    if text in {"true", "false"}:
+        return text
+    if text.lstrip("-").replace(".", "", 1).isdigit():
+        return text
+    return None
+
+
+def _is_text_column(meta: dict[str, Optional[str]]) -> bool:
+    data_type = (meta.get("data_type") or "").lower()
+    udt_name = (meta.get("udt_name") or "").lower()
+    return data_type in {"character varying", "text", "character", "name"} or udt_name in {
+        "varchar",
+        "text",
+        "bpchar",
+        "name",
+    }
+
+
+def _resolve_not_null_fill_value(col: str, meta: dict[str, Optional[str]]) -> Optional[str]:
+    if meta.get("is_nullable") == "YES":
+        return None
+    parsed = _parse_pg_column_default(meta.get("column_default"))
+    if parsed is not None:
+        return parsed
+    if _is_text_column(meta):
+        return ""
+    data_type = (meta.get("data_type") or "").lower()
+    if data_type in {"integer", "bigint", "smallint", "numeric", "double precision", "real"}:
+        return "0"
+    if data_type == "boolean":
+        return "false"
+    return None
+
+
+def _align_csv_to_target_schema(
+    csv_text: str,
+    use_columns: list[str],
+    table_columns: list[str],
+    column_meta: dict[str, dict[str, Optional[str]]],
+) -> tuple[list[str], str]:
+    """补齐目标库新增 NOT NULL 列，并将空值改写为默认值（避免 COPY 把空字段当 NULL）。"""
+    if not table_columns:
+        return use_columns, csv_text
+
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return use_columns, csv_text
+
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    header_index = {name: idx for idx, name in enumerate(header)}
+
+    extended_columns = list(use_columns)
+    for col in table_columns:
+        if col in extended_columns:
+            continue
+        fill_value = _resolve_not_null_fill_value(col, column_meta.get(col, {}))
+        if fill_value is not None:
+            extended_columns.append(col)
+
+    out_rows: list[list[str]] = [extended_columns]
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        out_row: list[str] = []
+        for col in extended_columns:
+            if col in header_index:
+                cell = padded[header_index[col]]
+            else:
+                cell = ""
+            meta = column_meta.get(col, {})
+            if (not str(cell).strip() or str(cell).strip().lower() == "null") and meta.get(
+                "is_nullable"
+            ) == "NO":
+                fill_value = _resolve_not_null_fill_value(col, meta)
+                if fill_value is not None:
+                    cell = fill_value
+            out_row.append(cell)
+        out_rows.append(out_row)
+
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n", quoting=csv.QUOTE_MINIMAL)
+    writer.writerows(out_rows)
+    return extended_columns, buffer.getvalue()
+
+
+def _force_not_null_columns_for_copy(
+    use_columns: list[str],
+    column_meta: dict[str, dict[str, Optional[str]]],
+) -> list[str]:
+    forced: list[str] = []
+    for col in use_columns:
+        meta = column_meta.get(col, {})
+        if meta.get("is_nullable") == "NO" and _is_text_column(meta):
+            forced.append(col)
+    return forced
+
+
 def _ensure_csv_field_limit() -> None:
     try:
         csv.field_size_limit(max(csv.field_size_limit(), 4 * 1024 * 1024))
@@ -610,6 +725,7 @@ def _prepare_csv_for_import(
     *,
     target_tenant_id: int,
     table_columns: Optional[list[str]],
+    column_meta: Optional[dict[str, dict[str, Optional[str]]]] = None,
 ) -> Optional[tuple[list[str], str]]:
     if not _csv_has_data_rows(csv_text):
         return None
@@ -629,6 +745,13 @@ def _prepare_csv_for_import(
         if not csv_text or not _csv_has_data_rows(csv_text):
             logger.warning("表 {} CSV 投影后为空，跳过", table)
             return None
+        if column_meta is not None:
+            use_columns, csv_text = _align_csv_to_target_schema(
+                csv_text,
+                use_columns,
+                table_columns,
+                column_meta,
+            )
         return use_columns, csv_text
     return csv_columns, csv_text
 
@@ -724,6 +847,7 @@ def _run_tenant_restore_transaction(
     target_tenant_id: int,
     source_tenant_id: int,
     table_pk_map: dict[str, list[str]],
+    table_column_meta: dict[str, dict[str, dict[str, Optional[str]]]],
 ) -> None:
     """
     在单个 psql 事务中执行 DELETE + COPY；任一步失败则整批回滚，避免只删不导。
@@ -756,9 +880,17 @@ def _run_tenant_restore_transaction(
                 f.write(csv_text if csv_text.endswith("\n") else f"{csv_text}\n")
             column_sql = ", ".join(f'"{col}"' for col in use_columns)
             psql_path = csv_path.replace("\\", "/")
+            force_not_null = _force_not_null_columns_for_copy(
+                use_columns,
+                table_column_meta.get(table, {}),
+            )
+            force_sql = ""
+            if force_not_null:
+                force_cols = ", ".join(f'"{col}"' for col in force_not_null)
+                force_sql = f", FORCE_NOT_NULL ({force_cols})"
             script_lines.append(
                 f'\\copy "{table}" ({column_sql}) FROM \'{psql_path}\' '
-                "WITH (FORMAT CSV, HEADER, ENCODING 'UTF8');"
+                f"WITH (FORMAT CSV, HEADER, ENCODING 'UTF8'{force_sql});"
             )
 
         script_lines.append("COMMIT;")
@@ -891,7 +1023,7 @@ async def restore_tenant_backup_from_dump(
     table_names = sorted(table_csv_map.keys())
 
     columns_sql = """
-        SELECT table_name, column_name
+        SELECT table_name, column_name, is_nullable, column_default, data_type, udt_name
         FROM information_schema.columns
         WHERE table_schema = 'public'
           AND table_name = ANY($1::text[])
@@ -899,11 +1031,18 @@ async def restore_tenant_backup_from_dump(
     """
     column_rows = await conn.execute_query_dict(columns_sql, [table_names])
     table_column_map: dict[str, list[str]] = defaultdict(list)
+    table_column_meta: dict[str, dict[str, dict[str, Optional[str]]]] = defaultdict(dict)
     for row in column_rows:
         table_name = row.get("table_name")
         column_name = row.get("column_name")
         if table_name and column_name:
             table_column_map[table_name].append(column_name)
+            table_column_meta[table_name][column_name] = {
+                "is_nullable": row.get("is_nullable"),
+                "column_default": row.get("column_default"),
+                "data_type": row.get("data_type"),
+                "udt_name": row.get("udt_name"),
+            }
 
     missing_tables = [table for table in table_names if table not in table_column_map]
     if missing_tables:
@@ -962,6 +1101,7 @@ async def restore_tenant_backup_from_dump(
             csv_text,
             target_tenant_id=target_tenant_id,
             table_columns=table_column_map.get(table),
+            column_meta=table_column_meta.get(table),
         )
         if prepared:
             import_plan[table] = prepared
@@ -983,6 +1123,7 @@ async def restore_tenant_backup_from_dump(
         target_tenant_id=target_tenant_id,
         source_tenant_id=effective_source,
         table_pk_map=dict(table_pk_map),
+        table_column_meta=dict(table_column_meta),
     )
 
     logger.info(
