@@ -21,6 +21,9 @@ export interface PlatformSettings {
   theme_color?: string;
   tenant_auto_approve?: boolean;
   float_button_enabled?: boolean;
+  login_guest_enabled?: boolean;
+  login_client_win_enabled?: boolean;
+  login_client_android_enabled?: boolean;
   created_at?: string;
   updated_at?: string;
 }

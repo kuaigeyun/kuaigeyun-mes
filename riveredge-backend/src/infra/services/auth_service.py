@@ -962,6 +962,14 @@ class AuthService:
         Raises:
             HTTPException: 当创建体验账户失败时抛出
         """
+        from infra.services.platform_settings_service import PlatformSettingsService
+
+        platform_settings = await PlatformSettingsService().get_or_create_default_settings()
+        if platform_settings.login_guest_enabled is False:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="免注册体验登录已关闭",
+            )
 
         from infra.schemas.tenant import TenantCreate
         from infra.schemas.user import UserCreate

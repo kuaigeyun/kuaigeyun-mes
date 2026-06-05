@@ -10753,6 +10753,12 @@ export default {
   'pages.infra.platform.tenantAutoApproveTooltip': '开启后，新注册的租户组织将自动通过审核，无需管理员手动审核',
   'pages.infra.platform.floatButtonEnabled': '显示右下角悬浮按钮',
   'pages.infra.platform.floatButtonEnabledTooltip': '开启后，系统主界面右下角将显示悬浮按钮，用于展示迭代说明、版本信息及意见反馈入口',
+  'pages.infra.platform.loginGuestEnabled': '登录页显示免注册体验登录',
+  'pages.infra.platform.loginGuestEnabledTooltip': '关闭后，登录页不再显示「免注册体验登录」按钮，且接口拒绝体验登录',
+  'pages.infra.platform.loginClientWinEnabled': '登录页显示 Windows 工位机下载',
+  'pages.infra.platform.loginClientWinEnabledTooltip': '关闭后，登录页不再显示触屏工位机 Windows 安装包入口',
+  'pages.infra.platform.loginClientAndroidEnabled': '登录页显示 Android PDA 下载',
+  'pages.infra.platform.loginClientAndroidEnabledTooltip': '关闭后，登录页不再显示移动端 PDA Android 安装包入口',
 
   // 报表与看板应用
   'app.kuaireport.name': '快报表',

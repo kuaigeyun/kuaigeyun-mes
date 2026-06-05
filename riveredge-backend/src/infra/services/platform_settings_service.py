@@ -117,6 +117,9 @@ class PlatformSettingsService:
                 theme_color=data.theme_color,
                 tenant_auto_approve=data.tenant_auto_approve if data.tenant_auto_approve is not None else False,
                 float_button_enabled=data.float_button_enabled if data.float_button_enabled is not None else True,
+                login_guest_enabled=data.login_guest_enabled if data.login_guest_enabled is not None else True,
+                login_client_win_enabled=data.login_client_win_enabled if data.login_client_win_enabled is not None else True,
+                login_client_android_enabled=data.login_client_android_enabled if data.login_client_android_enabled is not None else True,
             )
             settings = await PlatformSettings.create(**create_data.model_dump(exclude_unset=True))
         else:

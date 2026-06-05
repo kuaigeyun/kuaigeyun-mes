@@ -140,6 +140,19 @@ class PlatformSettings(Model):
         default=True,
         description="是否显示右下角悬浮按钮：包含系统迭代提示与意见反馈入口"
     )
+
+    login_guest_enabled = fields.BooleanField(
+        default=True,
+        description="登录页是否显示免注册体验登录"
+    )
+    login_client_win_enabled = fields.BooleanField(
+        default=True,
+        description="登录页是否显示 Windows 工位机安装包下载"
+    )
+    login_client_android_enabled = fields.BooleanField(
+        default=True,
+        description="登录页是否显示 Android PDA 安装包下载"
+    )
     
     # 时间字段
     created_at = fields.DatetimeField(

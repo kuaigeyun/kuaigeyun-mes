@@ -10705,6 +10705,12 @@ export default {
   'pages.infra.platform.tenantAutoApproveTooltip': 'When enabled, newly registered tenant organizations will be automatically approved without manual review',
   'pages.infra.platform.floatButtonEnabled': 'Show floating button',
   'pages.infra.platform.floatButtonEnabledTooltip': 'When enabled, a floating button will appear at the bottom-right of the main interface for iteration info, version details, and feedback',
+  'pages.infra.platform.loginGuestEnabled': 'Show guest login on sign-in page',
+  'pages.infra.platform.loginGuestEnabledTooltip': 'When disabled, hides the guest access button and blocks guest login API',
+  'pages.infra.platform.loginClientWinEnabled': 'Show Windows workstation download on sign-in page',
+  'pages.infra.platform.loginClientWinEnabledTooltip': 'When disabled, hides the Windows HMI installer tile on the sign-in page',
+  'pages.infra.platform.loginClientAndroidEnabled': 'Show Android PDA download on sign-in page',
+  'pages.infra.platform.loginClientAndroidEnabledTooltip': 'When disabled, hides the Android PDA installer tile on the sign-in page',
 
   // Report & Dashboard application
   'app.kuaireport.name': 'Kuaireport',

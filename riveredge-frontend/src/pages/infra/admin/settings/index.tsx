@@ -74,6 +74,9 @@ export default function PlatformSettingsPage() {
         theme_color: data.theme_color || '#1890ff',
         tenant_auto_approve: data.tenant_auto_approve ?? false,
         float_button_enabled: data.float_button_enabled ?? true,
+        login_guest_enabled: data.login_guest_enabled ?? true,
+        login_client_win_enabled: data.login_client_win_enabled ?? true,
+        login_client_android_enabled: data.login_client_android_enabled ?? true,
       });
       queryClient.setQueryData(['platformSettings'], data);
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
@@ -183,6 +186,9 @@ export default function PlatformSettingsPage() {
         theme_color: settings.theme_color || '#1890ff',
         tenant_auto_approve: settings.tenant_auto_approve ?? false,
         float_button_enabled: settings.float_button_enabled ?? true,
+        login_guest_enabled: settings.login_guest_enabled ?? true,
+        login_client_win_enabled: settings.login_client_win_enabled ?? true,
+        login_client_android_enabled: settings.login_client_android_enabled ?? true,
       });
       
       // 加载LOGO预览
@@ -616,6 +622,22 @@ export default function PlatformSettingsPage() {
                 }}
               />
             </Form.Item>
+
+            <ProFormSwitch
+              name="login_guest_enabled"
+              label={t('pages.infra.platform.loginGuestEnabled')}
+              tooltip={t('pages.infra.platform.loginGuestEnabledTooltip')}
+            />
+            <ProFormSwitch
+              name="login_client_win_enabled"
+              label={t('pages.infra.platform.loginClientWinEnabled')}
+              tooltip={t('pages.infra.platform.loginClientWinEnabledTooltip')}
+            />
+            <ProFormSwitch
+              name="login_client_android_enabled"
+              label={t('pages.infra.platform.loginClientAndroidEnabled')}
+              tooltip={t('pages.infra.platform.loginClientAndroidEnabledTooltip')}
+            />
           </Card>
 
           <ProFormText

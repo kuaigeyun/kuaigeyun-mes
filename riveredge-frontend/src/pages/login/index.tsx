@@ -172,6 +172,11 @@ export default function LoginPage() {
     ? (platformSettings?.platform_name_en || platformSettings?.login_title_en || platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS')
     : (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS');
 
+  const loginGuestEnabled = platformSettings?.login_guest_enabled !== false;
+  const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
+  const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
+  const showClientDownloads = loginClientWinEnabled || loginClientAndroidEnabled;
+
   // LOGO URL状态（支持UUID和URL两种格式）
   // 初始值：尝试从 localStorage 读取缓存的设置，避免闪烁
   const [logoUrl, setLogoUrl] = useState<string>(() => {
@@ -1984,19 +1989,21 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {loginGuestEnabled && (
             <div style={{ marginBottom: 16 }}>
-              <Button
-                type="default"
-                size="large"
-                className="login-guest-login-btn"
-                icon={<ThunderboltOutlined className="login-guest-login-btn-icon" aria-hidden />}
-                block
-                onClick={handleGuestLogin}
-                style={{ height: 40 }}
-              >
-                {t('pages.login.guestLogin')}
-              </Button>
+                <Button
+                  type="default"
+                  size="large"
+                  className="login-guest-login-btn"
+                  icon={<ThunderboltOutlined className="login-guest-login-btn-icon" aria-hidden />}
+                  block
+                  onClick={handleGuestLogin}
+                  style={{ height: 40 }}
+                >
+                  {t('pages.login.guestLogin')}
+                </Button>
             </div>
+            )}
 
             <Text 
               className="register-link"
@@ -2011,11 +2018,13 @@ export default function LoginPage() {
             </Text>
           </div>
 
+          {showClientDownloads && (
           <div
             className="login-client-downloads"
             aria-label={`${t('pages.login.clientDownloadWinTitle')}, ${t('pages.login.clientDownloadAndroidTitle')}`}
           >
             <div className="login-client-downloads-grid">
+              {loginClientWinEnabled && (
               <button
                 type="button"
                 className="login-client-download-tile"
@@ -2029,6 +2038,8 @@ export default function LoginPage() {
                 </div>
                 <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
               </button>
+              )}
+              {loginClientAndroidEnabled && (
               <button
                 type="button"
                 className="login-client-download-tile"
@@ -2042,8 +2053,10 @@ export default function LoginPage() {
                 </div>
                 <DownloadOutlined className="login-client-download-tile-arrow" aria-hidden />
               </button>
+              )}
             </div>
           </div>
+          )}
         </div>
 
         <div className="login-bottom-fixed">
