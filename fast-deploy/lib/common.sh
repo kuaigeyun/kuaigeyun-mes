@@ -932,8 +932,96 @@ generate_jwt_secret() {
     return 1
 }
 
+normalize_domain_input() {
+    local raw="${1:-}"
+    raw="$(echo "$raw" | tr '[:upper:]' '[:lower:]' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's|^https\?://||' -e 's|/.*$||' -e 's|:.*$||')"
+    printf '%s' "$raw"
+}
+
+is_ipv4_address() {
+    [[ "${1:-}" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]
+}
+
+resolve_prod_web_url() {
+    local server_ip="${1:-}"
+    load_deploy_env
+    [ -n "$server_ip" ] || server_ip="$(read_deploy_env_value SERVER_IP || true)"
+    [ -n "$server_ip" ] || server_ip="$(detect_server_ip)"
+    if [ -n "$CADDY_DOMAIN" ]; then
+        if [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
+            echo "https://${CADDY_DOMAIN}"
+            return 0
+        fi
+        echo "http://${CADDY_DOMAIN}:${PROXY_PORT}"
+        return 0
+    fi
+    echo "http://${server_ip}:${PROXY_PORT}"
+}
+
+collect_prod_domain_https_config() {
+    local current_domain current_le choice domain input enable_input enable_le default_le
+    load_deploy_env
+    [ "$DEPLOY_MODE" = "prod" ] || return 0
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
+
+    current_domain="$(read_deploy_env_value CADDY_DOMAIN || true)"
+    current_le="$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+
+    log_info "生产环境 Web 访问方式："
+    echo "    1) 仅 IP — http://服务器IP:${PROXY_PORT}"
+    if [ -n "$current_domain" ]; then
+        echo "    2) 使用域名 — 当前: ${current_domain} (HTTPS: ${current_le})"
+    else
+        echo "    2) 使用域名 — 可自动申请 Let's Encrypt HTTPS 证书"
+    fi
+    read -rp "请选择 [1/2] (默认 1): " choice
+    case "${choice:-1}" in
+        2|domain|https)
+            if [ -n "$current_domain" ]; then
+                read -rp "生产域名 [${current_domain}]: " input
+                domain="${input:-$current_domain}"
+            else
+                read -rp "请输入生产域名 (例如 app.example.com): " domain
+            fi
+            domain="$(normalize_domain_input "$domain")"
+            [ -n "$domain" ] || { log_error "域名不能为空"; return 1; }
+
+            if is_ipv4_address "$domain"; then
+                log_warn "Let's Encrypt 不支持 IP 证书，域名已保存但仅使用 HTTP"
+                set_deploy_env_value CADDY_DOMAIN "$domain"
+                set_deploy_env_value CADDY_ENABLE_LETSENCRYPT "false"
+                log_ok "已配置: http://${domain}:${PROXY_PORT}"
+                return 0
+            fi
+
+            default_le="Y"
+            [ "$current_le" = "false" ] && default_le="n"
+            read -rp "是否启用 HTTPS (Let's Encrypt)? [Y/n]: " enable_input
+            enable_input="${enable_input:-$default_le}"
+            case "$enable_input" in
+                n|N|no|No|NO|false) enable_le="false" ;;
+                *) enable_le="true" ;;
+            esac
+            set_deploy_env_value CADDY_DOMAIN "$domain"
+            set_deploy_env_value CADDY_ENABLE_LETSENCRYPT "$enable_le"
+            load_deploy_env
+            if [ "$enable_le" = "true" ]; then
+                log_ok "已配置: https://${domain}（需 DNS 指向本机且公网 80 端口可达）"
+            else
+                log_ok "已配置: http://${domain}:${PROXY_PORT}"
+            fi
+            ;;
+        *)
+            set_deploy_env_value CADDY_DOMAIN ""
+            set_deploy_env_value CADDY_ENABLE_LETSENCRYPT "false"
+            load_deploy_env
+            log_ok "已选择 IP 访问模式"
+            ;;
+    esac
+}
+
 apply_app_config() {
-    local jwt server_ip detected_ip base_url admin_user
+    local jwt server_ip detected_ip base_url admin_user cors
     load_deploy_env
 
     admin_user="$(read_env_value PLATFORM_SUPERADMIN_USERNAME || true)"
@@ -964,7 +1052,11 @@ apply_app_config() {
             base_url="http://${server_ip}:${PROXY_PORT}"
         fi
         set_env_value BASE_URL "$base_url"
-        set_env_value CORS_ORIGINS "http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+        cors="${base_url},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+        if [ -n "$CADDY_DOMAIN" ]; then
+            cors="${base_url},https://${CADDY_DOMAIN},http://${CADDY_DOMAIN}:${PROXY_PORT},http://${server_ip}:${PROXY_PORT},http://127.0.0.1:${PROXY_PORT},http://localhost:${PROXY_PORT}"
+        fi
+        set_env_value CORS_ORIGINS "$cors"
     else
         set_env_value HOST "0.0.0.0"
         set_env_value CORS_ORIGINS "http://${server_ip}:${FRONTEND_PORT},http://127.0.0.1:${FRONTEND_PORT},http://localhost:${FRONTEND_PORT}"
@@ -982,7 +1074,10 @@ print_configure_summary() {
     echo "  数据库: ${db_user}@${db_host}:${db_port}/${db_name}"
     echo "  超管账号: ${admin_user}"
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        echo "  访问地址: http://${server_ip}:${PROXY_PORT}"
+        echo "  访问地址: $(resolve_prod_web_url "$server_ip")"
+        if [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
+            echo "  备用 IP: http://${server_ip}:${PROXY_PORT}"
+        fi
     else
         echo "  访问地址: http://${server_ip}:${FRONTEND_PORT} (Web) / http://${server_ip}:${BACKEND_PORT} (API)"
     fi
@@ -1111,6 +1206,11 @@ cmd_configure() {
     read -rp "服务器 IP (浏览器访问地址) [${server_ip}]: " input
     server_ip="${input:-$server_ip}"
     set_deploy_env_value SERVER_IP "$server_ip"
+
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo ""
+        collect_prod_domain_https_config || exit 1
+    fi
 
     apply_app_config
 
@@ -1499,11 +1599,13 @@ cmd_start_prod() {
     ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 生产环境已就绪"
     local access_ip="${SERVER_IP:-127.0.0.1}"
-    if [ -n "$CADDY_DOMAIN" ]; then
-        echo "  访问: http://${CADDY_DOMAIN}:${PROXY_PORT} （或 HTTPS 域名）"
-    else
+    local web_url
+    web_url="$(resolve_prod_web_url "$access_ip")"
+    echo "  访问: ${web_url}"
+    if [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; then
+        echo "  备用 IP: http://${access_ip}:${PROXY_PORT}"
+    elif [ -z "$CADDY_DOMAIN" ]; then
         echo "  本机: http://127.0.0.1:${PROXY_PORT}"
-        echo "  局域网: http://${access_ip}:${PROXY_PORT}"
     fi
 }
 

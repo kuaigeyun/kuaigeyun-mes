@@ -326,6 +326,94 @@ function Set-DeployEnvValue([string]$Key, [string]$Val) {
     Set-Content -Path $script:DeployEnvFile -Value $content -Encoding UTF8
 }
 
+function Normalize-DomainInput([string]$Raw) {
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return '' }
+    $v = $Raw.Trim().ToLowerInvariant()
+    $v = $v -replace '^https?://', ''
+    $v = ($v -split '/')[0]
+    $v = ($v -split ':')[0]
+    return $v
+}
+
+function Test-Ipv4Address([string]$Value) {
+    return $Value -match '^(\d{1,3}\.){3}\d{1,3}$'
+}
+
+function Resolve-ProdWebUrl([string]$ServerIp) {
+    Load-DeployEnv
+    if ([string]::IsNullOrWhiteSpace($ServerIp)) {
+        $ServerIp = Read-DeployEnvValue 'SERVER_IP'
+        if ([string]::IsNullOrWhiteSpace($ServerIp)) { $ServerIp = Detect-ServerIp }
+    }
+    if ($script:CADDY_DOMAIN) {
+        if ($script:CADDY_ENABLE_LETSENCRYPT -eq 'true') { return "https://$($script:CADDY_DOMAIN)" }
+        return "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)"
+    }
+    return "http://${ServerIp}:$($script:PROXY_PORT)"
+}
+
+function Collect-ProdDomainHttpsConfig {
+    Load-DeployEnv
+    if ($script:DeployMode -ne 'prod') { return }
+    if (-not (Test-Path $script:DeployEnvFile)) {
+        Copy-Item (Join-Path $script:FastDeployDir 'deploy.env.example') $script:DeployEnvFile
+    }
+
+    $currentDomain = Read-DeployEnvValue 'CADDY_DOMAIN'
+    $currentLe = Read-DeployEnvValue 'CADDY_ENABLE_LETSENCRYPT'
+    if ([string]::IsNullOrWhiteSpace($currentLe)) { $currentLe = 'false' }
+
+    Write-LogInfo '生产环境 Web 访问方式：'
+    Write-Host "    1) 仅 IP — http://服务器IP:$($script:PROXY_PORT)"
+    if ($currentDomain) {
+        Write-Host "    2) 使用域名 — 当前: $currentDomain (HTTPS: $currentLe)"
+    } else {
+        Write-Host "    2) 使用域名 — 可自动申请 Let's Encrypt HTTPS 证书"
+    }
+    $choice = Read-Host '请选择 [1/2] (默认 1)'
+    if ([string]::IsNullOrWhiteSpace($choice)) { $choice = '1' }
+
+    switch ($choice) {
+        { $_ -in '2', 'domain', 'https' } {
+            if ($currentDomain) {
+                $inputDomain = Read-Host "生产域名 [$currentDomain]"
+                if ([string]::IsNullOrWhiteSpace($inputDomain)) { $inputDomain = $currentDomain }
+            } else {
+                $inputDomain = Read-Host '请输入生产域名 (例如 app.example.com)'
+            }
+            $domain = Normalize-DomainInput $inputDomain
+            if ([string]::IsNullOrWhiteSpace($domain)) { throw '域名不能为空' }
+
+            if (Test-Ipv4Address $domain) {
+                Write-LogWarn "Let's Encrypt 不支持 IP 证书，域名已保存但仅使用 HTTP"
+                Set-DeployEnvValue 'CADDY_DOMAIN' $domain
+                Set-DeployEnvValue 'CADDY_ENABLE_LETSENCRYPT' 'false'
+                Write-LogOk "已配置: http://${domain}:$($script:PROXY_PORT)"
+                return
+            }
+
+            $defaultLe = if ($currentLe -eq 'false') { 'n' } else { 'Y' }
+            $enableInput = Read-Host "是否启用 HTTPS (Let's Encrypt)? [Y/n]"
+            if ([string]::IsNullOrWhiteSpace($enableInput)) { $enableInput = $defaultLe }
+            $enableLe = if ($enableInput -match '^(n|N|no|No|NO|false)$') { 'false' } else { 'true' }
+            Set-DeployEnvValue 'CADDY_DOMAIN' $domain
+            Set-DeployEnvValue 'CADDY_ENABLE_LETSENCRYPT' $enableLe
+            Load-DeployEnv
+            if ($enableLe -eq 'true') {
+                Write-LogOk "已配置: https://${domain}（需 DNS 指向本机且公网 80 端口可达）"
+            } else {
+                Write-LogOk "已配置: http://${domain}:$($script:PROXY_PORT)"
+            }
+        }
+        default {
+            Set-DeployEnvValue 'CADDY_DOMAIN' ''
+            Set-DeployEnvValue 'CADDY_ENABLE_LETSENCRYPT' 'false'
+            Load-DeployEnv
+            Write-LogOk '已选择 IP 访问模式'
+        }
+    }
+}
+
 function Test-EnvNeedsConfigure {
     if (-not (Test-Path $script:EnvFile)) { return $true }
     $db = Read-EnvValue 'DB_PASSWORD'
@@ -508,6 +596,12 @@ function Invoke-Configure {
     Load-DeployEnv
 
     if ($script:DeployMode -eq 'prod') {
+        Write-Host ''
+        Collect-ProdDomainHttpsConfig
+        Load-DeployEnv
+    }
+
+    if ($script:DeployMode -eq 'prod') {
         Set-EnvValue 'ENVIRONMENT' 'production'
         Set-EnvValue 'DEBUG' 'false'
         if ($script:CADDY_DOMAIN) {
@@ -520,7 +614,11 @@ function Invoke-Configure {
             $baseUrl = "http://${serverIp}:$($script:PROXY_PORT)"
         }
         Set-EnvValue 'BASE_URL' $baseUrl
-        Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+        $cors = "$baseUrl,http://${serverIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+        if ($script:CADDY_DOMAIN) {
+            $cors = "$baseUrl,https://$($script:CADDY_DOMAIN),http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT),http://${serverIp}:$($script:PROXY_PORT),http://127.0.0.1:$($script:PROXY_PORT),http://localhost:$($script:PROXY_PORT)"
+        }
+        Set-EnvValue 'CORS_ORIGINS' $cors
     } else {
         Set-EnvValue 'HOST' '0.0.0.0'
         Set-EnvValue 'CORS_ORIGINS' "http://${serverIp}:$($script:FRONTEND_PORT),http://127.0.0.1:$($script:FRONTEND_PORT),http://localhost:$($script:FRONTEND_PORT)"
@@ -532,7 +630,11 @@ function Invoke-Configure {
     Write-Host "  数据库: ${dbUser}@${dbHost}/${dbName}"
     Write-Host '  超管账号: infra_admin'
     if ($script:DeployMode -eq 'prod') {
-        Write-Host "  访问地址: http://${serverIp}:$($script:PROXY_PORT)"
+        $webUrl = Resolve-ProdWebUrl $serverIp
+        Write-Host "  访问地址: $webUrl"
+        if ($script:CADDY_DOMAIN -and $script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
+            Write-Host "  备用 IP: http://${serverIp}:$($script:PROXY_PORT)"
+        }
     } else {
         Write-Host "  访问地址: http://${serverIp}:$($script:FRONTEND_PORT) (Web) / http://${serverIp}:$($script:BACKEND_PORT) (API)"
     }
@@ -853,11 +955,12 @@ function Invoke-StartProd {
     Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 生产环境已就绪'
     $accessIp = if ($script:SERVER_IP) { $script:SERVER_IP } else { '127.0.0.1' }
-    if ($script:CADDY_DOMAIN) {
-        Write-Host "  访问: http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)"
-    } else {
+    $webUrl = Resolve-ProdWebUrl $accessIp
+    Write-Host "  访问: $webUrl"
+    if ($script:CADDY_DOMAIN -and $script:CADDY_ENABLE_LETSENCRYPT -eq 'true') {
+        Write-Host "  备用 IP: http://${accessIp}:$($script:PROXY_PORT)"
+    } elseif (-not $script:CADDY_DOMAIN) {
         Write-Host "  本机: http://127.0.0.1:$($script:PROXY_PORT)"
-        Write-Host "  局域网: http://${accessIp}:$($script:PROXY_PORT)"
     }
 }
 

@@ -77,7 +77,7 @@ wizard_ask_intent() {
             wizard_say "将拉取代码、执行迁移并按当前模式重启服务"
             ;;
         *)
-            wizard_say "阶段 2 填写数据库、超管账号与访问 IP 后，其余步骤将自动执行"
+            wizard_say "阶段 2 填写数据库、超管账号、访问 IP/域名 后，其余步骤将自动执行"
             ;;
     esac
 }
@@ -318,7 +318,10 @@ wizard_collect_server_access() {
     esac
     set_deploy_env_value SERVER_IP "$server_ip"
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        wizard_say_ok "Web 访问: http://${server_ip}:${PROXY_PORT}"
+        echo ""
+        wizard_say "配置生产域名与 HTTPS（可选）"
+        collect_prod_domain_https_config || return 1
+        wizard_say_ok "Web 访问: $(resolve_prod_web_url "$server_ip")"
     else
         wizard_say_ok "Web 访问: http://${server_ip}:${FRONTEND_PORT}"
     fi
@@ -664,7 +667,7 @@ wizard_show_summary() {
     db_name="$(read_env_value DB_NAME || echo riveredge)"
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
-        web_url="http://${server_ip}:${PROXY_PORT}"
+        web_url="$(resolve_prod_web_url "$server_ip")"
         api_hint="${web_url}/api"
     else
         web_url="http://${server_ip}:${FRONTEND_PORT}"
@@ -676,6 +679,10 @@ wizard_show_summary() {
     echo ""
     wizard_say_ok "部署模式: $([ "$DEPLOY_MODE" = "dev" ] && echo "开发" || echo "生产")"
     wizard_say_ok "Web 访问: ${web_url}"
+    if [ "$DEPLOY_MODE" = "prod" ] && [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
+        wizard_say_ok "生产域名: $(read_deploy_env_value CADDY_DOMAIN)"
+        wizard_say_ok "HTTPS: $(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+    fi
     wizard_say_ok "API 地址: ${api_hint}"
     wizard_say_ok "数据库: $(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
     wizard_say_ok "平台超管: $(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"

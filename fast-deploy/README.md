@@ -44,7 +44,10 @@ Node.js 22+ · Python 3.12+（系统）/ 3.11（uv 虚拟环境）· uv · npm �
 | 模式 | Web | API |
 |------|-----|-----|
 | 开发 | :8100（Vite） | :8200 |
-| 生产 | :8080（Caddy） | 经 Caddy `/api` |
+| 生产（IP） | :8080（Caddy） | 经 Caddy `/api` |
+| 生产（域名 + HTTPS） | :443（Caddy 自动证书） | 经 Caddy `/api` |
+
+生产向导 / `configure` 会询问：**仅 IP** 或 **域名 + 自动 HTTPS**（写入 `deploy.env` 的 `CADDY_DOMAIN`、`CADDY_ENABLE_LETSENCRYPT`）。
 
 ## Windows 要点
 
