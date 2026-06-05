@@ -761,6 +761,52 @@ def resolve_restore_source_tenant_id(
     return int(effective)
 
 
+_TENANT_SCOPED_PATH_COLUMNS = frozenset({"file_path"})
+
+
+def _rewrite_csv_path_prefixes(
+    csv_text: str,
+    use_columns: list[str],
+    *,
+    source_tenant_id: int,
+    target_tenant_id: int,
+) -> str:
+    """跨租户恢复：将 file_path 等列中的 {source}/ 前缀改为 {target}/。"""
+    if source_tenant_id == target_tenant_id:
+        return csv_text
+    path_cols = [col for col in use_columns if col in _TENANT_SCOPED_PATH_COLUMNS]
+    if not path_cols:
+        return csv_text
+
+    old_prefix = f"{int(source_tenant_id)}/"
+    new_prefix = f"{int(target_tenant_id)}/"
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    col_indices = {col: header.index(col) for col in path_cols if col in header}
+    if not col_indices:
+        return csv_text
+
+    out_rows: list[list[str]] = [header]
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        for idx in col_indices.values():
+            cell = padded[idx]
+            if cell.startswith(old_prefix):
+                padded[idx] = new_prefix + cell[len(old_prefix) :]
+        out_rows.append(padded[: len(header)])
+
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue()
+
+
 def _rewrite_csv_tenant_id(csv_text: str, target_tenant_id: int) -> str:
     _ensure_csv_field_limit()
     lines = csv_text.splitlines()
@@ -813,6 +859,7 @@ def _prepare_csv_for_import(
     csv_text: str,
     *,
     target_tenant_id: int,
+    source_tenant_id: Optional[int] = None,
     table_columns: Optional[list[str]],
     column_meta: Optional[dict[str, dict[str, Optional[str]]]] = None,
 ) -> Optional[tuple[list[str], str]]:
@@ -841,7 +888,21 @@ def _prepare_csv_for_import(
                 table_columns,
                 column_meta,
             )
+        if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+            csv_text = _rewrite_csv_path_prefixes(
+                csv_text,
+                use_columns,
+                source_tenant_id=source_tenant_id,
+                target_tenant_id=target_tenant_id,
+            )
         return use_columns, csv_text
+    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+        csv_text = _rewrite_csv_path_prefixes(
+            csv_text,
+            csv_columns,
+            source_tenant_id=source_tenant_id,
+            target_tenant_id=target_tenant_id,
+        )
     return csv_columns, csv_text
 
 
@@ -987,6 +1048,29 @@ def _append_restore_import_table_fk_constraints(
         )
 
 
+def _append_tenant_scoped_path_rewrites(
+    script_lines: list[str],
+    *,
+    import_plan: dict[str, tuple[list[str], str]],
+    target_tenant_id: int,
+    source_tenant_id: int,
+) -> None:
+    """跨租户恢复后修正仍带源租户前缀的 file_path（与 uploads 目录迁移一致）。"""
+    if source_tenant_id == target_tenant_id:
+        return
+    source_prefix = f"{int(source_tenant_id)}/"
+    target_prefix = f"{int(target_tenant_id)}/"
+    for table, (use_columns, _csv_text) in import_plan.items():
+        if "file_path" not in use_columns:
+            continue
+        script_lines.append(
+            f"UPDATE \"{table}\" SET file_path = '{target_prefix}' || "
+            f"SUBSTRING(file_path FROM {len(source_prefix) + 1}) "
+            f"WHERE tenant_id = {int(target_tenant_id)} "
+            f"AND file_path LIKE '{source_prefix}%';"
+        )
+
+
 def _append_serial_sequence_resets(
     script_lines: list[str],
     import_tables: set[str],
@@ -1071,6 +1155,12 @@ def _run_tenant_restore_transaction(
             import_tables=import_tables,
             tenant_ids=tenant_ids_to_clear,
             table_column_map=table_column_map,
+        )
+        _append_tenant_scoped_path_rewrites(
+            script_lines,
+            import_plan=import_plan,
+            target_tenant_id=target_tenant_id,
+            source_tenant_id=source_tenant_id,
         )
         _append_restore_import_table_fk_constraints(script_lines, fk_constraints)
         _append_serial_sequence_resets(script_lines, import_tables, table_pk_map)
@@ -1284,6 +1374,7 @@ async def restore_tenant_backup_from_dump(
             table,
             csv_text,
             target_tenant_id=target_tenant_id,
+            source_tenant_id=effective_source,
             table_columns=table_column_map.get(table),
             column_meta=table_column_meta.get(table),
         )
@@ -1480,6 +1571,43 @@ def restore_tenant_uploads_from_zip(
         if os.path.exists(dest):
             shutil.rmtree(dest)
         shutil.copytree(src, dest)
-        logger.info("已恢复租户 uploads: {} -> {}", src, dest)
+        file_count = sum(len(files) for _root, _dirs, files in os.walk(dest))
+        logger.info("已恢复租户 uploads: {} -> {}（{} 个文件）", src, dest, file_count)
     except Exception as e:
         raise RuntimeError(f"恢复租户 uploads 失败: {e}") from e
+
+
+async def log_missing_upload_files_after_restore(tenant_id: int) -> None:
+    """恢复完成后统计 core_files 记录与磁盘文件不一致的数量。"""
+    upload_dir = infra_settings.FILE_UPLOAD_DIR
+    if not upload_dir:
+        return
+    upload_dir = os.path.abspath(upload_dir)
+    conn = Tortoise.get_connection("default")
+    rows = await conn.execute_query_dict(
+        """
+        SELECT file_path FROM core_files
+        WHERE tenant_id = $1 AND deleted_at IS NULL
+        """,
+        [int(tenant_id)],
+    )
+    if not isinstance(rows, list) or not rows:
+        return
+    missing = 0
+    for row in rows:
+        rel = row.get("file_path")
+        if not rel:
+            missing += 1
+            continue
+        full = os.path.join(upload_dir, rel.replace("/", os.sep))
+        if not os.path.isfile(full):
+            missing += 1
+    if missing:
+        logger.warning(
+            "租户 {} 恢复后 {} / {} 条文件记录在磁盘上找不到对应文件（需从源系统补传 uploads）",
+            tenant_id,
+            missing,
+            len(rows),
+        )
+    else:
+        logger.info("租户 {} 恢复后文件记录与磁盘一致（{} 条）", tenant_id, len(rows))
