@@ -57,6 +57,7 @@ import {
   FileListParams,
 } from '../../../../services/file';
 import FilePreviewModal from '../../../../components/file-preview';
+import { resolveFileUploadCategoryDisplayName } from '../../../../core/constants/fileUploadCategories';
 
 /**
  * 判断是否为图片类型（用于图标视图缩略图与预览）
@@ -176,27 +177,10 @@ const FileListPage: React.FC = () => {
   const [currentPath, setCurrentPath] = useState<string[]>([ROOT_PATH_KEY]);
   const [treeSearchValue, setTreeSearchValue] = useState<string>('');
 
-  const resolveCategoryDisplayName = useCallback((category?: string): string => {
-    const raw = (category || '').trim();
-    if (!raw) return '';
-    if (/[\u4e00-\u9fff]/.test(raw)) return raw;
-
-    const lower = raw.toLowerCase();
-    if (lower.includes('haoligo_equipment_upkeep_com') || lower.includes('haoligo-equipment-upkeep-com')) {
-      return t('app.haoligo.menu.equipment.documents.upkeep-complete', { defaultValue: raw });
-    }
-    if (lower.includes('haoligo_equipment_upkeep') || lower.includes('haoligo-equipment-upkeep')) {
-      return t('app.haoligo.menu.equipment.documents.upkeep-sheet', { defaultValue: raw });
-    }
-    if (lower.includes('haoligo_patrol_hazard') || lower.includes('haoligo-patrol-hazard')) {
-      return t('app.haoligo.menu.patrol.hazards', { defaultValue: raw });
-    }
-    if (lower === 'haoligo_equipment' || lower.includes('haoligo-equipment')) {
-      return t('app.haoligo.menu.equipment.ledger', { defaultValue: raw });
-    }
-
-    return raw;
-  }, [t]);
+  const resolveCategoryDisplayName = useCallback(
+    (category?: string): string => resolveFileUploadCategoryDisplayName(category, t),
+    [t],
+  );
   
   // Modal 相关状态
   const [uploadVisible, setUploadVisible] = useState(false);
@@ -257,14 +241,16 @@ const FileListPage: React.FC = () => {
       }
     });
 
-    const categoryNodes: FileFolderNode[] = Array.from(categories).map(category => ({
-      title: resolveCategoryDisplayName(category),
-      key: category,
-      rawCategory: category,
-      displayTitle: resolveCategoryDisplayName(category),
-      icon: <FolderOutlined />,
-      isLeaf: false,
-    }));
+    const categoryNodes: FileFolderNode[] = Array.from(categories)
+      .map(category => ({
+        title: resolveCategoryDisplayName(category),
+        key: category,
+        rawCategory: category,
+        displayTitle: resolveCategoryDisplayName(category),
+        icon: <FolderOutlined />,
+        isLeaf: false,
+      }))
+      .sort((a, b) => naturalCompare(String(a.displayTitle), String(b.displayTitle)));
 
     const allFilesNode: DataNode = {
       title: t('pages.system.files.allFiles'),

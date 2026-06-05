@@ -7881,6 +7881,8 @@ export default {
   'pages.system.files.selectedCount': '已选择 {{n}} 项，共 {{size}}',
   'pages.system.files.totalCount': '共 {{n}} 项',
   'pages.system.files.folderPlaceholderDesc': '文件夹占位文件',
+  'pages.system.files.category.siteLogo': '站点 Logo',
+  'pages.system.files.category.avatar': '用户头像',
 
   // 设备管理
   'pages.system.equipment.selectEquipmentForQrcode': '请先选择要生成二维码的设备',

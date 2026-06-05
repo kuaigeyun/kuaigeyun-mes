@@ -413,6 +413,36 @@ class FileService:
         return file
     
     @staticmethod
+    def resolve_physical_file_path(
+        tenant_id: int,
+        file_path: str,
+    ) -> tuple[Optional[str], Optional[str]]:
+        """
+        解析磁盘上的物理文件路径。
+
+        跨租户迁移后 core_files.file_path 可能仍带源租户前缀（如 17/2026/06/x.jpg），
+        而文件已位于 uploads/{target_tenant_id}/...，此处按目标租户前缀重试。
+
+        Returns:
+            (absolute_path, corrected_relative_path)
+            corrected_relative_path 仅在命中备用路径时返回，用于回写 DB。
+        """
+        upload_dir = FileService.UPLOAD_DIR
+        primary_abs = os.path.join(upload_dir, file_path)
+        if os.path.isfile(primary_abs):
+            return primary_abs, None
+
+        if "/" in file_path:
+            prefix, rest = file_path.split("/", 1)
+            if prefix.isdigit() and int(prefix) != int(tenant_id):
+                alt_rel = f"{int(tenant_id)}/{rest}"
+                alt_abs = os.path.join(upload_dir, alt_rel)
+                if os.path.isfile(alt_abs):
+                    return alt_abs, alt_rel
+
+        return None, None
+
+    @staticmethod
     async def get_file_content(
         tenant_id: int,
         uuid: str
@@ -432,14 +462,15 @@ class FileService:
         """
         file = await FileService.get_file_by_uuid(tenant_id, uuid)
         
-        # 构建完整路径
-        full_path = os.path.join(FileService.UPLOAD_DIR, file.file_path)
-        
-        # 检查文件是否存在
-        if not os.path.exists(full_path):
+        full_path, corrected_rel = FileService.resolve_physical_file_path(
+            tenant_id, file.file_path
+        )
+        if not full_path:
             raise NotFoundError("文件")
+
+        if corrected_rel and corrected_rel != file.file_path:
+            await File.filter(id=file.id).update(file_path=corrected_rel)
         
-        # 读取文件内容
         async with aiofiles.open(full_path, "rb") as f:
             content = await f.read()
         

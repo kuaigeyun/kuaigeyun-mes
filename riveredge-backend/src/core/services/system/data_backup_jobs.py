@@ -1577,6 +1577,33 @@ def restore_tenant_uploads_from_zip(
         raise RuntimeError(f"恢复租户 uploads 失败: {e}") from e
 
 
+async def repair_tenant_scoped_file_paths(
+    tenant_id: int,
+    source_tenant_id: int,
+) -> int:
+    """跨租户恢复后批量修正 core_files.file_path 前缀（幂等）。"""
+    if source_tenant_id == tenant_id:
+        return 0
+    source_prefix = f"{int(source_tenant_id)}/"
+    target_prefix = f"{int(tenant_id)}/"
+    conn = Tortoise.get_connection("default")
+    await conn.execute_query(
+        """
+        UPDATE core_files
+        SET file_path = $1 || SUBSTRING(file_path FROM $3)
+        WHERE tenant_id = $2 AND file_path LIKE $4
+        """,
+        [target_prefix, int(tenant_id), len(source_prefix) + 1, source_prefix + "%"],
+    )
+    logger.info(
+        "已执行 core_files.file_path 前缀修正: {} -> {}（tenant_id={}）",
+        source_prefix,
+        target_prefix,
+        tenant_id,
+    )
+    return 0
+
+
 async def log_missing_upload_files_after_restore(tenant_id: int) -> None:
     """恢复完成后统计 core_files 记录与磁盘文件不一致的数量。"""
     upload_dir = infra_settings.FILE_UPLOAD_DIR

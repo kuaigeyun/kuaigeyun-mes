@@ -7834,6 +7834,8 @@ export default {
   'pages.system.files.selectedCount': '{{n}} selected, {{size}} total',
   'pages.system.files.totalCount': '{{n}} items',
   'pages.system.files.folderPlaceholderDesc': 'Folder placeholder file',
+  'pages.system.files.category.siteLogo': 'Site logo',
+  'pages.system.files.category.avatar': 'User avatar',
 
   // Equipment management
   'pages.system.equipment.selectEquipmentForQrcode': 'Please select equipment to generate QR codes',

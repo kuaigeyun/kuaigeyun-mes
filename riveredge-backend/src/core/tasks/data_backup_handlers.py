@@ -27,6 +27,7 @@ from core.services.system.data_backup_jobs import (
     is_tenant_sql_dump,
     restore_tenant_backup_from_dump,
     restore_tenant_uploads_from_zip,
+    repair_tenant_scoped_file_paths,
     log_missing_upload_files_after_restore,
     restore_uploads_from_zip,
     run_backup_dump_and_zip_sync,
@@ -246,6 +247,8 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                     upload_source_id if upload_source_id != int(target_tenant_id) else None,
                 ),
             )
+            if upload_source_id != int(target_tenant_id):
+                await repair_tenant_scoped_file_paths(int(target_tenant_id), upload_source_id)
             await log_missing_upload_files_after_restore(int(target_tenant_id))
         else:
             await step.run("pg_restore", lambda: run_pg_restore(db_dump_path, backup_scope))
