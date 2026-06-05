@@ -6,6 +6,7 @@
 
 import os
 import shutil
+import asyncio
 from typing import List, Tuple, Optional
 from datetime import datetime
 from loguru import logger
@@ -23,6 +24,22 @@ class DataBackupService:
     管理数据备份记录，并触发后台备份/恢复任务。
     """
     
+    @staticmethod
+    def _flatten_exception_message(exc: Exception) -> str:
+        """
+        展开异常链，返回最有价值的根因信息。
+        """
+        parts: list[str] = []
+        visited: set[int] = set()
+        current: Optional[BaseException] = exc
+        while current is not None and id(current) not in visited:
+            visited.add(id(current))
+            text = str(current).strip()
+            if text and text not in parts:
+                parts.append(text)
+            current = current.__cause__ or current.__context__
+        return " | ".join(parts) if parts else exc.__class__.__name__
+
     @staticmethod
     async def get_backups(
         tenant_id: int,
@@ -88,28 +105,52 @@ class DataBackupService:
         
         # 2. 分发后台任务
         try:
-            task_ids = await dispatch_event(
-                TaskEvent(
-                    name="database/backup.requested",
-                    data={
-                        "backup_uuid": str(backup.uuid),
-                        "tenant_id": tenant_id,
-                        "backup_type": data.backup_type,
-                        "backup_scope": data.backup_scope,
-                        "backup_tables": data.backup_tables,
-                    },
-                    id=str(backup.uuid),
-                )
-            )
+            max_attempts = 3
+            task_ids = []
+            last_error: Optional[Exception] = None
+
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    task_ids = await dispatch_event(
+                        TaskEvent(
+                            name="database/backup.requested",
+                            data={
+                                "backup_uuid": str(backup.uuid),
+                                "tenant_id": tenant_id,
+                                "backup_type": data.backup_type,
+                                "backup_scope": data.backup_scope,
+                                "backup_tables": data.backup_tables,
+                            },
+                            id=str(backup.uuid),
+                        )
+                    )
+                    if not task_ids:
+                        raise RuntimeError("未注册 database/backup.requested 处理器，请确认事件处理器已加载")
+                    break
+                except Exception as dispatch_error:
+                    last_error = dispatch_error
+                    logger.warning(
+                        "分发备份任务重试 {}/{} 失败: {}",
+                        attempt,
+                        max_attempts,
+                        DataBackupService._flatten_exception_message(dispatch_error),
+                    )
+                    if attempt < max_attempts:
+                        await asyncio.sleep(attempt)
+
             if not task_ids:
-                raise RuntimeError("未注册 database/backup.requested 处理器，请确认事件处理器已加载")
+                raise last_error or RuntimeError("备份任务分发失败")
+
             backup.inngest_run_id = task_ids[0]
             await backup.save()
             logger.info(f"已分发备份任务: {backup.uuid} task_id={task_ids[0]}")
         except Exception as e:
             logger.exception(f"分发备份任务失败: {e}")
             backup.status = "failed"
-            backup.error_message = f"触发后台任务失败: {str(e)}"
+            backup.error_message = (
+                "触发后台任务失败: "
+                f"{DataBackupService._flatten_exception_message(e)}"
+            )
             await backup.save()
             
         return backup
@@ -191,6 +232,13 @@ class DataBackupService:
             raise ValueError("只能恢复成功的备份")
 
         src = source_tenant_id if source_tenant_id is not None else backup.tenant_id
+
+        from core.services.system.data_backup_jobs import read_backup_metadata
+
+        metadata = read_backup_metadata(backup.file_path or "") if backup.file_path else {}
+        backup_scope = metadata.get("backup_scope", backup.backup_scope)
+        if backup_scope == "tenant" and src is not None and src != tenant_id:
+            raise ValueError("租户级恢复仅支持同租户覆盖恢复，请将 source_tenant_id 设置为当前租户")
 
         try:
             await dispatch_event(

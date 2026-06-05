@@ -19,7 +19,7 @@ import {
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, Tag, Space, message, Modal, Descriptions, Popconfirm, Button, Badge, Typography, Alert, Progress, Tooltip, theme, Upload, InputNumber, Form } from 'antd';
 import { StatCardTrendArea } from '../../../components/common/StatCardTrendArea';
-import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlusOutlined, ReloadOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined, SyncOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
@@ -31,7 +31,9 @@ import {
   restoreBackup,
   deleteBackup,
   downloadBackup,
+  getBackupWorkerHealth,
   DataBackup,
+  BackupWorkerHealth,
   DataBackupListResponse,
   CreateDataBackupData,
 } from '../../../services/dataBackup';
@@ -93,6 +95,54 @@ const DataBackupsPage: React.FC = () => {
   const [form] = ProForm.useForm();
   const [restoreForm] = Form.useForm();
   const [allBackups, setAllBackups] = useState<DataBackup[]>([]); // 用于统计
+  const [workerHealth, setWorkerHealth] = useState<BackupWorkerHealth | null>(null);
+  const [workerHealthLoading, setWorkerHealthLoading] = useState(false);
+
+  const loadWorkerHealth = React.useCallback(async (silent: boolean = true) => {
+    if (!silent) {
+      setWorkerHealthLoading(true);
+    }
+    try {
+      const health = await getBackupWorkerHealth();
+      setWorkerHealth(health);
+    } catch (error: any) {
+      if (!silent) {
+        messageApi.error(error?.message || t('pages.system.dataBackups.workerHealthLoadFailed'));
+      }
+    } finally {
+      if (!silent) {
+        setWorkerHealthLoading(false);
+      }
+    }
+  }, [messageApi, t]);
+
+  React.useEffect(() => {
+    loadWorkerHealth(true);
+    const timer = window.setInterval(() => {
+      loadWorkerHealth(true);
+    }, 30000);
+    return () => window.clearInterval(timer);
+  }, [loadWorkerHealth]);
+
+  const workerHealthMeta = useMemo(() => {
+    if (!workerHealth) {
+      return {
+        badgeStatus: 'default' as const,
+        label: t('pages.system.dataBackups.workerStatusUnknown'),
+      };
+    }
+
+    const statusMap: Record<BackupWorkerHealth['status'], { badgeStatus: 'success' | 'error' | 'warning' | 'default'; label: string }> = {
+      online: { badgeStatus: 'success', label: t('pages.system.dataBackups.workerStatusOnline') },
+      backlog: { badgeStatus: 'warning', label: t('pages.system.dataBackups.workerStatusBacklog') },
+      idle: { badgeStatus: 'default', label: t('pages.system.dataBackups.workerStatusIdle') },
+    };
+
+    return statusMap[workerHealth.status] || {
+      badgeStatus: 'default',
+      label: t('pages.system.dataBackups.workerStatusUnknown'),
+    };
+  }, [workerHealth, t]);
 
   /**
    * 查看备份详情
@@ -110,14 +160,18 @@ const DataBackupsPage: React.FC = () => {
   /**
    * 创建备份
    */
-  const handleCreate = async (values: CreateDataBackupData) => {
+  const handleCreate = async (values: Pick<CreateDataBackupData, 'name' | 'backup_type'>) => {
     setSubmitting(true);
     try {
-      await createBackup(values);
+      await createBackup({
+        ...values,
+        backup_scope: 'tenant',
+      });
       messageApi.success(t('pages.system.dataBackups.createSuccess'));
       setCreateModalVisible(false);
       form.resetFields();
       actionRef.current?.reload();
+      loadWorkerHealth(true);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.dataBackups.createFailed'));
     } finally {
@@ -149,6 +203,7 @@ const DataBackupsPage: React.FC = () => {
         setRestoreModalVisible(false);
         setRestoreBackupRecord(null);
         actionRef.current?.reload();
+        loadWorkerHealth(true);
       } else {
         messageApi.error(result.error || t('pages.system.dataBackups.restoreFailed'));
       }
@@ -167,6 +222,7 @@ const DataBackupsPage: React.FC = () => {
       messageApi.success(t('pages.system.dataBackups.uploadSuccess'));
       setUploadModalVisible(false);
       actionRef.current?.reload();
+      loadWorkerHealth(true);
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.dataBackups.uploadFailed'));
     } finally {
@@ -182,6 +238,7 @@ const DataBackupsPage: React.FC = () => {
       await deleteBackup(record.uuid);
       messageApi.success(t('pages.system.dataBackups.deleteSuccess'));
       actionRef.current?.reload();
+      loadWorkerHealth(true);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.dataBackups.deleteFailed'));
     }
@@ -620,6 +677,33 @@ const DataBackupsPage: React.FC = () => {
           createButtonText={t('pages.system.dataBackups.createButton')}
           onCreate={() => setCreateModalVisible(true)}
           toolBarRender={() => [
+            <Space key="worker-status" size="middle">
+              <Tooltip
+                title={
+                  <Space direction="vertical" size={2}>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusTitle')}: {workerHealthMeta.label}</Text>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusPending')}: {workerHealth?.pending_total ?? '-'}</Text>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusStalledPending')}: {workerHealth?.pending_stalled ?? '-'}</Text>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusRunningCount')}: {workerHealth?.running_count ?? '-'}</Text>
+                    <Text style={{ color: '#fff' }}>{t('pages.system.dataBackups.workerStatusLastChecked')}: {workerHealth?.checked_at ? dayjs(workerHealth.checked_at).format('YYYY-MM-DD HH:mm:ss') : '-'}</Text>
+                  </Space>
+                }
+              >
+                <Badge status={workerHealthMeta.badgeStatus} text={`${t('pages.system.dataBackups.workerStatusTitle')}: ${workerHealthMeta.label}`} />
+              </Tooltip>
+              <Button
+                icon={<SyncOutlined spin={workerHealthLoading} />}
+                loading={workerHealthLoading}
+                onClick={() => loadWorkerHealth(false)}
+              >
+                {t('pages.system.dataBackups.workerStatusRefresh')}
+              </Button>
+            </Space>,
+          ]}
+          showImportButton={false}
+          showExportButton={true}
+          exportButtonText={t('pages.system.dataBackups.downloadBackup')}
+          rightToolBarActionsBeforeExport={[
             <Button
               key="upload"
               icon={<UploadOutlined />}
@@ -628,8 +712,6 @@ const DataBackupsPage: React.FC = () => {
               {t('pages.system.dataBackups.uploadButton')}
             </Button>,
           ]}
-          showImportButton={false}
-          showExportButton={true}
           onExport={async (type, keys, pageData) => {
             try {
               let items: DataBackup[] = [];
@@ -695,17 +777,6 @@ const DataBackupsPage: React.FC = () => {
             { label: t('pages.system.dataBackups.typeIncrementalLabel'), value: 'incremental' },
           ]}
           placeholder={t('pages.system.dataBackups.typePlaceholder')}
-        />
-        <SafeProFormSelect
-          name="backup_scope"
-          label={t('pages.system.dataBackups.labelScopeField')}
-          rules={[{ required: true, message: t('pages.system.dataBackups.scopeRequired') }]}
-          options={[
-            ...(currentUser?.is_infra_admin ? [{ label: t('pages.system.dataBackups.scopeAllLabel'), value: 'all' }] : []),
-            { label: t('pages.system.dataBackups.scopeTenantLabel'), value: 'tenant' },
-            { label: t('pages.system.dataBackups.scopeTableLabel'), value: 'table' },
-          ]}
-          placeholder={t('pages.system.dataBackups.scopePlaceholder')}
         />
       </FormModalTemplate>
 

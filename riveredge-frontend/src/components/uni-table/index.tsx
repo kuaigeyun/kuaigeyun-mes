@@ -768,6 +768,14 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
     currentPageData?: T[]
   ) => void
   /**
+   * 导出按钮主文案（默认：i18n 的 components.uniTable.export）
+   */
+  exportButtonText?: string
+  /**
+   * 右侧工具栏：插入在导出按钮之前的附加按钮（如自定义上传）
+   */
+  rightToolBarActionsBeforeExport?: ReactNode[]
+  /**
    * 是否显示同步按钮（默认：false）
    * 用于从数据集同步数据，仅业务主数据/单据类页面使用
    */
@@ -1148,6 +1156,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   autoGenerateImportConfig = true,
   showExportButton = true,
   onExport,
+  exportButtonText,
+  rightToolBarActionsBeforeExport = [],
   showSyncButton = false,
   onSync,
   syncButtonText,
@@ -2183,11 +2193,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     }
 
     if (gatedShowExportButton && onExport) {
+      const beforeExportActions = withToolbarItemKeys(
+        rightToolBarActionsBeforeExport,
+        'right-before-export',
+      )
+      rightButtons.push(...beforeExportActions)
       rightButtons.push(
         <UniExportMenuButton<T>
           key="export"
           size={toolBarButtonSize}
           iconOnly={iconOnly}
+          buttonText={exportButtonText}
           onExport={onExport}
           selectedRowKeys={selectedRowKeys}
           tableData={tableData}

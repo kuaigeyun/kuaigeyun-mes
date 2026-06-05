@@ -13,14 +13,12 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
-from core.api.deps.access import require_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(
     prefix="/mobile",
     tags=["App · HaoliGO · 移动端"],
-    dependencies=[Depends(require_module_access("haoligo", "workspace-dashboard"))],
 )
 
 

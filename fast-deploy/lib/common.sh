@@ -450,6 +450,33 @@ graceful_kill_pid() {
     kill -9 "$pid" 2>/dev/null || true
 }
 
+pidfile_alive() {
+    local pidf="$1"
+    [ -f "$pidf" ] || return 1
+    local pid
+    pid="$(cat "$pidf" 2>/dev/null || true)"
+    [ -n "$pid" ] || return 1
+    kill -0 "$pid" 2>/dev/null
+}
+
+wait_process_stable() {
+    local name="$1"
+    local pidf="$2"
+    local logfile="$3"
+    local stable_seconds="${4:-12}"
+    local i=0
+    while [ "$i" -lt "$stable_seconds" ]; do
+        if ! pidfile_alive "$pidf"; then
+            log_error "${name} 启动后很快退出，查看 ${logfile}"
+            [ -f "$logfile" ] && tail -30 "$logfile" >&2
+            return 1
+        fi
+        sleep 1
+        i=$((i + 1))
+    done
+    return 0
+}
+
 stop_service() {
     local name=$1
     local pidf="$LOGS_DIR/${name}.pid"
@@ -1128,6 +1155,42 @@ ensure_pyzbar_windows_native() {
     fi
 }
 
+ensure_playwright_chromium_postinstall() {
+    # 非阻断后置补装：避免因 Playwright/Chromium 影响既有部署主流程
+    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+        return 0
+    fi
+    ensure_logs_dir
+    local marker="$LOGS_DIR/playwright-chromium.ready"
+    local logf="$LOGS_DIR/playwright-install.log"
+    [ -f "$marker" ] && return 0
+    [ -d "$BACKEND_DIR" ] || return 0
+
+    log_info "补装 Playwright Chromium 运行时（非阻断）..."
+    (
+        cd "$BACKEND_DIR"
+        export PYTHONPATH="$BACKEND_DIR/src"
+        if ! "$(resolve_uv)" run --extra pdf python -m playwright --version >/dev/null 2>&1; then
+            exit 10
+        fi
+        "$(resolve_uv)" run --extra pdf python -m playwright install chromium
+    ) >>"$logf" 2>&1
+    local rc=$?
+    case "$rc" in
+        0)
+            date -u +%Y-%m-%dT%H:%M:%SZ > "$marker"
+            log_ok "Playwright Chromium 补装完成"
+            ;;
+        10)
+            log_warn "未检测到 Playwright Python 模块，已跳过 Chromium 补装"
+            ;;
+        *)
+            log_warn "Playwright Chromium 补装失败（不影响主流程），详见 $logf"
+            ;;
+    esac
+    return 0
+}
+
 cmd_migrate() {
     sync_backend_deps
     log_info "执行数据库迁移..."
@@ -1332,7 +1395,7 @@ start_backend_prod() {
 
 start_worker_prod() {
     sync_backend_deps
-    if [ -f "$LOGS_DIR/worker.pid" ] && kill -0 "$(cat "$LOGS_DIR/worker.pid")" 2>/dev/null; then
+    if pidfile_alive "$LOGS_DIR/worker.pid"; then
         log_info "Worker 已在运行"
     else
         log_info "启动 Taskiq Worker..."
@@ -1348,9 +1411,9 @@ start_worker_prod() {
                 > "$LOGS_DIR/worker.log" 2>&1 &
             echo $! > "$LOGS_DIR/worker.pid"
         )
-        sleep 2
+        wait_process_stable "Worker" "$LOGS_DIR/worker.pid" "$LOGS_DIR/worker.log" 12 || exit 1
     fi
-    if [ -f "$LOGS_DIR/scheduler.pid" ] && kill -0 "$(cat "$LOGS_DIR/scheduler.pid")" 2>/dev/null; then
+    if pidfile_alive "$LOGS_DIR/scheduler.pid"; then
         log_info "Scheduler 已在运行"
     else
         log_info "启动 Taskiq Scheduler..."
@@ -1364,7 +1427,7 @@ start_worker_prod() {
                 > "$LOGS_DIR/scheduler.log" 2>&1 &
             echo $! > "$LOGS_DIR/scheduler.pid"
         )
-        sleep 2
+        wait_process_stable "Scheduler" "$LOGS_DIR/scheduler.pid" "$LOGS_DIR/scheduler.log" 12 || exit 1
     fi
     log_ok "Taskiq 已启动"
 }
@@ -1420,6 +1483,7 @@ cmd_start_dev() {
     start_backend_dev
     start_worker_dev
     start_frontend_dev
+    ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 开发环境已就绪"
     echo "  Web:  http://127.0.0.1:${FRONTEND_PORT}"
     echo "  API:  http://127.0.0.1:${BACKEND_PORT}"
@@ -1432,6 +1496,7 @@ cmd_start_prod() {
     start_backend_prod
     start_worker_prod
     start_caddy_prod
+    ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 生产环境已就绪"
     local access_ip="${SERVER_IP:-127.0.0.1}"
     if [ -n "$CADDY_DOMAIN" ]; then

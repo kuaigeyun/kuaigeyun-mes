@@ -25,6 +25,7 @@ export function withMoldPictureCardUploadClass(props?: Partial<UploadProps>): Pa
   const className = prev ? `${prev} ${MOLD_PICTURE_CARD_UPLOAD_CLASS}` : MOLD_PICTURE_CARD_UPLOAD_CLASS;
   return {
     ...props,
+    multiple: props?.multiple ?? true,
     className,
     showUploadList: mergeShowUploadList(props?.showUploadList),
   };

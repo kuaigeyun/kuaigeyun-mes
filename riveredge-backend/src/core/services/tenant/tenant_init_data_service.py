@@ -60,6 +60,14 @@ class TenantInitDataService:
         {"key": "variant_attribute_preset", "name": "属性定义预设", "description": "颜色、规格、材质、等级、表面处理等"},
     ]
 
+    # 新组织初始化时默认启用的应用（其余应用保持已安装未启用状态）
+    DEFAULT_ENABLED_APPLICATION_CODES = {
+        "kuaizhizao",   # 快制造
+        "kuaiplm",      # 快研发
+        "kuaicaiwu",    # 快财务
+        "master-data",  # 主数据
+    }
+
     # 行业预设模板（一键建账）
     INDUSTRY_PRESETS: Dict[str, Dict[str, Any]] = {
         "sme_manufacturing": {
@@ -250,6 +258,8 @@ class TenantInitDataService:
                 manifest = ApplicationService._get_manifest_by_code(app_code)
                 is_pro = bool(manifest.get("is_pro", False)) if manifest else False
                 return (
+                    app_code in cls.DEFAULT_ENABLED_APPLICATION_CODES
+                    and
                     not is_pro
                     and app.get("is_installed")
                     and not app.get("is_active")

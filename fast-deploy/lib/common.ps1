@@ -260,6 +260,27 @@ function Stop-ServiceByPidFile([string]$Name) {
     Remove-Item $pidf -Force -ErrorAction SilentlyContinue
 }
 
+function Test-PidFileAlive([string]$PidFile) {
+    if (-not (Test-Path $PidFile)) { return $false }
+    $pidText = (Get-Content $PidFile -Raw).Trim()
+    if (-not ($pidText -match '^\d+$')) { return $false }
+    return [bool](Get-Process -Id ([int]$pidText) -ErrorAction SilentlyContinue)
+}
+
+function Wait-ProcessStable([string]$Name, [string]$PidFile, [string]$LogFile, [int]$StableSeconds = 12) {
+    for ($i = 0; $i -lt $StableSeconds; $i++) {
+        if (-not (Test-PidFileAlive $PidFile)) {
+            Write-LogError "$Name 启动后很快退出，查看日志: $LogFile"
+            if (Test-Path $LogFile) {
+                Get-Content $LogFile -Tail 30 | ForEach-Object { Write-Host $_ }
+            }
+            return $false
+        }
+        Start-Sleep -Seconds 1
+    }
+    return $true
+}
+
 function Read-EnvValue([string]$Key) {
     if (-not (Test-Path $script:EnvFile)) { return $null }
     $line = Select-String -Path $script:EnvFile -Pattern "^${Key}=" | Select-Object -Last 1
@@ -534,6 +555,40 @@ function Ensure-PyzbarWindowsNative {
     } finally { Pop-Location }
 }
 
+function Ensure-PlaywrightChromiumPostInstall {
+    # 非阻断后置补装：失败仅告警，不影响既有部署主流程
+    $enabled = if ($env:PLAYWRIGHT_POSTINSTALL_ENABLE) { $env:PLAYWRIGHT_POSTINSTALL_ENABLE } else { '1' }
+    if ($enabled -eq '0') { return }
+    Ensure-LogsDir
+    $marker = Join-Path $script:LogsDir 'playwright-chromium.ready'
+    $logFile = Join-Path $script:LogsDir 'playwright-install.log'
+    if (Test-Path $marker) { return }
+    if (-not (Test-Path $script:BackendDir)) { return }
+
+    Write-LogInfo '补装 Playwright Chromium 运行时（非阻断）...'
+    $uv = Resolve-Uv
+    Push-Location $script:BackendDir
+    try {
+        $env:PYTHONPATH = Join-Path $script:BackendDir 'src'
+        & $uv run --extra pdf python -m playwright --version *> $null
+        if ($LASTEXITCODE -ne 0) {
+            Write-LogWarn '未检测到 Playwright Python 模块，已跳过 Chromium 补装'
+            return
+        }
+        & $uv run --extra pdf python -m playwright install chromium *>> $logFile
+        if ($LASTEXITCODE -eq 0) {
+            Set-Content -Path $marker -Value (Get-Date -Format o) -Encoding UTF8
+            Write-LogOk 'Playwright Chromium 补装完成'
+        } else {
+            Write-LogWarn "Playwright Chromium 补装失败（不影响主流程），详见 $logFile"
+        }
+    } catch {
+        Write-LogWarn "Playwright Chromium 补装异常（不影响主流程）：$($_.Exception.Message)"
+    } finally {
+        Pop-Location
+    }
+}
+
 function Sync-BackendDeps {
     Apply-CN-Mirrors
     Write-LogInfo '同步 Python 依赖...'
@@ -729,21 +784,33 @@ function Start-BackendProd {
 function Start-WorkerProd {
     Sync-BackendDeps
     $uv = Resolve-Uv
-    if (-not (Test-Path (Join-Path $script:LogsDir 'worker.pid'))) {
+    $workerPidFile = Join-Path $script:LogsDir 'worker.pid'
+    $workerLogFile = Join-Path $script:LogsDir 'worker.log'
+    if (-not (Test-PidFileAlive $workerPidFile)) {
+        Remove-Item $workerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Worker...'
         $args = @('run','taskiq','worker','--app-dir','src','--fs-discover','--workers',"$($script:TASKIQ_WORKERS)",'core.tasks.taskiq_app:broker')
         Start-ProcessBackground 'worker' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir
         }
+        if (-not (Wait-ProcessStable 'Worker' $workerPidFile $workerLogFile 12)) { throw 'Worker 启动失败' }
+    } else {
+        Write-LogInfo 'Worker 已在运行'
     }
-    if (-not (Test-Path (Join-Path $script:LogsDir 'scheduler.pid'))) {
+    $schedulerPidFile = Join-Path $script:LogsDir 'scheduler.pid'
+    $schedulerLogFile = Join-Path $script:LogsDir 'scheduler.log'
+    if (-not (Test-PidFileAlive $schedulerPidFile)) {
+        Remove-Item $schedulerPidFile -Force -ErrorAction SilentlyContinue
         Write-LogInfo '启动 Taskiq Scheduler...'
         $args = @('run','taskiq','scheduler','--app-dir','src','--fs-discover','core.tasks.taskiq_app:scheduler')
         Start-ProcessBackground 'scheduler' $uv $args @{
             ENVIRONMENT = 'production'; SETUPTOOLS_EGG_INFO_DIR = $script:LogsDir
             PYTHONPATH = (Join-Path $script:BackendDir 'src'); WORKDIR = $script:BackendDir
         }
+        if (-not (Wait-ProcessStable 'Scheduler' $schedulerPidFile $schedulerLogFile 12)) { throw 'Scheduler 启动失败' }
+    } else {
+        Write-LogInfo 'Scheduler 已在运行'
     }
     Write-LogOk 'Taskiq 已启动'
 }
@@ -770,6 +837,7 @@ function Invoke-StartDev {
     Start-BackendDev
     Start-WorkerDev
     Start-FrontendDev
+    Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 开发环境已就绪'
     Write-Host "  Web:  http://127.0.0.1:$($script:FRONTEND_PORT)"
     Write-Host "  API:  http://127.0.0.1:$($script:BACKEND_PORT)"
@@ -782,6 +850,7 @@ function Invoke-StartProd {
     Start-BackendProd
     Start-WorkerProd
     Start-CaddyProd
+    Ensure-PlaywrightChromiumPostInstall
     Write-LogOk 'RiverEdge 生产环境已就绪'
     $accessIp = if ($script:SERVER_IP) { $script:SERVER_IP } else { '127.0.0.1' }
     if ($script:CADDY_DOMAIN) {

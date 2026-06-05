@@ -93,7 +93,7 @@ function normUploadUuids(val: unknown): string[] {
 }
 
 type DetailAttachmentPreview = {
-  byMold: Record<string, string[]>;
+  byIndex: string[][];
 };
 
 const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
@@ -317,12 +317,8 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             : null,
         );
         const initDept = resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid);
-        const byMold: Record<string, string[]> = {};
-        for (const it of d.line_items || []) {
-          const mc = String(it.mold_code ?? '').trim();
-          if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
-        }
-        setDetailAttachmentPreview(detailOnly ? { byMold } : null);
+        const byIndex = (d.line_items || []).map((it) => [...(it.attachment_file_uuids || [])]);
+        setDetailAttachmentPreview(detailOnly ? { byIndex } : null);
         const line_items = detailOnly
           ? (d.line_items || []).map((it) => ({
               mold_code: it.mold_code,
@@ -967,17 +963,13 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                     <Col span={24}>
                       {isDetailView ? (
                         <ProFormDependency name={['line_items']}>
-                          {({ line_items }) => {
-                            const rows = (line_items as { mold_code?: string }[] | undefined) ?? [];
-                            const mc = String(rows[index]?.mold_code ?? '').trim();
-                            return (
-                              <Form.Item label="维修模具图片附件（维修前）">
-                                <MoldAttachmentImagePreview
-                                  uuids={mc ? detailAttachmentPreview?.byMold[mc] : []}
-                                />
-                              </Form.Item>
-                            );
-                          }}
+                          {() => (
+                            <Form.Item label="维修模具图片附件（维修前）">
+                              <MoldAttachmentImagePreview
+                                uuids={detailAttachmentPreview?.byIndex[index] || []}
+                              />
+                            </Form.Item>
+                          )}
                         </ProFormDependency>
                       ) : (
                         <ProFormUploadButton

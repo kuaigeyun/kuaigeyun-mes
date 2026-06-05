@@ -451,13 +451,24 @@ const DepartmentListPage: React.FC = () => {
     return { can: true };
   };
 
+  const isDepartmentNotFoundError = (error: unknown): boolean => {
+    const msg = String((error as { message?: string })?.message ?? '');
+    const status = (error as { status?: number })?.status;
+    return status === 404 || msg.includes('不存在');
+  };
+
   const handleDelete = async (record: Department) => {
     try {
       await deleteDepartment(record.uuid);
       messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    } catch (error: unknown) {
+      if (isDepartmentNotFoundError(error)) {
+        messageApi.warning(t('field.department.alreadyDeletedRefresh'));
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error((error as Error).message || t('pages.system.deleteFailed'));
     }
   };
 
@@ -500,8 +511,12 @@ const DepartmentListPage: React.FC = () => {
       messageApi.success(t('pages.system.deleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.deleteFailed'));
+    } catch (error: unknown) {
+      if (isDepartmentNotFoundError(error)) {
+        messageApi.warning(t('field.department.alreadyDeletedRefresh'));
+      } else {
+        messageApi.error((error as Error).message || t('pages.system.deleteFailed'));
+      }
       actionRef.current?.reload();
     }
   };

@@ -259,20 +259,33 @@ start_worker() {
     cd riveredge-backend
     [ -f "../.logs/worker.pid" ] && rm -f "../.logs/worker.pid"
     TASKIQ_WORKERS="${TASKIQ_WORKERS:-2}"
-    PYTHONPATH="src" nohup uv run --extra pdf taskiq worker core.tasks.taskiq_app:broker --fs-discover \
+    PYTHONPATH="src" nohup uv run --extra pdf taskiq worker \
+        --app-dir src \
+        --fs-discover \
         --workers "$TASKIQ_WORKERS" \
-        core.tasks.taskiq_app \
-        core.tasks.worker_bootstrap \
-        core.tasks.data_backup_handlers > ../.logs/worker.log 2>&1 &
+        core.tasks.taskiq_app:broker > ../.logs/worker.log 2>&1 &
     echo $! > ../.logs/worker.pid
+    local worker_launcher_pid=$!
 
     [ -f "../.logs/scheduler.pid" ] && rm -f "../.logs/scheduler.pid"
-    PYTHONPATH="src" nohup uv run --extra pdf taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
-        core.tasks.taskiq_app \
-        core.inngest.functions \
-        apps.master_data.inngest.functions \
-        apps.kuaizhizao.inngest.functions > ../.logs/scheduler.log 2>&1 &
+    PYTHONPATH="src" nohup uv run --extra pdf taskiq scheduler \
+        --app-dir src \
+        --fs-discover \
+        core.tasks.taskiq_app:scheduler > ../.logs/scheduler.log 2>&1 &
     echo $! > ../.logs/scheduler.pid
+    local scheduler_launcher_pid=$!
+
+    sleep 3
+    if ! pid_is_alive "$worker_launcher_pid"; then
+        cd ..
+        log_error "Taskiq Worker 启动失败，请查看 .logs/worker.log"
+        return 1
+    fi
+    if ! pid_is_alive "$scheduler_launcher_pid"; then
+        cd ..
+        log_error "Taskiq Scheduler 启动失败，请查看 .logs/scheduler.log"
+        return 1
+    fi
     cd ..
     log_success "Taskiq 异步引擎已就绪!"
 }
@@ -308,13 +321,22 @@ frontend_http_ready() {
     curl -sf --max-time 2 "http://127.0.0.1:${FRONTEND_PORT}/" >/dev/null 2>&1
 }
 
+pidfile_alive() {
+    local pidfile=$1
+    [ -f "$pidfile" ] || return 1
+    local pid
+    pid="$(cat "$pidfile" 2>/dev/null)"
+    [ -n "$pid" ] || return 1
+    pid_is_alive "$pid"
+}
+
 case "$1" in
     stop) stop_all ;;
     status)
         backend_http_ready && log_success "Backend [OK] ($(get_listening_pids "${BACKEND_PORT}" | tr '\n' ' '))" || log_warn "Backend [OFF]"
         frontend_http_ready && log_success "Frontend [OK]" || log_warn "Frontend [OFF]"
-        [ -f ".logs/worker.pid" ] && log_success "Worker [OK]" || log_warn "Worker [OFF]"
-        [ -f ".logs/scheduler.pid" ] && log_success "Scheduler [OK]" || log_warn "Scheduler [OFF]"
+        pidfile_alive ".logs/worker.pid" && log_success "Worker [OK]" || log_warn "Worker [OFF]"
+        pidfile_alive ".logs/scheduler.pid" && log_success "Scheduler [OK]" || log_warn "Scheduler [OFF]"
         ;;
     be) start_backend ;;
     fe) kill_port "${FRONTEND_PORT}"; start_frontend ;;

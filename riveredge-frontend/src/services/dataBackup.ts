@@ -36,6 +36,16 @@ export interface DataBackupListResponse {
   page_size: number;
 }
 
+export interface BackupWorkerHealth {
+  status: 'online' | 'backlog' | 'idle';
+  broker_ready: boolean;
+  pending_total: number;
+  pending_stalled: number;
+  running_count: number;
+  recent_completed: number;
+  checked_at: string;
+}
+
 export interface CreateDataBackupData {
   name: string;
   backup_type: 'full' | 'incremental';
@@ -89,6 +99,13 @@ export async function getBackups(params?: {
   return apiRequest<DataBackupListResponse>('/core/data-backups', {
     params,
   });
+}
+
+/**
+ * 获取备份 Worker 运行健康状态
+ */
+export async function getBackupWorkerHealth(): Promise<BackupWorkerHealth> {
+  return apiRequest<BackupWorkerHealth>('/core/data-backups/worker-health');
 }
 
 /**

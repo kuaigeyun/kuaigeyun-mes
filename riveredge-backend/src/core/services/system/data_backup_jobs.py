@@ -11,6 +11,7 @@ import os
 import shutil
 import subprocess
 import zipfile
+from collections import defaultdict, deque
 from datetime import datetime
 from typing import Any, Optional
 
@@ -18,6 +19,13 @@ from loguru import logger
 from tortoise import Tortoise
 
 from infra.config.infra_config import infra_settings
+
+TENANT_BACKUP_EXCLUDED_TABLES = {
+    # 超大运行日志表：对业务恢复价值有限，但会显著拖慢租户级备份
+    "core_operation_logs",
+    "core_login_logs",
+    "core_user_activities",
+}
 
 
 def run_backup_dump_and_zip_sync(
@@ -48,7 +56,10 @@ def run_backup_dump_and_zip_sync(
 
     os.makedirs(temp_dir, exist_ok=True)
 
-    if backup_scope == "tenant" and tenant_id:
+    if backup_scope == "tenant" and tenant_id is None:
+        raise ValueError("租户隔离备份缺少 tenant_id，已拒绝执行以避免回退到全量备份")
+
+    if backup_scope == "tenant" and tenant_id is not None:
         logger.info(f"开始执行租户隔离备份: tenant_id={tenant_id}")
         db_dump_path = os.path.join(temp_dir, "db_dump.sql")
 
@@ -70,15 +81,32 @@ def run_backup_dump_and_zip_sync(
         if result.returncode != 0:
             raise RuntimeError(f"获取表列表失败: {result.stderr}")
 
-        tables = [t.strip() for t in result.stdout.split("\n") if t.strip()]
-        logger.info(f"发现 {len(tables)} 个租户相关表: {tables}")
+        discovered_tables = [t.strip() for t in result.stdout.split("\n") if t.strip()]
+        tables = [t for t in discovered_tables if t not in TENANT_BACKUP_EXCLUDED_TABLES]
+        skipped_tables = [t for t in discovered_tables if t in TENANT_BACKUP_EXCLUDED_TABLES]
+        logger.info(
+            "租户隔离备份表统计: discovered={} export={} skipped={}",
+            len(discovered_tables),
+            len(tables),
+            len(skipped_tables),
+        )
+        if skipped_tables:
+            logger.info("租户隔离备份跳过表: {}", skipped_tables)
 
         with open(db_dump_path, "w", encoding="utf-8") as f:
             f.write("-- Tenant Isolated Backup\n")
             f.write(f"-- Tenant ID: {tenant_id}\n")
             f.write(f"-- Date: {datetime.now()}\n\n")
+            if skipped_tables:
+                f.write(f"-- Skipped tables: {', '.join(skipped_tables)}\n\n")
 
-            for table in tables:
+            for index, table in enumerate(tables, start=1):
+                logger.info(
+                    "租户隔离备份导出表 [{}/{}]: {}",
+                    index,
+                    len(tables),
+                    table,
+                )
                 copy_cmd = [
                     "psql",
                     "-h",
@@ -99,6 +127,11 @@ def run_backup_dump_and_zip_sync(
                     f.write(f"--- TABLE: {table} ---\n")
                     f.write(table_result.stdout)
                     f.write("\n\n")
+                    logger.info(
+                        "租户隔离备份导出完成表 {}，bytes={}",
+                        table,
+                        len(table_result.stdout.encode("utf-8", errors="ignore")),
+                    )
                 else:
                     logger.error(f"导出表 {table} 失败: {table_result.stderr}")
     else:
@@ -134,11 +167,37 @@ def run_backup_dump_and_zip_sync(
         if backup_type == "full":
             upload_dir = infra_settings.FILE_UPLOAD_DIR
             if upload_dir and os.path.exists(upload_dir):
-                for root, _dirs, files in os.walk(upload_dir):
-                    for file in files:
-                        file_path = os.path.join(root, file)
-                        arcname = os.path.join("uploads", os.path.relpath(file_path, upload_dir))
-                        zipf.write(file_path, arcname)
+                # 租户隔离备份：仅打包当前租户 uploads 子目录；全量备份仍保留全部 uploads。
+                if backup_scope == "tenant" and tenant_id is not None:
+                    tenant_upload_dir = os.path.join(upload_dir, str(tenant_id))
+                    if os.path.exists(tenant_upload_dir):
+                        for root, _dirs, files in os.walk(tenant_upload_dir):
+                            for file in files:
+                                file_path = os.path.join(root, file)
+                                arcname = os.path.join(
+                                    "uploads",
+                                    os.path.relpath(file_path, upload_dir),
+                                )
+                                zipf.write(file_path, arcname)
+                        logger.info(
+                            "租户隔离备份仅打包 uploads 子目录: {}",
+                            tenant_upload_dir,
+                        )
+                    else:
+                        logger.info(
+                            "租户隔离备份未发现 uploads 子目录，跳过: {}",
+                            tenant_upload_dir,
+                        )
+                elif backup_scope == "tenant":
+                    raise ValueError(
+                        "租户隔离备份缺少 tenant_id，已拒绝执行 uploads 打包以避免串租户"
+                    )
+                else:
+                    for root, _dirs, files in os.walk(upload_dir):
+                        for file in files:
+                            file_path = os.path.join(root, file)
+                            arcname = os.path.join("uploads", os.path.relpath(file_path, upload_dir))
+                            zipf.write(file_path, arcname)
 
     return final_zip_path
 
@@ -231,6 +290,199 @@ def read_backup_metadata(zip_path: str) -> dict:
     except Exception as e:
         logger.warning(f"读取备份元数据失败: {e}")
     return {}
+
+
+def _parse_tenant_dump_sections(dump_path: str) -> dict[str, str]:
+    """
+    解析租户备份 database.dump（文本）中的分表 CSV 片段。
+
+    片段格式：
+    --- TABLE: table_name ---
+    <csv content>
+    """
+    if not os.path.exists(dump_path):
+        raise FileNotFoundError(f"租户备份文件不存在: {dump_path}")
+
+    sections: dict[str, list[str]] = {}
+    current_table: Optional[str] = None
+
+    with open(dump_path, "r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.rstrip("\n")
+            if line.startswith("--- TABLE: ") and line.endswith(" ---"):
+                current_table = line[len("--- TABLE: ") : -len(" ---")].strip()
+                sections[current_table] = []
+                continue
+
+            # 标题注释行不参与数据解析
+            if line.startswith("-- Data for table: "):
+                continue
+
+            if current_table is not None:
+                sections[current_table].append(raw_line)
+
+    parsed: dict[str, str] = {}
+    for table, lines in sections.items():
+        csv_text = "".join(lines).strip()
+        if csv_text:
+            parsed[table] = csv_text
+    return parsed
+
+
+def _build_topological_table_orders(
+    tables: list[str],
+    fk_rows: list[dict[str, Any]],
+) -> tuple[list[str], list[str]]:
+    """
+    计算表的插入/删除顺序：
+    - insert_order: 父表优先（先父后子）
+    - delete_order: 子表优先（先子后父）
+    """
+    table_set = set(tables)
+    indegree: dict[str, int] = {table: 0 for table in tables}
+    adjacency: dict[str, list[str]] = defaultdict(list)
+
+    for row in fk_rows:
+        child = row.get("child_table")
+        parent = row.get("parent_table")
+        if not child or not parent:
+            continue
+        if child not in table_set or parent not in table_set:
+            continue
+        adjacency[parent].append(child)
+        indegree[child] += 1
+
+    queue = deque(sorted([table for table, degree in indegree.items() if degree == 0]))
+    insert_order: list[str] = []
+
+    while queue:
+        node = queue.popleft()
+        insert_order.append(node)
+        for child in sorted(adjacency.get(node, [])):
+            indegree[child] -= 1
+            if indegree[child] == 0:
+                queue.append(child)
+
+    # 有环或依赖异常时，兜底补齐剩余表（保持稳定顺序）
+    if len(insert_order) < len(tables):
+        remaining = sorted([table for table in tables if table not in set(insert_order)])
+        insert_order.extend(remaining)
+
+    delete_order = list(reversed(insert_order))
+    return insert_order, delete_order
+
+
+def _validate_csv_header(table: str, csv_text: str) -> None:
+    first_line = csv_text.splitlines()[0] if csv_text else ""
+    if not first_line:
+        raise ValueError(f"租户备份表 {table} 缺少 CSV 表头")
+    if "tenant_id" not in first_line.split(","):
+        raise ValueError(f"租户备份表 {table} 不包含 tenant_id 列，无法安全恢复")
+
+
+def _run_psql_copy_from_stdin(table: str, csv_text: str) -> None:
+    db_user = infra_settings.DB_USER
+    db_password = infra_settings.DB_PASSWORD
+    db_host = infra_settings.DB_HOST
+    db_port = infra_settings.DB_PORT
+    db_name = infra_settings.DB_NAME
+    env = os.environ.copy()
+    env["PGPASSWORD"] = db_password
+
+    cmd = [
+        "psql",
+        "-h",
+        db_host,
+        "-p",
+        str(db_port),
+        "-U",
+        db_user,
+        "-d",
+        db_name,
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        f'COPY "{table}" FROM STDIN WITH (FORMAT CSV, HEADER, ENCODING \'UTF8\')',
+    ]
+    result = subprocess.run(
+        cmd,
+        env=env,
+        input=csv_text,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(f"导入表 {table} 失败: {result.stderr or result.stdout}")
+
+
+async def restore_tenant_backup_from_dump(
+    *,
+    dump_path: str,
+    target_tenant_id: int,
+    source_tenant_id: Optional[int],
+) -> None:
+    """
+    恢复租户级备份（同租户覆盖恢复）。
+
+    当前版本仅支持“源租户 == 目标租户”的恢复，避免跨租户恢复导致主键冲突。
+    """
+    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+        raise NotImplementedError(
+            "当前租户级恢复仅支持同租户覆盖恢复（source_tenant_id 必须等于 target_tenant_id）"
+        )
+
+    table_csv_map = _parse_tenant_dump_sections(dump_path)
+    if not table_csv_map:
+        raise ValueError("租户备份数据为空，无法恢复")
+
+    for table, csv_text in table_csv_map.items():
+        _validate_csv_header(table, csv_text)
+
+    conn = Tortoise.get_connection("default")
+    table_names = sorted(table_csv_map.keys())
+
+    fk_sql = """
+        SELECT
+            tc.table_name AS child_table,
+            ccu.table_name AS parent_table
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_schema = 'public'
+    """
+    fk_rows = await conn.execute_query_dict(fk_sql)
+    insert_order, delete_order = _build_topological_table_orders(table_names, fk_rows)
+
+    logger.info(
+        "租户级恢复开始: tenant_id={}, tables={}",
+        target_tenant_id,
+        len(table_names),
+    )
+
+    for table in delete_order:
+        await conn.execute_query(
+            f'DELETE FROM "{table}" WHERE tenant_id = $1',
+            [target_tenant_id],
+        )
+
+    for table in insert_order:
+        csv_text = table_csv_map.get(table)
+        if not csv_text:
+            continue
+        # COPY 需要以换行结束；否则最后一行偶发不被解析
+        payload = csv_text if csv_text.endswith("\n") else f"{csv_text}\n"
+        _run_psql_copy_from_stdin(table, payload)
+
+    logger.info(
+        "租户级恢复完成: tenant_id={}, imported_tables={}",
+        target_tenant_id,
+        len(insert_order),
+    )
 
 
 def run_pg_restore(dump_path: str, backup_scope: str) -> None:

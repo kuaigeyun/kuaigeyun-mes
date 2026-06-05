@@ -2,16 +2,117 @@
 数据备份 API 模块
 """
 
+import asyncio
 import os
+from datetime import datetime, timedelta
 from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException, status, UploadFile, File, Form
 from fastapi.responses import FileResponse
+from loguru import logger
+from pydantic import BaseModel
 from core.api.deps import get_current_user
 from infra.models.user import User
+from core.models.data_backup import DataBackup
 from core.schemas.data_backup import DataBackupCreate, DataBackupResponse, DataBackupListResponse
 from core.services.system.data_backup_service import DataBackupService
 
 router = APIRouter(prefix="/data-backups", tags=["Core · Data Backups"])
+
+
+class BackupWorkerHealthResponse(BaseModel):
+    status: str
+    broker_ready: bool
+    pending_total: int
+    pending_stalled: int
+    running_count: int
+    recent_completed: int
+    checked_at: datetime
+
+
+async def _load_worker_health_counts(
+    tenant_id: int,
+    stale_threshold: datetime,
+    recent_window: datetime,
+) -> tuple[int, int, int, int]:
+    # PostgreSQL 连接偶发中断时，允许一次短重试，避免前端偶发 500。
+    for attempt in range(2):
+        try:
+            pending_total = await DataBackup.filter(tenant_id=tenant_id, status="pending").count()
+            pending_stalled = await DataBackup.filter(
+                tenant_id=tenant_id,
+                status="pending",
+                created_at__lt=stale_threshold,
+            ).count()
+            running_count = await DataBackup.filter(tenant_id=tenant_id, status="running").count()
+            recent_completed = await DataBackup.filter(
+                tenant_id=tenant_id,
+                status__in=["success", "failed"],
+                completed_at__gte=recent_window,
+            ).count()
+            return pending_total, pending_stalled, running_count, recent_completed
+        except Exception as exc:
+            exc_name = exc.__class__.__name__
+            message = str(exc)
+            is_connection_error = (
+                exc_name in {"ConnectionDoesNotExistError", "InterfaceError", "OperationalError"}
+                or "connection was closed in the middle of operation" in message.lower()
+            )
+            if not is_connection_error or attempt == 1:
+                raise
+            logger.warning(
+                "worker-health 查询出现瞬时连接异常，准备重试: type={}, message={}",
+                exc_name,
+                message,
+            )
+            await asyncio.sleep(0.15)
+
+
+@router.get("/worker-health", response_model=BackupWorkerHealthResponse)
+async def get_worker_health(
+    current_user: User = Depends(get_current_user),
+) -> Any:
+    """
+    获取备份 Worker 健康状态（用于前端状态指示）。
+
+    状态说明：
+    - online: 最近有执行活动（running 或最近完成）
+    - backlog: 存在超时 pending（任务堆积，未必代表 worker 进程离线）
+    - idle: 当前无执行活动且无堆积（空闲）
+    """
+    now = datetime.now()
+    stale_threshold = now - timedelta(minutes=2)
+    recent_window = now - timedelta(minutes=10)
+
+    tenant_id = current_user.tenant_id
+    pending_total, pending_stalled, running_count, recent_completed = await _load_worker_health_counts(
+        tenant_id=tenant_id,
+        stale_threshold=stale_threshold,
+        recent_window=recent_window,
+    )
+
+    try:
+        from core.tasks.taskiq_app import broker as taskiq_broker
+
+        broker_ready = bool(getattr(taskiq_broker, "_write_pool", None))
+    except Exception:
+        broker_ready = False
+
+    if running_count > 0 or recent_completed > 0:
+        worker_status = "online"
+    elif pending_stalled > 0:
+        worker_status = "backlog"
+    else:
+        worker_status = "idle"
+
+    return BackupWorkerHealthResponse(
+        status=worker_status,
+        broker_ready=broker_ready,
+        pending_total=pending_total,
+        pending_stalled=pending_stalled,
+        running_count=running_count,
+        recent_completed=recent_completed,
+        checked_at=now,
+    )
 
 
 @router.get("", response_model=DataBackupListResponse)
@@ -149,9 +250,6 @@ async def delete_backup(
         return {"success": True}
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
-
-
-from pydantic import BaseModel
 
 
 class RestoreRequest(BaseModel):

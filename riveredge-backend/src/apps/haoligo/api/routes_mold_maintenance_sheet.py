@@ -535,7 +535,7 @@ async def approve_maintenance_sheet(
     )
 
     await send_mold_maintenance_approved_messages(tenant_id, row)
-    return await _serialize(row)
+    return _serialize(row)
 
 
 @router.post("/{row_id}/reject", response_model=MoldMaintenanceSheetOut, summary="审核驳回维保单")

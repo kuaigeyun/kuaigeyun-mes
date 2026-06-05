@@ -27,6 +27,8 @@ export interface UniExportMenuButtonProps<T extends Record<string, any> = Record
   showAll?: boolean;
   /** 仅图标（窄屏/工具栏宽度不足） */
   iconOnly?: boolean;
+  /** 按钮主文案（不传则使用 i18n components.uniTable.export） */
+  buttonText?: string;
 }
 
 export function UniExportMenuButton<T extends Record<string, any> = Record<string, any>>({
@@ -38,9 +40,10 @@ export function UniExportMenuButton<T extends Record<string, any> = Record<strin
   showCurrentPage = true,
   showAll = true,
   iconOnly = false,
+  buttonText,
 }: UniExportMenuButtonProps<T>) {
   const { t } = useTranslation();
-  const exportLabel = t('components.uniTable.export');
+  const exportLabel = buttonText ?? t('components.uniTable.export');
   const items: MenuProps['items'] = [];
   if (showSelected) {
     items.push({

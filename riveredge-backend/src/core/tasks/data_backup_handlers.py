@@ -17,6 +17,7 @@ from loguru import logger
 from core.models.data_backup import DataBackup
 from core.services.system.data_backup_jobs import (
     read_backup_metadata,
+    restore_tenant_backup_from_dump,
     restore_uploads_from_zip,
     run_backup_dump_and_zip_sync,
     run_full_backup_dump_and_zip,
@@ -141,7 +142,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
 
     restore_extract_dir = os.path.join(backup_dir, f"temp_restore_{backup_uuid}")
 
-    def extract_and_restore() -> None:
+    def extract_backup() -> str:
         logger.info(f"开始恢复: zip_path={zip_path}, extract_dir={restore_extract_dir}")
         if not os.path.exists(zip_path):
             raise FileNotFoundError(f"备份文件不存在: {zip_path}")
@@ -154,20 +155,31 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             raise FileNotFoundError(
                 f"备份中未找到 database.dump，zip 内容: {os.listdir(restore_extract_dir)}"
             )
+        return db_dump_path
 
+    try:
+        db_dump_path = await step.run("extract_backup", extract_backup)
         metadata = read_backup_metadata(zip_path)
         backup_scope = metadata.get("backup_scope", "all")
         logger.info(f"备份元数据: backup_scope={backup_scope}")
 
         if backup_scope == "tenant":
-            raise NotImplementedError("租户隔离备份的自动恢复暂未实现，请使用全量备份")
-
-        run_pg_restore(db_dump_path, backup_scope)
-        restore_uploads_from_zip(zip_path, restore_extract_dir)
-        logger.info("extract_and_restore 完成")
-
-    try:
-        await step.run("extract_and_restore", extract_and_restore)
+            if target_tenant_id is None:
+                raise ValueError("租户级恢复缺少目标 tenant_id")
+            await step.run(
+                "restore_tenant_backup",
+                lambda: restore_tenant_backup_from_dump(
+                    dump_path=db_dump_path,
+                    target_tenant_id=int(target_tenant_id),
+                    source_tenant_id=int(source_tenant_id) if source_tenant_id is not None else None,
+                ),
+            )
+        else:
+            await step.run("pg_restore", lambda: run_pg_restore(db_dump_path, backup_scope))
+            await step.run(
+                "restore_uploads_from_zip",
+                lambda: restore_uploads_from_zip(zip_path, restore_extract_dir),
+            )
     except Exception as e:
         logger.exception(f"备份恢复失败: {e}")
         if os.path.exists(restore_extract_dir):
@@ -177,7 +189,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         if os.path.exists(restore_extract_dir):
             shutil.rmtree(restore_extract_dir, ignore_errors=True)
 
-    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+    if backup_scope != "tenant" and source_tenant_id is not None and source_tenant_id != target_tenant_id:
         try:
             tables_updated = await run_tenant_id_replacement(source_tenant_id, target_tenant_id)
             logger.info(f"租户ID替换完成，共处理 {tables_updated} 个表")

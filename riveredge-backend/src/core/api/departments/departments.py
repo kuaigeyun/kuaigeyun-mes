@@ -179,6 +179,7 @@ async def get_department_tree(
             is_active=item.get("is_active", True),
             children_count=item.get("children_count", 0),
             user_count=item.get("user_count", 0),
+            position_count=item.get("position_count", 0),
             children=children,
         )
     
@@ -402,7 +403,7 @@ async def delete_department(
     """
     删除部门
     
-    软删除部门。有子部门或关联用户的部门不可删除。
+    软删除部门。存在子部门、关联用户或关联职位时不可删除。
     
     Args:
         department_uuid: 部门UUID

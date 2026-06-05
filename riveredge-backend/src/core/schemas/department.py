@@ -85,6 +85,7 @@ class DepartmentInfo(BaseModel):
     is_active: bool = Field(..., description="是否启用")
     children_count: int = Field(..., description="子部门数量")
     user_count: int = Field(..., description="用户数量")
+    position_count: int = Field(default=0, description="关联职位数量")
 
     model_config = ConfigDict(from_attributes=True)
 

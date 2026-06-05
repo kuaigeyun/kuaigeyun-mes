@@ -10,6 +10,7 @@ from tortoise.exceptions import IntegrityError
 from tortoise.expressions import Q
 
 from core.models.department import Department
+from core.models.position import Position
 from core.timezone_utils import now_utc
 from core.models.user_role import UserRole
 from core.schemas.department import DepartmentCreate, DepartmentUpdate
@@ -116,9 +117,8 @@ class DepartmentService:
         Returns:
             List[Dict]: 部门树列表
         """
-        # 1. 构建基础查询条件
-        query = Q(tenant_id=tenant_id)
-        # deleted_at__isnull=True  # 暂时移除，数据库表结构不一致
+        # 1. 构建基础查询条件（仅未软删除部门）
+        query = Q(tenant_id=tenant_id, deleted_at__isnull=True)
         
         # 2. 如果不带搜索/筛选，使用原有的递归加载方式（性能较好，且支持大数量）
         if not keyword and is_active is None:
@@ -166,8 +166,15 @@ class DepartmentService:
         from infra.models.user import User
         
         async def enrich_dept(dept):
-            children_count = await Department.filter(tenant_id=tenant_id, parent_id=dept.id).count()
-            user_count = await User.filter(tenant_id=tenant_id, department_id=dept.id).count()
+            children_count = await Department.filter(
+                tenant_id=tenant_id, parent_id=dept.id, deleted_at__isnull=True
+            ).count()
+            user_count = await User.filter(
+                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
+            ).count()
+            position_count = await Position.filter(
+                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
+            ).count()
             
             # 获取父部门的UUID
             parent_uuid = None
@@ -189,6 +196,7 @@ class DepartmentService:
                 "is_active": dept.is_active,
                 "children_count": children_count,
                 "user_count": user_count,
+                "position_count": position_count,
                 "children": []
             }
 
@@ -213,19 +221,29 @@ class DepartmentService:
         departments = await Department.filter(
             tenant_id=tenant_id,
             parent_id=parent_id,
+            deleted_at__isnull=True,
         ).order_by("sort_order", "id").all()
         
         result = []
         for dept in departments:
-            children_count = await Department.filter(tenant_id=tenant_id, parent_id=dept.id).count()
+            children_count = await Department.filter(
+                tenant_id=tenant_id, parent_id=dept.id, deleted_at__isnull=True
+            ).count()
             from infra.models.user import User
-            user_count = await User.filter(tenant_id=tenant_id, department_id=dept.id).count()
+            user_count = await User.filter(
+                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
+            ).count()
+            position_count = await Position.filter(
+                tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
+            ).count()
             
             children = await DepartmentService._get_recursive_tree(tenant_id, dept.id)
             
             parent_uuid = None
             if dept.parent_id:
-                parent_dept = await Department.get_or_none(id=dept.parent_id)
+                parent_dept = await Department.filter(
+                    id=dept.parent_id, tenant_id=tenant_id, deleted_at__isnull=True
+                ).first()
                 parent_uuid = parent_dept.uuid if parent_dept else None
 
             result.append({
@@ -242,6 +260,7 @@ class DepartmentService:
                 "is_active": dept.is_active,
                 "children_count": children_count,
                 "user_count": user_count,
+                "position_count": position_count,
                 "children": children,
             })
         return result
@@ -407,13 +426,20 @@ class DepartmentService:
         ).count()
         
         if user_count > 0:
-            # 自动清理关联用户的部门字段（设置为NULL）
-            await User.filter(
-                tenant_id=tenant_id,
-                department_id=department.id,
-                deleted_at__isnull=True
-            ).update(department_id=None)
-        
+            raise ValidationError(
+                f"部门下存在关联用户（{user_count}人），请先将人员移至其他部门后再删除"
+            )
+
+        position_count = await Position.filter(
+            tenant_id=tenant_id,
+            department_id=department.id,
+            deleted_at__isnull=True,
+        ).count()
+        if position_count > 0:
+            raise ValidationError(
+                f"部门下存在关联职位（{position_count}个），请先处理关联职位后再删除"
+            )
+
         # 软删除
         department.deleted_at = now_utc()
         await department.save()
