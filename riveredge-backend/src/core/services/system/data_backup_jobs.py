@@ -555,7 +555,7 @@ def run_pg_restore(dump_path: str, backup_scope: str) -> None:
 
 
 def restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:
-    """从备份 zip 恢复 uploads 目录到配置的上传目录"""
+    """从备份 zip 恢复 uploads 目录到配置的上传目录（全量备份）"""
     upload_dir = infra_settings.FILE_UPLOAD_DIR
     if not upload_dir:
         return
@@ -584,3 +584,40 @@ def restore_uploads_from_zip(zip_path: str, extract_dir: str) -> None:
                 logger.info(f"已恢复 uploads 到 {upload_dir}")
     except Exception as e:
         logger.warning(f"恢复 uploads 失败: {e}")
+
+
+def restore_tenant_uploads_from_zip(
+    zip_path: str,
+    extract_dir: str,
+    target_tenant_id: int,
+) -> None:
+    """从租户级备份 zip 恢复当前租户的 uploads 子目录（不影响其他租户）。"""
+    upload_dir = infra_settings.FILE_UPLOAD_DIR
+    if not upload_dir:
+        logger.info("未配置 FILE_UPLOAD_DIR，跳过租户 uploads 恢复")
+        return
+
+    upload_dir = os.path.abspath(upload_dir)
+    tenant_prefix = f"uploads/{target_tenant_id}/"
+
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            names = [n for n in zf.namelist() if n.startswith(tenant_prefix)]
+            if not names:
+                logger.info("备份中无租户 uploads/{}，跳过", target_tenant_id)
+                return
+            for name in names:
+                zf.extract(name, extract_dir)
+
+        src = os.path.join(extract_dir, "uploads", str(target_tenant_id))
+        if not os.path.isdir(src):
+            logger.info("解压后未发现租户 uploads 目录: {}", src)
+            return
+
+        dest = os.path.join(upload_dir, str(target_tenant_id))
+        if os.path.exists(dest):
+            shutil.rmtree(dest)
+        shutil.copytree(src, dest)
+        logger.info("已恢复租户 uploads: {} -> {}", src, dest)
+    except Exception as e:
+        raise RuntimeError(f"恢复租户 uploads 失败: {e}") from e

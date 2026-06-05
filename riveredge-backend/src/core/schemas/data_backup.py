@@ -30,6 +30,10 @@ class DataBackupResponse(DataBackupBase):
     started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    restore_status: Optional[str] = None
+    restore_started_at: Optional[datetime] = None
+    restore_completed_at: Optional[datetime] = None
+    restore_error_message: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 

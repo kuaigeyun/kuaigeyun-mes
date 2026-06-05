@@ -240,8 +240,14 @@ class DataBackupService:
         if backup_scope == "tenant" and src is not None and src != tenant_id:
             raise ValueError("租户级恢复仅支持同租户覆盖恢复，请将 source_tenant_id 设置为当前租户")
 
+        backup.restore_status = "running"
+        backup.restore_started_at = datetime.now()
+        backup.restore_completed_at = None
+        backup.restore_error_message = None
+        await backup.save()
+
         try:
-            await dispatch_event(
+            task_ids = await dispatch_event(
                 TaskEvent(
                     name="database/restore.requested",
                     data={
@@ -254,8 +260,17 @@ class DataBackupService:
                     id=f"restore-{backup.uuid}",
                 )
             )
-            logger.info(f"已分发恢复任务: {backup.uuid}")
+            if not task_ids:
+                raise RuntimeError("未注册 database/restore.requested 处理器，请确认 Worker 已启动")
+            logger.info(f"已分发恢复任务: {backup.uuid} task_id={task_ids[0]}")
             return True
         except Exception as e:
             logger.exception(f"分发恢复任务失败: {e}")
+            backup.restore_status = "failed"
+            backup.restore_error_message = (
+                "触发恢复任务失败: "
+                f"{DataBackupService._flatten_exception_message(e)}"
+            )
+            backup.restore_completed_at = datetime.now()
+            await backup.save()
             return False

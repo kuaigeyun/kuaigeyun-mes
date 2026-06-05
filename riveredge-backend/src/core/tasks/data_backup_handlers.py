@@ -11,6 +11,7 @@ import os
 import shutil
 import zipfile
 from datetime import datetime
+from typing import Optional
 
 from loguru import logger
 
@@ -18,6 +19,7 @@ from core.models.data_backup import DataBackup
 from core.services.system.data_backup_jobs import (
     read_backup_metadata,
     restore_tenant_backup_from_dump,
+    restore_tenant_uploads_from_zip,
     restore_uploads_from_zip,
     run_backup_dump_and_zip_sync,
     run_full_backup_dump_and_zip,
@@ -25,6 +27,32 @@ from core.services.system.data_backup_jobs import (
     run_tenant_id_replacement,
 )
 from core.tasks.dispatcher import TaskContext, TaskStep, register_event_handler
+
+
+async def _mark_restore_status(
+    backup_uuid: Optional[str],
+    *,
+    status: str,
+    error_message: Optional[str] = None,
+    mark_started: bool = False,
+    mark_completed: bool = False,
+) -> None:
+    if not backup_uuid:
+        return
+    try:
+        backup = await DataBackup.get(uuid=backup_uuid)
+        backup.restore_status = status
+        if mark_started:
+            backup.restore_started_at = datetime.now()
+            backup.restore_error_message = None
+            backup.restore_completed_at = None
+        if mark_completed:
+            backup.restore_completed_at = datetime.now()
+        if error_message is not None:
+            backup.restore_error_message = error_message
+        await backup.save()
+    except Exception as e:
+        logger.exception("更新恢复状态失败 backup_uuid={}: {}", backup_uuid, e)
 
 
 async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> None:
@@ -91,7 +119,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
 
 async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) -> None:
-    """数据恢复：可选恢复前备份 -> 解压并 pg_restore -> 租户 ID 替换。"""
+    """数据恢复：可选恢复前备份 -> 解压并 pg_restore / 租户覆盖 -> 恢复 uploads。"""
     event_data = ctx.event.data
     backup_uuid = event_data.get("backup_uuid")
     target_tenant_id = event_data.get("target_tenant_id") or event_data.get("tenant_id")
@@ -137,10 +165,20 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
     if not zip_path or not os.path.exists(zip_path):
-        logger.error(f"备份文件不存在，无法恢复: {file_path}")
+        msg = f"备份文件不存在，无法恢复: {file_path}"
+        logger.error(msg)
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=msg,
+            mark_completed=True,
+        )
         return
 
+    await _mark_restore_status(backup_uuid, status="running", mark_started=True)
+
     restore_extract_dir = os.path.join(backup_dir, f"temp_restore_{backup_uuid}")
+    backup_scope = "all"
 
     def extract_backup() -> str:
         logger.info(f"开始恢复: zip_path={zip_path}, extract_dir={restore_extract_dir}")
@@ -174,6 +212,14 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                     source_tenant_id=int(source_tenant_id) if source_tenant_id is not None else None,
                 ),
             )
+            await step.run(
+                "restore_tenant_uploads",
+                lambda: restore_tenant_uploads_from_zip(
+                    zip_path,
+                    restore_extract_dir,
+                    int(target_tenant_id),
+                ),
+            )
         else:
             await step.run("pg_restore", lambda: run_pg_restore(db_dump_path, backup_scope))
             await step.run(
@@ -182,6 +228,12 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             )
     except Exception as e:
         logger.exception(f"备份恢复失败: {e}")
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=str(e),
+            mark_completed=True,
+        )
         if os.path.exists(restore_extract_dir):
             shutil.rmtree(restore_extract_dir, ignore_errors=True)
         return
@@ -195,7 +247,15 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             logger.info(f"租户ID替换完成，共处理 {tables_updated} 个表")
         except Exception as e:
             logger.exception(f"租户ID替换失败: {e}")
+            await _mark_restore_status(
+                backup_uuid,
+                status="failed",
+                error_message=f"租户ID替换失败: {e}",
+                mark_completed=True,
+            )
+            return
 
+    await _mark_restore_status(backup_uuid, status="success", mark_completed=True)
     logger.info("数据恢复完成")
 
 

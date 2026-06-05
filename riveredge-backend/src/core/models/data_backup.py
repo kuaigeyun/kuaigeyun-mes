@@ -58,6 +58,11 @@ class DataBackup(BaseModel):
     started_at = fields.DatetimeField(null=True, description="开始时间")
     completed_at = fields.DatetimeField(null=True, description="完成时间")
     error_message = fields.TextField(null=True, description="错误信息")
+
+    restore_status = fields.CharField(max_length=20, null=True, description="最近一次恢复状态")
+    restore_started_at = fields.DatetimeField(null=True, description="最近一次恢复开始时间")
+    restore_completed_at = fields.DatetimeField(null=True, description="最近一次恢复完成时间")
+    restore_error_message = fields.TextField(null=True, description="最近一次恢复错误信息")
     
     def __str__(self):
         return f"Backup {self.name} ({self.status})"

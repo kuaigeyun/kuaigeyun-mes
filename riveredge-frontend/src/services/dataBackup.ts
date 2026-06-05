@@ -24,6 +24,10 @@ export interface DataBackup {
   started_at?: string;
   completed_at?: string;
   error_message?: string;
+  restore_status?: string | null;
+  restore_started_at?: string;
+  restore_completed_at?: string;
+  restore_error_message?: string;
   created_at: string;
   updated_at: string;
 }
@@ -58,8 +62,46 @@ export interface RestoreBackupRequest {
 
 export interface RestoreBackupResponse {
   success: boolean;
+  restore_status?: string;
   message?: string;
   error?: string;
+}
+
+export type RestorePollCallbacks = {
+  onSuccess?: () => void;
+  onFailed?: (errorMessage?: string) => void;
+  onTimeout?: () => void;
+};
+
+/**
+ * 轮询恢复状态，直到 success/failed 或超时
+ */
+export async function pollRestoreStatus(
+  uuid: string,
+  callbacks: RestorePollCallbacks = {},
+  options: { intervalMs?: number; maxAttempts?: number } = {},
+): Promise<'success' | 'failed' | 'timeout' | 'idle'> {
+  const intervalMs = options.intervalMs ?? 3000;
+  const maxAttempts = options.maxAttempts ?? 120;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await new Promise((resolve) => window.setTimeout(resolve, intervalMs));
+    const detail = await getBackupDetail(uuid);
+    if (detail.restore_status === 'success') {
+      callbacks.onSuccess?.();
+      return 'success';
+    }
+    if (detail.restore_status === 'failed') {
+      callbacks.onFailed?.(detail.restore_error_message || undefined);
+      return 'failed';
+    }
+    if (detail.restore_status !== 'running') {
+      return 'idle';
+    }
+  }
+
+  callbacks.onTimeout?.();
+  return 'timeout';
 }
 
 /**

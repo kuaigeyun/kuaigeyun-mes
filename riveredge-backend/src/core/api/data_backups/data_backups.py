@@ -286,7 +286,14 @@ class RestoreRequest(BaseModel):
     source_tenant_id: Optional[int] = None  # 备份中的租户ID（用于替换）；不填则从备份元数据或记录推断
 
 
-@router.post("/{uuid}/restore")
+class RestoreBackupResponse(BaseModel):
+    success: bool
+    restore_status: Optional[str] = None
+    message: Optional[str] = None
+    error: Optional[str] = None
+
+
+@router.post("/{uuid}/restore", response_model=RestoreBackupResponse)
 async def restore_backup(
     uuid: str,
     data: RestoreRequest,
@@ -307,6 +314,17 @@ async def restore_backup(
             create_pre_restore_backup=data.create_pre_restore_backup,
             source_tenant_id=data.source_tenant_id,
         )
-        return {"success": success}
+        if success:
+            return RestoreBackupResponse(
+                success=True,
+                restore_status="running",
+                message="恢复任务已提交，请稍后在列表中查看恢复状态",
+            )
+        backup = await DataBackupService.get_backup_by_uuid(current_user.tenant_id, uuid)
+        return RestoreBackupResponse(
+            success=False,
+            restore_status=backup.restore_status,
+            error=backup.restore_error_message or "恢复任务提交失败",
+        )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))

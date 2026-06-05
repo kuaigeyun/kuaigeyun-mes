@@ -14,6 +14,7 @@ import {
   getBackupDetail,
   restoreBackup,
   deleteBackup,
+  pollRestoreStatus,
   DataBackup,
   DataBackupListResponse,
 } from '../../../services/dataBackup';
@@ -114,6 +115,20 @@ const CardView: React.FC = () => {
       if (result.success) {
         handleSuccess(result.message || t('pages.system.dataBackups.restoreSuccess'));
         loadBackups();
+        void pollRestoreStatus(backup.uuid, {
+          onSuccess: () => {
+            handleSuccess(t('pages.system.dataBackups.restoreCompletedSuccess'));
+            loadBackups();
+          },
+          onFailed: (errorMessage) => {
+            handleError(new Error(errorMessage || t('pages.system.dataBackups.restoreFailed')), t('pages.system.dataBackups.restoreFailed'));
+            loadBackups();
+          },
+          onTimeout: () => {
+            messageApi.warning(t('pages.system.dataBackups.restorePollingTimeout'));
+            loadBackups();
+          },
+        });
       } else {
         handleError(new Error(result.error || t('pages.system.dataBackups.restoreFailed')), t('pages.system.dataBackups.restoreFailed'));
       }

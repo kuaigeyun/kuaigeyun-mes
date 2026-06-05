@@ -32,6 +32,7 @@ import {
   deleteBackup,
   startBackupDownload,
   getBackupWorkerHealth,
+  pollRestoreStatus,
   DataBackup,
   BackupWorkerHealth,
   DataBackupListResponse,
@@ -74,6 +75,12 @@ const DataBackupsPage: React.FC = () => {
       failed: { status: 'error', text: t('pages.system.dataBackups.statusFailed') },
     };
     return statusMap[status] || { status: 'default', text: status };
+  };
+
+  const getRestoreStatusTag = (restoreStatus?: string | null) => {
+    if (!restoreStatus) return <Text type="secondary">-</Text>;
+    const info = getStatusInfo(restoreStatus);
+    return <Badge status={info.status} text={info.text} />;
   };
 
   const getBackupScopeText = (scope: string): string => {
@@ -196,14 +203,29 @@ const DataBackupsPage: React.FC = () => {
     const values = await restoreForm.validateFields().catch(() => null);
     if (!values) return;
     const sourceTenantId = values.source_tenant_id != null ? Number(values.source_tenant_id) : undefined;
+    const restoringUuid = restoreBackupRecord.uuid;
     try {
-      const result = await restoreBackup(restoreBackupRecord.uuid, true, true, sourceTenantId);
+      const result = await restoreBackup(restoringUuid, true, true, sourceTenantId);
       if (result.success) {
-        messageApi.success(result.message || t('pages.system.dataBackups.restoreSuccess'));
+        messageApi.info(result.message || t('pages.system.dataBackups.restoreSuccess'));
         setRestoreModalVisible(false);
         setRestoreBackupRecord(null);
         actionRef.current?.reload();
         loadWorkerHealth(true);
+        void pollRestoreStatus(restoringUuid, {
+          onSuccess: () => {
+            messageApi.success(t('pages.system.dataBackups.restoreCompletedSuccess'));
+            actionRef.current?.reload();
+          },
+          onFailed: (errorMessage) => {
+            messageApi.error(errorMessage || t('pages.system.dataBackups.restoreFailed'));
+            actionRef.current?.reload();
+          },
+          onTimeout: () => {
+            messageApi.warning(t('pages.system.dataBackups.restorePollingTimeout'));
+            actionRef.current?.reload();
+          },
+        });
       } else {
         messageApi.error(result.error || t('pages.system.dataBackups.restoreFailed'));
       }
@@ -422,6 +444,13 @@ const DataBackupsPage: React.FC = () => {
                 text={statusInfo.text}
               />
             </div>
+
+            {backup.restore_status && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.columnRestoreStatus')}</Text>
+                {getRestoreStatusTag(backup.restore_status)}
+              </div>
+            )}
             
             {backup.file_size && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -455,6 +484,16 @@ const DataBackupsPage: React.FC = () => {
             {backup.error_message && (
               <Alert
                 message={backup.error_message}
+                type="error"
+                showIcon
+                style={{ fontSize: 11, marginTop: 8 }}
+                closable={false}
+              />
+            )}
+
+            {backup.restore_error_message && (
+              <Alert
+                message={backup.restore_error_message}
                 type="error"
                 showIcon
                 style={{ fontSize: 11, marginTop: 8 }}
@@ -512,6 +551,14 @@ const DataBackupsPage: React.FC = () => {
       },
       render: (_: any, record: DataBackup) => getStatusTag(record.status),
       width: 100,
+    },
+    {
+      title: t('pages.system.dataBackups.columnRestoreStatus'),
+      dataIndex: 'restore_status',
+      key: 'restore_status',
+      search: false,
+      render: (_: any, record: DataBackup) => getRestoreStatusTag(record.restore_status),
+      width: 110,
     },
     {
       title: t('pages.system.dataBackups.columnFileSize'),
@@ -593,11 +640,15 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
     { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupScopeText(r.backup_scope) },
     { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
+    { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status) },
     { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
     { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (_, r) => formatFileSize(r.file_size) },
     { title: t('pages.system.dataBackups.columnStartedAt'), dataIndex: 'started_at', valueType: 'dateTime' },
     { title: t('pages.system.dataBackups.columnCompletedAt'), dataIndex: 'completed_at', valueType: 'dateTime' },
     { title: t('pages.system.dataBackups.columnError'), dataIndex: 'error_message', render: (_, r) => r.error_message || '-' },
+    { title: t('pages.system.dataBackups.columnRestoreStartedAt'), dataIndex: 'restore_started_at', valueType: 'dateTime' },
+    { title: t('pages.system.dataBackups.columnRestoreCompletedAt'), dataIndex: 'restore_completed_at', valueType: 'dateTime' },
+    { title: t('pages.system.dataBackups.columnRestoreError'), dataIndex: 'restore_error_message', render: (_, r) => r.restore_error_message || '-' },
     {
       title: t('pages.system.dataBackups.columnCreatedAt'),
       dataIndex: 'created_at',
