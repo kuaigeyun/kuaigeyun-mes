@@ -77,13 +77,8 @@ def zip_has_upload_entries(zip_path: str) -> bool:
         return False
 
 
-def _build_tenant_user_reference_subqueries(
-    *,
-    tenant_id: int,
-    export_tables: list[str],
-    env: dict[str, str],
-) -> list[str]:
-    """收集租户子表引用 core_users 的 user_id，用于导出时一并打包关联用户。"""
+def _load_core_user_fk_children(*, export_tables: list[str], env: dict[str, str]) -> dict[str, str]:
+    """返回带 tenant_id 且 FK 指向 core_users.id 的子表映射 {table: column}。"""
     db_user = infra_settings.DB_USER
     db_host = infra_settings.DB_HOST
     db_port = infra_settings.DB_PORT
@@ -126,11 +121,11 @@ def _build_tenant_user_reference_subqueries(
     ]
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if result.returncode != 0:
-        logger.warning("查询 user 外键引用失败，core_users 仍仅按 tenant_id 导出: {}", result.stderr)
-        return []
+        logger.warning("查询 core_users 外键引用失败: {}", result.stderr)
+        return {}
 
     export_set = set(export_tables)
-    subqueries: list[str] = []
+    mapping: dict[str, str] = {}
     for line in result.stdout.splitlines():
         parts = line.strip().split("|")
         if len(parts) != 2:
@@ -140,6 +135,18 @@ def _build_tenant_user_reference_subqueries(
             continue
         if child_table == "core_users":
             continue
+        mapping[child_table] = child_column
+    return mapping
+
+
+def _build_tenant_user_reference_subqueries(
+    *,
+    tenant_id: int,
+    user_fk_children: dict[str, str],
+) -> list[str]:
+    """收集租户子表引用 core_users 的 user_id，用于导出时一并打包关联用户。"""
+    subqueries: list[str] = []
+    for child_table, child_column in sorted(user_fk_children.items()):
         subqueries.append(
             f'SELECT DISTINCT "{child_column}" FROM "{child_table}" '
             f"WHERE tenant_id = {int(tenant_id)} AND \"{child_column}\" IS NOT NULL"
@@ -147,14 +154,31 @@ def _build_tenant_user_reference_subqueries(
     return subqueries
 
 
-def _build_tenant_table_copy_sql(table: str, tenant_id: int, user_ref_subqueries: list[str]) -> str:
-    if table == "core_users" and user_ref_subqueries:
-        refs = " UNION ".join(user_ref_subqueries)
+def _build_tenant_table_copy_sql(
+    table: str,
+    tenant_id: int,
+    user_ref_subqueries: list[str],
+    user_fk_children: Optional[dict[str, str]] = None,
+) -> str:
+    tid = int(tenant_id)
+    user_fk_children = user_fk_children or {}
+    if table == "core_users":
+        if user_ref_subqueries:
+            refs = " UNION ".join(user_ref_subqueries)
+            return (
+                f'SELECT * FROM "core_users" WHERE tenant_id = {tid} '
+                f"OR id IN ({refs})"
+            )
+        return f'SELECT * FROM "core_users" WHERE tenant_id = {tid}'
+
+    if table in user_fk_children:
+        col = user_fk_children[table]
         return (
-            f'SELECT * FROM "core_users" WHERE tenant_id = {int(tenant_id)} '
-            f"OR id IN ({refs})"
+            f'SELECT t.* FROM "{table}" t '
+            f"WHERE t.tenant_id = {tid} "
+            f'AND EXISTS (SELECT 1 FROM "core_users" u WHERE u.id = t."{col}")'
         )
-    return f'SELECT * FROM "{table}" WHERE tenant_id = {int(tenant_id)}'
+    return f'SELECT * FROM "{table}" WHERE tenant_id = {tid}'
 
 
 def _build_tenant_junction_copy_sql(table: str, tenant_id: int) -> str:
@@ -277,10 +301,10 @@ def run_backup_dump_and_zip_sync(
         if skipped_tables:
             logger.info("租户隔离备份跳过表: {}", skipped_tables)
 
+        user_fk_children = _load_core_user_fk_children(export_tables=tables, env=env)
         user_ref_subqueries = _build_tenant_user_reference_subqueries(
             tenant_id=int(tenant_id),
-            export_tables=tables,
-            env=env,
+            user_fk_children=user_fk_children,
         )
         if user_ref_subqueries:
             logger.info("core_users 导出将包含 {} 个子表引用的用户 ID", len(user_ref_subqueries))
@@ -310,7 +334,7 @@ def run_backup_dump_and_zip_sync(
                     "-d",
                     db_name,
                     "-c",
-                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries)}) '
+                    f'COPY ({_build_tenant_table_copy_sql(table, int(tenant_id), user_ref_subqueries, user_fk_children)}) '
                     "TO STDOUT WITH (FORMAT CSV, HEADER, ENCODING 'UTF8')",
                 ]
                 logger.debug(f"正在导出表: {table}")
@@ -1063,6 +1087,119 @@ def _extract_csv_column_values(csv_text: str, column: str) -> list[str]:
     return values
 
 
+def _filter_csv_rows_by_allowed_values(
+    csv_text: str,
+    column: str,
+    allowed: set[str],
+    *,
+    allow_empty: bool = True,
+) -> tuple[str, int]:
+    """按列值白名单过滤 CSV 行，返回 (新 CSV, 丢弃行数)。"""
+    if not csv_text or not allowed:
+        return csv_text, 0
+    columns = _csv_header_columns(csv_text)
+    if column not in columns:
+        return csv_text, 0
+    col_idx = columns.index(column)
+    _ensure_csv_field_limit()
+    reader = csv.reader(csv_text.splitlines())
+    header = next(reader, [])
+    kept_rows: list[list[str]] = [header]
+    dropped = 0
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        cell = padded[col_idx].strip() if col_idx < len(padded) else ""
+        if not cell:
+            if allow_empty:
+                kept_rows.append(padded[: len(header)])
+            else:
+                dropped += 1
+            continue
+        if cell in allowed:
+            kept_rows.append(padded[: len(header)])
+        else:
+            dropped += 1
+    if dropped == 0:
+        return csv_text, 0
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(kept_rows)
+    return buffer.getvalue(), dropped
+
+
+def _filter_tenant_backup_user_fk_csv_rows(
+    table_csv_map: dict[str, str],
+    user_fk_children: dict[str, str],
+) -> dict[str, str]:
+    """恢复前剔除引用备份内不存在 core_users 行的子表记录（兼容旧备份包）。"""
+    users_csv = table_csv_map.get("core_users")
+    if not users_csv or not _csv_has_data_rows(users_csv):
+        return table_csv_map
+    allowed_user_ids = set(_extract_csv_column_values(users_csv, "id"))
+    if not allowed_user_ids:
+        return table_csv_map
+
+    filtered = dict(table_csv_map)
+    for table, column in sorted(user_fk_children.items()):
+        if table == "core_users":
+            continue
+        csv_text = filtered.get(table)
+        if not csv_text or not _csv_has_data_rows(csv_text):
+            continue
+        new_csv, dropped = _filter_csv_rows_by_allowed_values(
+            csv_text,
+            column,
+            allowed_user_ids,
+            allow_empty=False,
+        )
+        if dropped:
+            logger.warning(
+                "表 {} 已过滤 {} 条引用不存在用户(id)的备份行",
+                table,
+                dropped,
+            )
+            filtered[table] = new_csv
+    return filtered
+
+
+async def _load_core_user_fk_children_from_db(
+    conn: Any,
+    table_names: list[str],
+) -> dict[str, str]:
+    if not table_names:
+        return {}
+    fk_sql = """
+        SELECT tc.table_name AS child_table, kcu.column_name AS child_column
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = kcu.table_schema
+         AND tc.table_name = kcu.table_name
+        JOIN information_schema.constraint_column_usage ccu
+          ON ccu.constraint_name = tc.constraint_name
+         AND ccu.table_schema = tc.table_schema
+        JOIN information_schema.columns tenant_col
+          ON tenant_col.table_schema = 'public'
+         AND tenant_col.table_name = tc.table_name
+         AND tenant_col.column_name = 'tenant_id'
+        WHERE tc.constraint_type = 'FOREIGN KEY'
+          AND tc.table_schema = 'public'
+          AND ccu.table_name = 'core_users'
+          AND ccu.column_name = 'id'
+          AND tc.table_name = ANY($1::text[])
+    """
+    rows = await conn.execute_query_dict(fk_sql, [table_names])
+    mapping: dict[str, str] = {}
+    for row in rows:
+        child_table = row.get("child_table")
+        child_column = row.get("child_column")
+        if child_table and child_column and child_table != "core_users":
+            mapping[str(child_table)] = str(child_column)
+    return mapping
+
+
 def _append_pk_conflict_deletes(
     script_lines: list[str],
     table: str,
@@ -1139,12 +1276,22 @@ def _append_fk_orphan_cleanup(
             continue
         if "tenant_id" not in table_column_map.get(child, []):
             continue
+        parent_has_tenant = "tenant_id" in table_column_map.get(parent, [])
+        child_has_tenant = "tenant_id" in table_column_map.get(child, [])
+        if parent_has_tenant and child_has_tenant:
+            exists_clause = (
+                f'SELECT 1 FROM "{parent}" p '
+                f'WHERE p."{parent_col}" = c."{child_col}" '
+                f"AND p.tenant_id = c.tenant_id"
+            )
+        else:
+            exists_clause = (
+                f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
+            )
         script_lines.append(
             f'DELETE FROM "{child}" c WHERE c.tenant_id IN ({tenant_sql}) '
             f'AND c."{child_col}" IS NOT NULL '
-            f'AND NOT EXISTS ('
-            f'SELECT 1 FROM "{parent}" p WHERE p."{parent_col}" = c."{child_col}"'
-            f");"
+            f"AND NOT EXISTS ({exists_clause});"
         )
 
 
@@ -1456,6 +1603,9 @@ async def restore_tenant_backup_from_dump(
     table_names = sorted(table_csv_map.keys())
     if not table_names:
         raise ValueError("备份中的表在目标库均不存在，无法恢复")
+
+    user_fk_children = await _load_core_user_fk_children_from_db(conn, table_names)
+    table_csv_map = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, user_fk_children)
 
     fk_sql = """
         SELECT

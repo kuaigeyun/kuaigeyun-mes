@@ -6,6 +6,8 @@ from core.services.system.data_backup_jobs import (
     TENANT_JUNCTION_TABLES,
     _append_tenant_junction_deletes,
     _build_tenant_junction_copy_sql,
+    _build_tenant_table_copy_sql,
+    _filter_tenant_backup_user_fk_csv_rows,
     _parse_tenant_dump_sections,
     _validate_csv_header,
 )
@@ -84,3 +86,34 @@ def test_append_tenant_junction_deletes_scopes_all_junction_tables():
     assert 'DELETE FROM "core_role_permissions"' in script
     assert 'DELETE FROM "core_policy_bindings"' in script
     assert "tenant_id IN (10, 20)" in script
+
+
+def test_build_tenant_table_copy_sql_filters_user_fk_children():
+    sql = _build_tenant_table_copy_sql(
+        "core_user_preferences",
+        17,
+        [],
+        {"core_user_preferences": "user_id"},
+    )
+    assert "core_user_preferences" in sql
+    assert "EXISTS" in sql
+    assert "core_users" in sql
+    assert "tenant_id = 17" in sql
+
+
+def test_filter_tenant_backup_user_fk_csv_rows_drops_missing_users():
+    table_csv_map = {
+        "core_users": "id,tenant_id,username\n2,17,bob\n",
+        "core_user_preferences": (
+            "id,uuid,tenant_id,user_id,preferences\n"
+            "1,u1,17,1,{}\n"
+            "2,u2,17,2,{}\n"
+        ),
+    }
+    filtered = _filter_tenant_backup_user_fk_csv_rows(
+        table_csv_map,
+        {"core_user_preferences": "user_id"},
+    )
+    assert "user_id" in filtered["core_user_preferences"]
+    assert ",1," not in filtered["core_user_preferences"]
+    assert ",2," in filtered["core_user_preferences"]
