@@ -7371,6 +7371,7 @@ export default {
   'pages.system.dataBackups.deleteSuccess': 'Backup deleted',
   'pages.system.dataBackups.deleteFailed': 'Failed to delete backup',
   'pages.system.dataBackups.downloadStarted': 'Backup download started',
+  'pages.system.dataBackups.downloadPreparing': 'Preparing download, large files will prompt save after transfer completes',
   'pages.system.dataBackups.downloadFailed': 'Failed to download backup',
   'pages.system.dataBackups.statusPending': 'Pending',
   'pages.system.dataBackups.statusRunning': 'Running',
