@@ -410,6 +410,38 @@ check_port() {
     return 1
 }
 
+caddy_https_enabled() {
+    [ -n "${CADDY_DOMAIN:-}" ] && [ "${CADDY_ENABLE_LETSENCRYPT:-false}" = "true" ]
+}
+
+caddy_prepare_listen_ports() {
+    load_deploy_env
+    if caddy_https_enabled; then
+        kill_port 80
+        kill_port 443
+    else
+        kill_port "$PROXY_PORT"
+    fi
+}
+
+caddy_check_listening() {
+    load_deploy_env
+    if caddy_https_enabled; then
+        check_port 443
+    else
+        check_port "$PROXY_PORT"
+    fi
+}
+
+caddy_listen_port_label() {
+    load_deploy_env
+    if caddy_https_enabled; then
+        echo "443 (+80 跳转)"
+    else
+        echo "$PROXY_PORT"
+    fi
+}
+
 wait_for_backend_health() {
     local retries=0
     while [ $retries -lt "$BACKEND_START_TIMEOUT" ]; do
@@ -1546,17 +1578,23 @@ start_worker_prod() {
 start_caddy_prod() {
     ensure_linux_caddy_ready
     gen_caddyfile
-    local caddy_bin caddy_config
+    load_deploy_env
+    local caddy_bin caddy_config listen_label
     caddy_bin="$(resolve_caddy)"
     caddy_config="$(caddy_native_path "$CADDYFILE")"
+    listen_label="$(caddy_listen_port_label)"
     if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
         log_info "Caddy 已在运行"
         verify_caddy_serving || exit 1
         return 0
     fi
     stop_service caddy
-    kill_port "$PROXY_PORT"
-    log_info "启动 Caddy (:${PROXY_PORT})..."
+    caddy_prepare_listen_ports
+    if caddy_https_enabled; then
+        log_info "启动 Caddy (HTTPS :443 + HTTP :80, 域名 ${CADDY_DOMAIN})..."
+    else
+        log_info "启动 Caddy (:${PROXY_PORT})..."
+    fi
     nohup "$caddy_bin" run --config "$caddy_config" >> "$LOGS_DIR/caddy.log" 2>&1 &
     echo $! > "$LOGS_DIR/caddy.pid"
     sleep 2
@@ -1565,8 +1603,8 @@ start_caddy_prod() {
         tail -20 "$LOGS_DIR/caddy.log" >&2
         exit 1
     }
-    check_port "$PROXY_PORT" || {
-        log_error "Caddy 未监听端口 ${PROXY_PORT}，查看 $LOGS_DIR/caddy.log"
+    caddy_check_listening || {
+        log_error "Caddy 未监听端口 ${listen_label}，查看 $LOGS_DIR/caddy.log"
         tail -20 "$LOGS_DIR/caddy.log" >&2
         exit 1
     }
@@ -1575,12 +1613,27 @@ start_caddy_prod() {
 }
 
 verify_caddy_serving() {
+    load_deploy_env
     local code
-    code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PROXY_PORT}/" 2>/dev/null || echo "000")"
-    if [ "$code" = "200" ]; then
-        return 0
+    if caddy_https_enabled; then
+        code="$(curl -s -o /dev/null -w '%{http_code}' -H "Host: ${CADDY_DOMAIN}" "http://127.0.0.1/" 2>/dev/null || echo "000")"
+        case "$code" in
+            200|301|302|308)
+                return 0
+                ;;
+        esac
+        if caddy_check_listening; then
+            log_warn "Caddy 已在 :443 监听，TLS 证书可能仍在申请中（HTTP ${code}）"
+            return 0
+        fi
+        log_error "Caddy HTTPS 未就绪（Host: ${CADDY_DOMAIN} HTTP ${code}）"
+    else
+        code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${PROXY_PORT}/" 2>/dev/null || echo "000")"
+        if [ "$code" = "200" ]; then
+            return 0
+        fi
+        log_error "Web 入口 http://127.0.0.1:${PROXY_PORT}/ 返回 HTTP ${code}（期望 200）"
     fi
-    log_error "Web 入口 http://127.0.0.1:${PROXY_PORT}/ 返回 HTTP ${code}（期望 200）"
     log_error "Caddyfile: $CADDYFILE"
     log_error "前端 dist: $FRONTEND_DIR/dist/index.html"
     [ -f "$LOGS_DIR/caddy.log" ] && tail -20 "$LOGS_DIR/caddy.log" >&2
@@ -1629,12 +1682,18 @@ cmd_stop_dev() {
 }
 
 cmd_stop_prod() {
+    load_deploy_env
     stop_service caddy
     stop_service worker
     stop_service scheduler
     stop_service backend
     # 清理未纳入 pid 文件管理的旧进程占用（如历史 uvicorn/caddy）
-    kill_port "$PROXY_PORT"
+    if caddy_https_enabled; then
+        kill_port 80
+        kill_port 443
+    else
+        kill_port "$PROXY_PORT"
+    fi
     kill_port "$BACKEND_PORT"
     log_ok "生产服务已停止"
 }
@@ -1654,6 +1713,9 @@ cmd_status() {
     check_port "$BACKEND_PORT" && echo "  端口 ${BACKEND_PORT}: 监听中" || echo "  端口 ${BACKEND_PORT}: 空闲"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         check_port "$FRONTEND_PORT" && echo "  端口 ${FRONTEND_PORT}: 监听中" || echo "  端口 ${FRONTEND_PORT}: 空闲"
+    elif caddy_https_enabled; then
+        check_port 443 && echo "  端口 443 (HTTPS): 监听中" || echo "  端口 443 (HTTPS): 空闲"
+        check_port 80 && echo "  端口 80 (HTTP 跳转): 监听中" || echo "  端口 80 (HTTP 跳转): 空闲"
     else
         check_port "$PROXY_PORT" && echo "  端口 ${PROXY_PORT}: 监听中" || echo "  端口 ${PROXY_PORT}: 空闲"
     fi

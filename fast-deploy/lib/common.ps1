@@ -930,8 +930,14 @@ function Start-WorkerProd {
     Write-LogOk 'Taskiq 已启动'
 }
 
+function Test-CaddyHttpsEnabled {
+    Load-DeployEnv
+    return ($script:CADDY_DOMAIN -and $script:CADDY_ENABLE_LETSENCRYPT -eq 'true')
+}
+
 function Start-CaddyProd {
     New-Caddyfile
+    Load-DeployEnv
     $caddy = Resolve-Caddy
     if (-not $caddy) { throw '未安装 Caddy，请运行 install' }
     $pidf = Join-Path $script:LogsDir 'caddy.pid'
@@ -939,9 +945,18 @@ function Start-CaddyProd {
         $pid = [int](Get-Content $pidf -Raw).Trim()
         if (Get-Process -Id $pid -ErrorAction SilentlyContinue) { Write-LogInfo 'Caddy 已在运行'; return }
     }
-    Write-LogInfo "启动 Caddy (:$($script:PROXY_PORT))..."
+    if (Test-CaddyHttpsEnabled) {
+        Write-LogInfo "启动 Caddy (HTTPS :443 + HTTP :80, 域名 $($script:CADDY_DOMAIN))..."
+    } else {
+        Write-LogInfo "启动 Caddy (:$($script:PROXY_PORT))..."
+    }
     Start-ProcessBackground 'caddy' $caddy @('run',"--config",$script:Caddyfile) @{ WORKDIR = $script:ProjectRoot }
     Start-Sleep -Seconds 2
+    if (Test-CaddyHttpsEnabled) {
+        if (-not (Test-PortInUse 443)) { throw 'Caddy 未监听端口 443，查看 .logs/caddy.log' }
+    } elseif (-not (Test-PortInUse $script:PROXY_PORT)) {
+        throw "Caddy 未监听端口 $($script:PROXY_PORT)，查看 .logs/caddy.log"
+    }
     Write-LogOk 'Caddy 已启动'
 }
 
@@ -987,11 +1002,18 @@ function Invoke-StopDev {
 }
 
 function Invoke-StopProd {
+    Load-DeployEnv
     Stop-ServiceByPidFile 'caddy'
     Stop-ServiceByPidFile 'worker'
     Stop-ServiceByPidFile 'scheduler'
     Stop-ServiceByPidFile 'backend'
     Get-Process caddy -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if (Test-CaddyHttpsEnabled) {
+        Stop-Port 80
+        Stop-Port 443
+    } else {
+        Stop-Port $script:PROXY_PORT
+    }
     Write-LogOk '生产服务已停止'
 }
 
@@ -1011,6 +1033,9 @@ function Invoke-Status {
     if (Test-PortInUse $script:BACKEND_PORT) { Write-Host "  端口 $($script:BACKEND_PORT): 监听中" } else { Write-Host "  端口 $($script:BACKEND_PORT): 空闲" }
     if ($script:DeployMode -eq 'dev') {
         if (Test-PortInUse $script:FRONTEND_PORT) { Write-Host "  端口 $($script:FRONTEND_PORT): 监听中" } else { Write-Host "  端口 $($script:FRONTEND_PORT): 空闲" }
+    } elseif (Test-CaddyHttpsEnabled) {
+        if (Test-PortInUse 443) { Write-Host '  端口 443 (HTTPS): 监听中' } else { Write-Host '  端口 443 (HTTPS): 空闲' }
+        if (Test-PortInUse 80) { Write-Host '  端口 80 (HTTP 跳转): 监听中' } else { Write-Host '  端口 80 (HTTP 跳转): 空闲' }
     } else {
         if (Test-PortInUse $script:PROXY_PORT) { Write-Host "  端口 $($script:PROXY_PORT): 监听中" } else { Write-Host "  端口 $($script:PROXY_PORT): 空闲" }
     }
