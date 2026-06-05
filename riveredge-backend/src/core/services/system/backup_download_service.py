@@ -6,12 +6,18 @@
 """
 
 from datetime import datetime, timedelta
+import os
 from typing import Any, Dict
 from urllib.parse import urlparse
 
 from jose import JWTError, jwt
 from loguru import logger
 
+from core.services.system.backup_storage import (
+    _is_under_dir,
+    resolve_backup_file_path,
+    resolve_data_backup_dir,
+)
 from infra.config.infra_config import infra_settings as settings
 
 
@@ -67,16 +73,20 @@ class BackupDownloadService:
 
     @staticmethod
     def resolve_backup_file(backup_uuid: str, tenant_id: int, file_path: str | None) -> tuple[str, str]:
-        import os
-
         if not file_path:
             raise ValueError("备份文件不存在")
-        if not os.path.exists(file_path):
+
+        abs_path = resolve_backup_file_path(file_path)
+        if not abs_path:
+            logger.error(
+                "备份文件已丢失: backup_uuid={}, stored_path={}",
+                backup_uuid,
+                file_path,
+            )
             raise ValueError("备份文件已丢失")
 
-        abs_path = os.path.abspath(file_path)
-        backups_dir = os.path.abspath("backups")
-        if not abs_path.startswith(backups_dir):
+        backups_dir = resolve_data_backup_dir()
+        if not _is_under_dir(abs_path, backups_dir):
             logger.error("备份路径越界: file_path={}, backups_dir={}", abs_path, backups_dir)
             raise ValueError("无效的备份路径")
 

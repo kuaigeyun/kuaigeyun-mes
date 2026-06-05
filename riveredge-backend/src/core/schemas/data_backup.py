@@ -25,7 +25,10 @@ class DataBackupResponse(DataBackupBase):
         None,
         description="备份文件内记录的导出租户 ID（来自 backup_metadata.json，用于恢复时展示与映射）",
     )
-    file_path: Optional[str] = None
+    file_available: Optional[bool] = Field(
+        None,
+        description="本服务器上备份 zip 是否可访问（备份文件仅存于创建/上传所在服务器）",
+    )
     file_uuid: Optional[str] = None
     file_size: Optional[int] = None
     source_type: str = "generated"

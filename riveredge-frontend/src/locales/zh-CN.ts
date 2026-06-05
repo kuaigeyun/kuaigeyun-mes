@@ -7421,6 +7421,8 @@ export default {
   'pages.system.dataBackups.deleteFailed': '删除备份失败',
   'pages.system.dataBackups.downloadStarted': '浏览器已开始下载',
   'pages.system.dataBackups.downloadFailed': '下载备份失败',
+  'pages.system.dataBackups.fileNotOnServer':
+    '备份文件不在当前服务器上。请在创建备份的同一环境下载，或通过「上传备份」将 zip 传到本服务器后再恢复。',
   'pages.system.dataBackups.statusPending': '待执行',
   'pages.system.dataBackups.statusRunning': '执行中',
   'pages.system.dataBackups.statusSuccess': '成功',

@@ -7374,6 +7374,8 @@ export default {
   'pages.system.dataBackups.deleteFailed': 'Failed to delete backup',
   'pages.system.dataBackups.downloadStarted': 'Download started in browser',
   'pages.system.dataBackups.downloadFailed': 'Failed to download backup',
+  'pages.system.dataBackups.fileNotOnServer':
+    'The backup file is not on this server. Download from the environment that created it, or use Upload Backup to copy the zip here before restore.',
   'pages.system.dataBackups.statusPending': 'Pending',
   'pages.system.dataBackups.statusRunning': 'Running',
   'pages.system.dataBackups.statusSuccess': 'Success',

@@ -16,6 +16,11 @@ from typing import Optional
 from loguru import logger
 
 from core.models.data_backup import DataBackup
+from core.services.system.backup_storage import (
+    resolve_data_backup_dir,
+    store_backup_file_path,
+    resolve_backup_file_path,
+)
 from core.services.system.data_backup_jobs import (
     read_backup_metadata,
     resolve_backup_scope_for_restore,
@@ -65,8 +70,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
     backup_type = event_data.get("backup_type", "full")
     backup_scope = event_data.get("backup_scope", "full")
 
-    backup_dir = os.path.abspath("backups")
-    os.makedirs(backup_dir, exist_ok=True)
+    backup_dir = resolve_data_backup_dir()
     temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
     backup = None
 
@@ -101,7 +105,7 @@ async def handle_database_backup_requested(ctx: TaskContext, step: TaskStep) -> 
 
         backup.status = "success"
         backup.completed_at = datetime.now()
-        backup.file_path = final_zip_path
+        backup.file_path = store_backup_file_path(final_zip_path)
         backup.file_size = os.path.getsize(final_zip_path)
         await backup.save()
         logger.info(f"备份完成: {backup_uuid} -> {final_zip_path}")
@@ -129,10 +133,9 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
     file_path = event_data.get("file_path")
     create_pre_restore = event_data.get("create_pre_restore_backup", True)
 
-    backup_dir = os.path.abspath("backups")
-    os.makedirs(backup_dir, exist_ok=True)
+    backup_dir = resolve_data_backup_dir()
 
-    zip_path = os.path.abspath(file_path) if file_path else ""
+    zip_path = resolve_backup_file_path(file_path) or ""
     if zip_path and os.path.exists(zip_path):
         metadata = read_backup_metadata(zip_path)
         if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
@@ -181,7 +184,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                 backup_scope="tenant" if backup_scope == "tenant" else "all",
                 status="success",
                 source_type="generated",
-                file_path=final_zip_path,
+                file_path=store_backup_file_path(final_zip_path),
                 file_size=os.path.getsize(final_zip_path),
                 started_at=datetime.now(),
                 completed_at=datetime.now(),
@@ -224,19 +227,15 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             if target_tenant_id is None:
                 raise ValueError("租户级恢复缺少目标 tenant_id")
 
-            async def restore_tenant_backup_step() -> None:
-                await restore_tenant_backup_from_dump(
+            async def restore_tenant_backup_step() -> int:
+                return await restore_tenant_backup_from_dump(
                     dump_path=db_dump_path,
                     target_tenant_id=int(target_tenant_id),
                     source_tenant_id=int(source_tenant_id) if source_tenant_id is not None else None,
                 )
 
-            await step.run("restore_tenant_backup", restore_tenant_backup_step)
-            upload_source_id = (
-                int(source_tenant_id)
-                if source_tenant_id is not None
-                else int(target_tenant_id)
-            )
+            effective_source = await step.run("restore_tenant_backup", restore_tenant_backup_step)
+            upload_source_id = int(effective_source)
             await step.run(
                 "restore_tenant_uploads",
                 lambda: restore_tenant_uploads_from_zip(

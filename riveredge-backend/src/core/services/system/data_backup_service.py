@@ -13,6 +13,11 @@ from loguru import logger
 from tortoise.exceptions import DoesNotExist
 
 from core.models.data_backup import DataBackup
+from core.services.system.backup_storage import (
+    resolve_backup_file_path,
+    resolve_data_backup_dir,
+    store_backup_file_path,
+)
 from core.schemas.data_backup import DataBackupCreate
 from core.tasks.dispatcher import TaskEvent, dispatch_event
 
@@ -79,13 +84,21 @@ class DataBackupService:
 
     @staticmethod
     def resolve_source_tenant_id(backup: DataBackup) -> Optional[int]:
-        """从 zip 元数据读取导出租户 ID；缺失时回退到备份记录 tenant_id。"""
-        from core.services.system.data_backup_jobs import read_backup_metadata
+        """从 zip 元数据或 CSV 推断导出租户 ID；缺失时回退到备份记录 tenant_id。"""
+        from core.services.system.data_backup_jobs import (
+            read_backup_metadata,
+            infer_source_tenant_id_from_zip,
+        )
 
-        if backup.file_path and os.path.exists(backup.file_path):
-            meta_src = read_backup_metadata(backup.file_path).get("source_tenant_id")
-            if meta_src is not None:
-                return int(meta_src)
+        if backup.file_path:
+            resolved = resolve_backup_file_path(backup.file_path)
+            if resolved:
+                inferred = infer_source_tenant_id_from_zip(resolved)
+                if inferred is not None:
+                    return int(inferred)
+                meta_src = read_backup_metadata(resolved).get("source_tenant_id")
+                if meta_src is not None:
+                    return int(meta_src)
         return backup.tenant_id
 
     @staticmethod
@@ -93,7 +106,10 @@ class DataBackupService:
         from core.schemas.data_backup import DataBackupResponse
 
         return DataBackupResponse.model_validate(backup).model_copy(
-            update={"source_tenant_id": DataBackupService.resolve_source_tenant_id(backup)}
+            update={
+                "source_tenant_id": DataBackupService.resolve_source_tenant_id(backup),
+                "file_available": resolve_backup_file_path(backup.file_path) is not None,
+            }
         )
 
     @staticmethod
@@ -179,8 +195,7 @@ class DataBackupService:
         """
         上传备份文件并创建备份记录
         """
-        backup_dir = os.path.abspath("backups")
-        os.makedirs(backup_dir, exist_ok=True)
+        backup_dir = resolve_data_backup_dir()
         ts = datetime.now().strftime("%Y%m%d%H%M%S")
         safe_name = "".join(c if c.isalnum() or c in "-_" else "_" for c in backup_name)[:100]
         filename = f"{safe_name}_{ts}.zip"
@@ -200,7 +215,7 @@ class DataBackupService:
                 backup_type="full",
                 backup_scope=backup_scope,
                 backup_tables=None,
-                file_path=file_path,
+                file_path=store_backup_file_path(file_path),
                 file_size=file_size,
                 status="success",
                 source_type="uploaded",
@@ -227,10 +242,11 @@ class DataBackupService:
         # 如果有物理文件，发送删除事件或直接在此删除
         # 这里选择发送事件让后台清理，或者简单起见如果本地可访问则直接删除
         import os
-        if backup.file_path and os.path.exists(backup.file_path):
+        resolved = resolve_backup_file_path(backup.file_path)
+        if resolved and os.path.exists(resolved):
             try:
-                os.remove(backup.file_path)
-                logger.info(f"已删除备份文件: {backup.file_path}")
+                os.remove(resolved)
+                logger.info(f"已删除备份文件: {resolved}")
             except Exception as e:
                 logger.error(f"删除物理文件失败: {e}")
                 
@@ -254,14 +270,26 @@ class DataBackupService:
         if backup.status != "success":
             raise ValueError("只能恢复成功的备份")
 
-        from core.services.system.data_backup_jobs import read_backup_metadata
+        from core.services.system.data_backup_jobs import (
+            read_backup_metadata,
+            infer_source_tenant_id_from_zip,
+            resolve_restore_source_tenant_id,
+        )
 
-        metadata = read_backup_metadata(backup.file_path or "") if backup.file_path else {}
+        resolved_path = resolve_backup_file_path(backup.file_path)
+        if not resolved_path:
+            raise ValueError("备份文件已丢失，请在本服务器重新创建或上传备份后再恢复")
+
+        metadata = read_backup_metadata(resolved_path)
         backup_scope = metadata.get("backup_scope", backup.backup_scope)
-        src = source_tenant_id
-        if src is None:
-            meta_src = metadata.get("source_tenant_id")
-            src = int(meta_src) if meta_src is not None else backup.tenant_id
+        meta_src = metadata.get("source_tenant_id")
+        inferred = infer_source_tenant_id_from_zip(resolved_path)
+        src = resolve_restore_source_tenant_id(
+            target_tenant_id=tenant_id,
+            user_source=source_tenant_id,
+            metadata_source=int(meta_src) if meta_src is not None else None,
+            inferred_source=inferred,
+        )
 
         backup.restore_status = "running"
         backup.restore_started_at = datetime.now()
@@ -277,7 +305,7 @@ class DataBackupService:
                         "backup_uuid": str(backup.uuid),
                         "target_tenant_id": tenant_id,
                         "source_tenant_id": src,
-                        "file_path": backup.file_path,
+                        "file_path": resolved_path,
                         "create_pre_restore_backup": create_pre_restore_backup,
                         "backup_scope": backup_scope,
                         "record_backup_scope": backup.backup_scope,

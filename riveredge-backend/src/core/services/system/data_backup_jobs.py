@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 import zipfile
 from collections import defaultdict, deque
 from datetime import datetime
@@ -19,6 +20,7 @@ from typing import Any, Optional
 from loguru import logger
 from tortoise import Tortoise
 
+from core.services.system.backup_storage import resolve_data_backup_dir
 from infra.config.infra_config import infra_settings
 
 TENANT_BACKUP_EXCLUDED_TABLES = {
@@ -61,8 +63,7 @@ def run_backup_dump_and_zip_sync(
     env = os.environ.copy()
     env["PGPASSWORD"] = db_password
 
-    backup_dir = os.path.abspath("backups")
-    os.makedirs(backup_dir, exist_ok=True)
+    backup_dir = resolve_data_backup_dir()
     temp_dir = os.path.join(backup_dir, f"temp_{backup_uuid}")
     db_dump_file = os.path.join(temp_dir, "db_dump.dump")
 
@@ -425,6 +426,7 @@ def _validate_csv_header(table: str, csv_text: str) -> None:
 
 
 def _csv_header_columns(csv_text: str) -> list[str]:
+    _ensure_csv_field_limit()
     first_line = csv_text.splitlines()[0] if csv_text else ""
     if not first_line:
         return []
@@ -462,6 +464,218 @@ def _project_csv_to_columns(csv_text: str, use_columns: list[str]) -> str:
     writer = csv.writer(buffer, lineterminator="\n")
     writer.writerows(out_rows)
     return buffer.getvalue()
+
+
+def _ensure_csv_field_limit() -> None:
+    try:
+        csv.field_size_limit(max(csv.field_size_limit(), 4 * 1024 * 1024))
+    except OverflowError:
+        csv.field_size_limit(4 * 1024 * 1024)
+
+
+def infer_source_tenant_id_from_csv_map(table_csv_map: dict[str, str]) -> Optional[int]:
+    """从备份 CSV 数据推断导出租户 ID（须唯一）。"""
+    _ensure_csv_field_limit()
+
+    found: set[int] = set()
+    for csv_text in sorted(table_csv_map.values(), key=len):
+        if not _csv_has_data_rows(csv_text):
+            continue
+        columns = _csv_header_columns(csv_text)
+        if "tenant_id" not in columns:
+            continue
+        tenant_idx = columns.index("tenant_id")
+        for line in csv_text.splitlines()[1:]:
+            if not line.strip():
+                continue
+            row = next(csv.reader([line]))
+            if tenant_idx < len(row) and row[tenant_idx].strip().isdigit():
+                found.add(int(row[tenant_idx]))
+                break
+    if not found:
+        return None
+    if len(found) > 1:
+        raise ValueError(
+            f"备份 CSV 中存在多个 tenant_id（{sorted(found)}），无法安全恢复"
+        )
+    return next(iter(found))
+
+
+def infer_source_tenant_id_from_dump_path(dump_path: str) -> Optional[int]:
+    raw = _parse_tenant_dump_sections(dump_path)
+    filtered = {
+        table: csv_text
+        for table, csv_text in raw.items()
+        if not _is_platform_level_table(table)
+    }
+    return infer_source_tenant_id_from_csv_map(filtered)
+
+
+def infer_source_tenant_id_from_zip(zip_path: str) -> Optional[int]:
+    with tempfile.TemporaryDirectory(prefix="backup_infer_") as tmpdir:
+        dump_path = os.path.join(tmpdir, "database.dump")
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            if "database.dump" not in zf.namelist():
+                return None
+            with zf.open("database.dump") as src, open(dump_path, "wb") as dst:
+                shutil.copyfileobj(src, dst)
+        return infer_source_tenant_id_from_dump_path(dump_path)
+
+
+def resolve_restore_source_tenant_id(
+    *,
+    target_tenant_id: int,
+    user_source: Optional[int] = None,
+    metadata_source: Optional[int] = None,
+    inferred_source: Optional[int] = None,
+) -> int:
+    """
+    确定恢复用的源租户 ID，并校验用户填写与备份内容一致。
+    导入前会将 CSV 中 tenant_id 重写为 target_tenant_id。
+    """
+    effective = user_source
+    if effective is None:
+        effective = metadata_source
+    if effective is None:
+        effective = inferred_source
+    if effective is None:
+        effective = target_tenant_id
+
+    if inferred_source is not None:
+        if user_source is not None and user_source != inferred_source:
+            raise ValueError(
+                f"填写的导出租户编号 {user_source} 与备份文件内数据（{inferred_source}）不一致，请核对后重试"
+            )
+        if metadata_source is not None and metadata_source != inferred_source:
+            logger.warning(
+                "备份元数据 source_tenant_id={} 与 CSV 推断 {} 不一致，以 CSV 为准",
+                metadata_source,
+                inferred_source,
+            )
+        effective = inferred_source
+
+    return int(effective)
+
+
+def _rewrite_csv_tenant_id(csv_text: str, target_tenant_id: int) -> str:
+    _ensure_csv_field_limit()
+    lines = csv_text.splitlines()
+    if len(lines) <= 1:
+        return csv_text
+    reader = csv.reader(lines)
+    header = next(reader, [])
+    if "tenant_id" not in header:
+        return csv_text
+    tenant_idx = header.index("tenant_id")
+    out_rows: list[list[str]] = [header]
+    target_text = str(int(target_tenant_id))
+    for row in reader:
+        padded = row + [""] * max(0, len(header) - len(row))
+        padded[tenant_idx] = target_text
+        out_rows.append(padded[: len(header)])
+
+    from io import StringIO
+
+    buffer = StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerows(out_rows)
+    return buffer.getvalue()
+
+
+def _psql_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["PGPASSWORD"] = infra_settings.DB_PASSWORD
+    return env
+
+
+def _psql_base_cmd() -> list[str]:
+    return [
+        "psql",
+        "-h",
+        infra_settings.DB_HOST,
+        "-p",
+        str(infra_settings.DB_PORT),
+        "-U",
+        infra_settings.DB_USER,
+        "-d",
+        infra_settings.DB_NAME,
+        "-v",
+        "ON_ERROR_STOP=1",
+    ]
+
+
+def _prepare_csv_for_import(
+    table: str,
+    csv_text: str,
+    *,
+    target_tenant_id: int,
+    table_columns: Optional[list[str]],
+) -> Optional[tuple[list[str], str]]:
+    if not _csv_has_data_rows(csv_text):
+        return None
+
+    csv_text = _rewrite_csv_tenant_id(csv_text, target_tenant_id)
+    csv_columns = _csv_header_columns(csv_text)
+    if table_columns:
+        allowed = set(table_columns)
+        use_columns = [col for col in csv_columns if col in allowed]
+        skipped = [col for col in csv_columns if col not in allowed]
+        if skipped:
+            logger.warning("表 {} CSV 列在目标库不存在，已忽略: {}", table, skipped)
+        if not use_columns:
+            logger.warning("表 {} CSV 列与目标库无交集，跳过", table)
+            return None
+        csv_text = _project_csv_to_columns(csv_text, use_columns)
+        if not csv_text or not _csv_has_data_rows(csv_text):
+            logger.warning("表 {} CSV 投影后为空，跳过", table)
+            return None
+        return use_columns, csv_text
+    return csv_columns, csv_text
+
+
+def _run_tenant_restore_transaction(
+    *,
+    delete_order: list[str],
+    insert_order: list[str],
+    import_plan: dict[str, tuple[list[str], str]],
+    target_tenant_id: int,
+) -> None:
+    """
+    在单个 psql 事务中执行 DELETE + COPY；任一步失败则整批回滚，避免只删不导。
+    """
+    with tempfile.TemporaryDirectory(prefix="tenant_restore_") as tmpdir:
+        script_lines: list[str] = ["BEGIN;"]
+        for table in delete_order:
+            script_lines.append(
+                f'DELETE FROM "{table}" WHERE tenant_id = {int(target_tenant_id)};'
+            )
+
+        for table in insert_order:
+            payload = import_plan.get(table)
+            if not payload:
+                continue
+            use_columns, csv_text = payload
+            csv_path = os.path.join(tmpdir, f"{table}.csv")
+            with open(csv_path, "w", encoding="utf-8", newline="\n") as f:
+                f.write(csv_text if csv_text.endswith("\n") else f"{csv_text}\n")
+            column_sql = ", ".join(f'"{col}"' for col in use_columns)
+            psql_path = csv_path.replace("\\", "/")
+            script_lines.append(
+                f'\\copy "{table}" ({column_sql}) FROM \'{psql_path}\' '
+                "WITH (FORMAT CSV, HEADER, ENCODING 'UTF8');"
+            )
+
+        script_lines.append("COMMIT;")
+        script_path = os.path.join(tmpdir, "restore.sql")
+        with open(script_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(script_lines))
+            f.write("\n")
+
+        cmd = [*_psql_base_cmd(), "-f", script_path]
+        result = subprocess.run(cmd, env=_psql_env(), capture_output=True, text=True)
+        if result.returncode != 0:
+            err = (result.stderr or result.stdout or "").strip()
+            raise RuntimeError(f"租户级恢复事务失败（已回滚）: {err[:2000]}")
 
 
 def _run_psql_copy_from_stdin(
@@ -536,12 +750,13 @@ async def restore_tenant_backup_from_dump(
     dump_path: str,
     target_tenant_id: int,
     source_tenant_id: Optional[int],
-) -> None:
+) -> int:
     """
     恢复租户级备份（覆盖目标租户业务数据）。
 
-    支持跨系统迁移：备份中 tenant_id 为 source_tenant_id（如 15），
-    导入后统一替换为 target_tenant_id（如 1）。目标租户在导入前会先清空。
+    支持跨系统迁移：CSV 内 tenant_id 会先统一重写为 target_tenant_id 再导入。
+    DELETE + COPY 在同一 psql 事务中执行，失败时自动回滚，避免只删不导。
+    返回备份 CSV 中推断的源租户 ID（用于 uploads 路径映射）。
     """
 
     raw_table_csv_map = _parse_tenant_dump_sections(dump_path)
@@ -556,6 +771,20 @@ async def restore_tenant_backup_from_dump(
 
     if not table_csv_map:
         raise ValueError("租户备份数据为空，无法恢复")
+
+    inferred_source = infer_source_tenant_id_from_csv_map(table_csv_map)
+    effective_source = resolve_restore_source_tenant_id(
+        target_tenant_id=target_tenant_id,
+        user_source=source_tenant_id,
+        metadata_source=None,
+        inferred_source=inferred_source,
+    )
+    logger.info(
+        "租户级恢复租户映射: source={} -> target={} (inferred={})",
+        effective_source,
+        target_tenant_id,
+        inferred_source,
+    )
 
     for table, csv_text in table_csv_map.items():
         if not _csv_has_data_rows(csv_text):
@@ -607,44 +836,43 @@ async def restore_tenant_backup_from_dump(
     fk_rows = await conn.execute_query_dict(fk_sql)
     insert_order, delete_order = _build_topological_table_orders(table_names, fk_rows)
 
-    logger.info(
-        "租户级恢复开始: tenant_id={}, tables={}",
-        target_tenant_id,
-        len(table_names),
-    )
-
-    for table in delete_order:
-        await conn.execute_query(
-            f'DELETE FROM "{table}" WHERE tenant_id = $1',
-            [target_tenant_id],
-        )
-
+    import_plan: dict[str, tuple[list[str], str]] = {}
     for table in insert_order:
         csv_text = table_csv_map.get(table)
-        if not csv_text or not _csv_has_data_rows(csv_text):
+        if not csv_text:
             continue
-        # COPY 需要以换行结束；否则最后一行偶发不被解析
-        payload = csv_text if csv_text.endswith("\n") else f"{csv_text}\n"
-        _run_psql_copy_from_stdin(
+        prepared = _prepare_csv_for_import(
             table,
-            payload,
+            csv_text,
+            target_tenant_id=target_tenant_id,
             table_columns=table_column_map.get(table),
         )
+        if prepared:
+            import_plan[table] = prepared
 
-    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
-        tables_updated = await run_tenant_id_replacement(source_tenant_id, target_tenant_id)
-        logger.info(
-            "租户 ID 替换完成: {} -> {}，共处理 {} 个表",
-            source_tenant_id,
-            target_tenant_id,
-            tables_updated,
-        )
+    if not import_plan:
+        raise ValueError("备份中没有可导入的业务数据（可能全部表为空或与目标库结构不兼容）")
 
     logger.info(
-        "租户级恢复完成: tenant_id={}, imported_tables={}",
+        "租户级恢复开始: target_tenant_id={}, tables={}, importable={}",
         target_tenant_id,
-        len(insert_order),
+        len(table_names),
+        len(import_plan),
     )
+
+    _run_tenant_restore_transaction(
+        delete_order=delete_order,
+        insert_order=insert_order,
+        import_plan=import_plan,
+        target_tenant_id=target_tenant_id,
+    )
+
+    logger.info(
+        "租户级恢复完成: target_tenant_id={}, imported_tables={}",
+        target_tenant_id,
+        len(import_plan),
+    )
+    return effective_source
 
 
 def run_pg_restore(dump_path: str, backup_scope: str) -> None:

@@ -17,6 +17,8 @@ export interface DataBackup {
   backup_scope: string;
   backup_tables?: string[];
   file_path?: string;
+  /** 当前 API 服务器上 zip 是否可访问 */
+  file_available?: boolean;
   file_uuid?: string;
   file_size?: number;
   source_type?: 'generated' | 'uploaded';

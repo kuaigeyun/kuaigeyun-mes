@@ -239,6 +239,10 @@ class InfraSettings(BaseSettings):
     
     # 文件管理配置（第三阶段）
     FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
+    DATA_BACKUP_DIR: str = Field(
+        default="",
+        description="数据备份 zip 目录；留空则使用 {WORKDIR 或后端根目录}/backups",
+    )
     MAX_FILE_SIZE: int = Field(default=100 * 1024 * 1024, description="最大文件大小（字节）")
     
     # 安全增强配置

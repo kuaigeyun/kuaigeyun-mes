@@ -197,6 +197,10 @@ const DataBackupsPage: React.FC = () => {
   const handleRestore = async (record: DataBackup) => {
     try {
       const detail = await getBackupDetail(record.uuid);
+      if (detail.file_available === false) {
+        messageApi.error(t('pages.system.dataBackups.fileNotOnServer'));
+        return;
+      }
       setRestoreBackupRecord(detail);
       const inferredSource = detail.source_tenant_id ?? detail.tenant_id ?? undefined;
       restoreForm.setFieldsValue({ source_tenant_id: inferredSource });
@@ -278,6 +282,10 @@ const DataBackupsPage: React.FC = () => {
    * 下载备份（浏览器原生流式下载，立即弹出保存对话框）
    */
   const handleDownload = async (record: DataBackup) => {
+    if (record.file_available === false) {
+      messageApi.error(t('pages.system.dataBackups.fileNotOnServer'));
+      return;
+    }
     try {
       await startBackupDownload(
         record.uuid,
