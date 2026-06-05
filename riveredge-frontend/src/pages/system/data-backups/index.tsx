@@ -77,10 +77,14 @@ const DataBackupsPage: React.FC = () => {
     return statusMap[status] || { status: 'default', text: status };
   };
 
-  const getRestoreStatusTag = (restoreStatus?: string | null) => {
+  const getRestoreStatusTag = (restoreStatus?: string | null, errorMessage?: string | null) => {
     if (!restoreStatus) return <Text type="secondary">-</Text>;
     const info = getStatusInfo(restoreStatus);
-    return <Badge status={info.status} text={info.text} />;
+    const badge = <Badge status={info.status} text={info.text} />;
+    if (restoreStatus === 'failed' && errorMessage) {
+      return <Tooltip title={errorMessage}>{badge}</Tooltip>;
+    }
+    return badge;
   };
 
   const getBackupScopeText = (scope: string): string => {
@@ -448,7 +452,7 @@ const DataBackupsPage: React.FC = () => {
             {backup.restore_status && (
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.system.dataBackups.columnRestoreStatus')}</Text>
-                {getRestoreStatusTag(backup.restore_status)}
+                {getRestoreStatusTag(backup.restore_status, backup.restore_error_message)}
               </div>
             )}
             
@@ -557,7 +561,7 @@ const DataBackupsPage: React.FC = () => {
       dataIndex: 'restore_status',
       key: 'restore_status',
       search: false,
-      render: (_: any, record: DataBackup) => getRestoreStatusTag(record.restore_status),
+      render: (_: any, record: DataBackup) => getRestoreStatusTag(record.restore_status, record.restore_error_message),
       width: 110,
     },
     {
@@ -640,7 +644,7 @@ const DataBackupsPage: React.FC = () => {
     { title: t('pages.system.dataBackups.columnType'), dataIndex: 'backup_type', render: (_, r) => getBackupTypeTag(r.backup_type) },
     { title: t('pages.system.dataBackups.columnScope'), dataIndex: 'backup_scope', render: (_, r) => getBackupScopeText(r.backup_scope) },
     { title: t('pages.system.dataBackups.columnStatus'), dataIndex: 'status', render: (_, r) => getStatusTag(r.status) },
-    { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status) },
+    { title: t('pages.system.dataBackups.columnRestoreStatus'), dataIndex: 'restore_status', render: (_, r) => getRestoreStatusTag(r.restore_status, r.restore_error_message) },
     { title: t('pages.system.dataBackups.columnFilePath'), dataIndex: 'file_path', render: (_, r) => r.file_path || '-' },
     { title: t('pages.system.dataBackups.columnFileSize'), dataIndex: 'file_size', render: (_, r) => formatFileSize(r.file_size) },
     { title: t('pages.system.dataBackups.columnStartedAt'), dataIndex: 'started_at', valueType: 'dateTime' },

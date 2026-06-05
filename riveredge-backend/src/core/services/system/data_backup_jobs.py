@@ -292,6 +292,30 @@ def read_backup_metadata(zip_path: str) -> dict:
     return {}
 
 
+def resolve_backup_scope_for_restore(
+    zip_path: str,
+    *,
+    record_scope: Optional[str] = None,
+    event_scope: Optional[str] = None,
+) -> str:
+    """解析恢复范围：zip 元数据 > 任务参数 > 数据库记录 > 默认 all。"""
+    metadata = read_backup_metadata(zip_path)
+    for candidate in (metadata.get("backup_scope"), event_scope, record_scope):
+        if candidate in ("tenant", "all", "table"):
+            return candidate
+    return "all"
+
+
+def is_tenant_sql_dump(dump_path: str) -> bool:
+    """租户级备份 database.dump 为 CSV 分表文本，而非 pg_dump 二进制。"""
+    try:
+        with open(dump_path, "r", encoding="utf-8", errors="ignore") as f:
+            head = f.read(4096)
+    except OSError:
+        return False
+    return "--- TABLE:" in head or "Tenant Isolated Backup" in head
+
+
 def _parse_tenant_dump_sections(dump_path: str) -> dict[str, str]:
     """
     解析租户备份 database.dump（文本）中的分表 CSV 片段。
@@ -422,14 +446,11 @@ async def restore_tenant_backup_from_dump(
     source_tenant_id: Optional[int],
 ) -> None:
     """
-    恢复租户级备份（同租户覆盖恢复）。
+    恢复租户级备份（覆盖目标租户业务数据）。
 
-    当前版本仅支持“源租户 == 目标租户”的恢复，避免跨租户恢复导致主键冲突。
+    支持跨系统迁移：备份中 tenant_id 为 source_tenant_id（如 15），
+    导入后统一替换为 target_tenant_id（如 1）。目标租户在导入前会先清空。
     """
-    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
-        raise NotImplementedError(
-            "当前租户级恢复仅支持同租户覆盖恢复（source_tenant_id 必须等于 target_tenant_id）"
-        )
 
     table_csv_map = _parse_tenant_dump_sections(dump_path)
     if not table_csv_map:
@@ -477,6 +498,15 @@ async def restore_tenant_backup_from_dump(
         # COPY 需要以换行结束；否则最后一行偶发不被解析
         payload = csv_text if csv_text.endswith("\n") else f"{csv_text}\n"
         _run_psql_copy_from_stdin(table, payload)
+
+    if source_tenant_id is not None and source_tenant_id != target_tenant_id:
+        tables_updated = await run_tenant_id_replacement(source_tenant_id, target_tenant_id)
+        logger.info(
+            "租户 ID 替换完成: {} -> {}，共处理 {} 个表",
+            source_tenant_id,
+            target_tenant_id,
+            tables_updated,
+        )
 
     logger.info(
         "租户级恢复完成: tenant_id={}, imported_tables={}",
@@ -590,26 +620,31 @@ def restore_tenant_uploads_from_zip(
     zip_path: str,
     extract_dir: str,
     target_tenant_id: int,
+    source_tenant_id: Optional[int] = None,
 ) -> None:
-    """从租户级备份 zip 恢复当前租户的 uploads 子目录（不影响其他租户）。"""
+    """从租户级备份 zip 恢复 uploads 子目录（不影响其他租户）。
+
+    跨租户迁移时从 uploads/{source_tenant_id}/ 读取，写入 uploads/{target_tenant_id}/。
+    """
     upload_dir = infra_settings.FILE_UPLOAD_DIR
     if not upload_dir:
         logger.info("未配置 FILE_UPLOAD_DIR，跳过租户 uploads 恢复")
         return
 
     upload_dir = os.path.abspath(upload_dir)
-    tenant_prefix = f"uploads/{target_tenant_id}/"
+    upload_source_id = source_tenant_id if source_tenant_id is not None else target_tenant_id
+    tenant_prefix = f"uploads/{upload_source_id}/"
 
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
             names = [n for n in zf.namelist() if n.startswith(tenant_prefix)]
             if not names:
-                logger.info("备份中无租户 uploads/{}，跳过", target_tenant_id)
+                logger.info("备份中无租户 uploads/{}，跳过", upload_source_id)
                 return
             for name in names:
                 zf.extract(name, extract_dir)
 
-        src = os.path.join(extract_dir, "uploads", str(target_tenant_id))
+        src = os.path.join(extract_dir, "uploads", str(upload_source_id))
         if not os.path.isdir(src):
             logger.info("解压后未发现租户 uploads 目录: {}", src)
             return

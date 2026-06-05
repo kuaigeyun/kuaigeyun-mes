@@ -18,6 +18,8 @@ from loguru import logger
 from core.models.data_backup import DataBackup
 from core.services.system.data_backup_jobs import (
     read_backup_metadata,
+    resolve_backup_scope_for_restore,
+    is_tenant_sql_dump,
     restore_tenant_backup_from_dump,
     restore_tenant_uploads_from_zip,
     restore_uploads_from_zip,
@@ -136,11 +138,38 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
         if source_tenant_id is None and metadata.get("source_tenant_id") is not None:
             source_tenant_id = metadata["source_tenant_id"]
 
+    if not zip_path or not os.path.exists(zip_path):
+        msg = f"备份文件不存在，无法恢复: {file_path}"
+        logger.error(msg)
+        await _mark_restore_status(
+            backup_uuid,
+            status="failed",
+            error_message=msg,
+            mark_completed=True,
+        )
+        return
+
+    backup_scope = resolve_backup_scope_for_restore(
+        zip_path,
+        record_scope=event_data.get("record_backup_scope"),
+        event_scope=event_data.get("backup_scope"),
+    )
+    logger.info(f"恢复范围: backup_scope={backup_scope}")
+
     if create_pre_restore:
         pre_restore_name = "恢复前备份"
         temp_dir = os.path.join(backup_dir, f"temp_pre_restore_{backup_uuid}")
 
         def do_pre_restore_backup() -> str:
+            if backup_scope == "tenant" and target_tenant_id is not None:
+                return run_backup_dump_and_zip_sync(
+                    backup_uuid=f"pre_restore_{backup_uuid}",
+                    backup_name=pre_restore_name,
+                    source_tenant_id=int(target_tenant_id),
+                    tenant_id=int(target_tenant_id),
+                    backup_type="full",
+                    backup_scope="tenant",
+                )
             return run_full_backup_dump_and_zip(backup_dir, temp_dir, pre_restore_name)
 
         try:
@@ -149,7 +178,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                 tenant_id=target_tenant_id,
                 name=pre_restore_name,
                 backup_type="full",
-                backup_scope="all",
+                backup_scope="tenant" if backup_scope == "tenant" else "all",
                 status="success",
                 source_type="generated",
                 file_path=final_zip_path,
@@ -164,21 +193,9 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
             if os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir, ignore_errors=True)
 
-    if not zip_path or not os.path.exists(zip_path):
-        msg = f"备份文件不存在，无法恢复: {file_path}"
-        logger.error(msg)
-        await _mark_restore_status(
-            backup_uuid,
-            status="failed",
-            error_message=msg,
-            mark_completed=True,
-        )
-        return
-
     await _mark_restore_status(backup_uuid, status="running", mark_started=True)
 
     restore_extract_dir = os.path.join(backup_dir, f"temp_restore_{backup_uuid}")
-    backup_scope = "all"
 
     def extract_backup() -> str:
         logger.info(f"开始恢复: zip_path={zip_path}, extract_dir={restore_extract_dir}")
@@ -197,20 +214,28 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
 
     try:
         db_dump_path = await step.run("extract_backup", extract_backup)
-        metadata = read_backup_metadata(zip_path)
-        backup_scope = metadata.get("backup_scope", "all")
-        logger.info(f"备份元数据: backup_scope={backup_scope}")
+        if backup_scope != "tenant" and is_tenant_sql_dump(db_dump_path):
+            raise ValueError(
+                "备份文件为租户级 CSV 格式，但元数据/记录范围为全量。"
+                "请确认 backup_metadata.json 中 backup_scope=tenant，或重新创建租户级备份。"
+            )
 
         if backup_scope == "tenant":
             if target_tenant_id is None:
                 raise ValueError("租户级恢复缺少目标 tenant_id")
-            await step.run(
-                "restore_tenant_backup",
-                lambda: restore_tenant_backup_from_dump(
+
+            async def restore_tenant_backup_step() -> None:
+                await restore_tenant_backup_from_dump(
                     dump_path=db_dump_path,
                     target_tenant_id=int(target_tenant_id),
                     source_tenant_id=int(source_tenant_id) if source_tenant_id is not None else None,
-                ),
+                )
+
+            await step.run("restore_tenant_backup", restore_tenant_backup_step)
+            upload_source_id = (
+                int(source_tenant_id)
+                if source_tenant_id is not None
+                else int(target_tenant_id)
             )
             await step.run(
                 "restore_tenant_uploads",
@@ -218,6 +243,7 @@ async def handle_database_restore_requested(ctx: TaskContext, step: TaskStep) ->
                     zip_path,
                     restore_extract_dir,
                     int(target_tenant_id),
+                    upload_source_id if upload_source_id != int(target_tenant_id) else None,
                 ),
             )
         else:

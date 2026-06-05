@@ -171,11 +171,15 @@ class DataBackupService:
                 content = await file.read()
                 f.write(content)
             file_size = os.path.getsize(file_path)
+            from core.services.system.data_backup_jobs import read_backup_metadata
+
+            metadata = read_backup_metadata(file_path)
+            backup_scope = metadata.get("backup_scope", "all")
             backup = await DataBackup.create(
                 tenant_id=tenant_id,
                 name=backup_name,
                 backup_type="full",
-                backup_scope="all",
+                backup_scope=backup_scope,
                 backup_tables=None,
                 file_path=file_path,
                 file_size=file_size,
@@ -231,14 +235,14 @@ class DataBackupService:
         if backup.status != "success":
             raise ValueError("只能恢复成功的备份")
 
-        src = source_tenant_id if source_tenant_id is not None else backup.tenant_id
-
         from core.services.system.data_backup_jobs import read_backup_metadata
 
         metadata = read_backup_metadata(backup.file_path or "") if backup.file_path else {}
         backup_scope = metadata.get("backup_scope", backup.backup_scope)
-        if backup_scope == "tenant" and src is not None and src != tenant_id:
-            raise ValueError("租户级恢复仅支持同租户覆盖恢复，请将 source_tenant_id 设置为当前租户")
+        src = source_tenant_id
+        if src is None:
+            meta_src = metadata.get("source_tenant_id")
+            src = int(meta_src) if meta_src is not None else backup.tenant_id
 
         backup.restore_status = "running"
         backup.restore_started_at = datetime.now()
@@ -256,6 +260,8 @@ class DataBackupService:
                         "source_tenant_id": src,
                         "file_path": backup.file_path,
                         "create_pre_restore_backup": create_pre_restore_backup,
+                        "backup_scope": backup_scope,
+                        "record_backup_scope": backup.backup_scope,
                     },
                     id=f"restore-{backup.uuid}",
                 )
