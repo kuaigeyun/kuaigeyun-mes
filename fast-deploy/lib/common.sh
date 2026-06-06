@@ -1302,6 +1302,69 @@ ensure_pyzbar_windows_native() {
     fi
 }
 
+check_playwright() {
+    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+        echo "skipped"
+        return
+    fi
+    [ -d "$BACKEND_DIR" ] || { echo "missing"; return; }
+    local uv_bin
+    uv_bin="$(resolve_uv)"
+    if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
+        "$uv_bin" run --extra pdf python -m playwright --version >/dev/null 2>&1); then
+        echo "ok"
+    else
+        echo "missing"
+    fi
+}
+
+check_playwright_chromium() {
+    if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
+        echo "skipped"
+        return
+    fi
+    ensure_logs_dir
+    local marker="$LOGS_DIR/playwright-chromium.ready"
+    [ -f "$marker" ] && { echo "ok"; return; }
+
+    local pidf="$LOGS_DIR/playwright-install.pid"
+    if [ -f "$pidf" ]; then
+        local pid
+        pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
+        if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+            echo "installing"
+            return
+        fi
+    fi
+
+    local pw_st uv_bin
+    pw_st="$(check_playwright)"
+    case "$pw_st" in
+        ok) ;;
+        installing|missing|skipped|old:*) echo "$pw_st"; return ;;
+        *) echo "missing"; return ;;
+    esac
+
+    uv_bin="$(resolve_uv)"
+    if (cd "$BACKEND_DIR" && export PYTHONPATH="$BACKEND_DIR/src" && \
+        "$uv_bin" run --extra pdf python - <<'PY' >/dev/null 2>&1
+import os
+import sys
+from playwright.sync_api import sync_playwright
+
+with sync_playwright() as p:
+    exe = p.chromium.executable_path
+    if exe and os.path.isfile(exe):
+        sys.exit(0)
+sys.exit(1)
+PY
+    ); then
+        echo "ok"
+    else
+        echo "missing"
+    fi
+}
+
 ensure_playwright_chromium_postinstall() {
     # 非阻断后置补装：后台下载 Chromium，不阻塞 start 主流程
     if [ "${PLAYWRIGHT_POSTINSTALL_ENABLE:-1}" = "0" ]; then
@@ -2013,6 +2076,20 @@ cmd_check() {
     if [ "$need_caddy" -eq 1 ]; then
         st="$(check_caddy)"; [ "$st" = "ok" ] && log_ok "Caddy" || { log_warn "Caddy: $st"; failed=1; }
     fi
+    st="$(check_playwright)"
+    case "$st" in
+        ok) log_ok "Playwright" ;;
+        skipped) log_ok "Playwright — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
+        *) log_warn "Playwright: $st（需 uv sync --extra pdf）"; failed=1 ;;
+    esac
+    st="$(check_playwright_chromium)"
+    case "$st" in
+        ok) log_ok "Chromium (Playwright)" ;;
+        skipped) log_ok "Chromium — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
+        installing) log_warn "Chromium — 后台补装进行中（见 .logs/playwright-install.log）" ;;
+        missing) log_warn "Chromium — 未安装（启动服务时会后台补装）" ;;
+        *) log_warn "Chromium: $st" ;;
+    esac
     return $failed
 }
 

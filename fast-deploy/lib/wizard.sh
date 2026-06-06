@@ -98,7 +98,6 @@ wizard_print_kuaige_header() {
     wizard_print_kuaige_logo
     echo ""
     wizard_logo_print_caption "RiverEdge · Intelligent Deploy Console"
-    echo ""
 }
 
 wizard_panel_repeat() {
@@ -112,6 +111,10 @@ wizard_panel_blank() {
 
 wizard_panel_section() {
     wizard_panel_line "${WIZARD_BOLD}${1}${WIZARD_RESET}"
+}
+
+wizard_panel_heading() {
+    wizard_panel_line "${WIZARD_CYAN}${1}${WIZARD_RESET}"
 }
 
 wizard_panel_kv() {
@@ -291,17 +294,15 @@ wizard_show_home_panel() {
     wizard_panel_begin
     wizard_panel_top
 
-    wizard_panel_section "SYSTEM · 系统"
+    wizard_panel_heading "SYSTEM · 系统"
     wizard_panel_kv "Host" "${os_label} · ${arch}"
     wizard_panel_kv "Mode" "${mode_label} · ${mirror_label}"
     wizard_panel_kv "Git" "${WIZARD_HOME_GIT:-—}"
-    wizard_panel_blank
 
-    wizard_panel_section "RESOURCES · 资源"
+    wizard_panel_heading "RESOURCES · 资源"
     wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
-    wizard_panel_blank
 
-    wizard_panel_section "SERVICES · 服务"
+    wizard_panel_heading "SERVICES · 服务"
     svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker) $(wizard_service_badge scheduler)"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         svc_line="${svc_line} $(wizard_service_badge frontend)"
@@ -309,9 +310,8 @@ wizard_show_home_panel() {
         svc_line="${svc_line} $(wizard_service_badge caddy)"
     fi
     wizard_panel_line "${WIZARD_DIM}Status${WIZARD_RESET}  ${svc_line}"
-    wizard_panel_blank
 
-    wizard_panel_line "${WIZARD_BOLD}ENDPOINTS · 访问${WIZARD_RESET}  [${WIZARD_DIM}Health${WIZARD_RESET}  ${WIZARD_HOME_HEALTH:-—}]"
+    wizard_panel_line "${WIZARD_CYAN}ENDPOINTS · 访问${WIZARD_RESET}  [${WIZARD_DIM}Health${WIZARD_RESET}  ${WIZARD_HOME_HEALTH:-—}]"
     wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
     wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
 
@@ -576,6 +576,8 @@ wizard_report_component() {
     case "$status" in
         ok) wizard_say_ok "${name} — 就绪" ;;
         missing) wizard_say_warn "${name} — 未安装" ;;
+        installing) wizard_say_warn "${name} — 后台补装进行中" ;;
+        skipped) wizard_say_ok "${name} — 已跳过 (PLAYWRIGHT_POSTINSTALL_ENABLE=0)" ;;
         old:*) wizard_say_warn "${name} — 版本 ${status#old:}，需要升级" ;;
         *) wizard_say_warn "${name} — ${status}" ;;
     esac
@@ -603,6 +605,8 @@ wizard_env_scan() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         st="$(check_caddy)"; wizard_report_component "Caddy" "$st"; [ "$st" = "ok" ] || failed=1
     fi
+    st="$(check_playwright)"; wizard_report_component "Playwright" "$st"; [ "$st" = "ok" ] || [ "$st" = "skipped" ] || failed=1
+    st="$(check_playwright_chromium)"; wizard_report_component "Chromium" "$st"
     if [ "$failed" -eq 0 ]; then
         wizard_say_ok "环境检测通过，所有依赖已满足"
     else
