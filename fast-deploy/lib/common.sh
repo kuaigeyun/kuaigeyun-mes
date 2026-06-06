@@ -5,11 +5,13 @@ set -euo pipefail
 
 FAST_DEPLOY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PROJECT_ROOT="$(cd "$FAST_DEPLOY_DIR/.." && pwd)"
-INSTALL_SCRIPTS_JSON="$FAST_DEPLOY_DIR/install-scripts.json"
+FAST_DEPLOY_CONFIG_DIR="$FAST_DEPLOY_DIR/config"
+INSTALL_SCRIPTS_JSON="$FAST_DEPLOY_CONFIG_DIR/install-scripts.json"
 BACKEND_DIR="$PROJECT_ROOT/riveredge-backend"
 FRONTEND_DIR="$PROJECT_ROOT/riveredge-frontend"
 ENV_FILE="$BACKEND_DIR/.env"
-DEPLOY_ENV_FILE="$FAST_DEPLOY_DIR/deploy.env"
+DEPLOY_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/deploy.env"
+DEPLOY_ENV_EXAMPLE="$FAST_DEPLOY_CONFIG_DIR/deploy.env.example"
 LOGS_DIR="$PROJECT_ROOT/.logs"
 CADDY_DIR="$FAST_DEPLOY_DIR/caddy"
 CADDYFILE="$CADDY_DIR/Caddyfile"
@@ -29,8 +31,8 @@ ensure_logs_dir() { mkdir -p "$LOGS_DIR"; }
 
 load_deploy_env() {
     if [ ! -f "$DEPLOY_ENV_FILE" ]; then
-        if [ -f "$FAST_DEPLOY_DIR/deploy.env.example" ]; then
-            cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
+        if [ -f "$DEPLOY_ENV_EXAMPLE" ]; then
+            cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
             log_info "已从 deploy.env.example 创建 deploy.env"
         fi
     fi
@@ -606,7 +608,7 @@ read_deploy_env_value() {
 
 set_deploy_env_value() {
     local key=$1 val=$2
-    [ -f "$DEPLOY_ENV_FILE" ] || cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
     _env_file_set "$key" "$val" "$DEPLOY_ENV_FILE"
 }
 
@@ -995,7 +997,7 @@ collect_prod_domain_https_config() {
     local current_domain current_le choice domain input enable_input enable_le default_le
     load_deploy_env
     [ "$DEPLOY_MODE" = "prod" ] || return 0
-    [ -f "$DEPLOY_ENV_FILE" ] || cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
+    [ -f "$DEPLOY_ENV_FILE" ] || cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
 
     current_domain="$(read_deploy_env_value CADDY_DOMAIN || true)"
     current_le="$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"

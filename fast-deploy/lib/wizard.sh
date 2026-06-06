@@ -420,8 +420,8 @@ wizard_prepare_env() {
     ensure_logs_dir
     load_deploy_env
     apply_cn_mirrors
-    if [ ! -f "$DEPLOY_ENV_FILE" ] && [ -f "$FAST_DEPLOY_DIR/deploy.env.example" ]; then
-        cp "$FAST_DEPLOY_DIR/deploy.env.example" "$DEPLOY_ENV_FILE"
+    if [ ! -f "$DEPLOY_ENV_FILE" ] && [ -f "$DEPLOY_ENV_EXAMPLE" ]; then
+        cp "$DEPLOY_ENV_EXAMPLE" "$DEPLOY_ENV_FILE"
         wizard_say_ok "已创建 deploy.env"
     fi
     wizard_say_ok "日志目录: ${LOGS_DIR}"

@@ -11,12 +11,14 @@ if (-not (Test-Path (Join-Path $script:ProjectRoot 'riveredge-backend'))) {
 $script:BackendDir = Join-Path $script:ProjectRoot 'riveredge-backend'
 $script:FrontendDir = Join-Path $script:ProjectRoot 'riveredge-frontend'
 $script:EnvFile = Join-Path $script:BackendDir '.env'
-$script:DeployEnvFile = Join-Path $script:FastDeployDir 'deploy.env'
+$script:ConfigDir = Join-Path $script:FastDeployDir 'config'
+$script:DeployEnvFile = Join-Path $script:ConfigDir 'deploy.env'
+$script:DeployEnvExample = Join-Path $script:ConfigDir 'deploy.env.example'
 $script:LogsDir = Join-Path $script:ProjectRoot '.logs'
 $script:CaddyDir = Join-Path $script:FastDeployDir 'caddy'
 $script:Caddyfile = Join-Path $script:CaddyDir 'Caddyfile'
 $script:CaddyTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.template'
-$script:InstallScriptsJson = Join-Path $script:FastDeployDir 'install-scripts.json'
+$script:InstallScriptsJson = Join-Path $script:ConfigDir 'install-scripts.json'
 
 if (-not $env:DEPLOY_MODE) { $env:DEPLOY_MODE = 'prod' }
 $script:DeployMode = $env:DEPLOY_MODE
@@ -38,7 +40,7 @@ function Ensure-LogsDir {
 
 function Load-DeployEnv {
     if (-not (Test-Path $script:DeployEnvFile)) {
-        $example = Join-Path $script:FastDeployDir 'deploy.env.example'
+        $example = $script:DeployEnvExample
         if (Test-Path $example) {
             Copy-Item $example $script:DeployEnvFile
             Write-LogInfo '已从 deploy.env.example 创建 deploy.env'
@@ -313,7 +315,7 @@ function Read-DeployEnvValue([string]$Key) {
 
 function Set-DeployEnvValue([string]$Key, [string]$Val) {
     if (-not (Test-Path $script:DeployEnvFile)) {
-        Copy-Item (Join-Path $script:FastDeployDir 'deploy.env.example') $script:DeployEnvFile
+        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
     }
     $content = @()
     $found = $false
@@ -357,7 +359,7 @@ function Collect-ProdDomainHttpsConfig {
     Load-DeployEnv
     if ($script:DeployMode -ne 'prod') { return }
     if (-not (Test-Path $script:DeployEnvFile)) {
-        Copy-Item (Join-Path $script:FastDeployDir 'deploy.env.example') $script:DeployEnvFile
+        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
     }
 
     $currentDomain = Read-DeployEnvValue 'CADDY_DOMAIN'
@@ -541,7 +543,7 @@ function Invoke-Configure {
         Write-LogInfo '已从 .env.example 创建 .env'
     }
     if (-not (Test-Path $script:DeployEnvFile)) {
-        Copy-Item (Join-Path $script:FastDeployDir 'deploy.env.example') $script:DeployEnvFile
+        Copy-Item $script:DeployEnvExample $script:DeployEnvFile
     }
     Load-DeployEnv
 

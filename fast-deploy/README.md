@@ -11,7 +11,7 @@
 <strong style="color:#cf1322;">⛔ 部署建议</strong><br/>
 <ol style="margin:8px 0 0 0;padding-left:20px;">
 <li><strong>部署环境</strong>：<strong>建议在空白服务器或虚拟机</strong>上完成首次部署与升级验证；<strong>不建议</strong>在已运行生产业务的服务器上进行试装或试升级，以免对现有系统造成影响。</li>
-<li><strong>生产环境部署</strong>：若必须在已有业务的服务器上执行安装、<code>update</code> 或数据库迁移，<strong style="color:#cf1322;">须先完成完整备份</strong>（PostgreSQL 全库、<code>riveredge-backend/.env</code>、<code>fast-deploy/deploy.env</code>、上传目录等），并验证备份可还原；<strong style="color:#cf1322;">未备份即操作，相关风险由部署方自行承担。</strong></li>
+<li><strong>生产环境部署</strong>：若必须在已有业务的服务器上执行安装、<code>update</code> 或数据库迁移，<strong style="color:#cf1322;">须先完成完整备份</strong>（PostgreSQL 全库、<code>riveredge-backend/.env</code>、<code>fast-deploy/config/deploy.env</code>、上传目录等），并验证备份可还原；<strong style="color:#cf1322;">未备份即操作，相关风险由部署方自行承担。</strong></li>
 </ol>
 </div>
 
