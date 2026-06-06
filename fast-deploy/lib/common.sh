@@ -1735,6 +1735,122 @@ cmd_stop_prod() {
     log_ok "生产服务已停止"
 }
 
+cmd_restart_backend() {
+    load_deploy_env
+    stop_service backend
+    kill_port "$BACKEND_PORT"
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        start_backend_dev
+    else
+        start_backend_prod
+    fi
+}
+
+cmd_restart_frontend() {
+    load_deploy_env
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        kill_port "$FRONTEND_PORT"
+        rm -f "$LOGS_DIR/frontend.pid"
+        start_frontend_dev
+    else
+        stop_service caddy
+        start_caddy_prod
+    fi
+}
+
+cmd_restart_worker() {
+    load_deploy_env
+    stop_service worker
+    stop_service scheduler
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        start_worker_dev
+    else
+        start_worker_prod
+    fi
+}
+
+cmd_restart_postgres() {
+    load_deploy_env
+    local db_target db_host psql_bin pg_ctl_bin data_dir native_data
+    db_target="$(read_env_value DB_TARGET || echo local)"
+    db_host="$(read_env_value DB_HOST || echo localhost)"
+    case "$db_host" in
+        localhost|127.0.0.1|"") ;;
+        *)
+            log_error "远程 PostgreSQL (${db_host}) 无法在本机重启"
+            return 1
+            ;;
+    esac
+    if [ "$db_target" = "remote" ]; then
+        log_error "DB_TARGET=remote 时请在数据库服务器上重启 PostgreSQL"
+        return 1
+    fi
+
+    if is_windows_gitbash; then
+        psql_bin="$(resolve_psql)"
+        pg_ctl_bin="$(dirname "$psql_bin")/pg_ctl.exe"
+        data_dir="$(dirname "$(dirname "$psql_bin")")/data"
+        if [ -x "$pg_ctl_bin" ] && [ -d "$data_dir" ]; then
+            native_data="$(caddy_native_path "$data_dir")"
+            log_info "正在重启 PostgreSQL..."
+            if "$pg_ctl_bin" restart -D "$native_data" -m fast -t 60 >/dev/null 2>&1; then
+                log_ok "PostgreSQL 已重启"
+                return 0
+            fi
+        fi
+        if powershell.exe -NoProfile -Command "
+            \$s = Get-Service -Name 'postgresql*' -ErrorAction SilentlyContinue | Where-Object { \$_.Status -ne \$null } | Select-Object -First 1
+            if (\$null -eq \$s) { exit 1 }
+            Restart-Service \$s.Name -Force
+        " >/dev/null 2>&1; then
+            log_ok "PostgreSQL 服务已重启"
+            return 0
+        fi
+        log_error "未能重启 PostgreSQL，请检查服务是否已安装"
+        return 1
+    fi
+
+    if command -v pg_ctlcluster >/dev/null 2>&1; then
+        local ver name cluster
+        cluster="$(pg_lsclusters -h 2>/dev/null | awk 'NR>1 && $4=="online"{print $1" "$2; exit}')"
+        if [ -n "$cluster" ]; then
+            ver="${cluster%% *}"
+            name="${cluster#* }"
+            log_info "正在重启 PostgreSQL 集群 ${ver}/${name}..."
+            if sudo pg_ctlcluster "$ver" "$name" restart; then
+                log_ok "PostgreSQL 已重启"
+                return 0
+            fi
+        fi
+    fi
+    if command -v systemctl >/dev/null 2>&1; then
+        local unit
+        for unit in postgresql postgresql@15-main postgresql@16-main; do
+            if systemctl list-units --type=service --all 2>/dev/null | grep -q "$unit"; then
+                log_info "正在重启 ${unit}..."
+                if sudo systemctl restart "$unit"; then
+                    log_ok "PostgreSQL 已重启"
+                    return 0
+                fi
+            fi
+        done
+    fi
+    if command -v brew >/dev/null 2>&1; then
+        local svc
+        for svc in postgresql@15 postgresql@16 postgresql; do
+            if brew services list 2>/dev/null | awk '{print $1}' | grep -qx "$svc"; then
+                log_info "正在重启 ${svc}..."
+                if brew services restart "$svc"; then
+                    log_ok "PostgreSQL 已重启"
+                    return 0
+                fi
+            fi
+        done
+    fi
+    log_error "未能重启 PostgreSQL，请手动重启本机 postgres 服务"
+    return 1
+}
+
 cmd_status() {
     load_deploy_env
     echo "=== RiverEdge ${DEPLOY_MODE} 状态 ==="

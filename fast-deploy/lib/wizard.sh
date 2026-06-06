@@ -8,9 +8,130 @@ WIZARD_BOLD='\033[1m'
 WIZARD_DIM='\033[2m'
 WIZARD_CYAN='\033[36m'
 WIZARD_GREEN='\033[32m'
+WIZARD_LOGO_COLOR='\033[92m'
 WIZARD_YELLOW='\033[33m'
 WIZARD_RED='\033[31m'
+WIZARD_BLUE='\033[34m'
 WIZARD_RESET='\033[0m'
+
+# KUAIGE LOGO 宽 48；主面板仅横线分隔（无左右竖框，避免 CJK 错位）
+WIZARD_PANEL_W=48
+WIZARD_LOGO_W=48
+
+wizard_panel_init() {
+    if is_windows_gitbash; then
+        WIZARD_P_H='-'
+        WIZARD_PANEL_BORDER="${WIZARD_DIM}"
+    else
+        WIZARD_P_H='─'
+        WIZARD_PANEL_BORDER="${WIZARD_LOGO_COLOR}"
+    fi
+}
+wizard_panel_init
+
+wizard_block_margin() {
+    echo 0
+}
+
+wizard_panel_margin() {
+    wizard_block_margin "$WIZARD_LOGO_W"
+}
+
+wizard_panel_prefix() {
+    printf '%*s' "${WIZARD_PANEL_MARGIN:-$(wizard_panel_margin)}" ''
+}
+
+wizard_panel_begin() {
+    WIZARD_PANEL_MARGIN="$(wizard_panel_margin)"
+}
+
+wizard_panel_top() {
+    wizard_panel_prefix
+    echo -e "${WIZARD_PANEL_BORDER}$(wizard_panel_repeat "$WIZARD_P_H" "$WIZARD_PANEL_W")${WIZARD_RESET}"
+}
+
+wizard_panel_mid() {
+    wizard_panel_top
+}
+
+wizard_panel_bot() {
+    wizard_panel_top
+}
+
+wizard_panel_line() {
+    wizard_panel_prefix
+    echo -e "$1"
+}
+
+# 彩色用 %b，LOGO 正文用 %s；整块按 WIZARD_LOGO_W 左对齐（与面板同列顶格）
+wizard_logo_print_line() {
+    local line=$1
+    local pad
+    pad="$(wizard_block_margin "$WIZARD_LOGO_W")"
+    printf '%*s' "$pad" ''
+    printf '%b%-*s%b\n' "${WIZARD_BOLD}${WIZARD_LOGO_COLOR}" "$WIZARD_LOGO_W" "$line" "${WIZARD_RESET}"
+}
+
+wizard_logo_print_caption() {
+    local text=$1
+    local block_margin
+    block_margin="$(wizard_block_margin "$WIZARD_LOGO_W")"
+    printf '%*s' "$block_margin" ''
+    printf '%b%s%b\n' "${WIZARD_DIM}" "$text" "${WIZARD_RESET}"
+}
+
+wizard_print_kuaige_logo() {
+    while IFS= read -r line || [ -n "$line" ]; do
+        line="${line%"${line##*[![:space:]]}"}"
+        [ -z "$line" ] && continue
+        wizard_logo_print_line "$line"
+    done <<'EOF'
+______ ______  _________________________________
+___  //_/_  / / /__    |___  _/_  ____/__  ____/
+__  ,<  _  / / /__  /| |__  / _  / __ __  __/   
+_  /| | / /_/ / _  ___ |_/ /  / /_/ / _  /___   
+/_/ |_| \____/  /_/  |_/___/  \____/  /_____/   
+EOF
+}
+
+wizard_print_kuaige_header() {
+    echo ""
+    wizard_print_kuaige_logo
+    echo ""
+    wizard_logo_print_caption "RiverEdge · Intelligent Deploy Console"
+    echo ""
+}
+
+wizard_panel_repeat() {
+    local ch=$1 n=$2
+    printf "%*s" "$n" "" | tr ' ' "$ch"
+}
+
+wizard_panel_blank() {
+    wizard_panel_line ""
+}
+
+wizard_panel_section() {
+    wizard_panel_line "${WIZARD_BOLD}${1}${WIZARD_RESET}"
+}
+
+wizard_panel_kv() {
+    local key=$1 val=$2
+    wizard_panel_line "${WIZARD_DIM}${key}${WIZARD_RESET}  ${val}"
+}
+
+wizard_panel_menu_item() {
+    local num=$1 title=$2 desc=$3
+    wizard_panel_line "${WIZARD_CYAN}[${num}]${WIZARD_RESET} ${WIZARD_BOLD}${title}${WIZARD_RESET}  ${WIZARD_DIM}${desc}${WIZARD_RESET}"
+}
+
+wizard_panel_menu_short() {
+    wizard_panel_line "$*"
+}
+
+wizard_panel_line_center() {
+    wizard_panel_line "$1"
+}
 
 wizard_say() {
     echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} $*"
@@ -32,16 +153,308 @@ wizard_say_fail() {
 wizard_stage() {
     WIZARD_CURRENT=$1
     echo ""
-    echo -e "${WIZARD_BOLD}━━━ 阶段 ${1}/${WIZARD_TOTAL_STAGES} · ${2} ━━━${WIZARD_RESET}"
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_line "${WIZARD_BOLD}STAGE ${1}/${WIZARD_TOTAL_STAGES}${WIZARD_RESET}  ${WIZARD_DIM}·${WIZARD_RESET}  $2"
+    wizard_panel_bot
     echo ""
 }
 
 wizard_banner() {
+    : # 首屏由 wizard_show_home_panel 统一绘制
+}
+
+wizard_host_mem_value() {
+    if command -v free >/dev/null 2>&1; then
+        free -h | awk '/^Mem:/ {printf "%s / %s", $3, $2}'
+        return
+    fi
+    if is_windows_gitbash && command -v wmic >/dev/null 2>&1; then
+        local mem
+        mem="$(wmic OS get FreePhysicalMemory,TotalVisibleMemorySize /format:list 2>/dev/null | awk -F= '
+            /^FreePhysicalMemory=/ { free=$2+0 }
+            /^TotalVisibleMemorySize=/ { total=$2+0 }
+            END {
+                if (total > 0) printf "%.1fG / %.1fG", (total-free)/1048576, total/1048576
+            }')"
+        if [ -n "$mem" ]; then
+            echo "$mem"
+            return
+        fi
+    fi
+    if is_windows_gitbash && command -v powershell.exe >/dev/null 2>&1; then
+        powershell.exe -NoProfile -Command "
+            \$os = Get-CimInstance Win32_OperatingSystem
+            \$total = [math]::Round(\$os.TotalVisibleMemorySize/1MB, 1)
+            \$used = [math]::Round((\$os.TotalVisibleMemorySize - \$os.FreePhysicalMemory)/1MB, 1)
+            Write-Output (\"\${used}G / \${total}G\")
+        " 2>/dev/null | tr -d '\r'
+        return
+    fi
+    echo "—"
+}
+
+wizard_host_disk_value() {
+    df -h "$PROJECT_ROOT" 2>/dev/null | awk 'NR==2 {printf "%s / %s (%s)", $3, $2, $5}' || echo "—"
+}
+
+wizard_host_load_value() {
+    if [ -f /proc/loadavg ]; then
+        awk '{printf "%s  %s  %s", $1, $2, $3}' /proc/loadavg
+        return
+    fi
+    if command -v uptime >/dev/null 2>&1; then
+        uptime | sed -E 's/.*load averages?: //'
+        return
+    fi
+    echo "—"
+}
+
+wizard_git_value() {
+    if ! command -v git >/dev/null 2>&1 || [ ! -d "$PROJECT_ROOT/.git" ]; then
+        echo "—"
+        return
+    fi
+    local branch head
+    branch="$(git -C "$PROJECT_ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "?")"
+    head="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null || echo "?")"
+    echo "${branch} @ ${head}"
+}
+
+wizard_service_running() {
+    local name=$1
+    local pidf="$LOGS_DIR/${name}.pid"
+    [ -f "$pidf" ] && kill -0 "$(cat "$pidf")" 2>/dev/null
+}
+
+wizard_service_badge() {
+    local name=$1 label=${2:-$1}
+    if wizard_service_running "$name"; then
+        printf "${WIZARD_GREEN}●${WIZARD_RESET} %s  " "$label"
+    else
+        printf "${WIZARD_DIM}○${WIZARD_RESET} %s  " "$label"
+    fi
+}
+
+wizard_health_value() {
+    if wizard_service_running backend && curl -sf --connect-timeout 1 --max-time 2 "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+        echo -e "${WIZARD_GREEN}OK${WIZARD_RESET}"
+    elif wizard_service_running backend; then
+        echo -e "${WIZARD_YELLOW}无响应${WIZARD_RESET}"
+    else
+        echo -e "${WIZARD_DIM}—${WIZARD_RESET}"
+    fi
+}
+
+wizard_access_urls() {
+    local server_ip web_url api_hint
+    server_ip="$(read_deploy_env_value SERVER_IP || true)"
+    [ -n "$server_ip" ] || server_ip="$(detect_server_ip || true)"
+    if [ -z "$server_ip" ]; then
+        WIZARD_ACCESS_WEB="—"
+        WIZARD_ACCESS_API="—"
+        WIZARD_ACCESS_PLATFORM="—"
+        return
+    fi
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        web_url="$(resolve_prod_web_url "$server_ip")"
+        api_hint="${web_url}/api"
+    else
+        web_url="http://${server_ip}:${FRONTEND_PORT}"
+        api_hint="http://${server_ip}:${BACKEND_PORT}"
+    fi
+    WIZARD_ACCESS_WEB="$web_url"
+    WIZARD_ACCESS_API="$api_hint"
+    WIZARD_ACCESS_PLATFORM="${web_url}/infra"
+}
+
+wizard_prefetch_home_status() {
+    local tmp
+    tmp="$(mktemp -d 2>/dev/null || mktemp -d -t wizard)"
+    wizard_host_mem_value >"$tmp/mem" 2>/dev/null &
+    wizard_host_disk_value >"$tmp/disk" 2>/dev/null &
+    wizard_host_load_value >"$tmp/load" 2>/dev/null &
+    wizard_git_value >"$tmp/git" 2>/dev/null &
+    wizard_health_value >"$tmp/health" 2>/dev/null &
+    wait
+    WIZARD_HOME_MEM="$(cat "$tmp/mem" 2>/dev/null || echo '—')"
+    WIZARD_HOME_DISK="$(cat "$tmp/disk" 2>/dev/null || echo '—')"
+    WIZARD_HOME_LOAD="$(cat "$tmp/load" 2>/dev/null || echo '—')"
+    WIZARD_HOME_GIT="$(cat "$tmp/git" 2>/dev/null || echo '—')"
+    WIZARD_HOME_HEALTH="$(cat "$tmp/health" 2>/dev/null || echo '—')"
+    rm -rf "$tmp"
+}
+
+wizard_show_home_panel() {
+    local os_label arch mode_label mirror_label svc_line
+    os_label="$(wizard_runtime_label)"
+    arch="$(uname -m)"
+    mode_label="$([ "$DEPLOY_MODE" = "dev" ] && echo "开发 dev" || echo "生产 prod")"
+    mirror_label="$([ "$USE_MIRROR" = "1" ] && echo "国内镜像" || echo "官方源")"
+
+    WIZARD_HOME_MEM='—'
+    WIZARD_HOME_DISK='—'
+    WIZARD_HOME_LOAD='—'
+    WIZARD_HOME_GIT='—'
+    WIZARD_HOME_HEALTH='—'
+
+    wizard_access_urls
+
     echo ""
-    echo -e "${WIZARD_BOLD}━━━  RiverEdge · 智能部署向导  ━━━${WIZARD_RESET}"
+    wizard_print_kuaige_header
+    wizard_prefetch_home_status
+
+    wizard_panel_begin
+    wizard_panel_top
+
+    wizard_panel_section "SYSTEM · 系统"
+    wizard_panel_kv "Host" "${os_label} · ${arch}"
+    wizard_panel_kv "Mode" "${mode_label} · ${mirror_label}"
+    wizard_panel_kv "Git" "${WIZARD_HOME_GIT:-—}"
+    wizard_panel_blank
+
+    wizard_panel_section "RESOURCES · 资源"
+    wizard_panel_kv "Memory" "${WIZARD_HOME_MEM:-—}"
+    wizard_panel_kv "Disk" "${WIZARD_HOME_DISK:-—}"
+    wizard_panel_kv "Load" "${WIZARD_HOME_LOAD:-—}"
+    wizard_panel_blank
+
+    wizard_panel_section "SERVICES · 服务"
+    svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker) $(wizard_service_badge scheduler)"
+    if [ "$DEPLOY_MODE" = "dev" ]; then
+        svc_line="${svc_line} $(wizard_service_badge frontend)"
+    else
+        svc_line="${svc_line} $(wizard_service_badge caddy)"
+    fi
+    wizard_panel_line "${WIZARD_DIM}Status${WIZARD_RESET}  ${svc_line}"
+    wizard_panel_blank
+
+    wizard_panel_section "ENDPOINTS · 访问"
+    wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
+    wizard_panel_kv "API" "${WIZARD_ACCESS_API:-—}"
+    wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
+    wizard_panel_kv "Health" "${WIZARD_HOME_HEALTH:-—}"
+
+    wizard_panel_mid
+    wizard_panel_section "DEPLOY · 部署"
+    wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
+    wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
+    wizard_panel_menu_item "3" "更新系统" "拉取代码，迁移数据库并重启"
+    wizard_panel_blank
+    wizard_panel_section "OPS · 运维"
+    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[5]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[6]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
+    wizard_panel_menu_short "${WIZARD_CYAN}[8]${WIZARD_RESET} 环境检测  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_bot
     echo ""
-    wizard_say "你好，我将引导你完成 RiverEdge 的部署与维护。"
+}
+
+wizard_show_system_status() {
+    wizard_show_home_panel
+}
+
+wizard_show_main_menu() {
+    : # 菜单已并入 wizard_show_home_panel
+}
+
+wizard_run_quick_action() {
+    load_deploy_env
+    case "$1" in
+        start)
+            if [ "$DEPLOY_MODE" = "dev" ]; then cmd_start_dev; else cmd_start_prod; fi
+            ;;
+        stop)
+            if [ "$DEPLOY_MODE" = "dev" ]; then cmd_stop_dev; else cmd_stop_prod; fi
+            ;;
+        restart)
+            if [ "$DEPLOY_MODE" = "dev" ]; then
+                cmd_stop_dev
+                cmd_start_dev
+            else
+                cmd_stop_prod
+                cmd_start_prod
+            fi
+            ;;
+        restart-frontend) cmd_restart_frontend ;;
+        restart-backend) cmd_restart_backend ;;
+        restart-worker) cmd_restart_worker ;;
+        restart-postgres) cmd_restart_postgres ;;
+        status) cmd_status ;;
+        check) cmd_check ;;
+        migrate) cmd_migrate ;;
+        *) wizard_say_fail "未知快捷操作: $1"; return 1 ;;
+    esac
+}
+
+wizard_pause_return_menu() {
     echo ""
+    read -rp "$(echo -e "${WIZARD_DIM}Enter 返回主菜单${WIZARD_RESET} › ")" _ || true
+}
+
+wizard_show_restart_menu() {
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "RESTART · 重启"
+    wizard_panel_menu_item "1" "全部重启" "停止后启动当前环境全部服务"
+    wizard_panel_menu_item "2" "重启前端" "开发 Vite，生产 Caddy"
+    wizard_panel_menu_item "3" "重启后端" "API 服务"
+    wizard_panel_menu_item "4" "重启 worker" "Taskiq Worker 与 Scheduler"
+    wizard_panel_menu_item "5" "重启 PostgreSQL" "本机数据库服务"
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_ask_restart_choice() {
+    local choice
+    while true; do
+        wizard_show_restart_menu
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-5 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back)
+                return 0
+                ;;
+            1)
+                wizard_run_quick_action restart || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            2)
+                wizard_run_quick_action restart-frontend || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            3)
+                wizard_run_quick_action restart-backend || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            4)
+                wizard_run_quick_action restart-worker || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            5)
+                wizard_run_quick_action restart-postgres || true
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *)
+                wizard_say_warn "无效选项，请重新选择"
+                ;;
+        esac
+    done
+}
+
+wizard_prompt_choice() {
+    wizard_panel_prefix
+    echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-9 · 默认 1]${WIZARD_RESET}"
+    wizard_panel_prefix
+    read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+    REPLY="${choice:-1}"
 }
 
 wizard_intent_label() {
@@ -52,24 +465,8 @@ wizard_intent_label() {
     esac
 }
 
-wizard_ask_intent() {
-    if [ -n "${WIZARD_INTENT:-}" ]; then
-        wizard_say_ok "操作: $(wizard_intent_label)"
-        return 0
-    fi
-    wizard_say "请选择本次操作："
-    echo "    1) 全新安装 — 环境检测、依赖安装、配置与启动"
-    echo "    2) 修改配置 — 调整数据库、超管账号、访问 IP 等"
-    echo "    3) 更新系统 — 拉取最新代码、迁移并重启服务"
-    local choice
-    read -rp "$(echo -e "${WIZARD_CYAN}RiverEdge${WIZARD_RESET} ${WIZARD_DIM}›${WIZARD_RESET} 输入 1 / 2 / 3 [默认 1]: ")" choice
-    case "${choice:-1}" in
-        2|config|configure) export WIZARD_INTENT=configure ;;
-        3|update) export WIZARD_INTENT=update ;;
-        *) export WIZARD_INTENT=fresh ;;
-    esac
-    wizard_say_ok "已选择: $(wizard_intent_label)"
-    case "$WIZARD_INTENT" in
+wizard_ask_intent_hint() {
+    case "${WIZARD_INTENT:-fresh}" in
         configure)
             wizard_say "将逐项展示当前配置，回车保持原值（密码可回车跳过）"
             ;;
@@ -80,6 +477,67 @@ wizard_ask_intent() {
             wizard_say "阶段 2 填写数据库、超管账号、访问 IP/域名 后，其余步骤将自动执行"
             ;;
     esac
+}
+
+wizard_ask_intent() {
+    if [ -n "${WIZARD_INTENT:-}" ]; then
+        wizard_say_ok "操作: $(wizard_intent_label)"
+        wizard_ask_intent_hint
+        return 0
+    fi
+
+    wizard_show_main_menu
+    wizard_prompt_choice
+    local choice="$REPLY"
+    case "${choice:-1}" in
+        0|q|Q|exit)
+            wizard_say "已退出。"
+            exit 0
+            ;;
+        2|config|configure) export WIZARD_INTENT=configure ;;
+        3|update) export WIZARD_INTENT=update ;;
+        4)
+            wizard_run_quick_action start || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        5)
+            wizard_run_quick_action stop || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        6)
+            echo ""
+            wizard_run_quick_action status || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        7|restart)
+            wizard_ask_restart_choice
+            return 2
+            ;;
+        8)
+            echo ""
+            wizard_run_quick_action check || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        9)
+            echo ""
+            wizard_run_quick_action migrate || true
+            wizard_pause_return_menu
+            return 2
+            ;;
+        1|fresh|"") export WIZARD_INTENT=fresh ;;
+        *)
+            wizard_say_warn "无效选项，请重新选择"
+            sleep 0.4
+            return 2
+            ;;
+    esac
+    wizard_say_ok "已选择: $(wizard_intent_label)"
+    wizard_ask_intent_hint
+    return 0
 }
 
 wizard_runtime_label() {
@@ -658,11 +1116,12 @@ wizard_update_app() {
 
 wizard_show_summary() {
     load_deploy_env
-    local server_ip web_url api_hint db_host db_port db_name
+    local server_ip web_url api_hint db_host db_port db_name mode_label
     server_ip="$(read_deploy_env_value SERVER_IP || detect_server_ip)"
     db_host="$(read_env_value DB_HOST || echo localhost)"
     db_port="$(read_env_value DB_PORT || echo "$(detect_postgres_port)")"
     db_name="$(read_env_value DB_NAME || echo riveredge)"
+    mode_label="$([ "$DEPLOY_MODE" = "dev" ] && echo "开发 dev" || echo "生产 prod")"
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
         web_url="$(resolve_prod_web_url "$server_ip")"
@@ -673,23 +1132,26 @@ wizard_show_summary() {
     fi
 
     echo ""
-    echo -e "${WIZARD_BOLD}━━━  部署完成 · 系统信息  ━━━${WIZARD_RESET}"
-    echo ""
-    wizard_say_ok "部署模式: $([ "$DEPLOY_MODE" = "dev" ] && echo "开发" || echo "生产")"
-    wizard_say_ok "Web 访问: ${web_url}"
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_line "${WIZARD_BOLD}COMPLETE${WIZARD_RESET}  ${WIZARD_DIM}·${WIZARD_RESET}  部署完成"
+    wizard_panel_mid
+    wizard_panel_kv "Mode" "${mode_label}"
+    wizard_panel_kv "Web" "${web_url}"
     if [ "$DEPLOY_MODE" = "prod" ] && [ -n "$(read_deploy_env_value CADDY_DOMAIN || true)" ]; then
-        wizard_say_ok "生产域名: $(read_deploy_env_value CADDY_DOMAIN)"
-        wizard_say_ok "HTTPS: $(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
+        wizard_panel_kv "Domain" "$(read_deploy_env_value CADDY_DOMAIN)"
+        wizard_panel_kv "HTTPS" "$(read_deploy_env_value CADDY_ENABLE_LETSENCRYPT || echo false)"
     fi
-    wizard_say_ok "API 地址: ${api_hint}"
-    wizard_say_ok "数据库: $(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
-    wizard_say_ok "平台超管: $(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
-    echo ""
-    wizard_say "常用命令："
-    echo "    ./fast-deploy/deploy.sh status   # 查看运行状态"
-    echo "    ./fast-deploy/deploy.sh stop     # 停止服务"
-    echo "    ./fast-deploy/deploy.sh update   # 拉代码并更新"
-    echo "    ./fast-deploy/deploy.sh check    # 仅环境检测"
+    wizard_panel_kv "API" "${api_hint}"
+    wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
+    wizard_panel_kv "Admin" "$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
+    wizard_panel_mid
+    wizard_panel_section "COMMANDS · 常用命令"
+    wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh status${WIZARD_RESET}  查看状态"
+    wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh stop${WIZARD_RESET}    停止服务"
+    wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh update${WIZARD_RESET}   拉代码更新"
+    wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh check${WIZARD_RESET}    环境检测"
+    wizard_panel_bot
     echo ""
     wizard_say "感谢使用 RiverEdge，祝运行顺利。"
     echo ""
@@ -769,13 +1231,28 @@ cmd_wizard_update() {
     wizard_show_summary
 }
 
-cmd_wizard() {
-    wizard_banner
-    wizard_ask_intent
-
+wizard_dispatch_intent() {
     case "${WIZARD_INTENT:-fresh}" in
         configure) cmd_wizard_configure ;;
         update) cmd_wizard_update ;;
         *) cmd_wizard_fresh ;;
     esac
+}
+
+cmd_wizard() {
+    load_deploy_env
+    ensure_logs_dir
+
+    while true; do
+        unset WIZARD_INTENT
+        wizard_banner
+        wizard_show_system_status
+        local rc=0
+        wizard_ask_intent || rc=$?
+        if [ "$rc" = "2" ]; then
+            continue
+        fi
+        wizard_dispatch_intent
+        break
+    done
 }
