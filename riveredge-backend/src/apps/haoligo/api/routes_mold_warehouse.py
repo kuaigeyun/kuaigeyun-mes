@@ -19,14 +19,14 @@ from apps.haoligo.models.equipment import HaoligoWorkshop
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from apps.master_data.models.supplier import Supplier as MasterSupplier
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(
     prefix="/molds/warehouses",
     tags=["App · HaoliGO · 模具仓库"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-warehouse"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-warehouse"))],
 )
 
 WarehouseTypeLiteral = Literal["内部", "外部"]

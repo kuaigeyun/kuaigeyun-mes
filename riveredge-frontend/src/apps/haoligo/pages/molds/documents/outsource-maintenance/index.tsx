@@ -30,8 +30,7 @@ import {
   canCompleteSourceDocument,
   canInitiateCompleteCreate,
 } from '../../../../../../utils/documentWorkflowPermission';
-import { hasPermission } from '../../../../../../utils/permission';
-import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { refreshCurrentUserInStore } from '../../../../../../services/auth';
 import { buildOutsourceCompleteCreateFromMaintenanceUrl } from '../../../../utils/outsourceCompleteNavigation';
 import {
@@ -123,13 +122,8 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
     ) ||
     canCompleteSourceDocument(currentUser, HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE);
-  const canUpdateMaintenance = hasPermission(
-    currentUser,
-    buildPermissionCode(HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE, 'update'),
-  );
-  const canDeleteMaintenance = hasPermission(
-    currentUser,
-    buildPermissionCode(HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE, 'delete'),
+  const { canUpdate: canUpdateMaintenance, canDelete: canDeleteMaintenance } = useResourcePermissions(
+    HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
   );
   const actionRef = useRef<ActionType>(null);
   const queryClient = useQueryClient();

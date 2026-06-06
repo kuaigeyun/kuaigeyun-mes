@@ -4,32 +4,32 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../stores/globalStore';
-import { hasPermission } from '../../../utils/permission';
+import { hasModulePermission } from '../../../utils/permissionContract';
 
-const REDIRECT_CANDIDATES: { permission: string; path: string }[] = [
-  { permission: 'haoligo:workspace-dashboard:read', path: '/apps/haoligo/workspace' },
-  { permission: 'haoligo:molds-documents-trial:read', path: '/apps/haoligo/molds/documents/trial' },
+const REDIRECT_CANDIDATES: { module: string; path: string }[] = [
+  { module: 'haoligo:workspace-dashboard', path: '/apps/haoligo/workspace' },
+  { module: 'haoligo:molds-documents-trial', path: '/apps/haoligo/molds/documents/trial' },
   {
-    permission: 'haoligo:molds-documents-outsource-maintenance:read',
+    module: 'haoligo:molds-documents-outsource-maintenance',
     path: '/apps/haoligo/molds/documents/outsource-maintenance',
   },
   {
-    permission: 'haoligo:molds-documents-outsource-complete:read',
+    module: 'haoligo:molds-documents-outsource-complete',
     path: '/apps/haoligo/molds/documents/outsource-complete',
   },
-  { permission: 'haoligo:molds-ledger:read', path: '/apps/haoligo/molds/ledger' },
-  { permission: 'haoligo:equipment-ledger:read', path: '/apps/haoligo/equipment/ledger' },
-  { permission: 'haoligo:patrol-hazards:read', path: '/apps/haoligo/patrol/hazards' },
+  { module: 'haoligo:molds-ledger', path: '/apps/haoligo/molds/ledger' },
+  { module: 'haoligo:equipment-ledger', path: '/apps/haoligo/equipment/ledger' },
+  { module: 'haoligo:patrol-hazards', path: '/apps/haoligo/patrol/hazards' },
 ];
 
 const HaoligoDefaultRedirect: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
-  for (const { permission, path } of REDIRECT_CANDIDATES) {
-    if (hasPermission(currentUser, permission)) {
+  for (const { module, path } of REDIRECT_CANDIDATES) {
+    if (hasModulePermission(currentUser, module, 'read')) {
       return <Navigate to={path} replace />;
     }
   }
-  if (hasPermission(currentUser, 'haoligo:entry:read')) {
+  if (hasModulePermission(currentUser, 'haoligo:entry', 'read')) {
     return <Navigate to="/apps/haoligo/molds/documents/trial" replace />;
   }
   return <Navigate to="/" replace />;

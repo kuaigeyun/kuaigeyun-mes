@@ -16,7 +16,7 @@ from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_operations import HaoligoEquipmentStatusAdjustment
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
 from apps.haoligo.services.equipment_operational_status import normalize_operational_status
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -24,7 +24,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/equipment/status-adjustments",
     tags=["App · HaoliGO · 设备状态调整单"],
-    dependencies=[Depends(require_module_access("haoligo", "equipment-documents-status-adjustment"))],
+    dependencies=[Depends(require_haoligo_module_access("equipment-documents-status-adjustment"))],
 )
 
 

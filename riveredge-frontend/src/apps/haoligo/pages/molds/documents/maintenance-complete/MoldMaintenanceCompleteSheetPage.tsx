@@ -57,8 +57,7 @@ import {
   type InhouseMaintenanceServiceType,
 } from '../../../../constants/documentPermissionResources';
 import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
-import { hasPermission } from '../../../../../../utils/permission';
-import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -211,8 +210,7 @@ export function MoldMaintenanceCompleteSheetPage({
   const sourceSheetResource = inhouseSheetResourceForServiceType(serviceType);
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const canUpdateComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'update'));
-  const canDeleteComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'delete'));
+  const { canUpdate: canUpdateComplete, canDelete: canDeleteComplete } = useResourcePermissions(completeResource);
   const canPrintComplete = canPrintHaoligoDocument(currentUser, completeResource);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);

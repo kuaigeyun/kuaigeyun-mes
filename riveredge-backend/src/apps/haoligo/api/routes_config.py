@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from apps.haoligo.services.haoligo_notification_rule_presets import (
     load_haoligo_notification_rule_presets,
 )
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -28,6 +29,7 @@ class LoadNotificationRulePresetsOut(BaseModel):
     "/notification-rules/load-presets",
     response_model=LoadNotificationRulePresetsOut,
     summary="加载好力 GO 消息提醒规则预设",
+    dependencies=[Depends(require_permission_codes("haoligo:haoligo:update", check_abac=False))],
 )
 async def load_haoligo_notification_rule_presets_api(
     tenant_id: Annotated[int, Depends(get_current_tenant)],

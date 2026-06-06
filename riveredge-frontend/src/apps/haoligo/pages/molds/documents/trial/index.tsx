@@ -86,7 +86,6 @@ import {
   putMoldTrialDatasetBinding,
   rejectMoldTrialSheet,
   dispatchMoldTrialSheet,
-  getMoldTrialViewerContext,
   markMoldTrialSheetAdjustmentComplete,
   recallMoldTrialSheet,
   recallMoldTrialSheetAndRetrial,
@@ -107,9 +106,9 @@ import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColu
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-import { hasPermission } from '../../../../../../utils/permission';
-import { buildPermissionCode } from '../../../../../../utils/permissionResource';
 import { hasModulePermission } from '../../../../../../utils/permissionContract';
+import { userIsExternalPartner } from '../../../../../../utils/externalPartner';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 
 const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
@@ -764,6 +763,7 @@ const MoldTrialSheetsPage: React.FC = () => {
     () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'confirm_adjustment'),
     [currentUser],
   );
+  const trialPerms = useResourcePermissions(HAOLIGO_TRIAL_RESOURCE);
 
   const { data: businessConfigRes } = useQuery({
     queryKey: ['businessConfig'],
@@ -859,7 +859,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [bindingModalBusy, setBindingModalBusy] = useState(false);
   const [bindingTestResult, setBindingTestResult] = useState<string | null>(null);
   const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
-  const [isExternalPartner, setIsExternalPartner] = useState(false);
+  const isExternalPartner = useMemo(() => userIsExternalPartner(currentUser), [currentUser]);
   const [adjustmentSubmittingId, setAdjustmentSubmittingId] = useState<number | null>(null);
   const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
   const [poPickerOpen, setPoPickerOpen] = useState(false);
@@ -881,7 +881,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   /** 从待启用模具创建时跳过采购订单号必填 */
   const [skipPurchaseOrder, setSkipPurchaseOrder] = useState(false);
   const canReadMoldLedger = useMemo(
-    () => hasPermission(currentUser, buildPermissionCode('haoligo:molds-ledger', 'read')),
+    () => hasModulePermission(currentUser, 'haoligo:molds-ledger', 'read'),
     [currentUser],
   );
 
@@ -944,16 +944,6 @@ const MoldTrialSheetsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, []);
-
-  useEffect(() => {
-    void getMoldTrialViewerContext()
-      .then((ctx) => {
-        setIsExternalPartner(Boolean(ctx.is_external_partner));
-      })
-      .catch(() => {
-        setIsExternalPartner(false);
-      });
   }, []);
 
   const canCreateFromPo = useMemo(() => {
@@ -2370,7 +2360,6 @@ const MoldTrialSheetsPage: React.FC = () => {
       uniActionRenderOptions: { ...MOLD_SHEET_TABLE_ACTION_OPTIONS, directMax: 8 },
       render: (_, record) => {
         const approved = isMoldSheetApproved(record.sheet_status);
-        const canUpdateTrial = hasPermission(currentUser, buildPermissionCode(HAOLIGO_TRIAL_RESOURCE, 'update'));
         const canShowMarkAdjustment = canConfirmAdjustmentTrial && canMarkAdjustmentComplete(record);
         const auditHandlers = {
           onApprove: () => approveMoldTrialSheet(record.id),
@@ -2382,7 +2371,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             详情
           </Button>,
         ];
-        if (!isExternalPartner) {
+        if (trialPerms.canUpdate) {
           actions.push(
             <Button
               key="edit"
@@ -2394,6 +2383,10 @@ const MoldTrialSheetsPage: React.FC = () => {
             >
               编辑
             </Button>,
+          );
+        }
+        if (trialPerms.canDelete) {
+          actions.push(
             <Button
               key="delete"
               type="link"
@@ -2405,8 +2398,12 @@ const MoldTrialSheetsPage: React.FC = () => {
             >
               删除
             </Button>,
+          );
+        }
+        if (canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE)) {
+          actions.push(
             ...buildMoldSheetAuditActionElements({
-              canAudit: canAuditMoldSheet(currentUser, HAOLIGO_TRIAL_RESOURCE),
+              canAudit: true,
               sheetStatus: record.sheet_status,
               handlers: auditHandlers,
               messageApi,

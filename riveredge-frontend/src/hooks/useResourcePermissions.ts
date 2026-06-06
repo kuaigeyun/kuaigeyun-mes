@@ -17,15 +17,15 @@ export type ResourcePermissionGates = {
   canPrint: boolean;
 };
 
-const ALL_ALLOWED: ResourcePermissionGates = {
-  enabled: false,
-  canRead: true,
-  canCreate: true,
-  canUpdate: true,
-  canDelete: true,
-  canImport: true,
-  canExport: true,
-  canPrint: true,
+const FAIL_CLOSED: ResourcePermissionGates = {
+  enabled: true,
+  canRead: false,
+  canCreate: false,
+  canUpdate: false,
+  canDelete: false,
+  canImport: false,
+  canExport: false,
+  canPrint: false,
 };
 
 export type ResourcePermissionOptions = {
@@ -34,8 +34,8 @@ export type ResourcePermissionOptions = {
 };
 
 /**
- * 按功能资源前缀（app:module）判断标准 CRUD / 导入导出权限。
- * resource 为空时不启用门禁（保持历史页面行为）。
+ * 按 manifest 资源前缀（app:module）判断标准 CRUD / 导入导出权限。
+ * resource 为空时 fail-closed（禁止无资源前缀的旁路放行）。
  */
 export function useResourcePermissions(
   resource: string | null | undefined,
@@ -46,7 +46,7 @@ export function useResourcePermissions(
 
   return useMemo(() => {
     const prefix = (resource || '').trim();
-    if (!prefix) return ALL_ALLOWED;
+    if (!prefix) return FAIL_CLOSED;
 
     const check = (action: string) => hasPermission(currentUser, buildPermissionCode(prefix, action));
     const canCreate = completeSource

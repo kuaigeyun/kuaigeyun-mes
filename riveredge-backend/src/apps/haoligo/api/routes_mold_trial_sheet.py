@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Annotated, List, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from tortoise import timezone
 from tortoise.expressions import Q
@@ -70,7 +70,9 @@ from apps.haoligo.constants.mold_sheet_audit import (
 )
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
+from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
+from core.config.permission_contract import build_permission_code
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
@@ -1009,9 +1011,22 @@ async def recall_trial_sheet(
 async def recall_trial_sheet_and_retrial(
     row_id: int,
     body: MoldTrialRecallIn,
+    request: Request,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [
+            build_permission_code("haoligo", "molds-documents-trial", "recall"),
+            build_permission_code("haoligo", "molds-documents-trial", "create"),
+        ],
+        require_all=True,
+        check_abac=False,
+    )
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()

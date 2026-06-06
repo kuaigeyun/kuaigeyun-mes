@@ -26,7 +26,7 @@ from apps.haoligo.services.mold_upkeep_scheme import (
     load_upkeep_scheme_template_lines,
     mold_ledger_upkeep_param_set_id,
 )
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -148,7 +148,7 @@ class MoldUpkeepSchemeContextOut(BaseModel):
     "/upkeep-params",
     response_model=List[MoldUpkeepParamOut],
     summary="保养项列表",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-params"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-params"))],
 )
 async def list_mold_upkeep_params(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -162,7 +162,7 @@ async def list_mold_upkeep_params(
     "/upkeep-params",
     response_model=MoldUpkeepParamOut,
     summary="创建保养项",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-params"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-params"))],
 )
 async def create_mold_upkeep_param(
     body: MoldUpkeepParamCreate,
@@ -195,7 +195,7 @@ async def create_mold_upkeep_param(
     "/upkeep-params/{row_id}",
     response_model=MoldUpkeepParamOut,
     summary="更新保养项",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-params"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-params"))],
 )
 async def update_mold_upkeep_param(
     row_id: int,
@@ -240,7 +240,7 @@ async def update_mold_upkeep_param(
     "/upkeep-params/{row_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="软删除保养项",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-params"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-params"))],
 )
 async def delete_mold_upkeep_param(
     row_id: int,
@@ -267,7 +267,7 @@ async def delete_mold_upkeep_param(
     "/upkeep-param-sets",
     response_model=List[MoldUpkeepParamSetOut],
     summary="保养方案列表",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def list_mold_upkeep_param_sets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -281,7 +281,7 @@ async def list_mold_upkeep_param_sets(
     "/upkeep-param-sets",
     response_model=MoldUpkeepParamSetOut,
     summary="创建保养方案",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def create_mold_upkeep_param_set(
     body: MoldUpkeepParamSetCreate,
@@ -300,7 +300,7 @@ async def create_mold_upkeep_param_set(
     "/upkeep-param-sets/with-items",
     response_model=MoldUpkeepParamSetOut,
     summary="创建保养方案及明细（事务）",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def create_mold_upkeep_param_set_with_items(
     body: MoldUpkeepSetItemCreateWithItems,
@@ -350,7 +350,7 @@ async def create_mold_upkeep_param_set_with_items(
     "/upkeep-param-sets/{row_id}",
     response_model=MoldUpkeepParamSetOut,
     summary="更新保养方案",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def update_mold_upkeep_param_set(
     row_id: int,
@@ -371,7 +371,7 @@ async def update_mold_upkeep_param_set(
     "/upkeep-param-sets/{row_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="软删除保养方案",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def delete_mold_upkeep_param_set(
     row_id: int,
@@ -397,7 +397,7 @@ async def delete_mold_upkeep_param_set(
     "/upkeep-param-sets/{set_id}/items",
     response_model=List[MoldUpkeepSetItemOut],
     summary="保养方案明细",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def list_mold_upkeep_set_items(
     set_id: int,
@@ -428,7 +428,7 @@ async def list_mold_upkeep_set_items(
     "/upkeep-param-sets/{set_id}/items",
     response_model=MoldUpkeepSetItemOut,
     summary="保养方案添加明细",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def add_mold_upkeep_set_item(
     set_id: int,
@@ -468,7 +468,7 @@ async def add_mold_upkeep_set_item(
     "/upkeep-param-set-items/{item_id}",
     response_model=MoldUpkeepSetItemOut,
     summary="更新保养方案明细",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def update_mold_upkeep_set_item(
     item_id: int,
@@ -497,7 +497,7 @@ async def update_mold_upkeep_set_item(
     "/upkeep-param-set-items/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="删除保养方案明细",
-    dependencies=[Depends(require_module_access("haoligo", "molds-upkeep-param-sets"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-upkeep-param-sets"))],
 )
 async def delete_mold_upkeep_set_item(
     item_id: int,

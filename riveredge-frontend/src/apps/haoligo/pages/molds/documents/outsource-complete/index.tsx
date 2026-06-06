@@ -55,8 +55,7 @@ import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColu
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
 import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../../utils/permission';
-import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
 import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
 import {
@@ -234,8 +233,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const queryClient = useQueryClient();
   const completeResource = HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE;
-  const canUpdateComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'update'));
-  const canDeleteComplete = hasPermission(currentUser, buildPermissionCode(completeResource, 'delete'));
+  const { canUpdate: canUpdateComplete, canDelete: canDeleteComplete } = useResourcePermissions(completeResource);
   const canPrintComplete = canPrintHaoligoDocument(currentUser, completeResource);
   const actionRef = useRef<ActionType>(null);
   const reloadTableAndMoldLedger = useCallback(() => {

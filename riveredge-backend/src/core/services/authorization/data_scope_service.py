@@ -80,7 +80,7 @@ class DataScopeService:
                 "uuid": str(role.uuid),
                 "name": role.name,
                 "code": role.code,
-                "role_type": (getattr(role, "role_type", None) or "internal").strip().lower(),
+                "role_type": (getattr(role, "role_type", None) or "").strip().lower() or None,
                 "external_partner_type": getattr(role, "external_partner_type", None),
             }
             for role in roles

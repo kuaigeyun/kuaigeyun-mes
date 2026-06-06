@@ -25,7 +25,7 @@ from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_borrow_dataset_binding import HaoligoMoldBorrowDatasetBinding
 from apps.haoligo.models.mold_borrow_sheet import HaoligoMoldBorrowSheet
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_BORROW_SHEET_NO
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.department import Department
 from core.schemas.dataset import ExecuteQueryRequest
@@ -36,7 +36,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/borrow-sheets",
     tags=["App · HaoliGO · 领用单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-borrow-out"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-documents-borrow-out"))],
 )
 
 

@@ -12,7 +12,8 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useGlobalStore } from '../../../../stores/globalStore';
-import { hasPermission } from '../../../../utils/permission';
+import { hasModulePermission } from '../../../../utils/permissionContract';
+import { useResourcePermissions } from '../../../../hooks/useResourcePermissions';
 import { Column, Pie } from '@ant-design/charts';
 import dayjs from 'dayjs';
 import {
@@ -194,13 +195,19 @@ const WorkspacePage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const canReadEquipment = hasPermission(currentUser, 'haoligo:equipment-ledger:read');
-  const canReadMolds = hasPermission(currentUser, 'haoligo:molds-ledger:read');
-  const canReadMaintenanceAlert = hasPermission(currentUser, 'haoligo:molds-reports-maintenance-alert:read');
-  const canReadEquipmentMaintenancePlan = hasPermission(currentUser, 'haoligo:equipment-reports-maintenance-plan:read');
-  const canReadHazards = hasPermission(currentUser, 'haoligo:patrol-hazards:read');
-  const canCreateEquipmentUpkeep = hasPermission(currentUser, `${HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET}:create`);
-  const canCreateMoldUpkeep = hasPermission(currentUser, `${HAOLIGO_RESOURCE_MOLD_UPKEEP}:create`);
+  const canReadEquipment = hasModulePermission(currentUser, 'haoligo:equipment-ledger', 'read');
+  const canReadMolds = hasModulePermission(currentUser, 'haoligo:molds-ledger', 'read');
+  const canReadMaintenanceAlert = hasModulePermission(currentUser, 'haoligo:molds-reports-maintenance-alert', 'read');
+  const canReadEquipmentMaintenancePlan = hasModulePermission(
+    currentUser,
+    'haoligo:equipment-reports-maintenance-plan',
+    'read',
+  );
+  const canReadHazards = hasModulePermission(currentUser, 'haoligo:patrol-hazards', 'read');
+  const equipmentUpkeepPerms = useResourcePermissions(HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET);
+  const moldUpkeepPerms = useResourcePermissions(HAOLIGO_RESOURCE_MOLD_UPKEEP);
+  const canCreateEquipmentUpkeep = equipmentUpkeepPerms.canCreate;
+  const canCreateMoldUpkeep = moldUpkeepPerms.canCreate;
 
   const [loading, setLoading] = useState(true);
   const [hazardTrendLoading, setHazardTrendLoading] = useState(false);

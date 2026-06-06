@@ -6,12 +6,14 @@ import re
 from collections import Counter
 from typing import Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field
 from tortoise import Tortoise
 
+from apps.haoligo.api._patrol_report_access import ensure_patrol_kpi_read_access, ensure_patrol_report_read
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.patrol import HaoligoHazardReport
+from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -292,16 +294,21 @@ async def _keyword_cloud(tenant_id: int, *, limit: int = 40) -> List[ChartPoint]
 
 @router.get("/kpi-summary", response_model=PatrolKpiSummary, summary="巡查台账 KPI 汇总")
 async def get_patrol_kpi_summary(
+    request: Request,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
     _: User = Depends(get_current_user),
 ):
+    await ensure_patrol_kpi_read_access(request=request, auth=auth, tenant_id=tenant_id)
     return await _kpi_summary(tenant_id)
 
 
 @router.get("/{report_key}", response_model=PatrolReportPayload, summary="巡查统计报表")
 async def get_patrol_report(
     report_key: str,
+    request: Request,
     tenant_id: int = Depends(get_current_tenant),
+    auth: AuthContext = Depends(get_auth_context),
     _: User = Depends(get_current_user),
     months: int = Query(12, ge=3, le=36),
     days: int = Query(7, ge=1, le=90),
@@ -309,6 +316,7 @@ async def get_patrol_report(
     key = report_key.strip().lower()
     if key not in REPORT_KEYS:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未知报表")
+    await ensure_patrol_report_read(key, request=request, auth=auth, tenant_id=tenant_id)
 
     if key == "issue-type-share":
         return PatrolReportPayload(

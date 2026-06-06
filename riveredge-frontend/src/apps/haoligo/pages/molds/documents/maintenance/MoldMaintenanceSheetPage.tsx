@@ -57,8 +57,7 @@ import {
 } from '../../../../constants/documentPermissionResources';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-import { hasPermission } from '../../../../../../utils/permission';
-import { buildPermissionCode } from '../../../../../../utils/permissionResource';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 
 export type MoldMaintenanceSheetServiceType = InhouseMaintenanceServiceType;
 
@@ -130,8 +129,7 @@ export function MoldMaintenanceSheetPage({
   const sheetResource = inhouseSheetResourceForServiceType(serviceType);
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const canUpdateSheet = hasPermission(currentUser, buildPermissionCode(sheetResource, 'update'));
-  const canDeleteSheet = hasPermission(currentUser, buildPermissionCode(sheetResource, 'delete'));
+  const { canUpdate: canUpdateSheet, canDelete: canDeleteSheet } = useResourcePermissions(sheetResource);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
   const {

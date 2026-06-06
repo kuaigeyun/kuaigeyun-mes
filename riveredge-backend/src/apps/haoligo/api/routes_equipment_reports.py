@@ -24,7 +24,7 @@ from apps.haoligo.api.routes_equipment_documents import (
 )
 from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_operations import HaoligoEquipmentOutputRecord
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -43,7 +43,7 @@ class EquipmentOperationalStatusSummaryOut(BaseModel):
     "/operational-status-summary",
     response_model=EquipmentOperationalStatusSummaryOut,
     summary="设备运行状态分布（工作台环图）",
-    dependencies=[Depends(require_module_access("haoligo", "equipment-ledger"))],
+    dependencies=[Depends(require_haoligo_module_access( "equipment-dashboard-status"))],
 )
 async def get_equipment_operational_status_summary(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -67,7 +67,7 @@ class MaintenanceUpkeepLastByEquipmentOut(BaseModel):
     "/maintenance-upkeep-last-by-equipment",
     response_model=MaintenanceUpkeepLastByEquipmentOut,
     summary="各设备最近保养完修时间（设备保养计划表聚合）",
-    dependencies=[Depends(require_module_access("haoligo", "equipment-reports-maintenance-plan"))],
+    dependencies=[Depends(require_haoligo_module_access( "equipment-reports-maintenance-plan"))],
 )
 async def get_maintenance_upkeep_last_by_equipment(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -141,7 +141,7 @@ class EquipmentMaintenanceRemindersOut(BaseModel):
     "/maintenance-reminders",
     response_model=EquipmentMaintenanceRemindersOut,
     summary="设备保养提醒列表（保养计划表 / 工作台）",
-    dependencies=[Depends(require_module_access("haoligo", "equipment-reports-maintenance-plan"))],
+    dependencies=[Depends(require_haoligo_module_access( "equipment-reports-maintenance-plan"))],
 )
 async def get_equipment_maintenance_reminders(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -276,7 +276,12 @@ class CapacityReportOut(BaseModel):
     limit: int = 20
 
 
-@router.get("/capacity", response_model=CapacityReportOut, summary="产能查询（设备产出单）")
+@router.get(
+    "/capacity",
+    response_model=CapacityReportOut,
+    summary="产能查询（设备产出单）",
+    dependencies=[Depends(require_haoligo_module_access( "equipment-reports-capacity"))],
+)
 async def capacity_report(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],

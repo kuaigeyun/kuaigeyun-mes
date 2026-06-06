@@ -15,8 +15,15 @@ RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
 RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo:molds-documents-outsource-complete"
 
 
+from core.config.permission_contract import build_permission_code, parse_permission_code
+
+
 def _code(resource: str, action: str) -> str:
-    return f"{resource.strip()}:{action.strip().lower()}"
+    parsed = parse_permission_code(resource)
+    if not parsed:
+        raise ValueError(f"无效资源前缀：{resource!r}")
+    app_code, module_code, _ = parsed
+    return build_permission_code(app_code, module_code, action)
 
 
 def permission_codes_for_complete_create(*, source_resource: str, target_resource: str) -> list[str]:

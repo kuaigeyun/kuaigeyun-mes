@@ -53,7 +53,7 @@ from apps.haoligo.services.spot_check_side_effects import (
     send_spot_check_report_messages,
     validate_report_notify_users,
 )
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._equipment_route_access import require_equipment_document_path_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
@@ -63,7 +63,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/equipment",
     tags=["App · HaoliGO · 设备单据"],
-    dependencies=[Depends(require_module_access("haoligo", "equipment-documents"))],
+    dependencies=[Depends(require_equipment_document_path_access())],
 )
 
 

@@ -5,24 +5,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from apps.haoligo.api._data_scope import RESOURCE_OUTSOURCE_COMPLETE, apply_outsource_sheet_scope
+from apps.haoligo.api._data_scope import (
+    RESOURCE_OUTSOURCE_COMPLETE,
+    apply_outsource_sheet_scope,
+    user_is_external_partner,
+)
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
-from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
-
-
-async def is_external_partner_user(tenant_id: int, user: User) -> bool:
-    if DataScopeService._admin_bypass(user):
-        return False
-    roles = await DataScopeService._load_active_roles(user.id, tenant_id)
-    return any(
-        (getattr(role, "role_type", "") or "").strip().lower() == "external"
-        and (getattr(role, "external_partner_type", "") or "").strip()
-        for role in roles
-    )
 
 
 def collect_latest_from_line_items(
@@ -47,7 +39,7 @@ def collect_latest_from_line_items(
 async def fetch_last_upkeep_by_mold(tenant_id: int, user: User) -> dict[str, datetime]:
     out: dict[str, datetime] = {}
 
-    if not await is_external_partner_user(tenant_id, user):
+    if not await user_is_external_partner(tenant_id, user):
         inhouse_rows = await HaoligoMoldMaintenanceCompleteSheet.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
