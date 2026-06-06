@@ -352,7 +352,9 @@ class UserService:
                 )
             tenant_name = tenant.name
 
-        await user.fetch_related("department", "position", "roles")
+        from core.services.authorization.data_scope_service import DataScopeService
+
+        await user.fetch_related("department", "position")
         permissions: List[str] = []
         permission_version = 1
         permission_tenant_id = effective_tenant_id or user.tenant_id
@@ -378,7 +380,7 @@ class UserService:
                 "uuid": str(user.position.uuid),
                 "name": user.position.name,
             }
-        roles = [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await user.roles.all()]
+        roles = await DataScopeService.serialize_active_roles(user.id, effective_tenant_id)
         
         return {
             "id": user.id,

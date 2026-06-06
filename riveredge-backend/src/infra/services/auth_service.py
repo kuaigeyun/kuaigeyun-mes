@@ -817,7 +817,7 @@ class AuthService:
         
         permissions: list[str] = []
         permission_version = 1
-        await user.fetch_related("department", "position", "roles")
+        await user.fetch_related("department", "position")
         
         if final_tenant_id is not None:
             permission_set = await UserPermissionService.get_user_permissions(
@@ -830,9 +830,11 @@ class AuthService:
                 user_id=user.id,
             )
             
+        from core.services.authorization.data_scope_service import DataScopeService
+
         department = {"uuid": str(user.department.uuid), "name": user.department.name} if user.department else None
         position = {"uuid": str(user.position.uuid), "name": user.position.name} if user.position else None
-        roles = [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await user.roles.all()]
+        roles = await DataScopeService.serialize_active_roles(user.id, final_tenant_id)
         
         result = {
             "access_token": access_token,
@@ -1086,7 +1088,9 @@ class AuthService:
                 tenant_id=default_tenant.id,
                 user_id=guest_user.id,
             )
-            await guest_user.fetch_related("department", "position", "roles")
+            from core.services.authorization.data_scope_service import DataScopeService
+
+            await guest_user.fetch_related("department", "position")
             user_info_dict = {
                 "id": guest_user.id,
                 "uuid": str(guest_user.uuid),
@@ -1101,7 +1105,7 @@ class AuthService:
                 "permission_version": permission_version,
                 "department": {"uuid": str(guest_user.department.uuid), "name": guest_user.department.name} if guest_user.department else None,
                 "position": {"uuid": str(guest_user.position.uuid), "name": guest_user.position.name} if guest_user.position else None,
-                "roles": [{"uuid": str(r.uuid), "name": r.name, "code": r.code} for r in await guest_user.roles.all()],
+                "roles": await DataScopeService.serialize_active_roles(guest_user.id, default_tenant.id),
             }
             
             # 确保 default_tenant 不为 None（双重验证）

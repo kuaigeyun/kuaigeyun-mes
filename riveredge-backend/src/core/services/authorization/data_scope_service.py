@@ -71,6 +71,22 @@ class DataScopeService:
         return roles
 
     @classmethod
+    async def serialize_active_roles(cls, user_id: int, tenant_id: int | None) -> list[dict[str, Any]]:
+        if tenant_id is None:
+            return []
+        roles = await cls._load_active_roles(user_id, tenant_id)
+        return [
+            {
+                "uuid": str(role.uuid),
+                "name": role.name,
+                "code": role.code,
+                "role_type": (getattr(role, "role_type", None) or "internal").strip().lower(),
+                "external_partner_type": getattr(role, "external_partner_type", None),
+            }
+            for role in roles
+        ]
+
+    @classmethod
     async def _default_external_partner_q(
         cls,
         *,

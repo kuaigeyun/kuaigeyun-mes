@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
+from apps.haoligo.api._data_scope import user_is_external_partner
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
@@ -29,23 +29,12 @@ class MobileBootstrapOut(BaseModel):
     vendor_id: Optional[str] = Field(None, description="外协厂商标识（预留）")
 
 
-def _detect_is_outsource(user: User, roles: list) -> bool:
-    for r in roles:
-        code = (getattr(r, "code", None) or "").strip()
-        name = (getattr(r, "name", None) or "").strip()
-        if re.search(r"outsource|vendor|外协", code, re.I) or "外协" in name:
-            return True
-    return False
-
-
 @router.get("/bootstrap", response_model=MobileBootstrapOut, summary="移动端启动聚合")
 async def get_mobile_bootstrap(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> MobileBootstrapOut:
-    await user.fetch_related("roles")
-    roles = await user.roles.all()
-    is_outsource = _detect_is_outsource(user, roles)
+    is_outsource = await user_is_external_partner(tenant_id, user)
 
     pending_audit_count = await (
         tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id)
