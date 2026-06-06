@@ -1,5 +1,10 @@
 #!/bin/bash
 # RiverEdge SaaS 多组织框架 - 一键启动脚本 (重构稳定版)
+# 用法: ./fast-deploy/launch.dev.sh [stop|status|be|fe]
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$PROJECT_ROOT" || exit 1
 
 # 环境参数
 BACKEND_PORT=8200
