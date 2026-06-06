@@ -11,6 +11,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Button,
+  Badge,
   Checkbox,
   Space,
   Tag,
@@ -638,6 +639,16 @@ const RolesPermissionsPage: React.FC = () => {
               }}
             />
             <span>{role.name}</span>
+            {(role.user_count ?? 0) > 0 && (
+              <Tooltip title={t('field.department.userCountTag', { count: role.user_count ?? 0 })}>
+                <Badge
+                  count={role.user_count}
+                  size="small"
+                  color={token.colorPrimary}
+                  style={{ flexShrink: 0 }}
+                />
+              </Tooltip>
+            )}
             {role.role_type === 'external' && role.external_partner_type === 'supplier' && (
               <Tag color="cyan">{t('pages.system.roles.externalSupplier', { defaultValue: '供应商' })}</Tag>
             )}
@@ -690,7 +701,7 @@ const RolesPermissionsPage: React.FC = () => {
     if (!roleSearchKeyword.trim()) {
       setFilteredRoleTreeData(treeNodes);
     }
-  }, [filteredRoles, roleSearchKeyword, handleEditRole, handleDeleteRole]);
+  }, [filteredRoles, roleSearchKeyword, handleEditRole, handleDeleteRole, t, token]);
 
   /**
    * 过滤角色树（根据搜索关键词）

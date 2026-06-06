@@ -10,7 +10,6 @@ import os
 import subprocess
 from pathlib import Path
 from datetime import datetime, timezone
-from core.timezone_utils import now_utc
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from loguru import logger
@@ -102,7 +101,8 @@ async def get_platform_version():
     if raw_build:
         build_time = _normalize_to_iso_utc(raw_build)
     else:
-        build_time = now_utc().strftime("%Y-%m-%dT%H:%M:%SZ")
+        # 由 fast-deploy update / 向导安装·更新写入；未部署时不伪造时间
+        build_time = ""
 
     git_latest = "暂无"
 

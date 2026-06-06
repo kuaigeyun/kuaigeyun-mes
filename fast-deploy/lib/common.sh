@@ -612,6 +612,18 @@ set_deploy_env_value() {
     _env_file_set "$key" "$val" "$DEPLOY_ENV_FILE"
 }
 
+# 由 deploy.sh update / 向导安装·更新写入 riveredge-backend/.env，供工作台版本 API 读取。
+# 须在启动后端前调用，以便新进程加载 PLATFORM_BUILD_TIME / GIT_SHA。
+record_deploy_release_metadata() {
+    ensure_env_file
+    local sha build_time
+    sha="$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev/null | tr -d '[:space:]')"
+    build_time="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    [ -n "$sha" ] && set_env_value GIT_SHA "$sha"
+    set_env_value PLATFORM_BUILD_TIME "$build_time"
+    log_info "发版记录: commit=${sha:-unknown} deploy_time=${build_time}"
+}
+
 admin_config_complete() {
     local pass user
     pass="$(read_env_value PLATFORM_SUPERADMIN_PASSWORD || true)"
@@ -1920,6 +1932,7 @@ cmd_install() {
 cmd_update_dev() {
     cmd_migrate
     cmd_stop_dev
+    record_deploy_release_metadata
     cmd_start_dev
 }
 
@@ -1934,6 +1947,7 @@ cmd_update_prod() {
     cmd_migrate
     cmd_stop_prod
     cmd_ensure_frontend_dist
+    record_deploy_release_metadata
     cmd_start_prod
     log_ok "生产环境已更新"
 }

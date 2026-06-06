@@ -605,6 +605,7 @@ wizard_deploy_app() {
     if [ "$DEPLOY_MODE" = "dev" ]; then
         wizard_say "开发模式：迁移并启动后端、Worker 与 Vite 前端..."
         wizard_say "详细日志: ${log}"
+        wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
         wizard_run_deploy_step start_dev "启动开发环境" "$log" cmd_start_dev || return 1
         return 0
     fi
@@ -615,6 +616,7 @@ wizard_deploy_app() {
 
     wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
     wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
+    wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
     wizard_run_deploy_step start_prod "启动生产服务（后端 + Worker + Caddy）" "$log" cmd_start_prod || return 1
 }
 
@@ -645,9 +647,11 @@ wizard_update_app() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1
         wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
+        wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
         wizard_run_deploy_step start "启动生产服务" "$log" cmd_start_prod || return 1
     else
         wizard_run_deploy_step stop "停止开发服务" "$log" cmd_stop_dev || return 1
+        wizard_run_deploy_step release_meta "记录发版信息" "$log" record_deploy_release_metadata || return 1
         wizard_run_deploy_step start "启动开发环境" "$log" cmd_start_dev || return 1
     fi
 }

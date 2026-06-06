@@ -329,6 +329,23 @@ function Set-DeployEnvValue([string]$Key, [string]$Val) {
     Set-Content -Path $script:DeployEnvFile -Value $content -Encoding UTF8
 }
 
+function Record-DeployReleaseMetadata {
+    if (-not (Test-Path $script:EnvFile)) {
+        Copy-Item (Join-Path $script:BackendDir '.env.example') $script:EnvFile
+    }
+    $sha = $null
+    Push-Location $script:ProjectRoot
+    try {
+        $sha = (git rev-parse --short HEAD 2>$null)
+        if ($sha) { $sha = $sha.ToString().Trim() }
+    } finally { Pop-Location }
+    $buildTime = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ss') + 'Z'
+    if ($sha) { Set-EnvValue 'GIT_SHA' $sha }
+    Set-EnvValue 'PLATFORM_BUILD_TIME' $buildTime
+    $shaLabel = if ($sha) { $sha } else { 'unknown' }
+    Write-LogInfo "发版记录: commit=$shaLabel deploy_time=$buildTime"
+}
+
 function Normalize-DomainInput([string]$Raw) {
     if ([string]::IsNullOrWhiteSpace($Raw)) { return '' }
     $v = $Raw.Trim().ToLowerInvariant()
@@ -1118,6 +1135,7 @@ function Invoke-Install {
 function Invoke-UpdateDev {
     Invoke-Migrate
     Invoke-StopDev
+    Record-DeployReleaseMetadata
     Invoke-StartDev
 }
 
@@ -1135,6 +1153,7 @@ function Invoke-UpdateProd {
     Invoke-Migrate
     Invoke-StopProd
     Ensure-FrontendDist
+    Record-DeployReleaseMetadata
     Invoke-StartProd
     Write-LogOk '生产环境已更新'
 }
@@ -1146,11 +1165,15 @@ function Invoke-Default {
         Invoke-Install
     }
     if (Test-EnvNeedsConfigure) { Invoke-Configure }
-    if ($script:DeployMode -eq 'dev') { Invoke-StartDev }
+    if ($script:DeployMode -eq 'dev') {
+        Record-DeployReleaseMetadata
+        Invoke-StartDev
+    }
     else {
         Invoke-Migrate
         if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { Invoke-Build }
         else { Write-LogOk '已检测到 Web dist，跳过服务器构建' }
+        Record-DeployReleaseMetadata
         Invoke-StartProd
     }
 }

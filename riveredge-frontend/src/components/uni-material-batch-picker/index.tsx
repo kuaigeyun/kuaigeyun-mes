@@ -5,20 +5,27 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { App, Flex, Input, Modal, Select, Table, TreeSelect } from 'antd';
+import { App, Flex, Input, Modal, Select, Table, Tooltip, TreeSelect } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
 import { materialApi, materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
+import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/dataDictionary';
 import type { UniMaterialBatchPickerProps } from './types';
-import { getMaterialField, mapMaterialGroupTree, type MaterialGroupTreeNode } from './utils';
+import {
+  fetchBatchMaterialHasBom,
+  fetchBatchMaterialInventory,
+  getMaterialField,
+  mapMaterialGroupTree,
+  type MaterialGroupTreeNode,
+} from './utils';
 
 export type { UniMaterialBatchPickerProps } from './types';
 
 const PAGE_SIZE = 20;
-const DEFAULT_WIDTH = 1000;
+const DEFAULT_WIDTH = 1120;
 /** 标题行筛选项宽度（与 common 占位文案匹配，避免省略号截断） */
 const FILTER_SEARCH_WIDTH = 236;
 const FILTER_GROUP_WIDTH = 136;
@@ -44,6 +51,9 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   const [page, setPage] = useState(1);
   const [totalHint, setTotalHint] = useState(0);
   const [selectedMap, setSelectedMap] = useState<Map<number, Material>>(() => new Map());
+  const [bomMap, setBomMap] = useState<Record<number, boolean>>({});
+  const [inventoryMap, setInventoryMap] = useState<Record<number, number>>({});
+  const [indicatorsLoading, setIndicatorsLoading] = useState(false);
 
   const loadUnits = useCallback(async () => {
     try {
@@ -70,6 +80,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   }, [message, t]);
 
   const fetchSeqRef = useRef(0);
+  const indicatorSeqRef = useRef(0);
 
   const fetchList = useCallback(
     async (kw: string, gid: number | undefined, st: string | undefined, p: number) => {
@@ -126,6 +137,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   useEffect(() => {
     if (!open) {
       fetchSeqRef.current += 1;
+      indicatorSeqRef.current += 1;
       return;
     }
     setSearchDraft('');
@@ -141,6 +153,30 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
     if (!open) return;
     void fetchList(searchKeyword, groupId, sourceType, page);
   }, [open, searchKeyword, groupId, sourceType, page, fetchList]);
+
+  /** 当前页物料：批量拉取 BOM 与可用库存 */
+  useEffect(() => {
+    if (!open || list.length === 0) {
+      setBomMap({});
+      setInventoryMap({});
+      setIndicatorsLoading(false);
+      return;
+    }
+    const materialIds = list.map((m) => m.id).filter((id) => typeof id === 'number');
+    if (materialIds.length === 0) return;
+
+    const seq = ++indicatorSeqRef.current;
+    setIndicatorsLoading(true);
+    void Promise.all([
+      fetchBatchMaterialHasBom(materialIds),
+      fetchBatchMaterialInventory(materialIds),
+    ]).then(([bom, inventory]) => {
+      if (seq !== indicatorSeqRef.current) return;
+      setBomMap(bom);
+      setInventoryMap(inventory);
+      setIndicatorsLoading(false);
+    });
+  }, [open, list]);
 
   const selectedCount = selectedMap.size;
   const selectedRowKeys = useMemo(() => Array.from(selectedMap.keys()), [selectedMap]);
@@ -188,16 +224,21 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         },
       },
       {
-        title: t('app.kuaizhizao.salesOrder.materialCode'),
-        width: 120,
-        ellipsis: true,
-        render: (_, r) => String(getMaterialField(r as Record<string, unknown>, 'mainCode') ?? (r as { code?: string }).code ?? ''),
-      },
-      {
-        title: t('app.kuaizhizao.salesOrder.materialName'),
-        width: 180,
-        ellipsis: true,
-        render: (_, r) => String((r as { name?: string }).name ?? ''),
+        title: t('app.kuaizhizao.salesOrder.materialPickerMaterial'),
+        width: 200,
+        ellipsis: false,
+        render: (_, r) => {
+          const rec = r as Record<string, unknown>;
+          const code = String(
+            getMaterialField(rec, 'mainCode') ?? (r as { code?: string }).code ?? '',
+          );
+          return (
+            <UniTableStackedPrimaryCell
+              primary={String((r as { name?: string }).name ?? '')}
+              secondary={code}
+            />
+          );
+        },
       },
       {
         title: t('app.kuaizhizao.salesOrder.materialSpec'),
@@ -211,6 +252,52 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         render: (_, r) => {
           const val = String(getMaterialField(r as Record<string, unknown>, 'baseUnit') ?? '');
           return unitsMap[val] || val || '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialPickerHasBom'),
+        width: 88,
+        align: 'center',
+        render: (_, r) => {
+          const id = r.id;
+          if (indicatorsLoading || !(id in bomMap)) {
+            return (
+              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12 }}>...</span>
+            );
+          }
+          const hasBom = bomMap[id];
+          const text = hasBom
+            ? t('app.kuaizhizao.salesOrder.materialPickerHasBomYes')
+            : t('app.kuaizhizao.salesOrder.materialPickerHasBomNo');
+          const color = hasBom
+            ? 'var(--ant-color-success)'
+            : 'var(--ant-color-text-tertiary)';
+          return (
+            <Tooltip
+              title={
+                hasBom
+                  ? t('app.kuaizhizao.salesOrder.materialPickerHasBomConfigured')
+                  : t('app.kuaizhizao.salesOrder.materialPickerHasBomNone')
+              }
+            >
+              <span style={{ color, fontSize: 12 }}>{text}</span>
+            </Tooltip>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.materialPickerAvailableInventory'),
+        width: 96,
+        align: 'right',
+        render: (_, r) => {
+          const id = r.id;
+          if (indicatorsLoading || !(id in inventoryMap)) {
+            return (
+              <span style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 12 }}>...</span>
+            );
+          }
+          const qty = inventoryMap[id];
+          return qty ? Number(qty).toLocaleString() : '0';
         },
       },
       {
@@ -231,7 +318,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
         },
       },
     ],
-    [t, unitsMap],
+    [t, unitsMap, bomMap, inventoryMap, indicatorsLoading],
   );
 
   const handleOk = () => {
@@ -347,7 +434,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           onChange: (p) => setPage(p),
           showTotal: (tot) => t('app.kuaizhizao.salesOrder.materialPickerPageTotal', { total: tot }),
         }}
-        scroll={{ x: 720, y: 360 }}
+        scroll={{ x: 900, y: 360 }}
       />
     </Modal>
   );
