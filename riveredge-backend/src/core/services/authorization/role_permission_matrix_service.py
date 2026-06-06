@@ -29,7 +29,7 @@ from core.services.authorization.permission_version_service import PermissionVer
 from core.services.authorization.role_service import RoleService
 from core.services.system.menu_service import MenuService
 from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 
 
 _MANIFEST_ORDER_FALLBACK = 10_000_000

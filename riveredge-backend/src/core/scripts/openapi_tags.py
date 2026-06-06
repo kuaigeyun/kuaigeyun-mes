@@ -7,6 +7,9 @@ OpenAPI / ReDoc 左侧分组命名约定（仅影响 tags，不涉及接口正�
   App · … · …   — 应用级（产品名 · 功能模块）
 
 新路由请直接使用上述格式的字面量 tags=[...]，或与既有模块保持一致。
+
+用法（一次性迁移）::
+  python -m core.scripts.openapi_tags
 """
 
 from __future__ import annotations
@@ -177,6 +180,6 @@ def migrate_tags_in_tree(src_root: Path) -> int:
 
 
 if __name__ == "__main__":
-    root = Path(__file__).resolve().parents[1]  # .../src
+    root = Path(__file__).resolve().parents[2]  # .../src
     n = migrate_tags_in_tree(root)
     print(f"migrated_tags_in_files={n}")

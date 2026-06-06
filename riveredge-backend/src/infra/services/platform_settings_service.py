@@ -9,7 +9,7 @@ Date: 2026-01-06
 
 from typing import Optional
 
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from infra.models.platform_settings import PlatformSettings
 from infra.schemas.platform_settings import (
     PlatformSettingsCreate,

@@ -7,7 +7,7 @@ Author: Auto (AI Assistant)
 Date: 2026-01-06
 """
 
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from tortoise import fields
 from tortoise.models import Model
 

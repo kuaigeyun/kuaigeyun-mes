@@ -11,7 +11,7 @@ from tortoise.expressions import Q
 
 from core.models.code_rule import CodeRule
 from core.schemas.code_rule import CodeRuleCreate, CodeRuleUpdate
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from core.services.code_rule.code_rule_component_service import CodeRuleComponentService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 

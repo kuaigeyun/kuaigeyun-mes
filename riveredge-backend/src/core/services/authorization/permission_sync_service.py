@@ -7,7 +7,7 @@ from datetime import timedelta
 
 import asyncpg
 
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from typing import Any
 from uuid import uuid4
 

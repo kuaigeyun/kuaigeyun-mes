@@ -11,7 +11,7 @@ from tortoise.expressions import Q
 
 from core.models.department import Department
 from core.models.position import Position
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from core.models.user_role import UserRole
 from core.schemas.department import DepartmentCreate, DepartmentUpdate
 from infra.models.user import User

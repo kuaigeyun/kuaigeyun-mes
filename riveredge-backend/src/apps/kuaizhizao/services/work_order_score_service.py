@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.work_order_score import (
     WorkOrderScoreResponse,
 )
 from core.services.base import BaseService
-from core.timezone_utils import make_aware, now_utc
+from core.utils.timezone_utils import make_aware, now_utc
 from infra.services.business_config_service import BusinessConfigService
 
 SCORE_CONFIG_VERSION = "default-v1"

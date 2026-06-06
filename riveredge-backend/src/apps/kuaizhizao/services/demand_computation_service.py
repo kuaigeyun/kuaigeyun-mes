@@ -46,7 +46,7 @@ from apps.kuaizhizao.utils.inventory_helper import (
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
-from core.timezone_utils import make_aware, now_utc
+from core.utils.timezone_utils import make_aware, now_utc
 
 
 def _to_utc_aware(dt: Optional[datetime]) -> Optional[datetime]:

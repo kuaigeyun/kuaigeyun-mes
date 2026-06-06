@@ -14,7 +14,7 @@ from decimal import Decimal
 
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 

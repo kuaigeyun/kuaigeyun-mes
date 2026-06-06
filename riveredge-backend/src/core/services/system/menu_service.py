@@ -14,11 +14,11 @@ import re
 from core.models.menu import Menu
 from core.models.permission import Permission
 from core.config.system_menu_config import LEGACY_SYSTEM_GROUP_ALIASES, SYSTEM_MENU_CONFIG
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from core.schemas.menu import MenuCreate, MenuUpdate, MenuResponse, MenuTreeResponse, TenantBackendHomeResponse
 from core.services.application.application_service import ApplicationService
 from core.config.menu_takeover import merge_menu_meta_for_sync
-from core.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
+from core.config.menu_sync_is_active_policy import resolve_sync_is_active_for_existing_row
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.cache.cache_manager import cache_manager
 
@@ -1108,7 +1108,7 @@ class MenuService:
             menu_config: 菜单配置（JSON格式）
             is_active: 新建菜单项是否启用（默认与应用状态一致）
             preserve_existing_is_active: 对已存在行的写入规则见
-                ``core.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
+                ``core.config.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
                 （菜单同步 is_active 策略见业务文档）
             skip_permission_sync: 为 True 时不同步 core_permissions（例如「扫描应用」批量路径由调用方在最后统一同步）
             

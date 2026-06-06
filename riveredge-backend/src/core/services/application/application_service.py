@@ -15,7 +15,7 @@ import asyncpg
 
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import get_db_connection
 from loguru import logger

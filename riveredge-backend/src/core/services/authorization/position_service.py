@@ -8,7 +8,7 @@ from typing import List, Optional
 from tortoise.expressions import Q
 
 from core.models.position import Position
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from core.models.department import Department
 from core.schemas.position import PositionCreate, PositionUpdate
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError

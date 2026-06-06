@@ -9,7 +9,7 @@ from tortoise.expressions import Q
 from loguru import logger
 
 from core.models.role import Role
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from core.models.permission import Permission
 from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
 from core.models.field_permission_policy import FieldPermissionPolicy, FieldMaskLevel

@@ -18,7 +18,7 @@ from loguru import logger
 
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 
 READINESS_ACTIVE_STATUSES = ("draft", "released", "in_progress", "草稿", "已下达", "执行中")
 

@@ -9,7 +9,7 @@ Date: 2026-01-06
 
 from fastapi import APIRouter
 
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from loguru import logger
 
 from infra.schemas.platform_settings import PlatformSettingsResponse

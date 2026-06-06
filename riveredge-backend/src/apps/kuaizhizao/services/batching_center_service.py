@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
-from core.timezone_utils import make_aware, now_utc
+from core.utils.timezone_utils import make_aware, now_utc
 
 from apps.kuaizhizao.models.batching_order import BatchingOrder, BatchingOrderItem
 from apps.kuaizhizao.models.backflush_record import BackflushRecord

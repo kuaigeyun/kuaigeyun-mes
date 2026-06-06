@@ -20,7 +20,7 @@ from core.schemas.permission_policy import (
     FieldPermissionPolicyResponse,
     FieldPermissionPolicyUpsert,
 )
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from infra.infrastructure.database.database import get_db_connection
 from infra.exceptions.exceptions import ValidationError
 from tortoise.transactions import in_transaction

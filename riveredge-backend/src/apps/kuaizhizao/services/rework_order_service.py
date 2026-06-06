@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import List, Optional
 from decimal import Decimal
 
-from core.timezone_utils import is_future_datetime
+from core.utils.timezone_utils import is_future_datetime
 
 from tortoise.transactions import in_transaction
 

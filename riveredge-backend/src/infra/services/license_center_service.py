@@ -13,7 +13,7 @@ from base64 import urlsafe_b64encode
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from infra.infrastructure.database.database import get_db_connection
 from infra.schemas.license_center import PlatformLicenseCreateRequest
 

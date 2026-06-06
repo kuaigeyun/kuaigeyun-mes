@@ -114,7 +114,7 @@ class Tenant(BaseModel):
         """
         if self.expires_at is None:
             return False
-        from core.timezone_utils import now_utc, to_naive_utc
+        from core.utils.timezone_utils import now_utc, to_naive_utc
 
         return to_naive_utc(now_utc()) > to_naive_utc(self.expires_at)
 

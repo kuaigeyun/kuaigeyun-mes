@@ -8,7 +8,7 @@ from tortoise.transactions import in_transaction
 
 from core.models.user_data_scope_binding import UserDataScopeBinding
 from core.schemas.user_data_scope_binding import UserDataScopeBindingItem, UserDataScopeBindingReplace
-from core.timezone_utils import now_utc
+from core.utils.timezone_utils import now_utc
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
