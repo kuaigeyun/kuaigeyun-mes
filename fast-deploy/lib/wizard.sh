@@ -19,11 +19,10 @@ WIZARD_PANEL_W=48
 WIZARD_LOGO_W=48
 
 wizard_panel_init() {
+    WIZARD_P_H='-'
     if is_windows_gitbash; then
-        WIZARD_P_H='-'
         WIZARD_PANEL_BORDER="${WIZARD_DIM}"
     else
-        WIZARD_P_H='─'
         WIZARD_PANEL_BORDER="${WIZARD_LOGO_COLOR}"
     fi
 }
@@ -198,18 +197,6 @@ wizard_host_disk_value() {
     df -h "$PROJECT_ROOT" 2>/dev/null | awk 'NR==2 {printf "%s / %s (%s)", $3, $2, $5}' || echo "—"
 }
 
-wizard_host_load_value() {
-    if [ -f /proc/loadavg ]; then
-        awk '{printf "%s  %s  %s", $1, $2, $3}' /proc/loadavg
-        return
-    fi
-    if command -v uptime >/dev/null 2>&1; then
-        uptime | sed -E 's/.*load averages?: //'
-        return
-    fi
-    echo "—"
-}
-
 wizard_git_value() {
     if ! command -v git >/dev/null 2>&1 || [ ! -d "$PROJECT_ROOT/.git" ]; then
         echo "—"
@@ -273,13 +260,11 @@ wizard_prefetch_home_status() {
     tmp="$(mktemp -d 2>/dev/null || mktemp -d -t wizard)"
     wizard_host_mem_value >"$tmp/mem" 2>/dev/null &
     wizard_host_disk_value >"$tmp/disk" 2>/dev/null &
-    wizard_host_load_value >"$tmp/load" 2>/dev/null &
     wizard_git_value >"$tmp/git" 2>/dev/null &
     wizard_health_value >"$tmp/health" 2>/dev/null &
     wait
     WIZARD_HOME_MEM="$(cat "$tmp/mem" 2>/dev/null || echo '—')"
     WIZARD_HOME_DISK="$(cat "$tmp/disk" 2>/dev/null || echo '—')"
-    WIZARD_HOME_LOAD="$(cat "$tmp/load" 2>/dev/null || echo '—')"
     WIZARD_HOME_GIT="$(cat "$tmp/git" 2>/dev/null || echo '—')"
     WIZARD_HOME_HEALTH="$(cat "$tmp/health" 2>/dev/null || echo '—')"
     rm -rf "$tmp"
@@ -294,7 +279,6 @@ wizard_show_home_panel() {
 
     WIZARD_HOME_MEM='—'
     WIZARD_HOME_DISK='—'
-    WIZARD_HOME_LOAD='—'
     WIZARD_HOME_GIT='—'
     WIZARD_HOME_HEALTH='—'
 
@@ -314,9 +298,7 @@ wizard_show_home_panel() {
     wizard_panel_blank
 
     wizard_panel_section "RESOURCES · 资源"
-    wizard_panel_kv "Memory" "${WIZARD_HOME_MEM:-—}"
-    wizard_panel_kv "Disk" "${WIZARD_HOME_DISK:-—}"
-    wizard_panel_kv "Load" "${WIZARD_HOME_LOAD:-—}"
+    wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
     wizard_panel_blank
 
     wizard_panel_section "SERVICES · 服务"
@@ -329,11 +311,9 @@ wizard_show_home_panel() {
     wizard_panel_line "${WIZARD_DIM}Status${WIZARD_RESET}  ${svc_line}"
     wizard_panel_blank
 
-    wizard_panel_section "ENDPOINTS · 访问"
+    wizard_panel_line "${WIZARD_BOLD}ENDPOINTS · 访问${WIZARD_RESET}  [${WIZARD_DIM}Health${WIZARD_RESET}  ${WIZARD_HOME_HEALTH:-—}]"
     wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
-    wizard_panel_kv "API" "${WIZARD_ACCESS_API:-—}"
     wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
-    wizard_panel_kv "Health" "${WIZARD_HOME_HEALTH:-—}"
 
     wizard_panel_mid
     wizard_panel_section "DEPLOY · 部署"
