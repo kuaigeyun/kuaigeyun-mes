@@ -303,7 +303,7 @@ wizard_show_home_panel() {
     wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
 
     wizard_panel_heading "SERVICES · 服务"
-    svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker) $(wizard_service_badge scheduler)"
+    svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker)"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         svc_line="${svc_line} $(wizard_service_badge frontend)"
     else
