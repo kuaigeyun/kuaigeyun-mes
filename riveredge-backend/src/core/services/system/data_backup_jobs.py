@@ -1140,139 +1140,40 @@ def _extract_csv_column_values(csv_text: str, column: str) -> list[str]:
     return values
 
 
-def _filter_csv_rows_by_allowed_values(
-    csv_text: str,
-    column: str,
-    allowed: set[str],
-    *,
-    allow_empty: bool = True,
-) -> tuple[str, int]:
-    """按列值白名单过滤 CSV 行，返回 (新 CSV, 丢弃行数)。allowed 为空时剔除该列非空行。"""
-    if not csv_text:
-        return csv_text, 0
-    columns = _csv_header_columns(csv_text)
-    if column not in columns:
-        return csv_text, 0
-    col_idx = columns.index(column)
-    _ensure_csv_field_limit()
-    reader = csv.reader(csv_text.splitlines())
-    header = next(reader, [])
-    kept_rows: list[list[str]] = [header]
-    dropped = 0
-    for row in reader:
-        padded = row + [""] * max(0, len(header) - len(row))
-        cell = padded[col_idx].strip() if col_idx < len(padded) else ""
-        if not cell:
-            if allow_empty:
-                kept_rows.append(padded[: len(header)])
-            else:
-                dropped += 1
-            continue
-        if allowed and cell in allowed:
-            kept_rows.append(padded[: len(header)])
-        else:
-            dropped += 1
-    if dropped == 0:
-        return csv_text, 0
-    from io import StringIO
-
-    buffer = StringIO()
-    writer = csv.writer(buffer, lineterminator="\n")
-    writer.writerows(kept_rows)
-    return buffer.getvalue(), dropped
-
-
-def _user_ref_columns_for_table(
-    table: str,
-    csv_text: str,
-    user_fk_children: dict[str, str],
-) -> set[str]:
-    cols: set[str] = set()
-    fk_col = user_fk_children.get(table)
-    if fk_col:
-        cols.add(fk_col)
-    header = _csv_header_columns(csv_text)
-    if "user_id" in header:
-        cols.add("user_id")
-    return cols
-
-
-def _filter_tenant_backup_user_fk_csv_rows(
+def _validate_tenant_backup_user_refs(
     table_csv_map: dict[str, str],
-    user_fk_children: dict[str, str],
-) -> dict[str, str]:
-    """恢复前剔除引用备份内不存在 core_users 行的子表记录（兼容旧备份包）。"""
+    table_column_map: dict[str, list[str]],
+) -> None:
+    """
+    严格校验租户备份中所有 user_id 引用：
+    任何子表 user_id 不存在于 core_users.id 时直接失败，避免恢复阶段外键报错。
+    """
     users_csv = table_csv_map.get("core_users")
     if not users_csv:
-        return table_csv_map
-    allowed_user_ids = set(_extract_csv_column_values(users_csv, "id")) if _csv_has_data_rows(users_csv) else set()
+        return
+    allowed_user_ids = set(_extract_csv_column_values(users_csv, "id"))
     if not allowed_user_ids:
-        logger.warning("备份 core_users 无有效用户 id，将剔除子表中所有 user 引用行")
+        raise ValueError("备份中的 core_users 无有效 id，无法恢复依赖 user_id 的业务表")
 
-    filtered = dict(table_csv_map)
-    for table in sorted(filtered.keys()):
-        if table == "core_users":
+    offending: list[tuple[str, list[str]]] = []
+    for table, csv_text in sorted(table_csv_map.items()):
+        if table == "core_users" or not _csv_has_data_rows(csv_text):
             continue
-        csv_text = filtered.get(table)
-        if not csv_text or not _csv_has_data_rows(csv_text):
+        if "user_id" not in table_column_map.get(table, []):
             continue
-        ref_columns = _user_ref_columns_for_table(table, csv_text, user_fk_children)
-        if not ref_columns:
+        ref_values = set(_extract_csv_column_values(csv_text, "user_id"))
+        if not ref_values:
             continue
-        total_dropped = 0
-        current_csv = csv_text
-        for column in sorted(ref_columns):
-            current_csv, dropped = _filter_csv_rows_by_allowed_values(
-                current_csv,
-                column,
-                allowed_user_ids,
-                allow_empty=False,
-            )
-            total_dropped += dropped
-        if total_dropped:
-            logger.warning(
-                "表 {} 已过滤 {} 条引用不存在用户(id)的备份行",
-                table,
-                total_dropped,
-            )
-            filtered[table] = current_csv
-    return filtered
+        invalid = sorted(v for v in ref_values if v not in allowed_user_ids)
+        if invalid:
+            offending.append((table, invalid[:10]))
 
-
-async def _load_core_user_fk_children_from_db(
-    conn: Any,
-    table_names: list[str],
-) -> dict[str, str]:
-    if not table_names:
-        return {}
-    fk_sql = """
-        SELECT tc.table_name AS child_table, kcu.column_name AS child_column
-        FROM information_schema.table_constraints tc
-        JOIN information_schema.key_column_usage kcu
-          ON tc.constraint_name = kcu.constraint_name
-         AND tc.table_schema = kcu.table_schema
-         AND tc.table_name = kcu.table_name
-        JOIN information_schema.constraint_column_usage ccu
-          ON ccu.constraint_name = tc.constraint_name
-         AND ccu.table_schema = tc.table_schema
-        JOIN information_schema.columns tenant_col
-          ON tenant_col.table_schema = 'public'
-         AND tenant_col.table_name = tc.table_name
-         AND tenant_col.column_name = 'tenant_id'
-        WHERE tc.constraint_type = 'FOREIGN KEY'
-          AND tc.table_schema = 'public'
-          AND ccu.table_name = 'core_users'
-          AND ccu.column_name = 'id'
-          AND tc.table_name = ANY($1::text[])
-    """
-    rows = await conn.execute_query_dict(fk_sql, [table_names])
-    mapping: dict[str, str] = {}
-    for row in rows:
-        child_table = row.get("child_table")
-        child_column = row.get("child_column")
-        if child_table and child_column and child_table != "core_users":
-            mapping[str(child_table)] = str(child_column)
-    return mapping
+    if offending:
+        parts = [f"{table}: {ids}" for table, ids in offending[:5]]
+        raise ValueError(
+            "备份数据存在无效 user_id 引用，请先在源系统清理后重新备份；"
+            + "; ".join(parts)
+        )
 
 
 def _append_pk_conflict_deletes(
@@ -1679,8 +1580,7 @@ async def restore_tenant_backup_from_dump(
     if not table_names:
         raise ValueError("备份中的表在目标库均不存在，无法恢复")
 
-    user_fk_children = await _load_core_user_fk_children_from_db(conn, table_names)
-    table_csv_map = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, user_fk_children)
+    _validate_tenant_backup_user_refs(table_csv_map, dict(table_column_map))
 
     fk_sql = """
         SELECT

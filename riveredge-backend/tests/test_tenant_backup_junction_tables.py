@@ -7,8 +7,8 @@ from core.services.system.data_backup_jobs import (
     _append_tenant_junction_deletes,
     _build_tenant_junction_copy_sql,
     _build_tenant_table_copy_sql,
-    _filter_tenant_backup_user_fk_csv_rows,
     _parse_tenant_dump_sections,
+    _validate_tenant_backup_user_refs,
     _validate_csv_header,
 )
 
@@ -101,25 +101,7 @@ def test_build_tenant_table_copy_sql_filters_user_fk_children():
     assert "tenant_id = 17" in sql
 
 
-def test_filter_tenant_backup_user_fk_csv_rows_drops_missing_users():
-    table_csv_map = {
-        "core_users": "id,tenant_id,username\n2,17,bob\n",
-        "core_user_preferences": (
-            "id,uuid,tenant_id,user_id,preferences\n"
-            "1,u1,17,1,{}\n"
-            "2,u2,17,2,{}\n"
-        ),
-    }
-    filtered = _filter_tenant_backup_user_fk_csv_rows(
-        table_csv_map,
-        {"core_user_preferences": "user_id"},
-    )
-    assert "user_id" in filtered["core_user_preferences"]
-    assert ",1," not in filtered["core_user_preferences"]
-    assert ",2," in filtered["core_user_preferences"]
-
-
-def test_filter_tenant_backup_user_fk_csv_rows_covers_saved_searches_user_id_column():
+def test_validate_tenant_backup_user_refs_rejects_missing_users():
     table_csv_map = {
         "core_users": "id,tenant_id,username\n2,17,bob\n",
         "core_saved_searches": (
@@ -128,12 +110,15 @@ def test_filter_tenant_backup_user_fk_csv_rows_covers_saved_searches_user_id_col
             "2,s2,17,2,/b,n,False,False,{}\n"
         ),
     }
-    filtered = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, {})
-    assert ",64," not in filtered["core_saved_searches"]
-    assert ",2," in filtered["core_saved_searches"]
+    table_column_map = {
+        "core_users": ["id", "tenant_id", "username"],
+        "core_saved_searches": ["id", "tenant_id", "user_id", "page_path"],
+    }
+    with pytest.raises(ValueError, match="无效 user_id 引用"):
+        _validate_tenant_backup_user_refs(table_csv_map, table_column_map)
 
 
-def test_filter_tenant_backup_user_fk_csv_rows_strips_all_when_no_users():
+def test_validate_tenant_backup_user_refs_rejects_empty_users_csv():
     table_csv_map = {
         "core_users": "id,tenant_id,username\n",
         "core_saved_searches": (
@@ -141,5 +126,9 @@ def test_filter_tenant_backup_user_fk_csv_rows_strips_all_when_no_users():
             "1,s1,17,64,/a,n,False,False,{}\n"
         ),
     }
-    filtered = _filter_tenant_backup_user_fk_csv_rows(table_csv_map, {})
-    assert filtered["core_saved_searches"].count("\n") == 1
+    table_column_map = {
+        "core_users": ["id", "tenant_id", "username"],
+        "core_saved_searches": ["id", "tenant_id", "user_id", "page_path"],
+    }
+    with pytest.raises(ValueError, match="core_users 无有效 id"):
+        _validate_tenant_backup_user_refs(table_csv_map, table_column_map)
