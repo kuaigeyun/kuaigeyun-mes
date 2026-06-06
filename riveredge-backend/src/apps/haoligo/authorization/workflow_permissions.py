@@ -15,14 +15,16 @@ RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
 RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo:molds-documents-outsource-complete"
 
 
-from core.config.permission_contract import build_permission_code, parse_permission_code
+from core.config.permission_contract import build_permission_code
 
 
 def _code(resource: str, action: str) -> str:
-    parsed = parse_permission_code(resource)
-    if not parsed:
+    """resource 为 app:module 前缀（无 action 段），与 manifest module 一致。"""
+    norm = (resource or "").strip().lower()
+    parts = [p for p in norm.split(":") if p]
+    if len(parts) < 2:
         raise ValueError(f"无效资源前缀：{resource!r}")
-    app_code, module_code, _ = parsed
+    app_code, module_code = parts[0], ":".join(parts[1:])
     return build_permission_code(app_code, module_code, action)
 
 
