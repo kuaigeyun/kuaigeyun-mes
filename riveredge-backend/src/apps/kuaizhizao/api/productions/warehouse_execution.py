@@ -15,7 +15,8 @@ from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from core.api.deps.access import require_permission_codes
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
@@ -162,7 +163,7 @@ from apps.kuaizhizao.schemas.batching_order import (
 
 router = APIRouter(
     tags=["App · Kuaige Zhizao · Warehouse Execution"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "warehouse-management-inventory"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("warehouse-management-inventory", resolve_print=False))],
 )
 
 
@@ -948,7 +949,11 @@ async def withdraw_production_return(
     )
 
 
-@router.get("/production-returns/{return_id}/print", summary="Print production return")
+@router.get(
+    "/production-returns/{return_id}/print",
+    summary="Print production return",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:material-return:print"))],
+)
 async def print_production_return(
     return_id: int,
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1147,7 +1152,11 @@ async def confirm_other_inbound(
     )
 
 
-@router.get("/other-inbounds/{inbound_id}/print", summary="Print misc inbound")
+@router.get(
+    "/other-inbounds/{inbound_id}/print",
+    summary="Print misc inbound",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:other-inbound:print"))],
+)
 async def print_other_inbound(
     inbound_id: int,
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1295,7 +1304,11 @@ async def confirm_other_outbound(
     )
 
 
-@router.get("/other-outbounds/{outbound_id}/print", summary="Print misc outbound")
+@router.get(
+    "/other-outbounds/{outbound_id}/print",
+    summary="Print misc outbound",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:other-outbound:print"))],
+)
 async def print_other_outbound(
     outbound_id: int,
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1441,7 +1454,11 @@ async def confirm_material_borrow(
     )
 
 
-@router.get("/material-borrows/{borrow_id}/print", summary="Print material borrow slip")
+@router.get(
+    "/material-borrows/{borrow_id}/print",
+    summary="Print material borrow slip",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:material-borrow:print"))],
+)
 async def print_material_borrow(
     borrow_id: int,
     template_code: Optional[str] = Query(None),
@@ -1589,7 +1606,11 @@ async def confirm_material_return(
     )
 
 
-@router.get("/material-returns/{return_id}/print", summary="Print material return slip")
+@router.get(
+    "/material-returns/{return_id}/print",
+    summary="Print material return slip",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:material-return:print"))],
+)
 async def print_material_return(
     return_id: int,
     template_code: Optional[str] = Query(None),
@@ -3072,7 +3093,11 @@ async def export_sales_deliveries(
         )
 
 
-@router.get("/sales-deliveries/{delivery_id}/print", summary="Print sales delivery")
+@router.get(
+    "/sales-deliveries/{delivery_id}/print",
+    summary="Print sales delivery",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:outbound:print"))],
+)
 async def print_sales_delivery(
     delivery_id: int,
     template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，如果不提供则使用默认模板）"),

@@ -11,7 +11,8 @@ from fastapi.responses import JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access, require_permission_codes
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
@@ -80,7 +81,7 @@ from apps.kuaizhizao.schemas.outsource_order import (
 
 router = APIRouter(
     tags=["App · Kuaige Zhizao · Production Execution"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "work-order"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("work-order"))],
 )
 
 

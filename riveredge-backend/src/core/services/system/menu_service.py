@@ -1109,7 +1109,7 @@ class MenuService:
             is_active: 新建菜单项是否启用（默认与应用状态一致）
             preserve_existing_is_active: 对已存在行的写入规则见
                 ``core.menu_sync_is_active_policy.resolve_sync_is_active_for_existing_row``
-                （单测：tests/test_menu_sync_is_active_policy.py）
+                （菜单同步 is_active 策略见业务文档）
             skip_permission_sync: 为 True 时不同步 core_permissions（例如「扫描应用」批量路径由调用方在最后统一同步）
             
         Returns:

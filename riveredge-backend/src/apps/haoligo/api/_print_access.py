@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import HTTPException, Request, status
 
-from apps.haoligo.api._mold_inhouse_maintenance_access import assert_haoligo_module_access
+from apps.haoligo.api._mold_inhouse_maintenance_access import _ensure_haoligo_permissions
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.document_print import (
     HAOLIGO_DOCUMENT_PRINT_MODULES,
@@ -36,14 +36,14 @@ async def resolve_haoligo_print_module(
     return module
 
 
-async def assert_haoligo_print_preset_loader(
+async def ensure_haoligo_print_preset_loader(
     *,
     auth: AuthContext,
     tenant_id: int,
     request: Request,
 ) -> None:
     """加载打印模板预设：具备任一连单据 print 权限即可（幂等，不视为管理端 update）。"""
-    await assert_haoligo_module_access(
+    await _ensure_haoligo_permissions(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -55,7 +55,7 @@ async def assert_haoligo_print_preset_loader(
     )
 
 
-async def assert_haoligo_document_print_access(
+async def ensure_haoligo_document_print_access(
     *,
     auth: AuthContext,
     tenant_id: int,
@@ -64,7 +64,7 @@ async def assert_haoligo_document_print_access(
     document_id: int | None = None,
 ) -> None:
     module = await resolve_haoligo_print_module(tenant_id, document_type, document_id)
-    await assert_haoligo_module_access(
+    await _ensure_haoligo_permissions(
         auth=auth,
         tenant_id=tenant_id,
         request=request,

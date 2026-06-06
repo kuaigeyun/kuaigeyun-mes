@@ -12,7 +12,9 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException, status as ht
 from fastapi.responses import JSONResponse, HTMLResponse
 from loguru import logger
 
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
@@ -26,7 +28,11 @@ from apps.kuaizhizao.schemas.delivery_notice import (
 )
 
 delivery_notice_service = DeliveryNoticeService()
-router = APIRouter(prefix="/delivery-notices", tags=["App · Kuaige Zhizao · Delivery Notice"])
+router = APIRouter(
+    prefix="/delivery-notices",
+    tags=["App · Kuaige Zhizao · Delivery Notice"],
+    dependencies=[Depends(require_kuaizhizao_module_access("delivery-notice", resolve_print=False))],
+)
 
 
 @router.post("", response_model=DeliveryNoticeResponse, summary="Create delivery notice")
@@ -150,7 +156,11 @@ async def send_delivery_notice(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
-@router.get("/{notice_id}/print", summary="Print delivery notice")
+@router.get(
+    "/{notice_id}/print",
+    summary="Print delivery notice",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:delivery-notice:print"))],
+)
 async def print_delivery_notice(
     notice_id: int = Path(..., description="通知单ID"),
     template_code: Optional[str] = Query(None),

@@ -147,6 +147,52 @@ def require_access(
     return dependency
 
 
+async def ensure_permission_codes(
+    auth: AuthContext,
+    tenant_id: int,
+    request: Request,
+    permission_codes: list[str],
+    *,
+    require_all: bool = False,
+    check_abac: bool = False,
+) -> None:
+    """命令式权限码校验（供应用内细粒度 RBAC helper 复用）。"""
+    codes = [c.strip() for c in permission_codes if (c or "").strip()]
+    for code in codes:
+        err = validate_permission_code(code)
+        if err:
+            raise ValueError(f"无效权限码：{err}")
+    parsed = parse_permission_code(codes[0]) if codes else None
+    resource = f"{parsed[0]}:{parsed[1]}" if parsed else ""
+    action = parsed[2] if parsed else ""
+    env = {
+        "method": request.method,
+        "path": request.url.path,
+        "client_ip": request.client.host if request.client else None,
+    }
+    decision = await AccessControlService.check_access(
+        user_id=auth.user_id,
+        tenant_id=tenant_id,
+        resource=resource,
+        action=action,
+        is_infra_admin=auth.is_infra_admin,
+        is_tenant_admin=auth.is_tenant_admin,
+        check_abac=check_abac,
+        require_all=require_all,
+        required_permissions=codes,
+        env=env,
+    )
+    if not decision.allowed:
+        _make_error(
+            http_status=status.HTTP_403_FORBIDDEN,
+            code="ACCESS_DENIED",
+            message="权限不足",
+            request_id=auth.request_id,
+            reason=decision.reason,
+            required=decision.required,
+        )
+
+
 def require_permission_codes(
     *permission_codes: str,
     require_all: bool = False,
@@ -186,35 +232,14 @@ def require_permission_codes(
                 request_id=auth.request_id,
                 reason="tenant_none",
             )
-        parsed = parse_permission_code(codes[0]) if codes else None
-        resource = f"{parsed[0]}:{parsed[1]}" if parsed else ""
-        action = parsed[2] if parsed else ""
-        env = {
-            "method": request.method,
-            "path": request.url.path,
-            "client_ip": request.client.host if request.client else None,
-        }
-        decision = await AccessControlService.check_access(
-            user_id=auth.user_id,
-            tenant_id=tenant_id,
-            resource=resource,
-            action=action,
-            is_infra_admin=auth.is_infra_admin,
-            is_tenant_admin=auth.is_tenant_admin,
-            check_abac=check_abac,
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            codes,
             require_all=require_all,
-            required_permissions=codes,
-            env=env,
+            check_abac=check_abac,
         )
-        if not decision.allowed:
-            _make_error(
-                http_status=status.HTTP_403_FORBIDDEN,
-                code="ACCESS_DENIED",
-                message="权限不足",
-                request_id=auth.request_id,
-                reason=decision.reason,
-                required=decision.required,
-            )
         auth.tenant_id = tenant_id
         return auth
 
@@ -231,8 +256,6 @@ def _resolve_action_by_request(method: str, path: str) -> str:
     m = (method or "").upper()
     p = (path or "").lower()
     if m == "GET":
-        if "/print/" in p:
-            return "print"
         return "read"
     if m in {"PUT", "PATCH"}:
         return "update"
@@ -249,19 +272,10 @@ def _resolve_action_by_request(method: str, path: str) -> str:
         return "audit"
     if any(k in p for k in ["/submit"]):
         return "submit"
-    # 模具等单据「撤销审核」与通过/驳回同属审核权，勿映射为独立 revoke（manifest 常无 revoke 码）
-    if "/revoke-approval" in p:
-        return "audit"
     if any(k in p for k in ["/revoke", "/cancel", "/withdraw"]):
         return "revoke"
     if any(k in p for k in ["/execute", "/confirm", "/checkin", "/checkout"]):
         return "execute"
-    if "/mark-adjustment-complete" in p:
-        return "confirm_adjustment"
-    if "/recall" in p:
-        return "recall"
-    if "/dispatch" in p:
-        return "dispatch"
     return "create"
 
 

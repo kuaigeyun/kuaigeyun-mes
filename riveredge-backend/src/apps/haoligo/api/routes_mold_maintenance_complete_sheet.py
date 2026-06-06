@@ -21,8 +21,8 @@ from apps.haoligo.api.routes_mold_maintenance_sheet import (
 )
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
 from apps.haoligo.api._mold_inhouse_maintenance_access import (
-    assert_inhouse_complete_access_for_service_type,
-    assert_inhouse_complete_create_access,
+    ensure_inhouse_complete_access_for_service_type,
+    ensure_inhouse_complete_create_access,
     require_inhouse_maintenance_complete_list_access,
 )
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
@@ -477,7 +477,7 @@ async def create_maintenance_complete_sheet(
     svc = str(src.service_type or "维修").strip()
     if svc not in ("维修", "保养"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维保单类型无效")
-    await assert_inhouse_complete_create_access(
+    await ensure_inhouse_complete_create_access(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -570,7 +570,7 @@ async def get_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_complete_access_for_service_type(
+    await ensure_inhouse_complete_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -590,7 +590,7 @@ async def update_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_complete_access_for_service_type(
+    await ensure_inhouse_complete_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -666,7 +666,7 @@ async def delete_maintenance_complete_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_complete_access_for_service_type(
+    await ensure_inhouse_complete_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,

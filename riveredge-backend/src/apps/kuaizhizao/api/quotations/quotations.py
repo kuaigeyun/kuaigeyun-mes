@@ -13,7 +13,7 @@ from fastapi import APIRouter, Body, Depends, Query, Path, HTTPException, status
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
@@ -33,7 +33,7 @@ quotation_service = QuotationService()
 router = APIRouter(
     prefix="/quotations",
     tags=["App · Kuaige Zhizao · Quotation Management"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "quotation"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("quotation"))],
 )
 
 

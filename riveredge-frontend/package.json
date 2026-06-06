@@ -13,14 +13,6 @@
         "build:16g": "cross-env NODE_OPTIONS=--max-old-space-size=16384 vite build src && node scripts/move-dist.js",
         "build:monolithic": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src",
         "build:saas": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src",
-        "test": "vitest",
-        "test:ui": "vitest --ui",
-        "test:coverage": "vitest --coverage",
-        "test:run": "vitest run",
-        "test:e2e": "playwright test",
-        "test:e2e:ui": "playwright test --ui",
-        "test:e2e:report": "playwright show-report",
-        "test:e2e:install": "playwright install chromium",
         "install:all": "npm install",
         "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs",
         "clean": "rm -rf node_modules"
@@ -92,9 +84,6 @@
         "zustand": "^5.0.0"
     },
     "devDependencies": {
-        "@playwright/test": "^1.60.0",
-        "@testing-library/jest-dom": "^6.1.0",
-        "@testing-library/react": "^14.0.0",
         "@types/node": "^22.7.0",
         "@types/react": "18.3.1",
         "@types/react-dom": "18.3.1",
@@ -102,15 +91,12 @@
         "@types/three": "^0.183.1",
         "@vitejs/plugin-basic-ssl": "^2.3.0",
         "@vitejs/plugin-react": "4.3.1",
-        "@vitest/ui": "^2.1.8",
         "cross-env": "7.0.3",
         "eslint": "9.11.1",
-        "jsdom": "^25.0.1",
         "less": "^4.4.2",
         "patch-package": "^8.0.1",
         "prettier": "3.3.3",
         "typescript": "^5.6.3",
-        "vite": "^5.4.8",
-        "vitest": "^2.1.8"
+        "vite": "^5.4.8"
     }
 }

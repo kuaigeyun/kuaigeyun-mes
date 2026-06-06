@@ -8,9 +8,11 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query, Path
+from fastapi import APIRouter, Depends, Query, Path, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 
+from apps.kuaizhizao.api._document_print_access import ensure_document_print_access
+from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps import get_current_user, get_current_tenant
 from infra.models.user import User
 
@@ -27,12 +29,14 @@ document_timing_service = DocumentTimingService()
 
 @router.get("/documents/{document_type}/{document_id}/print", summary="Print document")
 async def print_document(
+    request: Request,
     document_type: str = Path(..., description="单据类型（如：work_order, production_picking等）"),
     document_id: int = Path(..., description="单据ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码（可选）"),
     template_uuid: Optional[str] = Query(None, description="打印模板UUID（可选，优先于 template_code）"),
     output_format: str = Query("html", description="输出格式（html/pdf）"),
     response_format: str = Query("json", description="响应格式：json（API调用）或 html（window.open 直接打开）"),
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -48,6 +52,12 @@ async def print_document(
 
     返回 JSON { success, content, message } 或直接返回 HTML
     """
+    await ensure_document_print_access(
+        auth=auth,
+        tenant_id=tenant_id,
+        request=request,
+        document_type=document_type,
+    )
     result = await DocumentPrintService().print_document(
         tenant_id=tenant_id,
         document_type=document_type,

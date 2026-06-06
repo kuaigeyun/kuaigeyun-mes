@@ -60,7 +60,7 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     mold_warehouse_snapshot_by_codes,
 )
 from apps.master_data.models.supplier import Supplier
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -68,7 +68,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/outsource-maintenance-sheets",
     tags=["App · HaoliGO · 外协维保单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-outsource-maintenance"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-documents-outsource-maintenance"))],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]

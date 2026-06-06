@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { defineConfig, normalizePath, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
@@ -387,16 +386,4 @@ export default defineConfig({
   logLevel: 'info', // 显示必要信息，方便调试
   // ⚠️ 优化：允许清屏，但减少频率
   clearScreen: true,
-  // 测试配置
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: [resolve(__dirname, 'tests/setup.ts')],
-    include: [
-      '**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-      'tests/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}',
-    ],
-    exclude: ['node_modules', 'dist', '.idea', '.git', '.cache'],
-    root: resolve(__dirname), // 设置根目录为项目根目录，以便发现tests目录
-  },
 })

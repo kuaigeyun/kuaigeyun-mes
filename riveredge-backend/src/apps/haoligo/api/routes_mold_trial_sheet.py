@@ -69,7 +69,7 @@ from apps.haoligo.constants.mold_sheet_audit import (
     SHEET_STATUS_REJECTED,
 )
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
@@ -77,7 +77,7 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/molds/trial-sheets",
     tags=["App · HaoliGO · 试模单"],
-    dependencies=[Depends(require_module_access("haoligo", "molds-documents-trial"))],
+    dependencies=[Depends(require_haoligo_module_access("molds-documents-trial"))],
 )
 
 TrialResultLiteral = Literal["合格", "不合格"]

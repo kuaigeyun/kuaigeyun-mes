@@ -54,7 +54,7 @@ from apps.haoligo.api._mold_sheet_audit import (
 from apps.haoligo.api._mold_sheet_audit import assert_approved_for_revoke as assert_approved_for_sheet_revoke
 from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
 from apps.haoligo.authorization.workflow_permissions import OUTSOURCE_COMPLETE_CREATE_PERMISSIONS
-from core.api.deps.access import require_module_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.models.file import File as CoreFile
 from infra.exceptions.exceptions import ValidationError
@@ -65,8 +65,7 @@ router = APIRouter(
     tags=["App · HaoliGO · 外协维保完修单"],
     dependencies=[
         Depends(
-            require_module_access(
-                "haoligo",
+            require_haoligo_module_access(
                 "molds-documents-outsource-complete",
                 collection_create_permissions=OUTSOURCE_COMPLETE_CREATE_PERMISSIONS,
             )

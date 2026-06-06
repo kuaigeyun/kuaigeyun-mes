@@ -13,7 +13,8 @@ from fastapi.responses import JSONResponse, FileResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
+from core.api.deps.access import require_permission_codes
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
@@ -254,7 +255,6 @@ from .reporting import router as reporting_router
 from .warehouse_execution import router as warehouse_execution_router
 from .quality_execution import router as quality_execution_router
 from .quality_improvement import router as quality_improvement_router
-from .document_relations_legacy import router as document_relations_legacy_router
 from ..station.station import router as station_router
 
 def _scheduling_deep_link(work_order_id: int) -> str:
@@ -281,7 +281,7 @@ def _attach_visual_scheduling_guidance(handled: Any, *, action: str, plan_adjust
 # 注意：路由前缀为空，因为应用路由注册时会自动添加 /apps/kuaizhizao 前缀
 router = APIRouter(
     tags=["App · Kuaige Zhizao · Production Execution"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "production-execution-reporting"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("production-execution-reporting", resolve_print=False))],
 )
 router.include_router(work_orders_router)
 router.include_router(work_order_groups_router)
@@ -289,7 +289,6 @@ router.include_router(reporting_router)
 router.include_router(warehouse_execution_router)
 router.include_router(quality_execution_router)
 router.include_router(quality_improvement_router)
-router.include_router(document_relations_legacy_router)
 router.include_router(station_router)
 
 
@@ -696,7 +695,11 @@ async def get_quality_statistics(
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
-@router.get("/work-orders/{id}/print", summary="Print work order")
+@router.get(
+    "/work-orders/{id}/print",
+    summary="Print work order",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:print"))],
+)
 async def print_work_order(
     id: int = Path(..., description="工单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -721,7 +724,11 @@ async def print_work_order(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/work-orders/{id}/print-variables", summary="Work order print variables")
+@router.get(
+    "/work-orders/{id}/print-variables",
+    summary="Work order print variables",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:work-order:print"))],
+)
 async def get_work_order_print_variables(
     id: int = Path(..., description="工单ID"),
     current_user: User = Depends(get_current_user),
@@ -1042,7 +1049,11 @@ async def get_sales_forecast_items(
 from apps.kuaizhizao.services.print_service import DocumentPrintService
 from fastapi.responses import HTMLResponse
 
-@router.get("/production-pickings/{id}/print", summary="Print production picking")
+@router.get(
+    "/production-pickings/{id}/print",
+    summary="Print production picking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
 async def print_production_picking(
     id: int = Path(..., description="生产领料单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1067,7 +1078,11 @@ async def print_production_picking(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/semi-finished-goods-receipts/{id}/print", summary="Print semi-finished receipt")
+@router.get(
+    "/semi-finished-goods-receipts/{id}/print",
+    summary="Print semi-finished receipt",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
 async def print_semi_finished_goods_receipt(
     id: int = Path(..., description="半成品入库单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),
@@ -1092,7 +1107,11 @@ async def print_semi_finished_goods_receipt(
     return JSONResponse(content=result, status_code=200)
 
 
-@router.get("/finished-goods-receipts/{id}/print", summary="Print finished goods receipt")
+@router.get(
+    "/finished-goods-receipts/{id}/print",
+    summary="Print finished goods receipt",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
 async def print_finished_goods_receipt(
     id: int = Path(..., description="成品入库单ID"),
     template_code: Optional[str] = Query(None, description="打印模板代码"),

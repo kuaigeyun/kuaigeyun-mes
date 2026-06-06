@@ -6,6 +6,7 @@ from typing import Annotated, List, Optional
 
 from fastapi import Depends, HTTPException, Query, Request, status
 
+from apps.haoligo.api._haoligo_route_access import resolve_haoligo_module_action
 from apps.haoligo.authorization.workflow_permissions import (
     REPAIR_COMPLETE_CREATE_PERMISSIONS,
     UPKEEP_COMPLETE_CREATE_PERMISSIONS,
@@ -17,13 +18,12 @@ from apps.haoligo.constants.mold_inhouse_maintenance_permissions import (
     complete_module_for_service_type,
     sheet_module_for_service_type,
 )
-from core.api.deps.access import AuthContext, _resolve_action_by_request, get_auth_context
+from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant
 from core.config.permission_contract import build_permission_code
-from core.services.authorization.access_control_service import AccessControlService
 
 
-async def assert_haoligo_module_access(
+async def _ensure_haoligo_permissions(
     *,
     auth: AuthContext,
     tenant_id: int,
@@ -33,37 +33,23 @@ async def assert_haoligo_module_access(
     required_permissions: Optional[List[str]] = None,
     check_abac: bool = True,
 ) -> None:
-    act = (action or _resolve_action_by_request(request.method, request.url.path)).strip().lower()
     perms = list(required_permissions or [])
     if not perms:
+        act = (action or resolve_haoligo_module_action(request.method, request.url.path)).strip().lower()
         perms = [build_permission_code("haoligo", m, act) for m in module_codes if m]
     if not perms:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="权限不足")
-    env = {
-        "method": request.method,
-        "path": request.url.path,
-        "client_ip": request.client.host if request.client else None,
-    }
-    decision = await AccessControlService.check_access(
-        user_id=auth.user_id,
-        tenant_id=tenant_id,
-        resource="haoligo",
-        action=act,
-        is_infra_admin=auth.is_infra_admin,
-        is_tenant_admin=auth.is_tenant_admin,
-        check_abac=check_abac,
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        perms,
         require_all=False,
-        required_permissions=perms,
-        env=env,
+        check_abac=check_abac,
     )
-    if not decision.allowed:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="权限不足",
-        )
 
 
-async def assert_inhouse_sheet_access_for_service_type(
+async def ensure_inhouse_sheet_access_for_service_type(
     *,
     auth: AuthContext,
     tenant_id: int,
@@ -74,7 +60,7 @@ async def assert_inhouse_sheet_access_for_service_type(
     st = (service_type or "").strip()
     if st not in INHOUSE_SERVICE_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的维修/保养类型")
-    await assert_haoligo_module_access(
+    await _ensure_haoligo_permissions(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -83,7 +69,7 @@ async def assert_inhouse_sheet_access_for_service_type(
     )
 
 
-async def assert_inhouse_complete_access_for_service_type(
+async def ensure_inhouse_complete_access_for_service_type(
     *,
     auth: AuthContext,
     tenant_id: int,
@@ -94,7 +80,7 @@ async def assert_inhouse_complete_access_for_service_type(
     st = (service_type or "").strip()
     if st not in INHOUSE_SERVICE_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的维修/保养类型")
-    await assert_haoligo_module_access(
+    await _ensure_haoligo_permissions(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -120,7 +106,7 @@ def require_inhouse_maintenance_sheet_list_access():
         if st in INHOUSE_SERVICE_TYPES:
             if open_for_complete:
                 mod = sheet_module_for_service_type(st)
-                await assert_haoligo_module_access(
+                await _ensure_haoligo_permissions(
                     auth=auth,
                     tenant_id=tenant_id,
                     request=request,
@@ -131,11 +117,11 @@ def require_inhouse_maintenance_sheet_list_access():
                     ],
                 )
             else:
-                await assert_inhouse_sheet_access_for_service_type(
+                await ensure_inhouse_sheet_access_for_service_type(
                     auth=auth, tenant_id=tenant_id, request=request, service_type=st
                 )
         else:
-            await assert_haoligo_module_access(
+            await _ensure_haoligo_permissions(
                 auth=auth,
                 tenant_id=tenant_id,
                 request=request,
@@ -150,7 +136,7 @@ def require_inhouse_maintenance_sheet_list_access():
     return dependency
 
 
-async def assert_inhouse_complete_create_access(
+async def ensure_inhouse_complete_create_access(
     *,
     auth: AuthContext,
     tenant_id: int,
@@ -164,7 +150,7 @@ async def assert_inhouse_complete_create_access(
         perms = REPAIR_COMPLETE_CREATE_PERMISSIONS
     else:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="无效的维修/保养类型")
-    await assert_haoligo_module_access(
+    await _ensure_haoligo_permissions(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -182,11 +168,11 @@ def require_inhouse_maintenance_complete_list_access():
     ) -> AuthContext:
         st = (service_type or "").strip()
         if st in INHOUSE_SERVICE_TYPES:
-            await assert_inhouse_complete_access_for_service_type(
+            await ensure_inhouse_complete_access_for_service_type(
                 auth=auth, tenant_id=tenant_id, request=request, service_type=st
             )
         else:
-            await assert_haoligo_module_access(
+            await _ensure_haoligo_permissions(
                 auth=auth,
                 tenant_id=tenant_id,
                 request=request,

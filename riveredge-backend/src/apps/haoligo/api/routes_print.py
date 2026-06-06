@@ -9,8 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from apps.haoligo.api._print_access import (
-    assert_haoligo_document_print_access,
-    assert_haoligo_print_preset_loader,
+    ensure_haoligo_document_print_access,
+    ensure_haoligo_print_preset_loader,
 )
 from apps.haoligo.services.print_service import (
     DOCUMENT_TEMPLATE_CODES,
@@ -52,7 +52,7 @@ async def print_haoligo_document(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不支持的单据类型，可选：{', '.join(sorted(SUPPORTED_DOCUMENT_TYPES))}",
         )
-    await assert_haoligo_document_print_access(
+    await ensure_haoligo_document_print_access(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -108,7 +108,7 @@ async def get_haoligo_print_variables(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"不支持的单据类型，可选：{', '.join(sorted(SUPPORTED_DOCUMENT_TYPES))}",
         )
-    await assert_haoligo_document_print_access(
+    await ensure_haoligo_document_print_access(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -142,7 +142,7 @@ async def load_haoligo_print_presets(
     _: Annotated[User, Depends(get_current_user)],
     auth: Annotated[AuthContext, Depends(get_auth_context)],
 ):
-    await assert_haoligo_print_preset_loader(
+    await ensure_haoligo_print_preset_loader(
         auth=auth,
         tenant_id=tenant_id,
         request=request,

@@ -30,7 +30,7 @@ from apps.haoligo.constants.mold_sheet_audit import (
     SHEET_STATUS_REJECTED,
 )
 from apps.haoligo.api._mold_inhouse_maintenance_access import (
-    assert_inhouse_sheet_access_for_service_type,
+    ensure_inhouse_sheet_access_for_service_type,
     require_inhouse_maintenance_sheet_list_access,
 )
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
@@ -385,7 +385,7 @@ async def create_maintenance_sheet(
 ):
     if body.service_type not in INHOUSE_SERVICE_TYPES:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维修/保养类型无效")
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -436,7 +436,7 @@ async def get_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -456,7 +456,7 @@ async def update_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -508,7 +508,7 @@ async def approve_maintenance_sheet(
     preview = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not preview:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -549,7 +549,7 @@ async def reject_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -583,7 +583,7 @@ async def revoke_maintenance_sheet_approval(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
@@ -610,7 +610,7 @@ async def delete_maintenance_sheet(
     row = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    await assert_inhouse_sheet_access_for_service_type(
+    await ensure_inhouse_sheet_access_for_service_type(
         auth=auth,
         tenant_id=tenant_id,
         request=request,
