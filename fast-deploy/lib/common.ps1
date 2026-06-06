@@ -57,6 +57,7 @@ function Load-DeployEnv {
     if (-not $script:CADDY_DOMAIN) { $script:CADDY_DOMAIN = '' }
     if (-not $script:CADDY_ENABLE_LETSENCRYPT) { $script:CADDY_ENABLE_LETSENCRYPT = 'false' }
     if (-not $script:NODE_BUILD_MEM) { $script:NODE_BUILD_MEM = 4096 }
+    if (-not $script:ALLOW_SERVER_BUILD) { $script:ALLOW_SERVER_BUILD = '0' }
     if (-not $script:SERVER_IP) { $script:SERVER_IP = '' }
     if (-not $script:TASKIQ_WORKERS) {
         if ($script:DeployMode -eq 'prod') { $script:TASKIQ_WORKERS = 1 } else { $script:TASKIQ_WORKERS = 2 }
@@ -759,6 +760,21 @@ function Invoke-Build {
     Write-LogOk '前端构建完成'
 }
 
+function Ensure-FrontendDist {
+    Load-DeployEnv
+    $index = Join-Path $script:FrontendDir 'dist\index.html'
+    if ($script:ALLOW_SERVER_BUILD -eq '1') {
+        Write-LogWarn 'ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）...'
+        Invoke-Build
+        return
+    }
+    if (Test-Path $index) {
+        Write-LogOk '已检测到 Web dist，跳过服务器构建（Caddy 直接代理 Git 中的 dist）'
+        return
+    }
+    throw '缺少 dist/index.html。请在本地 fast-deploy/build.web.sh 构建并推送，或设置 ALLOW_SERVER_BUILD=1'
+}
+
 function New-Caddyfile {
     Load-DeployEnv
     if (-not (Test-Path $script:CaddyDir)) { New-Item -ItemType Directory -Path $script:CaddyDir -Force | Out-Null }
@@ -1104,6 +1120,7 @@ function Invoke-UpdateDev {
 }
 
 function Invoke-UpdateProd {
+    Load-DeployEnv
     $branch = if ($env:GIT_BRANCH) { $env:GIT_BRANCH } else { 'develop' }
     Write-LogInfo "拉取代码 (origin/$branch)..."
     Push-Location $script:ProjectRoot
@@ -1115,7 +1132,7 @@ function Invoke-UpdateProd {
     } finally { Pop-Location }
     Invoke-Migrate
     Invoke-StopProd
-    Invoke-Build
+    Ensure-FrontendDist
     Invoke-StartProd
     Write-LogOk '生产环境已更新'
 }
@@ -1131,6 +1148,7 @@ function Invoke-Default {
     else {
         Invoke-Migrate
         if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) { Invoke-Build }
+        else { Write-LogOk '已检测到 Web dist，跳过服务器构建' }
         Invoke-StartProd
     }
 }

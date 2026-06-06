@@ -35,7 +35,7 @@ riveredge-frontend/.vite/
 .logs/
 
 # ===== 部署面板 =====
-# riveredge-panel/ 需要随仓库分发（密钥/运行期文件由 riveredge-panel/.gitignore 单独忽略）
+# riveredge-panel/ 已下线，见 fast-deploy/
 
 # ===== 环境与密钥 =====
 .env
@@ -81,8 +81,7 @@ scripts/
 !riveredge-frontend/src/pages/infra/scripts/**
 
 # 部署面板脚本（勿被根目录 scripts/ 规则误伤）
-!riveredge-panel/scripts/
-!riveredge-panel/scripts/**
+riveredge-panel/
 
 # ===== 后端脚本与测试（不推送） =====
 riveredge-backend/scripts/

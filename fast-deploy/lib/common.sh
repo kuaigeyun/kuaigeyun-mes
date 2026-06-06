@@ -46,6 +46,7 @@ load_deploy_env() {
     CADDY_DOMAIN="${CADDY_DOMAIN:-}"
     CADDY_ENABLE_LETSENCRYPT="${CADDY_ENABLE_LETSENCRYPT:-false}"
     NODE_BUILD_MEM="${NODE_BUILD_MEM:-4096}"
+    ALLOW_SERVER_BUILD="${ALLOW_SERVER_BUILD:-0}"
     SERVER_IP="${SERVER_IP:-}"
     # Taskiq 子进程数：生产默认 1（CLI 内置默认为 2，每子进程约 +200MB RSS）
     if [ -z "${TASKIQ_WORKERS:-}" ]; then
@@ -1365,6 +1366,28 @@ cmd_build() {
     log_ok "前端构建完成"
 }
 
+# 生产 update/start 前确保 dist 可用：默认使用 Git 中的 dist，跳过服务器构建（弱机友好）。
+# 显式 ALLOW_SERVER_BUILD=1 时强制 npm build；dist 缺失且无该开关则报错退出。
+cmd_ensure_frontend_dist() {
+    load_deploy_env
+    local frontend_index="$FRONTEND_DIR/dist/index.html"
+
+    if [ "${ALLOW_SERVER_BUILD:-0}" = "1" ]; then
+        log_warn "ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）..."
+        cmd_build
+        return
+    fi
+
+    if [ -f "$frontend_index" ]; then
+        log_ok "已检测到 Web dist，跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
+        return 0
+    fi
+
+    log_error "缺少 ${frontend_index}"
+    log_error "请在本地执行 fast-deploy/build.web.sh 构建并推送 dist，或设置 ALLOW_SERVER_BUILD=1 后在服务器构建"
+    exit 1
+}
+
 gen_caddyfile() {
     load_deploy_env
     mkdir -p "$CADDY_DIR"
@@ -1899,6 +1922,7 @@ cmd_update_dev() {
 }
 
 cmd_update_prod() {
+    load_deploy_env
     local branch="${GIT_BRANCH:-develop}"
     log_info "拉取代码 (origin/$branch)..."
     (cd "$PROJECT_ROOT" && git fetch origin && git checkout "$branch" && git pull origin "$branch") || {
@@ -1907,7 +1931,7 @@ cmd_update_prod() {
     }
     cmd_migrate
     cmd_stop_prod
-    cmd_build
+    cmd_ensure_frontend_dist
     cmd_start_prod
     log_ok "生产环境已更新"
 }

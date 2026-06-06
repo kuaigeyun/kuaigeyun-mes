@@ -614,13 +614,7 @@ wizard_deploy_app() {
     echo ""
 
     wizard_run_deploy_step migrate "执行数据库迁移" "$log" cmd_migrate || return 1
-
-    if [ ! -f "$FRONTEND_DIR/dist/index.html" ]; then
-        wizard_run_deploy_step build "构建 Web 前端（首次可能较慢）" "$log" cmd_build || return 1
-    else
-        wizard_say_ok "前端 dist 已存在，跳过构建"
-    fi
-
+    wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
     wizard_run_deploy_step start_prod "启动生产服务（后端 + Worker + Caddy）" "$log" cmd_start_prod || return 1
 }
 
@@ -650,7 +644,7 @@ wizard_update_app() {
 
     if [ "$DEPLOY_MODE" = "prod" ]; then
         wizard_run_deploy_step stop "停止生产服务" "$log" cmd_stop_prod || return 1
-        wizard_run_deploy_step build "构建 Web 前端" "$log" cmd_build || return 1
+        wizard_run_deploy_step ensure_dist "检查 Web dist（有则跳过构建）" "$log" cmd_ensure_frontend_dist || return 1
         wizard_run_deploy_step start "启动生产服务" "$log" cmd_start_prod || return 1
     else
         wizard_run_deploy_step stop "停止开发服务" "$log" cmd_stop_dev || return 1
