@@ -195,6 +195,7 @@ const WorkspacePage: React.FC = () => {
   const navigate = useNavigate();
   const { token } = useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const canReadWorkspaceDashboard = hasModulePermission(currentUser, 'haoligo:workspace-dashboard', 'read');
   const canReadEquipment = hasModulePermission(currentUser, 'haoligo:equipment-ledger', 'read');
   const canReadMolds = hasModulePermission(currentUser, 'haoligo:molds-ledger', 'read');
   const canReadMaintenanceAlert = hasModulePermission(currentUser, 'haoligo:molds-reports-maintenance-alert', 'read');
@@ -259,7 +260,9 @@ const WorkspacePage: React.FC = () => {
     try {
       const [ws, hazardKpi, eqStatusSummary, moldTotal, equipmentReminders, moldReminders] =
         await Promise.all([
-          listWorkshops(),
+          canReadWorkspaceDashboard || canReadEquipment
+            ? listWorkshops()
+            : Promise.resolve([]),
           canReadHazards ? getPatrolReportKpiSummary() : Promise.resolve(null),
           canReadEquipment ? fetchEquipmentOperationalStatusSummary() : Promise.resolve(null),
           canReadMolds ? listMolds({ limit: 1, skip: 0 }).then((r) => r.total) : Promise.resolve(0),
@@ -321,6 +324,7 @@ const WorkspacePage: React.FC = () => {
     void loadHazardTrend(last7Days);
   }, [
     message,
+    canReadWorkspaceDashboard,
     canReadEquipment,
     canReadMolds,
     canReadMaintenanceAlert,

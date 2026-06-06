@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated
-from fastapi import APIRouter, Depends
+from typing import Annotated, Any
+
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 
 from apps.haoligo.api._qs import tenant_alive
@@ -11,6 +12,7 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_trial_sheet import HaoligoMoldTrialSheet
+from apps.haoligo.services.mobile_workbench import resolve_mobile_workbench
 from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
@@ -25,6 +27,21 @@ router = APIRouter(
 class MobileBootstrapOut(BaseModel):
     pending_audit_count: int = Field(description="当前用户外协完修单待审核数量")
     trial_failed_count: int = Field(description="租户内试模不合格单数量（角标参考）")
+
+
+class MobileWorkbenchEntryOut(BaseModel):
+    key: str
+    label: str
+    route: str
+    icon: str
+    icon_group: str | None = None
+    solo_row: bool = False
+
+
+class MobileWorkbenchSectionOut(BaseModel):
+    key: str
+    title: str
+    entries: list[MobileWorkbenchEntryOut]
 
 
 @router.get("/bootstrap", response_model=MobileBootstrapOut, summary="移动端启动聚合")
@@ -46,3 +63,17 @@ async def get_mobile_bootstrap(
         pending_audit_count=pending_audit_count,
         trial_failed_count=trial_failed_count,
     )
+
+
+@router.get("/workbench", response_model=list[MobileWorkbenchSectionOut], summary="移动端工作台导航")
+async def get_mobile_workbench(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    user: Annotated[User, Depends(get_current_user)],
+    scope: Annotated[str, Query(description="home | approval | mold_menu")] = "home",
+) -> list[MobileWorkbenchSectionOut]:
+    sections: list[dict[str, Any]] = await resolve_mobile_workbench(
+        tenant_id=tenant_id,
+        user=user,
+        scope=scope,
+    )
+    return [MobileWorkbenchSectionOut.model_validate(s) for s in sections]

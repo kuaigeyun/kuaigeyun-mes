@@ -10,6 +10,20 @@ from core.api.deps.deps import get_current_tenant
 from core.config.permission_contract import build_permission_code
 
 
+def _workshops_read_permission_codes() -> list[str]:
+    """车间列表为各模块共用的只读同步数据，满足任一业务读权限即可。"""
+    modules = (
+        "workspace-dashboard",
+        "equipment-ledger",
+        "equipment-patrol-routes",
+        "equipment-documents-upkeep-sheet",
+        "molds-warehouse",
+        "patrol-daily-form",
+        "master-data-factory-workshops",
+    )
+    return [build_permission_code("haoligo", mod, "read") for mod in modules]
+
+
 def resolve_equipment_master_module(path: str) -> str:
     """设备主数据 /equipment/* → manifest module。"""
     p = (path or "").lower()
@@ -50,6 +64,19 @@ def require_equipment_master_path_access(*, check_abac: bool = True):
         auth: AuthContext = Depends(get_auth_context),
         tenant_id: int = Depends(get_current_tenant),
     ) -> AuthContext:
+        path = (request.url.path or "").lower()
+        if "/workshops" in path and (request.method or "").upper() == "GET":
+            await ensure_permission_codes(
+                auth,
+                tenant_id,
+                request,
+                _workshops_read_permission_codes(),
+                require_all=False,
+                check_abac=check_abac,
+            )
+            auth.tenant_id = tenant_id
+            return auth
+
         try:
             mod = resolve_equipment_master_module(request.url.path)
         except ValueError as exc:
