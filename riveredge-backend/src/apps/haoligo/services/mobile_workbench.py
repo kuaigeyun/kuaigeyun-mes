@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from apps.haoligo.authorization.workflow_permissions import permission_codes_for_complete_create
+from apps.haoligo.authorization.workflow_permissions import (
+    parse_complete_create_token,
+    permission_codes_for_complete_create,
+)
 from core.config.permission_contract import review_permission_codes
 from core.services.application.application_service import ApplicationService
 from core.services.authorization.data_scope_service import DataScopeService
@@ -45,8 +48,7 @@ def _resolve_permissions_any(raw: Any) -> list[str]:
         if not text:
             continue
         if text.startswith("complete_create:"):
-            _, rest = text.split(":", 1)
-            src, tgt = rest.split(":", 1)
+            src, tgt = parse_complete_create_token(text)
             codes.extend(
                 permission_codes_for_complete_create(
                     source_resource=src.strip(),

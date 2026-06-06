@@ -40,6 +40,24 @@ def permission_codes_for_complete_create(*, source_resource: str, target_resourc
     ]
 
 
+def parse_complete_create_token(text: str) -> tuple[str, str]:
+    """解析 manifest 令牌 complete_create:{source}:{target}，资源为 app:module 前缀。"""
+    prefix = "complete_create:"
+    raw = (text or "").strip()
+    if not raw.startswith(prefix):
+        raise ValueError(f"不是 complete_create 令牌：{text!r}")
+    rest = raw[len(prefix) :]
+    parts = [p for p in rest.split(":") if p]
+    if len(parts) < 4:
+        raise ValueError(f"无效 complete_create 令牌：{text!r}")
+    app_code = parts[0]
+    marker = f":{app_code}:"
+    split_at = rest.find(marker, len(app_code) + 1)
+    if split_at < 0:
+        raise ValueError(f"无效 complete_create 令牌：{text!r}")
+    return rest[:split_at], rest[split_at + 1 :]
+
+
 OUTSOURCE_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
     source_resource=RESOURCE_OUTSOURCE_MAINTENANCE,
     target_resource=RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
