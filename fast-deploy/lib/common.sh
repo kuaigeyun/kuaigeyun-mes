@@ -2068,7 +2068,7 @@ cmd_install_service() {
     [ "$DEPLOY_MODE" = "prod" ] || { log_error "install-service 仅用于生产模式"; exit 1; }
     [ -f "$SYSTEMD_UNIT_TEMPLATE" ] || { log_error "缺少模板 $SYSTEMD_UNIT_TEMPLATE"; exit 1; }
     [ -f "$SYSTEMD_SERVICE_SCRIPT" ] || { log_error "缺少 $SYSTEMD_SERVICE_SCRIPT"; exit 1; }
-    chmod +x "$SYSTEMD_SERVICE_SCRIPT"
+    chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" 2>/dev/null || true
 
     local service_user
     service_user="$(resolve_service_user)" || exit 1
