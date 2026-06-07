@@ -1547,25 +1547,25 @@ cmd_build() {
     log_ok "前端构建完成"
 }
 
-# 生产 update/start 前确保 dist 可用：dist 不入 Git，缺失时在服务器构建。
-# 设置 ALLOW_SERVER_BUILD=0 可禁止自动构建（需自行提供 dist）。
+# 生产 update/start 前确保 dist 可用：默认使用 Git 中的 dist，跳过服务器构建（弱机友好）。
+# 显式 ALLOW_SERVER_BUILD=1 时强制 npm build；dist 缺失且无该开关则报错退出。
 cmd_ensure_frontend_dist() {
     load_deploy_env
     local frontend_index="$FRONTEND_DIR/dist/index.html"
 
-    if [ -f "$frontend_index" ]; then
-        log_ok "已检测到 Web dist，跳过服务器构建"
-        return 0
-    fi
-
-    if [ "${ALLOW_SERVER_BUILD:-1}" = "1" ]; then
-        log_warn "dist 不在仓库中，正在服务器构建（内存占用较高）..."
+    if [ "${ALLOW_SERVER_BUILD:-0}" = "1" ]; then
+        log_warn "ALLOW_SERVER_BUILD=1，执行服务器构建（内存占用高，不推荐）..."
         cmd_build
         return
     fi
 
+    if [ -f "$frontend_index" ]; then
+        log_ok "已检测到 Web dist，跳过服务器构建（Caddy 直接代理 Git 中的 dist）"
+        return 0
+    fi
+
     log_error "缺少 ${frontend_index}"
-    log_error "请设置 ALLOW_SERVER_BUILD=1 在服务器构建，或本地 build 后上传 dist 目录"
+    log_error "请在本地执行 fast-deploy/build.web.sh 构建并推送 dist，或设置 ALLOW_SERVER_BUILD=1 后在服务器构建"
     exit 1
 }
 
