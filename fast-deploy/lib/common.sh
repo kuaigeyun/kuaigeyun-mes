@@ -33,6 +33,43 @@ log_error() { echo -e "\033[0;31m[$(date +'%H:%M:%S')] ERROR: $*\033[0m" >&2; }
 
 ensure_logs_dir() { mkdir -p "$LOGS_DIR"; }
 
+ensure_logs_dir_writable() {
+    local run_user="${1:-$(id -un)}"
+    ensure_logs_dir
+    if [ -w "$LOGS_DIR" ] && { [ ! -f "$LOGS_DIR/backend.pid" ] || [ -w "$LOGS_DIR/backend.pid" ]; }; then
+        return 0
+    fi
+    log_error ".logs 目录对 ${run_user} 不可写: ${LOGS_DIR}"
+    log_error "若曾用 sudo 启动过服务，请执行:"
+    log_error "  sudo chown -R ${run_user}:${run_user} ${LOGS_DIR}"
+    if [ -f "$ENV_FILE" ] && [ ! -r "$ENV_FILE" ]; then
+        log_error "  sudo chown ${run_user}:${run_user} ${ENV_FILE}"
+    fi
+    return 1
+}
+
+fix_systemd_runtime_permissions() {
+    local service_user=$1
+    local service_home service_group
+    service_home="$(getent passwd "$service_user" | cut -d: -f6)"
+    service_group="$(id -gn "$service_user" 2>/dev/null || echo "$service_user")"
+    [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
+    ensure_logs_dir
+    log_info "修复运行时目录归属 (${service_user})..."
+    sudo chown -R "${service_user}:${service_group}" "$LOGS_DIR" || return 1
+    if [ -f "$ENV_FILE" ]; then
+        sudo chown "${service_user}:${service_group}" "$ENV_FILE" || return 1
+        sudo chmod u+rw "$ENV_FILE" || return 1
+    fi
+    for dir in "${service_home}/.local/share/caddy" "${service_home}/.config/caddy"; do
+        if [ -d "$dir" ]; then
+            sudo chown -R "${service_user}:${service_group}" "$dir" 2>/dev/null || true
+        fi
+    done
+    log_ok "运行时目录权限已就绪"
+    return 0
+}
+
 load_deploy_env() {
     if [ ! -f "$DEPLOY_ENV_FILE" ]; then
         if [ -f "$DEPLOY_ENV_EXAMPLE" ]; then
@@ -1940,6 +1977,12 @@ cmd_start_prod() {
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; exit 1; }
     if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
         wait_for_local_postgres_ready 120 || exit 1
+        ensure_logs_dir_writable "$(id -un)" || exit 1
+        if [ -f "$ENV_FILE" ] && [ ! -r "$ENV_FILE" ]; then
+            log_error "无法读取 ${ENV_FILE}（可能被 root 占用）"
+            log_error "请执行: sudo chown \$(whoami):\$(whoami) ${ENV_FILE} ${LOGS_DIR}"
+            exit 1
+        fi
     fi
     start_backend_prod
     start_worker_prod
@@ -2058,7 +2101,14 @@ render_systemd_unit() {
 show_systemd_start_failure() {
     log_error "服务启动失败，最近日志："
     if command -v journalctl >/dev/null 2>&1; then
-        sudo journalctl -u "$SYSTEMD_UNIT_NAME" -n 40 --no-pager 2>/dev/null || true
+        local journal_tail
+        journal_tail="$(sudo journalctl -u "$SYSTEMD_UNIT_NAME" -n 40 --no-pager 2>/dev/null || true)"
+        printf '%s\n' "$journal_tail"
+        if printf '%s\n' "$journal_tail" | grep -q 'Permission denied'; then
+            local run_user="${SUDO_USER:-${USER:-ubuntu}}"
+            log_error "检测到权限问题：请勿使用 sudo 运行 deploy.sh start"
+            log_error "修复命令: sudo chown -R ${run_user}:${run_user} ${LOGS_DIR} ${ENV_FILE}"
+        fi
     fi
     if [ -f "$LOGS_DIR/backend.log" ]; then
         log_error "backend.log 末尾："
@@ -2160,6 +2210,7 @@ cmd_install_service() {
         exit 1
     fi
     log_ok "开机自启已注册: $(systemctl is-enabled "$SYSTEMD_UNIT_NAME" 2>/dev/null || echo unknown)"
+    fix_systemd_runtime_permissions "$service_user" || exit 1
     if ! sudo systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
         log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
         if ! sudo systemctl start "$SYSTEMD_UNIT_NAME"; then
@@ -2176,6 +2227,7 @@ cmd_install_service() {
     echo "  本次启动日志: journalctl -b -u riveredge --no-pager"
     echo "  完整日志: journalctl -u riveredge -e"
     echo ""
+    echo "  提示: 请勿使用 sudo ./fast-deploy/deploy.sh start（会导致 .logs/.env 归属 root）"
     echo "  提示: 启用 systemd 后，日常启停建议用 systemctl，避免与手动 start/stop 混用导致状态不一致"
 }
 
