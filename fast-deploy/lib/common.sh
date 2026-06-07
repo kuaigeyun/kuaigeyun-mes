@@ -1950,7 +1950,7 @@ start_caddy_prod() {
     listen_label="$(caddy_listen_port_label)"
     if [ -f "$LOGS_DIR/caddy.pid" ] && kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null; then
         log_info "Caddy 已在运行"
-        verify_caddy_serving || exit 1
+        verify_caddy_serving || return 1
         return 0
     fi
     stop_service caddy
@@ -1967,15 +1967,40 @@ start_caddy_prod() {
     kill -0 "$(cat "$LOGS_DIR/caddy.pid")" 2>/dev/null || {
         log_error "Caddy 启动失败，查看 $LOGS_DIR/caddy.log"
         tail -20 "$LOGS_DIR/caddy.log" >&2
-        exit 1
+        rm -f "$LOGS_DIR/caddy.pid"
+        kill_all_caddy_processes
+        return 1
     }
-    caddy_check_listening || {
+    if ! caddy_check_listening; then
         log_error "Caddy 未监听端口 ${listen_label}，查看 $LOGS_DIR/caddy.log"
         tail -20 "$LOGS_DIR/caddy.log" >&2
-        exit 1
-    }
-    verify_caddy_serving || exit 1
+        rm -f "$LOGS_DIR/caddy.pid"
+        kill_all_caddy_processes
+        return 1
+    fi
+    if ! verify_caddy_serving; then
+        rm -f "$LOGS_DIR/caddy.pid"
+        kill_all_caddy_processes
+        return 1
+    fi
     log_ok "Caddy 已启动"
+}
+
+rollback_partial_prod_start() {
+    load_deploy_env
+    log_warn "回滚已启动的生产服务..."
+    stop_service caddy
+    stop_service backend
+    stop_service worker
+    stop_service scheduler
+    kill_all_caddy_processes
+    kill_port "$BACKEND_PORT"
+    if caddy_https_enabled; then
+        ensure_port_free 80 || true
+        ensure_port_free 443 || true
+    else
+        ensure_port_free "$PROXY_PORT" || true
+    fi
 }
 
 verify_caddy_serving() {
@@ -2035,7 +2060,10 @@ cmd_start_prod() {
     record_deploy_release_metadata
     start_backend_prod
     start_worker_prod
-    start_caddy_prod
+    if ! start_caddy_prod; then
+        rollback_partial_prod_start
+        exit 1
+    fi
     ensure_playwright_chromium_postinstall
     log_ok "RiverEdge 生产环境已就绪"
     local access_ip="${SERVER_IP:-127.0.0.1}"
@@ -2063,12 +2091,12 @@ cmd_stop_prod() {
     stop_service worker
     stop_service scheduler
     stop_service backend
-    # 清理未纳入 pid 文件管理的旧进程占用（如历史 uvicorn/caddy）
+    kill_all_caddy_processes
     if caddy_https_enabled; then
-        kill_port 80
-        kill_port 443
+        ensure_port_free 80 || true
+        ensure_port_free 443 || true
     else
-        kill_port "$PROXY_PORT"
+        ensure_port_free "$PROXY_PORT" || true
     fi
     kill_port "$BACKEND_PORT"
     log_ok "生产服务已停止"
@@ -2269,6 +2297,7 @@ cmd_install_service() {
         log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
         if ! sudo systemctl start "$SYSTEMD_UNIT_NAME"; then
             show_systemd_start_failure
+            log_error "可尝试: sudo systemctl reset-failed riveredge && sudo systemctl start riveredge"
             exit 1
         fi
     fi

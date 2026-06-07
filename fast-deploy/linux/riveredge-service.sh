@@ -15,7 +15,8 @@ if [ "$action" = "start" ]; then
             exit 0
         fi
         if [ "$attempt" -lt 3 ]; then
-            echo "riveredge start failed (attempt ${attempt}/3), retry in 15s..." >&2
+            echo "riveredge start failed (attempt ${attempt}/3), cleaning up before retry..." >&2
+            /usr/bin/env bash "$SCRIPT_DIR/prod.sh" stop >/dev/null 2>&1 || true
             sleep 15
         fi
         attempt=$((attempt + 1))
