@@ -1169,7 +1169,7 @@ const ReceiptNoticesPage: React.FC = () => {
         }}
         okText={`创建${pullFromPurchaseOrderAction.targetLabel}`}
         confirmLoading={pullPurchaseOrderSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

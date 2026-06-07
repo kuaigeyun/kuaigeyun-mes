@@ -351,7 +351,7 @@ const PartnerStatementsPage: React.FC = () => {
             生成对账单
           </Button>,
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <Space wrap>

@@ -292,13 +292,11 @@ const ComputationHistoryTab: React.FC = () => {
                     <Statistic
                       title="业务模式"
                       value={compareResult.basic_diff.business_mode?.value1 ?? compareResult.basic_diff.computation_type.value1}
-                      valueStyle={{
-                        color:
+                      styles={{ content: {color:
                           (compareResult.basic_diff.business_mode?.same ??
                             compareResult.basic_diff.computation_type.same)
                             ? '#3f8600'
-                            : '#cf1322',
-                      }}
+                            : '#cf1322', } }}
                     />
                     <Divider />
                     <div><strong>计算开始时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation1.computation_start_time)}</div>
@@ -310,13 +308,11 @@ const ComputationHistoryTab: React.FC = () => {
                     <Statistic
                       title="业务模式"
                       value={compareResult.basic_diff.business_mode?.value2 ?? compareResult.basic_diff.computation_type.value2}
-                      valueStyle={{
-                        color:
+                      styles={{ content: {color:
                           (compareResult.basic_diff.business_mode?.same ??
                             compareResult.basic_diff.computation_type.same)
                             ? '#3f8600'
-                            : '#cf1322',
-                      }}
+                            : '#cf1322', } }}
                     />
                     <Divider />
                     <div><strong>计算开始时间:</strong> {formatDateTimeBySiteSetting(compareResult.computation2.computation_start_time)}</div>

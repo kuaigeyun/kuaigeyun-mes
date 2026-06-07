@@ -454,7 +454,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         onOk={handleSubmit}
         confirmLoading={submitting}
         width={960}
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical" preserve={false}>
           <Form.Item name="_masterMaterialUuid" hidden>

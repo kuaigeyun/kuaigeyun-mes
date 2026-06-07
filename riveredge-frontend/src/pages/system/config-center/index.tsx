@@ -395,7 +395,7 @@ const ConfigCenterPage: React.FC = () => {
                 <Text strong>{t('pages.system.configCenter.auditSwitch.sectionTitle')}</Text>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 12, marginTop: 12 }}>
                   {auditSwitches.map(item => (
-                    <Card key={item.code} size="small" bodyStyle={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <Card key={item.code} size="small" styles={{ body: {display: 'flex', justifyContent: 'space-between' } }}>
                       <div style={{ flex: 1, marginRight: 16 }}>
                         <Text strong>{renderText(item.labelKey, item.code)}</Text>
                         <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(item.descKey, '')}</Paragraph>

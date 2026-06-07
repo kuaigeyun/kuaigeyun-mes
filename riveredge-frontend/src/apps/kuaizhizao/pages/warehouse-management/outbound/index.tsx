@@ -1224,7 +1224,7 @@ const OutboundPage: React.FC = () => {
         okText="确认出库并过账"
         cancelText="取消"
         confirmLoading={salesConfirmSubmitting}
-        destroyOnClose
+        destroyOnHidden
         width={880}
         styles={{ body: { paddingTop: 12 } }}
         onCancel={() => {

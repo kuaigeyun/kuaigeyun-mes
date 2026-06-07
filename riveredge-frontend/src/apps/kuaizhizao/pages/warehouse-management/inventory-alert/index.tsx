@@ -515,28 +515,28 @@ const InventoryAlertPage: React.FC = () => {
                 title="待处理预警"
                 value={statistics.pending_count || 0}
                 prefix={<WarningOutlined />}
-                valueStyle={{ color: '#cf1322' }}
+                styles={{ content: {color: '#cf1322' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="低库存预警"
                 value={statistics.by_type?.low_stock || 0}
-                valueStyle={{ color: '#cf1322' }}
+                styles={{ content: {color: '#cf1322' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="高库存预警"
                 value={statistics.by_type?.high_stock || 0}
-                valueStyle={{ color: '#faad14' }}
+                styles={{ content: {color: '#faad14' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
                 title="严重级别"
                 value={statistics.by_level?.critical || 0}
-                valueStyle={{ color: '#cf1322' }}
+                styles={{ content: {color: '#cf1322' } }}
               />
             </Col>
           </Row>

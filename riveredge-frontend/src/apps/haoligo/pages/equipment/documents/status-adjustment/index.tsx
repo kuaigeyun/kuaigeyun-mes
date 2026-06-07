@@ -302,7 +302,7 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         okText={detailMode ? t('common.close') : t('common.save')}
         cancelButtonProps={{ style: detailMode ? { display: 'none' } : undefined }}
         confirmLoading={formLoading}
-        destroyOnClose
+        destroyOnHidden
         width={640}
       >
         <Spin spinning={formLoading}>

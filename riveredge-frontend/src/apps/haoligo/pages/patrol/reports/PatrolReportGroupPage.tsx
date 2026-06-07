@@ -91,7 +91,7 @@ function KpiStrip({ kpi, loading }: { kpi: PatrolReportKpiSummary | undefined; l
             title={<Text style={{ color: '#0958d9' }}>{t('app.haoligo.patrol.reports.kpi.total')}</Text>}
             value={loading ? '—' : kpi?.total_tasks ?? 0}
             prefix={<UnorderedListOutlined style={{ color: '#1677ff' }} />}
-            valueStyle={{ fontWeight: 700, color: '#0958d9' }}
+            styles={{ content: {fontWeight: 700, color: '#0958d9' } }}
           />
         </Card>
       </Col>
@@ -101,7 +101,7 @@ function KpiStrip({ kpi, loading }: { kpi: PatrolReportKpiSummary | undefined; l
             title={<Text style={{ color: '#ad4e00' }}>{t('app.haoligo.patrol.reports.kpi.open')}</Text>}
             value={loading ? '—' : kpi?.open_tasks ?? 0}
             prefix={<BarChartOutlined style={{ color: '#fa8c16' }} />}
-            valueStyle={{ fontWeight: 700, color: '#ad4e00' }}
+            styles={{ content: {fontWeight: 700, color: '#ad4e00' } }}
           />
         </Card>
       </Col>
@@ -111,7 +111,7 @@ function KpiStrip({ kpi, loading }: { kpi: PatrolReportKpiSummary | undefined; l
             title={<Text style={{ color: '#237804' }}>{t('app.haoligo.patrol.reports.kpi.completed')}</Text>}
             value={loading ? '—' : kpi?.completed_tasks ?? 0}
             prefix={<CheckCircleOutlined style={{ color: '#52c41a' }} />}
-            valueStyle={{ fontWeight: 700, color: '#237804' }}
+            styles={{ content: {fontWeight: 700, color: '#237804' } }}
           />
         </Card>
       </Col>
@@ -121,7 +121,7 @@ function KpiStrip({ kpi, loading }: { kpi: PatrolReportKpiSummary | undefined; l
             title={<Text style={{ color: '#531dab' }}>{t('app.haoligo.patrol.reports.kpi.contributors')}</Text>}
             value={loading ? '—' : kpi?.contributor_count ?? 0}
             prefix={<TeamOutlined style={{ color: '#722ed1' }} />}
-            valueStyle={{ fontWeight: 700, color: '#531dab' }}
+            styles={{ content: {fontWeight: 700, color: '#531dab' } }}
           />
         </Card>
       </Col>

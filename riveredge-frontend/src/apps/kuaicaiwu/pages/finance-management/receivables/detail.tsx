@@ -167,10 +167,10 @@ const ReceivableDetail: React.FC = () => {
                   <Statistic title="应收总额" value={data.total_amount} precision={2} prefix="¥" />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="已收金额" value={data.received_amount} precision={2} prefix="¥" valueStyle={{ color: '#3f8600' }} />
+                  <Statistic title="已收金额" value={data.received_amount} precision={2} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="剩余应收" value={data.remaining_amount} precision={2} prefix="¥" valueStyle={{ color: '#cf1322' }} />
+                  <Statistic title="剩余应收" value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
                 </Col>
               </Row>
             </DetailDrawerSection>

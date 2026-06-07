@@ -1004,7 +1004,7 @@ const EquipmentLedgerPage: React.FC = () => {
         onCancel={() => setStatusHistoryOpen(false)}
         footer={null}
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         <Table<EquipmentOperationalStatusLogRow>
           size="small"

@@ -1000,7 +1000,7 @@ const DeliveryNotesPage: React.FC = () => {
         }}
         okText="创建送货单"
         confirmLoading={pullSalesDeliverySubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

@@ -1621,7 +1621,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         }}
         okText="创建采购申请"
         confirmLoading={pullComputationSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

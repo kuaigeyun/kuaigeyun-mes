@@ -656,7 +656,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
         open={editorOpen}
         onCancel={closeEditor}
         width={MODAL_CONFIG.LARGE_WIDTH}
-        destroyOnClose
+        destroyOnHidden
         footer={null}
         styles={{ body: { maxHeight: MODAL_CONFIG.BODY_MAX_HEIGHT, overflowY: 'auto' } }}
       >

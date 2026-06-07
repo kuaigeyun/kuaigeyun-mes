@@ -99,26 +99,34 @@ function Get-EnhancedPath {
         (Join-Path $script:FastDeployDir '.tools\node'),
         "$env:ProgramFiles\nodejs",
         "$env:ProgramFiles(x86)\nodejs",
-        "$env:LOCALAPPDATA\Programs\Python\Python312",
-        "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts",
-        "$env:LOCALAPPDATA\Programs\Python\Python313",
-        "$env:LOCALAPPDATA\Programs\Python\Python313\Scripts",
         "$env:USERPROFILE\.local\bin",
-        "$env:ProgramFiles\PostgreSQL\15\bin",
-        "$env:ProgramFiles\PostgreSQL\16\bin",
-        "$env:ProgramFiles\PostgreSQL\17\bin",
         (Join-Path $script:FastDeployDir '.tools\caddy')
     )
-    foreach ($p in $extra) {
-        if ($p -and (Test-Path $p) -and ($paths -notcontains $p)) { $paths = @($p) + $paths }
+    $pgRoot = Join-Path $env:ProgramFiles 'PostgreSQL'
+    if (Test-Path $pgRoot) {
+        foreach ($dir in Get-ChildItem $pgRoot -Directory -ErrorAction SilentlyContinue) {
+            $bin = Join-Path $dir.FullName 'bin'
+            if (Test-Path $bin) { $extra += $bin }
+        }
     }
     $pyRoot = Join-Path $env:LOCALAPPDATA 'Programs\Python'
     if (Test-Path $pyRoot) {
         foreach ($dir in Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue) {
-            foreach ($sub in @($dir.FullName, (Join-Path $dir.FullName 'Scripts'))) {
-                if (($paths -notcontains $sub)) { $paths = @($sub) + $paths }
-            }
+            $extra += $dir.FullName
+            $extra += (Join-Path $dir.FullName 'Scripts')
         }
+    }
+    foreach ($dir in @(
+        (Join-Path $env:ProgramFiles 'Python312'),
+        (Join-Path $env:ProgramFiles 'python')
+    )) {
+        if (Test-Path $dir) {
+            $extra += $dir
+            $extra += (Join-Path $dir 'Scripts')
+        }
+    }
+    foreach ($p in $extra) {
+        if ($p -and (Test-Path $p) -and ($paths -notcontains $p)) { $paths = @($p) + $paths }
     }
     return ($paths -join ';')
 }
@@ -172,33 +180,132 @@ function Test-CheckNode {
     if (Test-VersionGe $v '22.0.0') { return 'ok' } else { return "old:$v" }
 }
 
-function Test-CheckPython {
+function Test-IsWindowsStoreStub([string]$Path) {
+    return $Path -match 'WindowsApps'
+}
+
+function Get-DiscoverExesViaWhere([string]$Name) {
+    $found = @()
+    $where = Get-Command where.exe -ErrorAction SilentlyContinue
+    if (-not $where) { return $found }
+    foreach ($line in (& $where.Source $Name 2>$null)) {
+        $line = $line.Trim()
+        if (-not $line -or (Test-IsWindowsStoreStub $line)) { continue }
+        if (Test-Path $line) { $found += $line }
+    }
+    return $found
+}
+
+function Get-PythonCandidates {
     $env:PATH = Get-EnhancedPath
-    foreach ($c in @('python3.12', 'python3', 'python', 'py')) {
-        if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { continue }
-        $out = if ($c -eq 'py') { & py -3.12 --version 2>&1 } else { & $c --version 2>&1 }
-        if ($out -match '(\d+\.\d+\.\d+)') {
-            $v = $Matches[1]
-            if (Test-VersionGe $v '3.12.0') { return 'ok' } else { return "old:$v" }
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $seen = @{}
+
+    foreach ($p in Get-DiscoverExesViaWhere 'python') {
+        if (-not $seen.ContainsKey($p)) { $candidates.Add($p); $seen[$p] = $true }
+    }
+    foreach ($p in Get-DiscoverExesViaWhere 'python3') {
+        if (-not $seen.ContainsKey($p)) { $candidates.Add($p); $seen[$p] = $true }
+    }
+
+    if (Get-Command py -ErrorAction SilentlyContinue) {
+        foreach ($line in (& py -0p 2>$null)) {
+            $line = $line.Trim()
+            if (-not $line) { continue }
+            $path = ($line -split '\s+')[-1]
+            if ($path -match '\\' -and -not (Test-IsWindowsStoreStub $path) -and (Test-Path $path)) {
+                if (-not $seen.ContainsKey($path)) { $candidates.Add($path); $seen[$path] = $true }
+            }
+            if ($line -match '-V:(\d+\.\d+)') {
+                $spec = "py -V:$($Matches[1])"
+                try {
+                    & py "-V:$($Matches[1])" --version 2>$null | Out-Null
+                    if (-not $seen.ContainsKey($spec)) { $candidates.Add($spec); $seen[$spec] = $true }
+                } catch { }
+            }
+        }
+        foreach ($item in @('-3.12', '-3')) {
+            try {
+                & py $item --version 2>$null | Out-Null
+                $spec = "py $item"
+                if (-not $seen.ContainsKey($spec)) { $candidates.Add($spec); $seen[$spec] = $true }
+            } catch { }
         }
     }
-    $pyCandidates = @(
-        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
-        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')
-    )
+
     $pyRoot = Join-Path $env:LOCALAPPDATA 'Programs\Python'
     if (Test-Path $pyRoot) {
-        $pyCandidates += Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue |
-            ForEach-Object { Join-Path $_.FullName 'python.exe' }
-    }
-    foreach ($p in $pyCandidates) {
-        if (-not (Test-Path $p)) { continue }
-        $out = & $p --version 2>&1
-        if ($out -match '(\d+\.\d+\.\d+)') {
-            $v = $Matches[1]
-            if (Test-VersionGe $v '3.12.0') { return 'ok' } else { return "old:$v" }
+        foreach ($dir in Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue) {
+            $exe = Join-Path $dir.FullName 'python.exe'
+            if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) { $candidates.Add($exe); $seen[$exe] = $true }
         }
     }
+    foreach ($dir in @(
+        (Join-Path $env:ProgramFiles 'Python312'),
+        (Join-Path $env:ProgramFiles 'python')
+    )) {
+        $exe = Join-Path $dir 'python.exe'
+        if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) { $candidates.Add($exe); $seen[$exe] = $true }
+    }
+
+    foreach ($c in @('python3.12', 'python3', 'python')) {
+        if (Get-Command $c -ErrorAction SilentlyContinue) {
+            $src = (Get-Command $c).Source
+            if (-not (Test-IsWindowsStoreStub $src) -and -not $seen.ContainsKey($c)) {
+                $candidates.Add($c); $seen[$c] = $true
+            }
+        }
+    }
+    return $candidates
+}
+
+function Get-PsqlCandidates {
+    $env:PATH = Get-EnhancedPath
+    $candidates = [System.Collections.Generic.List[string]]::new()
+    $seen = @{}
+
+    foreach ($p in Get-DiscoverExesViaWhere 'psql') {
+        if (-not $seen.ContainsKey($p)) { $candidates.Add($p); $seen[$p] = $true }
+    }
+    $pgRoot = Join-Path $env:ProgramFiles 'PostgreSQL'
+    if (Test-Path $pgRoot) {
+        foreach ($dir in Get-ChildItem $pgRoot -Directory -ErrorAction SilentlyContinue) {
+            $exe = Join-Path $dir.FullName 'bin\psql.exe'
+            if ((Test-Path $exe) -and -not $seen.ContainsKey($exe)) { $candidates.Add($exe); $seen[$exe] = $true }
+        }
+    }
+    if (Get-Command psql -ErrorAction SilentlyContinue) {
+        $src = (Get-Command psql).Source
+        if (-not $seen.ContainsKey($src)) { $candidates.Add($src); $seen[$src] = $true }
+    }
+    if ($IsLinux -or $env:OS -ne 'Windows_NT') {
+        foreach ($p in Get-ChildItem -Path '/usr/lib/postgresql/*/bin/psql' -ErrorAction SilentlyContinue) {
+            if (-not $seen.ContainsKey($p.FullName)) { $candidates.Add($p.FullName); $seen[$p.FullName] = $true }
+        }
+    }
+    return $candidates
+}
+
+function Get-PythonVersionOutput([string]$Py) {
+    if ($Py -match '^py ') {
+        $parts = $Py -split '\s+', 2
+        return & $parts[0] $parts[1] --version 2>&1
+    }
+    return & $Py --version 2>&1
+}
+
+function Test-CheckPython {
+    $best = $null
+    foreach ($py in Get-PythonCandidates) {
+        if (Test-IsWindowsStoreStub $py) { continue }
+        $out = Get-PythonVersionOutput $py
+        if ($out -match '(\d+\.\d+\.\d+)') {
+            $v = $Matches[1]
+            if (Test-VersionGe $v '3.12.0') { return 'ok' }
+            $best = $v
+        }
+    }
+    if ($best) { return "old:$best" }
     return 'missing'
 }
 
@@ -216,12 +323,9 @@ function Test-CheckNpm {
 
 function Test-CheckPostgres {
     $best = $null
-    $candidates = @('psql')
-    if ($IsLinux -or $env:OS -ne 'Windows_NT') {
-        $candidates += Get-ChildItem -Path '/usr/lib/postgresql/*/bin/psql' -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-    }
-    foreach ($bin in $candidates) {
-        if (-not (Get-Command $bin -ErrorAction SilentlyContinue) -and -not (Test-Path $bin)) { continue }
+    foreach ($bin in Get-PsqlCandidates) {
+        if (Test-IsWindowsStoreStub $bin) { continue }
+        if (-not (Test-Path $bin) -and -not (Get-Command $bin -ErrorAction SilentlyContinue)) { continue }
         $out = & $bin --version 2>$null
         if ($out -match '(\d+\.\d+)') {
             $v = $Matches[1]

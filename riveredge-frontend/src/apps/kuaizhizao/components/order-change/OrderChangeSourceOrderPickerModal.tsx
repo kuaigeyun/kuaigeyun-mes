@@ -95,7 +95,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
       }}
       okText="确定"
       okButtonProps={{ disabled: !selectedId }}
-      destroyOnClose
+      destroyOnHidden
     >
       <Space orientation="vertical" style={{ width: '100%' }} size={12}>
         <Input.Search

@@ -215,7 +215,7 @@ const DocumentEfficiencyPage: React.FC = () => {
                     title="平均耗时"
                     value={efficiencyData.average_duration_hours || 0}
                     suffix="小时"
-                    valueStyle={{ color: 'var(--ant-color-primary)' }}
+                    styles={{ content: {color: 'var(--ant-color-primary)' } }}
                   />
                 </Col>
                 <Col xs={24} md={8}>
@@ -223,7 +223,7 @@ const DocumentEfficiencyPage: React.FC = () => {
                     title="瓶颈节点数"
                     value={efficiencyData.bottleneck_nodes?.length || 0}
                     suffix="个"
-                    valueStyle={{ color: 'var(--ant-color-error)' }}
+                    styles={{ content: {color: 'var(--ant-color-error)' } }}
                   />
                 </Col>
                 <Col xs={24} md={8}>
@@ -231,7 +231,7 @@ const DocumentEfficiencyPage: React.FC = () => {
                     title="优化建议数"
                     value={efficiencyData.optimization_suggestions?.length || 0}
                     suffix="条"
-                    valueStyle={{ color: 'var(--ant-color-warning)' }}
+                    styles={{ content: {color: 'var(--ant-color-warning)' } }}
                   />
                 </Col>
               </Row>

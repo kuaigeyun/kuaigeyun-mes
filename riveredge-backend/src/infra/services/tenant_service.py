@@ -4,6 +4,7 @@
 提供组织的 CRUD 操作和业务逻辑处理
 """
 
+import asyncio
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from loguru import logger
@@ -681,4 +682,41 @@ class TenantService:
             await InitWizardService().apply_default_init_settings(tenant_id)
         except Exception as e:
             logger.warning(f"组织 {tenant_id} 自动完成初始化向导失败（不中断流程）: {e}")
+
+
+async def initialize_tenant_data_background(
+    tenant_id: int,
+    init_data_options: Optional[List[str]] = None,
+    current_user_id: Optional[int] = None,
+    industry_preset: Optional[str] = None,
+) -> None:
+    """后台初始化组织数据，避免阻塞创建/注册接口响应。"""
+    try:
+        service = TenantService()
+        await service.initialize_tenant_data(
+            tenant_id,
+            init_data_options=init_data_options,
+            current_user_id=current_user_id,
+            industry_preset=industry_preset,
+        )
+        logger.info(f"组织 {tenant_id} 后台初始化完成")
+    except Exception as e:
+        logger.error(f"组织 {tenant_id} 后台初始化失败: {e}", exc_info=True)
+
+
+def schedule_initialize_tenant_data(
+    tenant_id: int,
+    init_data_options: Optional[List[str]] = None,
+    current_user_id: Optional[int] = None,
+    industry_preset: Optional[str] = None,
+) -> None:
+    """提交组织数据后台初始化任务。"""
+    asyncio.create_task(
+        initialize_tenant_data_background(
+            tenant_id,
+            init_data_options=init_data_options,
+            current_user_id=current_user_id,
+            industry_preset=industry_preset,
+        )
+    )
 

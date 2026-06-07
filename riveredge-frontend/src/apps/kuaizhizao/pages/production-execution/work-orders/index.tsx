@@ -5867,7 +5867,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
         okText="创建工单"
         confirmLoading={pullComputationSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
@@ -5955,7 +5955,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
         okText="创建工单"
         confirmLoading={pullProductionPlanSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

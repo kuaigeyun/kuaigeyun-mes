@@ -450,7 +450,7 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
             {t('common.save')}
           </Button>,
         ]}
-        destroyOnClose
+        destroyOnHidden
       >
         <ProForm formRef={editorFormRef} submitter={false} layout="vertical">
           <Row gutter={16}>

@@ -2050,7 +2050,7 @@ const InboundPage: React.FC = () => {
         confirmLoading={pullReceiptNoticeSubmitting}
         width={1240}
         okText="创建采购入库单"
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

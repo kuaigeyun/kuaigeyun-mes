@@ -170,7 +170,7 @@ const HaoligoDocumentPrintModal: React.FC<HaoligoDocumentPrintModalProps> = ({
       open={open}
       onCancel={onClose}
       width={960}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space>
           <Button onClick={onClose}>{t('app.haoligo.equipment.documents.btnCancel')}</Button>

@@ -135,7 +135,7 @@ export default function RegisterDrawer({
       centered
       maskClosable
       closable={false}
-      destroyOnClose={false}
+      destroyOnHidden={false}
       footer={null}
       styles={{
         body: { padding: 32 },

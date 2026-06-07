@@ -128,7 +128,7 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
             <Statistic
               title={<span style={statTitleStyle}>{m.title}</span>}
               value={m.value}
-              valueStyle={{ ...statValueStyle, ...m.valueStyle }}
+              styles={{ content: {...statValueStyle, ...m.valueStyle } }}
             />
           </Col>
         ))}

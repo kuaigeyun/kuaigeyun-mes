@@ -298,7 +298,7 @@ const LaunchProgressPage: React.FC = () => {
                               title={t('pages.system.launchProgress.daysRemaining')}
                               value={progressTracking.days_remaining}
                               suffix={t('pages.system.launchProgress.days')}
-                              valueStyle={{ color: progressTracking.days_remaining <= 3 ? '#cf1322' : '#1890ff' }}
+                              styles={{ content: {color: progressTracking.days_remaining <= 3 ? '#cf1322' : '#1890ff' } }}
                             />
                             <Progress
                               percent={progressTracking.progress_percentage}

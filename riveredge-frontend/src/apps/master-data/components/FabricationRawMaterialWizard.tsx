@@ -215,7 +215,7 @@ const FabricationRawMaterialWizard: React.FC<FabricationRawMaterialWizardProps> 
       open={open}
       onCancel={handleClose}
       width={640}
-      destroyOnClose
+      destroyOnHidden
       footer={
         <Space>
           <Button onClick={handleClose}>{t('app.master-data.fabricationWizard.skipLater')}</Button>

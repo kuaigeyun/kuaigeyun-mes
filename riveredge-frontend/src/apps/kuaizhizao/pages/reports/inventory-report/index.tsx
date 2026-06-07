@@ -628,7 +628,7 @@ const InventoryReportPage: React.FC = () => {
                         title="总库存成本"
                         value={costAnalysisData.summary?.total_cost || 0}
                         prefix="¥"
-                        valueStyle={{ color: '#1890ff' }}
+                        styles={{ content: {color: '#1890ff' } }}
                       />
                     </Col>
                     <Col span={12}>
@@ -636,7 +636,7 @@ const InventoryReportPage: React.FC = () => {
                         title="平均库存成本"
                         value={costAnalysisData.summary?.average_cost || 0}
                         prefix="¥"
-                        valueStyle={{ color: '#52c41a' }}
+                        styles={{ content: {color: '#52c41a' } }}
                       />
                     </Col>
                   </Row>

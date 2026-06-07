@@ -192,7 +192,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
             </Col>
             <Col span={16}>
               <Card 
-                bodyStyle={{ padding: '16px 24px' }} 
+                styles={{ body: {padding: '16px 24px' } }} 
                 style={{ border: '1px solid #52c41a', background: 'linear-gradient(135deg, #f6ffed 0%, #fff 100%)' }}
               >
                 <Statistic 
@@ -200,7 +200,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
                   value={finalPrice} 
                   precision={2} 
                   prefix="¥" 
-                  valueStyle={{ color: '#52c41a', fontSize: 32, fontWeight: 'bold' }}
+                  styles={{ content: {color: '#52c41a', fontSize: 32, fontWeight: 'bold' } }}
                 />
                 <Paragraph type="secondary" style={{ fontSize: 12, marginTop: 8, marginBottom: 0 }}>
                   * 基于“成本 + 毛利”模型。实际报价建议根据客户级关系及订单规模动态调整。

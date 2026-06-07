@@ -892,7 +892,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
         }}
         width={720}
         centered
-        destroyOnClose
+        destroyOnHidden
         styles={{ body: { paddingTop: 8 } }}
         footer={
           detailMode ? (
@@ -1130,7 +1130,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
       <Modal
         title={t('app.haoligo.equipment.documents.spotCheckPlanPickerTitle')}
         open={planPickerOpen}
-        destroyOnClose
+        destroyOnHidden
         onCancel={() => {
           setPlanPickerOpen(false);
           setPlanPickerPendingEquipmentId(null);

@@ -827,7 +827,7 @@ export const MaterialVariantCombinationsTable: React.FC<MaterialVariantCombinati
           addForm.resetFields();
         }}
         onOk={() => void handleAddSubmit()}
-        destroyOnClose
+        destroyOnHidden
         width={560}
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>

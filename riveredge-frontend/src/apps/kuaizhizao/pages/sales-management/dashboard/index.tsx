@@ -528,7 +528,7 @@ const SalesDashboard: React.FC = () => {
               }
               headerBordered
               style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              bodyStyle={{ padding: '10px 12px' }}
+              styles={{ body: {padding: '10px 12px' } }}
             >
               {s?.pending_quotations > 0 && (
                 <div
@@ -622,7 +622,7 @@ const SalesDashboard: React.FC = () => {
               }
               headerBordered
               style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              bodyStyle={{ padding: 8 }}
+              styles={{ body: {padding: 8 } }}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>查看全部</a>}
             >
               <div style={{ height: 250, overflow: 'hidden' }}>
@@ -662,7 +662,7 @@ const SalesDashboard: React.FC = () => {
               }
               headerBordered
               style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              bodyStyle={{ padding: '10px 12px 8px' }}
+              styles={{ body: {padding: '10px 12px 8px' } }}
               extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>查看全部</a>}
             >
               <div style={{ minHeight: 250, maxHeight: 320, overflowY: 'auto', paddingRight: 2 }}>
@@ -719,7 +719,7 @@ const SalesDashboard: React.FC = () => {
               }
               headerBordered
               style={{ flex: 1, height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              bodyStyle={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+              styles={{ body: {display: 'flex', flexDirection: 'column', flex: 1 } }}
               extra={
                 <Segmented
                   options={[
@@ -785,7 +785,7 @@ const SalesDashboard: React.FC = () => {
               }
               headerBordered
               style={{ flex: 1, height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-              bodyStyle={{ display: 'flex', flexDirection: 'column', flex: 1 }}
+              styles={{ body: {display: 'flex', flexDirection: 'column', flex: 1 } }}
               extra={
                 <Segmented
                   options={[

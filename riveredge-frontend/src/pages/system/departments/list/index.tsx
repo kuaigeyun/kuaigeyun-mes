@@ -852,7 +852,7 @@ const DepartmentListPage: React.FC = () => {
         open={syncIntroModalOpen}
         onCancel={() => setSyncIntroModalOpen(false)}
         width={560}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
             {t('common.cancel')}
@@ -873,7 +873,7 @@ const DepartmentListPage: React.FC = () => {
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={640}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
             {t('common.cancel')}

@@ -3490,7 +3490,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                       borderRadius: token.borderRadius,
                       overflow: 'visible',
                     }}
-                    bodyStyle={{ paddingLeft: 16, paddingRight: 16, paddingBottom: 16 }}
+                    styles={{ body: {paddingLeft: 16, paddingRight: 16, paddingBottom: 16 } }}
                   >
                     <div style={{ minHeight: '200px' }}>{cv.render(tableData)}</div>
                   </ProCard>

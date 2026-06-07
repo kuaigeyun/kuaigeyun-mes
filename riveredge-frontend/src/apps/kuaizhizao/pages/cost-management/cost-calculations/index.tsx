@@ -640,7 +640,7 @@ const CostCalculationPage: React.FC = () => {
                   value={compareData.cost_difference}
                   prefix="¥"
                   precision={2}
-                  valueStyle={{ color: compareData.cost_difference > 0 ? '#cf1322' : '#3f8600' }}
+                  styles={{ content: {color: compareData.cost_difference > 0 ? '#cf1322' : '#3f8600' } }}
                 />
               </Col>
               <Col span={12}>
@@ -649,7 +649,7 @@ const CostCalculationPage: React.FC = () => {
                   value={compareData.cost_difference_rate}
                   suffix="%"
                   precision={2}
-                  valueStyle={{ color: compareData.cost_difference_rate > 0 ? '#cf1322' : '#3f8600' }}
+                  styles={{ content: {color: compareData.cost_difference_rate > 0 ? '#cf1322' : '#3f8600' } }}
                 />
               </Col>
             </Row>

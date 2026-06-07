@@ -218,7 +218,7 @@ const CostReportPage: React.FC = () => {
               value={result.structure_analysis.total_cost}
               prefix="¥"
               precision={2}
-              valueStyle={{ fontSize: 22, fontWeight: 600, color: token.colorPrimary }}
+              styles={{ content: {fontSize: 22, fontWeight: 600, color: token.colorPrimary } }}
             />
             <Divider style={{ margin: '16px 0' }} />
             <Row gutter={[16, 16]}>

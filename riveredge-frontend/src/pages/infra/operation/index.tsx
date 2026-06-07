@@ -313,7 +313,7 @@ export default function OperationsDashboard() {
         </div>
 
         {/* 顶部工具栏 */}
-        <Card bodyStyle={{ padding: '12px 24px' }} style={{ marginBottom: 16 }}>
+        <Card styles={{ body: {padding: '12px 24px' } }} style={{ marginBottom: 16 }}>
           <Row justify="space-between" align="middle">
             <Col>
               <Space size="large">
@@ -368,7 +368,7 @@ export default function OperationsDashboard() {
         {/* 核心 KPI 卡片 */}
         <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.totalTenants')}
                 value={tenantStats?.total || 0}
@@ -377,17 +377,17 @@ export default function OperationsDashboard() {
             </Card>
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.activeTenants')}
                 value={tenantStats?.by_status?.active || 0}
-                valueStyle={{ color: '#52c41a' }}
+                styles={{ content: {color: '#52c41a' } }}
                 prefix={<RocketOutlined />}
               />
             </Card>
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.totalUsers')}
                 value={userStats?.total_users || 0}
@@ -396,7 +396,7 @@ export default function OperationsDashboard() {
             </Card>
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.dauToday')}
                 value={accessStats?.dau_today || 0}
@@ -405,7 +405,7 @@ export default function OperationsDashboard() {
             </Card>
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.loginsToday')}
                 value={accessStats?.logins_today || 0}
@@ -414,7 +414,7 @@ export default function OperationsDashboard() {
             </Card>
           </Col>
           <Col xs={12} sm={8} md={4}>
-            <Card style={CARD_STYLE} bodyStyle={{ padding: 16 }}>
+            <Card style={CARD_STYLE} styles={{ body: {padding: 16 } }}>
               <Statistic
                 title={t('pages.infra.operation.newRegistrationsToday')}
                 value={userStats?.new_today || 0}

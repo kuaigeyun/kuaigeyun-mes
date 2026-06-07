@@ -298,7 +298,7 @@ const ProductionControlTower: React.FC = () => {
           form.resetFields();
         }}
         open={simulationVisible}
-        destroyOnClose
+        destroyOnHidden
         style={{
           borderLeft: '1px solid rgba(0, 0, 0, 0.08)',
         }}

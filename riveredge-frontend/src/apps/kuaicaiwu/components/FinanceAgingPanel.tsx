@@ -61,7 +61,7 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
                 value={row.amount}
                 precision={2}
                 prefix="¥"
-                valueStyle={{ fontSize: 16 }}
+                styles={{ content: {fontSize: 16 } }}
               />
               <div style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
                 {row.count} 笔

@@ -534,7 +534,7 @@ const SalesInvoicesPage: React.FC = () => {
         onOk={handlePullNext}
         okText="下一步"
         confirmLoading={false}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
@@ -617,7 +617,7 @@ const SalesInvoicesPage: React.FC = () => {
         }}
         onFinish={handlePullCreateSubmit}
         width={560}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ destroyOnHidden: true }}
         submitter={{ submitButtonProps: { loading: pullSubmitting } }}
         initialValues={
           pullSelectedSource

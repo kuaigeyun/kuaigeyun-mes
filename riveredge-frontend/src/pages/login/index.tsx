@@ -719,7 +719,7 @@ export default function LoginPage() {
       // 验证密码确认
       if (values.password !== values.confirm_password) {
         message.error(t('pages.login.passwordMismatch'));
-        return;
+        return false;
       }
 
       const registerResponse = await registerOrganization({
@@ -778,12 +778,18 @@ export default function LoginPage() {
           navigate(path, { replace: true });
         });
       }, 0);
+          } else {
+            message.warning(t('pages.login.registerSuccessManual'));
+            setRegisterDrawerVisible(false);
+            setRegisterType('personal');
           }
         } catch (loginError: any) {
           message.warning(t('pages.login.registerSuccessManual'));
           setRegisterDrawerVisible(false);
           setRegisterType('personal');
         }
+      } else {
+        message.error(registerResponse?.message || t('pages.login.registerFailed'));
       }
     } catch (error: any) {
       let errorMessage = t('pages.login.registerFailed');

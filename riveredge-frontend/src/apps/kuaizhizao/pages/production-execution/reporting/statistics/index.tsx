@@ -220,7 +220,7 @@ const ReportingStatisticsPage: React.FC = () => {
                 <Statistic
                   title="总报工次数"
                   value={statistics.total_count}
-                  valueStyle={{ color: '#1890ff' }}
+                  styles={{ content: {color: '#1890ff' } }}
                 />
               </Card>
             </Col>
@@ -230,7 +230,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   title="总报工数量"
                   value={statistics.total_reported_quantity}
                   precision={2}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                 />
               </Card>
             </Col>
@@ -241,9 +241,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   value={statistics.qualification_rate}
                   precision={2}
                   suffix="%"
-                  valueStyle={{
-                    color: statistics.qualification_rate >= 95 ? '#52c41a' : statistics.qualification_rate >= 90 ? '#faad14' : '#ff4d4f',
-                  }}
+                  styles={{ content: {color: statistics.qualification_rate >= 95 ? '#52c41a' : statistics.qualification_rate >= 90 ? '#faad14' : '#ff4d4f', } }}
                 />
               </Card>
             </Col>
@@ -253,7 +251,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   title="总工时（小时）"
                   value={statistics.total_work_hours}
                   precision={2}
-                  valueStyle={{ color: '#722ed1' }}
+                  styles={{ content: {color: '#722ed1' } }}
                 />
               </Card>
             </Col>
@@ -265,7 +263,7 @@ const ReportingStatisticsPage: React.FC = () => {
                 <Statistic
                   title="待审核"
                   value={statistics.pending_count}
-                  valueStyle={{ color: '#faad14' }}
+                  styles={{ content: {color: '#faad14' } }}
                 />
               </Card>
             </Col>
@@ -274,7 +272,7 @@ const ReportingStatisticsPage: React.FC = () => {
                 <Statistic
                   title="已审核"
                   value={statistics.approved_count}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                 />
               </Card>
             </Col>
@@ -284,7 +282,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   title="平均效率（件/小时）"
                   value={statistics.avg_quantity_per_hour}
                   precision={2}
-                  valueStyle={{ color: '#1890ff' }}
+                  styles={{ content: {color: '#1890ff' } }}
                 />
               </Card>
             </Col>
@@ -295,9 +293,7 @@ const ReportingStatisticsPage: React.FC = () => {
                   value={statistics.unqualified_rate}
                   precision={2}
                   suffix="%"
-                  valueStyle={{
-                    color: statistics.unqualified_rate <= 5 ? '#52c41a' : statistics.unqualified_rate <= 10 ? '#faad14' : '#ff4d4f',
-                  }}
+                  styles={{ content: {color: statistics.unqualified_rate <= 5 ? '#52c41a' : statistics.unqualified_rate <= 10 ? '#faad14' : '#ff4d4f', } }}
                 />
               </Card>
             </Col>

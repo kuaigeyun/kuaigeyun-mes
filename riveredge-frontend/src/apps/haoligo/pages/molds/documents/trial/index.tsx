@@ -3066,7 +3066,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         loading={repairWhCreateLoading}
         width={MODAL_CONFIG.SMALL_WIDTH}
         grid={false}
-        destroyOnClose
+        destroyOnHidden
         initialValues={{ warehouse_type: '外部' }}
       >
         <Form.Item label="供应商">
@@ -3096,7 +3096,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         okText="确认发出"
         cancelText="取消"
         width={MODAL_CONFIG.SMALL_WIDTH}
-        destroyOnClose
+        destroyOnHidden
         okButtonProps={{ disabled: dispatchModalLoading || dispatchTargetOptions.length === 0 }}
       >
         {dispatchModalLoading ? (
@@ -3143,7 +3143,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         open={recallModalOpen}
         onCancel={() => setRecallModalOpen(false)}
         width={MODAL_CONFIG.SMALL_WIDTH}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setRecallModalOpen(false)} disabled={recallSubmitting}>
             取消
@@ -3202,7 +3202,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={640}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消
@@ -3340,7 +3340,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           setPoPickerKw('');
         }}
         width={960}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button
             key="cancel"

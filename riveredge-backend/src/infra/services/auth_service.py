@@ -492,7 +492,7 @@ class AuthService:
         Raises:
             HTTPException: 当域名已存在或用户名已存在时抛出
         """
-        from infra.services.tenant_service import TenantService
+        from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
         from infra.services.user_service import UserService
         from infra.schemas.tenant import TenantCreate
         from infra.schemas.user import UserCreate
@@ -553,14 +553,11 @@ class AuthService:
             expires_at=None,
         )
         tenant = await tenant_service.create_tenant(tenant_data)
-        
-        # 初始化组织数据（创建默认角色、权限等）
-        await tenant_service.initialize_tenant_data(tenant.id)
-        
-        # 创建管理员用户
+
+        # 创建管理员用户（失败则回滚组织，避免留下无管理员的脏数据）
         # ⭐ 关键：手机号即账号，自动作为用户名
         username = data.phone
-        
+
         user_data = UserCreate(
             username=username,  # 手机号作为用户名
             phone=data.phone,
@@ -572,9 +569,19 @@ class AuthService:
             is_infra_admin=False,
             is_tenant_admin=True,  # ⭐ 关键：设置为组织管理员
         )
-        user = await user_service.create_user(user_data, tenant_id=tenant.id)
-        
-        logger.info(f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), 管理员: {user.username} (ID: {user.id}), 自动审核: {auto_approve}")
+        try:
+            user = await user_service.create_user(user_data, tenant_id=tenant.id)
+        except Exception:
+            await Tenant.filter(id=tenant.id).delete()
+            raise
+
+        # 系统级初始化耗时较长，放后台执行，接口立即返回
+        schedule_initialize_tenant_data(tenant.id)
+
+        logger.info(
+            f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), "
+            f"管理员: {user.username} (ID: {user.id}), 自动审核: {auto_approve}，初始化任务已提交后台"
+        )
         
         return {
             "success": True,

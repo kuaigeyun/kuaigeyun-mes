@@ -535,7 +535,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={720}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
             {t('app.haoligo.equipment.documents.btnCancel')}
@@ -664,7 +664,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
           }
         }}
         width={MODAL_CONFIG.STANDARD_WIDTH}
-        destroyOnClose
+        destroyOnHidden
         footer={
           detailMode ? (
             <Button onClick={() => setModalOpen(false)}>{t('app.haoligo.equipment.documents.btnClose')}</Button>

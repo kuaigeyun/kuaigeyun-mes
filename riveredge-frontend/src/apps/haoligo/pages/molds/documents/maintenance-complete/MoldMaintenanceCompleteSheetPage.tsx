@@ -1316,7 +1316,7 @@ export function MoldMaintenanceCompleteSheetPage({
         open={sourcePickerOpen}
         onCancel={() => setSourcePickerOpen(false)}
         width={820}
-        destroyOnClose
+        destroyOnHidden
         footer={null}
       >
         <Table<MoldMaintenanceSheetRow>

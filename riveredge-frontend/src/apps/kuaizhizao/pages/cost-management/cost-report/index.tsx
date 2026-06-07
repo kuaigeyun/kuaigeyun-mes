@@ -265,7 +265,7 @@ const CostReportPage: React.FC = () => {
                   value={result.structure_analysis.total_cost}
                   prefix="¥"
                   precision={2}
-                  valueStyle={{ fontSize: '24px', fontWeight: 'bold', color: '#1890ff' }}
+                  styles={{ content: {fontSize: '24px', fontWeight: 'bold', color: '#1890ff' } }}
                 />
               </Card>
 

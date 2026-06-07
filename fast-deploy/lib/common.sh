@@ -144,18 +144,18 @@ refresh_windows_path() {
         "$LOCALAPPDATA/Programs/Python/Python313" \
         "$LOCALAPPDATA/Programs/Python/Python313/Scripts" \
         "$USERPROFILE/.local/bin" \
-        "/c/Program Files/PostgreSQL/17/bin" \
-        "/c/Program Files/PostgreSQL/16/bin" \
-        "/c/Program Files/PostgreSQL/15/bin" \
         "$FAST_DEPLOY_DIR/.tools/caddy"
     do
         [ -d "$p" ] && PATH="$p:$PATH"
+    done
+    for dir in "/c/Program Files/PostgreSQL/"*/bin; do
+        [ -d "$dir" ] && PATH="$dir:$PATH"
     done
     for dir in "$LOCALAPPDATA/Programs/Python"/Python3*; do
         [ -d "$dir" ] || continue
         PATH="$dir:$dir/Scripts:$PATH"
     done
-    for dir in "/c/Program Files/Python"*; do
+    for dir in "/c/Program Files/Python"* "/c/Program Files/python"*; do
         [ -d "$dir" ] || continue
         PATH="$dir:$dir/Scripts:$PATH"
     done
@@ -213,6 +213,99 @@ detect_server_ip() {
 version_ge() {
     local a="${1#v}" b="${2#v}"
     [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -n1)" = "$b" ]
+}
+
+# Windows: C:\foo → /c/foo（Git Bash 路径）
+_unix_path_from_win32() {
+    local p="${1//\\/\/}"
+    p="$(echo "$p" | tr -d '\r')"
+    if [[ "$p" =~ ^([A-Za-z]):/(.*)$ ]]; then
+        echo "/$(echo "${BASH_REMATCH[1]}" | tr 'A-Z' 'a-z')/${BASH_REMATCH[2]}"
+    fi
+}
+
+_is_windows_store_stub() {
+    [[ "${1:-}" == *WindowsApps* ]]
+}
+
+# where.exe 发现已安装可执行文件（跳过 Microsoft Store 占位符）
+_discover_exes_via_where() {
+    local name=$1 line unix
+    is_windows_gitbash || return 0
+    command -v where.exe >/dev/null 2>&1 || return 0
+    while IFS= read -r line; do
+        line="$(echo "$line" | tr -d '\r')"
+        [ -n "$line" ] || continue
+        _is_windows_store_stub "$line" && continue
+        unix="$(_unix_path_from_win32 "$line")"
+        [ -n "$unix" ] && [ -x "$unix" ] && echo "$unix"
+    done < <(where.exe "$name" 2>/dev/null)
+}
+
+# py -0p 列出 Python Launcher 已注册的解释器
+_discover_python_via_launcher() {
+    local line path unix spec
+    is_windows_gitbash || return 0
+    command -v py >/dev/null 2>&1 || return 0
+    while IFS= read -r line; do
+        line="$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/\r$//')"
+        [ -n "$line" ] || continue
+        path="${line##*[[:space:]]}"
+        [[ "$path" == *\\* ]] || continue
+        _is_windows_store_stub "$path" && continue
+        unix="$(_unix_path_from_win32 "$path")"
+        [ -n "$unix" ] && [ -x "$unix" ] && echo "$unix"
+        if [[ "$line" =~ -V:([0-9]+\.[0-9]+) ]]; then
+            spec="${BASH_REMATCH[1]}"
+            py "-V:${spec}" --version >/dev/null 2>&1 && echo "py -V:${spec}"
+        fi
+    done < <(py -0p 2>/dev/null)
+}
+
+_collect_python_candidates() {
+    local item
+    if is_windows_gitbash; then
+        refresh_windows_path
+        _discover_exes_via_where python
+        _discover_exes_via_where python3
+        _discover_python_via_launcher
+        for item in \
+            "$LOCALAPPDATA/Programs/Python/Python312/python.exe" \
+            "$LOCALAPPDATA/Programs/Python/Python313/python.exe" \
+            "$LOCALAPPDATA/Programs/Python/Python314/python.exe" \
+            "/c/Program Files/Python312/python.exe" \
+            "/c/Program Files/python/python.exe"
+        do
+            [ -x "$item" ] && echo "$item"
+        done
+        for item in "$LOCALAPPDATA/Programs/Python"/Python3* "/c/Program Files/Python"* "/c/Program Files/python"*; do
+            [ -x "$item/python.exe" ] && echo "$item/python.exe"
+        done
+    fi
+    for item in python3.12 python3 python; do
+        command -v "$item" >/dev/null 2>&1 && echo "$item"
+    done
+    if is_windows_gitbash && command -v py >/dev/null 2>&1; then
+        for item in -3.12 -3; do
+            py "$item" --version >/dev/null 2>&1 && echo "py $item"
+        done
+    fi
+}
+
+_collect_psql_candidates() {
+    local item
+    if is_windows_gitbash; then
+        refresh_windows_path
+        _discover_exes_via_where psql
+        for item in "/c/Program Files/PostgreSQL/"*/bin/psql.exe; do
+            [ -x "$item" ] && echo "$item"
+        done
+        command -v psql >/dev/null 2>&1 && echo "$(command -v psql)"
+    fi
+    for item in /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
+        [ -x "$item" ] 2>/dev/null && echo "$item"
+    done
+    command -v psql >/dev/null 2>&1 && echo "$(command -v psql)"
 }
 
 load_os_release() {
@@ -445,45 +538,26 @@ check_node() {
 _python_version_output() {
     local py=$1
     case "$py" in
-        "py -3.12") py -3.12 --version 2>&1 ;;
+        py\ -*) "$py" --version 2>&1 ;;
         *) "$py" --version 2>&1 ;;
     esac
 }
 
 check_python() {
-    local py="" v p dir
-    is_windows_gitbash && refresh_windows_path
-    for c in python3.12 python3 python; do
-        if command -v "$c" >/dev/null 2>&1; then py="$c"; break; fi
-    done
-    if [ -z "$py" ] && is_windows_gitbash && command -v py >/dev/null 2>&1; then
-        if py -3.12 --version >/dev/null 2>&1; then
-            py="py -3.12"
-        elif py -3 --version >/dev/null 2>&1; then
-            py="py -3"
-        fi
-    fi
-    if [ -z "$py" ] && is_windows_gitbash; then
-        for p in \
-            "$LOCALAPPDATA/Programs/Python/Python312/python.exe" \
-            "$LOCALAPPDATA/Programs/Python/Python313/python.exe" \
-            "/c/Program Files/Python312/python.exe"
-        do
-            [ -x "$p" ] && { py="$p"; break; }
-        done
-        if [ -z "$py" ]; then
-            for dir in "$LOCALAPPDATA/Programs/Python"/Python3* "/c/Program Files/Python"*; do
-                [ -x "$dir/python.exe" ] || continue
-                py="$dir/python.exe"
-                break
-            done
-        fi
-    fi
-    [ -z "$py" ] && { echo "missing"; return; }
-    v="$(_python_version_output "$py" | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)"
-    [ -z "$v" ] && { echo "missing"; return; }
-    [[ "$v" != *.*.* ]] && v="${v}.0"
-    if version_ge "$v" "3.12.0"; then echo "ok"; else echo "old:$v"; fi
+    local py v best="" seen="" item
+    while IFS= read -r py; do
+        [ -n "$py" ] || continue
+        _is_windows_store_stub "$py" && continue
+        [[ " $seen " == *" $py "* ]] && continue
+        seen="$seen $py"
+        v="$(_python_version_output "$py" 2>/dev/null | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -1)"
+        [ -n "$v" ] || continue
+        [[ "$v" != *.*.* ]] && v="${v}.0"
+        if version_ge "$v" "3.12.0"; then echo "ok"; return; fi
+        best="$v"
+    done < <(_collect_python_candidates | awk '!seen[$0]++')
+    [ -n "$best" ] && { echo "old:$best"; return; }
+    echo "missing"
 }
 
 check_uv() {
@@ -502,17 +576,9 @@ check_npm() {
 
 check_postgres() {
     local v="" bin best=""
-    local candidates=(psql)
-    if is_windows_gitbash; then
-        refresh_windows_path
-        candidates=(
-            "/c/Program Files/PostgreSQL/17/bin/psql.exe"
-            "/c/Program Files/PostgreSQL/16/bin/psql.exe"
-            "/c/Program Files/PostgreSQL/15/bin/psql.exe"
-            psql
-        )
-    fi
-    for bin in "${candidates[@]}" /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
+    while IFS= read -r bin; do
+        [ -n "$bin" ] || continue
+        _is_windows_store_stub "$bin" && continue
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
         [ -n "$v" ] || continue
@@ -521,7 +587,7 @@ check_postgres() {
             return
         fi
         best="$v"
-    done
+    done < <(_collect_psql_candidates | awk '!seen[$0]++')
     [ -n "$best" ] && { echo "old:$best"; return; }
     echo "missing"
 }
@@ -999,24 +1065,20 @@ END \$\$;"
 }
 
 resolve_psql() {
-    local bin v
-    if is_windows_gitbash; then
-        refresh_windows_path
-        for bin in \
-            "/c/Program Files/PostgreSQL/17/bin/psql.exe" \
-            "/c/Program Files/PostgreSQL/16/bin/psql.exe" \
-            "/c/Program Files/PostgreSQL/15/bin/psql.exe"
-        do
-            [ -x "$bin" ] || continue
-            v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
-            [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
-        done
-    fi
-    for bin in /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
+    local bin v best_bin="" best_v=""
+    while IFS= read -r bin; do
+        [ -n "$bin" ] || continue
+        _is_windows_store_stub "$bin" && continue
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
-        [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
-    done
+        [ -n "$v" ] || continue
+        version_ge "$v" "15.0" || continue
+        if [ -z "$best_v" ] || version_ge "$v" "$best_v"; then
+            best_v="$v"
+            best_bin="$bin"
+        fi
+    done < <(_collect_psql_candidates | awk '!seen[$0]++')
+    [ -n "$best_bin" ] && { echo "$best_bin"; return; }
     command -v psql 2>/dev/null || echo "psql"
 }
 

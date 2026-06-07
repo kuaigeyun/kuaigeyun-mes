@@ -1075,7 +1075,7 @@ const ShipmentNoticesPage: React.FC = () => {
         }}
         okText={`创建${pullFromSalesOrderAction.targetLabel}`}
         confirmLoading={pullSalesOrderSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search

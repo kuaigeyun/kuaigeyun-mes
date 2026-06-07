@@ -1293,7 +1293,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         open={sourcePickerOpen}
         onCancel={() => setSourcePickerOpen(false)}
         width={900}
-        destroyOnClose
+        destroyOnHidden
         footer={null}
       >
         <Table<MoldOutsourceMaintenanceSheetRow>

@@ -449,7 +449,7 @@ const RoutePatrolDocumentsPage: React.FC = () => {
         }}
         width={920}
         centered
-        destroyOnClose
+        destroyOnHidden
         styles={{ body: { paddingTop: 8, maxHeight: 'calc(100vh - 200px)', overflowY: 'auto' } }}
         footer={
           detailMode ? (

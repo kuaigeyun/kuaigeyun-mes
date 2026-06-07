@@ -7,7 +7,7 @@ Author: Luigi Lu
 Date: 2025-12-27
 """
 
-import asyncio
+
 from typing import Optional
 from datetime import datetime
 from pydantic import BaseModel, Field
@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, Depends, status
 from loguru import logger
 
 from infra.schemas.tenant import TenantResponse, TenantListResponse, TenantUpdate, TenantCreate
-from infra.services.tenant_service import TenantService
+from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
 from infra.api.deps.services import get_tenant_service_with_fallback
 from infra.models.tenant import TenantStatus, TenantPlan
 from infra.api.deps.deps import get_current_infra_superadmin
@@ -26,25 +26,6 @@ from typing import Any
 
 # 创建路由
 router = APIRouter(prefix="/tenants", tags=["Platform · Tenants"])
-
-
-async def _initialize_tenant_data_background(
-    tenant_id: int,
-    init_data_options: Optional[list],
-    industry_preset: Optional[str],
-) -> None:
-    """后台初始化组织数据，避免阻塞创建接口响应。"""
-    try:
-        service = TenantService()
-        await service.initialize_tenant_data(
-            tenant_id,
-            init_data_options=init_data_options,
-            current_user_id=None,
-            industry_preset=industry_preset,
-        )
-        logger.info(f"组织 {tenant_id} 后台初始化完成")
-    except Exception as e:
-        logger.error(f"组织 {tenant_id} 后台初始化失败: {e}", exc_info=True)
 
 
 async def _rollback_created_tenant(tenant_id: int) -> None:
@@ -403,12 +384,10 @@ async def create_tenant_by_superadmin(
         raise
 
     # 系统级初始化耗时较长，放后台执行，接口立即返回
-    asyncio.create_task(
-        _initialize_tenant_data_background(
-            tenant.id,
-            init_data_options=data.init_data_options,
-            industry_preset=data.industry_preset,
-        )
+    schedule_initialize_tenant_data(
+        tenant.id,
+        init_data_options=data.init_data_options,
+        industry_preset=data.industry_preset,
     )
     logger.info(
         f"平台超级管理员 {current_admin.username} 创建组织: {tenant.name} (ID: {tenant.id})，"

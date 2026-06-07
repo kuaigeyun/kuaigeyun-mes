@@ -874,7 +874,7 @@ const MoldBorrowOutPage: React.FC = () => {
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={720}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消

@@ -1651,7 +1651,7 @@ const DemandComputationPage: React.FC = () => {
         }}
         okText="创建需求运算"
         confirmLoading={pullDemandSubmitting}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
@@ -2150,7 +2150,7 @@ const DemandComputationPage: React.FC = () => {
         }}
         footer={null}
         width={720}
-        destroyOnClose
+        destroyOnHidden
       >
         {recalcSnapshotModalLoading ? (
           <div style={{ textAlign: 'center', padding: 24 }}>

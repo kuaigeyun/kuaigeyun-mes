@@ -451,7 +451,7 @@ const PaymentsPage: React.FC = () => {
         }}
         okText="下一步"
         confirmLoading={false}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
@@ -526,7 +526,7 @@ const PaymentsPage: React.FC = () => {
         }}
         onFinish={handlePullCreateSubmit}
         width={480}
-        modalProps={{ destroyOnClose: true }}
+        modalProps={{ destroyOnHidden: true }}
         submitter={{ submitButtonProps: { loading: pullSubmitting } }}
         initialValues={
           pullSelectedPayable

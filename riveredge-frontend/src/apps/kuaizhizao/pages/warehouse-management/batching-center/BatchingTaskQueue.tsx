@@ -710,7 +710,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         okText="确认"
         cancelText="取消"
         confirmLoading={completeSubmitting}
-        destroyOnClose
+        destroyOnHidden
         width={840}
         onCancel={() => {
           setCompleteOpen(false);

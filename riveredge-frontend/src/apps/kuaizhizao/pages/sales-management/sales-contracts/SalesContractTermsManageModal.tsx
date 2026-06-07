@@ -234,7 +234,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         onCancel={onClose}
         footer={null}
         width={960}
-        destroyOnClose
+        destroyOnHidden
       >
         <Tabs
           activeKey={activeTab}
@@ -318,7 +318,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             : t('app.kuaizhizao.salesContract.terms.newItem')
         }
         open={itemFormOpen}
-        modalProps={{ destroyOnClose: true, onCancel: () => setItemFormOpen(false) }}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setItemFormOpen(false) }}
         initialValues={
           editingItem || { sort_order: 0, is_active: true, term_code: '', term_name: '', content: '' }
         }
@@ -365,7 +365,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         }
         open={groupFormOpen}
         width={720}
-        modalProps={{ destroyOnClose: true, onCancel: () => setGroupFormOpen(false) }}
+        modalProps={{ destroyOnHidden: true, onCancel: () => setGroupFormOpen(false) }}
         initialValues={
           editingGroup || { is_active: true, group_code: '', group_name: '', description: '' }
         }

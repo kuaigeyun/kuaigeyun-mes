@@ -1503,7 +1503,7 @@ const MoldLedgerPage: React.FC = () => {
         open={batchModalOpen}
         onCancel={() => setBatchModalOpen(false)}
         width={560}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBatchModalOpen(false)}>
             取消
@@ -1587,7 +1587,7 @@ const MoldLedgerPage: React.FC = () => {
         open={syncIntroModalOpen}
         onCancel={() => setSyncIntroModalOpen(false)}
         width={560}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
             取消
@@ -1621,7 +1621,7 @@ const MoldLedgerPage: React.FC = () => {
         open={bindingModalOpen}
         onCancel={() => setBindingModalOpen(false)}
         width={640}
-        destroyOnClose
+        destroyOnHidden
         footer={[
           <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消

@@ -145,13 +145,13 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                 <Card styles={{ body: { padding: '16px' } }}>
                     <Row gutter={[16, 16]}>
                         <Col span={8}>
-                            <Statistic title="产品" value={workOrder.product_name} valueStyle={{ fontSize: `${HMI_DESIGN_TOKENS.FONT_BODY_MIN}px`, fontWeight: 'bold' }} />
+                            <Statistic title="产品" value={workOrder.product_name} styles={{ content: {fontSize: `${HMI_DESIGN_TOKENS.FONT_BODY_MIN}px`, fontWeight: 'bold' } }} />
                         </Col>
                          <Col span={4}>
-                            <Statistic title="计划数量" value={workOrder.quantity} valueStyle={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }} />
+                            <Statistic title="计划数量" value={workOrder.quantity} styles={{ content: {fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN } }} />
                         </Col>
                         <Col span={4}>
-                            <Statistic title="已完工" value={workOrder.completed_quantity || 0} valueStyle={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }} />
+                            <Statistic title="已完工" value={workOrder.completed_quantity || 0} styles={{ content: {color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN } }} />
                         </Col>
                          <Col span={8} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px' }}>
                              {activeOperation?.status === 'pending' && (

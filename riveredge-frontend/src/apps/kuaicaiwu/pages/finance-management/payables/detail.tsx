@@ -167,10 +167,10 @@ const PayableDetail: React.FC = () => {
                   <Statistic title="应付总额" value={data.total_amount} precision={2} prefix="¥" />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="已付金额" value={data.paid_amount} precision={2} prefix="¥" valueStyle={{ color: '#3f8600' }} />
+                  <Statistic title="已付金额" value={data.paid_amount} precision={2} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="剩余应付" value={data.remaining_amount} precision={2} prefix="¥" valueStyle={{ color: '#cf1322' }} />
+                  <Statistic title="剩余应付" value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
                 </Col>
               </Row>
             </DetailDrawerSection>

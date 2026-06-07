@@ -788,7 +788,7 @@ const InspectionParamsPage: React.FC = () => {
         onCancel={() => setBatchCategoryOpen(false)}
         onOk={() => void handleBatchCategorySubmit()}
         confirmLoading={batchCategoryLoading}
-        destroyOnClose
+        destroyOnHidden
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
         <p style={{ marginBottom: 16 }}>

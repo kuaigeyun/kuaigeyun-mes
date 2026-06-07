@@ -44,7 +44,7 @@ export const GuideTooltip: React.FC<TooltipRenderProps> = ({
         border: `1px solid ${token.colorBorderSecondary}`,
         background: token.colorBgContainer,
       }}
-      bodyStyle={{ padding: '20px' }}
+      styles={{ body: {padding: '20px' } }}
       actions={[
         <div key="footer" style={{ padding: '0 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Space>

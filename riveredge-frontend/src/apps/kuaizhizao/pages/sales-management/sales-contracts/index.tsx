@@ -2904,7 +2904,7 @@ const SalesContractsPage: React.FC = () => {
 
         width={640}
 
-        destroyOnClose
+        destroyOnHidden
 
       >
 
@@ -3046,7 +3046,7 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
-        destroyOnClose
+        destroyOnHidden
 
       >
 
@@ -3176,7 +3176,7 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
-        destroyOnClose
+        destroyOnHidden
 
       >
 
@@ -3224,7 +3224,7 @@ const SalesContractsPage: React.FC = () => {
 
         }}
 
-        destroyOnClose
+        destroyOnHidden
 
       >
 

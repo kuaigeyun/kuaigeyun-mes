@@ -918,7 +918,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         onCancel={() => setSourcePickerOpen(false)}
         footer={null}
         width={800}
-        destroyOnClose
+        destroyOnHidden
       >
         <Tabs
           activeKey={sourcePickerTab}

@@ -49,7 +49,7 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
       okText={confirmText}
       okButtonProps={{ disabled: !canProceed, loading }}
       width={720}
-      destroyOnClose
+      destroyOnHidden
     >
       {blocking.length > 0 && (
         <Alert type="error" showIcon message="存在阻断项" description={blocking.join('；')} style={{ marginBottom: 16 }} />

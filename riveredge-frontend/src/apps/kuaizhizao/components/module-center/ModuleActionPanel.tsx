@@ -28,7 +28,7 @@ export function ModuleActionPanel({
         headerBordered
         loading={loading}
         style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
-        bodyStyle={{ padding: 8 }}
+        styles={{ body: {padding: 8 } }}
         extra={extra}
       >
         {children}

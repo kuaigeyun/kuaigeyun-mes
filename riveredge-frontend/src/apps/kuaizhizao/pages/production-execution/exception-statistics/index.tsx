@@ -156,14 +156,14 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <Statistic
                   title="待处理"
                   value={statistics.summary?.total_pending || 0}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: {color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="已解决"
                   value={statistics.summary?.total_resolved || 0}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                   prefix={<CheckCircleOutlined />}
                 />
               </Col>
@@ -192,14 +192,14 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <Statistic
                   title="待处理"
                   value={statistics.material_shortage?.pending || 0}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: {color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="已解决"
                   value={statistics.material_shortage?.resolved || 0}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
@@ -253,14 +253,14 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <Statistic
                   title="待处理"
                   value={statistics.delivery_delay?.pending || 0}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: {color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="已解决"
                   value={statistics.delivery_delay?.resolved || 0}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
@@ -314,14 +314,14 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <Statistic
                   title="待处理"
                   value={statistics.quality?.pending || 0}
-                  valueStyle={{ color: '#ff4d4f' }}
+                  styles={{ content: {color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
                   title="已关闭"
                   value={statistics.quality?.closed || 0}
-                  valueStyle={{ color: '#52c41a' }}
+                  styles={{ content: {color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
