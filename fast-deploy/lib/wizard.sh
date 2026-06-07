@@ -84,12 +84,11 @@ wizard_print_kuaige_logo() {
         line="${line%"${line##*[![:space:]]}"}"
         [ -z "$line" ] && continue
         wizard_logo_print_line "$line"
-    done <<'EOF'
-______ ______  _________________________________
-___  //_/_  / / /__    |___  _/_  ____/__  ____/
-__  ,<  _  / / /__  /| |__  / _  / __ __  __/   
-_  /| | / /_/ / _  ___ |_/ /  / /_/ / _  /___   
-/_/ |_| \____/  /_/  |_/___/  \____/  /_____/   
+    done <<'EOF'                                                                            
+██ ▄█▀ ██  ██ ▄████▄ ██  ▄████  ██████ 
+████   ██  ██ ██▄▄██ ██ ██  ▄▄▄ ██▄▄   
+██ ▀█▄ ▀████▀ ██  ██ ██  ▀███▀  ██▄▄▄▄ 
+                                                                                                       
 EOF
 }
 
@@ -299,9 +298,11 @@ wizard_show_home_panel() {
     wizard_panel_kv "Mode" "${mode_label} · ${mirror_label}"
     wizard_panel_kv "Git" "${WIZARD_HOME_GIT:-—}"
 
+    wizard_panel_blank
     wizard_panel_heading "RESOURCES · 资源"
     wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
 
+    wizard_panel_blank
     wizard_panel_heading "SERVICES · 服务"
     svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker)"
     if [ "$DEPLOY_MODE" = "dev" ]; then
@@ -311,6 +312,7 @@ wizard_show_home_panel() {
     fi
     wizard_panel_line "${WIZARD_DIM}Status${WIZARD_RESET}  ${svc_line}"
 
+    wizard_panel_blank
     wizard_panel_line "${WIZARD_CYAN}ENDPOINTS · 访问${WIZARD_RESET}  [${WIZARD_DIM}Health${WIZARD_RESET}  ${WIZARD_HOME_HEALTH:-—}]"
     wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
     wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"

@@ -28,6 +28,18 @@ const FAIL_CLOSED: ResourcePermissionGates = {
   canPrint: false,
 };
 
+/** 平台级管理员：菜单树无 permission_code 时（如 /infra/*）与 hasPermission 一致，不按 fail-closed 隐藏按钮 */
+const INFRA_ADMIN_OPEN: ResourcePermissionGates = {
+  enabled: false,
+  canRead: true,
+  canCreate: true,
+  canUpdate: true,
+  canDelete: true,
+  canImport: true,
+  canExport: true,
+  canPrint: true,
+};
+
 export type ResourcePermissionOptions = {
   /** 新建完修单时接受来源单据的 :complete（无需本页 :create） */
   completeCreateSourceResource?: string;
@@ -35,7 +47,7 @@ export type ResourcePermissionOptions = {
 
 /**
  * 按 manifest 资源前缀（app:module）判断标准 CRUD / 导入导出权限。
- * resource 为空时 fail-closed（禁止无资源前缀的旁路放行）。
+ * resource 为空时 fail-closed；平台级管理员（is_infra_admin）与 hasPermission 一致，仍放行。
  */
 export function useResourcePermissions(
   resource: string | null | undefined,
@@ -46,7 +58,9 @@ export function useResourcePermissions(
 
   return useMemo(() => {
     const prefix = (resource || '').trim();
-    if (!prefix) return FAIL_CLOSED;
+    if (!prefix) {
+      return currentUser?.is_infra_admin ? INFRA_ADMIN_OPEN : FAIL_CLOSED;
+    }
 
     const check = (action: string) => hasPermission(currentUser, buildPermissionCode(prefix, action));
     const canCreate = completeSource
