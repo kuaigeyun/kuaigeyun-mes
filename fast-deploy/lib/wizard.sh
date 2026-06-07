@@ -4,28 +4,71 @@
 WIZARD_TOTAL_STAGES=8
 WIZARD_CURRENT=0
 
+WIZARD_RESET='\033[0m'
 WIZARD_BOLD='\033[1m'
 WIZARD_DIM='\033[2m'
-WIZARD_CYAN='\033[36m'
-WIZARD_GREEN='\033[32m'
-WIZARD_LOGO_COLOR='\033[92m'
-WIZARD_YELLOW='\033[33m'
-WIZARD_RED='\033[31m'
-WIZARD_BLUE='\033[34m'
-WIZARD_RESET='\033[0m'
+WIZARD_CYAN=''
+WIZARD_GREEN=''
+WIZARD_LOGO_COLOR=''
+WIZARD_YELLOW=''
+WIZARD_RED=''
+WIZARD_BLUE=''
+WIZARD_PANEL_BORDER=''
 
 # KUAIGE LOGO 宽 48；主面板仅横线分隔（无左右竖框，避免 CJK 错位）
 WIZARD_PANEL_W=48
 WIZARD_LOGO_W=48
 
+wizard_supports_truecolor() {
+    case "${COLORTERM:-}" in
+        truecolor|24bit) return 0 ;;
+    esac
+    case "${TERM:-}" in
+        *256color*|*direct*) return 0 ;;
+    esac
+    [ -n "${WT_SESSION:-}" ] && return 0
+    return 1
+}
+
+# 固定主题色：优先 24-bit RGB（各终端观感一致），否则退回标准 16 色（不用 90–97 亮色系）
+wizard_init_theme() {
+    WIZARD_RESET='\033[0m'
+    WIZARD_BOLD='\033[1m'
+    WIZARD_DIM='\033[2m'
+    if [ -n "${NO_COLOR:-}" ]; then
+        WIZARD_CYAN=''
+        WIZARD_GREEN=''
+        WIZARD_LOGO_COLOR=''
+        WIZARD_YELLOW=''
+        WIZARD_RED=''
+        WIZARD_BLUE=''
+        WIZARD_PANEL_BORDER=''
+        return 0
+    fi
+    if wizard_supports_truecolor; then
+        WIZARD_CYAN=$'\033[38;2;56;188;210m'
+        WIZARD_LOGO_COLOR="${WIZARD_CYAN}"
+        WIZARD_GREEN=$'\033[38;2;88;176;104m'
+        WIZARD_YELLOW=$'\033[38;2;196;168;72m'
+        WIZARD_RED=$'\033[38;2;208;96;96m'
+        WIZARD_BLUE=$'\033[38;2;96;144;208m'
+    else
+        WIZARD_CYAN='\033[36m'
+        WIZARD_LOGO_COLOR="${WIZARD_CYAN}"
+        WIZARD_GREEN='\033[32m'
+        WIZARD_YELLOW='\033[33m'
+        WIZARD_RED='\033[31m'
+        WIZARD_BLUE='\033[34m'
+    fi
+    WIZARD_PANEL_BORDER="${WIZARD_DIM}"
+}
+
 wizard_panel_init() {
     WIZARD_P_H='-'
-    if is_windows_gitbash; then
-        WIZARD_PANEL_BORDER="${WIZARD_DIM}"
-    else
-        WIZARD_PANEL_BORDER="${WIZARD_LOGO_COLOR}"
-    fi
+    WIZARD_PANEL_BORDER="${WIZARD_DIM}"
 }
+
+wizard_init_theme
 wizard_panel_init
 
 wizard_block_margin() {
@@ -108,12 +151,16 @@ wizard_panel_blank() {
     wizard_panel_line ""
 }
 
+wizard_panel_title() {
+    wizard_panel_line "${WIZARD_BOLD}${WIZARD_CYAN}${1}${WIZARD_RESET}"
+}
+
 wizard_panel_section() {
-    wizard_panel_line "${WIZARD_BOLD}${1}${WIZARD_RESET}"
+    wizard_panel_title "$1"
 }
 
 wizard_panel_heading() {
-    wizard_panel_line "${WIZARD_CYAN}${1}${WIZARD_RESET}"
+    wizard_panel_title "$1"
 }
 
 wizard_panel_kv() {
@@ -225,16 +272,6 @@ wizard_service_badge() {
     fi
 }
 
-wizard_health_value() {
-    if wizard_service_running backend && curl -sf --connect-timeout 1 --max-time 2 "http://127.0.0.1:${BACKEND_PORT}/health" >/dev/null 2>&1; then
-        echo -e "${WIZARD_GREEN}OK${WIZARD_RESET}"
-    elif wizard_service_running backend; then
-        echo -e "${WIZARD_YELLOW}无响应${WIZARD_RESET}"
-    else
-        echo -e "${WIZARD_DIM}—${WIZARD_RESET}"
-    fi
-}
-
 wizard_access_urls() {
     local server_ip web_url api_hint
     server_ip="$(read_deploy_env_value SERVER_IP || true)"
@@ -263,12 +300,10 @@ wizard_prefetch_home_status() {
     wizard_host_mem_value >"$tmp/mem" 2>/dev/null &
     wizard_host_disk_value >"$tmp/disk" 2>/dev/null &
     wizard_git_value >"$tmp/git" 2>/dev/null &
-    wizard_health_value >"$tmp/health" 2>/dev/null &
     wait
     WIZARD_HOME_MEM="$(cat "$tmp/mem" 2>/dev/null || echo '—')"
     WIZARD_HOME_DISK="$(cat "$tmp/disk" 2>/dev/null || echo '—')"
     WIZARD_HOME_GIT="$(cat "$tmp/git" 2>/dev/null || echo '—')"
-    WIZARD_HOME_HEALTH="$(cat "$tmp/health" 2>/dev/null || echo '—')"
     rm -rf "$tmp"
 }
 
@@ -282,7 +317,6 @@ wizard_show_home_panel() {
     WIZARD_HOME_MEM='—'
     WIZARD_HOME_DISK='—'
     WIZARD_HOME_GIT='—'
-    WIZARD_HOME_HEALTH='—'
 
     wizard_access_urls
 
@@ -293,17 +327,16 @@ wizard_show_home_panel() {
     wizard_panel_begin
     wizard_panel_top
 
-    wizard_panel_heading "SYSTEM · 系统"
+    wizard_panel_heading "SYSTEM 系统"
     wizard_panel_kv "Host" "${os_label} · ${arch}"
+    wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
     wizard_panel_kv "Mode" "${mode_label} · ${mirror_label}"
     wizard_panel_kv "Git" "${WIZARD_HOME_GIT:-—}"
 
     wizard_panel_blank
-    wizard_panel_heading "RESOURCES · 资源"
-    wizard_panel_line "${WIZARD_DIM}Memory${WIZARD_RESET}  ${WIZARD_HOME_MEM:-—}  ${WIZARD_DIM}Disk${WIZARD_RESET}  ${WIZARD_HOME_DISK:-—}"
-
-    wizard_panel_blank
-    wizard_panel_heading "SERVICES · 服务"
+    wizard_panel_heading "SERVICES 服务"
+    wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
+    wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
     svc_line="$(wizard_service_badge backend) $(wizard_service_badge worker)"
     if [ "$DEPLOY_MODE" = "dev" ]; then
         svc_line="${svc_line} $(wizard_service_badge frontend)"
@@ -312,19 +345,14 @@ wizard_show_home_panel() {
     fi
     wizard_panel_line "${WIZARD_DIM}Status${WIZARD_RESET}  ${svc_line}"
 
-    wizard_panel_blank
-    wizard_panel_line "${WIZARD_CYAN}ENDPOINTS · 访问${WIZARD_RESET}  [${WIZARD_DIM}Health${WIZARD_RESET}  ${WIZARD_HOME_HEALTH:-—}]"
-    wizard_panel_kv "Web" "${WIZARD_ACCESS_WEB:-—}"
-    wizard_panel_kv "Platform" "${WIZARD_ACCESS_PLATFORM:-—}"
-
     wizard_panel_mid
-    wizard_panel_section "DEPLOY · 部署"
+    wizard_panel_section "DEPLOY 部署"
     wizard_panel_menu_item "1" "全新安装" "检测环境与依赖，完成配置后启动"
     wizard_panel_menu_item "2" "修改配置" "修改数据库、超管账号与访问地址"
     wizard_panel_menu_item "3" "更新系统" "拉取代码，迁移数据库并重启"
     wizard_panel_blank
-    wizard_panel_section "OPS · 运维"
-    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[5]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[6]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
+    wizard_panel_section "OPS 运维"
+    wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[5]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[6]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
     wizard_panel_menu_short "${WIZARD_CYAN}[8]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
@@ -377,7 +405,7 @@ wizard_show_restart_menu() {
     echo ""
     wizard_panel_begin
     wizard_panel_top
-    wizard_panel_section "RESTART · 重启"
+    wizard_panel_section "RESTART 重启"
     wizard_panel_menu_item "1" "全部重启" "停止后启动当前环境全部服务"
     wizard_panel_menu_item "2" "重启前端" "开发 Vite，生产 Caddy"
     wizard_panel_menu_item "3" "重启后端" "API 服务"
@@ -395,7 +423,7 @@ wizard_show_boot_service_menu() {
     echo ""
     wizard_panel_begin
     wizard_panel_top
-    wizard_panel_section "BOOT · 开机自启"
+    wizard_panel_section "BOOT 开机自启"
     wizard_panel_kv "Service" "riveredge.service"
     wizard_panel_kv "Status" "${status_label}"
     wizard_panel_blank
@@ -537,18 +565,18 @@ wizard_ask_intent() {
         2|config|configure) export WIZARD_INTENT=configure ;;
         3|update) export WIZARD_INTENT=update ;;
         4)
-            wizard_run_quick_action start || true
+            echo ""
+            wizard_run_quick_action details || true
             wizard_pause_return_menu
             return 2
             ;;
         5)
-            wizard_run_quick_action stop || true
+            wizard_run_quick_action start || true
             wizard_pause_return_menu
             return 2
             ;;
         6)
-            echo ""
-            wizard_run_quick_action details || true
+            wizard_run_quick_action stop || true
             wizard_pause_return_menu
             return 2
             ;;
@@ -1213,7 +1241,7 @@ wizard_show_summary() {
     wizard_panel_kv "Database" "$(read_env_value DB_USER || echo postgres)@${db_host}:${db_port}/${db_name}"
     wizard_panel_kv "Admin" "$(read_env_value PLATFORM_SUPERADMIN_USERNAME || echo infra_admin)"
     wizard_panel_mid
-    wizard_panel_section "COMMANDS · 常用命令"
+    wizard_panel_section "COMMANDS 常用命令"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh status${WIZARD_RESET}  查看状态"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh stop${WIZARD_RESET}    停止服务"
     wizard_panel_line "${WIZARD_DIM}./fast-deploy/deploy.sh update${WIZARD_RESET}   拉代码更新"
