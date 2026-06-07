@@ -152,45 +152,20 @@ class PermissionPolicyService:
     async def _collect_role_granted_function_resources(
         cls, tenant_id: int, role_uuid: str
     ) -> set[str]:
-        """角色已授予的功能权限对应的 app:resource（与数据权限页展示范围一致）。"""
-        role = await Role.filter(
-            uuid=role_uuid,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True,
-        ).first()
-        if not role:
-            return set()
+        """角色功能权限树中已勾选页面对应的 app:resource（与数据/字段权限页展示一致）。"""
+        from core.services.authorization.role_permission_matrix_service import (
+            RolePermissionMatrixService,
+        )
 
-        from core.services.authorization.role_service import RoleService
-
-        role_permissions = await RolePermission.filter(role_id=role.id).all()
-        permission_ids = [rp.permission_id for rp in role_permissions]
-        if permission_ids:
-            perms = await Permission.filter(
-                id__in=permission_ids,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-            ).all()
-        elif RoleService._is_admin_system_role(role):
-            perms = await Permission.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-            ).all()
-        else:
-            perms = []
-
+        grants = await RolePermissionMatrixService.get_function_grants(
+            tenant_id, role_uuid
+        )
         allowed = await cls._collect_allowed_function_resources(tenant_id)
-        out: set[str] = set()
-        for perm in perms:
-            if (perm.permission_type or PermissionType.FUNCTION) != PermissionType.FUNCTION:
-                continue
-            key = cls._permission_code_to_resource_key(perm.code or "")
-            if not key:
-                continue
-            normalized = cls._normalize_resource(key)
-            if normalized in allowed:
-                out.add(normalized)
-        return out
+        keys = RolePermissionMatrixService.collect_granted_resource_keys_from_tree(
+            grants.tree,
+            set(grants.granted_codes or []),
+        )
+        return keys & allowed
 
     @classmethod
     async def list_data_policies(cls, tenant_id: int, role_uuid: str) -> list[DataPermissionPolicyResponse]:
@@ -199,11 +174,13 @@ class PermissionPolicyService:
             role_uuid=role_uuid,
             deleted_at__isnull=True,
         ).order_by("resource")
-        allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
+        role_resources = await cls._collect_role_granted_function_resources(
+            tenant_id, role_uuid
+        )
         return [
             DataPermissionPolicyResponse.model_validate(r)
             for r in rows
-            if cls._normalize_resource(r.resource) in allowed
+            if cls._normalize_resource(r.resource) in role_resources
         ]
 
     @classmethod
@@ -214,6 +191,9 @@ class PermissionPolicyService:
         items: Iterable[DataPermissionPolicyUpsert],
     ) -> list[DataPermissionPolicyResponse]:
         allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
+        role_resources = await cls._collect_role_granted_function_resources(
+            tenant_id, role_uuid
+        )
         now = now_utc()
         desired: dict[str, DataPermissionPolicyUpsert] = {}
         for item in items:
@@ -223,6 +203,10 @@ class PermissionPolicyService:
             resource = cls._normalize_resource(item.resource)
             if resource not in allowed:
                 raise ValidationError(f"无效数据权限资源（非真源资源）: {item.resource}")
+            if resource not in role_resources:
+                raise ValidationError(
+                    f"数据权限资源未在功能权限中勾选: {item.resource}"
+                )
             payload = item.scope_payload if scope == DataScopeType.CUSTOM else None
             if scope == DataScopeType.CUSTOM:
                 resolver = ""
@@ -336,7 +320,12 @@ class PermissionPolicyService:
             deleted_at__isnull=True,
         ).order_by("resource", "field_name")
         allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
-        visible_rows = [r for r in rows if cls._normalize_resource(r.resource) in allowed]
+        role_resources = await cls._collect_role_granted_function_resources(
+            tenant_id, role_uuid
+        )
+        visible_rows = [
+            r for r in rows if cls._normalize_resource(r.resource) in role_resources
+        ]
         dedup: dict[tuple[str, str], FieldPermissionPolicy] = {}
         for r in visible_rows:
             resource = cls._normalize_resource(r.resource)
@@ -509,6 +498,9 @@ class PermissionPolicyService:
         items: Iterable[FieldPermissionPolicyUpsert],
     ) -> list[FieldPermissionPolicyResponse]:
         allowed = await cls._collect_allowed_function_resources(tenant_id=tenant_id)
+        role_resources = await cls._collect_role_granted_function_resources(
+            tenant_id, role_uuid
+        )
         alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
         now = now_utc()
         explicit: dict[tuple[str, str], FieldPermissionPolicyUpsert] = {}
@@ -519,6 +511,10 @@ class PermissionPolicyService:
             resource = cls._normalize_resource(item.resource)
             if resource not in allowed:
                 raise ValidationError(f"无效字段权限资源（非真源资源）: {item.resource}")
+            if resource not in role_resources:
+                raise ValidationError(
+                    f"字段权限资源未在功能权限中勾选: {item.resource}"
+                )
             key = cls._field_policy_key(item.resource, item.field_name, alias_map)
             if not key:
                 raise ValidationError("字段名不能为空")

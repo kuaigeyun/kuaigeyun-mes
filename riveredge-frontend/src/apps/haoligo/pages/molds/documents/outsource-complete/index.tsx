@@ -1110,7 +1110,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                   <ProFormSelect
                     name="department_uuid"
                     label="申请部门"
-                    placeholder="请选择末级申请部门"
+                    placeholder="请选择申请部门"
                     rules={[{ required: true, message: '请选择申请部门' }]}
                     options={leafDeptOptions}
                     showSearch

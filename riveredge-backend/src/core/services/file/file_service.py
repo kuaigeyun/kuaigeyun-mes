@@ -16,6 +16,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.file import File
 from core.schemas.file import FileCreate, FileUpdate
+from core.services.file.image_compress import compress_image_content, effective_storage_extension
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 
@@ -379,6 +380,10 @@ class FileService:
             
         if file_extension and file_extension not in FileService.ALLOWED_EXTENSIONS:
             raise ValidationError(f"暂不支持上传 {file_extension} 格式的文件，请联系管理员")
+
+        file_content, compressed_ext = compress_image_content(file_content, file_extension)
+        file_extension = effective_storage_extension(file_extension, compressed_ext)
+        file_size = len(file_content)
 
         # 生成文件名（使用UUID）
         file_uuid = str(uuid.uuid4())

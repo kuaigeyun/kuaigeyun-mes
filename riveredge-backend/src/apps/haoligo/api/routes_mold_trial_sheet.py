@@ -42,6 +42,7 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     mark_trial_adjustment_complete,
     list_incomplete_trial_mold_blocks,
     mold_trial_create_availability,
+    pending_trial_failure_exception_q,
     recall_trial_failure_sheet,
     apply_trial_failure_after_save,
     list_supplier_notify_preview,
@@ -422,6 +423,10 @@ async def list_trial_sheets(
     limit: int = Query(50, ge=1, le=200),
     sheet_status: Optional[str] = Query(None, description="按单据状态筛选（兼容旧参数）"),
     trial_result: Optional[str] = Query(None, description="按试模结果筛选：合格/不合格"),
+    failure_pending: Optional[bool] = Query(
+        None,
+        description="为 true 时仅返回试模/试产不合格且尚未确认收回的待处理单",
+    ),
     keyword: Optional[str] = Query(None, description="采购订单号/模具代号/名称关键字"),
     created_from: Optional[datetime] = Query(None, description="创建时间起（含）"),
     created_to: Optional[datetime] = Query(None, description="创建时间止（含）"),
@@ -434,6 +439,8 @@ async def list_trial_sheets(
         qs = qs.filter(sheet_status=st)
     if trial_result and trial_result.strip():
         qs = qs.filter(trial_result=trial_result.strip())
+    if failure_pending:
+        qs = qs.filter(pending_trial_failure_exception_q())
     if keyword and keyword.strip():
         k = keyword.strip()
         qs = qs.filter(

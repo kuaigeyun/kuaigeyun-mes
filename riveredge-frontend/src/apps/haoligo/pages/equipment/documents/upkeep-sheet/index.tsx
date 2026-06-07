@@ -537,7 +537,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                   <ProFormSelect
                     name="department_uuid"
                     label={t('app.haoligo.equipment.upkeep.department')}
-                    placeholder="请选择末级申请部门"
+                    placeholder="请选择申请部门"
                     rules={[{ required: true, message: t('app.haoligo.equipment.upkeep.selectDept') }]}
                     options={leafDeptOptions}
                     showSearch

@@ -6,6 +6,7 @@ from typing import List, Optional
 
 from fastapi import HTTPException, status
 from loguru import logger
+from tortoise.expressions import Q
 
 from apps.haoligo.api._qs import tenant_alive
 from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
@@ -631,6 +632,19 @@ def _effective_unqualified_result(row: HaoligoMoldTrialSheet) -> str:
 def is_trial_failure_flow_in_progress(failure_handling: Optional[str]) -> bool:
     """不合格处理方式处于发出/送修/调整完成等进行中（未确认收回）。"""
     return (failure_handling or "").strip() in TRIAL_FAILURE_HANDLING_IN_PROGRESS
+
+
+def pending_trial_failure_exception_q() -> Q:
+    """试模/试产不合格且尚未「确认收回」——异常处理角标与待办列表。"""
+    return (Q(trial_result="不合格") | Q(production_trial_result="不合格")) & ~Q(
+        failure_handling=TRIAL_FAILURE_HANDLING_RECALLED
+    )
+
+
+async def count_pending_trial_failure_exceptions(tenant_id: int) -> int:
+    return await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(
+        pending_trial_failure_exception_q()
+    ).count()
 
 
 def is_mold_trial_process_incomplete(row: HaoligoMoldTrialSheet) -> bool:

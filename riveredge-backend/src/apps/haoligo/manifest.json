@@ -450,7 +450,7 @@
               },
               {
                 "key": "upkeep-complete",
-                "label": "保养完修",
+                "label": "保养完成",
                 "icon": "check-circle-outline",
                 "route": "/mold/upkeep-complete",
                 "permission": "haoligo:molds-documents-upkeep-complete:read",
@@ -468,7 +468,7 @@
               },
               {
                 "key": "repair-complete",
-                "label": "维修完修",
+                "label": "完修",
                 "icon": "shield-check-outline",
                 "route": "/mold/repair-complete",
                 "permission": "haoligo:molds-documents-repair-complete:read",
@@ -704,7 +704,7 @@
               },
               {
                 "key": "upkeep-complete",
-                "label": "保养完修",
+                "label": "保养完成",
                 "icon": "check-circle-outline",
                 "route": "/mold/upkeep-complete",
                 "permission": "haoligo:molds-documents-upkeep-complete:read",
@@ -722,7 +722,7 @@
               },
               {
                 "key": "repair-complete",
-                "label": "维修完修",
+                "label": "完修",
                 "icon": "shield-check-outline",
                 "route": "/mold/repair-complete",
                 "permission": "haoligo:molds-documents-repair-complete:read",

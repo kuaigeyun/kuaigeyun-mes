@@ -380,3 +380,62 @@ class RolePermissionMatrixService:
         )
 
         return await RolePermissionMatrixService.get_function_grants(tenant_id, role_uuid)
+
+    @staticmethod
+    def _action_codes_from_schema(action: FunctionGrantActionSchema) -> List[str]:
+        merged = list(action.merged_codes or [])
+        if merged:
+            return [normalize_permission_code(c) for c in merged if c]
+        if action.code:
+            return [normalize_permission_code(action.code)]
+        return []
+
+    @staticmethod
+    def _action_granted_on_tree(
+        action: FunctionGrantActionSchema, granted_codes: Set[str]
+    ) -> bool:
+        codes = RolePermissionMatrixService._action_codes_from_schema(action)
+        return bool(codes) and all(c in granted_codes for c in codes)
+
+    @staticmethod
+    def collect_granted_resource_keys_from_tree(
+        tree: List[FunctionGrantMenuNodeSchema],
+        granted_codes: Set[str],
+    ) -> Set[str]:
+        """功能权限矩阵树中已勾选操作对应的 app:resource（数据/字段权限唯一范围）。"""
+        from core.services.authorization.menu_resource_resolver import (
+            is_generic_menu_permission_code,
+            parse_permission_code,
+        )
+
+        keys: Set[str] = set()
+        granted = {normalize_permission_code(c) for c in granted_codes if c}
+
+        def walk(nodes: List[FunctionGrantMenuNodeSchema]) -> None:
+            for node in nodes:
+                actions = list(node.actions or [])
+                if any(
+                    RolePermissionMatrixService._action_granted_on_tree(a, granted)
+                    for a in actions
+                ):
+                    for action in actions:
+                        if not RolePermissionMatrixService._action_granted_on_tree(
+                            action, granted
+                        ):
+                            continue
+                        for code in RolePermissionMatrixService._action_codes_from_schema(
+                            action
+                        ):
+                            if not code or is_generic_menu_permission_code(code):
+                                continue
+                            parsed = parse_permission_code(code)
+                            if not parsed:
+                                continue
+                            app, resource, _action = parsed
+                            if app and resource:
+                                keys.add(f"{app}:{resource}".lower())
+                if node.children:
+                    walk(list(node.children))
+
+        walk(tree)
+        return keys

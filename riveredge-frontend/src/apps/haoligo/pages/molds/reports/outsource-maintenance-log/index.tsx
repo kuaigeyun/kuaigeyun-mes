@@ -4,7 +4,7 @@
 
 import React, { useRef } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Tag } from 'antd';
+import { App } from 'antd';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import {
@@ -12,6 +12,7 @@ import {
   type MoldOutsourceMaintenanceCompleteSheetRow,
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { parseMoldReportCreatedRange } from '../../../../utils/moldReportDateRange';
 
 const sheetStatusEnum: Record<string, { text: string }> = {
@@ -19,14 +20,6 @@ const sheetStatusEnum: Record<string, { text: string }> = {
   已通过: { text: '已通过' },
   已驳回: { text: '已驳回' },
 };
-
-function statusTag(status: string | null | undefined) {
-  const s = (status && String(status).trim()) || '—';
-  if (s === '已通过') return <Tag color="success">{s}</Tag>;
-  if (s === '待审核') return <Tag color="processing">{s}</Tag>;
-  if (s === '已驳回') return <Tag color="error">{s}</Tag>;
-  return <Tag>{s}</Tag>;
-}
 
 const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -71,7 +64,7 @@ const MoldOutsourceMaintenanceLogReportPage: React.FC = () => {
       valueEnum: sheetStatusEnum,
       width: 120,
       fieldProps: { allowClear: true },
-      render: (_, r) => statusTag(r.sheet_status),
+      render: (_, r) => moldSheetAuditStatusTag(r.sheet_status),
     },
     {
       title: '维修摘要',

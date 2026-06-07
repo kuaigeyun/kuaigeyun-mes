@@ -62,17 +62,28 @@ function newTempId(): string {
   return `t-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-async function fetchAllEquipments(): Promise<EquipmentRow[]> {
+function normalizeWorkshopId(raw: unknown): number | null {
+  if (raw == null || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchEquipmentsPaged(params?: { workshop_id?: number }): Promise<EquipmentRow[]> {
   const out: EquipmentRow[] = [];
   let skip = 0;
   const limit = 200;
-  while (true) {
-    const res = await listEquipments({ skip, limit });
-    out.push(...res.items);
-    if (res.items.length === 0 || out.length >= res.total) break;
+  for (;;) {
+    const res = await listEquipments({ skip, limit, ...params });
+    const batch = res.items ?? [];
+    out.push(...batch);
+    if (batch.length === 0 || out.length >= res.total) break;
     skip += limit;
   }
   return out;
+}
+
+async function fetchAllEquipments(): Promise<EquipmentRow[]> {
+  return fetchEquipmentsPaged();
 }
 
 const EquipmentPatrolRoutesPage: React.FC = () => {
@@ -96,7 +107,8 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
   const [linesLoading, setLinesLoading] = useState(false);
 
   const [addEquipOpen, setAddEquipOpen] = useState(false);
-  const [filterWorkshopId, setFilterWorkshopId] = useState<number | null>(null);
+  const [addEquipOptions, setAddEquipOptions] = useState<{ label: string; value: number }[]>([]);
+  const [addEquipLoading, setAddEquipLoading] = useState(false);
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailRecord, setDetailRecord] = useState<PatrolRouteRow | null>(null);
@@ -176,7 +188,6 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     setEditorRouteCode('');
     setLines([]);
     setPendingLines([]);
-    setFilterWorkshopId(null);
     setEditorOpen(true);
     await Promise.all([loadWorkshops(), loadEquipments()]);
     setTimeout(() => editorFormRef.current?.resetFields(), 0);
@@ -187,7 +198,6 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
     setEditorRouteId(record.id);
     setEditorRouteCode(record.code);
     setPendingLines([]);
-    setFilterWorkshopId(record.workshop_id ?? null);
     setEditorOpen(true);
     await loadWorkshops();
     await loadLines(record.id);
@@ -315,21 +325,39 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
   const usedEquipIdsCreate = useMemo(() => new Set(pendingLines.map((l) => l.equipment_id)), [pendingLines]);
   const usedEquipIdsEdit = useMemo(() => new Set(lines.map((l) => l.equipment_id)), [lines]);
 
-  const addableEquipmentOptions = useMemo(() => {
-    const used = editorCreateMode ? usedEquipIdsCreate : usedEquipIdsEdit;
-    return allEquipments
-      .filter((eq) => !used.has(eq.id))
-      .filter((eq) => filterWorkshopId == null || eq.workshop_id === filterWorkshopId)
-      .map((eq) => ({ label: `${eq.asset_code} · ${eq.name}`, value: eq.id }));
-  }, [allEquipments, editorCreateMode, usedEquipIdsCreate, usedEquipIdsEdit, filterWorkshopId]);
+  const buildAddableEquipmentOptions = useCallback(
+    (equipments: EquipmentRow[], workshopId: number | null) => {
+      const used = editorCreateMode ? usedEquipIdsCreate : usedEquipIdsEdit;
+      return equipments
+        .filter((eq) => !used.has(eq.id))
+        .filter((eq) => workshopId == null || normalizeWorkshopId(eq.workshop_id) === workshopId)
+        .map((eq) => ({ label: `${eq.asset_code} · ${eq.name}`, value: eq.id }));
+    },
+    [editorCreateMode, usedEquipIdsCreate, usedEquipIdsEdit],
+  );
 
   const openAddEquipment = () => {
-    if (!addableEquipmentOptions.length) {
-      messageApi.info(t('app.haoligo.equipment.patrolRoutes.noEquipmentToAdd'));
-      return;
-    }
-    setAddEquipOpen(true);
-    setTimeout(() => addEquipFormRef.current?.resetFields(), 0);
+    void (async () => {
+      const wsId = normalizeWorkshopId(editorFormRef.current?.getFieldValue('workshop_id'));
+      setAddEquipLoading(true);
+      try {
+        const pool =
+          wsId != null ? await fetchEquipmentsPaged({ workshop_id: wsId }) : await fetchAllEquipments();
+        if (!wsId) setAllEquipments(pool);
+        const options = buildAddableEquipmentOptions(pool, wsId);
+        if (!options.length) {
+          messageApi.info(t('app.haoligo.equipment.patrolRoutes.noEquipmentToAdd'));
+          return;
+        }
+        setAddEquipOptions(options);
+        setAddEquipOpen(true);
+        setTimeout(() => addEquipFormRef.current?.resetFields(), 0);
+      } catch (e) {
+        messageApi.error((e as Error).message || t('app.haoligo.equipment.loadFailed'));
+      } finally {
+        setAddEquipLoading(false);
+      }
+    })();
   };
 
   const handleAddEquipmentSubmit = async (values: Record<string, unknown>) => {
@@ -664,7 +692,6 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
                 fieldProps={{
                   optionFilterProp: 'label',
                   loading: workshopsLoading,
-                  onChange: (v: number | null) => setFilterWorkshopId(v ?? null),
                 }}
               />
             </Col>
@@ -677,7 +704,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           <Title level={5} style={{ margin: 0 }}>
             {t('app.haoligo.equipment.patrolRoutes.sectionSequence')}
           </Title>
-          <Button type="primary" size="small" icon={<PlusOutlined />} onClick={openAddEquipment}>
+          <Button type="primary" size="small" icon={<PlusOutlined />} loading={addEquipLoading} onClick={openAddEquipment}>
             {t('app.haoligo.equipment.patrolRoutes.btnAddEquipment')}
           </Button>
         </Space>
@@ -763,7 +790,7 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
           label={t('app.haoligo.equipment.patrolRoutes.stepColEquipment')}
           placeholder={t('app.haoligo.equipment.patrolRoutes.stepEquipmentPh')}
           rules={[{ required: true, message: t('app.haoligo.equipment.patrolRoutes.pickEquipment') }]}
-          options={addableEquipmentOptions}
+          options={addEquipOptions}
           showSearch
           fieldProps={{
             mode: 'multiple',

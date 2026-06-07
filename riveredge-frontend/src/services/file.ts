@@ -6,6 +6,7 @@
  */
 
 import { apiRequest } from './api';
+import { compressImageForUpload } from '../utils/compressImageForUpload';
 
 export interface File {
   uuid: string;
@@ -112,12 +113,14 @@ export async function uploadFile(
   }
 ): Promise<FileUploadResponse> {
   const formData = new FormData();
-  
+
+  const payload = await compressImageForUpload(file);
+
   // 处理文件
-  if (file instanceof File) {
-    formData.append('file', file);
-  } else if (file instanceof Blob) {
-    formData.append('file', file, 'uploaded-file');
+  if (payload instanceof File) {
+    formData.append('file', payload);
+  } else if (payload instanceof Blob) {
+    formData.append('file', payload, 'uploaded-file');
   }
   
   // 构建查询参数（后端 API 期望 category、tags、description 作为 Query 参数）
@@ -160,9 +163,11 @@ export async function uploadMultipleFiles(
   }
 ): Promise<FileUploadResponse[]> {
   const formData = new FormData();
-  
+
+  const compressed = await Promise.all(files.map((f) => compressImageForUpload(f)));
+
   // 添加所有文件
-  files.forEach((file, index) => {
+  compressed.forEach((file, index) => {
     if (file instanceof File) {
       formData.append('files', file);
     } else if (file instanceof Blob) {

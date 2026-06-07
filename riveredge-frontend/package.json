@@ -54,6 +54,7 @@
         "@univerjs/ui": "^0.12.4",
         "ahooks": "^3.9.6",
         "antd": "^6.1.0",
+        "browser-image-compression": "^2.0.2",
         "dayjs": "1.11.13",
         "dxf-parser": "^1.1.2",
         "eslint-plugin-react": "^7.37.5",

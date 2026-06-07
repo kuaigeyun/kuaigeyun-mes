@@ -111,8 +111,8 @@ import {
 } from './components/dataPermissionFilters';
 import { filterVisibleFieldPolicyIndexes, upsertFieldPolicyMask } from './components/fieldPermissionFilters';
 import {
-  buildFunctionScopedResourceOptions,
-  collectGrantedResourceKeys,
+  collectGrantedResourceKeysFromGrantTree,
+  collectGrantedResourceOptionsFromGrantTree,
   isGenericPolicyResourceCode,
   normalizeResourceKey,
 } from './components/roleGrantedResourceScope';
@@ -839,52 +839,15 @@ const RolesPermissionsPage: React.FC = () => {
   const treeVisibleAssignedCount = functionGrants?.stats?.granted_visible_on_tree ?? 0;
   const grantedNotOnTree = functionGrants?.stats?.granted_not_on_tree ?? 0;
 
-  const resourceLabelMap = useMemo(() => {
-    const map = new Map<string, string>();
-    const walk = (nodes: MenuTree[]) => {
-      for (const m of nodes || []) {
-        const code = (m.permission_code || '').trim();
-        if (code) {
-          const parts = code.split(':').filter(Boolean);
-          if (parts.length >= 2) {
-            const app = parts[0];
-            const resource = parts.length >= 3 ? parts.slice(1, -1).join(':') : parts[1];
-            map.set(`${app}:${resource}`, menuTreeNodeTitle(m, t));
-          }
-        }
-        if (m.children?.length) walk(m.children);
-      }
-    };
-    walk(menuTree);
-    return map;
-  }, [menuTree, t]);
-
-  const resourceOptions = useMemo(() => {
-    // 数据权限资源以菜单真源为准，避免非菜单资源进入第二页配置。
-    return Array.from(resourceLabelMap.keys())
-      .sort()
-      .map((value) => {
-        const [app, ...rest] = value.split(':');
-        const resource = rest.join(':');
-        const appName = getAppDisplayName(app, t, app);
-        const fallback = `${appName} / ${resource}`;
-        return {
-          value,
-          label: resourceLabelMap.get(value) || fallback,
-        };
-      });
-  }, [resourceLabelMap, t]);
-
-  /** 功能权限已勾选 code 推导出的数据/字段权限资源键（唯一前端范围推导） */
-  const grantedDataResourceKeys = useMemo(
-    () => collectGrantedResourceKeys(grantedCodes),
-    [grantedCodes]
+  /** 功能权限树已勾选页 → 数据/字段权限可配置资源（唯一前端范围推导） */
+  const functionScopedResourceOptions = useMemo(
+    () => collectGrantedResourceOptionsFromGrantTree(functionGrantBaseTree, grantedCodes, t),
+    [functionGrantBaseTree, grantedCodes, t]
   );
 
-  /** 数据/字段权限页共用的已授权资源选项（带菜单文案） */
-  const functionScopedResourceOptions = useMemo(
-    () => buildFunctionScopedResourceOptions(grantedDataResourceKeys, resourceOptions, t),
-    [grantedDataResourceKeys, resourceOptions, t]
+  const grantedDataResourceKeys = useMemo(
+    () => collectGrantedResourceKeysFromGrantTree(functionGrantBaseTree, grantedCodes),
+    [functionGrantBaseTree, grantedCodes]
   );
 
   useEffect(() => {

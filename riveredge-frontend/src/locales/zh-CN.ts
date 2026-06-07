@@ -2571,7 +2571,7 @@ export default {
   'app.haoligo.equipment.upkeep.attachBefore': '附件照片（保养前）',
   'app.haoligo.equipment.upkeep.selectApplicant': '请选择申请人',
   'app.haoligo.equipment.upkeep.selectDept': '请选择申请部门',
-  'app.haoligo.equipment.upkeep.deptInvalid': '申请部门无效，请从末级部门中选择',
+  'app.haoligo.equipment.upkeep.deptInvalid': '申请部门无效，请重新选择',
   'app.haoligo.equipment.upkeep.loadOptionsFailed': '加载下拉选项失败',
   'app.haoligo.equipment.upkeep.saved': '已保存',
   'app.haoligo.equipment.upkeep.submitted': '已提交',

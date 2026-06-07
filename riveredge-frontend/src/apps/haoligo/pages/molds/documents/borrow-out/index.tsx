@@ -30,7 +30,6 @@ import {
   getMoldBorrowSheet,
   getMoldBorrowSourceOrderUsage,
   listMoldBorrowSheets,
-  listMolds,
   prefillMoldBorrowSheetFromDataset,
   putMoldBorrowDatasetBinding,
   updateMoldBorrowSheet,
@@ -39,6 +38,7 @@ import {
   type MoldBorrowSheetRow,
   type MoldRow,
 } from '../../../../services/haoligo';
+import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { executeDatasetQuery, getDatasetByUuid, getDatasetList } from '../../../../../../services/dataset';
 import { extractSqlNamedParams } from '../../../../../../utils/extractSqlNamedParams';
@@ -404,13 +404,11 @@ const MoldBorrowOutPage: React.FC = () => {
   const loadMoldsForPicker = useCallback(async (keyword?: string) => {
     setMoldLoading(true);
     try {
-      const kw = (keyword ?? '').trim();
-      const res = await listMolds({
-        limit: 200,
-        skip: 0,
-        ...(kw ? { keyword: kw } : {}),
+      const rows = await fetchMoldsForPicker({
+        status: '待用',
+        keyword: keyword ?? '',
       });
-      setMoldRows(res.items ?? []);
+      setMoldRows(rows);
     } catch {
       setMoldRows([]);
     } finally {
@@ -1046,6 +1044,12 @@ const MoldBorrowOutPage: React.FC = () => {
         destroyOnHidden
       >
         <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+          <Alert
+            type="info"
+            showIcon
+            message="仅列出状态为「待用」的模具"
+            description="其他状态（待启用、在用、保养等）不可领用。"
+          />
           {isCastingProductMode ? (
             <Alert
               type="info"

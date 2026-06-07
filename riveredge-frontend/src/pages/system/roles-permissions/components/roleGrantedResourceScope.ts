@@ -1,13 +1,12 @@
 /**
- * 角色「功能权限 → 数据/字段权限」资源范围（唯一前端推导入口）。
- * 数据权限页、字段权限页共用；字段策略行本身仅来自 GET .../field API（后端 list_field_policies）。
+ * 角色「功能权限树 → 数据/字段权限」资源范围（唯一推导入口）。
+ * 仅功能权限 TAB 中已勾选操作的菜单页进入数据/字段 TAB；禁止从 grantedCodes 扁平推导或菜单全量兜底。
  */
 
-import { getAppDisplayName } from '../../../../utils/menuTranslation';
-import {
-  permissionCodeToResourceKey,
-  type ResourceOption,
-} from './dataPermissionFilters';
+import type { FunctionGrantMenuNode } from '../../../../services/role';
+import { codesFromAction, isActionGranted } from './FunctionGrantTree';
+import { translateGrantMenuTitle } from './functionGrantTreeFilters';
+import { permissionCodeToResourceKey, type ResourceOption } from './dataPermissionFilters';
 
 export function normalizeResourceKey(resource: string): string {
   return resource.trim().toLowerCase();
@@ -24,42 +23,59 @@ export function isGenericPolicyResourceCode(norm: string): boolean {
   return false;
 }
 
-/** 功能权限码列表 → 已授权 app:resource 键集合 */
-export function collectGrantedResourceKeys(grantedCodes: string[]): Set<string> {
-  const keys = new Set<string>();
-  for (const code of grantedCodes) {
-    const norm = String(code ?? '').trim().toLowerCase();
-    if (!norm || isGenericPolicyResourceCode(norm)) continue;
-    const key = permissionCodeToResourceKey(code);
-    if (key) keys.add(normalizeResourceKey(key));
-  }
-  return keys;
-}
-
-/** 已授权资源 → 带菜单文案的选项（数据/字段权限筛选用） */
-export function buildFunctionScopedResourceOptions(
-  grantedResourceKeys: Set<string>,
-  menuResourceOptions: ResourceOption[],
+/**
+ * 功能权限矩阵树 + 当前勾选 code → 数据/字段权限可配置资源（唯一真源）。
+ * 仅当菜单节点上至少有一项操作已勾选时，该页才进入第二、三 TAB。
+ */
+export function collectGrantedResourceOptionsFromGrantTree(
+  tree: FunctionGrantMenuNode[],
+  grantedCodes: string[],
   t: (key: string, opts?: { defaultValue?: string }) => string
 ): ResourceOption[] {
-  if (grantedResourceKeys.size === 0) return [];
+  const granted = new Set(
+    grantedCodes.map((c) => String(c ?? '').trim().toLowerCase()).filter(Boolean)
+  );
+  if (granted.size === 0 || tree.length === 0) return [];
+
   const byKey = new Map<string, ResourceOption>();
-  for (const opt of menuResourceOptions) {
-    const nk = normalizeResourceKey(opt.value);
-    if (grantedResourceKeys.has(nk)) {
-      byKey.set(nk, opt);
+
+  const walk = (nodes: FunctionGrantMenuNode[]) => {
+    for (const node of nodes) {
+      const hasGrantedAction = node.actions.some((a) => isActionGranted(a, granted));
+      if (hasGrantedAction) {
+        const label = translateGrantMenuTitle(node, t);
+        for (const action of node.actions) {
+          if (!isActionGranted(action, granted)) continue;
+          for (const code of codesFromAction(action)) {
+            const norm = String(code ?? '').trim().toLowerCase();
+            if (!norm || isGenericPolicyResourceCode(norm)) continue;
+            const key = permissionCodeToResourceKey(code);
+            if (!key) continue;
+            const nk = normalizeResourceKey(key);
+            if (!byKey.has(nk)) {
+              byKey.set(nk, { value: nk, label });
+            }
+          }
+        }
+      }
+      if (node.children?.length) walk(node.children);
     }
-  }
-  for (const key of grantedResourceKeys) {
-    const nk = normalizeResourceKey(key);
-    if (byKey.has(nk)) continue;
-    const [app, ...rest] = nk.split(':');
-    const resource = rest.join(':');
-    const appName = getAppDisplayName(app, t, app);
-    byKey.set(nk, {
-      value: nk,
-      label: `${appName} / ${resource}`,
-    });
-  }
+  };
+
+  walk(tree);
   return Array.from(byKey.values()).sort((a, b) => a.label.localeCompare(b.label, 'zh-CN'));
+}
+
+/** 由功能权限树推导出的 app:resource 键集合 */
+export function collectGrantedResourceKeysFromGrantTree(
+  tree: FunctionGrantMenuNode[],
+  grantedCodes: string[]
+): Set<string> {
+  const keys = new Set<string>();
+  for (const opt of collectGrantedResourceOptionsFromGrantTree(tree, grantedCodes, (k, o) =>
+    o?.defaultValue ?? k
+  )) {
+    keys.add(normalizeResourceKey(opt.value));
+  }
+  return keys;
 }

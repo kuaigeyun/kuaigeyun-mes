@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from typing import Annotated, Any, Dict, Optional
+from typing import Annotated, Any, Dict, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,10 +11,13 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from apps.haoligo.api._mold_processing_time import recompute_mold_processing_time_minutes
+from apps.haoligo.api._mold_processing_time import (
+    borrow_return_status_label,
+    outstanding_borrow_ids_for_tenant,
+    recompute_mold_processing_time_minutes,
+)
 from apps.haoligo.api._erp_mold_code import parse_erp_mold_code
 from apps.haoligo.api._mold_ledger_sync import (
-    MAINTENANCE_OCCUPY_STATUSES,
     count_active_borrow_sheets as _count_active_borrow_sheets,
     sync_mold_ledger_status_for_mold_code as _sync_mold_ledger_status_for_mold_code,
 )
@@ -302,6 +305,7 @@ class MoldBorrowSheetOut(BaseModel):
     finished_product_name: Optional[str] = None
     planned_qty: Optional[Decimal] = None
     created_at: datetime
+    return_status: Literal["已领用", "已还入"]
 
 
 class MoldBorrowSheetCreate(BaseModel):
@@ -351,10 +355,10 @@ async def _assert_mold_ledger_allows_borrow(
     mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mcode).first()
     if not mold:
         return
-    if mold.status in ("报废", "停用") or mold.status in MAINTENANCE_OCCUPY_STATUSES:
+    if mold.status != "待用":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"模具台账状态为「{mold.status}」，不可领用",
+            detail=f"模具台账状态为「{mold.status}」，仅「待用」状态的模具可领用",
         )
     n = await _count_active_borrow_sheets(tenant_id, mcode, exclude_id=exclude_sheet_id)
     if n > 0 and not mold.allow_repeated_borrow:
@@ -364,7 +368,7 @@ async def _assert_mold_ledger_allows_borrow(
         )
 
 
-def _serialize(row: HaoligoMoldBorrowSheet) -> MoldBorrowSheetOut:
+def _serialize(row: HaoligoMoldBorrowSheet, *, outstanding_ids: set[int]) -> MoldBorrowSheetOut:
     return MoldBorrowSheetOut(
         id=row.id,
         uuid=row.uuid,
@@ -378,7 +382,13 @@ def _serialize(row: HaoligoMoldBorrowSheet) -> MoldBorrowSheetOut:
         finished_product_name=row.finished_product_name,
         planned_qty=row.planned_qty,
         created_at=row.created_at,
+        return_status=borrow_return_status_label(row.id, outstanding_ids),
     )
+
+
+async def _serialize_one(row: HaoligoMoldBorrowSheet, tenant_id: int) -> MoldBorrowSheetOut:
+    outstanding_ids = await outstanding_borrow_ids_for_tenant(tenant_id)
+    return _serialize(row, outstanding_ids=outstanding_ids)
 
 
 @router.get("", summary="领用单分页列表")
@@ -403,8 +413,9 @@ async def list_borrow_sheets(
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
+    outstanding_ids = await outstanding_borrow_ids_for_tenant(tenant_id)
     return {
-        "items": [_serialize(r) for r in rows],
+        "items": [_serialize(r, outstanding_ids=outstanding_ids) for r in rows],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -471,7 +482,7 @@ async def create_borrow_sheet(
         )
         await _sync_mold_ledger_status_for_mold_code(tenant_id, mcode)
         await recompute_mold_processing_time_minutes(tenant_id, mcode)
-    return _serialize(row)
+    return await _serialize_one(row, tenant_id)
 
 
 @router.get("/{row_id}", response_model=MoldBorrowSheetOut, summary="领用单详情")
@@ -483,7 +494,7 @@ async def get_borrow_sheet(
     row = await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(id=row_id).first()
     if not row:
         await _not_found()
-    return _serialize(row)
+    return await _serialize_one(row, tenant_id)
 
 
 @router.patch("/{row_id}", response_model=MoldBorrowSheetOut, summary="更新领用单")
@@ -520,7 +531,7 @@ async def update_borrow_sheet(
             await recompute_mold_processing_time_minutes(tenant_id, old_mold_code)
         await _sync_mold_ledger_status_for_mold_code(tenant_id, saved_code)
         await recompute_mold_processing_time_minutes(tenant_id, saved_code)
-    return _serialize(row)
+    return await _serialize_one(row, tenant_id)
 
 
 @router.delete("/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除领用单")

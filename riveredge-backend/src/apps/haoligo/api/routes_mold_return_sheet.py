@@ -10,7 +10,10 @@ from tortoise import timezone
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
-from apps.haoligo.api._mold_processing_time import recompute_mold_processing_time_minutes
+from apps.haoligo.api._mold_processing_time import (
+    outstanding_borrow_ids_for_tenant,
+    recompute_mold_processing_time_minutes,
+)
 from apps.haoligo.api._mold_ledger_sync import sync_mold_ledger_status_for_mold_code
 from apps.haoligo.api._mold_sheet_code import generate_mold_sheet_no
 from apps.haoligo.api._qs import tenant_alive
@@ -262,6 +265,68 @@ class MoldReturnBorrowLookupOut(BaseModel):
     planned_qty: Optional[Decimal] = None
 
 
+def _borrow_sheet_to_lookup_out(row: HaoligoMoldBorrowSheet) -> MoldReturnBorrowLookupOut:
+    return MoldReturnBorrowLookupOut(
+        borrow_sheet_id=row.id,
+        borrow_sheet_no=(row.sheet_no or "").strip() or f"领用单#{row.id}",
+        production_order_no=_strip_opt(row.source_order_no),
+        issue_department_uuid=_strip_opt(row.department_uuid),
+        issue_department_name=_strip_opt(row.department_name),
+        mold_code=row.mold_code,
+        mold_name=row.mold_name,
+        finished_product_code=_strip_opt(row.finished_product_code),
+        finished_product_name=_strip_opt(row.finished_product_name),
+        planned_qty=row.planned_qty,
+    )
+
+
+class MoldOutstandingBorrowOut(MoldReturnBorrowLookupOut):
+    created_at: datetime
+
+
+@router.get(
+    "/outstanding-borrows",
+    summary="待还入领用单列表（已领用、尚未配对还入单）",
+)
+async def list_outstanding_borrows_for_return(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    skip: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+    keyword: Optional[str] = Query(None),
+):
+    outstanding_ids = await outstanding_borrow_ids_for_tenant(tenant_id)
+    if not outstanding_ids:
+        return {"items": [], "total": 0, "skip": skip, "limit": limit}
+    qs = tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(id__in=list(outstanding_ids))
+    if keyword and keyword.strip():
+        k = keyword.strip()
+        qs = qs.filter(
+            Q(sheet_no__icontains=k)
+            | Q(mold_code__icontains=k)
+            | Q(mold_name__icontains=k)
+            | Q(department_name__icontains=k)
+            | Q(source_order_no__icontains=k)
+            | Q(finished_product_code__icontains=k)
+            | Q(finished_product_name__icontains=k)
+        )
+    total = await qs.count()
+    rows = await qs.order_by("-id").offset(skip).limit(limit).all()
+    items = [
+        MoldOutstandingBorrowOut(
+            **_borrow_sheet_to_lookup_out(row).model_dump(),
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+    return {
+        "items": items,
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+    }
+
+
 @router.get(
     "/borrow-lookup",
     response_model=MoldReturnBorrowLookupOut,
@@ -272,7 +337,20 @@ async def borrow_lookup_for_return_sheet(
     _: Annotated[User, Depends(get_current_user)],
     production_order_no: Optional[str] = Query(None, max_length=128),
     mold_code: Optional[str] = Query(None, max_length=64),
+    borrow_sheet_id: Optional[int] = Query(None, ge=1),
 ):
+    if borrow_sheet_id is not None:
+        row = await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).filter(id=borrow_sheet_id).first()
+        if row is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="领用单不存在")
+        outstanding_ids = await outstanding_borrow_ids_for_tenant(tenant_id)
+        if row.id not in outstanding_ids:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="该领用单已还入或不可再还入",
+            )
+        return _borrow_sheet_to_lookup_out(row)
+
     p = (production_order_no or "").strip()
     m = (mold_code or "").strip()
     if not p and not m:
@@ -291,18 +369,7 @@ async def borrow_lookup_for_return_sheet(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="未找到与制令单号或模具代号匹配的领用单",
         )
-    return MoldReturnBorrowLookupOut(
-        borrow_sheet_id=row.id,
-        borrow_sheet_no=(row.sheet_no or "").strip() or f"领用单#{row.id}",
-        production_order_no=row.source_order_no,
-        issue_department_uuid=_strip_opt(row.department_uuid),
-        issue_department_name=_strip_opt(row.department_name),
-        mold_code=row.mold_code,
-        mold_name=row.mold_name,
-        finished_product_code=_strip_opt(row.finished_product_code),
-        finished_product_name=_strip_opt(row.finished_product_name),
-        planned_qty=row.planned_qty,
-    )
+    return _borrow_sheet_to_lookup_out(row)
 
 
 @router.post("", response_model=MoldReturnSheetOut, summary="创建还入单")

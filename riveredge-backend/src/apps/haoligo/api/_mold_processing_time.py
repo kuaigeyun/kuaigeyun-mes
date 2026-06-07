@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -52,6 +53,77 @@ def _to_utc(dt: datetime) -> datetime:
     return dt.astimezone(_UTC)
 
 
+async def matched_borrow_ids_for_returns(
+    tenant_id: int,
+    borrows: list[HaoligoMoldBorrowSheet],
+    returns: list[HaoligoMoldReturnSheet],
+) -> set[int]:
+    """还入单与领用单配对后，返回已被还入单占用的领用单 id 集合。"""
+    pairs = await pair_return_sheets_to_borrow_sheets(tenant_id, borrows, returns)
+    return {borrow.id for borrow, _ in pairs}
+
+
+async def pair_return_sheets_to_borrow_sheets(
+    tenant_id: int,
+    borrows: list[HaoligoMoldBorrowSheet],
+    returns: list[HaoligoMoldReturnSheet],
+) -> list[tuple[HaoligoMoldBorrowSheet, HaoligoMoldReturnSheet]]:
+    """按与加工时间相同的规则，将还入单逐条配对到领用单。"""
+    borrow_by_id = {b.id: b for b in borrows}
+    matched_borrow_ids: set[int] = set()
+    pairs: list[tuple[HaoligoMoldBorrowSheet, HaoligoMoldReturnSheet]] = []
+    for ret in returns:
+        ret_ts = _to_utc(ret.created_at)
+        borrow = None
+        bid = await resolve_borrow_sheet_id_from_ref(tenant_id, ret.borrow_sheet_no)
+        if bid is not None and bid in borrow_by_id:
+            b = borrow_by_id[bid]
+            if b.id not in matched_borrow_ids:
+                borrow = b
+        if borrow is None:
+            candidates = [
+                b
+                for b in borrows
+                if b.id not in matched_borrow_ids and _to_utc(b.created_at) <= ret_ts
+            ]
+            if candidates:
+                borrow = max(candidates, key=lambda b: _to_utc(b.created_at))
+        if borrow is None:
+            continue
+        matched_borrow_ids.add(borrow.id)
+        pairs.append((borrow, ret))
+    return pairs
+
+
+async def outstanding_borrow_ids_for_tenant(tenant_id: int) -> set[int]:
+    """尚未被还入单配对的领用单 id（即仍「已领用」）。"""
+    borrows = await tenant_alive(HaoligoMoldBorrowSheet, tenant_id).order_by("created_at", "id").all()
+    returns = await tenant_alive(HaoligoMoldReturnSheet, tenant_id).order_by("created_at", "id").all()
+    borrows_by_mold: dict[str, list[HaoligoMoldBorrowSheet]] = defaultdict(list)
+    returns_by_mold: dict[str, list[HaoligoMoldReturnSheet]] = defaultdict(list)
+    for row in borrows:
+        borrows_by_mold[(row.mold_code or "").strip()].append(row)
+    for row in returns:
+        returns_by_mold[(row.mold_code or "").strip()].append(row)
+    outstanding: set[int] = set()
+    for mcode, mold_borrows in borrows_by_mold.items():
+        if not mcode:
+            continue
+        matched = await matched_borrow_ids_for_returns(
+            tenant_id,
+            mold_borrows,
+            returns_by_mold.get(mcode, []),
+        )
+        for borrow in mold_borrows:
+            if borrow.id not in matched:
+                outstanding.add(borrow.id)
+    return outstanding
+
+
+def borrow_return_status_label(borrow_id: int, outstanding_ids: set[int]) -> str:
+    return "已领用" if borrow_id in outstanding_ids else "已还入"
+
+
 async def recompute_mold_processing_time_minutes(tenant_id: int, mold_code: str) -> None:
     """
     按模具代号重算加工时间：
@@ -74,29 +146,10 @@ async def recompute_mold_processing_time_minutes(tenant_id: int, mold_code: str)
         .order_by("created_at", "id")
         .all()
     )
-    borrow_by_id = {b.id: b for b in borrows}
-    matched_borrow_ids: set[int] = set()
+    pairs = await pair_return_sheets_to_borrow_sheets(tenant_id, borrows, returns)
     total_seconds = 0.0
-
-    for ret in returns:
+    for borrow, ret in pairs:
         ret_ts = _to_utc(ret.created_at)
-        borrow = None
-        bid = await resolve_borrow_sheet_id_from_ref(tenant_id, ret.borrow_sheet_no)
-        if bid is not None and bid in borrow_by_id:
-            b = borrow_by_id[bid]
-            if b.id not in matched_borrow_ids:
-                borrow = b
-        if borrow is None:
-            candidates = [
-                b
-                for b in borrows
-                if b.id not in matched_borrow_ids and _to_utc(b.created_at) <= ret_ts
-            ]
-            if candidates:
-                borrow = max(candidates, key=lambda b: _to_utc(b.created_at))
-        if borrow is None:
-            continue
-        matched_borrow_ids.add(borrow.id)
         borrow_ts = _to_utc(borrow.created_at)
         delta_sec = (ret_ts - borrow_ts).total_seconds()
         if delta_sec > 0:
