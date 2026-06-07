@@ -573,6 +573,47 @@ wait_for_backend_health() {
     return 1
 }
 
+wait_for_local_postgres_ready() {
+    local max_wait="${1:-120}"
+    db_target_is_remote && return 0
+    load_deploy_env
+    local db_host db_port db_user db_name db_pass psql_bin elapsed=0
+    db_host="$(read_env_value DB_HOST || echo localhost)"
+    case "$db_host" in
+        localhost|127.0.0.1|"") ;;
+        *)
+            log_info "远程数据库 (${db_host})，跳过本地 PostgreSQL 等待"
+            return 0
+            ;;
+    esac
+    db_port="$(read_env_value DB_PORT || echo 5432)"
+    db_user="$(read_env_value DB_USER || echo postgres)"
+    db_name="$(read_env_value DB_NAME || echo riveredge)"
+    db_pass="$(read_env_value DB_PASSWORD || true)"
+    log_info "等待 PostgreSQL 就绪（最多 ${max_wait}s）..."
+    while [ "$elapsed" -lt "$max_wait" ]; do
+        if command -v pg_isready >/dev/null 2>&1; then
+            if pg_isready -h 127.0.0.1 -p "$db_port" -q 2>/dev/null; then
+                log_ok "PostgreSQL 已就绪"
+                return 0
+            fi
+        else
+            psql_bin="$(resolve_psql)"
+            export PGPASSWORD="$db_pass"
+            if "$psql_bin" -h 127.0.0.1 -p "$db_port" -U "$db_user" -d "$db_name" -c "SELECT 1" >/dev/null 2>&1; then
+                unset PGPASSWORD
+                log_ok "PostgreSQL 已就绪"
+                return 0
+            fi
+            unset PGPASSWORD
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+    log_error "PostgreSQL 在 ${max_wait}s 内未就绪，无法启动"
+    return 1
+}
+
 kill_port() {
     local port=$1
     if ! check_port "$port"; then return 0; fi
@@ -1897,6 +1938,9 @@ cmd_start_prod() {
     ensure_logs_dir
     load_deploy_env
     [ -f "$FRONTEND_DIR/dist/index.html" ] || { log_error "缺少前端 dist，请先运行 build"; exit 1; }
+    if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
+        wait_for_local_postgres_ready 120 || exit 1
+    fi
     start_backend_prod
     start_worker_prod
     start_caddy_prod
@@ -1948,6 +1992,11 @@ is_systemd_boot_enabled() {
     systemctl is-enabled --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null
 }
 
+is_systemd_service_active() {
+    is_linux_systemd || return 1
+    systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null
+}
+
 systemd_boot_status_label() {
     if ! is_linux_systemd; then
         echo "不支持 (非 Linux systemd)"
@@ -1962,9 +2011,13 @@ systemd_boot_status_label() {
         return 0
     fi
     if is_systemd_boot_enabled; then
-        echo "已启用"
+        if is_systemd_service_active; then
+            echo "已启用 · 运行中"
+        else
+            echo "已启用 · 未运行（可能启动失败，见 journalctl -b -u riveredge）"
+        fi
     else
-        echo "已安装，未启用"
+        echo "已安装，未 enable"
     fi
 }
 
@@ -2102,6 +2155,11 @@ cmd_install_service() {
     rm -f "$tmp"
     sudo systemctl daemon-reload
     sudo systemctl enable "$SYSTEMD_UNIT_NAME"
+    if ! sudo systemctl is-enabled --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
+        log_error "systemctl enable 未成功，开机自启未注册"
+        exit 1
+    fi
+    log_ok "开机自启已注册: $(systemctl is-enabled "$SYSTEMD_UNIT_NAME" 2>/dev/null || echo unknown)"
     if ! sudo systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
         log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
         if ! sudo systemctl start "$SYSTEMD_UNIT_NAME"; then
@@ -2110,11 +2168,13 @@ cmd_install_service() {
         fi
     fi
 
-    log_ok "已启用开机自启: ${SYSTEMD_UNIT_NAME}"
+    log_ok "服务已运行: ${SYSTEMD_UNIT_NAME}"
+    echo "  开机自启: sudo systemctl is-enabled riveredge"
     echo "  立即启动: sudo systemctl start riveredge"
     echo "  查看状态: sudo systemctl status riveredge"
     echo "  停止服务: sudo systemctl stop riveredge"
-    echo "  查看日志: journalctl -u riveredge -e"
+    echo "  本次启动日志: journalctl -b -u riveredge --no-pager"
+    echo "  完整日志: journalctl -u riveredge -e"
     echo ""
     echo "  提示: 启用 systemd 后，日常启停建议用 systemctl，避免与手动 start/stop 混用导致状态不一致"
 }
