@@ -325,7 +325,7 @@ wizard_show_home_panel() {
     wizard_panel_blank
     wizard_panel_section "OPS · 运维"
     wizard_panel_menu_short "${WIZARD_CYAN}[4]${WIZARD_RESET} 启动  ${WIZARD_CYAN}[5]${WIZARD_RESET} 停止  ${WIZARD_CYAN}[6]${WIZARD_RESET} 详情  ${WIZARD_CYAN}[7]${WIZARD_RESET} 重启"
-    wizard_panel_menu_short "${WIZARD_CYAN}[8]${WIZARD_RESET} 环境检测  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
+    wizard_panel_menu_short "${WIZARD_CYAN}[8]${WIZARD_RESET} 开机自启  ${WIZARD_CYAN}[9]${WIZARD_RESET} 数据库迁移  ${WIZARD_CYAN}[0]${WIZARD_RESET} 退出"
     wizard_panel_bot
     echo ""
 }
@@ -361,6 +361,7 @@ wizard_run_quick_action() {
         restart-worker) cmd_restart_worker ;;
         restart-postgres) cmd_restart_postgres ;;
         status) cmd_status ;;
+        details) cmd_details ;;
         check) cmd_check ;;
         migrate) cmd_migrate ;;
         *) wizard_say_fail "未知快捷操作: $1"; return 1 ;;
@@ -385,6 +386,63 @@ wizard_show_restart_menu() {
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     wizard_panel_bot
     echo ""
+}
+
+wizard_show_boot_service_menu() {
+    local status_label
+    load_deploy_env
+    status_label="$(systemd_boot_status_label)"
+    echo ""
+    wizard_panel_begin
+    wizard_panel_top
+    wizard_panel_section "BOOT · 开机自启"
+    wizard_panel_kv "Service" "riveredge.service"
+    wizard_panel_kv "Status" "${status_label}"
+    wizard_panel_blank
+    if [ "$DEPLOY_MODE" = "prod" ] && is_linux_systemd; then
+        if is_systemd_boot_enabled; then
+            wizard_panel_menu_item "1" "关闭开机自启" "disable 并移除 systemd 单元"
+        else
+            wizard_panel_menu_item "1" "开启开机自启" "注册 systemd 服务并 enable"
+        fi
+    else
+        wizard_panel_line "${WIZARD_DIM}仅 Linux 生产模式支持开机自启${WIZARD_RESET}"
+    fi
+    wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
+    wizard_panel_bot
+    echo ""
+}
+
+wizard_ask_boot_service_choice() {
+    local choice
+    while true; do
+        wizard_show_boot_service_menu
+        if [ "$DEPLOY_MODE" != "prod" ] || ! is_linux_systemd; then
+            wizard_pause_return_menu
+            return 0
+        fi
+        wizard_panel_prefix
+        echo -e "${WIZARD_BOLD}请选择${WIZARD_RESET} ${WIZARD_DIM}[0-1 · 默认 0]${WIZARD_RESET}"
+        wizard_panel_prefix
+        read -rp "$(echo -e "${WIZARD_DIM}›${WIZARD_RESET} ")" choice || true
+        case "${choice:-0}" in
+            0|q|Q|back)
+                return 0
+                ;;
+            1)
+                if is_systemd_boot_enabled; then
+                    cmd_uninstall_service || true
+                else
+                    cmd_install_service || true
+                fi
+                wizard_pause_return_menu
+                return 0
+                ;;
+            *)
+                wizard_say_warn "无效选项，请重新选择"
+                ;;
+        esac
+    done
 }
 
 wizard_ask_restart_choice() {
@@ -490,7 +548,7 @@ wizard_ask_intent() {
             ;;
         6)
             echo ""
-            wizard_run_quick_action status || true
+            wizard_run_quick_action details || true
             wizard_pause_return_menu
             return 2
             ;;
@@ -498,10 +556,8 @@ wizard_ask_intent() {
             wizard_ask_restart_choice
             return 2
             ;;
-        8)
-            echo ""
-            wizard_run_quick_action check || true
-            wizard_pause_return_menu
+        8|boot|autostart)
+            wizard_ask_boot_service_choice
             return 2
             ;;
         9)

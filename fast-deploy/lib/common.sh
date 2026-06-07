@@ -1910,6 +1910,32 @@ is_linux_systemd() {
     [ "$(uname -s)" = "Linux" ] && command -v systemctl >/dev/null 2>&1
 }
 
+is_systemd_boot_enabled() {
+    is_linux_systemd || return 1
+    [ -f "$SYSTEMD_UNIT_PATH" ] || return 1
+    systemctl is-enabled --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null
+}
+
+systemd_boot_status_label() {
+    if ! is_linux_systemd; then
+        echo "不支持 (非 Linux systemd)"
+        return 0
+    fi
+    if [ "$DEPLOY_MODE" != "prod" ]; then
+        echo "仅生产模式可用"
+        return 0
+    fi
+    if [ ! -f "$SYSTEMD_UNIT_PATH" ]; then
+        echo "未配置"
+        return 0
+    fi
+    if is_systemd_boot_enabled; then
+        echo "已启用"
+    else
+        echo "已安装，未启用"
+    fi
+}
+
 resolve_service_user() {
     local u
     if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
@@ -2127,6 +2153,19 @@ cmd_restart_postgres() {
     fi
     log_error "未能重启 PostgreSQL，请手动重启本机 postgres 服务"
     return 1
+}
+
+cmd_details() {
+    load_deploy_env
+    cmd_status
+    echo ""
+    echo "=== 环境依赖 ==="
+    cmd_check || true
+    if [ "$DEPLOY_MODE" = "prod" ]; then
+        echo ""
+        echo "=== 开机自启 ==="
+        echo "  riveredge.service: $(systemd_boot_status_label)"
+    fi
 }
 
 cmd_status() {
