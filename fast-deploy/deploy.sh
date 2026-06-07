@@ -76,20 +76,22 @@ log_banner() {
 # Windows 下 install 优先走 PowerShell（winget 更可靠）
 if [ "$RUNTIME_OS" = "windows" ] && [ "${SUBCMD:-deploy}" = "install" ]; then
     log_banner
-    if ! powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "
+    # shellcheck source=lib/common.sh
+    source "$SCRIPT_DIR/lib/common.sh"
+    PS_COMMON_PS1="$(to_powershell_path "$SCRIPT_DIR/lib/common.ps1")"
+    if powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "
         \$ErrorActionPreference = 'Stop'
         \$env:DEPLOY_MODE = '$DEPLOY_MODE'
         \$env:USE_MIRROR = '$USE_MIRROR'
-        . '$SCRIPT_DIR/lib/common.ps1'
+        . '$PS_COMMON_PS1'
         Load-DeployEnv
         Invoke-Install
     "; then
-        echo "PowerShell install 失败，尝试 Git Bash 路径..." >&2
-        # shellcheck source=lib/common.sh
-        source "$SCRIPT_DIR/lib/common.sh"
-        load_deploy_env
-        fd_dispatch install
+        exit 0
     fi
+    echo "PowerShell install 失败，尝试 Git Bash 路径..." >&2
+    load_deploy_env
+    fd_dispatch install
     exit $?
 fi
 

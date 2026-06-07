@@ -67,6 +67,23 @@ is_windows_gitbash() {
     esac
 }
 
+# Git Bash / MSYS 路径 (/d/foo) 转为 PowerShell 可识别的 D:/foo 或 D:\foo
+to_powershell_path() {
+    local p="${1:-}"
+    [ -n "$p" ] || return 1
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -m "$p"
+        return
+    fi
+    if [[ "$p" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+        local drive="${BASH_REMATCH[1]}"
+        drive="$(echo "$drive" | tr 'a-z' 'A-Z')"
+        echo "${drive}:/${BASH_REMATCH[2]}"
+        return
+    fi
+    echo "$p"
+}
+
 # Windows Git Bash 默认 locale 为 GBK，aerich 读 pyproject.toml（UTF-8 中文注释）会 UnicodeDecodeError
 if is_windows_gitbash; then
     export PYTHONUTF8="${PYTHONUTF8:-1}"
@@ -111,10 +128,13 @@ fi
 run_windows_install_component() {
     local comp=$1
     local ps_script="$FAST_DEPLOY_DIR/windows/install-component.ps1"
+    local ps_script_win fast_deploy_win
     [ -f "$ps_script" ] || { log_error "缺少 $ps_script"; return 1; }
+    ps_script_win="$(to_powershell_path "$ps_script")"
+    fast_deploy_win="$(to_powershell_path "$FAST_DEPLOY_DIR")"
     log_info "Windows 安装 $comp（winget 或官方安装包）..."
-    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script" \
-        -Component "$comp" -UseMirror "$USE_MIRROR" -FastDeployDir "$FAST_DEPLOY_DIR" || return 1
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script_win" \
+        -Component "$comp" -UseMirror "$USE_MIRROR" -FastDeployDir "$fast_deploy_win" || return 1
     refresh_windows_path
 }
 
@@ -154,14 +174,98 @@ version_ge() {
     [ "$(printf '%s\n%s\n' "$a" "$b" | sort -V | head -n1)" = "$b" ]
 }
 
-detect_linux_platform() {
+load_os_release() {
     if [ -f /etc/os-release ]; then
         # shellcheck disable=SC1091
         . /etc/os-release
-        if [ "${ID:-}" = "ubuntu" ] && { [ "${VERSION_ID:-}" = "22.04" ] || [ "${VERSION_ID:-}" = "24.04" ] || [[ "${VERSION_ID:-}" == 22.* ]] || [[ "${VERSION_ID:-}" == 24.* ]]; }; then
-            echo "ubuntu22"
+    fi
+}
+
+is_linux_debian_family() {
+    load_os_release
+    case "${ID:-}" in
+        debian|ubuntu|linuxmint|pop|elementary|zorin) return 0 ;;
+    esac
+    [[ "${ID_LIKE:-}" == *debian* ]]
+}
+
+is_linux_rhel_family() {
+    load_os_release
+    case "${ID:-}" in
+        rhel|centos|rocky|almalinux|ol|scientific|eurolinux|virtuozzo|opencloudos|anolis|tencentos) return 0 ;;
+    esac
+    [[ "${ID_LIKE:-}" == *rhel* ]] || [[ "${ID_LIKE:-}" == *centos* ]]
+}
+
+is_linux_fedora() {
+    load_os_release
+    [ "${ID:-}" = "fedora" ]
+}
+
+linux_pkg_manager() {
+    if command -v dnf >/dev/null 2>&1; then
+        echo dnf
+    elif command -v yum >/dev/null 2>&1; then
+        echo yum
+    elif command -v apt-get >/dev/null 2>&1; then
+        echo apt
+    else
+        echo ""
+    fi
+}
+
+linux_machine_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo x86_64 ;;
+        aarch64|arm64) echo aarch64 ;;
+        *) uname -m ;;
+    esac
+}
+
+get_rhel_el_version() {
+    load_os_release
+    local ver="${VERSION_ID:-}"
+    ver="${ver%%.*}"
+    if [ -n "$ver" ] && [ "$ver" != "n/a" ]; then
+        echo "$ver"
+        return
+    fi
+    if command -v rpm >/dev/null 2>&1; then
+        ver="$(rpm -E '%{rhel}' 2>/dev/null || true)"
+        if [ -n "$ver" ] && [ "$ver" != "%{rhel}" ]; then
+            echo "$ver"
             return
         fi
+    fi
+    echo "9"
+}
+
+linux_platform_label() {
+    load_os_release
+    echo "${PRETTY_NAME:-Linux}"
+}
+
+detect_linux_platform() {
+    if [ ! -f /etc/os-release ]; then
+        echo "linux"
+        return
+    fi
+    load_os_release
+    if [ "${ID:-}" = "ubuntu" ] && { [ "${VERSION_ID:-}" = "22.04" ] || [ "${VERSION_ID:-}" = "24.04" ] || [[ "${VERSION_ID:-}" == 22.* ]] || [[ "${VERSION_ID:-}" == 24.* ]]; }; then
+        echo "ubuntu22"
+        return
+    fi
+    if is_linux_rhel_family; then
+        echo "rhel"
+        return
+    fi
+    if is_linux_fedora; then
+        echo "fedora"
+        return
+    fi
+    if is_linux_debian_family; then
+        echo "debian"
+        return
     fi
     echo "linux"
 }
@@ -184,7 +288,7 @@ import json, sys
 path, comp, plat, mirror = sys.argv[1:5]
 with open(path, encoding="utf-8") as f:
     data = json.load(f)
-if mirror == "1" and comp not in ("node", "python", "postgresql", "caddy") and plat in ("ubuntu22", "linux"):
+if mirror == "1" and comp not in ("node", "python", "postgresql", "caddy") and plat in ("ubuntu22", "debian", "rhel", "fedora", "linux"):
     if comp in data.get("scripts_cn", {}):
         print(data["scripts_cn"][comp])
         sys.exit(0)
@@ -211,7 +315,7 @@ _get_install_command_powershell() {
         \$data = Get-Content -LiteralPath '$ps_path' -Raw -Encoding UTF8 | ConvertFrom-Json
         \$comp = '$component'
         \$plat = '$platform'
-        if ('$USE_MIRROR' -eq '1' -and \$comp -notin @('node','python','postgresql','caddy') -and \$plat -in @('ubuntu22','linux') -and \$data.scripts_cn.PSObject.Properties.Name -contains \$comp) {
+        if ('$USE_MIRROR' -eq '1' -and \$comp -notin @('node','python','postgresql','caddy') -and \$plat -in @('ubuntu22','debian','rhel','fedora','linux') -and \$data.scripts_cn.PSObject.Properties.Name -contains \$comp) {
             Write-Output \$data.scripts_cn.\$comp
             exit 0
         }
@@ -359,7 +463,7 @@ check_postgres() {
             psql
         )
     fi
-    for bin in "${candidates[@]}" /usr/lib/postgresql/*/bin/psql; do
+    for bin in "${candidates[@]}" /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
         [ -n "$v" ] || continue
@@ -771,7 +875,7 @@ resolve_psql() {
             [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
         done
     fi
-    for bin in /usr/lib/postgresql/*/bin/psql; do
+    for bin in /usr/pgsql-*/bin/psql /usr/lib/postgresql/*/bin/psql; do
         [ -x "$bin" ] 2>/dev/null || continue
         v="$("$bin" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+' | head -1)"
         [ -n "$v" ] && version_ge "$v" "15.0" && { echo "$bin"; return; }
@@ -1945,6 +2049,241 @@ pgdg_apt_base_url() {
     fi
 }
 
+pgdg_yum_base_url() {
+    if [ "${USE_MIRROR}" = "1" ]; then
+        echo "https://mirrors.aliyun.com/postgresql/repos/yum"
+    else
+        echo "https://download.postgresql.org/pub/repos/yum"
+    fi
+}
+
+curl_pipe_bash_fallback() {
+    local url
+    for url in "$@"; do
+        log_info "run setup script: $url"
+        if curl -fsSL "$url" | sudo bash -; then
+            return 0
+        fi
+        log_warn "setup script failed: $url"
+    done
+    return 1
+}
+
+curl_download_fallback() {
+    local dest=$1
+    shift
+    local url
+    for url in "$@"; do
+        log_info "download: $url"
+        if curl -fsSL "$url" -o "$dest"; then
+            return 0
+        fi
+        log_warn "download failed: $url"
+    done
+    return 1
+}
+
+nodesource_setup_urls() {
+    local kind=$1
+    if [ "$kind" = "rpm" ]; then
+        if [ "${USE_MIRROR}" = "1" ]; then
+            printf '%s\n' \
+                "https://rpm.nodesource.com/setup_22.x" \
+                "https://mirrors.tuna.tsinghua.edu.cn/nodesource/rpm/setup_22.x" \
+                "https://mirrors.huaweicloud.com/nodesource/setup_22.x"
+        else
+            echo "https://rpm.nodesource.com/setup_22.x"
+        fi
+        return
+    fi
+    if [ "${USE_MIRROR}" = "1" ]; then
+        printf '%s\n' \
+            "https://deb.nodesource.com/setup_22.x" \
+            "https://mirrors.tuna.tsinghua.edu.cn/nodesource/deb/setup_22.x"
+    else
+        echo "https://deb.nodesource.com/setup_22.x"
+    fi
+}
+
+install_node_nodesource_rpm() {
+    local pkg_mgr urls
+    pkg_mgr="$(linux_pkg_manager)"
+    [ "$pkg_mgr" = "dnf" ] || [ "$pkg_mgr" = "yum" ] || { log_error "未找到 dnf/yum"; return 1; }
+    mapfile -t urls < <(nodesource_setup_urls rpm)
+    curl_pipe_bash_fallback "${urls[@]}" || return 1
+    sudo "$pkg_mgr" install -y nodejs || return 1
+    log_ok "Node.js 已通过 NodeSource (dnf/yum) 安装"
+}
+
+install_node_nodesource_deb() {
+    local urls
+    mapfile -t urls < <(nodesource_setup_urls deb)
+    curl_pipe_bash_fallback "${urls[@]}" || return 1
+    sudo apt update || return 1
+    sudo apt install -y nodejs || return 1
+    log_ok "Node.js 已通过 NodeSource (apt) 安装"
+}
+
+install_python_rhel() {
+    local pkg_mgr pip_urls tmp
+    pkg_mgr="$(linux_pkg_manager)"
+    [ "$pkg_mgr" = "dnf" ] || [ "$pkg_mgr" = "yum" ] || { log_error "未找到 dnf/yum"; return 1; }
+
+    if is_linux_rhel_family; then
+        local el_ver="${1:-$(get_rhel_el_version)}"
+        if [ "$el_ver" -le 8 ] 2>/dev/null; then
+            sudo "$pkg_mgr" config-manager --set-enabled powertools 2>/dev/null || \
+                sudo "$pkg_mgr" config-manager --set-enabled crb 2>/dev/null || \
+                sudo "$pkg_mgr" config-manager --set-enabled PowerTools 2>/dev/null || true
+        fi
+    fi
+
+    sudo "$pkg_mgr" install -y python3.12 python3.12-devel 2>/dev/null || \
+        sudo "$pkg_mgr" install -y python3.12 || {
+        log_error "无法安装 python3.12，请确认系统为 EL 9+ / Fedora 38+ 或已启用 CRB/PowerTools"
+        return 1
+    }
+
+    if ! python3.12 -m pip --version >/dev/null 2>&1; then
+        pip_urls=(
+            "https://bootstrap.pypa.io/get-pip.py"
+            "https://npmmirror.com/mirrors/pypi/get-pip.py"
+        )
+        tmp="$(mktemp)"
+        if curl_download_fallback "$tmp" "${pip_urls[@]}"; then
+            python3.12 "$tmp"
+        fi
+        rm -f "$tmp"
+    fi
+    log_ok "Python 3.12 已通过 dnf/yum 安装"
+}
+
+install_uv_shell() {
+    local urls=(
+        "https://astral.sh/uv/install.sh"
+        "https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
+        "https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.sh"
+    )
+    local url
+    for url in "${urls[@]}"; do
+        log_info "install uv: $url"
+        if curl -LsSf "$url" | sh; then
+            if [ "$(check_uv)" = "ok" ]; then
+                log_ok "uv 已安装"
+                return 0
+            fi
+            log_warn "uv 脚本执行后未检测到 uv"
+        else
+            log_warn "uv 安装脚本失败: $url"
+        fi
+    done
+    return 1
+}
+
+install_postgresql_pgdg_rhel() {
+    local pkg_mgr pgdg_base arch repo_rpm el_ver
+    is_linux_rhel_family || is_linux_fedora || {
+        log_error "PostgreSQL PGDG (dnf/yum) 安装仅支持 RHEL/CentOS/Rocky/Alma/Fedora"
+        return 1
+    }
+    pkg_mgr="$(linux_pkg_manager)"
+    [ "$pkg_mgr" = "dnf" ] || [ "$pkg_mgr" = "yum" ] || { log_error "未找到 dnf/yum"; return 1; }
+    pgdg_base="$(pgdg_yum_base_url)"
+    arch="$(linux_machine_arch)"
+
+    if is_linux_fedora; then
+        load_os_release
+        repo_rpm="${pgdg_base}/reporpms/F-${VERSION_ID}-${arch}/pgdg-fedora-repo-latest.noarch.rpm"
+    else
+        el_ver="$(get_rhel_el_version)"
+        repo_rpm="${pgdg_base}/reporpms/EL-${el_ver}-${arch}/pgdg-redhat-repo-latest.noarch.rpm"
+    fi
+
+    log_info "配置 PGDG 源 (dnf/yum): ${repo_rpm}"
+    sudo "$pkg_mgr" install -y "$repo_rpm" || return 1
+    if [ "$pkg_mgr" = "dnf" ]; then
+        sudo dnf -qy module disable postgresql 2>/dev/null || true
+    fi
+    sudo "$pkg_mgr" install -y postgresql15-server postgresql15-contrib || return 1
+
+    if [ ! -f /var/lib/pgsql/15/data/PG_VERSION ]; then
+        sudo /usr/pgsql-15/bin/postgresql-15-setup initdb || return 1
+    fi
+    sudo systemctl enable postgresql-15 || true
+    sudo systemctl start postgresql-15 || return 1
+    log_ok "PostgreSQL 15 已安装 (/usr/pgsql-15/bin)"
+}
+
+caddy_rpm_repo_urls() {
+    local distro=$1 codename=$2
+    if [ "${USE_MIRROR}" = "1" ]; then
+        printf '%s\n' \
+            "https://dl.cloudsmith.io/public/caddy/stable/config.rpm.txt?distro=${distro}&codename=${codename}" \
+            "https://mirrors.china.12306.work/repository/caddy/stable/config.rpm.txt?distro=${distro}&codename=${codename}"
+    else
+        echo "https://dl.cloudsmith.io/public/caddy/stable/config.rpm.txt?distro=${distro}&codename=${codename}"
+    fi
+}
+
+install_caddy_dnf() {
+    local pkg_mgr distro codename repo_urls url gpg_url keyring=/etc/pki/rpm-gpg/RPM-GPG-KEY-caddy
+    is_linux_rhel_family || is_linux_fedora || {
+        log_error "Caddy dnf/yum 安装仅支持 RHEL/CentOS/Rocky/Alma/Fedora"
+        return 1
+    }
+    pkg_mgr="$(linux_pkg_manager)"
+    [ "$pkg_mgr" = "dnf" ] || [ "$pkg_mgr" = "yum" ] || { log_error "未找到 dnf/yum"; return 1; }
+
+    if is_linux_fedora; then
+        load_os_release
+        distro=fedora
+        codename="${VERSION_ID:-}"
+    else
+        distro=el
+        codename="$(get_rhel_el_version)"
+    fi
+    [ -n "$codename" ] || { log_error "无法检测发行版版本号"; return 1; }
+
+    mapfile -t repo_urls < <(caddy_rpm_repo_urls "$distro" "$codename")
+    gpg_url="$(caddy_gpg_url)"
+    sudo "$pkg_mgr" install -y "dnf-command(config-manager)" curl ca-certificates 2>/dev/null || \
+        sudo "$pkg_mgr" install -y curl ca-certificates || return 1
+
+    local configured=0
+    for url in "${repo_urls[@]}"; do
+        log_info "配置 Caddy dnf/yum 源: $url"
+        if curl -fsSL "$url" | sudo tee /etc/yum.repos.d/caddy-stable.repo >/dev/null; then
+            configured=1
+            break
+        fi
+        log_warn "Caddy 源配置失败: $url"
+    done
+    if [ "$configured" -eq 0 ]; then
+        log_info "尝试手动写入 Caddy 源 (备用)"
+        local base
+        if [ "${USE_MIRROR}" = "1" ]; then
+            base="https://mirrors.china.12306.work/repository/caddy/stable/rpm/${distro}/${codename}/\$basearch"
+        else
+            base="https://dl.cloudsmith.io/public/caddy/stable/rpm/${distro}/${codename}/\$basearch"
+        fi
+        sudo tee /etc/yum.repos.d/caddy-stable.repo >/dev/null <<EOF
+[caddy-stable]
+name=Caddy Stable
+baseurl=${base}
+gpgcheck=1
+gpgkey=${gpg_url}
+enabled=1
+EOF
+    fi
+
+    curl -fsSL "$gpg_url" | sudo tee "$keyring" >/dev/null || return 1
+    sudo "$pkg_mgr" makecache -y 2>/dev/null || sudo "$pkg_mgr" makecache || true
+    sudo "$pkg_mgr" install -y caddy || return 1
+    stop_system_caddy || return 1
+    command -v caddy >/dev/null 2>&1 || { log_error "dnf/yum 安装后未找到 caddy"; return 1; }
+    log_ok "Caddy 已通过 dnf/yum 安装: $(command -v caddy)"
+}
+
 install_postgresql_pgdg() {
     local pgdg_base codename key_path
     if [ ! -f /etc/debian_version ]; then
@@ -2025,6 +2364,9 @@ run_install_component() {
         elif [ -f /etc/debian_version ]; then
             install_caddy_apt || return 1
             return 0
+        elif is_linux_rhel_family || is_linux_fedora; then
+            install_caddy_dnf || return 1
+            return 0
         elif [[ "$(uname -s)" == "Darwin" ]]; then
             if command -v brew >/dev/null 2>&1; then
                 brew install caddy || return 1
@@ -2037,15 +2379,46 @@ run_install_component() {
         log_error "不支持的平台，请手动安装 Caddy"
         return 1
     fi
-    if [ "$comp" = "postgresql" ] && [ -f /etc/debian_version ] && ! is_windows_gitbash; then
-        log_info "安装 postgresql..."
-        install_postgresql_pgdg || return 1
+    if [ "$comp" = "postgresql" ] && ! is_windows_gitbash; then
+        if [ -f /etc/debian_version ]; then
+            log_info "安装 postgresql..."
+            install_postgresql_pgdg || return 1
+            return 0
+        fi
+        if is_linux_rhel_family || is_linux_fedora; then
+            log_info "安装 postgresql..."
+            install_postgresql_pgdg_rhel || return 1
+            return 0
+        fi
+    fi
+    if [ "$comp" = "node" ] && ! is_windows_gitbash; then
+        if is_linux_rhel_family || is_linux_fedora; then
+            log_info "安装 node..."
+            install_node_nodesource_rpm || return 1
+            return 0
+        fi
+        if [ "$(get_install_platform_key)" = "debian" ]; then
+            log_info "安装 node..."
+            install_node_nodesource_deb || return 1
+            return 0
+        fi
+    fi
+    if [ "$comp" = "python" ] && ! is_windows_gitbash; then
+        if is_linux_rhel_family || is_linux_fedora; then
+            log_info "安装 python..."
+            install_python_rhel || return 1
+            return 0
+        fi
+    fi
+    if [ "$comp" = "uv" ] && ! is_windows_gitbash; then
+        log_info "安装 uv..."
+        install_uv_shell || return 1
         return 0
     fi
     local cmd
     cmd="$(get_install_command "$comp")"
     [ -n "$cmd" ] || { log_error "无 $comp 的安装命令"; return 1; }
-    if [[ "$cmd" == *"从 https"* ]]; then
+    if [[ "$cmd" == *"fast-deploy"* ]] || [[ "$cmd" == *"从 https"* ]]; then
         log_error "请手动安装 $comp: $cmd"
         return 1
     fi
@@ -2099,6 +2472,8 @@ cmd_install() {
     log_info "安装缺失依赖（可能需要 sudo / 管理员权限）..."
     if is_windows_gitbash; then
         log_info "Windows 环境：优先 winget，不可用时走官方安装包..."
+    elif [ "$(uname -s)" = "Linux" ]; then
+        log_info "Linux 发行版: $(linux_platform_label) · 平台标识: $(get_install_platform_key)"
     fi
     run_install_component node "$(check_node)" || true
     run_install_component python "$(check_python)" || true

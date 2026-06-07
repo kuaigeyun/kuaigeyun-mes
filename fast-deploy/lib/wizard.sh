@@ -551,6 +551,9 @@ wizard_detect_system() {
 
     wizard_say "正在识别运行环境..."
     wizard_say_ok "操作系统: ${os_label}"
+    if [ "$(uname -s)" = "Linux" ] && [ -f /etc/os-release ]; then
+        wizard_say_ok "Linux 平台: $(get_install_platform_key)"
+    fi
     wizard_say_ok "CPU 架构: ${arch}"
     wizard_say_ok "部署模式: ${mode_label}"
     wizard_say_ok "软件源: ${mirror_label}"
@@ -894,14 +897,36 @@ wizard_install_reason() {
 }
 
 wizard_install_method_hint() {
+    local plat
+    plat="$(get_install_platform_key 2>/dev/null || echo linux)"
     case "$1" in
-        node|python) echo "官方源安装" ;;
-        uv) echo "官方安装脚本" ;;
+        node|python)
+            case "$plat" in
+                rhel|fedora) echo "NodeSource / dnf 官方源 + 国内备用" ;;
+                debian|ubuntu22) echo "NodeSource / apt 官方源 + 国内备用" ;;
+                *) echo "官方源安装" ;;
+            esac
+            ;;
+        uv) echo "官方安装脚本 + ghproxy 备用" ;;
         postgresql)
-            if [ "${USE_MIRROR}" = "1" ]; then echo "阿里云 PGDG 镜像"; else echo "PGDG 官方源"; fi
+            case "$plat" in
+                rhel|fedora)
+                    if [ "${USE_MIRROR}" = "1" ]; then echo "阿里云 PGDG yum 镜像"; else echo "PGDG 官方 yum 源"; fi
+                    ;;
+                *)
+                    if [ "${USE_MIRROR}" = "1" ]; then echo "阿里云 PGDG 镜像"; else echo "PGDG 官方源"; fi
+                    ;;
+            esac
             ;;
         caddy)
-            if [ "${USE_MIRROR}" = "1" ]; then echo "apt 国内镜像"; else echo "apt 官方源"; fi
+            case "$plat" in
+                rhel|fedora)
+                    if [ "${USE_MIRROR}" = "1" ]; then echo "dnf 国内 rpm 镜像"; else echo "Cloudsmith rpm 官方源"; fi
+                    ;;
+                *)
+                    if [ "${USE_MIRROR}" = "1" ]; then echo "apt 国内镜像"; else echo "apt 官方源"; fi
+                    ;;
+            esac
             ;;
         *) echo "" ;;
     esac

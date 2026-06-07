@@ -1,4 +1,4 @@
-# RiverEdge Windows component install (winget with MSI/exe fallback)
+# RiverEdge Windows component install (winget with MSI/exe fallback + CN backup mirrors)
 param(
     [Parameter(Mandatory)]
     [ValidateSet('node', 'python', 'uv', 'postgresql', 'caddy')]
@@ -24,6 +24,46 @@ function Write-Ok([string]$Msg) {
 function Write-Err([string]$Msg) {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] ERROR: $Msg" -ForegroundColor Red
     exit 1
+}
+
+function Get-UniqueUrls([string[]]$Urls) {
+    $seen = @{}
+    $result = @()
+    foreach ($url in $Urls) {
+        if ([string]::IsNullOrWhiteSpace($url)) { continue }
+        if ($seen.ContainsKey($url)) { continue }
+        $seen[$url] = $true
+        $result += $url
+    }
+    return $result
+}
+
+function Invoke-DownloadWithFallback([string[]]$Urls, [string]$Dest) {
+    foreach ($url in (Get-UniqueUrls $Urls)) {
+        try {
+            Write-Info "download: $url"
+            Invoke-WebRequest -Uri $url -OutFile $Dest -UseBasicParsing
+            return $true
+        } catch {
+            Write-Info "download failed ($url): $($_.Exception.Message)"
+        }
+    }
+    return $false
+}
+
+function Invoke-RestWithFallback([string[]]$Urls, [hashtable]$Headers = @{}) {
+    if (-not $Headers.ContainsKey('User-Agent')) {
+        $Headers['User-Agent'] = 'riveredge-fast-deploy'
+    }
+    foreach ($url in (Get-UniqueUrls $Urls)) {
+        try {
+            Write-Info "fetch: $url"
+            return Invoke-RestMethod -Uri $url -UseBasicParsing -Headers $Headers
+        } catch {
+            Write-Info "fetch failed ($url): $($_.Exception.Message)"
+        }
+    }
+    return $null
 }
 
 function Resolve-WingetPath {
@@ -53,6 +93,16 @@ function Test-WingetSuccess([int]$ExitCode) {
     return $false
 }
 
+function Ensure-WingetBackupSource([string]$Name, [string]$Url) {
+    $winget = Resolve-WingetPath
+    if (-not $winget) { return $false }
+    $list = & $winget source list 2>$null
+    if ($list -match [regex]::Escape($Name)) { return $true }
+    Write-Info "adding winget backup source: $Name"
+    & $winget source add --name $Name --arg $Url --accept-source-agreements 2>$null | Out-Null
+    return (Test-WingetSuccess $LASTEXITCODE)
+}
+
 function Invoke-WingetInstall([string[]]$WingetArgs) {
     $winget = Resolve-WingetPath
     if (-not $winget) { return $false }
@@ -61,42 +111,163 @@ function Invoke-WingetInstall([string[]]$WingetArgs) {
     return (Test-WingetSuccess $LASTEXITCODE)
 }
 
+function Invoke-WingetInstallVerified([string[]]$WingetArgs, [scriptblock]$VerifyFn) {
+    if (Invoke-WingetInstall $WingetArgs) {
+        if (& $VerifyFn) { return $true }
+        Write-Info 'winget reported success but component not detected, trying fallback...'
+    }
+
+    $backupSources = @(
+        @{ Name = 'winget-ustc'; Url = 'https://mirrors.ustc.edu.cn/winget-source' },
+        @{ Name = 'winget-bfsu'; Url = 'https://mirrors.bfsu.edu.cn/winget-source' }
+    )
+    foreach ($src in $backupSources) {
+        if (-not (Ensure-WingetBackupSource $src.Name $src.Url)) { continue }
+        $argsWithSource = @('--source', $src.Name) + $WingetArgs
+        if (Invoke-WingetInstall $argsWithSource) {
+            if (& $VerifyFn) { return $true }
+            Write-Info "winget ($($src.Name)) reported success but component not detected"
+        }
+    }
+
+    return $false
+}
+
 function Get-InstallTempDir {
     $dir = Join-Path $env:TEMP 'riveredge-install'
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
     return $dir
 }
 
-function Get-NodeDistBase([bool]$Mirror) {
-    if ($Mirror) { return 'https://npmmirror.com/mirrors/node' }
-    return 'https://nodejs.org/dist'
+function Test-NodeReady {
+    $toolsNode = Join-Path $FastDeployDir '.tools\node\node.exe'
+    if (Test-Path $toolsNode) { return $true }
+    foreach ($p in @(
+        (Join-Path $env:ProgramFiles 'nodejs\node.exe'),
+        (Join-Path ${env:ProgramFiles(x86)} 'nodejs\node.exe')
+    )) {
+        if (Test-Path $p) { return $true }
+    }
+    return ($null -ne (Get-Command node -ErrorAction SilentlyContinue))
+}
+
+function Test-PythonReady {
+    foreach ($c in @('python3.12', 'python3', 'python', 'py')) {
+        if (-not (Get-Command $c -ErrorAction SilentlyContinue)) { continue }
+        $out = if ($c -eq 'py') { & py -3.12 --version 2>&1 } else { & $c --version 2>&1 }
+        if ($out -match '3\.(1[2-9]|[2-9]\d)\.') { return $true }
+    }
+    foreach ($p in @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python312\python.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\Python313\python.exe')
+    )) {
+        if (Test-Path $p) { return $true }
+    }
+    $pyRoot = Join-Path $env:LOCALAPPDATA 'Programs\Python'
+    if (Test-Path $pyRoot) {
+        foreach ($dir in Get-ChildItem $pyRoot -Directory -Filter 'Python3*' -ErrorAction SilentlyContinue) {
+            if (Test-Path (Join-Path $dir.FullName 'python.exe')) { return $true }
+        }
+    }
+    return $false
+}
+
+function Test-UvReady {
+    if (Get-Command uv -ErrorAction SilentlyContinue) { return $true }
+    foreach ($p in @(
+        "$env:USERPROFILE\.local\bin\uv.exe",
+        "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts\uv.exe"
+    )) {
+        if (Test-Path $p) { return $true }
+    }
+    return $false
+}
+
+function Test-PostgresqlReady {
+    foreach ($p in @(
+        "$env:ProgramFiles\PostgreSQL\15\bin\psql.exe",
+        "$env:ProgramFiles\PostgreSQL\16\bin\psql.exe",
+        "$env:ProgramFiles\PostgreSQL\17\bin\psql.exe"
+    )) {
+        if (Test-Path $p) { return $true }
+    }
+    $svc = Get-Service -ErrorAction SilentlyContinue | Where-Object { $_.Name -like 'postgresql*' } | Select-Object -First 1
+    return ($null -ne $svc)
+}
+
+function Test-CaddyReady {
+    $bundled = Join-Path $FastDeployDir '.tools\caddy\caddy.exe'
+    if (Test-Path $bundled) { return $true }
+    return ($null -ne (Get-Command caddy -ErrorAction SilentlyContinue))
+}
+
+function Get-NodeDistBases([bool]$Mirror) {
+    $official = 'https://nodejs.org/dist'
+    $cn = @(
+        'https://npmmirror.com/mirrors/node',
+        'https://mirrors.huaweicloud.com/nodejs',
+        'https://mirrors.tuna.tsinghua.edu.cn/nodejs-release'
+    )
+    if ($Mirror) {
+        return Get-UniqueUrls @($cn[0]) + @($official) + $cn[1..($cn.Length - 1)]
+    }
+    return Get-UniqueUrls @($official) + $cn
 }
 
 function Get-NodeReleaseVersion([bool]$Mirror) {
-    $base = Get-NodeDistBase $Mirror
-    try {
-        $indexUrl = if ($Mirror) { "$base/index.json" } else { 'https://nodejs.org/dist/index.json' }
-        $index = Invoke-RestMethod -Uri $indexUrl -UseBasicParsing
-        $entry = $index | Where-Object { $_.version -match '^v22\.' -and $_.lts } | Select-Object -First 1
-        if (-not $entry) {
-            $entry = $index | Where-Object { $_.version -match '^v22\.' } | Select-Object -First 1
+    $indexUrls = @()
+    foreach ($base in (Get-NodeDistBases $Mirror)) {
+        $indexUrls += if ($base -match 'nodejs\.org') {
+            'https://nodejs.org/dist/index.json'
+        } else {
+            "$base/index.json"
         }
-        if ($entry) { return $entry.version.TrimStart('v') }
-    } catch {
-        Write-Info "node index fetch failed: $($_.Exception.Message)"
+    }
+    foreach ($indexUrl in (Get-UniqueUrls $indexUrls)) {
+        try {
+            $index = Invoke-RestWithFallback @($indexUrl)
+            if (-not $index) { continue }
+            $entry = $index | Where-Object { $_.version -match '^v22\.' -and $_.lts } | Select-Object -First 1
+            if (-not $entry) {
+                $entry = $index | Where-Object { $_.version -match '^v22\.' } | Select-Object -First 1
+            }
+            if ($entry) { return $entry.version.TrimStart('v') }
+        } catch {
+            Write-Info "node index fetch failed ($indexUrl): $($_.Exception.Message)"
+        }
     }
     return '22.14.0'
 }
 
-function Install-NodeMsi([string]$Ver, [bool]$Mirror) {
-    $base = Get-NodeDistBase $Mirror
+function Get-NodeMsiUrls([string]$Ver, [bool]$Mirror) {
     $file = "node-v$Ver-x64.msi"
-    $url = "$base/v$Ver/$file"
+    $rel = "v$Ver/$file"
+    $urls = @()
+    foreach ($base in (Get-NodeDistBases $Mirror)) {
+        $urls += "$base/$rel"
+    }
+    return Get-UniqueUrls $urls
+}
+
+function Get-NodeZipUrls([string]$Ver, [bool]$Mirror) {
+    $folder = "node-v$Ver-win-x64"
+    $file = "$folder.zip"
+    $rel = "v$Ver/$file"
+    $urls = @()
+    foreach ($base in (Get-NodeDistBases $Mirror)) {
+        $urls += "$base/$rel"
+    }
+    return Get-UniqueUrls $urls
+}
+
+function Install-NodeMsi([string]$Ver, [bool]$Mirror) {
+    $file = "node-v$Ver-x64.msi"
     $tmpdir = Get-InstallTempDir
     $msi = Join-Path $tmpdir $file
 
-    Write-Info "download: $url"
-    Invoke-WebRequest -Uri $url -OutFile $msi -UseBasicParsing
+    if (-not (Invoke-DownloadWithFallback (Get-NodeMsiUrls $Ver $Mirror) $msi)) {
+        return $false
+    }
 
     $argSets = @(
         @('/i', $msi, '/qn', 'ADDLOCAL=ALL', 'ALLUSERS=2', 'MSIINSTALLPERUSER=1'),
@@ -112,17 +283,16 @@ function Install-NodeMsi([string]$Ver, [bool]$Mirror) {
 }
 
 function Install-NodePortable([string]$Ver, [bool]$Mirror) {
-    $base = Get-NodeDistBase $Mirror
     $folder = "node-v$Ver-win-x64"
     $file = "$folder.zip"
-    $url = "$base/v$Ver/$file"
     $tmpdir = Get-InstallTempDir
     $zip = Join-Path $tmpdir $file
     $extract = Join-Path $tmpdir 'node-extract'
     $toolsDir = Join-Path $FastDeployDir '.tools\node'
 
-    Write-Info "download portable: $url"
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+    if (-not (Invoke-DownloadWithFallback (Get-NodeZipUrls $Ver $Mirror) $zip)) {
+        throw 'all node portable download sources failed'
+    }
 
     if (Test-Path $extract) { Remove-Item $extract -Recurse -Force }
     Expand-Archive -Path $zip -DestinationPath $extract -Force
@@ -139,7 +309,7 @@ function Install-NodePortable([string]$Ver, [bool]$Mirror) {
 }
 
 function Install-Node {
-    if (Invoke-WingetInstall @('-e', '--id', 'OpenJS.NodeJS.LTS', '--accept-package-agreements', '--accept-source-agreements')) {
+    if (Invoke-WingetInstallVerified @('-e', '--id', 'OpenJS.NodeJS.LTS', '--accept-package-agreements', '--accept-source-agreements') { Test-NodeReady }) {
         Write-Ok 'Node.js installed via winget'
         return
     }
@@ -147,7 +317,7 @@ function Install-Node {
     $mirror = ($UseMirror -eq '1')
     $ver = Get-NodeReleaseVersion $mirror
 
-    Write-Info "winget unavailable, installing Node.js $ver ..."
+    Write-Info "winget unavailable or incomplete, installing Node.js $ver ..."
     if (Install-NodeMsi $ver $mirror) {
         Write-Ok "Node.js $ver installed via MSI (reopen terminal to refresh PATH)"
         return
@@ -163,43 +333,67 @@ function Install-Node {
     Write-Ok "Node.js $ver portable: $nodeExe"
 }
 
-function Get-PythonInstallerUrl([bool]$Mirror, [string]$Version = '3.12.9') {
+function Get-PythonInstallerUrls([bool]$Mirror, [string]$Version = '3.12.9') {
     $file = "python-$Version-amd64.exe"
+    $official = "https://www.python.org/ftp/python/$Version/$file"
+    $cn = @(
+        "https://npmmirror.com/mirrors/python/$Version/$file",
+        "https://mirrors.huaweicloud.com/python/$Version/$file",
+        "https://mirrors.aliyun.com/python-release-windows/$Version/$file"
+    )
     if ($Mirror) {
-        return "https://npmmirror.com/mirrors/python/$Version/$file", $file
+        return Get-UniqueUrls @($cn[0]) + @($official) + $cn[1..($cn.Length - 1)]
     }
-    return "https://www.python.org/ftp/python/$Version/$file", $file
+    return Get-UniqueUrls @($official) + $cn
 }
 
 function Install-Python {
-    if (Invoke-WingetInstall @('-e', '--id', 'Python.Python.3.12', '--accept-package-agreements', '--accept-source-agreements')) {
+    if (Invoke-WingetInstallVerified @('-e', '--id', 'Python.Python.3.12', '--accept-package-agreements', '--accept-source-agreements') { Test-PythonReady }) {
         Write-Ok 'Python 3.12 installed via winget'
         return
     }
 
-    Write-Info 'winget unavailable, installing Python 3.12 via official installer...'
+    Write-Info 'winget unavailable or incomplete, installing Python 3.12 via official installer...'
     $mirror = ($UseMirror -eq '1')
-    $url, $file = Get-PythonInstallerUrl $mirror
+    $urls = Get-PythonInstallerUrls $mirror
+    $file = ([uri]($urls[0])).Segments[-1]
     $tmpdir = Get-InstallTempDir
     $exe = Join-Path $tmpdir $file
 
-    Write-Info "download: $url"
-    Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+    if (-not (Invoke-DownloadWithFallback $urls $exe)) {
+        Write-Err "Python download failed from all sources. Manual: $($urls[0])"
+    }
 
     Write-Info 'silent Python install...'
     $proc = Start-Process -FilePath $exe -ArgumentList @(
         '/quiet', 'InstallAllUsers=0', 'PrependPath=1', 'Include_test=0'
     ) -Wait -PassThru
     if ($proc.ExitCode -ne 0) {
-        Write-Err "Python install failed (exit $($proc.ExitCode)). Manual: $url"
+        Write-Err "Python install failed (exit $($proc.ExitCode)). Manual: $($urls[0])"
     }
     Write-Ok 'Python 3.12 installed (reopen terminal to refresh PATH)'
 }
 
 function Install-Uv {
-    Write-Info 'installing uv via official script...'
-    Invoke-Expression 'irm https://astral.sh/uv/install.ps1 | iex'
-    Write-Ok 'uv installed'
+    $scripts = Get-UniqueUrls @(
+        'https://astral.sh/uv/install.ps1',
+        'https://ghproxy.net/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1',
+        'https://mirror.ghproxy.com/https://raw.githubusercontent.com/astral-sh/uv/main/scripts/install.ps1'
+    )
+    foreach ($url in $scripts) {
+        try {
+            Write-Info "installing uv via $url"
+            Invoke-Expression "irm '$url' | iex"
+            if (Test-UvReady) {
+                Write-Ok 'uv installed'
+                return
+            }
+            Write-Info "uv script ran but binary not detected ($url)"
+        } catch {
+            Write-Info "uv install failed ($url): $($_.Exception.Message)"
+        }
+    }
+    Write-Err 'uv install failed from all sources'
 }
 
 function Read-BackendEnvValue([string]$Key, [string]$Default = '') {
@@ -219,10 +413,18 @@ function Get-PostgresqlInstallerInfo([int]$Major = 16) {
         17 = @{ Ver = '17.4-1'; File = 'postgresql-17.4-1-windows-x64.exe' }
     }
     if ($builds.ContainsKey($Major)) {
-        return $builds[$Major].File, "https://get.enterprisedb.com/postgresql/$($builds[$Major].File)"
+        return $builds[$Major].File, $builds[$Major].Ver
     }
     $file = "postgresql-$Major.8-1-windows-x64.exe"
-    return $file, "https://get.enterprisedb.com/postgresql/$file"
+    return $file, "$Major.8-1"
+}
+
+function Get-PostgresqlInstallerUrls([int]$Major = 16) {
+    $file, $verTag = Get-PostgresqlInstallerInfo $Major
+    return Get-UniqueUrls @(
+        "https://get.enterprisedb.com/postgresql/$file",
+        "https://ftp.postgresql.org/pub/binary/v$($verTag.Split('-')[0])/windows/$file"
+    )
 }
 
 function Start-PostgresqlWindowsService {
@@ -244,12 +446,14 @@ function Install-PostgresqlEdb {
     }
     $port = Read-BackendEnvValue 'DB_PORT' '5432'
 
-    $file, $url = Get-PostgresqlInstallerInfo 16
+    $urls = Get-PostgresqlInstallerUrls 16
+    $file = ([uri]($urls[0])).Segments[-1]
     $tmpdir = Get-InstallTempDir
     $exe = Join-Path $tmpdir $file
 
-    Write-Info "download: $url"
-    Invoke-WebRequest -Uri $url -OutFile $exe -UseBasicParsing
+    if (-not (Invoke-DownloadWithFallback $urls $exe)) {
+        throw 'PostgreSQL installer download failed from all sources'
+    }
 
     Write-Info "silent PostgreSQL install (port $port)..."
     $args = @(
@@ -268,13 +472,13 @@ function Install-PostgresqlEdb {
 }
 
 function Install-Postgresql {
-    if (Invoke-WingetInstall @('-e', '--id', 'PostgreSQL.PostgreSQL', '--accept-package-agreements', '--accept-source-agreements')) {
+    if (Invoke-WingetInstallVerified @('-e', '--id', 'PostgreSQL.PostgreSQL', '--accept-package-agreements', '--accept-source-agreements') { Test-PostgresqlReady }) {
         Start-PostgresqlWindowsService
         Write-Ok 'PostgreSQL installed via winget'
         return
     }
 
-    Write-Info 'winget unavailable, installing PostgreSQL 16 via EDB installer...'
+    Write-Info 'winget unavailable or incomplete, installing PostgreSQL 16 via EDB installer...'
     try {
         Install-PostgresqlEdb
     } catch {
@@ -289,30 +493,36 @@ function Install-Postgresql {
     Write-Ok 'PostgreSQL installed via EDB installer (reopen terminal to refresh PATH)'
 }
 
-function Install-Caddy {
-    if (Invoke-WingetInstall @('-e', '--id', 'CaddyServer.Caddy', '--accept-package-agreements', '--accept-source-agreements')) {
-        Write-Ok 'Caddy installed via winget'
-        return
-    }
+function Get-GhProxyUrls([string]$Url) {
+    return Get-UniqueUrls @(
+        $Url,
+        "https://ghproxy.net/$Url",
+        "https://mirror.ghproxy.com/$Url"
+    )
+}
 
-    Write-Info 'winget unavailable, downloading portable Caddy...'
-    $apiUrl = 'https://api.github.com/repos/caddyserver/caddy/releases/latest'
-    try {
-        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -Headers @{ 'User-Agent' = 'riveredge-fast-deploy' }
+function Get-CaddyDownloadUrl {
+    $apiUrls = Get-GhProxyUrls 'https://api.github.com/repos/caddyserver/caddy/releases/latest'
+    $release = Invoke-RestWithFallback $apiUrls
+    if ($release) {
         $asset = $release.assets | Where-Object { $_.name -match 'windows_amd64\.zip$' } | Select-Object -First 1
-        if (-not $asset) { throw 'windows_amd64.zip not found' }
-        $url = $asset.browser_download_url
-    } catch {
-        $url = 'https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_windows_amd64.zip'
+        if ($asset) { return $asset.browser_download_url }
     }
+    return 'https://github.com/caddyserver/caddy/releases/download/v2.9.1/caddy_2.9.1_windows_amd64.zip'
+}
+
+function Install-CaddyPortable {
+    $directUrl = Get-CaddyDownloadUrl
+    $urls = Get-GhProxyUrls $directUrl
 
     $toolsDir = Join-Path $FastDeployDir '.tools\caddy'
     New-Item -ItemType Directory -Force -Path $toolsDir | Out-Null
     $tmpdir = Get-InstallTempDir
     $zip = Join-Path $tmpdir 'caddy.zip'
 
-    Write-Info "download: $url"
-    Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+    if (-not (Invoke-DownloadWithFallback $urls $zip)) {
+        Write-Err 'Caddy download failed from all sources'
+    }
     Expand-Archive -Path $zip -DestinationPath $toolsDir -Force
 
     $exe = Join-Path $toolsDir 'caddy.exe'
@@ -320,6 +530,16 @@ function Install-Caddy {
         Write-Err 'caddy.exe not found after extract'
     }
     Write-Ok "portable Caddy installed: $exe"
+}
+
+function Install-Caddy {
+    if (Invoke-WingetInstallVerified @('-e', '--id', 'CaddyServer.Caddy', '--accept-package-agreements', '--accept-source-agreements') { Test-CaddyReady }) {
+        Write-Ok 'Caddy installed via winget'
+        return
+    }
+
+    Write-Info 'winget unavailable or incomplete, downloading portable Caddy...'
+    Install-CaddyPortable
 }
 
 switch ($Component) {
