@@ -10,6 +10,12 @@ User={{SERVICE_USER}}
 Group={{SERVICE_GROUP}}
 WorkingDirectory={{PROJECT_ROOT}}
 Environment=HOME={{SERVICE_HOME}}
+Environment=RIVEREDGE_SYSTEMD=1
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:{{SERVICE_HOME}}/.local/bin:{{SERVICE_HOME}}/.cargo/bin
+Environment=RIVEREDGE_UV={{UV_BIN}}
+Environment=RIVEREDGE_CADDY={{CADDY_BIN}}
+StandardOutput=journal
+StandardError=journal
 ExecStart={{SERVICE_SCRIPT}} start
 ExecStop={{SERVICE_SCRIPT}} stop
 TimeoutStartSec=300

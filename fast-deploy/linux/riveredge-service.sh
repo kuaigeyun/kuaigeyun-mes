@@ -3,7 +3,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${HOME}/.local/bin:${HOME}/.cargo/bin"
+export RIVEREDGE_SYSTEMD=1
 export DEPLOY_MODE=prod
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:${HOME}/.local/bin:${HOME}/.cargo/bin"
 
 exec "$SCRIPT_DIR/prod.sh" "${1:-start}"

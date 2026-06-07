@@ -347,8 +347,12 @@ get_install_command() {
 }
 
 resolve_uv() {
+    if [ -n "${RIVEREDGE_UV:-}" ] && [ -x "${RIVEREDGE_UV}" ]; then
+        echo "${RIVEREDGE_UV}"
+        return
+    fi
     if command -v uv >/dev/null 2>&1; then
-        echo "uv"
+        command -v uv
         return
     fi
     local candidates=(
@@ -362,6 +366,10 @@ resolve_uv() {
 }
 
 resolve_caddy() {
+    if [ -n "${RIVEREDGE_CADDY:-}" ] && [ -x "${RIVEREDGE_CADDY}" ]; then
+        echo "${RIVEREDGE_CADDY}"
+        return
+    fi
     if command -v caddy >/dev/null 2>&1; then
         command -v caddy
         return
@@ -1615,6 +1623,16 @@ stop_system_caddy() {
         return 0
     fi
     if systemctl is-active --quiet caddy 2>/dev/null || systemctl is-enabled --quiet caddy 2>/dev/null; then
+        if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
+            if systemctl is-active --quiet caddy 2>/dev/null; then
+                log_error "系统 caddy.service 仍在运行，与项目 Caddy 冲突"
+                log_error "请执行: sudo systemctl stop caddy && sudo systemctl disable caddy"
+                log_error "然后: sudo systemctl restart riveredge"
+                return 1
+            fi
+            log_warn "系统 caddy.service 仍 enabled，建议在注册开机自启时已 disable"
+            return 0
+        fi
         log_info "停止系统 caddy.service（apt 安装后会自启，与本项目 Caddyfile 冲突）..."
         sudo systemctl stop caddy || {
             log_error "无法停止 caddy.service，请执行: sudo systemctl stop caddy"
@@ -1634,25 +1652,39 @@ stop_system_caddy() {
     return 0
 }
 
+ensure_caddy_bind_caps() {
+    local caddy_bin=$1
+    [ -n "$caddy_bin" ] || return 1
+    load_deploy_env
+    if [ "$PROXY_PORT" -ge 1024 ] && { [ -z "$CADDY_DOMAIN" ] || [ "$CADDY_ENABLE_LETSENCRYPT" != "true" ]; }; then
+        return 0
+    fi
+    local caps
+    caps="$(getcap "$caddy_bin" 2>/dev/null || echo "")"
+    if echo "$caps" | grep -q "cap_net_bind_service"; then
+        return 0
+    fi
+    if [ "${RIVEREDGE_SYSTEMD:-0}" = "1" ]; then
+        log_error "caddy 缺少 cap_net_bind_service，无法绑定 80/443 端口"
+        log_error "请执行: sudo setcap 'cap_net_bind_service=+ep' $caddy_bin"
+        log_error "然后: sudo systemctl restart riveredge"
+        return 1
+    fi
+    if sudo -n setcap 'cap_net_bind_service=+ep' "$caddy_bin" 2>/dev/null; then
+        log_ok "已为 caddy 配置 cap_net_bind_service"
+        return 0
+    fi
+    log_error "caddy 需要 bind <1024 端口权限，请执行: sudo setcap 'cap_net_bind_service=+ep' $caddy_bin"
+    return 1
+}
+
 ensure_linux_caddy_ready() {
     load_deploy_env
     stop_system_caddy || exit 1
     local caddy_bin
     caddy_bin="$(resolve_caddy)"
     [ -n "$caddy_bin" ] || { log_error "未安装 Caddy，请运行: $0 install"; exit 1; }
-
-    if [ "$PROXY_PORT" -lt 1024 ] || { [ -n "$CADDY_DOMAIN" ] && [ "$CADDY_ENABLE_LETSENCRYPT" = "true" ]; }; then
-        local caps
-        caps="$(getcap "$caddy_bin" 2>/dev/null || echo "")"
-        if ! echo "$caps" | grep -q "cap_net_bind_service"; then
-            if sudo -n setcap 'cap_net_bind_service=+ep' "$caddy_bin" 2>/dev/null; then
-                log_ok "已为 caddy 配置 cap_net_bind_service"
-            else
-                log_error "caddy 需要 bind <1024 端口权限，请执行: sudo setcap 'cap_net_bind_service=+ep' $caddy_bin"
-                exit 1
-            fi
-        fi
-    fi
+    ensure_caddy_bind_caps "$caddy_bin" || exit 1
 }
 
 start_backend_dev() {
@@ -1954,7 +1986,7 @@ resolve_service_user() {
 }
 
 render_systemd_unit() {
-    local service_user=$1
+    local service_user=$1 uv_bin=$2 caddy_bin=$3
     local service_home service_group
     service_home="$(getent passwd "$service_user" | cut -d: -f6)"
     [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
@@ -1965,7 +1997,69 @@ render_systemd_unit() {
         -e "s|{{SERVICE_HOME}}|${service_home}|g" \
         -e "s|{{PROJECT_ROOT}}|${PROJECT_ROOT}|g" \
         -e "s|{{SERVICE_SCRIPT}}|${SYSTEMD_SERVICE_SCRIPT}|g" \
+        -e "s|{{UV_BIN}}|${uv_bin}|g" \
+        -e "s|{{CADDY_BIN}}|${caddy_bin}|g" \
         "$SYSTEMD_UNIT_TEMPLATE"
+}
+
+show_systemd_start_failure() {
+    log_error "服务启动失败，最近日志："
+    if command -v journalctl >/dev/null 2>&1; then
+        sudo journalctl -u "$SYSTEMD_UNIT_NAME" -n 40 --no-pager 2>/dev/null || true
+    fi
+    if [ -f "$LOGS_DIR/backend.log" ]; then
+        log_error "backend.log 末尾："
+        tail -20 "$LOGS_DIR/backend.log" >&2 || true
+    fi
+    if [ -f "$LOGS_DIR/caddy.log" ]; then
+        log_error "caddy.log 末尾："
+        tail -20 "$LOGS_DIR/caddy.log" >&2 || true
+    fi
+    log_error "完整日志: journalctl -u ${SYSTEMD_UNIT_NAME} -e"
+}
+
+resolve_systemd_tool_path() {
+    local service_user=$1 tool=$2
+    local service_home path
+    service_home="$(getent passwd "$service_user" | cut -d: -f6)"
+    [ -n "$service_home" ] || return 1
+    path="$(sudo -u "$service_user" -H env \
+        HOME="$service_home" \
+        PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin:${service_home}/.local/bin:${service_home}/.cargo/bin" \
+        bash -c "command -v ${tool} 2>/dev/null || true")"
+    if [ -n "$path" ]; then
+        echo "$path"
+        return 0
+    fi
+    if [ "$tool" = "uv" ] && [ -x "${service_home}/.local/bin/uv" ]; then
+        echo "${service_home}/.local/bin/uv"
+        return 0
+    fi
+    if [ "$tool" = "uv" ] && [ -x "${service_home}/.cargo/bin/uv" ]; then
+        echo "${service_home}/.cargo/bin/uv"
+        return 0
+    fi
+    return 1
+}
+
+prepare_systemd_prerequisites() {
+    local service_user=$1
+    local uv_bin caddy_bin
+    load_deploy_env
+    stop_system_caddy || return 1
+    caddy_bin="$(resolve_systemd_tool_path "$service_user" caddy)" || caddy_bin="$(resolve_caddy)"
+    [ -n "$caddy_bin" ] || { log_error "未安装 Caddy，请先执行 install"; return 1; }
+    ensure_caddy_bind_caps "$caddy_bin" || return 1
+    uv_bin="$(resolve_systemd_tool_path "$service_user" uv)" || true
+    if [ -z "$uv_bin" ]; then
+        log_error "未找到用户 ${service_user} 的 uv，请先为该用户安装 uv"
+        return 1
+    fi
+    if [ ! -x "$uv_bin" ]; then
+        log_error "uv 不可执行: $uv_bin"
+        return 1
+    fi
+    echo "${uv_bin}|${caddy_bin}"
 }
 
 cmd_install_service() {
@@ -1985,17 +2079,24 @@ cmd_install_service() {
         exit 1
     }
 
-    log_info "注册 systemd 服务 (${SYSTEMD_UNIT_NAME})，运行用户: ${service_user}"
-    local unit_content tmp
-    unit_content="$(render_systemd_unit "$service_user")" || exit 1
-    tmp="$(mktemp)"
-    printf '%s\n' "$unit_content" > "$tmp"
-
     if ! sudo -v; then
         log_error "需要 sudo 权限写入 ${SYSTEMD_UNIT_PATH}"
-        rm -f "$tmp"
         exit 1
     fi
+
+    log_info "准备 systemd 运行前提（停止系统 caddy、检查端口权限）..."
+    local prereq uv_bin caddy_bin
+    prereq="$(prepare_systemd_prerequisites "$service_user")" || exit 1
+    uv_bin="${prereq%%|*}"
+    caddy_bin="${prereq#*|}"
+
+    log_info "注册 systemd 服务 (${SYSTEMD_UNIT_NAME})，运行用户: ${service_user}"
+    log_info "uv: ${uv_bin}"
+    log_info "caddy: ${caddy_bin}"
+    local unit_content tmp
+    unit_content="$(render_systemd_unit "$service_user" "$uv_bin" "$caddy_bin")" || exit 1
+    tmp="$(mktemp)"
+    printf '%s\n' "$unit_content" > "$tmp"
 
     sudo cp "$tmp" "$SYSTEMD_UNIT_PATH"
     rm -f "$tmp"
@@ -2003,10 +2104,10 @@ cmd_install_service() {
     sudo systemctl enable "$SYSTEMD_UNIT_NAME"
     if ! sudo systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
         log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
-        sudo systemctl start "$SYSTEMD_UNIT_NAME" || {
-            log_error "服务启动失败，请执行: journalctl -u ${SYSTEMD_UNIT_NAME} -e"
+        if ! sudo systemctl start "$SYSTEMD_UNIT_NAME"; then
+            show_systemd_start_failure
             exit 1
-        }
+        fi
     fi
 
     log_ok "已启用开机自启: ${SYSTEMD_UNIT_NAME}"
