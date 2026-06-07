@@ -47,7 +47,7 @@ case "$SUBCMD" in
 esac
 export DEPLOY_MODE="${DEPLOY_MODE:-prod}"
 
-KNOWN_CMDS="wizard check install configure migrate build start stop status update deploy"
+KNOWN_CMDS="wizard check install configure migrate build start stop status update install-service uninstall-service deploy"
 is_known_cmd() {
     case " ${KNOWN_CMDS} " in
         *" $1 "*) return 0 ;;
@@ -57,7 +57,7 @@ is_known_cmd() {
 
 if [ -n "$SUBCMD" ] && ! is_known_cmd "$SUBCMD"; then
     echo "未知命令: $SUBCMD" >&2
-    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update]" >&2
+    echo "用法: $0 [dev|prod] [check|install|configure|migrate|build|start|stop|status|update|install-service|uninstall-service]" >&2
     exit 1
 fi
 

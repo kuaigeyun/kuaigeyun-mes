@@ -1,0 +1,19 @@
+[Unit]
+Description=RiverEdge Production (API + Taskiq + Caddy)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User={{SERVICE_USER}}
+Group={{SERVICE_GROUP}}
+WorkingDirectory={{PROJECT_ROOT}}
+Environment=HOME={{SERVICE_HOME}}
+ExecStart={{SERVICE_SCRIPT}} start
+ExecStop={{SERVICE_SCRIPT}} stop
+TimeoutStartSec=300
+TimeoutStopSec=120
+
+[Install]
+WantedBy=multi-user.target

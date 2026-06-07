@@ -16,6 +16,10 @@ LOGS_DIR="$PROJECT_ROOT/.logs"
 CADDY_DIR="$FAST_DEPLOY_DIR/caddy"
 CADDYFILE="$CADDY_DIR/Caddyfile"
 CADDY_TEMPLATE="$FAST_DEPLOY_DIR/templates/Caddyfile.template"
+SYSTEMD_UNIT_NAME="riveredge.service"
+SYSTEMD_UNIT_PATH="/etc/systemd/system/${SYSTEMD_UNIT_NAME}"
+SYSTEMD_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge.service.template"
+SYSTEMD_SERVICE_SCRIPT="$FAST_DEPLOY_DIR/linux/riveredge-service.sh"
 
 # 由入口脚本设置：dev | prod
 DEPLOY_MODE="${DEPLOY_MODE:-dev}"
@@ -1902,6 +1906,113 @@ cmd_stop_prod() {
     log_ok "生产服务已停止"
 }
 
+is_linux_systemd() {
+    [ "$(uname -s)" = "Linux" ] && command -v systemctl >/dev/null 2>&1
+}
+
+resolve_service_user() {
+    local u
+    if [ -n "${SUDO_USER:-}" ] && [ "$SUDO_USER" != "root" ]; then
+        u="$SUDO_USER"
+    elif [ "$(id -u)" -eq 0 ] && command -v logname >/dev/null 2>&1; then
+        u="$(logname 2>/dev/null || echo "")"
+    else
+        u="${USER:-}"
+    fi
+    if [ -z "$u" ] || [ "$u" = "root" ]; then
+        log_error "请用部署用户执行: ./fast-deploy/deploy.sh install-service"
+        log_error "或: sudo ./fast-deploy/deploy.sh install-service（将使用原登录用户运行服务）"
+        return 1
+    fi
+    echo "$u"
+}
+
+render_systemd_unit() {
+    local service_user=$1
+    local service_home service_group
+    service_home="$(getent passwd "$service_user" | cut -d: -f6)"
+    [ -n "$service_home" ] || { log_error "用户不存在: $service_user"; return 1; }
+    service_group="$(id -gn "$service_user")"
+    sed \
+        -e "s|{{SERVICE_USER}}|${service_user}|g" \
+        -e "s|{{SERVICE_GROUP}}|${service_group}|g" \
+        -e "s|{{SERVICE_HOME}}|${service_home}|g" \
+        -e "s|{{PROJECT_ROOT}}|${PROJECT_ROOT}|g" \
+        -e "s|{{SERVICE_SCRIPT}}|${SYSTEMD_SERVICE_SCRIPT}|g" \
+        "$SYSTEMD_UNIT_TEMPLATE"
+}
+
+cmd_install_service() {
+    is_linux_systemd || { log_error "install-service 仅支持 Linux (systemd)"; exit 1; }
+    is_windows_gitbash && { log_error "install-service 请在 Linux 服务器上执行"; exit 1; }
+    [ "$DEPLOY_MODE" = "prod" ] || { log_error "install-service 仅用于生产模式"; exit 1; }
+    [ -f "$SYSTEMD_UNIT_TEMPLATE" ] || { log_error "缺少模板 $SYSTEMD_UNIT_TEMPLATE"; exit 1; }
+    [ -f "$SYSTEMD_SERVICE_SCRIPT" ] || { log_error "缺少 $SYSTEMD_SERVICE_SCRIPT"; exit 1; }
+    chmod +x "$SYSTEMD_SERVICE_SCRIPT"
+
+    local service_user
+    service_user="$(resolve_service_user)" || exit 1
+
+    load_deploy_env
+    [ -f "$FRONTEND_DIR/dist/index.html" ] || {
+        log_error "缺少前端 dist，请先执行: ./fast-deploy/deploy.sh build"
+        exit 1
+    }
+
+    log_info "注册 systemd 服务 (${SYSTEMD_UNIT_NAME})，运行用户: ${service_user}"
+    local unit_content tmp
+    unit_content="$(render_systemd_unit "$service_user")" || exit 1
+    tmp="$(mktemp)"
+    printf '%s\n' "$unit_content" > "$tmp"
+
+    if ! sudo -v; then
+        log_error "需要 sudo 权限写入 ${SYSTEMD_UNIT_PATH}"
+        rm -f "$tmp"
+        exit 1
+    fi
+
+    sudo cp "$tmp" "$SYSTEMD_UNIT_PATH"
+    rm -f "$tmp"
+    sudo systemctl daemon-reload
+    sudo systemctl enable "$SYSTEMD_UNIT_NAME"
+    if ! sudo systemctl is-active --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null; then
+        log_info "正在启动 ${SYSTEMD_UNIT_NAME}..."
+        sudo systemctl start "$SYSTEMD_UNIT_NAME" || {
+            log_error "服务启动失败，请执行: journalctl -u ${SYSTEMD_UNIT_NAME} -e"
+            exit 1
+        }
+    fi
+
+    log_ok "已启用开机自启: ${SYSTEMD_UNIT_NAME}"
+    echo "  立即启动: sudo systemctl start riveredge"
+    echo "  查看状态: sudo systemctl status riveredge"
+    echo "  停止服务: sudo systemctl stop riveredge"
+    echo "  查看日志: journalctl -u riveredge -e"
+    echo ""
+    echo "  提示: 启用 systemd 后，日常启停建议用 systemctl，避免与手动 start/stop 混用导致状态不一致"
+}
+
+cmd_uninstall_service() {
+    is_linux_systemd || { log_error "uninstall-service 仅支持 Linux (systemd)"; exit 1; }
+    is_windows_gitbash && { log_error "uninstall-service 请在 Linux 服务器上执行"; exit 1; }
+
+    if [ ! -f "$SYSTEMD_UNIT_PATH" ]; then
+        log_warn "未安装 ${SYSTEMD_UNIT_NAME}"
+        return 0
+    fi
+
+    log_info "移除 systemd 服务 ${SYSTEMD_UNIT_NAME}..."
+    if ! sudo -v; then
+        log_error "需要 sudo 权限"
+        exit 1
+    fi
+    sudo systemctl stop "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
+    sudo systemctl disable "$SYSTEMD_UNIT_NAME" 2>/dev/null || true
+    sudo rm -f "$SYSTEMD_UNIT_PATH"
+    sudo systemctl daemon-reload
+    log_ok "已移除 ${SYSTEMD_UNIT_NAME} 开机自启"
+}
+
 cmd_restart_backend() {
     load_deploy_env
     stop_service backend
@@ -2545,10 +2656,12 @@ fd_dispatch() {
         update)
             if [ "$DEPLOY_MODE" = "dev" ]; then cmd_update_dev; else cmd_update_prod; fi
             ;;
+        install-service)   cmd_install_service ;;
+        uninstall-service) cmd_uninstall_service ;;
         wizard|""|deploy) cmd_wizard ;;
         *)
             log_error "未知命令: $cmd"
-            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update"
+            echo "用法: wizard | check | install | configure | migrate | build | start | stop | status | update | install-service | uninstall-service"
             exit 1
             ;;
     esac
