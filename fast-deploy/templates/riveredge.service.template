@@ -2,6 +2,7 @@
 Description=RiverEdge Production (API + Taskiq + Caddy)
 After=network-online.target network.target postgresql.service
 Wants=network-online.target postgresql.service
+Conflicts=caddy.service
 
 [Service]
 Type=oneshot

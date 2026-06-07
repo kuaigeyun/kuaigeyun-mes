@@ -570,13 +570,60 @@ caddy_https_enabled() {
     [ -n "${CADDY_DOMAIN:-}" ] && [ "${CADDY_ENABLE_LETSENCRYPT:-false}" = "true" ]
 }
 
+kill_all_caddy_processes() {
+    local pid
+    for pid in $(pgrep -f '[c]addy' 2>/dev/null || true); do
+        [ -n "$pid" ] || continue
+        kill -TERM "$pid" 2>/dev/null || true
+    done
+    sleep 2
+    for pid in $(pgrep -f '[c]addy' 2>/dev/null || true); do
+        [ -n "$pid" ] || continue
+        kill -9 "$pid" 2>/dev/null || true
+    done
+}
+
+ensure_port_free() {
+    local port=$1
+    local round
+    if ! check_port "$port"; then
+        return 0
+    fi
+    log_warn "清理端口 ${port}..."
+    for round in 1 2 3 4 5 6; do
+        kill_all_caddy_processes
+        kill_port "$port"
+        if ! check_port "$port"; then
+            return 0
+        fi
+        if [ "$round" -ge 3 ] && sudo -n true 2>/dev/null; then
+            sudo -n fuser -k "${port}/tcp" 2>/dev/null || true
+            sleep 2
+        fi
+        if ! check_port "$port"; then
+            return 0
+        fi
+        sleep 1
+    done
+    log_error "端口 ${port} 仍被占用："
+    if command -v ss >/dev/null 2>&1; then
+        ss -tlnp 2>/dev/null | grep -E ":${port}\s" || true
+    elif command -v lsof >/dev/null 2>&1; then
+        lsof -iTCP:"${port}" -sTCP:LISTEN 2>/dev/null || true
+    fi
+    log_error "若占用者为系统 caddy 或其它 root 进程，请执行:"
+    log_error "  sudo systemctl stop caddy && sudo systemctl disable caddy"
+    log_error "  sudo fuser -k ${port}/tcp"
+    return 1
+}
+
 caddy_prepare_listen_ports() {
     load_deploy_env
     if caddy_https_enabled; then
-        kill_port 80
-        kill_port 443
+        ensure_port_free 80 || exit 1
+        ensure_port_free 443 || exit 1
     else
-        kill_port "$PROXY_PORT"
+        ensure_port_free "$PROXY_PORT" || exit 1
     fi
 }
 
@@ -1907,6 +1954,7 @@ start_caddy_prod() {
         return 0
     fi
     stop_service caddy
+    kill_all_caddy_processes
     caddy_prepare_listen_ports
     if caddy_https_enabled; then
         log_info "启动 Caddy (HTTPS :443 + HTTP :80, 域名 ${CADDY_DOMAIN})..."
@@ -2151,6 +2199,11 @@ prepare_systemd_prerequisites() {
     local uv_bin caddy_bin
     load_deploy_env
     stop_system_caddy || return 1
+    if caddy_https_enabled; then
+        log_info "释放 80/443 端口（避免与系统 caddy 冲突）..."
+        sudo fuser -k 443/tcp 80/tcp 2>/dev/null || true
+        sleep 1
+    fi
     caddy_bin="$(resolve_systemd_tool_path "$service_user" caddy)" || caddy_bin="$(resolve_caddy)"
     [ -n "$caddy_bin" ] || { log_error "未安装 Caddy，请先执行 install"; return 1; }
     ensure_caddy_bind_caps "$caddy_bin" || return 1
