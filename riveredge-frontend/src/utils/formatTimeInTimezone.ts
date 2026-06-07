@@ -2,7 +2,7 @@
  * 将 ISO 8601 UTC 时间按指定时区格式化为 YYYY-MM-DD HH:mm（与悬浮迭代按钮一致）
  */
 export function formatTimeInTimezone(isoUtc: string | undefined, timezone: string): string {
-  if (!isoUtc || isoUtc === '暂无') return isoUtc ?? '-';
+  if (!isoUtc || isoUtc === '暂无') return '-';
   try {
     const d = new Date(isoUtc);
     const parts = new Intl.DateTimeFormat('zh-CN', {

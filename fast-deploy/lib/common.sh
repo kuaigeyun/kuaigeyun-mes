@@ -1984,6 +1984,7 @@ cmd_start_prod() {
             exit 1
         fi
     fi
+    record_deploy_release_metadata
     start_backend_prod
     start_worker_prod
     start_caddy_prod

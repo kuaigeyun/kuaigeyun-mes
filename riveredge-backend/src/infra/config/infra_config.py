@@ -33,6 +33,15 @@ class InfraSettings(BaseSettings):
     APP_VERSION: str = Field(default="1.0.0", description="应用版本")
     DEBUG: bool = Field(default=False, description="调试模式")
     ENVIRONMENT: str = Field(default="development", description="运行环境")
+    GIT_SHA: str = Field(
+        default="",
+        validation_alias=AliasChoices("GIT_SHA", "PLATFORM_GIT_SHA"),
+        description="当前部署代码 Git 短 commit（fast-deploy 写入 .env）",
+    )
+    PLATFORM_BUILD_TIME: str = Field(
+        default="",
+        description="当前部署构建/更新时间 ISO 8601 UTC（fast-deploy 写入 .env）",
+    )
 
     # 服务器配置
     HOST: str = Field(default="127.0.0.1", description="服务器地址（Windows 使用 127.0.0.1，Linux/Mac 使用 0.0.0.0）")

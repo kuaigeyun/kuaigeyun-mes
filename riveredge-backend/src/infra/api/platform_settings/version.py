@@ -14,6 +14,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from loguru import logger
 
+from infra.config.infra_config import infra_settings
 from infra.infrastructure.http import get_http_client
 
 router = APIRouter(prefix="/platform", tags=["Platform · Version"])
@@ -96,13 +97,9 @@ async def get_platform_version():
     返回当前部署构建时间、代码仓库最新提交时间，均为 ISO 8601 UTC 格式。
     前端按系统设置的时区统一格式化显示。
     """
-    # 构建时间：优先从环境变量读取（部署时注入），否则使用当前 UTC 时间
-    raw_build = os.environ.get("PLATFORM_BUILD_TIME")
-    if raw_build:
-        build_time = _normalize_to_iso_utc(raw_build)
-    else:
-        # 由 fast-deploy update / 向导安装·更新写入；未部署时不伪造时间
-        build_time = ""
+    # 构建时间：由 fast-deploy 写入 .env 的 PLATFORM_BUILD_TIME（经 InfraSettings 加载）
+    raw_build = (infra_settings.PLATFORM_BUILD_TIME or os.environ.get("PLATFORM_BUILD_TIME") or "").strip()
+    build_time = _normalize_to_iso_utc(raw_build) if raw_build else ""
 
     git_latest = "暂无"
 
@@ -127,7 +124,12 @@ async def get_platform_version():
         logger.warning(f"获取 Gitee 最新提交时间失败: {e}")
 
     def _display_git_commit() -> str:
-        raw = (os.environ.get("GIT_SHA") or os.environ.get("PLATFORM_GIT_SHA") or "").strip()
+        raw = (
+            infra_settings.GIT_SHA
+            or os.environ.get("GIT_SHA")
+            or os.environ.get("PLATFORM_GIT_SHA")
+            or ""
+        ).strip()
         if not raw:
             raw = _try_git_short_sha_from_worktree()
         if not raw or raw.lower().startswith("http"):
