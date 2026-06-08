@@ -343,3 +343,78 @@ class TenantInitDataService:
             return await MenuService.sync_all_menus_from_applications(tenant_id)
 
         raise ValueError(f"未知的初始化项: {key}")
+
+    BOOTSTRAP_APPLICATION_STEP: Dict[str, str] = {
+        "key": "application",
+        "name": "应用注册与启用",
+        "description": "扫描并安装默认基础应用（快制造、快研发、快财务、主数据等）",
+    }
+
+    @classmethod
+    def bootstrap_step_keys(cls) -> List[str]:
+        return [cls.BOOTSTRAP_APPLICATION_STEP["key"]] + [
+            item["key"] for item in cls.INIT_ITEMS_REQUIRED
+        ]
+
+    @classmethod
+    def get_bootstrap_steps(cls) -> List[Dict[str, str]]:
+        return [cls.BOOTSTRAP_APPLICATION_STEP, *cls.INIT_ITEMS_REQUIRED]
+
+    @classmethod
+    async def get_bootstrap_status(cls, tenant_id: int) -> Dict[str, Any]:
+        from infra.models.tenant import Tenant
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        settings = (tenant.settings or {}) if tenant else {}
+        completed = bool(settings.get("bootstrap_completed") or settings.get("init_completed"))
+        return {
+            "pending": not completed,
+            "bootstrap_completed": completed,
+            "steps": cls.get_bootstrap_steps(),
+        }
+
+    @classmethod
+    async def run_bootstrap_step(
+        cls,
+        tenant_id: int,
+        key: str,
+        current_user_id: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        if key not in cls.bootstrap_step_keys():
+            raise ValueError(f"不支持的引导步骤: {key}")
+        count = await cls.run_single(tenant_id, key, current_user_id)
+        return {"success": True, "created": count}
+
+    @classmethod
+    async def complete_bootstrap(cls, tenant_id: int) -> None:
+        from datetime import datetime
+
+        from infra.models.tenant import Tenant
+        from infra.services.init_wizard_service import InitWizardService
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise ValueError("组织不存在")
+
+        settings = dict(tenant.settings or {})
+        if settings.get("bootstrap_completed"):
+            return
+
+        if tenant.name:
+            from core.schemas.site_setting import SiteSettingUpdate
+            from core.services.system.site_setting_service import SiteSettingService
+
+            await SiteSettingService.update_settings(
+                tenant_id,
+                SiteSettingUpdate(settings={"site_name": tenant.name}),
+            )
+
+        await InitWizardService().apply_default_init_settings(tenant_id)
+
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        settings = dict((tenant.settings or {}) if tenant else {})
+        settings["bootstrap_completed"] = True
+        settings["bootstrap_completed_at"] = datetime.now().isoformat()
+        await Tenant.filter(id=tenant_id).update(settings=settings)
+        logger.info(f"组织 {tenant_id} 首次引导初始化完成")
+

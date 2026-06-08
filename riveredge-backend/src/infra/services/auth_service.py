@@ -492,7 +492,7 @@ class AuthService:
         Raises:
             HTTPException: 当域名已存在或用户名已存在时抛出
         """
-        from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
+        from infra.services.tenant_service import TenantService
         from infra.services.user_service import UserService
         from infra.schemas.tenant import TenantCreate
         from infra.schemas.user import UserCreate
@@ -575,12 +575,10 @@ class AuthService:
             await Tenant.filter(id=tenant.id).delete()
             raise
 
-        # 系统级初始化耗时较长，放后台执行，接口立即返回
-        schedule_initialize_tenant_data(tenant.id)
-
         logger.info(
             f"组织注册成功: {tenant.name} (ID: {tenant.id}, 域名: {tenant.domain}), "
-            f"管理员: {user.username} (ID: {user.id}), 自动审核: {auto_approve}，初始化任务已提交后台"
+            f"管理员: {user.username} (ID: {user.id}), 自动审核: {auto_approve}；"
+            f"应用与系统初始项将在首次登录时完成"
         )
         
         return {

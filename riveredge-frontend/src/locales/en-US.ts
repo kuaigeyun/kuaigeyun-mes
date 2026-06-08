@@ -6927,6 +6927,16 @@ export default {
   'pages.system.configCenter.tenantInit.statusFailed': 'Failed',
   'pages.system.configCenter.tenantInit.createdCount': '{{count}} records written/updated',
   'pages.system.configCenter.tenantInit.item.menu_sync': 'App menu sync',
+  'components.tenantBootstrap.title': 'Initializing applications',
+  'components.tenantBootstrap.description':
+    'Installing default apps and loading required system data for your organization. Please wait.',
+  'components.tenantBootstrap.runningHint': 'Initialization in progress. Please keep this page open…',
+  'components.tenantBootstrap.enterSystem': 'Enter system',
+  'components.tenantBootstrap.stepFailed': 'Initialization step failed',
+  'components.tenantBootstrap.completeFailed': 'Failed to complete initialization',
+  'components.tenantBootstrap.partialSuccess':
+    'Some steps did not succeed. You can complete them later in System Settings.',
+  'components.tenantBootstrap.step.application': 'Application registration & enablement',
   'pages.system.configCenter.tenantInit.item.data_dictionary': 'Data dictionaries',
   'pages.system.configCenter.tenantInit.item.language': 'System languages',
   'pages.system.configCenter.tenantInit.item.application': 'Application registry',

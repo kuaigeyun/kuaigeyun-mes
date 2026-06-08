@@ -6,6 +6,11 @@ import { getNavigationMenuTree } from '../services/menu';
 import { resolvePermissionResourceFromMenus } from '../utils/permissionResource';
 import { NAVIGATION_MENU_TREE_QUERY_KEY } from './useUnifiedMenuData';
 
+/** 平台级路由不走租户 navigation-tree 的 permission_code（避免误匹配导致按钮被 fail-closed） */
+function isPlatformInfraPath(pathname: string): boolean {
+  return pathname === '/infra' || pathname.startsWith('/infra/');
+}
+
 /**
  * 从当前路由 + 导航菜单树解析功能资源前缀（与菜单 permission_code 一致）。
  */
@@ -13,6 +18,10 @@ export function usePagePermissionResource(pathname?: string): string | null {
   const location = useLocation();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const path = pathname ?? location.pathname;
+
+  if (isPlatformInfraPath(path)) {
+    return null;
+  }
 
   const queryKey = useMemo(
     () =>

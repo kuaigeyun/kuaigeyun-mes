@@ -676,12 +676,12 @@ class TenantService:
                     import traceback
                     logger.error(traceback.format_exc())
 
-        # 3. 自动应用默认初始化设置（时区/货币/语言等），跳过初始化向导
+        # 3. 写入默认站点/向导设置并标记引导完成
         try:
-            from infra.services.init_wizard_service import InitWizardService
-            await InitWizardService().apply_default_init_settings(tenant_id)
+            from core.services.tenant.tenant_init_data_service import TenantInitDataService
+            await TenantInitDataService.complete_bootstrap(tenant_id)
         except Exception as e:
-            logger.warning(f"组织 {tenant_id} 自动完成初始化向导失败（不中断流程）: {e}")
+            logger.warning(f"组织 {tenant_id} 自动完成引导初始化失败（不中断流程）: {e}")
 
 
 async def initialize_tenant_data_background(

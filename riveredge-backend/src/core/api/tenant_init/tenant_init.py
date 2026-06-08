@@ -33,6 +33,80 @@ class RunInitResponse(BaseModel):
     message: str = Field(default="执行完成", description="提示信息")
 
 
+class BootstrapStatusResponse(BaseModel):
+    """首次引导初始化状态"""
+    pending: bool = Field(..., description="是否仍需完成引导初始化")
+    bootstrap_completed: bool = Field(..., description="是否已完成引导初始化")
+    steps: list = Field(default_factory=list, description="引导步骤列表")
+
+
+class RunBootstrapStepRequest(BaseModel):
+    """执行单步引导初始化"""
+    key: str = Field(..., description="步骤 key（application 或必备初始项 key）")
+
+
+class RunBootstrapStepResponse(BaseModel):
+    """单步引导初始化结果"""
+    key: str
+    success: bool
+    created: Optional[int] = None
+    error: Optional[str] = None
+
+
+@router.get("/bootstrap-status", response_model=BootstrapStatusResponse)
+async def get_bootstrap_status(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    查询组织是否仍需完成首次引导初始化（应用 + 必备系统初始项）。
+    """
+    return await TenantInitDataService.get_bootstrap_status(tenant_id)
+
+
+@router.post("/run-bootstrap-step", response_model=RunBootstrapStepResponse)
+async def run_bootstrap_step(
+    data: RunBootstrapStepRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user_dep),
+):
+    """
+    执行单步引导初始化（应用注册/启用，或一项必备系统初始项）。
+    """
+    try:
+        result = await TenantInitDataService.run_bootstrap_step(
+            tenant_id,
+            data.key,
+            current_user_id=current_user.id,
+        )
+        return RunBootstrapStepResponse(
+            key=data.key,
+            success=True,
+            created=result.get("created"),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    except Exception as e:
+        return RunBootstrapStepResponse(
+            key=data.key,
+            success=False,
+            error=str(e),
+        )
+
+
+@router.post("/complete-bootstrap")
+async def complete_bootstrap(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    标记首次引导初始化完成（写入默认站点/向导设置）。
+    """
+    try:
+        await TenantInitDataService.complete_bootstrap(tenant_id)
+        return {"success": True, "message": "引导初始化完成"}
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
 @router.get("/config")
 async def get_init_config(
     tenant_id: int = Depends(get_current_tenant),

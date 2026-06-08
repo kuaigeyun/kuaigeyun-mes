@@ -991,6 +991,7 @@ const SuperAdminTenantList: React.FC = () => {
       rowKey="id"
       showAdvancedSearch={true}
       showCreateButton={true}
+      disablePermissionGates
       createButtonText={t('pages.infra.tenant.createButton')}
       onCreate={handleCreate}
       showImportButton={true}

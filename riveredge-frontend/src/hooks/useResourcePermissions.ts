@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
 import { hasPermission } from '../utils/permission';
+import { isInfraSuperAdminUser } from '../utils/auth';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
 
 export type ResourcePermissionGates = {
@@ -58,8 +59,11 @@ export function useResourcePermissions(
 
   return useMemo(() => {
     const prefix = (resource || '').trim();
+    const isPlatformOperator =
+      currentUser?.is_infra_admin === true || isInfraSuperAdminUser(currentUser);
+
     if (!prefix) {
-      return currentUser?.is_infra_admin ? INFRA_ADMIN_OPEN : FAIL_CLOSED;
+      return isPlatformOperator ? INFRA_ADMIN_OPEN : FAIL_CLOSED;
     }
 
     const check = (action: string) => hasPermission(currentUser, buildPermissionCode(prefix, action));

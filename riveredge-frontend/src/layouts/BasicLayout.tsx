@@ -77,6 +77,7 @@ import { MobileQRCode } from '../components/mobile-preview';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
 import { RouteTransition } from '../components/route-transition';
+const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
 import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser } from '../utils/auth';
@@ -5698,6 +5699,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           {t('common.shortcutHelpHint')}
         </Typography.Text>
       </Modal>
+
+      {/* 新组织首次登录：应用 + 必备系统初始项引导 */}
+      <React.Suspense fallback={null}>
+        <TenantBootstrapModal />
+      </React.Suspense>
 
       {/* 右下角悬浮按钮：迭代提示与意见反馈 */}
       <IterationFloatButton />

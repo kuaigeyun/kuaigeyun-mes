@@ -29,6 +29,53 @@ export interface IndustryPreset {
   keys: string[];
 }
 
+export interface BootstrapStep {
+  key: string;
+  name: string;
+  description: string;
+}
+
+export interface BootstrapStatusResponse {
+  pending: boolean;
+  bootstrap_completed: boolean;
+  steps: BootstrapStep[];
+}
+
+export interface RunBootstrapStepResponse {
+  key: string;
+  success: boolean;
+  created?: number;
+  error?: string;
+}
+
+/**
+ * 获取首次引导初始化状态
+ */
+export async function getBootstrapStatus(): Promise<BootstrapStatusResponse> {
+  return apiRequest<BootstrapStatusResponse>('/core/tenant-init/bootstrap-status', {
+    method: 'GET',
+  });
+}
+
+/**
+ * 执行单步引导初始化
+ */
+export async function runBootstrapStep(key: string): Promise<RunBootstrapStepResponse> {
+  return apiRequest<RunBootstrapStepResponse>('/core/tenant-init/run-bootstrap-step', {
+    method: 'POST',
+    data: { key },
+  });
+}
+
+/**
+ * 完成首次引导初始化
+ */
+export async function completeBootstrap(): Promise<{ success: boolean; message: string }> {
+  return apiRequest<{ success: boolean; message: string }>('/core/tenant-init/complete-bootstrap', {
+    method: 'POST',
+  });
+}
+
 /**
  * 获取初始化项配置
  */
