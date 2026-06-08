@@ -5,9 +5,10 @@
   "description": "研发项目 / NPI 阶段门、设计变更与知识中心协同平台",
   "icon": "layers",
   "author": "RiverEdge Team",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/kuaiplm/index.tsx",
   "route_path": "/apps/kuaiplm",
-  "is_pro": false,
   "sort_order": 25,
   "menu_config": {
     "title": "app.kuaiplm.name",

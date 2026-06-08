@@ -5,6 +5,8 @@
   "description": "聚焦管理会计与经营分析协同平台",
   "icon": "wallet",
   "author": "RiverEdge Team",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/kuaicaiwu/index.tsx",
   "route_path": "/apps/kuaicaiwu",
   "sort_order": 50,

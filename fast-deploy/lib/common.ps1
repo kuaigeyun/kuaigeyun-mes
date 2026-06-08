@@ -1381,6 +1381,42 @@ function Get-RiverEdgeBootStatusLabel {
     return "已启用 · ${mode} · 未运行"
 }
 
+function New-RiverEdgeBootTaskSettings {
+    return New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1)
+}
+
+function Register-RiverEdgeBootStopTask {
+    param(
+        [Microsoft.Management.Infrastructure.CimInstance]$StopAction,
+        [Microsoft.Management.Infrastructure.CimInstance]$Settings,
+        [Microsoft.Management.Infrastructure.CimInstance]$Principal
+    )
+    $triggerCmd = Get-Command New-ScheduledTaskTrigger -ErrorAction SilentlyContinue
+    if (-not $triggerCmd -or -not $triggerCmd.Parameters.ContainsKey('AtShutdown')) {
+        Write-LogWarn '当前 PowerShell 不支持 -AtShutdown，已跳过 RiverEdge-Stop（系统重启时进程会自动结束）'
+        return
+    }
+    try {
+        $stopTrigger = New-ScheduledTaskTrigger -AtShutdown
+        Register-ScheduledTask `
+            -TaskName $script:BootTaskStopName `
+            -Description 'RiverEdge graceful stop at shutdown' `
+            -Action $StopAction `
+            -Trigger $stopTrigger `
+            -Settings $Settings `
+            -Principal $Principal `
+            -Force | Out-Null
+    } catch {
+        Write-LogWarn "注册关机停止任务失败，已跳过: $_"
+    }
+}
+
 function Install-RiverEdgeBootTask {
     Ensure-LogsDir
     Load-DeployEnv
@@ -1406,13 +1442,7 @@ function Install-RiverEdgeBootTask {
 
     $actionArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`" -Action start"
     $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $actionArgs -WorkingDirectory $script:ProjectRoot
-    $settings = New-ScheduledTaskSettingsSet `
-        -AllowStartIfOnBatteries `
-        -DontStopIfGoingOnBatteries `
-        -StartWhenAvailable `
-        -ExecutionTimeLimit ([TimeSpan]::Zero) `
-        -RestartCount 3 `
-        -RestartInterval (New-TimeSpan -Minutes 1)
+    $settings = New-RiverEdgeBootTaskSettings
 
     if (Test-IsAdministrator) {
         Write-LogInfo '管理员模式：注册 SYSTEM 开机启动任务（延迟 45s，等待 PostgreSQL 就绪）...'
@@ -1433,8 +1463,7 @@ function Install-RiverEdgeBootTask {
 
     $stopArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`" -Action stop"
     $stopAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $stopArgs -WorkingDirectory $script:ProjectRoot
-    $stopTrigger = New-ScheduledTaskTrigger -AtShutdown
-    Register-ScheduledTask -TaskName $script:BootTaskStopName -Description 'RiverEdge graceful stop at shutdown' -Action $stopAction -Trigger $stopTrigger -Settings $settings -Principal $principal -Force | Out-Null
+    Register-RiverEdgeBootStopTask -StopAction $stopAction -Settings $settings -Principal $principal
 
     Write-LogOk "开机自启已注册: $($script:BootTaskName)"
     if (Test-IsAdministrator) {

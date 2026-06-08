@@ -10,8 +10,6 @@ Author: RiverEdge
 from typing import List, Dict, Any, Optional
 from loguru import logger
 
-from core.config.default_enabled_applications import DEFAULT_ENABLED_APPLICATION_CODES
-
 
 class TenantInitDataService:
     """
@@ -245,40 +243,7 @@ class TenantInitDataService:
         if key == "application":
             from core.services.application.application_service import ApplicationService
             apps = await ApplicationService.scan_and_register_plugins(tenant_id=tenant_id)
-            enabled = 0
-
-            def _should_enable(app: dict) -> bool:
-                app_code = str(app.get("code") or "")
-                manifest = ApplicationService._get_manifest_by_code(app_code)
-                is_pro = bool(manifest.get("is_pro", False)) if manifest else False
-                return (
-                    app_code in DEFAULT_ENABLED_APPLICATION_CODES
-                    and
-                    not is_pro
-                    and app.get("is_installed")
-                    and not app.get("is_active")
-                    and app.get("uuid")
-                )
-
-            base_apps = [
-                a for a in apps
-                if ApplicationService.is_base_app_code(str(a.get("code") or ""))
-            ]
-            other_apps = [a for a in apps if a not in base_apps]
-
-            for app in base_apps + other_apps:
-                if not _should_enable(app):
-                    continue
-                try:
-                    await ApplicationService.enable_application(
-                        tenant_id, str(app["uuid"])
-                    )
-                    enabled += 1
-                except Exception as e:
-                    logger.error(
-                        f"组织 {tenant_id} 启用应用 {app.get('code')} 失败: {e}"
-                    )
-            return len(apps) + enabled
+            return len(apps)
 
         if key == "code_rule":
             from core.services.default.default_values_service import DefaultValuesService

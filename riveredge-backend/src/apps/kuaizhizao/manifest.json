@@ -5,6 +5,8 @@
   "description": "制造业全流程一体化管控与协同平台",
   "icon": "production",
   "author": "RiverEdge Team",
+  "market_category": "base",
+  "is_pro": false,
   "entry_point": "../apps/kuaizhizao/index.tsx",
   "route_path": "/apps/kuaizhizao",
   "sort_order": 20,

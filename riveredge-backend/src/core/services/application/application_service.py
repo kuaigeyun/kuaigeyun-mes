@@ -13,7 +13,6 @@ from uuid import UUID, uuid4
 from datetime import datetime
 import asyncpg
 
-from core.config.default_enabled_applications import DEFAULT_ENABLED_APPLICATION_CODES
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.utils.timezone_utils import now_utc
@@ -58,23 +57,13 @@ class ApplicationService:
         return bool(manifest and ApplicationService._manifest_is_base(manifest))
 
     @staticmethod
-    def _should_auto_enable_on_install(app_code: str) -> bool:
-        """新组织安装后是否自动启用（基础应用 + 默认套件）。"""
-        if app_code in DEFAULT_ENABLED_APPLICATION_CODES:
-            manifest = ApplicationService._get_manifest_by_code(app_code)
-            if manifest and bool(manifest.get("is_pro", False)):
-                return False
-            return True
-        return ApplicationService.is_base_app_code(app_code)
-
-    @staticmethod
     async def _auto_enable_base_app_if_needed(
         tenant_id: int,
         app_code: str,
         application: ApplicationDict,
     ) -> ApplicationDict:
-        """默认应用（快制造/快研发/快财务/主数据等）安装后自动启用。"""
-        if not ApplicationService._should_auto_enable_on_install(app_code):
+        """基础应用（manifest market_category=base）安装后默认启用。"""
+        if not ApplicationService.is_base_app_code(app_code):
             return application
         if not application.get("is_installed") or application.get("is_active"):
             return application
