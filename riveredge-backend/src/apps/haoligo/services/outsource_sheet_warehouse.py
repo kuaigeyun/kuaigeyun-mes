@@ -102,8 +102,8 @@ async def warehouse_snapshot_by_id(tenant_id: int, warehouse_id: int) -> Optiona
         return None
     return {
         "mold_warehouse_id": wh.id,
-        "mold_warehouse_code": (wh.code or "").strip() or None,
-        "mold_warehouse_name": (wh.name or "").strip() or None,
+        "mold_warehouse_code": (wh.warehouse_code or "").strip() or None,
+        "mold_warehouse_name": (wh.warehouse_name or "").strip() or None,
     }
 
 
@@ -364,8 +364,8 @@ async def apply_warehouses_on_outsource_complete_approved(
         item = persist_display_warehouse_on_line(
             dict(raw),
             warehouse_id=wh.id,
-            warehouse_code=(wh.code or "").strip() or None,
-            warehouse_name=(wh.name or "").strip() or None,
+            warehouse_code=(wh.warehouse_code or "").strip() or None,
+            warehouse_name=(wh.warehouse_name or "").strip() or None,
         )
         if item != raw:
             items[i] = item
