@@ -1224,9 +1224,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const gatedShowEditButton = showEditButton && permissionGates.canUpdate
   const gatedShowImportButton = showImportButton && permissionGates.canImport
   const gatedShowExportButton = showExportButton && permissionGates.canExport
-  const hasStringHeaderTitle =
-    typeof headerTitle === 'string' && headerTitle.trim().length > 0
-  const actionsInSearchRow = searchPlacement === 'searchRow' && !hasStringHeaderTitle
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -2342,18 +2339,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const memoizedRightActions = !isMobile ? buildRightActions(dataActionIconOnly) : undefined
 
-  const showRightActionsInSearchRow = actionsInSearchRow && Boolean(memoizedRightActions)
-
   const memoizedToolbar = React.useMemo(() => ({
     actions: [
-      ...(memoizedRightActions && !showRightActionsInSearchRow ? [memoizedRightActions] : []),
+      ...(memoizedRightActions ? [memoizedRightActions] : []),
       ...(restProps.toolbar?.actions
         ? Array.isArray(restProps.toolbar.actions)
           ? restProps.toolbar.actions
           : [restProps.toolbar.actions]
         : []),
     ],
-  }), [memoizedRightActions, restProps.toolbar?.actions, showRightActionsInSearchRow])
+  }), [memoizedRightActions, restProps.toolbar?.actions])
 
   const normalizedUserRowSelection = React.useMemo(() => {
     const userRowSelection = (restProps as { rowSelection?: unknown }).rowSelection
@@ -2624,7 +2619,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         Boolean(beforeSearchButtons) ||
         Boolean(afterSearchButtons) ||
         Boolean(betweenFuzzyAndAdvancedButtons) ||
-        (actionsInSearchRow && Boolean(memoizedHeaderActions || memoizedRightActions)) ||
         (isMobile && gatedShowCreateButton && onCreate)
       : (!isMobile && viewTypes && viewTypes.length > 1) ||
         (isMobile && gatedShowCreateButton && onCreate)
@@ -2702,7 +2696,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   const memoizedHeaderTitle = React.useMemo(() => {
-    const leftActions = memoizedHeaderActions || (hasStringHeaderTitle ? headerTitle : undefined)
+    const leftActions = memoizedHeaderActions || headerTitle
     if (searchPlacement === 'toolbarLeft') {
       return (
         <div
@@ -2721,18 +2715,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         </div>
       )
     }
-    if (actionsInSearchRow) {
-      return hasStringHeaderTitle ? headerTitle : undefined
-    }
     return leftActions || undefined
-  }, [
-    headerTitle,
-    memoizedHeaderActions,
-    memoizedUniSearch,
-    searchPlacement,
-    hasStringHeaderTitle,
-    actionsInSearchRow,
-  ])
+  }, [headerTitle, memoizedHeaderActions, memoizedUniSearch, searchPlacement])
+
+  const hasListToolbarActions = Boolean(memoizedHeaderActions || memoizedRightActions)
 
   return (
     <>
@@ -2811,6 +2797,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           position: relative;
           z-index: 3;
         }
+        /* 无 string headerTitle 时仍展示 3.1 功能按钮行（新建/批量等） */
+        .uni-table-container.uni-table-has-list-toolbar .ant-pro-table-list-toolbar-container {
+          display: flex !important;
+          min-height: 32px;
+        }
         /* 排序提示默认向下弹出（见 showSorterTooltip），避免遮挡上方工具栏 */
         .uni-table-container .ant-table-thead .ant-table-column-sorters-tooltip-target-sorter .ant-table-column-sorter {
           margin-inline-start: 4px;
@@ -2879,7 +2870,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       `}</style>
       <div
         ref={containerRef}
-        className={`uni-table-container${embedded ? ' uni-table-embedded' : ''}${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}`}
+        className={`uni-table-container${embedded ? ' uni-table-embedded' : ''}${proTableBodyScrollYEnabled ? ' uni-table-scroll-y-mode' : ' uni-table-natural-height'}${isEmptyTable ? ' uni-table-empty' : ''}${emptyTableHasFixedColumns ? ' uni-table-empty-has-fixed' : ''}${hasListToolbarActions ? ' uni-table-has-list-toolbar' : ''}`}
         style={{
           position: 'relative',
           padding: isMobile ? '0 8px' : 0,
@@ -2907,26 +2898,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               minWidth: 0,
             }}
           >
-            {searchPlacement === 'searchRow' ? (
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  flex: 1,
-                  minWidth: 0,
-                  flexWrap: isMobile ? 'wrap' : 'nowrap',
-                }}
-              >
-                {actionsInSearchRow && memoizedHeaderActions ? (
-                  <div style={{ flexShrink: 0 }}>{memoizedHeaderActions}</div>
-                ) : null}
-                {memoizedUniSearch}
-              </div>
-            ) : null}
-            {searchPlacement === 'searchRow' && actionsInSearchRow && memoizedRightActions ? (
-              <div style={{ flexShrink: 0 }}>{memoizedRightActions}</div>
-            ) : null}
+            {searchPlacement === 'searchRow' ? memoizedUniSearch : null}
             {!isMobile && viewTypes && viewTypes.length > 1 ? (
               <div style={{ flexShrink: 0, marginLeft: 8 }}>
                 <UniView
@@ -2990,11 +2962,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     })
                   }
                 }
-                return showRightActionsInSearchRow
-                  ? []
-                  : memoizedRightActions
-                    ? [memoizedRightActions]
-                    : []
+                return memoizedRightActions ? [memoizedRightActions] : []
               }}
               {...(() => {
                 // 过滤 toolBarRender/search；scroll：调用方优先，否则默认 x 为 max-content（antd）；拖拽开启时注入数值 x
