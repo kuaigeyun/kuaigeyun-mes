@@ -85,7 +85,7 @@ const VouchersPage: React.FC = () => {
         title={current ? `凭证分录 · ${current.voucher_code}` : '凭证分录'}
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
-        width={720}
+        size={720}
       >
         <Table<VoucherLine>
           rowKey="line_no"

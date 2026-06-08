@@ -62,6 +62,17 @@ class PartnerInvoiceAndExtendedMixin(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CustomerContactItem(BaseModel):
+    """客户联系人明细行"""
+
+    contact_person: Optional[str] = Field(None, max_length=100, description="联系人", alias="contactPerson")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    phone: Optional[str] = Field(None, max_length=20, description="电话")
+    email: Optional[str] = Field(None, max_length=100, description="邮箱")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
 class CustomerBase(PartnerInvoiceAndExtendedMixin):
     """客户基础 Schema"""
 
@@ -80,6 +91,7 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
     last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
     recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -152,6 +164,7 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
     recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
@@ -237,6 +250,7 @@ class SupplierBase(PartnerInvoiceAndExtendedMixin):
     buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")
@@ -294,6 +308,7 @@ class SupplierUpdate(PartnerInvoiceAndExtendedMixin):
     buyer_id: Optional[int] = Field(None, description="归属采购员ID", alias="buyerId")
     buyer_name: Optional[str] = Field(None, max_length=100, description="归属采购员姓名", alias="buyerName")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
     estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购额", alias="estimatedAnnualPurchase")
     source_channel_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="sourceChannelCode")

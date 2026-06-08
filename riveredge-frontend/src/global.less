@@ -112,6 +112,18 @@
   box-sizing: border-box;
 }
 
+/* 表单 Modal 内 Segmented：与 Input/Select 默认高度一致 */
+.form-modal-template,
+.form-modal-template-fixed-footer {
+  .form-field-segmented.ant-segmented {
+    .ant-segmented-item-label {
+      min-height: var(--ant-control-height);
+      line-height: calc(var(--ant-control-height) - 2px);
+      padding-inline: calc(var(--ant-control-padding-horizontal) - 1px);
+    }
+  }
+}
+
 .quotation-create-form-card {
   width: 100%;
   box-sizing: border-box;

@@ -10,6 +10,8 @@ export {
 } from './customer';
 export {
   supplierFormSchemaBasic,
+  supplierFormSchemaBasicHead,
+  supplierFormSchemaBasicTail,
   supplierFormSchemaInvoice,
   supplierFormSchemaExtended,
 } from './supplier';

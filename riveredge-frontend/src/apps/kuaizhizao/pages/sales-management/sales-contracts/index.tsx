@@ -2902,7 +2902,7 @@ const SalesContractsPage: React.FC = () => {
 
         onClose={() => setChangeDrawerOpen(false)}
 
-        width={640}
+        size={640}
 
         destroyOnHidden
 

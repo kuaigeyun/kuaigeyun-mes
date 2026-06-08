@@ -250,7 +250,7 @@ const EnhancedHelpSystem: React.FC<EnhancedHelpSystemProps> = ({
             </Space>
           }
           placement="right"
-          width={600}
+          size={600}
           open={open}
           onClose={handleClose}
         >
@@ -271,7 +271,7 @@ const EnhancedHelpSystem: React.FC<EnhancedHelpSystemProps> = ({
           </Space>
         }
         placement="right"
-        width={600}
+        size={600}
         open={open}
         onClose={handleClose}
       >

@@ -1,10 +1,7 @@
 /**
  * uni-table-detail 通用明细表样式
  *
- * 设计原则：
- *   1. 只写组件自身元素（.uni-table-detail-header / .detail-table-footer 等）的样式。
- *   2. 固定列背景：antd v6 须 CSS 变量 + !important（见下方 thead / fix-right 规则）。
- *   3. 表格 DOM 结构由 UniTableDetail.tsx 与报价单 hand-roll 对齐（外层 overflowX: auto）。
+ * 框线：仅外层容器 1px 描边 + 表内行分隔 1px（避免与 global.less .ant-modal .ant-table 外框叠成粗线）
  */
 
 .uni-table-detail {
@@ -47,7 +44,6 @@
 
   /*
    * fixed:'right' 操作列：仅作用于 UniTableDetail 的 .uni-detail-table。
-   * 不得写在 .uni-table-detail 根下——报价单等 hand-roll 页也包在该 class 内。
    */
   .uni-detail-table {
     .ant-table-thead > tr > th {
@@ -74,33 +70,79 @@
     }
   }
 
-  /*
-   * 明细表外框：圆角与边框跟随 Ant Design token（ConfigProvider / BasicLayout 注入的 CSS 变量）
-   */
+  /* 明细表外框：唯一外圈 1px */
   .uni-table-detail-body {
     width: 100%;
     min-width: 0;
     box-sizing: border-box;
     border: 1px solid var(--ant-color-border, #d9d9d9);
-    border-radius: var(--ant-border-radius-lg, var(--ant-borderRadiusLG, 8px));
+    border-radius: var(--ant-border-radius, var(--ant-borderRadius, 6px));
     overflow: hidden;
     background: var(--ant-color-bg-container, #ffffff);
+
+    .uni-table-detail-scroll {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      scrollbar-gutter: auto;
+    }
+
+    /*
+     * 明细表随行增高，不做纵向滚动；避免 scroll.x + 全站 overflow 规则出现「未超高却有竖条」。
+     */
+    .ant-table-wrapper .ant-table-body,
+    .ant-table-wrapper .ant-table-content {
+      overflow-y: hidden !important;
+      max-height: none !important;
+      scrollbar-gutter: auto !important;
+    }
+
+    /* 取消 global.less「.ant-modal .ant-table」叠加外框 */
+    .ant-table-wrapper .ant-table {
+      border: none !important;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .ant-table-container {
+      border: none !important;
+      border-radius: 0 !important;
+    }
+
+    .ant-table-content > table {
+      border-collapse: collapse;
+    }
+
+    /* 标准 1px 行分隔，无竖线网格 */
+    .ant-table-thead > tr > th,
+    .ant-table-tbody > tr > td {
+      padding: 8px 12px !important;
+      border-inline-start: none !important;
+      border-inline-end: none !important;
+      border-top: none !important;
+      border-bottom: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06)) !important;
+    }
+
+    .ant-table-thead > tr > th {
+      background: var(--ant-color-fill-alter, rgba(0, 0, 0, 0.02)) !important;
+      font-weight: var(--ant-font-weight-strong, 500);
+    }
+
+    .ant-table-tbody > tr:last-child > td {
+      border-bottom: none !important;
+    }
+
+    .ant-table-tbody > tr:hover > td {
+      background: var(--ant-color-fill-alter, rgba(0, 0, 0, 0.02));
+    }
   }
 
-  .uni-table-detail-scroll {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .uni-table-detail-body .ant-table {
-    border-top: none;
-  }
-
-  .uni-table-detail-body .ant-table-container {
-    border-start-start-radius: 0;
-    border-start-end-radius: 0;
-    border-end-start-radius: 0;
-    border-end-end-radius: 0;
+  /* hand-roll 页：仅有 .uni-detail-table、无 body 包裹时，同样去掉 modal 外框叠线 */
+  .uni-table-detail-scroll > .ant-table-wrapper .ant-table,
+  > .ant-table-wrapper > .ant-table {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
   }
 
   /* ===== 表头文字不换行 ===== */
@@ -154,8 +196,9 @@
   /* ===== 表格 footer（添加行 / 批量选择 按钮区） ===== */
   .ant-table-footer {
     background: transparent;
-    padding: 8px 0;
+    padding: 8px 12px;
     border: none;
+    border-top: 1px solid var(--ant-color-split, rgba(5, 5, 5, 0.06)) !important;
   }
 
   .detail-table-footer {

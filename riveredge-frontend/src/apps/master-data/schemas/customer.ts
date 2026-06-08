@@ -3,10 +3,10 @@
  */
 
 import type { FieldConfig } from '../../../components/schema-form';
-import { partnerInvoiceFormFields, partnerExtendedCommonFormFields } from './partner-form-shared';
+import { partnerInvoiceFormFields, partnerExtendedFormFieldsWithoutFinance } from './partner-form-shared';
 
-/** TAB：基本信息 */
-export const customerFormSchemaBasic: FieldConfig[] = [
+/** TAB：基本信息（联系人明细表插在 head 与 tail 之间） */
+export const customerFormSchemaBasicHead: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -51,44 +51,9 @@ export const customerFormSchemaBasic: FieldConfig[] = [
     colSpan: 12,
     allowClear: true,
   },
-  {
-    name: 'contactPerson',
-    type: 'text',
-    labelKey: 'field.customer.contactPerson',
-    placeholderKey: 'field.customer.contactPersonPlaceholder',
-    maxLength: 100,
-    colSpan: 12,
-    rules: [{ maxLength: 100, messageKey: 'field.customer.contactPersonMaxLength' }],
-  },
-  {
-    name: 'contactTitle',
-    type: 'select',
-    labelKey: 'field.customer.contactTitle',
-    placeholderKey: 'field.customer.contactTitlePlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
-    name: 'phone',
-    type: 'text',
-    labelKey: 'field.customer.phone',
-    placeholderKey: 'field.customer.phonePlaceholder',
-    maxLength: 20,
-    colSpan: 12,
-    rules: [{ maxLength: 20, messageKey: 'field.customer.phoneMaxLength' }],
-  },
-  {
-    name: 'email',
-    type: 'text',
-    labelKey: 'field.customer.email',
-    placeholderKey: 'field.customer.emailPlaceholder',
-    maxLength: 100,
-    colSpan: 12,
-    rules: [
-      { type: 'email', messageKey: 'field.customer.emailInvalid' },
-      { maxLength: 100, messageKey: 'field.customer.emailMaxLength' },
-    ],
-  },
+];
+
+export const customerFormSchemaBasicTail: FieldConfig[] = [
   {
     name: 'salesmanId',
     type: 'select',
@@ -107,6 +72,7 @@ export const customerFormSchemaBasic: FieldConfig[] = [
       { labelKey: 'field.customer.visibilityPrivate', value: false },
       { labelKey: 'field.customer.visibilityPublic', value: true },
     ],
+    fieldProps: { className: 'form-field-segmented', size: 'middle' },
     rules: [{ required: true, messageKey: 'field.customer.visibilityRequired' }],
   },
   {
@@ -115,6 +81,12 @@ export const customerFormSchemaBasic: FieldConfig[] = [
     labelKey: 'field.customer.isActive',
     colSpan: 12,
   },
+];
+
+/** @deprecated 使用 head + 联系人明细 + tail */
+export const customerFormSchemaBasic: FieldConfig[] = [
+  ...customerFormSchemaBasicHead,
+  ...customerFormSchemaBasicTail,
 ];
 
 /** TAB：开票资料（与客户/供应商共用字段） */
@@ -184,8 +156,8 @@ const customerBusinessFields: FieldConfig[] = [
   },
 ];
 
-/** TAB：业务与扩展（客户业务指标 + 商事/结算/联系人） */
+/** TAB：业务与扩展（客户业务指标 + 商事/结算/收货联系人） */
 export const customerFormSchemaExtended: FieldConfig[] = [
   ...customerBusinessFields,
-  ...partnerExtendedCommonFormFields,
+  ...partnerExtendedFormFieldsWithoutFinance,
 ];

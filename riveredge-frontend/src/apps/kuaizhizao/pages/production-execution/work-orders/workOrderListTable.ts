@@ -43,6 +43,34 @@ export function resolveWorkOrderIdFromListRowKey(key: React.Key): number | null 
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** 批量操作：从列表 rowKey 解析可调用工单 API 的 ID（排除组行、返工、委外） */
+export function resolveWorkOrderIdsFromListRowKeys(
+  keys: React.Key[],
+  rowByKey?: Map<string, WorkOrderListRow>
+): number[] {
+  const ids: number[] = []
+  const seen = new Set<number>()
+  for (const key of keys) {
+    if (parseWorkOrderGroupIdFromListRowKey(key) != null) continue
+    const rowKey = String(key)
+    const row = rowByKey?.get(rowKey)
+    const kind =
+      row?.row_kind ??
+      (rowKey.startsWith('split-')
+        ? 'split'
+        : rowKey.startsWith('work_order_group-')
+          ? 'work_order_group'
+          : 'work_order')
+    if (kind === 'work_order_group' || kind === 'rework' || kind === 'outsource') continue
+    if (kind !== 'work_order' && kind !== 'split') continue
+    const id = row?.id != null ? Number(row.id) : resolveWorkOrderIdFromListRowKey(key)
+    if (id == null || id < 1 || seen.has(id)) continue
+    seen.add(id)
+    ids.push(id)
+  }
+  return ids
+}
+
 /** 批量操作：仅保留可编入组的主工单（排除组节点、拆分子行等） */
 export function resolveMergeableWorkOrderIdsFromRowKeys(
   keys: React.Key[],

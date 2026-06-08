@@ -316,6 +316,22 @@ export async function getSiteLogoPreview(
   return null;
 }
 
+/** 上传或更换站点/平台 Logo 后清除预览缓存，避免 404 负缓存或旧 URL 残留 */
+export function invalidateSiteLogoPreviewCache(fileUuid?: string): void {
+  const shouldPurge = (key: string) =>
+    key.startsWith('site-logo:') && (!fileUuid || key.includes(fileUuid));
+  for (const key of missingSiteLogoKeys) {
+    if (shouldPurge(key)) {
+      missingSiteLogoKeys.delete(key);
+    }
+  }
+  for (const key of previewUrlCache.keys()) {
+    if (shouldPurge(key)) {
+      previewUrlCache.delete(key);
+    }
+  }
+}
+
 /**
  * 获取文件预览信息
  *

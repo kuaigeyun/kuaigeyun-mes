@@ -291,7 +291,7 @@ const ProductionControlTower: React.FC = () => {
       <Drawer
         title={<Space><ThunderboltOutlined style={{ color: '#1890ff' }} /><span>紧急插单影响模拟分析</span></Space>}
         placement="right"
-        width={580}
+        size={580}
         onClose={() => {
           setSimulationVisible(false);
           setSimulationResult(null);

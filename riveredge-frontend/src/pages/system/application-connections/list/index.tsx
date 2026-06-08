@@ -53,6 +53,7 @@ import AppConnectorMarket from '../AppConnectorMarket';
 import type { AppConnectorDefinition } from '../connectors';
 import {
   getApplicationConnectionList,
+  getApplicationConnectionListAll,
   getApplicationConnectionByUuid,
   createApplicationConnection,
   updateApplicationConnection,
@@ -849,8 +850,12 @@ const ApplicationConnectionsListPage: React.FC = () => {
               const result = await getApplicationConnectionList(apiParams);
               if ((params.current || 1) === 1) {
                 try {
-                  const allRes = await getApplicationConnectionList({ page: 1, page_size: 1000 });
-                  setAllConnections(allRes.items);
+                  const allItems = await getApplicationConnectionListAll({
+                    search: apiParams.search,
+                    type: apiParams.type,
+                    is_active: apiParams.is_active,
+                  });
+                  setAllConnections(allItems);
                 } catch {
                   // ignore
                 }
@@ -945,8 +950,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             } else if (type === 'currentPage' && pageData?.length) {
               items = pageData;
             } else {
-              const res = await getApplicationConnectionList({ page: 1, page_size: 1000 });
-              items = res.items;
+              items = await getApplicationConnectionListAll();
             }
             if (items.length === 0) {
               messageApi.warning(t('common.exportNoData'));

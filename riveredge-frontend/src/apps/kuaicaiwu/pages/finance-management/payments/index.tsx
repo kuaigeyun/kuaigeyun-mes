@@ -626,7 +626,7 @@ const PaymentsPage: React.FC = () => {
       <Drawer
         title={detailRecord ? `付款单 · ${detailRecord.payment_code}` : '付款单详情'}
         open={detailOpen}
-        width={520}
+        size={520}
         onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
         destroyOnHidden
       >

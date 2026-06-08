@@ -247,7 +247,7 @@ const CustomerPoolPage: React.FC = () => {
       <Drawer
         title="客户池规则"
         open={rulesOpen}
-        width={420}
+        size={420}
         onClose={() => setRulesOpen(false)}
         extra={
           <Button

@@ -17,7 +17,8 @@ import {
 } from '../../../services/siteSetting';
 import { useConfigStore, getPersistedConfigs } from '../../../stores/configStore';
 import { useThemeStore } from '../../../stores/themeStore';
-import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../services/file';
+import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../services/file';
+import { toRelativeIfLocalhost } from '../../../utils/avatar';
 import { 
   getDataDictionaryByCode, 
   getDictionaryItemList, 
@@ -143,12 +144,13 @@ const SiteSettingsPage: React.FC = () => {
         setLogoFileList([]);
         return;
       }
-      setLogoUrl(previewInfo.preview_url);
+      const previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+      setLogoUrl(previewUrl);
       setLogoFileList([{
         uid: logoValue.trim(),
         name: t('pages.system.siteSettings.siteLogo'),
         status: 'done',
-        url: previewInfo.preview_url,
+        url: previewUrl,
       }]);
     } else {
       // 如果是URL格式，直接使用
@@ -272,6 +274,15 @@ const SiteSettingsPage: React.FC = () => {
     const hasSiteConfig = configs && (initialized || 'site_name' in configs);
     if (!hasSiteConfig) return;
     const values = getInitialValuesFromConfigStore(configs, normalizeColorValue);
+    // 保留表单中已上传但尚未同步到 configStore 的 site_logo，避免 persist 注水覆盖
+    const currentSiteLogo = form.getFieldValue('site_logo');
+    if (
+      typeof currentSiteLogo === 'string' &&
+      currentSiteLogo.trim() &&
+      currentSiteLogo.trim() !== String(values.site_logo ?? '').trim()
+    ) {
+      values.site_logo = currentSiteLogo;
+    }
     form.setFieldsValue(values);
     systemSettingsRef.current = {
       'security.token_check_interval': values['security.token_check_interval'],
@@ -284,7 +295,7 @@ const SiteSettingsPage: React.FC = () => {
       'network.timeout': values['network.timeout'],
       'system.max_retries': values['system.max_retries'],
     };
-    const logo = configs.site_logo ?? '';
+    const logo = String(values.site_logo ?? '').trim();
     if (logo) loadLogoPreview(logo);
   }, [configs, initialized]);
 
@@ -416,33 +427,33 @@ const SiteSettingsPage: React.FC = () => {
       });
       
       if (response.uuid) {
-        // 更新表单中的site_logo字段（保存UUID）
-        form.setFieldsValue({
-          site_logo: response.uuid,
-        });
-        
-        // 获取服务器预览URL
-        let previewUrl: string | undefined = undefined;
+        invalidateSiteLogoPreviewCache(response.uuid);
+        form.setFieldsValue({ site_logo: response.uuid });
+
+        // 与清除 LOGO 一致：上传后立即持久化，避免仅提示成功但未写入站点设置
+        await updateSiteSetting({ settings: { site_logo: response.uuid } });
+        await fetchConfigs(true);
+
+        let previewUrl: string | undefined;
         try {
-          const previewInfo = await getFilePreview(response.uuid);
-          previewUrl = previewInfo.preview_url;
-          // 释放本地预览URL
-          URL.revokeObjectURL(localPreviewUrl);
-          // 使用服务器预览URL
-          setLogoUrl(previewUrl);
+          const previewInfo = await getSiteLogoPreview(response.uuid);
+          if (previewInfo?.preview_url) {
+            previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+            URL.revokeObjectURL(localPreviewUrl);
+            setLogoUrl(previewUrl);
+          }
         } catch (error) {
-          // 如果获取预览URL失败，继续使用本地预览URL
           console.warn('Failed to get logo preview URL:', error);
         }
-        
-        // 更新LOGO文件列表
+
         setLogoFileList([{
           uid: response.uuid,
           name: response.original_name,
           status: 'done',
           url: previewUrl || localPreviewUrl,
         }]);
-        
+
+        useThemeStore.getState().initFromApi();
         messageApi.success(t('pages.system.siteSettings.logoUploadSuccess'));
       } else {
         // 上传失败，释放本地预览URL
@@ -469,12 +480,17 @@ const SiteSettingsPage: React.FC = () => {
   const handleClearLogo = async () => {
     try {
       setSaving(true);
+      const previousLogo = form.getFieldValue('site_logo');
       setLogoUrl(undefined);
       setLogoFileList([]);
       form.setFieldsValue({
         site_logo: '',
       });
       await updateSiteSetting({ settings: { site_logo: '' } });
+      if (typeof previousLogo === 'string' && previousLogo.trim()) {
+        invalidateSiteLogoPreviewCache(previousLogo.trim());
+      }
+      await fetchConfigs(true);
       messageApi.success(t('pages.system.siteSettings.logoClearSuccess'));
       useThemeStore.getState().initFromApi();
     } catch (error: any) {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { Table, Form as AntForm, Button, Space } from 'antd';
 import type { TableProps, ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ImportOutlined, DeleteOutlined, AppstoreAddOutlined } from '@ant-design/icons';
@@ -48,6 +48,8 @@ export interface UniTableDetailProps<RecordType = any> {
   onImport?: () => void;
   /** 容器自定义样式 */
   containerStyle?: React.CSSProperties;
+  /** 添加按钮位置：header=标题栏右上（默认），footer=表格底栏 */
+  addPlacement?: 'header' | 'footer';
 }
 
 export interface UniTableDetailHeaderProps {
@@ -74,6 +76,47 @@ export interface UniTableDetailHeaderProps {
   /** 导入按钮文案 */
   importText?: React.ReactNode;
 }
+
+/** 仅在实际横向溢出时启用 scroll.x，避免未超高/未超宽时出现多余滚动条 */
+const AdaptiveScrollDetailTable: React.FC<
+  TableProps<any> & { totalWidth: number; rowCount: number }
+> = ({ totalWidth, rowCount, scroll: userScroll, ...tableProps }) => {
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const [scrollX, setScrollX] = useState<number | undefined>(undefined);
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+
+    const measure = () => {
+      const table = el.querySelector('table');
+      if (!table) {
+        setScrollX(undefined);
+        return;
+      }
+      setScrollX(table.scrollWidth > el.clientWidth + 1 ? totalWidth : undefined);
+    };
+
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [rowCount, totalWidth]);
+
+  const mergedUserScroll = typeof userScroll === 'object' && userScroll != null ? userScroll : undefined;
+  const scroll: TableProps<any>['scroll'] =
+    scrollX != null
+      ? { ...mergedUserScroll, x: scrollX }
+      : mergedUserScroll?.y != null
+        ? { y: mergedUserScroll.y }
+        : undefined;
+
+  return (
+    <div ref={wrapRef} className="uni-table-detail-scroll">
+      <Table {...tableProps} scroll={scroll} />
+    </div>
+  );
+};
 
 export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
   title,
@@ -102,7 +145,6 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
           <Button
             key={action.key}
             type={action.type ?? 'default'}
-            size="small"
             icon={action.icon}
             danger={action.danger}
             disabled={action.disabled}
@@ -113,7 +155,7 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
         ))}
         {headerExtra}
         {onImport && (
-          <Button type="default" size="small" icon={<ImportOutlined />} onClick={onImport}>
+          <Button type="default" icon={<ImportOutlined />} onClick={onImport}>
             {importText ?? t('common.importDetail')}
           </Button>
         )}
@@ -126,7 +168,7 @@ export const UniTableDetailHeader: React.FC<UniTableDetailHeaderProps> = ({
  * 通用明细表格组件 (UniTableDetail)
  *
  * 基准设计：报价单新建 Modal 中的物料明细表。
- * 支持 Form.List 自动关联、响应式滚动、自定义页脚按钮等。
+ * 默认「添加明细」在标题栏右上角（与 headerExtra 并列）；可用 addPlacement="footer" 恢复底栏虚线按钮。
  *
  * ⚠️ 固定操作列：表头/单元格背景在 index.less（.uni-table-detail 作用域）；
  *   表格 wrapper 与报价单 hand-roll 一致（双层 div + overflowX: auto + Table width:100%）。
@@ -153,20 +195,12 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
   batchSelectText,
   containerStyle,
   requiredMessage,
+  addPlacement = 'header',
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="uni-table-detail" style={containerStyle}>
-      <UniTableDetailHeader
-        title={title}
-        required={required}
-        leftExtra={leftExtra}
-        headerExtra={headerExtra}
-        onImport={onImport}
-        importText={importText}
-      />
-
       <AntForm.List
         name={name}
         rules={[
@@ -180,6 +214,36 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
         ]}
       >
         {(fields, { add, remove }) => {
+          const handleAdd = () => {
+            const row = typeof initialValue === 'function' ? initialValue() : initialValue;
+            add(row);
+          };
+
+          const headerActions: NonNullable<UniTableDetailHeaderProps['actions']> = [];
+          if (!disabledAdd && addPlacement === 'header') {
+            headerActions.push({
+              key: 'add',
+              label: addText || t('common.addDetail'),
+              icon: <PlusOutlined />,
+              type: 'default',
+              onClick: handleAdd,
+            });
+          }
+          if (onBatchSelect && addPlacement === 'header') {
+            headerActions.push({
+              key: 'batch-select',
+              label: batchSelectText || t('app.kuaizhizao.common.materialBatchSelect'),
+              icon: <AppstoreAddOutlined />,
+              type: 'default',
+              onClick: onBatchSelect,
+            });
+          }
+
+          const showFooter =
+            Boolean(footerExtra) ||
+            (!disabledAdd && addPlacement === 'footer') ||
+            (Boolean(onBatchSelect) && addPlacement === 'footer');
+
           // 计算列总宽度（用于横向滚动）
           const totalWidth = columns.reduce((s, c) => s + (Number(c.width) || 0), 0) + (hideOperation ? 0 : 70);
 
@@ -210,57 +274,64 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
           }
 
           return (
-            <div className="uni-table-detail-body">
-              <div className="uni-table-detail-scroll">
-                <Table
+            <>
+              <UniTableDetailHeader
+                title={title}
+                required={required}
+                leftExtra={leftExtra}
+                actions={headerActions}
+                headerExtra={headerExtra}
+                onImport={onImport}
+                importText={importText}
+              />
+              <div className="uni-table-detail-body">
+                <AdaptiveScrollDetailTable
                   className="uni-detail-table"
+                  totalWidth={totalWidth}
+                  rowCount={fields.length}
                   dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
                   columns={finalColumns}
                   pagination={false}
                   size="small"
+                  bordered={false}
                   rowKey="key"
                   {...tableProps}
-                  scroll={
-                    fields.length > 0
-                      ? { x: totalWidth, ...(typeof tableProps?.scroll === 'object' ? tableProps.scroll : {}) }
-                      : tableProps?.scroll
-                  }
                   style={{ width: '100%', margin: 0, ...tableProps?.style }}
                   summary={summary}
-                  footer={() => (
-                  <div className="detail-table-footer">
-                    <Space style={{ width: '100%' }} wrap>
-                      {!disabledAdd && (
-                        <Button
-                          type="dashed"
-                          icon={<PlusOutlined />}
-                          onClick={() => {
-                            const row =
-                              typeof initialValue === 'function' ? initialValue() : initialValue;
-                            add(row);
-                          }}
-                          style={{ flex: 1, minWidth: 120 }}
-                        >
-                          {addText || t('common.addDetail')}
-                        </Button>
-                      )}
-                      {onBatchSelect && (
-                        <Button
-                          type="default"
-                          icon={<AppstoreAddOutlined />}
-                          onClick={onBatchSelect}
-                          style={{ flex: 1, minWidth: 120 }}
-                        >
-                          {batchSelectText || t('app.kuaizhizao.common.materialBatchSelect')}
-                        </Button>
-                      )}
-                      {footerExtra}
-                    </Space>
-                  </div>
-                )}
-              />
+                  footer={
+                    showFooter
+                      ? () => (
+                          <div className="detail-table-footer">
+                            <Space style={{ width: '100%' }} wrap>
+                              {!disabledAdd && addPlacement === 'footer' && (
+                                <Button
+                                  type="dashed"
+                                  icon={<PlusOutlined />}
+                                  onClick={handleAdd}
+                                  style={{ flex: 1, minWidth: 120 }}
+                                >
+                                  {addText || t('common.addDetail')}
+                                </Button>
+                              )}
+                              {onBatchSelect && addPlacement === 'footer' && (
+                                <Button
+                                  type="default"
+                                  icon={<AppstoreAddOutlined />}
+                                  onClick={onBatchSelect}
+                                  style={{ flex: 1, minWidth: 120 }}
+                                >
+                                  {batchSelectText || t('app.kuaizhizao.common.materialBatchSelect')}
+                                </Button>
+                              )}
+                              {footerExtra}
+                            </Space>
+                          </div>
+                        )
+                      : undefined
+                  }
+                />
               </div>
-            </div>
+            </>
           );
         }}
       </AntForm.List>

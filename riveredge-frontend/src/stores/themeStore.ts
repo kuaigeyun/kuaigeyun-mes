@@ -3,7 +3,7 @@
  *
  * 从 userPreferenceStore 读取主题，合并站点默认，计算 resolved 供 ConfigProvider 使用。
  * 主题数据源：userPreferenceStore.preferences（theme / theme_config）
- * 解析顺序：用户 preferences.theme_config（云端）优先；从未配置过则用 DEFAULT_CONFIG
+ * 解析顺序：用户 preferences.theme_config（云端）> 站点 settings.theme_config / theme_color（云端）> DEFAULT_CONFIG
  * 首帧：localStorage 缓存（rehydrateFromStorage）仅作占位，登录后以 API 为准覆盖
  */
 
@@ -88,17 +88,46 @@ export function hasCloudThemeConfig(cfg: Partial<ThemeConfig> | null | undefined
   });
 }
 
-/** 从云端用户偏好解析主题：有 theme_config 用云端；否则用默认（不叠站点/缓存） */
-export function resolveThemeFromPreferences(
-  preferences: Record<string, unknown> | null | undefined,
+function buildSiteThemeConfig(site: Record<string, unknown>): Partial<ThemeConfig> {
+  const siteThemeConfig = (site.theme_config || {}) as Partial<ThemeConfig>;
+  const legacyThemeColor = site.theme_color;
+  if (
+    typeof legacyThemeColor === 'string' &&
+    legacyThemeColor.trim() &&
+    !siteThemeConfig.colorPrimary
+  ) {
+    return { ...siteThemeConfig, colorPrimary: legacyThemeColor.trim() };
+  }
+  return siteThemeConfig;
+}
+
+/** 从云端解析主题：用户偏好 theme_config 优先，其次站点 theme_config / theme_color */
+export function resolveThemeFromCloud(
+  userPreferences: Record<string, unknown> | null | undefined,
+  siteSettings?: Record<string, unknown> | null | undefined,
 ): { theme: ThemeMode; config: ThemeConfig } {
-  const prefs = preferences && typeof preferences === 'object' ? preferences : {};
+  const prefs = userPreferences && typeof userPreferences === 'object' ? userPreferences : {};
   const userTheme = (prefs.theme as ThemeMode) || 'light';
   const userConfig = (prefs.theme_config || {}) as Partial<ThemeConfig>;
   if (hasCloudThemeConfig(userConfig)) {
     return { theme: userTheme, config: mergeConfig({}, userConfig) };
   }
+
+  const site = siteSettings && typeof siteSettings === 'object' ? siteSettings : {};
+  const siteConfig = buildSiteThemeConfig(site);
+  if (hasCloudThemeConfig(siteConfig)) {
+    return { theme: userTheme, config: mergeConfig({}, siteConfig) };
+  }
+
   return { theme: 'light', config: normalizeThemeConfig({ ...DEFAULT_CONFIG }) };
+}
+
+/** @deprecated 请使用 resolveThemeFromCloud；保留别名供既有调用方使用 */
+export function resolveThemeFromPreferences(
+  preferences: Record<string, unknown> | null | undefined,
+  siteSettings?: Record<string, unknown> | null | undefined,
+): { theme: ThemeMode; config: ThemeConfig } {
+  return resolveThemeFromCloud(preferences, siteSettings);
 }
 
 function mergeConfig(base: ThemeConfig, override: Partial<ThemeConfig> | null): ThemeConfig {
@@ -154,9 +183,11 @@ interface ThemeState {
   resolved: ResolvedTheme;
   initialized: boolean;
   loading: boolean;
+  /** 最近一次从站点设置 API 拉取的 settings，供偏好无 theme_config 时回退 */
+  siteThemeSettings: Record<string, unknown> | null;
   initFromApi: () => Promise<void>;
   applyTheme: (themeMode: ThemeMode, config?: Partial<ThemeConfig>, options?: { persist?: boolean }) => void;
-  /** 偏好变更时按云端 theme_config 应用；未配置过则用默认主题 */
+  /** 偏好变更时按云端 theme_config 应用；无个人配置时回退站点云端主题 */
   syncFromPreferences: (preferences: Record<string, any>) => void;
   subscribeToSystemTheme: () => () => void;
   clearForLogout: () => void;
@@ -187,7 +218,8 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
   const syncFromPreferences = (preferences: Record<string, any>) => {
     if (!preferences || typeof preferences !== 'object') return;
-    const { theme, config } = resolveThemeFromPreferences(preferences);
+    const { siteThemeSettings } = get();
+    const { theme, config } = resolveThemeFromCloud(preferences, siteThemeSettings);
     applyResolvedTheme(theme, config);
   };
 
@@ -212,6 +244,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
     resolved: initialResolved,
     initialized: false,
     loading: false,
+    siteThemeSettings: null,
 
     initFromApi: async () => {
       const { initialized, loading } = get();
@@ -220,7 +253,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
       if (!getToken()) {
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
-          const { theme, config } = resolveThemeFromPreferences({
+          const { theme, config } = resolveThemeFromCloud({
             theme: cachedTheme.theme,
             theme_config: cachedTheme.theme_config,
           });
@@ -239,29 +272,38 @@ export const useThemeStore = create<ThemeState>((set, get) => {
           useUserPreferenceStore.getState().fetchPreferences(),
         ]);
 
+        const siteSettings =
+          siteSetting?.settings && typeof siteSetting.settings === 'object'
+            ? siteSetting.settings
+            : null;
+
         // 复用同一份 siteSetting 给 configStore，避免 app.tsx 再触发一次 /site-setting 请求；
         // 失败（siteSetting 为 null）时不 hydrate，保留 configStore.fetchConfigs 独立重试能力。
-        if (siteSetting && siteSetting.settings) {
+        if (siteSettings) {
           try {
-            useConfigStore.getState().hydrateFromSettings(siteSetting.settings);
+            useConfigStore.getState().hydrateFromSettings(siteSettings);
           } catch {
             // 不阻塞主题流程
           }
         }
 
         const prefs = useUserPreferenceStore.getState().preferences || {};
-        const { theme, config } = resolveThemeFromPreferences(prefs);
+        const { theme, config } = resolveThemeFromCloud(prefs, siteSettings);
         applyResolvedTheme(theme, config);
 
-        set({ initialized: true, loading: false });
+        set({ initialized: true, loading: false, siteThemeSettings: siteSettings });
       } catch (e) {
         console.warn('Theme init failed:', e);
         const cachedTheme = getThemeFromPreferenceCache();
         if (cachedTheme) {
-          const { theme, config } = resolveThemeFromPreferences({
-            theme: cachedTheme.theme,
-            theme_config: cachedTheme.theme_config,
-          });
+          const { siteThemeSettings } = get();
+          const { theme, config } = resolveThemeFromCloud(
+            {
+              theme: cachedTheme.theme,
+              theme_config: cachedTheme.theme_config,
+            },
+            siteThemeSettings,
+          );
           applyResolvedTheme(theme, config);
         } else {
           applyResolvedTheme('light', normalizeThemeConfig({ ...DEFAULT_CONFIG }));
@@ -321,6 +363,7 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         config: { ...DEFAULT_CONFIG },
         resolved: computeResolved('light', DEFAULT_CONFIG),
         initialized: false,
+        siteThemeSettings: null,
       });
       doApplyTheme('light', DEFAULT_CONFIG);
     },

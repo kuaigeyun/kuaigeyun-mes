@@ -158,6 +158,8 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const drawerSize = size ?? width;
+  const isPresetDrawerSize = drawerSize === 'default' || drawerSize === 'large';
+  const isNumericDrawerSize = typeof drawerSize === 'number';
   const resolvedPlacement = placement ?? 'right';
 
   const drawerFloatingWrapperStyle = useMemo(
@@ -294,16 +296,17 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       destroyOnHidden={false}
       loading={false}
       size={
-        drawerSize === 'default' || drawerSize === 'large'
+        isPresetDrawerSize
           ? (drawerSize as 'default' | 'large')
-          : undefined
+          : isNumericDrawerSize
+            ? drawerSize
+            : undefined
       }
       styles={{
         ...styles,
         wrapper: {
           ...drawerFloatingWrapperStyle,
-          ...(typeof drawerSize === 'number' ||
-          (typeof drawerSize === 'string' && !['default', 'large'].includes(drawerSize))
+          ...(!isPresetDrawerSize && !isNumericDrawerSize && drawerSize
             ? { width: drawerSize }
             : {}),
           ...styles?.wrapper,

@@ -554,7 +554,7 @@ const ReceiptsPage: React.FC = () => {
       <Drawer
         title={detailRecord ? `收款单 · ${detailRecord.receipt_code}` : '收款单详情'}
         open={detailOpen}
-        width={520}
+        size={520}
         onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
         destroyOnHidden
       >

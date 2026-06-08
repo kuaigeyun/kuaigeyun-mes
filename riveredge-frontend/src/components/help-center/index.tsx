@@ -260,7 +260,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
           }
           open={open}
           onClose={handleClose}
-          width={600}
+          size={600}
           placement="right"
         >
           <div style={{ marginBottom: 16 }}>
@@ -305,7 +305,7 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
         }
         open={open}
         onClose={handleClose}
-        width={600}
+        size={600}
         placement="right"
       >
         <div style={{ marginBottom: 16 }}>

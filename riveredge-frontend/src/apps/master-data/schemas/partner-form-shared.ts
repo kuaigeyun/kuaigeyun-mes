@@ -112,8 +112,7 @@ export const partnerInvoiceFormFields: FieldConfig[] = [
   },
 ];
 
-/** 扩展 TAB：商事主体、结算、财务/收货联系人（业务指标在各自主 schema 中前置） */
-export const partnerExtendedCommonFormFields: FieldConfig[] = [
+const partnerExtendedSettlementFormFields: FieldConfig[] = [
   {
     name: 'legalRepresentative',
     type: 'text',
@@ -149,6 +148,10 @@ export const partnerExtendedCommonFormFields: FieldConfig[] = [
     allowClear: true,
     colSpan: 12,
   },
+];
+
+/** 财务联系人（客户已用联系人明细表，供应商仍保留） */
+export const partnerFinanceContactFormFields: FieldConfig[] = [
   {
     name: 'financeContactName',
     type: 'text',
@@ -179,6 +182,9 @@ export const partnerExtendedCommonFormFields: FieldConfig[] = [
       { maxLength: 100, messageKey: 'field.partner.financeContactEmailMaxLength' },
     ],
   },
+];
+
+const partnerDeliveryContactFormFields: FieldConfig[] = [
   {
     name: 'deliveryContactName',
     type: 'text',
@@ -205,4 +211,17 @@ export const partnerExtendedCommonFormFields: FieldConfig[] = [
     colSpan: 24,
     fieldProps: { rows: 2, maxLength: 500 },
   },
+];
+
+/** 扩展 TAB：商事主体、结算、财务/收货联系人（业务指标在各自主 schema 中前置） */
+export const partnerExtendedCommonFormFields: FieldConfig[] = [
+  ...partnerExtendedSettlementFormFields,
+  ...partnerFinanceContactFormFields,
+  ...partnerDeliveryContactFormFields,
+];
+
+/** 客户扩展 TAB：不含财务联系人（基本信息 TAB 已有联系人明细表） */
+export const partnerExtendedFormFieldsWithoutFinance: FieldConfig[] = [
+  ...partnerExtendedSettlementFormFields,
+  ...partnerDeliveryContactFormFields,
 ];

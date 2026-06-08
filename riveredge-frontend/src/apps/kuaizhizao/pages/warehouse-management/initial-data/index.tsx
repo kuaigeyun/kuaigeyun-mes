@@ -698,7 +698,7 @@ const InitialDataImportPage: React.FC = () => {
 
       <Drawer
         title={`${lastImportLabel} — ${t('app.kuaizhizao.initialData.errorDrawerTitle')}`}
-        width={560}
+        size={560}
         open={errorDrawerOpen}
         onClose={() => setErrorDrawerOpen(false)}
         extra={

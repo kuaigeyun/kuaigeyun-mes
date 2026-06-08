@@ -26,6 +26,16 @@ export interface PartnerInvoiceAndExtendedFields {
   deliveryAddress?: string;
 }
 
+export interface PartnerContact {
+  contactPerson?: string;
+  contactTitle?: string;
+  phone?: string;
+  email?: string;
+}
+
+/** @deprecated 使用 PartnerContact */
+export type CustomerContact = PartnerContact;
+
 export interface Customer extends PartnerInvoiceAndExtendedFields {
   id: number;
   uuid: string;
@@ -33,10 +43,12 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
+  /** 首条联系人快照（列表/检索）；明细以 contacts 为准 */
   contactPerson?: string;
   contactTitle?: string;
   phone?: string;
   email?: string;
+  contacts?: CustomerContact[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -59,10 +71,7 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
-  contactPerson?: string;
-  contactTitle?: string;
-  phone?: string;
-  email?: string;
+  contacts?: PartnerContact[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -81,10 +90,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   code?: string;
   name?: string;
   shortName?: string;
-  contactPerson?: string;
-  contactTitle?: string;
-  phone?: string;
-  email?: string;
+  contacts?: PartnerContact[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -123,10 +129,12 @@ export interface Supplier extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
+  /** 首条联系人快照（列表/检索）；明细以 contacts 为准 */
   contactPerson?: string;
   contactTitle?: string;
   phone?: string;
   email?: string;
+  contacts?: PartnerContact[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -147,10 +155,7 @@ export interface SupplierCreate extends PartnerInvoiceAndExtendedFields {
   code: string;
   name: string;
   shortName?: string;
-  contactPerson?: string;
-  contactTitle?: string;
-  phone?: string;
-  email?: string;
+  contacts?: PartnerContact[];
   address?: string;
   category?: string;
   industryCode?: string;
@@ -167,10 +172,7 @@ export interface SupplierUpdate extends PartnerInvoiceAndExtendedFields {
   code?: string;
   name?: string;
   shortName?: string;
-  contactPerson?: string;
-  contactTitle?: string;
-  phone?: string;
-  email?: string;
+  contacts?: PartnerContact[];
   address?: string;
   category?: string;
   industryCode?: string;

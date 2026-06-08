@@ -105,6 +105,7 @@ import {
   resolveDissolvableWorkOrderGroupIdsFromRowKeys,
   resolveMergeableWorkOrderIdsFromRowKeys,
   resolveWorkOrderGroupIdFromListRow,
+  resolveWorkOrderIdsFromListRowKeys,
   WORK_ORDER_LIST_STALE_MS,
 } from './workOrderListTable'
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
@@ -1101,6 +1102,11 @@ const WorkOrdersPage: React.FC = () => {
     return rows
   }, [])
 
+  const selectedWorkOrderIds = useMemo(
+    () => resolveWorkOrderIdsFromListRowKeys(selectedRowKeys, workOrderRowByKeyRef.current),
+    [selectedRowKeys, workOrderListRowIndexVersion]
+  )
+
   const handleWorkOrderTableRequest = useCallback(
     async (params: any, sort: any, _filter: any, searchFormValues: any) => {
       try {
@@ -1350,15 +1356,6 @@ const WorkOrdersPage: React.FC = () => {
     }
     load()
   }, [productSourceModalVisible, productSourceModalType])
-
-  // 产品选项：根据只显示自制件、文档来源过滤
-  const productOptionsList = useMemo(() => {
-    let list = productSourceData ? productSourceData.materials : productList
-    if (!productSourceData && onlyShowMake) {
-      list = productList.filter((m: any) => (m.sourceType || m.source_type) === 'Make')
-    }
-    return list
-  }, [productList, onlyShowMake, productSourceData])
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false)
@@ -3028,19 +3025,18 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量生成二维码
    */
   const handleBatchGenerateQRCode = async () => {
-    if (selectedRowKeys.length === 0) {
+    if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请先选择要生成二维码的工单')
       return
     }
 
     try {
-      // 通过API获取选中的工单数据
       const workOrders = await Promise.all(
-        selectedRowKeys.map(async key => {
+        selectedWorkOrderIds.map(async (id) => {
           try {
-            return await workOrderApi.get(key.toString())
+            return await workOrderApi.get(String(id))
           } catch (error) {
-            console.error(`获取工单失败: ${key}`, error)
+            console.error(`获取工单失败: ${id}`, error)
             return null
           }
         })
@@ -3253,13 +3249,17 @@ const WorkOrdersPage: React.FC = () => {
   }
 
   const handleDelete = async (keys: React.Key[]) => {
+    const workOrderIds = resolveWorkOrderIdsFromListRowKeys(keys, workOrderRowByKeyRef.current)
+    if (workOrderIds.length === 0) {
+      messageApi.warning('未找到可删除的工单')
+      return
+    }
     Modal.confirm({
       title: '确认删除',
-      content: `确定要删除 ${keys.length} 个工单吗？`,
+      content: `确定要删除 ${workOrderIds.length} 个工单吗？`,
       onOk: async () => {
         try {
-          // 批量删除
-          await Promise.all(keys.map(key => workOrderApi.delete(key.toString())))
+          await Promise.all(workOrderIds.map((id) => workOrderApi.delete(String(id))))
           messageApi.success('删除成功')
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
@@ -3616,7 +3616,7 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量下达工单（核心功能，新增）
    */
   const handleBatchRelease = async () => {
-    if (selectedRowKeys.length === 0) {
+    if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请至少选择一个工单')
       return
     }
@@ -3625,9 +3625,8 @@ const WorkOrdersPage: React.FC = () => {
     setBatchReleaseModalVisible(true)
 
     try {
-      // 获取选中的工单详情
       const workOrders = await Promise.all(
-        selectedRowKeys.map(key => workOrderApi.get(key.toString()))
+        selectedWorkOrderIds.map((id) => workOrderApi.get(String(id)))
       )
 
       // 执行智能检查
@@ -3719,11 +3718,8 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmitBatchRelease = async (ignoreErrors: boolean = false) => {
     try {
-      const workOrderIds = selectedRowKeys.map(key => Number(key))
-
-      // 如果忽略错误，下达所有工单；否则只下达通过检查的工单
       const idsToRelease = ignoreErrors
-        ? workOrderIds
+        ? selectedWorkOrderIds
         : batchReleaseCheckResults
             .filter(result => result.passed)
             .map(result => result.workOrder.id)
@@ -4085,7 +4081,7 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量冻结工单
    */
   const handleBatchFreeze = () => {
-    if (selectedRowKeys.length === 0) {
+    if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请至少选择一个工单')
       return
     }
@@ -4102,13 +4098,18 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
 
+    if (selectedWorkOrderIds.length === 0) {
+      messageApi.warning('未找到可冻结的工单')
+      return
+    }
+
     try {
       await Promise.all(
-        selectedRowKeys.map(key =>
-          workOrderApi.freeze(key.toString(), { freeze_reason: batchFreezeReason })
+        selectedWorkOrderIds.map((id) =>
+          workOrderApi.freeze(String(id), { freeze_reason: batchFreezeReason })
         )
       )
-      messageApi.success(`已批量冻结 ${selectedRowKeys.length} 个工单`)
+      messageApi.success(`已批量冻结 ${selectedWorkOrderIds.length} 个工单`)
       setBatchFreezeModalVisible(false)
       setBatchFreezeReason('')
       setSelectedRowKeys([])
@@ -4122,20 +4123,22 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量取消工单
    */
   const handleBatchCancel = async () => {
-    if (selectedRowKeys.length === 0) {
+    if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请至少选择一个工单')
       return
     }
 
     Modal.confirm({
       title: '确认批量取消',
-      content: `确定要取消 ${selectedRowKeys.length} 个工单吗？`,
+      content: `确定要取消 ${selectedWorkOrderIds.length} 个工单吗？`,
       onOk: async () => {
         try {
           await Promise.all(
-            selectedRowKeys.map(key => workOrderApi.update(key.toString(), { status: 'cancelled' }))
+            selectedWorkOrderIds.map((id) =>
+              workOrderApi.update(String(id), { status: 'cancelled' })
+            )
           )
-          messageApi.success(`已批量取消 ${selectedRowKeys.length} 个工单`)
+          messageApi.success(`已批量取消 ${selectedWorkOrderIds.length} 个工单`)
           setSelectedRowKeys([])
           invalidateStatistics(); actionRef.current?.reload()
         } catch (error: any) {
@@ -4194,7 +4197,7 @@ const WorkOrdersPage: React.FC = () => {
    * 处理批量设置优先级
    */
   const handleBatchSetPriority = () => {
-    if (selectedRowKeys.length === 0) {
+    if (selectedWorkOrderIds.length === 0) {
       messageApi.warning('请至少选择一个工单')
       return
     }
@@ -4206,12 +4209,17 @@ const WorkOrdersPage: React.FC = () => {
    * 处理提交批量设置优先级
    */
   const handleSubmitBatchPriority = async () => {
+    if (selectedWorkOrderIds.length === 0) {
+      messageApi.warning('未找到可设置优先级的工单')
+      return
+    }
+
     try {
       await workOrderApi.batchSetPriority({
-        work_order_ids: selectedRowKeys.map(key => Number(key)),
+        work_order_ids: selectedWorkOrderIds,
         priority: batchPriority,
       })
-      messageApi.success(`已批量设置 ${selectedRowKeys.length} 个工单的优先级`)
+      messageApi.success(`已批量设置 ${selectedWorkOrderIds.length} 个工单的优先级`)
       setBatchPriorityModalVisible(false)
       setSelectedRowKeys([])
       invalidateStatistics(); actionRef.current?.reload()
@@ -5785,7 +5793,12 @@ const WorkOrdersPage: React.FC = () => {
               if (type === 'currentPage' && pageData?.length) {
                 items = pageData
               } else if (type === 'selected' && keys?.length) {
-                items = items.filter((d: WorkOrder) => d.id != null && keys.includes(d.id))
+                const selectedIds = new Set(
+                  resolveWorkOrderIdsFromListRowKeys(keys, workOrderRowByKeyRef.current)
+                )
+                items = items.filter(
+                  (d: WorkOrder) => d.id != null && selectedIds.has(Number(d.id))
+                )
               }
               if (items.length === 0) {
                 messageApi.warning('暂无数据可导出')
@@ -6335,52 +6348,67 @@ const WorkOrdersPage: React.FC = () => {
             colProps={{ span: 12 }}
           />
         )}
-        {!isEdit && (
+        {!isEdit ? (
           <Col span={12}>
-            <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
-              <ThemedSegmented
-                value={createWorkOrderMode}
-                onChange={(v) => {
-                  const mode = v as 'normal' | 'peer_group'
-                  setCreateWorkOrderMode(mode)
-                  if (mode === 'peer_group') {
-                    setSelectedOperations([])
-                    const items = formRef.current?.getFieldValue('group_items')
-                    if (!items?.length) {
-                      formRef.current?.setFieldsValue({
-                        group_items: [
-                          { ...EMPTY_PEER_GROUP_ITEM },
-                          { ...EMPTY_PEER_GROUP_ITEM },
-                        ],
-                      })
-                    }
-                  } else {
-                    setSelectedOperations([])
-                    formRef.current?.setFieldsValue({
-                      process_route_id: undefined,
-                      operations: undefined,
-                      allow_operation_jump: false,
-                      over_report_mode: 'none',
-                      over_report_value: 0,
-                    })
-                  }
-                }}
-                options={[
-                  { label: '普通工单', value: 'normal' },
-                  { label: '平级组工单', value: 'peer_group' },
-                ]}
-              />
-            </Form.Item>
+            <Row gutter={16} align="top" wrap={false}>
+              <Col flex="none">
+                <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
+                  <ThemedSegmented
+                    value={createWorkOrderMode}
+                    onChange={(v) => {
+                      const mode = v as 'normal' | 'peer_group'
+                      setCreateWorkOrderMode(mode)
+                      if (mode === 'peer_group') {
+                        setSelectedOperations([])
+                        const items = formRef.current?.getFieldValue('group_items')
+                        if (!items?.length) {
+                          formRef.current?.setFieldsValue({
+                            group_items: [
+                              { ...EMPTY_PEER_GROUP_ITEM },
+                              { ...EMPTY_PEER_GROUP_ITEM },
+                            ],
+                          })
+                        }
+                      } else {
+                        setSelectedOperations([])
+                        formRef.current?.setFieldsValue({
+                          process_route_id: undefined,
+                          operations: undefined,
+                          allow_operation_jump: false,
+                          over_report_mode: 'none',
+                          over_report_value: 0,
+                        })
+                      }
+                    }}
+                    options={[
+                      { label: '普通工单', value: 'normal' },
+                      { label: '平级组工单', value: 'peer_group' },
+                    ]}
+                  />
+                </Form.Item>
+              </Col>
+              {createWorkOrderMode === 'normal' && (
+                <Col flex="auto" style={{ minWidth: 0 }}>
+                  <ProFormText
+                    name="name"
+                    label="工单名称"
+                    placeholder="可选"
+                    formItemProps={{ style: { marginBottom: 24 } }}
+                  />
+                </Col>
+              )}
+            </Row>
           </Col>
-        )}
-        {createWorkOrderMode === 'normal' && (
-          <ProFormText
-            name="name"
-            label="工单名称"
-            placeholder="可选"
-            disabled={isEdit}
-            colProps={{ span: 12 }}
-          />
+        ) : (
+          createWorkOrderMode === 'normal' && (
+            <ProFormText
+              name="name"
+              label="工单名称"
+              placeholder="可选"
+              disabled
+              colProps={{ span: 12 }}
+            />
+          )
         )}
         <ProFormText name="production_mode" initialValue="MTS" hidden />
 
@@ -6403,6 +6431,7 @@ const WorkOrdersPage: React.FC = () => {
               placeholder="请选择产品"
               required
               disabled={isEdit}
+              sourceType={onlyShowMake ? 'Make' : undefined}
               /* UniMaterialSelect 默认 formItem style={{ margin: 0 }}，会吃掉与其它 ProForm 行一致的底间距 */
               formItemProps={{ style: { marginBottom: 24 } }}
               fallbackOption={
@@ -8123,7 +8152,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
       >
         <div style={{ marginBottom: 16 }}>
-          已选择 <strong>{selectedRowKeys.length}</strong> 个工单进行冻结
+          已选择 <strong>{selectedWorkOrderIds.length}</strong> 个工单进行冻结
         </div>
         <div style={{ marginBottom: 16 }}>
           <div style={{ marginBottom: 8, fontWeight: 500 }}>
@@ -8176,7 +8205,7 @@ const WorkOrdersPage: React.FC = () => {
       >
         <div style={{ padding: '16px 0' }}>
           <div style={{ marginBottom: 16 }}>
-            已选择 <strong>{selectedRowKeys.length}</strong> 个工单
+            已选择 <strong>{selectedWorkOrderIds.length}</strong> 个工单
           </div>
           <div>
             <div style={{ marginBottom: 8 }}>优先级：</div>

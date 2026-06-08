@@ -61,6 +61,9 @@ export interface TestConnectionResponse {
   error?: string;
 }
 
+/** 与后端 application_connections 列表 API 的 page_size 上限一致 */
+export const APPLICATION_CONNECTION_LIST_MAX_PAGE_SIZE = 100;
+
 export async function getApplicationConnectionList(
   params?: ApplicationConnectionListParams
 ): Promise<ApplicationConnectionListResponse> {
@@ -69,6 +72,25 @@ export async function getApplicationConnectionList(
     params: { page, page_size, search, type, is_active },
   });
   return result;
+}
+
+/** 按筛选条件拉取全部应用连接（多页拼接，每页不超过 {@link APPLICATION_CONNECTION_LIST_MAX_PAGE_SIZE}） */
+export async function getApplicationConnectionListAll(
+  params?: Omit<ApplicationConnectionListParams, 'page' | 'page_size'>,
+): Promise<ApplicationConnection[]> {
+  const page_size = APPLICATION_CONNECTION_LIST_MAX_PAGE_SIZE;
+  let page = 1;
+  const out: ApplicationConnection[] = [];
+  for (;;) {
+    const res = await getApplicationConnectionList({ ...params, page, page_size });
+    out.push(...res.items);
+    if (res.items.length === 0 || res.items.length < page_size || out.length >= res.total) {
+      break;
+    }
+    page += 1;
+    if (page > 500) break;
+  }
+  return out;
 }
 
 export async function getApplicationConnectionByUuid(uuid: string): Promise<ApplicationConnection> {

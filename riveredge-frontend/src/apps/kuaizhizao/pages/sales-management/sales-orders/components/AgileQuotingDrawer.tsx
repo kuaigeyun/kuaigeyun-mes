@@ -116,9 +116,7 @@ export const AgileQuotingDrawer: React.FC<AgileQuotingDrawerProps> = ({
       }
       placement="right"
       zIndex={zIndex}
-      styles={{
-        wrapper: { width: 800 }
-      }}
+      size={800}
       onClose={onClose}
       open={open}
       footer={

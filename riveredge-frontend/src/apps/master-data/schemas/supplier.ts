@@ -3,10 +3,10 @@
  */
 
 import type { FieldConfig } from '../../../components/schema-form';
-import { partnerInvoiceFormFields, partnerExtendedCommonFormFields } from './partner-form-shared';
+import { partnerInvoiceFormFields, partnerExtendedFormFieldsWithoutFinance } from './partner-form-shared';
 
-/** TAB：基本信息 */
-export const supplierFormSchemaBasic: FieldConfig[] = [
+/** TAB：基本信息（联系人明细表插在 head 与 tail 之间） */
+export const supplierFormSchemaBasicHead: FieldConfig[] = [
   {
     name: 'code',
     type: 'text',
@@ -51,44 +51,9 @@ export const supplierFormSchemaBasic: FieldConfig[] = [
     colSpan: 12,
     allowClear: true,
   },
-  {
-    name: 'contactPerson',
-    type: 'text',
-    labelKey: 'field.supplier.contactPerson',
-    placeholderKey: 'field.supplier.contactPersonPlaceholder',
-    maxLength: 100,
-    colSpan: 12,
-    rules: [{ maxLength: 100, messageKey: 'field.supplier.contactPersonMaxLength' }],
-  },
-  {
-    name: 'contactTitle',
-    type: 'select',
-    labelKey: 'field.supplier.contactTitle',
-    placeholderKey: 'field.supplier.contactTitlePlaceholder',
-    colSpan: 12,
-    allowClear: true,
-  },
-  {
-    name: 'phone',
-    type: 'text',
-    labelKey: 'field.supplier.phone',
-    placeholderKey: 'field.supplier.phonePlaceholder',
-    maxLength: 20,
-    colSpan: 12,
-    rules: [{ maxLength: 20, messageKey: 'field.supplier.phoneMaxLength' }],
-  },
-  {
-    name: 'email',
-    type: 'text',
-    labelKey: 'field.supplier.email',
-    placeholderKey: 'field.supplier.emailPlaceholder',
-    maxLength: 100,
-    colSpan: 12,
-    rules: [
-      { type: 'email', messageKey: 'field.supplier.emailInvalid' },
-      { maxLength: 100, messageKey: 'field.supplier.emailMaxLength' },
-    ],
-  },
+];
+
+export const supplierFormSchemaBasicTail: FieldConfig[] = [
   {
     name: 'buyerId',
     type: 'select',
@@ -111,6 +76,12 @@ export const supplierFormSchemaBasic: FieldConfig[] = [
     labelKey: 'field.supplier.isActive',
     colSpan: 12,
   },
+];
+
+/** @deprecated 使用 head + 联系人明细 + tail */
+export const supplierFormSchemaBasic: FieldConfig[] = [
+  ...supplierFormSchemaBasicHead,
+  ...supplierFormSchemaBasicTail,
 ];
 
 export const supplierFormSchemaInvoice: FieldConfig[] = partnerInvoiceFormFields;
@@ -171,7 +142,8 @@ const supplierBusinessFields: FieldConfig[] = [
   },
 ];
 
+/** TAB：业务与扩展（供应商业务指标 + 商事/结算/收货联系人） */
 export const supplierFormSchemaExtended: FieldConfig[] = [
   ...supplierBusinessFields,
-  ...partnerExtendedCommonFormFields,
+  ...partnerExtendedFormFieldsWithoutFinance,
 ];

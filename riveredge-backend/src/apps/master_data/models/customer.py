@@ -56,10 +56,11 @@ class Customer(BaseModel):
     name = fields.CharField(max_length=200, description="客户名称")
     short_name = fields.CharField(max_length=100, null=True, description="简称")
     
-    # 联系信息
+    # 联系信息（contact_person/phone/email/contact_title 保留为首条联系人快照，供列表与检索）
     contact_person = fields.CharField(max_length=100, null=True, description="联系人")
     phone = fields.CharField(max_length=20, null=True, description="电话")
     email = fields.CharField(max_length=100, null=True, description="邮箱")
+    contacts = fields.JSONField(null=True, default=list, description="联系人明细 JSON 数组")
     address = fields.TextField(null=True, description="地址")
     
     # 分类信息

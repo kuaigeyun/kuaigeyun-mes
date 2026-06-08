@@ -4,7 +4,7 @@
 提供供应链数据的业务逻辑处理（客户、供应商），支持多组织隔离。
 """
 
-from typing import List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from tortoise.exceptions import IntegrityError
 
 from tortoise.expressions import Q
@@ -12,14 +12,116 @@ from tortoise import timezone
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.supplier import Supplier
 from apps.master_data.schemas.supply_chain_schemas import (
-    CustomerCreate, CustomerUpdate, CustomerResponse,
-    SupplierCreate, SupplierUpdate, SupplierResponse
+    CustomerContactItem,
+    CustomerCreate,
+    CustomerUpdate,
+    CustomerResponse,
+    SupplierCreate,
+    SupplierUpdate,
+    SupplierResponse,
 )
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 RESOURCE_SUPPLIER = "master-data:supply-chain:supplier"
+
+
+def _pick_contact_field(row: Dict[str, Any], *keys: str) -> Optional[str]:
+    for key in keys:
+        val = row.get(key)
+        if val is not None and str(val).strip():
+            return str(val).strip()
+    return None
+
+
+def _normalize_partner_contact_row(row: Any) -> Optional[Dict[str, Optional[str]]]:
+    if not isinstance(row, dict):
+        return None
+    contact_person = _pick_contact_field(row, "contact_person", "contactPerson")
+    contact_title = _pick_contact_field(row, "contact_title", "contactTitle")
+    phone = _pick_contact_field(row, "phone")
+    email = _pick_contact_field(row, "email")
+    if not any([contact_person, contact_title, phone, email]):
+        return None
+    return {
+        "contact_person": contact_person,
+        "contact_title": contact_title,
+        "phone": phone,
+        "email": email,
+    }
+
+
+def _apply_partner_contacts_payload(data: Dict[str, Any]) -> None:
+    """将 contacts 明细写入 payload，并同步首条至 legacy 单联系人字段。"""
+    if "contacts" not in data:
+        legacy = _normalize_partner_contact_row(
+            {
+                "contact_person": data.get("contact_person"),
+                "contact_title": data.get("contact_title"),
+                "phone": data.get("phone"),
+                "email": data.get("email"),
+            }
+        )
+        if legacy:
+            data["contacts"] = [legacy]
+        return
+
+    raw_contacts = data.get("contacts")
+    normalized: List[Dict[str, Optional[str]]] = []
+    if isinstance(raw_contacts, list):
+        for row in raw_contacts:
+            item = _normalize_partner_contact_row(row)
+            if item:
+                normalized.append(item)
+
+    data["contacts"] = normalized
+    if normalized:
+        first = normalized[0]
+        data["contact_person"] = first.get("contact_person")
+        data["contact_title"] = first.get("contact_title")
+        data["phone"] = first.get("phone")
+        data["email"] = first.get("email")
+    else:
+        data["contact_person"] = None
+        data["contact_title"] = None
+        data["phone"] = None
+        data["email"] = None
+
+
+def _partner_contacts_for_response(entity: Customer | Supplier) -> List[Dict[str, Optional[str]]]:
+    stored = entity.contacts
+    if isinstance(stored, list) and stored:
+        rows: List[Dict[str, Optional[str]]] = []
+        for row in stored:
+            item = _normalize_partner_contact_row(row)
+            if item:
+                rows.append(item)
+        if rows:
+            return rows
+    legacy = _normalize_partner_contact_row(
+        {
+            "contact_person": entity.contact_person,
+            "contact_title": entity.contact_title,
+            "phone": entity.phone,
+            "email": entity.email,
+        }
+    )
+    return [legacy] if legacy else []
+
+
+def _to_customer_response(customer: Customer) -> CustomerResponse:
+    resp = CustomerResponse.model_validate(customer)
+    contact_rows = _partner_contacts_for_response(customer)
+    contact_items = [CustomerContactItem.model_validate(row) for row in contact_rows] if contact_rows else None
+    return resp.model_copy(update={"contacts": contact_items})
+
+
+def _to_supplier_response(supplier: Supplier) -> SupplierResponse:
+    resp = SupplierResponse.model_validate(supplier)
+    contact_rows = _partner_contacts_for_response(supplier)
+    contact_items = [CustomerContactItem.model_validate(row) for row in contact_rows] if contact_rows else None
+    return resp.model_copy(update={"contacts": contact_items})
 
 
 class SupplyChainService:
@@ -74,6 +176,8 @@ class SupplyChainService:
             salesman = await User.filter(id=create_data["salesman_id"]).first()
             if salesman:
                 create_data["salesman_name"] = salesman.full_name or salesman.username
+
+        _apply_partner_contacts_payload(create_data)
         
         try:
             customer = await Customer.create(
@@ -86,7 +190,7 @@ class SupplyChainService:
                 raise ValidationError(f"客户编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return CustomerResponse.model_validate(customer)
+        return _to_customer_response(customer)
     
     @staticmethod
     async def get_customer_by_uuid(
@@ -115,7 +219,7 @@ class SupplyChainService:
         if not customer:
             raise NotFoundError(f"客户 {customer_uuid} 不存在")
         
-        return CustomerResponse.model_validate(customer)
+        return _to_customer_response(customer)
     
     @staticmethod
     async def list_customers(
@@ -186,7 +290,7 @@ class SupplyChainService:
 
         customers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
-        return [CustomerResponse.model_validate(c) for c in customers], total
+        return [_to_customer_response(c) for c in customers], total
     
     @staticmethod
     async def update_customer(
@@ -248,6 +352,8 @@ class SupplyChainService:
             update_data["assigned_at"] = None
             update_data["recycle_at"] = None
 
+        _apply_partner_contacts_payload(update_data)
+
         for key, value in update_data.items():
             setattr(customer, key, value)
         
@@ -268,7 +374,7 @@ class SupplyChainService:
                 raise ValidationError(f"客户编码 {data.code or customer.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return CustomerResponse.model_validate(customer)
+        return _to_customer_response(customer)
     
     @staticmethod
     async def delete_customer(
@@ -339,6 +445,8 @@ class SupplyChainService:
             if buyer:
                 create_data["buyer_name"] = buyer.full_name or buyer.username
 
+        _apply_partner_contacts_payload(create_data)
+
         try:
             supplier = await Supplier.create(
                 tenant_id=tenant_id,
@@ -350,7 +458,7 @@ class SupplyChainService:
                 raise ValidationError(f"供应商编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return SupplierResponse.model_validate(supplier)
+        return _to_supplier_response(supplier)
     
     @staticmethod
     async def get_supplier_by_uuid(
@@ -379,7 +487,7 @@ class SupplyChainService:
         if not supplier:
             raise NotFoundError(f"供应商 {supplier_uuid} 不存在")
         
-        return SupplierResponse.model_validate(supplier)
+        return _to_supplier_response(supplier)
     
     @staticmethod
     async def list_suppliers(
@@ -467,7 +575,7 @@ class SupplyChainService:
 
         suppliers = await query.offset(skip).limit(limit).order_by(order_expr).all()
 
-        return [SupplierResponse.model_validate(s) for s in suppliers], total
+        return [_to_supplier_response(s) for s in suppliers], total
     
     @staticmethod
     async def update_supplier(
@@ -512,6 +620,9 @@ class SupplyChainService:
         
         # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
+
+        _apply_partner_contacts_payload(update_data)
+
         for key, value in update_data.items():
             setattr(supplier, key, value)
         
@@ -532,7 +643,7 @@ class SupplyChainService:
                 raise ValidationError(f"供应商编码 {data.code or supplier.code} 已存在（可能已被软删除，请检查）")
             raise
         
-        return SupplierResponse.model_validate(supplier)
+        return _to_supplier_response(supplier)
     
     @staticmethod
     async def delete_supplier(

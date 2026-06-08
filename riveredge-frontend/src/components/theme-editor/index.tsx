@@ -5,14 +5,14 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Form, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover, Segmented } from 'antd';
+import { Drawer, Form, Input, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover, Segmented, Spin } from 'antd';
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
-import { useThemeStore, type ThemeStyle } from '../../stores/themeStore';
+import { useThemeStore, resolveThemeFromCloud, type ThemeStyle } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 import '../layout-templates/drawerSlideMotion.css';
@@ -385,13 +385,23 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
     try {
       setLoading(true);
 
-      await useUserPreferenceStore.getState().fetchPreferences({ force: true });
+      const [, siteSetting] = await Promise.all([
+        useUserPreferenceStore.getState().fetchPreferences({ force: true }),
+        getSiteSetting().catch(() => null),
+      ]);
       const prefs = useUserPreferenceStore.getState().preferences || {};
-      /** 云端 theme_config 优先；未配置则用默认。同步到 themeStore 后填表，与全局界面一致 */
-      useThemeStore.getState().syncFromPreferences(prefs);
-      const applied = useThemeStore.getState().config;
+      const siteSettings =
+        siteSetting?.settings && typeof siteSetting.settings === 'object'
+          ? siteSetting.settings
+          : null;
 
-      const userThemeMode = useThemeStore.getState().theme;
+      /** 云端优先：用户偏好 theme_config > 站点 theme_config / theme_color */
+      const { theme: userThemeMode, config: applied } = resolveThemeFromCloud(prefs, siteSettings);
+      if (siteSettings) {
+        useThemeStore.setState({ siteThemeSettings: siteSettings });
+      }
+      useThemeStore.getState().applyTheme(userThemeMode, applied, { persist: false });
+
       setColorMode(userThemeMode);
 
       const parseDim = (v: unknown, fallback: number): number => {
@@ -399,20 +409,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         return Number.isFinite(n) ? n : fallback;
       };
 
-      let colorPrimaryValue = applied.colorPrimary || token.colorPrimary || '#1890ff';
-      if (!colorPrimaryValue) {
-        colorPrimaryValue = token.colorPrimary || '#1890ff';
-      }
-      if (typeof colorPrimaryValue !== 'string') {
-        if (colorPrimaryValue && typeof (colorPrimaryValue as any).toHexString === 'function') {
-          colorPrimaryValue = (colorPrimaryValue as any).toHexString();
-        } else {
-          colorPrimaryValue = token.colorPrimary || '#1890ff';
-        }
-      }
+      const colorPrimaryValue = applied.colorPrimary || '#1890ff';
 
-      const currentBorderRadius = Math.min(16, Math.max(0, parseDim(applied.borderRadius, token.borderRadius ?? 6)));
-      const currentFontSize = Math.min(20, Math.max(12, parseDim(applied.fontSize, token.fontSize ?? 14)));
+      const currentBorderRadius = Math.min(16, Math.max(0, parseDim(applied.borderRadius, 6)));
+      const currentFontSize = Math.min(20, Math.max(12, parseDim(applied.fontSize, 14)));
 
       const tabsPersistence = 'tabs_persistence' in prefs ? Boolean(prefs.tabs_persistence) : false;
       const loadedThemeStyle = applied.themeStyle === 'plain' ? 'plain' : 'vivid';
@@ -775,7 +775,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
         }
       `}</style>
       {open && form && (
-        <>
+        <Spin spinning={loading}>
           <Form
             form={form}
             layout="vertical"
@@ -795,10 +795,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              <Form.Item
-                name="colorMode"
-                style={{ marginBottom: 0 }}
-              >
+              <Form.Item name="colorMode" hidden>
+                <Input />
+              </Form.Item>
+              <Form.Item style={{ marginBottom: 0 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
                   {/* 浅色模式 */}
                   <div
@@ -940,13 +940,6 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     { label: t('ui.theme.style.vivid'), value: 'vivid' },
                     { label: t('ui.theme.style.plain'), value: 'plain' },
                   ]}
-                  value={themeStyleValue}
-                  onChange={(value) => {
-                    const next = value as ThemeStyle;
-                    form.setFieldValue('themeStyle', next);
-                    setThemeStyleValue(next);
-                    handleValuesChange({ themeStyle: next }, form.getFieldsValue());
-                  }}
                 />
               </Form.Item>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -1484,16 +1477,13 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 name="tabsPersistence"
                 label={t('components.themeEditor.tabsPersistence.label')}
                 valuePropName="checked"
-              >
-                <div>
-                  <Switch checked={tabsPersistenceValue} onChange={(checked) => {
-                    setTabsPersistenceValue(checked);
-                    form.setFieldsValue({ tabsPersistence: checked });
-                  }} />
-                  <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>
+                extra={
+                  <Text type="secondary" style={{ fontSize: 12 }}>
                     {t('components.themeEditor.tabsPersistence.desc')}
                   </Text>
-                </div>
+                }
+              >
+                <Switch />
               </Form.Item>
 
             </Card>
@@ -1559,7 +1549,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               </div>
             </Card>
           </ConfigProvider>
-        </>
+        </Spin>
       )}
     </Drawer>
   );
