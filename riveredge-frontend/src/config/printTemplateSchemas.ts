@@ -623,6 +623,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
           { key: 'line_items.0.mold_code', label: '模具代号', type: 'string' },
           { key: 'line_items.0.mold_name', label: '模具名称', type: 'string' },
           { key: 'line_items.0.repair_content', label: '维修内容', type: 'string' },
+          { key: 'line_items.0.repair_cost', label: '维修金额', type: 'string' },
           { key: 'line_items.0.upkeep_summary', label: '保养摘要', type: 'string' },
         ],
       },
@@ -646,7 +647,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
         children: [
           { key: 'line_items.0.mold_code', label: '模具代号', type: 'string' },
           { key: 'line_items.0.repair_content', label: '维修内容', type: 'string' },
-          { key: 'line_items.0.repair_cost', label: '维修费用', type: 'string' },
+          { key: 'line_items.0.repair_cost', label: '维修金额', type: 'string' },
         ],
       },
       { key: 'created_at', label: '制单时间', type: 'date' },

@@ -195,6 +195,7 @@ MOLD_MAINTENANCE_COMPLETE_PRINT_CONTENT = (
           <th>维修原因</th>
           <th>维修内容</th>
           <th style="width:72px;">结果</th>
+          <th style="width:88px;">维修金额</th>
           {% else %}
           <th>保养内容/记录摘要</th>
           <th style="width:72px;">重置产量</th>
@@ -211,6 +212,7 @@ MOLD_MAINTENANCE_COMPLETE_PRINT_CONTENT = (
           <td>{{ line.repair_reason or '—' }}</td>
           <td>{{ line.repair_content or '—' }}</td>
           <td>{{ line.repair_result or '—' }}</td>
+          <td style="text-align:right;">{{ line.repair_cost if line.repair_cost else '—' }}</td>
           {% else %}
           <td>{{ line.upkeep_summary or '—' }}</td>
           <td>{{ line.clear_total_production_label }}</td>

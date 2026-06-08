@@ -22,6 +22,11 @@ export type UniUserIdSelectPreset = {
   department_uuid?: string;
 };
 
+export type UniUserIdSearchFn = (
+  keyword?: string,
+  selectedIds?: number[],
+) => Promise<Array<{ label: string; value: number }>>;
+
 export interface UniUserIdSelectProps {
   name: NamePath;
   label?: string;
@@ -33,6 +38,8 @@ export interface UniUserIdSelectProps {
   departmentUuid?: string;
   /** 编辑回显：单据快照名或已知 id→label */
   presetUsers?: UniUserIdSelectPreset[];
+  /** 业务域自定义人员搜索（如试模单 create/update 权限即可选人，不依赖 system:user:read） */
+  searchUsers?: UniUserIdSearchFn;
   /** 选中人员时回调（含 department_uuid，便于联动部门） */
   onUserPicked?: (user: UserDisplayItem | undefined) => void;
   [key: string]: unknown;
@@ -55,12 +62,14 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
   activeOnly = true,
   departmentUuid,
   presetUsers,
+  searchUsers,
   onUserPicked,
   ...restProps
 }) => {
   const { message } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const canPick = canPickUsersForDisplay(currentUser);
+  const canPickDirectory = canPickUsersForDisplay(currentUser);
+  const canPick = Boolean(searchUsers) || canPickDirectory;
   const useFullList = canReadUserDirectory(currentUser);
 
   const [options, setOptions] = useState<{ label: string; value: number }[]>([]);
@@ -127,13 +136,25 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
         return;
       }
       try {
+        if (searchUsers) {
+          const opts = await searchUsers(undefined, missing);
+          ingestDisplayItems(
+            opts.map((o) => ({
+              id: o.value,
+              uuid: '',
+              username: '',
+              label: o.label,
+            })),
+          );
+          return;
+        }
         const resolved = await resolveUserDisplay({ user_ids: missing });
         ingestDisplayItems(resolved);
       } catch {
         mergePresets();
       }
     },
-    [canPick, ingestDisplayItems, mergePresets, syncOptionsFromLabelMap],
+    [canPick, ingestDisplayItems, mergePresets, searchUsers, syncOptionsFromLabelMap],
   );
 
   const fetchUsers = async (searchText: string = '') => {
@@ -143,6 +164,20 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
     }
     setLoading(true);
     try {
+      if (searchUsers) {
+        const wid = watchedId != null ? Number(watchedId) : NaN;
+        const selectedIds = Number.isFinite(wid) ? [wid] : [];
+        const opts = await searchUsers(searchText.trim() || undefined, selectedIds);
+        ingestDisplayItems(
+          opts.map((o) => ({
+            id: o.value,
+            uuid: '',
+            username: '',
+            label: o.label,
+          })),
+        );
+        return;
+      }
       if (useFullList) {
         const response = await getUserList({
           page: 1,
@@ -208,7 +243,7 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOnly, departmentUuid, canPick, useFullList]);
+  }, [activeOnly, departmentUuid, canPick, useFullList, searchUsers]);
 
   useEffect(() => {
     mergePresets(presetUsers);

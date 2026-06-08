@@ -56,8 +56,8 @@ from apps.haoligo.services.outsource_maintenance_sheet_side_effects import (
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_maintenance_approved,
     format_mold_warehouse_label,
-    merge_line_warehouse_fields,
     mold_warehouse_snapshot_by_codes,
+    resolve_maintenance_line_warehouse_fields,
 )
 from apps.master_data.models.supplier import Supplier
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -294,14 +294,21 @@ async def _serialize(
                 lines.append(_line_from_store(item))
     codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]
     snapshots = await mold_warehouse_snapshot_by_codes(tenant_id, codes)
+    is_closed = int(row.id) in (linked_complete_ids or set())
+    is_approved = effective_sheet_status(row) == SHEET_STATUS_APPROVED
     enriched: List[OutsourceMaintLineOut] = []
     for ln, raw in zip(lines, raw_dicts):
         snap = snapshots.get((ln.mold_code or "").strip(), {})
-        enriched.append(
-            ln.model_copy(
-                update=merge_line_warehouse_fields({}, snapshot=snap, raw=raw),
-            )
+        wh_fields = await resolve_maintenance_line_warehouse_fields(
+            tenant_id,
+            raw,
+            snap,
+            is_closed=is_closed,
+            is_approved=is_approved,
+            outsourced_unit_name=row.outsourced_unit_name or "",
+            outsourced_unit_code=row.outsourced_unit_code,
         )
+        enriched.append(ln.model_copy(update=wh_fields))
     lines = enriched
     primary_wh: Optional[str] = None
     if lines:

@@ -15,8 +15,11 @@ from apps.master_data.schemas.supply_chain_schemas import (
     CustomerCreate, CustomerUpdate, CustomerResponse,
     SupplierCreate, SupplierUpdate, SupplierResponse
 )
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+
+RESOURCE_SUPPLIER = "master-data:supply-chain:supplier"
 
 
 class SupplyChainService:
@@ -448,9 +451,13 @@ class SupplyChainService:
             # 模糊匹配供应商名称
             query = query.filter(name__icontains=name)
 
-        # 采购员数据隔离：普通用户只能看到自己负责的供应商
-        if current_user and current_user.is_regular_user():
-            query = query.filter(buyer_id=current_user.id)
+        if current_user:
+            query = await DataScopeService.apply(
+                query,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=RESOURCE_SUPPLIER,
+            )
 
         total = await query.count()
         allowed_sort = {"code", "name", "category", "created_at", "is_active", "buyer_name", "short_name"}

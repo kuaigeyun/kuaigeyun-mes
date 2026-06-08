@@ -44,15 +44,15 @@ from apps.haoligo.api._data_scope import (
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_complete_approved,
     format_mold_warehouse_label,
-    merge_line_warehouse_fields,
     mold_warehouse_snapshot_by_codes,
+    resolve_complete_line_warehouse_fields,
 )
 from apps.haoligo.api._mold_sheet_audit import (
     assert_pending_for_audit as assert_pending_for_sheet_audit,
     load_sheet_row_for_audit,
 )
 from apps.haoligo.api._mold_sheet_audit import assert_approved_for_revoke as assert_approved_for_sheet_revoke
-from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
+from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED, SHEET_STATUS_PENDING
 from apps.haoligo.authorization.workflow_permissions import OUTSOURCE_COMPLETE_CREATE_PERMISSIONS
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
@@ -368,6 +368,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
 
     src_header: List[str] = []
     src_by_mold: dict[str, List[str]] = {}
+    src_line_raw_by_mold: dict[str, dict[str, Any]] = {}
     sid = row.source_outsource_maintenance_sheet_id
     tid = getattr(row, "tenant_id", None)
     if sid and tid is not None:
@@ -388,6 +389,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
                         continue
                     mc = str(it.get("mold_code") or "").strip()
                     if mc:
+                        src_line_raw_by_mold[mc] = it
                         normalized_line_uuids = await _normalize_attachment_uuids_for_tenant(
                             int(tid), it.get("attachment_file_uuids")
                         )
@@ -403,6 +405,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
     tid_int = int(tid) if tid is not None else 0
     codes = [(ln.mold_code or "").strip() for ln in lines if (ln.mold_code or "").strip()]
     snapshots = await mold_warehouse_snapshot_by_codes(tid_int, codes) if tid_int else {}
+    is_approved = _effective_sheet_status(row) == SHEET_STATUS_APPROVED
     raw_dicts: List[dict[str, Any]] = []
     if isinstance(raw_lines, list):
         for item in raw_lines:
@@ -412,10 +415,17 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
     for ln, raw in zip(lines, raw_dicts):
         mc = (ln.mold_code or "").strip()
         snap = snapshots.get(mc, {})
+        wh_fields = await resolve_complete_line_warehouse_fields(
+            tid_int,
+            raw,
+            snap,
+            src_line_raw_by_mold.get(mc),
+            is_approved=is_approved,
+        )
         enriched_lines.append(
             ln.model_copy(
                 update={
-                    **merge_line_warehouse_fields({}, snapshot=snap, raw=raw),
+                    **wh_fields,
                     "source_attachment_file_uuids": src_by_mold.get(mc, []),
                 }
             )

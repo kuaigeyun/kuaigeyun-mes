@@ -61,7 +61,7 @@ import {
   notificationRuleRequiresFormNotifyUsers,
 } from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
-import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
+import { UniUserIdSelect, type UniUserIdSelectPreset, type UniUserIdSearchFn } from '../../../../../../components/uni-user-id-select';
 import { useGlobalStore } from '../../../../../../stores';
 import { formatUserDisplayLabel, searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -91,6 +91,8 @@ import {
   recallMoldTrialSheetAndRetrial,
   revokeMoldTrialSheetApproval,
   updateMold,
+  resolveMoldTrialOperators,
+  searchMoldTrialOperators,
   updateMoldTrialSheet,
   type MoldRow,
   type MoldWarehouseCreatePayload,
@@ -1134,6 +1136,53 @@ const MoldTrialSheetsPage: React.FC = () => {
       return opts;
     },
     [currentUser, pendingNotifyLabelRef],
+  );
+
+  const searchTrialOperatorUsers = useCallback<UniUserIdSearchFn>(
+    async (keyword, selectedIds) => {
+      const presetIds = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const wid = formRef.current?.getFieldValue('trial_user_id');
+      const prodWid = formRef.current?.getFieldValue('production_trial_user_id');
+      for (const raw of [wid, prodWid]) {
+        const n = raw != null ? Number(raw) : NaN;
+        if (Number.isFinite(n) && n > 0 && !presetIds.includes(n)) presetIds.push(n);
+      }
+      const res = await searchMoldTrialOperators({
+        page: 1,
+        page_size: 50,
+        keyword: keyword?.trim() || undefined,
+        is_active: true,
+      });
+      const opts = (res.items || []).map((u) => ({
+        label: u.label || formatUserDisplayLabel(u),
+        value: u.id,
+      }));
+      const seen = new Set(opts.map((o) => o.value));
+      for (const id of presetIds) {
+        if (seen.has(id)) continue;
+        const preset =
+          trialUserPresets.find((p) => p.id === id) ||
+          productionTrialUserPresets.find((p) => p.id === id);
+        opts.unshift({
+          value: id,
+          label: preset?.label || `用户#${id}`,
+        });
+      }
+      if (presetIds.some((id) => !seen.has(id) && !opts.some((o) => o.value === id))) {
+        try {
+          const resolved = await resolveMoldTrialOperators({ user_ids: presetIds });
+          for (const u of resolved.items || []) {
+            if (!opts.some((o) => o.value === u.id)) {
+              opts.unshift({ value: u.id, label: u.label || formatUserDisplayLabel(u) });
+            }
+          }
+        } catch {
+          /* 回显解析失败不阻断下拉 */
+        }
+      }
+      return opts;
+    },
+    [productionTrialUserPresets, trialUserPresets],
   );
 
   /** 从模具台账带出上次「待处理」时选择的消息提醒人员（新建单，可再改） */
@@ -2672,6 +2721,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                   readonly={isDetailView}
                   disabled={isDetailView}
                   presetUsers={trialUserPresets}
+                  searchUsers={searchTrialOperatorUsers}
                 />
               </Col>
               {!isDetailView &&
@@ -2763,11 +2813,12 @@ const MoldTrialSheetsPage: React.FC = () => {
                       <Col span={12}>
                         <UniUserIdSelect
                           name="production_trial_user_id"
-                          label="试产检验"
-                          placeholder="请选择试产检验"
+                          label="试产人员"
+                          placeholder="请选择试产人员"
                           readonly={isDetailView}
                           disabled={isDetailView}
                           presetUsers={productionTrialUserPresets}
+                          searchUsers={searchTrialOperatorUsers}
                         />
                       </Col>
                       <Col span={12}>
@@ -2931,12 +2982,13 @@ const MoldTrialSheetsPage: React.FC = () => {
               <Col span={12}>
                 <UniUserIdSelect
                   name="production_trial_user_id"
-                  label="试产检验"
-                  placeholder="请选择试产检验"
+                  label="试产人员"
+                  placeholder="请选择试产人员"
                   required
                   readonly={isDetailView}
                   disabled={isDetailView}
                   presetUsers={productionTrialUserPresets}
+                  searchUsers={searchTrialOperatorUsers}
                 />
               </Col>
               <Col span={12}>

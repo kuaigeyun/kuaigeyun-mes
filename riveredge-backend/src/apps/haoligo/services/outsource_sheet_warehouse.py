@@ -25,6 +25,10 @@ from apps.haoligo.services.trial_sheet_side_effects import (
 from apps.master_data.models.supplier import Supplier as MasterSupplier
 
 BEFORE_OUTSOURCE_WAREHOUSE_KEY = "before_outsource_warehouse_id"
+DISPLAY_MOLD_WAREHOUSE_ID = "display_mold_warehouse_id"
+DISPLAY_MOLD_WAREHOUSE_CODE = "display_mold_warehouse_code"
+DISPLAY_MOLD_WAREHOUSE_NAME = "display_mold_warehouse_name"
+CLOSED_WAREHOUSE_DISPLAY_LABEL = "已结案"
 
 
 def format_mold_warehouse_label(
@@ -33,10 +37,142 @@ def format_mold_warehouse_label(
     warehouse_code: Optional[str],
 ) -> Optional[str]:
     name = (warehouse_name or "").strip()
+    if name == CLOSED_WAREHOUSE_DISPLAY_LABEL:
+        return CLOSED_WAREHOUSE_DISPLAY_LABEL
     code = (warehouse_code or "").strip()
     if name and code:
         return f"{code} · {name}"
     return name or code or None
+
+
+def _warehouse_fields_from_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "mold_warehouse_id": snapshot.get("mold_warehouse_id"),
+        "mold_warehouse_code": snapshot.get("mold_warehouse_code"),
+        "mold_warehouse_name": snapshot.get("mold_warehouse_name"),
+    }
+
+
+def _closed_warehouse_fields() -> dict[str, Any]:
+    return {
+        "mold_warehouse_id": None,
+        "mold_warehouse_code": None,
+        "mold_warehouse_name": CLOSED_WAREHOUSE_DISPLAY_LABEL,
+    }
+
+
+def _display_warehouse_from_line_raw(raw: dict[str, Any]) -> Optional[dict[str, Any]]:
+    name = (raw.get(DISPLAY_MOLD_WAREHOUSE_NAME) or "").strip()
+    code = (raw.get(DISPLAY_MOLD_WAREHOUSE_CODE) or "").strip()
+    wid = raw.get(DISPLAY_MOLD_WAREHOUSE_ID)
+    if not name and not code and wid in (None, ""):
+        return None
+    try:
+        wh_id = int(wid) if wid not in (None, "") else None
+        if wh_id is not None and wh_id <= 0:
+            wh_id = None
+    except (TypeError, ValueError):
+        wh_id = None
+    return {
+        "mold_warehouse_id": wh_id,
+        "mold_warehouse_code": code or None,
+        "mold_warehouse_name": name or None,
+    }
+
+
+def persist_display_warehouse_on_line(
+    item: dict[str, Any],
+    *,
+    warehouse_id: Optional[int],
+    warehouse_code: Optional[str],
+    warehouse_name: Optional[str],
+) -> dict[str, Any]:
+    out = dict(item)
+    out[DISPLAY_MOLD_WAREHOUSE_ID] = int(warehouse_id) if warehouse_id else None
+    out[DISPLAY_MOLD_WAREHOUSE_CODE] = (warehouse_code or "").strip() or None
+    out[DISPLAY_MOLD_WAREHOUSE_NAME] = (warehouse_name or "").strip() or None
+    return out
+
+
+async def warehouse_snapshot_by_id(tenant_id: int, warehouse_id: int) -> Optional[dict[str, Any]]:
+    if warehouse_id <= 0:
+        return None
+    wh = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=warehouse_id).first()
+    if not wh:
+        return None
+    return {
+        "mold_warehouse_id": wh.id,
+        "mold_warehouse_code": (wh.code or "").strip() or None,
+        "mold_warehouse_name": (wh.name or "").strip() or None,
+    }
+
+
+async def external_warehouse_snapshot_for_unit(
+    tenant_id: int,
+    *,
+    outsourced_unit_name: str,
+    outsourced_unit_code: Optional[str] = None,
+) -> Optional[dict[str, Any]]:
+    try:
+        ext_wh_id = await resolve_outsource_external_warehouse_id(
+            tenant_id,
+            outsourced_unit_name=outsourced_unit_name,
+            outsourced_unit_code=outsourced_unit_code,
+        )
+    except HTTPException:
+        return None
+    return await warehouse_snapshot_by_id(tenant_id, ext_wh_id)
+
+
+async def resolve_maintenance_line_warehouse_fields(
+    tenant_id: int,
+    raw: dict[str, Any],
+    live_snapshot: dict[str, Any],
+    *,
+    is_closed: bool,
+    is_approved: bool,
+    outsourced_unit_name: str,
+    outsourced_unit_code: Optional[str] = None,
+) -> dict[str, Any]:
+    """外协维保单展示用仓库：已结案固定为「已结案」，进行中/已通过用审核快照，草稿读台账。"""
+    stored = _display_warehouse_from_line_raw(raw)
+    if is_closed:
+        return stored or _closed_warehouse_fields()
+    if stored:
+        return stored
+    if is_approved:
+        ext = await external_warehouse_snapshot_for_unit(
+            tenant_id,
+            outsourced_unit_name=outsourced_unit_name,
+            outsourced_unit_code=outsourced_unit_code,
+        )
+        if ext:
+            return _warehouse_fields_from_snapshot(ext)
+    merged = merge_line_warehouse_fields({}, snapshot=live_snapshot, raw=raw)
+    return _warehouse_fields_from_snapshot(merged)
+
+
+async def resolve_complete_line_warehouse_fields(
+    tenant_id: int,
+    raw: dict[str, Any],
+    live_snapshot: dict[str, Any],
+    source_raw: Optional[dict[str, Any]],
+    *,
+    is_approved: bool,
+) -> dict[str, Any]:
+    """外协维保完修单展示用仓库：已通过用完修归还仓快照，草稿/待审读台账。"""
+    stored = _display_warehouse_from_line_raw(raw)
+    if stored:
+        return stored
+    if is_approved:
+        before_id = _origin_warehouse_id_from_line(source_raw or {})
+        if before_id:
+            snap = await warehouse_snapshot_by_id(tenant_id, before_id)
+            if snap:
+                return _warehouse_fields_from_snapshot(snap)
+        return _closed_warehouse_fields()
+    merged = merge_line_warehouse_fields({}, snapshot=live_snapshot, raw=raw)
+    return _warehouse_fields_from_snapshot(merged)
 
 
 async def resolve_outsource_external_warehouse_id(
@@ -140,6 +276,7 @@ async def apply_warehouses_on_outsource_maintenance_approved(
         outsourced_unit_name=row.outsourced_unit_name or "",
         outsourced_unit_code=row.outsourced_unit_code,
     )
+    ext_snap = await warehouse_snapshot_by_id(tenant_id, ext_wh_id)
     items = list(row.line_items or [])
     changed = False
     for i, raw in enumerate(items):
@@ -157,6 +294,13 @@ async def apply_warehouses_on_outsource_maintenance_approved(
         origin = mold.mold_warehouse_id
         item = dict(raw)
         item[BEFORE_OUTSOURCE_WAREHOUSE_KEY] = int(origin) if origin else None
+        if ext_snap:
+            item = persist_display_warehouse_on_line(
+                item,
+                warehouse_id=ext_snap.get("mold_warehouse_id"),
+                warehouse_code=ext_snap.get("mold_warehouse_code"),
+                warehouse_name=ext_snap.get("mold_warehouse_name"),
+            )
         await _apply_mold_warehouse_by_id(mold, tenant_id=tenant_id, warehouse_id=ext_wh_id)
         await mold.save(
             update_fields=["mold_warehouse_id", "mold_warehouse_code", "mold_warehouse_name", "updated_at"]
@@ -179,7 +323,9 @@ async def apply_warehouses_on_outsource_complete_approved(
         src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=sid).first()
         if src:
             by_mold = origin_warehouse_by_mold_from_source_lines(list(src.line_items or []))
-    for raw in row.line_items or []:
+    items = list(row.line_items or [])
+    lines_changed = False
+    for i, raw in enumerate(items):
         if not isinstance(raw, dict):
             continue
         mc = str(raw.get("mold_code") or "").strip()
@@ -215,3 +361,15 @@ async def apply_warehouses_on_outsource_complete_approved(
         await mold.save(
             update_fields=["mold_warehouse_id", "mold_warehouse_code", "mold_warehouse_name", "updated_at"]
         )
+        item = persist_display_warehouse_on_line(
+            dict(raw),
+            warehouse_id=wh.id,
+            warehouse_code=(wh.code or "").strip() or None,
+            warehouse_name=(wh.name or "").strip() or None,
+        )
+        if item != raw:
+            items[i] = item
+            lines_changed = True
+    if lines_changed:
+        row.line_items = items
+        await row.save(update_fields=["line_items", "updated_at"])

@@ -74,6 +74,12 @@ from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.config.permission_contract import build_permission_code
+from core.schemas.user_display import (
+    UserDisplayListResponse,
+    UserDisplayResolveRequest,
+    UserDisplayResolveResponse,
+)
+from core.services.user.user_display_service import UserDisplayService
 from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
@@ -586,6 +592,69 @@ async def preview_supplier_notify_users(
     return MoldTrialSupplierNotifyPreviewOut(
         items=[MoldTrialSupplierNotifyUserOut(id=x["id"], name=x["name"]) for x in items],
     )
+
+
+async def _ensure_trial_form_operator_picker(
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
+    tenant_id: int = Depends(get_current_tenant),
+) -> None:
+    """试模/试产人员下拉：具备试模单 create 或 update 即可搜索，不依赖 system:user:read。"""
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [
+            build_permission_code("haoligo", "molds-documents-trial", "create"),
+            build_permission_code("haoligo", "molds-documents-trial", "update"),
+        ],
+        require_all=False,
+    )
+
+
+@router.get(
+    "/operator-search",
+    response_model=UserDisplayListResponse,
+    summary="试模单表单人员搜索（试模/试产人员下拉）",
+)
+async def search_trial_sheet_operators(
+    request: Request,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[None, Depends(_ensure_trial_form_operator_picker)],
+    page: int = Query(1, ge=1, description="页码"),
+    page_size: int = Query(50, ge=1, le=200, description="每页数量"),
+    keyword: Optional[str] = Query(None, description="姓名或账号关键词"),
+    department_uuid: Optional[str] = Query(None, description="部门 UUID 筛选"),
+    is_active: Optional[bool] = Query(True, description="是否仅启用用户"),
+):
+    result = await UserDisplayService.search(
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        department_uuid=department_uuid,
+        is_active=is_active,
+    )
+    return UserDisplayListResponse(**result)
+
+
+@router.post(
+    "/operator-resolve",
+    response_model=UserDisplayResolveResponse,
+    summary="试模单表单人员回显解析",
+)
+async def resolve_trial_sheet_operators(
+    body: UserDisplayResolveRequest,
+    request: Request,
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[None, Depends(_ensure_trial_form_operator_picker)],
+):
+    items = await UserDisplayService.resolve(
+        tenant_id=tenant_id,
+        user_ids=body.user_ids,
+        user_uuids=body.user_uuids,
+    )
+    return UserDisplayResolveResponse(items=items)
 
 
 @router.get(

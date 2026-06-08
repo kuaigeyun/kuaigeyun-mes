@@ -1692,6 +1692,35 @@ export function previewTrialRepairNotifyUsers(params?: {
   return apiRequest(`${PREFIX}/molds/trial-sheets/repair-notify-preview`, { params });
 }
 
+/** 试模单表单人员搜索（create/update 权限即可，不依赖 system:user:read） */
+export function searchMoldTrialOperators(params?: {
+  page?: number;
+  page_size?: number;
+  keyword?: string;
+  department_uuid?: string;
+  is_active?: boolean;
+}): Promise<{
+  items: Array<{ id: number; uuid: string; username: string; full_name?: string | null; label: string }>;
+  total: number;
+  page: number;
+  page_size: number;
+}> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/operator-search`, { params });
+}
+
+/** 试模单表单人员回显解析 */
+export function resolveMoldTrialOperators(payload: {
+  user_ids?: number[];
+  user_uuids?: string[];
+}): Promise<{
+  items: Array<{ id: number; uuid: string; username: string; full_name?: string | null; label: string }>;
+}> {
+  return apiRequest(`${PREFIX}/molds/trial-sheets/operator-resolve`, {
+    method: 'POST',
+    data: payload,
+  });
+}
+
 export function listMoldTrialSheets(params?: {
   skip?: number;
   limit?: number;

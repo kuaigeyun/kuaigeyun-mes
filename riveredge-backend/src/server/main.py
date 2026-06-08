@@ -184,10 +184,14 @@ async def lifespan(app: FastAPI):
     from apps.kuaizhizao.authorization.data_scope_setup import (
         register_kuaizhizao_data_scope_profiles,
     )
+    from apps.master_data.authorization.data_scope_setup import (
+        register_master_data_data_scope_profiles,
+    )
 
     ensure_data_scope_framework()
     register_haoligo_data_scope_profiles()
     register_kuaizhizao_data_scope_profiles()
+    register_master_data_data_scope_profiles()
     logger.info("✅ 数据权限框架（DataScopeService）已注册")
 
     # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
