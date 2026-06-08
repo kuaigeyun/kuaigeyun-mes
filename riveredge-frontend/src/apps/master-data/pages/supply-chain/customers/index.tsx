@@ -4,8 +4,9 @@
  * 提供客户的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
@@ -49,6 +50,8 @@ import {
 const CustomersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   
@@ -74,6 +77,49 @@ const CustomersPage: React.FC = () => {
     return seed;
   });
   const customerDetailReqRef = useRef(0);
+
+  const renderPoolStatus = useCallback(
+    (status?: string) => {
+      if (status === 'pool') return <Tag color="blue">{t('field.customer.poolStatusPool')}</Tag>;
+      if (status === 'owned') return <Tag color="green">{t('field.customer.poolStatusOwned')}</Tag>;
+      return '—';
+    },
+    [t],
+  );
+
+  const openDetailByUuid = useCallback(
+    async (uuid: string) => {
+      const req = ++customerDetailReqRef.current;
+      flushDrawerOpen(() => {
+        setCustomerDetail(null);
+        setDrawerVisible(true);
+        setDetailLoading(true);
+      });
+      try {
+        const detail = await customerApi.get(uuid);
+        if (customerDetailReqRef.current !== req) return;
+        setCustomerDetail(detail);
+      } catch (error: any) {
+        if (customerDetailReqRef.current === req) {
+          messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
+        }
+      } finally {
+        if (customerDetailReqRef.current === req) {
+          setDetailLoading(false);
+        }
+      }
+    },
+    [messageApi, t],
+  );
+
+  useEffect(() => {
+    const uuid = searchParams.get('uuid');
+    if (!uuid) return;
+    void openDetailByUuid(uuid);
+    const next = new URLSearchParams(searchParams);
+    next.delete('uuid');
+    setSearchParams(next, { replace: true });
+  }, [openDetailByUuid, searchParams, setSearchParams]);
 
   const customerImportTemplate = useMemo(
     () =>
@@ -496,8 +542,9 @@ const CustomersPage: React.FC = () => {
         t('field.customer.phone'),
         t('field.customer.email'),
         t('field.customer.address'),
-        '销售经理',
-        t('field.customer.visibility'),
+        t('field.customer.salesman'),
+        t('field.customer.poolStatus'),
+        t('field.customer.recycleAt'),
         t('app.master-data.warehouses.status'),
         t('common.createdAt'),
       ];
@@ -519,7 +566,12 @@ const CustomersPage: React.FC = () => {
           item.email || '',
           item.address || '',
           item.salesmanName || '',
-          item.isPublic ? t('field.customer.visibilityPublic') : t('field.customer.visibilityPrivate'),
+          item.poolStatus === 'owned'
+            ? t('field.customer.poolStatusOwned')
+            : item.poolStatus === 'pool'
+              ? t('field.customer.poolStatusPool')
+              : '',
+          item.recycleAt ? new Date(item.recycleAt).toLocaleString() : '',
           (item.isActive ?? (item as any)?.is_active) ? t('common.enabled') : t('common.disabled'),
           item.createdAt ? new Date(item.createdAt).toLocaleString() : '',
         ];
@@ -606,14 +658,14 @@ const CustomersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '销售经理',
+      title: t('field.customer.salesman'),
       dataIndex: 'salesmanName',
       width: 120,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '销售经理',
+      title: t('field.customer.salesman'),
       dataIndex: 'salesmanId',
       hideInTable: true,
       valueType: 'select',
@@ -627,8 +679,22 @@ const CustomersPage: React.FC = () => {
             .toLowerCase()
             .includes(input.toLowerCase()),
         allowClear: true,
-        placeholder: '请选择销售经理',
+        placeholder: t('field.customer.salesmanPlaceholder'),
       },
+    },
+    {
+      title: t('field.customer.poolStatus'),
+      dataIndex: 'poolStatus',
+      width: 100,
+      hideInSearch: true,
+      render: (_, r) => renderPoolStatus(r.poolStatus),
+    },
+    {
+      title: t('field.customer.recycleAt'),
+      dataIndex: 'recycleAt',
+      width: 165,
+      hideInSearch: true,
+      valueType: 'dateTime',
     },
     {
       title: t('field.customer.revenueRecognitionOverride'),
@@ -637,14 +703,6 @@ const CustomersPage: React.FC = () => {
       hideInSearch: true,
       ellipsis: true,
       render: (_, r) => partnerRevenueRecognitionOverrideLabel(t, r.revenueRecognitionOverride),
-    },
-    {
-      title: t('field.customer.visibility'),
-      dataIndex: 'isPublic',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) =>
-        r.isPublic ? t('field.customer.visibilityPublic') : t('field.customer.visibilityPrivate'),
     },
     {
       title: t('app.master-data.warehouses.status'),
@@ -728,18 +786,33 @@ const CustomersPage: React.FC = () => {
     },
     { title: t('field.customer.phone'), dataIndex: 'phone' },
     { title: t('field.customer.email'), dataIndex: 'email' },
-    { title: '销售经理', dataIndex: 'salesmanName' },
-    { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
+    { title: t('field.customer.salesman'), dataIndex: 'salesmanName' },
     {
-      title: t('field.customer.visibility'),
-      dataIndex: 'isPublic',
+      title: t('field.customer.poolStatus'),
+      dataIndex: 'poolStatus',
       render: (_, r) =>
-        r.isPublic === true
-          ? t('field.customer.visibilityPublic')
-          : r.isPublic === false
-            ? t('field.customer.visibilityPrivate')
+        r.poolStatus === 'owned'
+          ? t('field.customer.poolStatusOwned')
+          : r.poolStatus === 'pool'
+            ? t('field.customer.poolStatusPool')
             : '—',
     },
+    {
+      title: t('field.customer.recycleAt'),
+      dataIndex: 'recycleAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: t('field.customer.assignedAt'),
+      dataIndex: 'assignedAt',
+      valueType: 'dateTime',
+    },
+    {
+      title: t('field.customer.lastFollowUpAt'),
+      dataIndex: 'lastFollowUpAt',
+      valueType: 'dateTime',
+    },
+    { title: t('field.customer.address'), dataIndex: 'address', span: 2 },
     {
       title: t('app.master-data.warehouses.status'),
       dataIndex: 'isActive',
@@ -967,9 +1040,23 @@ const CustomersPage: React.FC = () => {
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
                   {t('app.kuaizhizao.quotationStage.detailHint')}
                 </Typography.Text>
-                <Button type="primary" size="small" onClick={handleOpenFollowUp}>
-                  {t('app.kuaizhizao.customerFollowUp.new')}
-                </Button>
+                <Space wrap>
+                  <Button type="primary" size="small" onClick={handleOpenFollowUp}>
+                    {t('app.kuaizhizao.customerFollowUp.new')}
+                  </Button>
+                  {customerDetail.id ? (
+                    <Button
+                      size="small"
+                      onClick={() =>
+                        navigate(
+                          `/apps/kuaizhizao/sales-management/customer-pool?customerId=${customerDetail.id}`,
+                        )
+                      }
+                    >
+                      {t('field.customer.viewInPool')}
+                    </Button>
+                  ) : null}
+                </Space>
               </DetailDrawerSection>
             </>
           ) : null

@@ -73,8 +73,59 @@ class CustomerContactItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
 
+class CustomerCreate(PartnerInvoiceAndExtendedMixin):
+    """创建客户 Schema（归属仅通过 salesmanId，池状态由服务写入）"""
+
+    code: str = Field(..., max_length=50, description="客户编码")
+    name: str = Field(..., max_length=200, description="客户名称")
+    short_name: Optional[str] = Field(None, max_length=100, description="简称", alias="shortName")
+    contact_person: Optional[str] = Field(None, max_length=100, description="联系人", alias="contactPerson")
+    phone: Optional[str] = Field(None, max_length=20, description="电话")
+    email: Optional[str] = Field(None, max_length=100, description="邮箱")
+    address: Optional[str] = Field(None, description="地址")
+    category: Optional[str] = Field(None, max_length=50, description="客户分类")
+    salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
+    contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
+    contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
+    industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
+    customer_level_code: Optional[str] = Field(None, max_length=50, description="客户级别字典值", alias="customerLevelCode")
+    estimated_annual_purchase: Optional[Decimal] = Field(None, description="预估年采购量", alias="estimatedAnnualPurchase")
+    lead_source_code: Optional[str] = Field(None, max_length=50, description="来源渠道字典值", alias="leadSourceCode")
+    credit_limit: Optional[Decimal] = Field(None, description="信用额度", alias="creditLimit")
+    revenue_recognition_override: Optional[str] = Field(
+        None,
+        max_length=32,
+        description="应收确认策略覆盖：空=跟随组织；on_shipment / on_invoice",
+        alias="revenueRecognitionOverride",
+    )
+    is_active: bool = Field(True, alias="isActive", description="是否启用")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    @validator("revenue_recognition_override", pre=True)
+    def validate_revenue_recognition_override(cls, v):
+        if v is None or (isinstance(v, str) and not str(v).strip()):
+            return None
+        s = str(v).strip()
+        if s not in ("on_shipment", "on_invoice"):
+            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice 或空")
+        return s
+
+    @validator("code")
+    def validate_code(cls, v):
+        if not v or not v.strip():
+            raise ValueError("客户编码不能为空")
+        return v.strip().upper()
+
+    @validator("name")
+    def validate_name(cls, v):
+        if not v or not v.strip():
+            raise ValueError("客户名称不能为空")
+        return v.strip()
+
+
 class CustomerBase(PartnerInvoiceAndExtendedMixin):
-    """客户基础 Schema"""
+    """客户响应基础 Schema（含池只读字段）"""
 
     code: str = Field(..., max_length=50, description="客户编码")
     name: str = Field(..., max_length=200, description="客户名称")
@@ -104,46 +155,8 @@ class CustomerBase(PartnerInvoiceAndExtendedMixin):
         alias="revenueRecognitionOverride",
     )
     is_active: bool = Field(True, alias="isActive", description="是否启用")
-    is_public: bool = Field(False, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
-
-    @validator("revenue_recognition_override", pre=True)
-    def validate_revenue_recognition_override(cls, v):
-        if v is None or (isinstance(v, str) and not str(v).strip()):
-            return None
-        s = str(v).strip()
-        if s not in ("on_shipment", "on_invoice"):
-            raise ValueError("revenueRecognitionOverride 必须为 on_shipment、on_invoice 或空")
-        return s
-
-    @validator("code")
-    def validate_code(cls, v):
-        """验证编码格式"""
-        if not v or not v.strip():
-            raise ValueError("客户编码不能为空")
-        return v.strip().upper()
-
-    @validator("name")
-    def validate_name(cls, v):
-        """验证名称格式"""
-        if not v or not v.strip():
-            raise ValueError("客户名称不能为空")
-        return v.strip()
-
-    @validator("pool_status", pre=True)
-    def validate_pool_status(cls, v):
-        if v is None or (isinstance(v, str) and not v.strip()):
-            return "pool"
-        status = str(v).strip().lower()
-        if status not in {"pool", "owned"}:
-            raise ValueError("poolStatus 必须为 pool 或 owned")
-        return status
-
-
-class CustomerCreate(CustomerBase):
-    """创建客户 Schema"""
-    pass
 
 
 class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
@@ -158,11 +171,6 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
     address: Optional[str] = Field(None, description="地址")
     category: Optional[str] = Field(None, max_length=50, description="客户分类")
     salesman_id: Optional[int] = Field(None, description="归属业务员ID", alias="salesmanId")
-    salesman_name: Optional[str] = Field(None, max_length=100, description="归属业务员姓名", alias="salesmanName")
-    pool_status: Optional[str] = Field(None, max_length=20, description="客户池状态：pool/owned", alias="poolStatus")
-    assigned_at: Optional[datetime] = Field(None, description="最近领取/分配时间", alias="assignedAt")
-    last_follow_up_at: Optional[datetime] = Field(None, description="最近跟进时间", alias="lastFollowUpAt")
-    recycle_at: Optional[datetime] = Field(None, description="计划回收时间", alias="recycleAt")
     contact_title: Optional[str] = Field(None, max_length=100, description="联系人职位", alias="contactTitle")
     contacts: Optional[List[CustomerContactItem]] = Field(None, description="联系人明细")
     industry_code: Optional[str] = Field(None, max_length=50, description="所属行业字典值", alias="industryCode")
@@ -177,7 +185,6 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         alias="revenueRecognitionOverride",
     )
     is_active: Optional[bool] = Field(None, alias="isActive", description="是否启用")
-    is_public: Optional[bool] = Field(None, alias="isPublic", description="是否公共（false=私有，true=公共）")
 
     model_config = ConfigDict(populate_by_name=True)
 
@@ -203,15 +210,6 @@ class CustomerUpdate(PartnerInvoiceAndExtendedMixin):
         if v is not None and (not v or not v.strip()):
             raise ValueError("客户名称不能为空")
         return v.strip() if v else None
-
-    @validator("pool_status", pre=True)
-    def validate_pool_status_update(cls, v):
-        if v is None:
-            return None
-        status = str(v).strip().lower()
-        if status not in {"pool", "owned"}:
-            raise ValueError("poolStatus 必须为 pool 或 owned")
-        return status
 
 
 class CustomerResponse(CustomerBase):

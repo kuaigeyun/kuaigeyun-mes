@@ -87,6 +87,143 @@ class CustomerPoolService:
         )
 
     @classmethod
+    async def _assert_owned_capacity(
+        cls,
+        tenant_id: int,
+        target_user_id: int,
+        *,
+        exclude_customer_id: Optional[int] = None,
+    ) -> None:
+        rule = await cls._get_rule(tenant_id)
+        if rule.max_owned_customers <= 0:
+            return
+        query = Customer.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            salesman_id=target_user_id,
+            pool_status="owned",
+        )
+        if exclude_customer_id is not None:
+            query = query.exclude(id=exclude_customer_id)
+        owned_count = await query.count()
+        if owned_count >= rule.max_owned_customers:
+            raise ValidationError("目标业务员已达到客户持有上限")
+
+    @classmethod
+    async def apply_assign(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        target_user: User,
+        operator: User,
+        reason: Optional[str] = None,
+        action: str = "assign",
+    ) -> Customer:
+        """分配/改派归属（主数据与池 API 共用）。"""
+        if customer.salesman_id == target_user.id and customer.pool_status == "owned":
+            return customer
+
+        await cls._assert_owned_capacity(
+            tenant_id,
+            target_user.id,
+            exclude_customer_id=customer.id,
+        )
+
+        now = timezone.now()
+        from_salesman = customer.salesman_id
+        customer.salesman_id = target_user.id
+        customer.salesman_name = target_user.full_name or target_user.username
+        customer.pool_status = "owned"
+        customer.assigned_at = now
+        customer.recycle_at = await cls._calc_recycle_at(
+            tenant_id,
+            assigned_at=now,
+            last_follow_up_at=customer.last_follow_up_at,
+        )
+        await customer.save()
+
+        await cls._write_log(
+            tenant_id=tenant_id,
+            customer=customer,
+            action=action,
+            operator_user_id=operator.id,
+            from_salesman_id=from_salesman,
+            to_salesman_id=target_user.id,
+            reason=reason,
+        )
+        return customer
+
+    @classmethod
+    async def apply_release(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        operator: User,
+        reason: Optional[str] = None,
+        action: str = "release",
+        skip_own_check: bool = False,
+    ) -> Customer:
+        """释放到公海（主数据与池 API 共用）。"""
+        if customer.pool_status == "pool" and not customer.salesman_id:
+            return customer
+
+        if not skip_own_check and operator.is_regular_user() and customer.salesman_id != operator.id:
+            raise ValidationError("只能释放自己持有的客户")
+
+        from_salesman = customer.salesman_id
+        customer.salesman_id = None
+        customer.salesman_name = None
+        customer.pool_status = "pool"
+        customer.assigned_at = None
+        customer.recycle_at = None
+        await customer.save()
+
+        await cls._write_log(
+            tenant_id=tenant_id,
+            customer=customer,
+            action=action,
+            operator_user_id=operator.id,
+            from_salesman_id=from_salesman,
+            to_salesman_id=None,
+            reason=reason,
+        )
+        return customer
+
+    @classmethod
+    async def apply_recycle(
+        cls,
+        *,
+        tenant_id: int,
+        customer: Customer,
+        operator: User,
+        reason: Optional[str] = None,
+    ) -> Customer:
+        """强制回收到公海。"""
+        if customer.pool_status == "pool" and not customer.salesman_id:
+            return customer
+
+        from_salesman = customer.salesman_id
+        customer.salesman_id = None
+        customer.salesman_name = None
+        customer.pool_status = "pool"
+        customer.assigned_at = None
+        customer.recycle_at = None
+        await customer.save()
+
+        await cls._write_log(
+            tenant_id=tenant_id,
+            customer=customer,
+            action="recycle",
+            operator_user_id=operator.id,
+            from_salesman_id=from_salesman,
+            to_salesman_id=None,
+            reason=reason,
+        )
+        return customer
+
+    @classmethod
     async def list_customers(
         cls,
         *,
@@ -101,27 +238,17 @@ class CustomerPoolService:
 
         normalized_scope = (scope or "pool").strip().lower()
         if normalized_scope == "mine":
-            owned_query = query.filter(pool_status="owned")
-            owned_query = await DataScopeService.apply(
-                owned_query,
-                tenant_id=tenant_id,
-                user=current_user,
-                resource="kuaizhizao:customer-pool",
-            )
-            visible_ids = await owned_query.values_list("id", flat=True)
-            query = query.filter(id__in=list(visible_ids))
+            # 私有客户：仅当前用户持有的客户（owned + salesman_id=me）
+            query = query.filter(pool_status="owned", salesman_id=current_user.id)
         elif normalized_scope == "all":
             if current_user.is_regular_user():
-                owned_query = query.filter(pool_status="owned")
-                owned_query = await DataScopeService.apply(
-                    owned_query,
-                    tenant_id=tenant_id,
-                    user=current_user,
-                    resource="kuaizhizao:customer-pool",
+                # 全部客户：公共池 + 本人持有
+                query = query.filter(
+                    Q(pool_status="pool")
+                    | Q(pool_status="owned", salesman_id=current_user.id)
                 )
-                visible_ids = await owned_query.values_list("id", flat=True)
-                query = query.filter(Q(pool_status="pool") | Q(id__in=list(visible_ids)))
         else:
+            # 公共客户：公海待领取
             query = query.filter(pool_status="pool")
 
         kw = (keyword or "").strip()
@@ -158,40 +285,18 @@ class CustomerPoolService:
             )
         rule = await cls._get_rule(tenant_id)
 
-        if rule.max_owned_customers > 0:
-            owned_count = await Customer.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True,
-                salesman_id=current_user.id,
-                pool_status="owned",
-            ).count()
-            if owned_count >= rule.max_owned_customers:
-                raise ValidationError("已达到客户持有上限")
+        await cls._assert_owned_capacity(tenant_id, current_user.id)
 
         if customer.salesman_id and customer.salesman_id != current_user.id and not rule.allow_claim_others:
             raise ValidationError("该客户已被他人持有，当前规则不允许领取")
 
-        now = timezone.now()
-        from_salesman = customer.salesman_id
-        customer.salesman_id = current_user.id
-        customer.salesman_name = current_user.full_name or current_user.username
-        customer.pool_status = "owned"
-        customer.assigned_at = now
-        customer.recycle_at = await cls._calc_recycle_at(
-            tenant_id,
-            assigned_at=now,
-            last_follow_up_at=customer.last_follow_up_at,
-        )
-        await customer.save()
-
-        await cls._write_log(
+        customer = await cls.apply_assign(
             tenant_id=tenant_id,
             customer=customer,
-            action="claim",
-            operator_user_id=current_user.id,
-            from_salesman_id=from_salesman,
-            to_salesman_id=current_user.id,
+            target_user=current_user,
+            operator=current_user,
             reason=body.reason if body else None,
+            action="claim",
         )
         return CustomerPoolItem.model_validate(customer)
 
@@ -215,27 +320,13 @@ class CustomerPoolService:
         if not target_user:
             raise ValidationError(f"目标业务员不存在: {body.salesman_id}")
 
-        now = timezone.now()
-        from_salesman = customer.salesman_id
-        customer.salesman_id = target_user.id
-        customer.salesman_name = target_user.full_name or target_user.username
-        customer.pool_status = "owned"
-        customer.assigned_at = now
-        customer.recycle_at = await cls._calc_recycle_at(
-            tenant_id,
-            assigned_at=now,
-            last_follow_up_at=customer.last_follow_up_at,
-        )
-        await customer.save()
-
-        await cls._write_log(
+        customer = await cls.apply_assign(
             tenant_id=tenant_id,
             customer=customer,
-            action="assign",
-            operator_user_id=current_user.id,
-            from_salesman_id=from_salesman,
-            to_salesman_id=target_user.id,
+            target_user=target_user,
+            operator=current_user,
             reason=body.reason,
+            action="assign",
         )
         return CustomerPoolItem.model_validate(customer)
 
@@ -255,25 +346,12 @@ class CustomerPoolService:
             user=current_user,
             resource="kuaizhizao:customer-pool",
         )
-        if current_user.is_regular_user() and customer.salesman_id != current_user.id:
-            raise ValidationError("只能释放自己持有的客户")
-
-        from_salesman = customer.salesman_id
-        customer.salesman_id = None
-        customer.salesman_name = None
-        customer.pool_status = "pool"
-        customer.assigned_at = None
-        customer.recycle_at = None
-        await customer.save()
-
-        await cls._write_log(
+        customer = await cls.apply_release(
             tenant_id=tenant_id,
             customer=customer,
-            action="release",
-            operator_user_id=current_user.id,
-            from_salesman_id=from_salesman,
-            to_salesman_id=None,
+            operator=current_user,
             reason=body.reason if body else None,
+            action="release",
         )
         return CustomerPoolItem.model_validate(customer)
 
@@ -293,22 +371,10 @@ class CustomerPoolService:
             user=current_user,
             resource="kuaizhizao:customer-pool",
         )
-        from_salesman = customer.salesman_id
-
-        customer.salesman_id = None
-        customer.salesman_name = None
-        customer.pool_status = "pool"
-        customer.assigned_at = None
-        customer.recycle_at = None
-        await customer.save()
-
-        await cls._write_log(
+        customer = await cls.apply_recycle(
             tenant_id=tenant_id,
             customer=customer,
-            action="recycle",
-            operator_user_id=current_user.id,
-            from_salesman_id=from_salesman,
-            to_salesman_id=None,
+            operator=current_user,
             reason=body.reason if body else None,
         )
         return CustomerPoolItem.model_validate(customer)
@@ -382,4 +448,3 @@ class CustomerPoolService:
             "recycled": recycled,
             "timestamp": now.isoformat(),
         }
-

@@ -1,8 +1,18 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Drawer, Form, Input, InputNumber, Modal, Select, Space, Switch, Tag } from 'antd';
-import { PlusOutlined, UserAddOutlined, UserSwitchOutlined, RollbackOutlined } from '@ant-design/icons';
+import {
+  PlusOutlined,
+  UserAddOutlined,
+  UserSwitchOutlined,
+  RollbackOutlined,
+  SyncOutlined,
+  ProfileOutlined,
+} from '@ant-design/icons';
+import { useGlobalStore } from '../../../../../stores/globalStore';
+import { hasPermission } from '../../../../../utils/permission';
 import dayjs from 'dayjs';
 
 import { UniTable } from '../../../../../components/uni-table';
@@ -14,10 +24,27 @@ import { CustomerFollowUpFormModal } from '../../../components/CustomerFollowUpF
 import { customerPoolApi, type CustomerPoolItem, type CustomerPoolRule } from '../../../services/customer-pool';
 
 const CustomerPoolPage: React.FC = () => {
-  const { message } = App.useApp();
+  const { t } = useTranslation();
+  const { message, modal } = App.useApp();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('pool');
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+
+  const handleScopeChange = useCallback((next: 'pool' | 'mine' | 'all') => {
+    if (next === scopeRef.current) return;
+    scopeRef.current = next;
+    setScope(next);
+    actionRef.current?.reload();
+  }, []);
+  const canClaim = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:claim');
+  const canAssign = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:assign');
+  const canRelease = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:release');
+  const canRecycle = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:recycle');
+  const canUpdateRules = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:update');
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [followUpCustomerId, setFollowUpCustomerId] = useState<number | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
@@ -65,16 +92,52 @@ const CustomerPoolPage: React.FC = () => {
     navigate(`/apps/kuaizhizao/sales-management/quotations/new?customerId=${customerId}`);
   };
 
+  const confirmReleaseCustomer = useCallback(
+    (row: CustomerPoolItem) => {
+      modal.confirm({
+        title: '确认释放客户',
+        content: `确定将「${row.name}」释放回公共客户池吗？释放后将不再归属当前业务员。`,
+        okText: '确认释放',
+        cancelText: '取消',
+        onOk: async () => {
+          try {
+            await customerPoolApi.release(row.id);
+            message.success('已释放回公海');
+            actionRef.current?.reload();
+          } catch (error: any) {
+            message.error(error?.message || '释放失败');
+            throw error;
+          }
+        },
+      });
+    },
+    [message, modal],
+  );
+
   const claimAndQuote = async (row: CustomerPoolItem) => {
     try {
       const owned = await customerPoolApi.claim(row.id);
-      message.success('领取成功');
+      message.success('领取成功，可在主数据完善开票资料');
       actionRef.current?.reload();
-      toQuotation(owned.id);
+      const customerId = Number(owned?.id ?? row.id);
+      if (!Number.isFinite(customerId) || customerId <= 0) {
+        message.warning('领取成功，但无法跳转报价单，请从列表手动创建');
+        return;
+      }
+      toQuotation(customerId);
     } catch (error: any) {
       message.error(error?.message || '领取失败');
     }
   };
+
+  useEffect(() => {
+    const customerId = searchParams.get('customerId');
+    if (!customerId) return;
+    handleScopeChange('all');
+    const next = new URLSearchParams(searchParams);
+    next.delete('customerId');
+    setSearchParams(next, { replace: true });
+  }, [handleScopeChange, searchParams, setSearchParams]);
 
   const columns: ProColumns<CustomerPoolItem>[] = useMemo(
     () => [
@@ -96,7 +159,11 @@ const CustomerPoolPage: React.FC = () => {
         width: 100,
         hideInSearch: true,
         render: (_, row) => (
-          row.pool_status === 'pool' ? <Tag color="blue">公海</Tag> : <Tag color="green">我的客户</Tag>
+          row.pool_status === 'pool' ? (
+            <Tag color="blue">{t('app.kuaizhizao.customerPool.scopePublic')}</Tag>
+          ) : (
+            <Tag color="green">{t('app.kuaizhizao.customerPool.scopePrivate')}</Tag>
+          )
         ),
       },
       {
@@ -121,17 +188,36 @@ const CustomerPoolPage: React.FC = () => {
         hideInSearch: true,
         render: (_, row) => {
           const actions: React.ReactNode[] = [];
+          if (row.uuid) {
+            actions.push(
+              <Button
+                key="master"
+                type="link"
+                size="small"
+                icon={<ProfileOutlined />}
+                onClick={() =>
+                  navigate(`/apps/master-data/supply-chain/customers?uuid=${encodeURIComponent(row.uuid!)}`)
+                }
+              >
+                主数据详情
+              </Button>
+            );
+          }
           if (row.pool_status === 'pool') {
-            actions.push(
-              <Button key="claim" type="link" size="small" icon={<UserAddOutlined />} onClick={() => claimAndQuote(row)}>
-                领取并报价
-              </Button>
-            );
-            actions.push(
-              <Button key="assign" type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssignModal(row)}>
-                分配
-              </Button>
-            );
+            if (canClaim) {
+              actions.push(
+                <Button key="claim" type="link" size="small" icon={<UserAddOutlined />} onClick={() => claimAndQuote(row)}>
+                  领取并报价
+                </Button>
+              );
+            }
+            if (canAssign) {
+              actions.push(
+                <Button key="assign" type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssignModal(row)}>
+                  分配
+                </Button>
+              );
+            }
           } else {
             actions.push(
               <Button key="follow-up" type="link" size="small" icon={<PlusOutlined />} onClick={() => openFollowUp(row.id)}>
@@ -143,31 +229,48 @@ const CustomerPoolPage: React.FC = () => {
                 去报价
               </Button>
             );
-            actions.push(
-              <Button
-                key="release"
-                type="link"
-                size="small"
-                icon={<RollbackOutlined />}
-                onClick={async () => {
-                  try {
-                    await customerPoolApi.release(row.id);
-                    message.success('已释放回公海');
-                    actionRef.current?.reload();
-                  } catch (error: any) {
-                    message.error(error?.message || '释放失败');
-                  }
-                }}
-              >
-                释放
-              </Button>
-            );
+            if (canRelease) {
+              actions.push(
+                <Button
+                  key="release"
+                  type="link"
+                  size="small"
+                  icon={<RollbackOutlined />}
+                  onClick={() => {
+                    confirmReleaseCustomer(row);
+                  }}
+                >
+                  释放
+                </Button>
+              );
+            }
+            if (canRecycle) {
+              actions.push(
+                <Button
+                  key="recycle"
+                  type="link"
+                  size="small"
+                  icon={<SyncOutlined />}
+                  onClick={async () => {
+                    try {
+                      await customerPoolApi.recycle(row.id);
+                      message.success('已强制回收到公海');
+                      actionRef.current?.reload();
+                    } catch (error: any) {
+                      message.error(error?.message || '回收失败');
+                    }
+                  }}
+                >
+                  强制回收
+                </Button>
+              );
+            }
           }
           return renderRowActionsOverflow(actions, `pool-${row.id}`);
         },
       },
     ],
-    [message],
+    [canAssign, canClaim, canRecycle, canRelease, confirmReleaseCustomer, navigate, t],
   );
 
   return (
@@ -179,27 +282,32 @@ const CustomerPoolPage: React.FC = () => {
           columns={columns}
           headerTitle="客户池"
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
+          tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}
           beforeSearchButtons={
             <ThemedSegmented
               surfaceBackground
               value={scope}
-              onChange={(v) => setScope(v as 'pool' | 'mine' | 'all')}
+              onChange={(v) => handleScopeChange(v as 'pool' | 'mine' | 'all')}
               options={[
-                { label: '公海客户', value: 'pool' },
-                { label: '我的客户', value: 'mine' },
-                { label: '全部视图', value: 'all' },
+                { label: t('app.kuaizhizao.customerPool.scopePublic'), value: 'pool' },
+                { label: t('app.kuaizhizao.customerPool.scopePrivate'), value: 'mine' },
+                { label: t('app.kuaizhizao.customerPool.scopeAll'), value: 'all' },
               ]}
             />
           }
-          toolBarRender={() => [
-            <Button key="rules" onClick={openRules}>
-              回收规则
-            </Button>,
-          ]}
+          toolBarRender={() =>
+            canUpdateRules
+              ? [
+                  <Button key="rules" onClick={openRules}>
+                    回收规则
+                  </Button>,
+                ]
+              : []
+          }
           request={async (params, _sort, _filter, searchValues) => {
             try {
               const res = await customerPoolApi.list({
-                scope,
+                scope: scopeRef.current,
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 keyword: typeof searchValues?.keyword === 'string' ? searchValues.keyword.trim() || undefined : undefined,

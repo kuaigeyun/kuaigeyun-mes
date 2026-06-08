@@ -20,11 +20,49 @@ from apps.master_data.schemas.supply_chain_schemas import (
     SupplierUpdate,
     SupplierResponse,
 )
+from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from core.services.authorization.data_scope_service import DataScopeService
+from core.services.authorization.user_permission_service import UserPermissionService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 RESOURCE_SUPPLIER = "master-data:supply-chain:supplier"
+
+CUSTOMER_POOL_MANAGED_FIELDS = frozenset(
+    {
+        "pool_status",
+        "assigned_at",
+        "recycle_at",
+        "last_follow_up_at",
+        "is_public",
+        "salesman_name",
+    }
+)
+
+
+def _strip_customer_pool_managed_fields(data: Dict[str, Any]) -> None:
+    for key in CUSTOMER_POOL_MANAGED_FIELDS:
+        data.pop(key, None)
+
+
+async def _assert_can_assign_customer_ownership(user: User, tenant_id: int) -> None:
+    if user.is_tenant_admin or user.is_infra_admin:
+        return
+    if await UserPermissionService.has_permission(
+        user.id, tenant_id, "kuaizhizao:customer-pool:assign"
+    ):
+        return
+    raise ValidationError("无权分配客户归属")
+
+
+async def _assert_can_release_customer_ownership(user: User, tenant_id: int) -> None:
+    if user.is_tenant_admin or user.is_infra_admin:
+        return
+    if await UserPermissionService.has_permission(
+        user.id, tenant_id, "kuaizhizao:customer-pool:release"
+    ):
+        return
+    raise ValidationError("无权释放客户归属")
 
 
 def _pick_contact_field(row: Dict[str, Any], *keys: str) -> Optional[str]:
@@ -132,7 +170,8 @@ class SupplyChainService:
     @staticmethod
     async def create_customer(
         tenant_id: int,
-        data: CustomerCreate
+        data: CustomerCreate,
+        current_user: User,
     ) -> CustomerResponse:
         """
         创建客户
@@ -157,39 +196,44 @@ class SupplyChainService:
         if existing:
             raise ValidationError(f"客户编码 {data.code} 已存在")
         
-        # 创建客户（未传 is_active 时默认为启用）
         create_data = data.model_dump(by_alias=False) if hasattr(data, "model_dump") else data.dict()
+        _strip_customer_pool_managed_fields(create_data)
+        salesman_id = create_data.pop("salesman_id", None)
+
         if create_data.get("is_active") is None:
             create_data["is_active"] = True
-        if create_data.get("is_public") is None:
-            create_data["is_public"] = False
-        if create_data.get("salesman_id"):
-            create_data["pool_status"] = "owned"
-            create_data["assigned_at"] = timezone.now()
-        else:
-            create_data["pool_status"] = create_data.get("pool_status") or "pool"
-            if create_data["pool_status"] == "pool":
-                create_data["assigned_at"] = None
-                create_data["recycle_at"] = None
-        # 自动回填业务员姓名
-        if create_data.get("salesman_id"):
-            salesman = await User.filter(id=create_data["salesman_id"]).first()
-            if salesman:
-                create_data["salesman_name"] = salesman.full_name or salesman.username
+
+        create_data["pool_status"] = "pool"
+        create_data["salesman_id"] = None
+        create_data["salesman_name"] = None
+        create_data["assigned_at"] = None
+        create_data["recycle_at"] = None
 
         _apply_partner_contacts_payload(create_data)
-        
+
         try:
             customer = await Customer.create(
                 tenant_id=tenant_id,
                 **create_data
             )
         except IntegrityError as e:
-            # 捕获数据库唯一约束错误，提供友好提示
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 raise ValidationError(f"客户编码 {data.code} 已存在（可能已被软删除，请检查）")
             raise
-        
+
+        if salesman_id:
+            await _assert_can_assign_customer_ownership(current_user, tenant_id)
+            target_user = await User.filter(id=salesman_id, tenant_id=tenant_id).first()
+            if not target_user:
+                raise ValidationError(f"业务员不存在: {salesman_id}")
+            customer = await CustomerPoolService.apply_assign(
+                tenant_id=tenant_id,
+                customer=customer,
+                target_user=target_user,
+                operator=current_user,
+                reason="master-data create",
+            )
+
         return _to_customer_response(customer)
     
     @staticmethod
@@ -278,7 +322,7 @@ class SupplyChainService:
                 | Q(invoice_title__icontains=kw)
             )
 
-        # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公共客户
+        # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公海客户
         if current_user and current_user.is_regular_user():
             query = query.filter(Q(salesman_id=current_user.id) | Q(pool_status="pool"))
 
@@ -296,7 +340,8 @@ class SupplyChainService:
     async def update_customer(
         tenant_id: int,
         customer_uuid: str,
-        data: CustomerUpdate
+        data: CustomerUpdate,
+        current_user: User,
     ) -> CustomerResponse:
         """
         更新客户
@@ -333,41 +378,43 @@ class SupplyChainService:
             if existing:
                 raise ValidationError(f"客户编码 {data.code} 已存在")
         
-        # 更新字段（by_alias=False 得到 snake_case 供 ORM 使用）
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
-        now = timezone.now()
+        _strip_customer_pool_managed_fields(update_data)
 
-        if "salesman_id" in update_data:
-            if update_data["salesman_id"]:
-                update_data["pool_status"] = "owned"
-                update_data["assigned_at"] = now
-            else:
-                update_data["pool_status"] = "pool"
-                update_data["assigned_at"] = None
-                update_data["recycle_at"] = None
-
-        if update_data.get("pool_status") == "pool":
-            update_data["salesman_id"] = None
-            update_data["salesman_name"] = None
-            update_data["assigned_at"] = None
-            update_data["recycle_at"] = None
+        salesman_change = update_data.pop("salesman_id", None) if "salesman_id" in update_data else None
+        salesman_changed = salesman_change is not None and salesman_change != customer.salesman_id
 
         _apply_partner_contacts_payload(update_data)
 
+        if salesman_changed:
+            if salesman_change:
+                await _assert_can_assign_customer_ownership(current_user, tenant_id)
+                target_user = await User.filter(id=salesman_change, tenant_id=tenant_id).first()
+                if not target_user:
+                    raise ValidationError(f"业务员不存在: {salesman_change}")
+                customer = await CustomerPoolService.apply_assign(
+                    tenant_id=tenant_id,
+                    customer=customer,
+                    target_user=target_user,
+                    operator=current_user,
+                    reason="master-data update",
+                )
+            else:
+                await _assert_can_release_customer_ownership(current_user, tenant_id)
+                customer = await CustomerPoolService.apply_release(
+                    tenant_id=tenant_id,
+                    customer=customer,
+                    operator=current_user,
+                    reason="master-data update",
+                    skip_own_check=True,
+                )
+
         for key, value in update_data.items():
             setattr(customer, key, value)
-        
-        # 自动回填业务员姓名
-        if "salesman_id" in update_data:
-            if update_data["salesman_id"]:
-                salesman = await User.filter(id=update_data["salesman_id"]).first()
-                if salesman:
-                    customer.salesman_name = salesman.full_name or salesman.username
-            else:
-                customer.salesman_name = None
 
         try:
-            await customer.save()
+            if update_data:
+                await customer.save()
         except IntegrityError as e:
             # 捕获数据库唯一约束错误，提供友好提示
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():

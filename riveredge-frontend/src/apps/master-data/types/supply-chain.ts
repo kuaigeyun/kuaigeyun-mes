@@ -60,8 +60,11 @@ export interface Customer extends PartnerInvoiceAndExtendedFields {
   revenueRecognitionOverride?: string | null;
   salesmanId?: number;
   salesmanName?: string;
+  poolStatus?: 'pool' | 'owned' | string;
+  assignedAt?: string;
+  lastFollowUpAt?: string;
+  recycleAt?: string;
   isActive: boolean;
-  isPublic?: boolean;
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
@@ -81,9 +84,7 @@ export interface CustomerCreate extends PartnerInvoiceAndExtendedFields {
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
   salesmanId?: number;
-  salesmanName?: string;
   isActive?: boolean;
-  isPublic?: boolean;
 }
 
 export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
@@ -100,9 +101,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
   salesmanId?: number;
-  salesmanName?: string;
   isActive?: boolean;
-  isPublic?: boolean;
 }
 
 export interface CustomerListParams {

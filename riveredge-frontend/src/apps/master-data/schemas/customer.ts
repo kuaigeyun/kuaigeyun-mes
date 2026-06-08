@@ -83,6 +83,9 @@ export const customerFormSchemaBasicTail: FieldConfig[] = [
   },
 ];
 
+/** 编辑与新建共用尾部字段 */
+export const customerFormSchemaBasicTailEdit: FieldConfig[] = customerFormSchemaBasicTail;
+
 /** @deprecated 使用 head + 联系人明细 + tail */
 export const customerFormSchemaBasic: FieldConfig[] = [
   ...customerFormSchemaBasicHead,

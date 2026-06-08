@@ -198,7 +198,15 @@ async def get_pool_rules(
     "/rules",
     response_model=CustomerPoolRuleResponse,
     summary="Update customer pool rule",
-    dependencies=[Depends(require_module_access("kuaizhizao", "customer-pool"))],
+    dependencies=[
+        Depends(
+            require_access(
+                "kuaizhizao:customer-pool",
+                "update",
+                required_permissions=["kuaizhizao:customer-pool:update"],
+            )
+        )
+    ],
 )
 async def update_pool_rules(
     body: CustomerPoolRuleUpdateBody,

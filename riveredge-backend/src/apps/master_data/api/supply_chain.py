@@ -81,7 +81,7 @@ async def create_customer(
     - **is_active**: 是否启用（默认：true）
     """
     try:
-        return await SupplyChainService.create_customer(tenant_id, data)
+        return await SupplyChainService.create_customer(tenant_id, data, current_user)
     except ValidationError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -197,7 +197,7 @@ async def update_customer(
     - **is_active**: 是否启用（可选）
     """
     try:
-        return await SupplyChainService.update_customer(tenant_id, customer_uuid, data)
+        return await SupplyChainService.update_customer(tenant_id, customer_uuid, data, current_user)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValidationError as e:

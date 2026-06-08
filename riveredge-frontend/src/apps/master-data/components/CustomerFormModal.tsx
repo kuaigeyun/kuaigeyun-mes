@@ -23,6 +23,7 @@ import { SchemaFormRenderer } from '../../../components/schema-form';
 import {
   customerFormSchemaBasicHead,
   customerFormSchemaBasicTail,
+  customerFormSchemaBasicTailEdit,
   customerFormSchemaInvoice,
   customerFormSchemaExtended,
 } from '../schemas/customer';
@@ -74,6 +75,20 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
   const isEdit = Boolean(editUuid);
 
+  const syncSalesmanWithVisibility = useCallback((isPublic: boolean | undefined) => {
+    const currentUser = useGlobalStore.getState().currentUser;
+    if (isPublic === true) {
+      formRef.current?.setFieldsValue({ salesmanId: undefined });
+      return;
+    }
+    if (isPublic === false && currentUser?.id) {
+      const salesmanId = formRef.current?.getFieldValue('salesmanId');
+      if (!salesmanId) {
+        formRef.current?.setFieldsValue({ salesmanId: currentUser.id });
+      }
+    }
+  }, []);
+
   const loadOptions = useCallback(async () => {
     const [users, industry, level, lead, category, contactTitle] = await Promise.all([
       getUserOptions(),
@@ -106,12 +121,11 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
 
   useEffect(() => {
     if (!open) return;
-    const currentUser = useGlobalStore.getState().currentUser;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       isActive: true,
-      isPublic: false,
-      salesmanId: currentUser?.id,
+      isPublic: true,
+      salesmanId: undefined,
     });
     if (!editUuid) {
       (async () => {
@@ -132,16 +146,16 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
               formRef.current?.setFieldsValue({
                 code: res.code,
                 isActive: true,
-                isPublic: false,
-                salesmanId: currentUser?.id,
+                isPublic: true,
+                salesmanId: undefined,
               });
             })
             .catch(() => {
               setPreviewCode(null);
               formRef.current?.setFieldsValue({
                 isActive: true,
-                isPublic: false,
-                salesmanId: currentUser?.id,
+                isPublic: true,
+                salesmanId: undefined,
               });
             });
         } else {
@@ -149,8 +163,8 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
           setEffectiveRuleCode(null);
           formRef.current?.setFieldsValue({
             isActive: true,
-            isPublic: false,
-            salesmanId: currentUser?.id,
+            isPublic: true,
+            salesmanId: undefined,
           });
         }
       })();
@@ -171,10 +185,17 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      const payload = {
-        ...values,
+      const currentUser = useGlobalStore.getState().currentUser;
+      const { isPublic: _isPublic, ...restValues } = values;
+      const payload: Record<string, unknown> = {
+        ...restValues,
         contacts: normalizeCustomerContactsForSubmit(values.contacts),
       };
+      if (values.isPublic === true) {
+        payload.salesmanId = undefined;
+      } else if (!payload.salesmanId && currentUser?.id) {
+        payload.salesmanId = currentUser.id;
+      }
       if (isEdit && editUuid) {
         await customerApi.update(editUuid, payload as CustomerUpdate);
         messageApi.success(t('common.updateSuccess'));
@@ -196,9 +217,6 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         }
         if (values.isActive === undefined) {
           values.isActive = true;
-        }
-        if (values.isPublic === undefined) {
-          values.isPublic = false;
         }
         const created = await customerApi.create(payload as CustomerCreate);
         messageApi.success(t('common.createSuccess'));
@@ -261,10 +279,15 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef as React.RefObject<ProFormInstance>}
-        initialValues={{ isActive: true, isPublic: false }}
+        initialValues={{ isActive: true, isPublic: true }}
         layout="vertical"
         grid
         zIndex={zIndex}
+        onValuesChange={(changed) => {
+          if ('isPublic' in changed) {
+            syncSalesmanWithVisibility(changed.isPublic);
+          }
+        }}
       >
         {/*
          * ProForm grid 只给「直接子级」包一层 Row；若唯一子节点是 Tabs，表单项的 Col 在 Tab 内，
@@ -316,7 +339,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                       />
                     </Col>
                     <SchemaFormRenderer
-                      schema={customerFormSchemaBasicTail}
+                      schema={isEdit ? customerFormSchemaBasicTailEdit : customerFormSchemaBasicTail}
                       isEdit={isEdit}
                       optionsMap={optionsMap}
                     />

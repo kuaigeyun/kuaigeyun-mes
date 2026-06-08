@@ -541,14 +541,21 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
   );
 };
 
+function normalizeFormListItems<T>(raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') return Object.values(raw as Record<string, T>);
+  return [];
+}
+
 const QuotationFormSummary: React.FC = () => {
-  const items = Form.useWatch('items');
+  const rawItems = Form.useWatch('items');
+  const items = normalizeFormListItems<any>(rawItems);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
   const { token } = AntdTheme.useToken();
-  const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0), 0) || 0;
+  const totalQuantity = items.reduce((sum: number, it: any) => sum + (Number(it?.quote_quantity) || 0), 0);
   let totalExcl = 0;
   let totalIncl = 0;
-  for (const it of items || []) {
+  for (const it of items) {
     const line = calcQuotationLineAmounts(it?.quote_quantity, it?.unit_price, it?.tax_rate, priceType);
     totalExcl += line.excl;
     totalIncl += line.incl;
@@ -1901,8 +1908,14 @@ const QuotationsPage: React.FC = () => {
     setPreviewCode(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
+    lastPriceTypeRef.current = 'tax_exclusive';
+    formRef.current?.setFieldsValue({
+      items: [defaultQuoteItem],
+      currency_code: defaultQuotationCurrency,
+      price_type: 'tax_exclusive',
+      quotation_date: dayjs(),
+    });
     setTimeout(() => {
-      lastPriceTypeRef.current = 'tax_exclusive';
       formRef.current?.setFieldsValue({
         items: [defaultQuoteItem],
         currency_code: defaultQuotationCurrency,
