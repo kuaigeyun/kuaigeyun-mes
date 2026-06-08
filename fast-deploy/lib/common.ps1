@@ -19,6 +19,9 @@ $script:CaddyDir = Join-Path $script:FastDeployDir 'caddy'
 $script:Caddyfile = Join-Path $script:CaddyDir 'Caddyfile'
 $script:CaddyTemplate = Join-Path $script:FastDeployDir 'templates\Caddyfile.template'
 $script:InstallScriptsJson = Join-Path $script:ConfigDir 'install-scripts.json'
+$script:BootTaskName = 'RiverEdge'
+$script:BootTaskStopName = 'RiverEdge-Stop'
+$script:BootEnvFile = Join-Path $script:ConfigDir 'boot-service.env'
 
 if (-not $env:DEPLOY_MODE) { $env:DEPLOY_MODE = 'prod' }
 $script:DeployMode = $env:DEPLOY_MODE
@@ -146,7 +149,9 @@ function Get-InstallCommand([string]$component) {
 }
 
 function Resolve-Uv {
-    if (Get-Command uv -ErrorAction SilentlyContinue) { return 'uv' }
+    if ($env:RIVEREDGE_UV -and (Test-Path -LiteralPath $env:RIVEREDGE_UV)) { return $env:RIVEREDGE_UV }
+    if ($env:UV_BIN -and (Test-Path -LiteralPath $env:UV_BIN)) { return $env:UV_BIN }
+    if (Get-Command uv -ErrorAction SilentlyContinue) { return (Get-Command uv).Source }
     $candidates = @(
         "$env:USERPROFILE\.local\bin\uv.exe",
         "$env:LOCALAPPDATA\Programs\Python\Python312\Scripts\uv.exe"
@@ -156,6 +161,8 @@ function Resolve-Uv {
 }
 
 function Resolve-Caddy {
+    if ($env:RIVEREDGE_CADDY -and (Test-Path -LiteralPath $env:RIVEREDGE_CADDY)) { return $env:RIVEREDGE_CADDY }
+    if ($env:CADDY_BIN -and (Test-Path -LiteralPath $env:CADDY_BIN)) { return $env:CADDY_BIN }
     if (Get-Command caddy -ErrorAction SilentlyContinue) { return (Get-Command caddy).Source }
     $bundled = Join-Path $script:FastDeployDir '.tools\caddy\caddy.exe'
     if (Test-Path $bundled) { return $bundled }
@@ -1282,6 +1289,175 @@ function Invoke-Default {
     }
 }
 
+function Test-IsAdministrator {
+    $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($identity)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+function Grant-SystemReadFile([string]$File) {
+    if (Test-Path -LiteralPath $File) {
+        & icacls $File /grant 'SYSTEM:R' 2>$null | Out-Null
+    }
+}
+
+function Grant-SystemExecuteFile([string]$File) {
+    if (Test-Path -LiteralPath $File) {
+        & icacls $File /grant 'SYSTEM:RX' 2>$null | Out-Null
+    }
+}
+
+function Grant-SystemModifyDir([string]$Dir) {
+    if (-not (Test-Path -LiteralPath $Dir)) {
+        New-Item -ItemType Directory -Path $Dir -Force | Out-Null
+    }
+    & icacls $Dir /grant 'SYSTEM:(OI)(CI)M' 2>$null | Out-Null
+}
+
+function Grant-SystemTraverseDir([string]$Dir) {
+    if (Test-Path -LiteralPath $Dir) {
+        & icacls $Dir /grant 'SYSTEM:(RX)' 2>$null | Out-Null
+    }
+}
+
+function Grant-BootServiceSystemAccess([string]$UvBin, [string]$CaddyBin) {
+    Grant-SystemTraverseDir $script:ProjectRoot
+    Grant-SystemTraverseDir $script:FastDeployDir
+    Grant-SystemTraverseDir $script:BackendDir
+    Grant-SystemTraverseDir $script:FrontendDir
+    Grant-SystemTraverseDir (Join-Path $script:FrontendDir 'dist')
+    Grant-SystemReadFile $script:EnvFile
+    Grant-SystemReadFile $script:DeployEnvFile
+    Grant-SystemReadFile $script:BootEnvFile
+    Grant-SystemReadFile $script:Caddyfile
+    Grant-SystemModifyDir $script:LogsDir
+    Grant-SystemExecuteFile $UvBin
+    Grant-SystemExecuteFile $CaddyBin
+    foreach ($dir in @(
+        (Split-Path -Parent $UvBin),
+        (Split-Path -Parent $CaddyBin),
+        (Join-Path $script:FastDeployDir '.tools\caddy')
+    )) {
+        Grant-SystemTraverseDir $dir
+    }
+    $profileRoot = Split-Path -Parent (Split-Path -Parent $UvBin)
+    if ($profileRoot -and (Test-Path -LiteralPath $profileRoot)) {
+        Grant-SystemTraverseDir $profileRoot
+    }
+}
+
+function Get-RiverEdgeBootTask {
+    return Get-ScheduledTask -TaskName $script:BootTaskName -ErrorAction SilentlyContinue
+}
+
+function Test-RiverEdgeBootEnabled {
+    $task = Get-RiverEdgeBootTask
+    if (-not $task) { return $false }
+    return $task.State -ne 'Disabled'
+}
+
+function Test-RiverEdgeBootAtStartup {
+    $task = Get-RiverEdgeBootTask
+    if (-not $task) { return $false }
+    foreach ($trigger in $task.Triggers) {
+        if ($trigger.CimClass.CimClassName -eq 'MSFT_TaskBootTrigger') { return $true }
+    }
+    return $false
+}
+
+function Test-RiverEdgeBootActive {
+    Ensure-LogsDir
+    $pidf = Join-Path $script:LogsDir 'backend.pid'
+    if (-not (Test-Path $pidf)) { return $false }
+    $pid = [int](Get-Content $pidf -Raw).Trim()
+    return [bool](Get-Process -Id $pid -ErrorAction SilentlyContinue)
+}
+
+function Get-RiverEdgeBootStatusLabel {
+    if ($script:DeployMode -ne 'prod') { return '仅生产模式可用' }
+    if (-not (Test-RiverEdgeBootEnabled)) { return '未配置' }
+    $mode = if (Test-RiverEdgeBootAtStartup) { '开机启动' } else { '登录时启动' }
+    if (Test-RiverEdgeBootActive) { return "已启用 · ${mode} · 运行中" }
+    return "已启用 · ${mode} · 未运行"
+}
+
+function Install-RiverEdgeBootTask {
+    Ensure-LogsDir
+    Load-DeployEnv
+    if (-not (Test-Path (Join-Path $script:FrontendDir 'dist\index.html'))) {
+        throw '缺少前端 dist，请先执行 build'
+    }
+    $uv = Resolve-Uv
+    if (-not (Test-Path -LiteralPath $uv)) { throw "未找到 uv: $uv" }
+    $caddy = Resolve-Caddy
+    if (-not $caddy) { throw '未安装 Caddy，请先执行 install' }
+
+    $serviceScript = Join-Path $script:FastDeployDir 'windows\riveredge-service.ps1'
+    if (-not (Test-Path $serviceScript)) { throw "缺少 $serviceScript" }
+
+    $bootEnv = @(
+        "PROJECT_ROOT=$($script:ProjectRoot)"
+        "FAST_DEPLOY_DIR=$($script:FastDeployDir)"
+        "UV_BIN=$uv"
+        "CADDY_BIN=$caddy"
+        "SERVICE_USER=$env:USERNAME"
+    )
+    Set-Content -Path $script:BootEnvFile -Value $bootEnv -Encoding UTF8
+
+    $actionArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`" -Action start"
+    $action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $actionArgs -WorkingDirectory $script:ProjectRoot
+    $settings = New-ScheduledTaskSettingsSet `
+        -AllowStartIfOnBatteries `
+        -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable `
+        -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -RestartCount 3 `
+        -RestartInterval (New-TimeSpan -Minutes 1)
+
+    if (Test-IsAdministrator) {
+        Write-LogInfo '管理员模式：注册 SYSTEM 开机启动任务（延迟 45s，等待 PostgreSQL 就绪）...'
+        Grant-BootServiceSystemAccess -UvBin $uv -CaddyBin $caddy
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        $trigger.Delay = 'PT45S'
+        $principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+        $desc = 'RiverEdge production auto-start at boot (SYSTEM)'
+    } else {
+        Write-LogInfo '注册当前用户登录时启动任务...'
+        Write-LogWarn '如需未登录即开机自启，请以管理员身份重新执行 install-service'
+        $trigger = New-ScheduledTaskTrigger -AtLogon -User $env:USERNAME
+        $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Limited
+        $desc = 'RiverEdge production auto-start at user logon'
+    }
+
+    Register-ScheduledTask -TaskName $script:BootTaskName -Description $desc -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+
+    $stopArgs = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$serviceScript`" -Action stop"
+    $stopAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $stopArgs -WorkingDirectory $script:ProjectRoot
+    $stopTrigger = New-ScheduledTaskTrigger -AtShutdown
+    Register-ScheduledTask -TaskName $script:BootTaskStopName -Description 'RiverEdge graceful stop at shutdown' -Action $stopAction -Trigger $stopTrigger -Settings $settings -Principal $principal -Force | Out-Null
+
+    Write-LogOk "开机自启已注册: $($script:BootTaskName)"
+    if (Test-IsAdministrator) {
+        Write-Host '  触发: 系统开机（SYSTEM，延迟 45s）'
+    } else {
+        Write-Host '  触发: 当前用户登录时'
+    }
+    Write-Host "  查看任务: taskschd.msc → 任务计划程序库 → $($script:BootTaskName)"
+    Write-Host '  卸载: ./fast-deploy/deploy.sh uninstall-service'
+}
+
+function Uninstall-RiverEdgeBootTask {
+    foreach ($name in @($script:BootTaskName, $script:BootTaskStopName)) {
+        $task = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if ($task) {
+            Write-LogInfo "移除计划任务 ${name}..."
+            Unregister-ScheduledTask -TaskName $name -Confirm:$false
+        }
+    }
+    if (Test-Path $script:BootEnvFile) { Remove-Item $script:BootEnvFile -Force }
+    Write-LogOk '已移除 Windows 开机自启任务'
+}
+
 function Invoke-FdDispatch([string]$Command) {
     switch ($Command) {
         'check'     { if (-not (Invoke-Check)) { exit 1 } }
@@ -1293,10 +1469,12 @@ function Invoke-FdDispatch([string]$Command) {
         'stop'      { if ($script:DeployMode -eq 'dev') { Invoke-StopDev } else { Invoke-StopProd } }
         'status'    { Invoke-Status }
         'update'    { if ($script:DeployMode -eq 'dev') { Invoke-UpdateDev } else { Invoke-UpdateProd } }
+        'install-service'   { Install-RiverEdgeBootTask }
+        'uninstall-service' { Uninstall-RiverEdgeBootTask }
         { $_ -in '', 'deploy' } { Invoke-Default }
         default {
             Write-LogError "未知命令: $Command"
-            Write-Host '用法: check | install | configure | migrate | build | start | stop | status | update | deploy'
+            Write-Host '用法: check | install | configure | migrate | build | start | stop | status | update | install-service | uninstall-service | deploy'
             exit 1
         }
     }

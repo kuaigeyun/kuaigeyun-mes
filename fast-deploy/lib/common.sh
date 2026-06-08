@@ -20,6 +20,9 @@ SYSTEMD_UNIT_NAME="riveredge.service"
 SYSTEMD_UNIT_PATH="/etc/systemd/system/${SYSTEMD_UNIT_NAME}"
 SYSTEMD_UNIT_TEMPLATE="$FAST_DEPLOY_DIR/templates/riveredge.service.template"
 SYSTEMD_SERVICE_SCRIPT="$FAST_DEPLOY_DIR/linux/riveredge-service.sh"
+WINDOWS_BOOT_TASK_NAME="RiverEdge"
+WINDOWS_BOOT_TASK_STOP_NAME="RiverEdge-Stop"
+WINDOWS_BOOT_ENV_FILE="$FAST_DEPLOY_CONFIG_DIR/boot-service.env"
 
 # 由入口脚本设置：dev | prod
 DEPLOY_MODE="${DEPLOY_MODE:-dev}"
@@ -177,6 +180,18 @@ run_windows_install_component() {
     powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script_win" \
         -Component "$comp" -UseMirror "$USE_MIRROR" -FastDeployDir "$fast_deploy_win" || return 1
     refresh_windows_path
+}
+
+run_windows_boot_task_action() {
+    local action=$1
+    local ps_script="$FAST_DEPLOY_DIR/windows/install-boot-task.ps1"
+    local ps_script_win project_root_win fast_deploy_win
+    [ -f "$ps_script" ] || { log_error "缺少 $ps_script"; return 1; }
+    ps_script_win="$(to_powershell_path "$ps_script")"
+    project_root_win="$(to_powershell_path "$PROJECT_ROOT")"
+    fast_deploy_win="$(to_powershell_path "$FAST_DEPLOY_DIR")"
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$ps_script_win" \
+        -Action "$action" -FastDeployDir "$fast_deploy_win" -ProjectRoot "$project_root_win"
 }
 
 apply_cn_mirrors() {
@@ -2168,6 +2183,82 @@ is_linux_systemd() {
     [ "$(uname -s)" = "Linux" ] && command -v systemctl >/dev/null 2>&1
 }
 
+boot_service_supported() {
+    [ "$DEPLOY_MODE" = "prod" ] || return 1
+    is_linux_systemd && return 0
+    is_windows_gitbash && return 0
+    return 1
+}
+
+is_windows_boot_enabled() {
+    is_windows_gitbash || return 1
+    powershell.exe -NoProfile -Command "
+        \$t = Get-ScheduledTask -TaskName '${WINDOWS_BOOT_TASK_NAME}' -ErrorAction SilentlyContinue
+        if (-not \$t) { exit 1 }
+        if (\$t.State -eq 'Disabled') { exit 1 }
+        exit 0
+    " 2>/dev/null
+}
+
+is_boot_service_enabled() {
+    if is_linux_systemd && [ -f "$SYSTEMD_UNIT_PATH" ]; then
+        systemctl is-enabled --quiet "$SYSTEMD_UNIT_NAME" 2>/dev/null
+        return
+    fi
+    if is_windows_gitbash; then
+        is_windows_boot_enabled
+        return
+    fi
+    return 1
+}
+
+is_boot_service_active() {
+    local pidf="$LOGS_DIR/backend.pid" pid
+    [ -f "$pidf" ] || return 1
+    pid="$(tr -d '[:space:]' < "$pidf" 2>/dev/null || true)"
+    [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+windows_boot_status_label() {
+    local mode_label=""
+    if ! is_windows_boot_enabled; then
+        echo "未配置"
+        return 0
+    fi
+    if powershell.exe -NoProfile -Command "
+        \$t = Get-ScheduledTask -TaskName '${WINDOWS_BOOT_TASK_NAME}' -ErrorAction SilentlyContinue
+        foreach (\$tr in \$t.Triggers) {
+            if (\$tr.CimClass.CimClassName -eq 'MSFT_TaskBootTrigger') { exit 0 }
+        }
+        exit 1
+    " 2>/dev/null; then
+        mode_label="开机启动"
+    else
+        mode_label="登录时启动"
+    fi
+    if is_boot_service_active; then
+        echo "已启用 · ${mode_label} · 运行中"
+    else
+        echo "已启用 · ${mode_label} · 未运行"
+    fi
+}
+
+boot_service_status_label() {
+    if [ "$DEPLOY_MODE" != "prod" ]; then
+        echo "仅生产模式可用"
+        return 0
+    fi
+    if is_windows_gitbash; then
+        windows_boot_status_label
+        return 0
+    fi
+    if ! is_linux_systemd; then
+        echo "不支持 (非 Linux systemd / Windows)"
+        return 0
+    fi
+    systemd_boot_status_label
+}
+
 is_systemd_boot_enabled() {
     is_linux_systemd || return 1
     [ -f "$SYSTEMD_UNIT_PATH" ] || return 1
@@ -2310,9 +2401,13 @@ prepare_systemd_prerequisites() {
 }
 
 cmd_install_service() {
-    is_linux_systemd || { log_error "install-service 仅支持 Linux (systemd)"; exit 1; }
-    is_windows_gitbash && { log_error "install-service 请在 Linux 服务器上执行"; exit 1; }
     [ "$DEPLOY_MODE" = "prod" ] || { log_error "install-service 仅用于生产模式"; exit 1; }
+    if is_windows_gitbash; then
+        log_info "Windows 环境：注册计划任务开机自启..."
+        run_windows_boot_task_action install || exit 1
+        return 0
+    fi
+    is_linux_systemd || { log_error "install-service 仅支持 Linux (systemd) 或 Windows"; exit 1; }
     [ -f "$SYSTEMD_UNIT_TEMPLATE" ] || { log_error "缺少模板 $SYSTEMD_UNIT_TEMPLATE"; exit 1; }
     [ -f "$SYSTEMD_SERVICE_SCRIPT" ] || { log_error "缺少 $SYSTEMD_SERVICE_SCRIPT"; exit 1; }
     chmod +x "$SYSTEMD_SERVICE_SCRIPT" "$FAST_DEPLOY_DIR/linux/prod.sh" 2>/dev/null || true
@@ -2377,8 +2472,11 @@ cmd_install_service() {
 }
 
 cmd_uninstall_service() {
-    is_linux_systemd || { log_error "uninstall-service 仅支持 Linux (systemd)"; exit 1; }
-    is_windows_gitbash && { log_error "uninstall-service 请在 Linux 服务器上执行"; exit 1; }
+    if is_windows_gitbash; then
+        run_windows_boot_task_action uninstall || exit 1
+        return 0
+    fi
+    is_linux_systemd || { log_error "uninstall-service 仅支持 Linux (systemd) 或 Windows"; exit 1; }
 
     if [ ! -f "$SYSTEMD_UNIT_PATH" ]; then
         log_warn "未安装 ${SYSTEMD_UNIT_NAME}"
@@ -2522,7 +2620,11 @@ cmd_details() {
     if [ "$DEPLOY_MODE" = "prod" ]; then
         echo ""
         echo "=== 开机自启 ==="
-        echo "  riveredge.service: $(systemd_boot_status_label)"
+        if is_windows_gitbash; then
+            echo "  ${WINDOWS_BOOT_TASK_NAME}: $(boot_service_status_label)"
+        else
+            echo "  riveredge.service: $(boot_service_status_label)"
+        fi
     fi
 }
 

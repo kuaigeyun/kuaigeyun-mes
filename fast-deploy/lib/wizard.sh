@@ -417,24 +417,32 @@ wizard_show_restart_menu() {
 }
 
 wizard_show_boot_service_menu() {
-    local status_label
+    local status_label boot_name
     load_deploy_env
-    status_label="$(systemd_boot_status_label)"
+    status_label="$(boot_service_status_label)"
+    if is_windows_gitbash; then
+        boot_name="$WINDOWS_BOOT_TASK_NAME (计划任务)"
+    else
+        boot_name="riveredge.service"
+    fi
     echo ""
     wizard_panel_begin
     wizard_panel_top
     wizard_panel_section "BOOT 开机自启"
-    wizard_panel_kv "Service" "riveredge.service"
+    wizard_panel_kv "Service" "${boot_name}"
     wizard_panel_kv "Status" "${status_label}"
     wizard_panel_blank
-    if [ "$DEPLOY_MODE" = "prod" ] && is_linux_systemd; then
-        if is_systemd_boot_enabled; then
-            wizard_panel_menu_item "1" "关闭开机自启" "disable 并移除 systemd 单元"
+    if boot_service_supported; then
+        if is_boot_service_enabled; then
+            wizard_panel_menu_item "1" "关闭开机自启" "disable 并移除自启配置"
         else
-            wizard_panel_menu_item "1" "开启开机自启" "注册 systemd 服务并 enable"
+            wizard_panel_menu_item "1" "开启开机自启" "注册自启任务并 enable"
+        fi
+        if is_windows_gitbash; then
+            wizard_panel_line "${WIZARD_DIM}Windows: 管理员=开机启动(SYSTEM)；普通用户=登录时启动${WIZARD_RESET}"
         fi
     else
-        wizard_panel_line "${WIZARD_DIM}仅 Linux 生产模式支持开机自启${WIZARD_RESET}"
+        wizard_panel_line "${WIZARD_DIM}仅 Linux/Windows 生产模式支持开机自启${WIZARD_RESET}"
     fi
     wizard_panel_line "${WIZARD_DIM}[0]${WIZARD_RESET} 返回主菜单"
     wizard_panel_bot
@@ -445,7 +453,7 @@ wizard_ask_boot_service_choice() {
     local choice
     while true; do
         wizard_show_boot_service_menu
-        if [ "$DEPLOY_MODE" != "prod" ] || ! is_linux_systemd; then
+        if ! boot_service_supported; then
             wizard_pause_return_menu
             return 0
         fi
@@ -458,7 +466,7 @@ wizard_ask_boot_service_choice() {
                 return 0
                 ;;
             1)
-                if is_systemd_boot_enabled; then
+                if is_boot_service_enabled; then
                     cmd_uninstall_service || true
                 else
                     cmd_install_service || true
