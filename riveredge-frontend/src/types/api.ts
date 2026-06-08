@@ -57,5 +57,7 @@ export interface CurrentUser {
     role_type?: 'internal' | 'external' | string;
     external_partner_type?: string | null;
   }>;
+  /** 登录身份：infra_superadmin 为平台超级管理员 */
+  user_type?: 'infra_superadmin' | 'user' | 'guest' | string;
 }
 

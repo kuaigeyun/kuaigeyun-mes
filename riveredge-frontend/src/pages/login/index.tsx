@@ -868,7 +868,7 @@ export default function LoginPage() {
         roles: response.user.roles || [],
         tenant_id: response.default_tenant_id,
         tenant_name: tenantName,
-        user_type: 'infra_superadmin',
+        user_type: 'user',
       };
       syncUserStateAfterLogin(userInfo);
 

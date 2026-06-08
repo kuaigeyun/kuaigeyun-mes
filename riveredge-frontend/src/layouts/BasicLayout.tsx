@@ -80,7 +80,7 @@ import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
-import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser } from '../utils/auth';
+import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
 import { LANGUAGE_MAP } from '../config/i18n';
@@ -235,7 +235,7 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // 检查用户类型（平台超级管理员还是系统级用户）
   const userInfo = getUserInfo();
-  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo);
+  const isInfraSuperAdmin = isInfraSuperAdminUser(userInfo) || isInfraSuperAdminFromToken();
 
   // 获取组织 ID
   const currentTenantId = getTenantId();
@@ -258,14 +258,15 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       if (shouldUsePlatformAPI) {
         // 平台超级管理员：调用平台接口
         const infraUser = await getCurrentInfraSuperAdmin();
+        const tenantId = getTenantId();
         return {
           id: infraUser.id,
           username: infraUser.username,
           email: infraUser.email,
           full_name: infraUser.full_name,
-          is_infra_admin: true, // 平台超级管理员始终是平台管理
+          is_infra_admin: true,
           is_tenant_admin: false,
-          tenant_id: undefined,
+          tenant_id: tenantId ?? undefined,
           user_type: 'infra_superadmin' as const,
         };
       } else {

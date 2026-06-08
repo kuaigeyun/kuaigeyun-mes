@@ -21,7 +21,7 @@ import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslat
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
-import { isInfraSuperAdminUser } from '../utils/auth';
+import { isInfraSuperAdminUser, hasPlatformAdministrativeAuthority } from '../utils/auth';
 
 /** 与 Dashboard / clearSessionQueries 共用，避免侧栏与工作台菜单缓存不一致 */
 export const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
@@ -253,8 +253,7 @@ export function useUnifiedMenuData(
       });
       items.splice(1, 0, ...appMenuItems);
     }
-    const canAccessPlatformInfra =
-      currentUser.is_infra_admin === true || isInfraSuperAdminUser(currentUser);
+    const canAccessPlatformInfra = hasPlatformAdministrativeAuthority(currentUser);
     if (!canAccessPlatformInfra) {
       items = items.filter((item) => {
         if (item.children) {

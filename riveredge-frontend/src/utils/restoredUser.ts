@@ -27,6 +27,9 @@ export function buildRestoredUserFromStorage(): CurrentUser | null {
     department: savedUserInfo.department,
     position: savedUserInfo.position,
     roles: Array.isArray(savedUserInfo.roles) ? savedUserInfo.roles : [],
+    user_type: isInfraSuperAdminUser(savedUserInfo)
+      ? ('infra_superadmin' as const)
+      : savedUserInfo.user_type,
   };
 }
 

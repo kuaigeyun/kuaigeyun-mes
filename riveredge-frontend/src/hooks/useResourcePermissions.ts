@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
 import { hasPermission } from '../utils/permission';
-import { isInfraSuperAdminUser } from '../utils/auth';
+import { hasPlatformAdministrativeAuthority } from '../utils/auth';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
 
 export type ResourcePermissionGates = {
@@ -29,7 +29,7 @@ const FAIL_CLOSED: ResourcePermissionGates = {
   canPrint: false,
 };
 
-/** 平台级管理员：菜单树无 permission_code 时（如 /infra/*）与 hasPermission 一致，不按 fail-closed 隐藏按钮 */
+/** 平台级管理员：不受租户 manifest RBAC 拦截（与 hasPermission 唯一真源一致） */
 const INFRA_ADMIN_OPEN: ResourcePermissionGates = {
   enabled: false,
   canRead: true,
@@ -48,7 +48,7 @@ export type ResourcePermissionOptions = {
 
 /**
  * 按 manifest 资源前缀（app:module）判断标准 CRUD / 导入导出权限。
- * resource 为空时 fail-closed；平台级管理员（is_infra_admin）与 hasPermission 一致，仍放行。
+ * 平台管理员（JWT / is_infra_admin）始终放行；resource 为空时普通用户 fail-closed。
  */
 export function useResourcePermissions(
   resource: string | null | undefined,
@@ -58,12 +58,13 @@ export function useResourcePermissions(
   const completeSource = options?.completeCreateSourceResource?.trim() || '';
 
   return useMemo(() => {
-    const prefix = (resource || '').trim();
-    const isPlatformOperator =
-      currentUser?.is_infra_admin === true || isInfraSuperAdminUser(currentUser);
+    if (hasPlatformAdministrativeAuthority(currentUser)) {
+      return INFRA_ADMIN_OPEN;
+    }
 
+    const prefix = (resource || '').trim();
     if (!prefix) {
-      return isPlatformOperator ? INFRA_ADMIN_OPEN : FAIL_CLOSED;
+      return FAIL_CLOSED;
     }
 
     const check = (action: string) => hasPermission(currentUser, buildPermissionCode(prefix, action));

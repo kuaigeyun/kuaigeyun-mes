@@ -19,7 +19,7 @@ import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getCurrentInfraSuperAdmin } from './services/infraAdmin';
-import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime, isInfraSuperAdminUser } from './utils/auth';
+import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId, isTokenExpired, getTokenRemainingTime, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from './utils/auth';
 import { buildRestoredUserFromStorage } from './utils/restoredUser';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
@@ -120,22 +120,24 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     return !!token;
   }, [isPublicPath]);
 
-  const isInfraSuperAdmin = isInfraSuperAdminUser(getUserInfo());
+  const isInfraSuperAdmin = isInfraSuperAdminUser(getUserInfo()) || isInfraSuperAdminFromToken();
 
   const { data: userData, isLoading, isError, error } = useQuery({
     queryKey: ['currentUser', isInfraSuperAdmin],
     queryFn: async () => {
       if (isInfraSuperAdmin) {
         const infraUser = await getCurrentInfraSuperAdmin();
+        const tenantId = getTenantId();
         return {
           id: infraUser.id,
           uuid: infraUser.uuid,
           username: infraUser.username,
           email: infraUser.email,
           full_name: infraUser.full_name,
+          avatar: infraUser.avatar,
           is_infra_admin: true,
           is_tenant_admin: false,
-          tenant_id: undefined,
+          tenant_id: tenantId ?? undefined,
           user_type: 'infra_superadmin' as const,
         };
       }

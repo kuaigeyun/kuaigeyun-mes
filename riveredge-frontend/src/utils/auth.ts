@@ -241,27 +241,49 @@ export function getTokenRemainingTime(token?: string | null): number {
 }
 
 /**
- * 判断是否为平台超级管理员
+ * 平台超级管理员身份（唯一真源：JWT `is_infra_superadmin`）。
+ * 选中租户上下文不影响判定；不依赖租户 manifest RBAC。
+ */
+export function isInfraSuperAdminFromToken(): boolean {
+  const token = getToken();
+  if (!token) return false;
+  const payload = decodeJWT(token);
+  return payload?.is_infra_superadmin === true;
+}
+
+/**
+ * 判断是否为平台超级管理员（InfraSuperAdmin，/infra/login 签发 Token）。
  *
- * 登录时 user_info 会写入 user_type；AuthGuard 刷新用户信息后可能丢失该字段，
- * 因此同时兼容 is_infra_admin（无租户）与 JWT 中的 is_infra_superadmin 标记。
+ * 优先级：JWT 标记 > user_type；不因 tenant_id 存在而失效。
  */
 export function isInfraSuperAdminUser(userInfo?: any | null): boolean {
+  if (isInfraSuperAdminFromToken()) {
+    return true;
+  }
   if (userInfo?.user_type === 'infra_superadmin') {
     return true;
   }
-  if (
-    userInfo?.is_infra_admin === true &&
-    (userInfo.tenant_id == null || userInfo.tenant_id === '')
-  ) {
+  return false;
+}
+
+/**
+ * 是否拥有平台管理权限（不受下级租户 manifest RBAC 拦截）。
+ *
+ * - 平台超级管理员：JWT / user_type
+ * - 租户内平台管理员：User.is_infra_admin（/auth/me）
+ */
+export function hasPlatformAdministrativeAuthority(userInfo?: any | null): boolean {
+  if (isInfraSuperAdminFromToken()) {
     return true;
   }
-  const token = getToken();
-  if (token) {
-    const payload = decodeJWT(token);
-    if (payload?.is_infra_superadmin === true) {
-      return true;
-    }
+  if (!userInfo) {
+    return false;
+  }
+  if (userInfo.user_type === 'infra_superadmin') {
+    return true;
+  }
+  if (userInfo.is_infra_admin === true) {
+    return true;
   }
   return false;
 }

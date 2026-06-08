@@ -16,6 +16,7 @@ export interface InfraSuperAdmin {
   username: string;
   email?: string;
   full_name?: string;
+  avatar?: string;
   is_active: boolean;
   last_login?: string;
   created_at: string;

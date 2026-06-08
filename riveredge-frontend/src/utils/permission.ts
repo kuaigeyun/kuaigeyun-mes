@@ -8,6 +8,7 @@
  */
 
 import { CurrentUser } from '../types/api';
+import { hasPlatformAdministrativeAuthority } from './auth';
 
 const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'];
 const SYSTEM_ADMIN_ROLE_NAME = '系统管理员';
@@ -48,12 +49,15 @@ function isSystemAdminRole(user: CurrentUser | undefined): boolean {
  * @returns 是否具有权限
  */
 export function hasPermission(user: CurrentUser | undefined, permissionCode: string): boolean {
+  if (hasPlatformAdministrativeAuthority(user)) {
+    return true;
+  }
   if (!user) {
     return false;
   }
 
-  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
+  // 组织管理员或系统管理员角色默认拥有所有权限
+  if (user.is_tenant_admin || isSystemAdminRole(user)) {
     return true;
   }
 
@@ -72,12 +76,14 @@ export function hasAnyPermission(
   user: CurrentUser | undefined,
   permissionCodes: string[]
 ): boolean {
+  if (hasPlatformAdministrativeAuthority(user)) {
+    return true;
+  }
   if (!user) {
     return false;
   }
 
-  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
+  if (user.is_tenant_admin || isSystemAdminRole(user)) {
     return true;
   }
 
@@ -96,12 +102,14 @@ export function hasAllPermissions(
   user: CurrentUser | undefined,
   permissionCodes: string[]
 ): boolean {
+  if (hasPlatformAdministrativeAuthority(user)) {
+    return true;
+  }
   if (!user) {
     return false;
   }
 
-  // 组织管理员、平台管理员或系统管理员角色默认拥有所有权限
-  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) {
+  if (user.is_tenant_admin || isSystemAdminRole(user)) {
     return true;
   }
 
@@ -155,8 +163,11 @@ function userHasMenuPermission(user: CurrentUser, permissionCode: string): boole
 }
 
 function hasAnyMenuPermission(user: CurrentUser | undefined, permissionCodes: string[]): boolean {
+  if (hasPlatformAdministrativeAuthority(user)) {
+    return true;
+  }
   if (!user) return false;
-  if (user.is_tenant_admin || user.is_infra_admin || isSystemAdminRole(user)) return true;
+  if (user.is_tenant_admin || isSystemAdminRole(user)) return true;
   return permissionCodes.some((code) => userHasMenuPermission(user, code));
 }
 
@@ -178,6 +189,9 @@ export function resolveUserForMenuPermission(user: CurrentUser | undefined): Cur
     }
     if (!merged.is_infra_admin && saved?.is_infra_admin) {
       merged.is_infra_admin = true;
+    }
+    if (!merged.user_type && saved?.user_type) {
+      merged.user_type = saved.user_type;
     }
     if (!merged.roles?.length && Array.isArray(saved?.roles) && saved.roles.length) {
       merged.roles = saved.roles;

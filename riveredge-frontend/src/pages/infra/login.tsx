@@ -78,9 +78,10 @@ export default function PlatformLoginPage() {
         username: response.user.username,
         email: response.user.email,
         full_name: response.user.full_name,
-        is_infra_admin: true, // 平台超级管理员始终是平台管理
+        is_infra_admin: true,
         is_tenant_admin: false,
-        tenant_id: response.default_tenant_id, // 使用默认租户 ID
+        tenant_id: response.default_tenant_id,
+        user_type: 'infra_superadmin',
       });
 
       messageApi.success(t('pages.infra.login.success'));

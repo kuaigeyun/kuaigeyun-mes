@@ -820,8 +820,6 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    * 值为来源单据资源前缀（app:module）。
    */
   completeCreateSourceResource?: string
-  /** 为 true 时不按权限隐藏按钮（特殊页面临时关闭） */
-  disablePermissionGates?: boolean
   /**
    * 是否显示新建按钮（默认：false）
    */
@@ -1169,7 +1167,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   printButtonText,
   permissionResource: permissionResourceProp,
   completeCreateSourceResource,
-  disablePermissionGates = false,
   showCreateButton = false,
   onCreate,
   createButtonText,
@@ -1217,7 +1214,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const location = useLocation()
   const pagePermissionResource = usePagePermissionResource(location.pathname)
   const permissionGates = useResourcePermissions(
-    disablePermissionGates ? null : permissionResourceProp ?? pagePermissionResource,
+    permissionResourceProp ?? pagePermissionResource,
     completeCreateSourceResource
       ? { completeCreateSourceResource }
       : undefined,
