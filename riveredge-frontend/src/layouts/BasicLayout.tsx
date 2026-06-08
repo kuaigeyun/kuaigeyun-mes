@@ -100,7 +100,7 @@ import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
-import { getFilePreview } from '../services/file';
+import { getSiteLogoPreview } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import OnboardingGuide from '../components/onboarding-guide';
@@ -1003,17 +1003,15 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       }
 
       if (isUUID(siteLogoValue)) {
-        try {
-          const previewInfo = await getFilePreview(siteLogoValue, { forAvatar: true });
-          const rawUrl = previewInfo.preview_url;
-          const newUrl = toRelativeIfLocalhost(rawUrl);
-          setSiteLogoUrl(newUrl);
-          setCachedSiteLogoUrl(siteLogoValue, newUrl);
-        } catch (error) {
-          console.error(t('ui.error.loadLogo'), error);
+        const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
+        if (!previewInfo?.preview_url) {
           clearCachedSiteLogoUrl(siteLogoValue);
           setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
+          return;
         }
+        const newUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+        setSiteLogoUrl(newUrl);
+        setCachedSiteLogoUrl(siteLogoValue, newUrl);
       } else {
         setSiteLogoUrl(siteLogoValue);
       }

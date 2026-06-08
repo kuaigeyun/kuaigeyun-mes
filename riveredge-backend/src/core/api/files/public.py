@@ -8,6 +8,7 @@ Date: 2026-01-06
 """
 
 from fastapi import APIRouter, HTTPException, status, Query
+from typing import Optional
 from core.schemas.file import FilePreviewResponse
 from core.services.file.file_service import FileService
 from core.services.file.file_preview_service import FilePreviewService
@@ -22,6 +23,7 @@ router = APIRouter(prefix="/files", tags=["Core · Files (Public)"])
 async def get_file_preview_public(
     uuid: str,
     category: str = Query(..., description="文件分类（用于验证是否为公开资源）"),
+    size: Optional[int] = Query(None, ge=16, le=512, description="缩略图边长（像素），仅图片有效"),
 ):
     """
     获取文件预览信息（公开接口）
@@ -80,6 +82,7 @@ async def get_file_preview_public(
         preview_info = await FilePreviewService.get_preview_info(
             file_uuid=uuid,
             tenant_id=tenant_id,
+            thumbnail_size=size,
         )
         
         return FilePreviewResponse(**preview_info)

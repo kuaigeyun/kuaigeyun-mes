@@ -263,6 +263,58 @@ function previewCacheKey(fileUuid: string, options?: FilePreviewOptions): string
 
 // 全局文件预览 URL 缓存，减少重复请求（每会话单次请求即可）
 const previewUrlCache = new Map<string, FilePreviewResponse>();
+const missingSiteLogoKeys = new Set<string>();
+
+const SITE_LOGO_FILE_CATEGORIES = ['site-logo', 'platform-logo'] as const;
+
+function isHttp404(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      (error as { response?: { status?: number } }).response?.status === 404,
+  );
+}
+
+/**
+ * 站点/平台 Logo 预览（公开分类接口，支持跨租户 logo 文件与缩略图）。
+ * 文件不存在时返回 null，由调用方回退默认 Logo。
+ */
+export async function getSiteLogoPreview(
+  fileUuid: string,
+  options?: FilePreviewOptions,
+): Promise<FilePreviewResponse | null> {
+  const cacheKey = `site-logo:${previewCacheKey(fileUuid, options)}`;
+  if (missingSiteLogoKeys.has(cacheKey)) {
+    return null;
+  }
+  const cached = previewUrlCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+
+  const size = resolvePreviewSize(options);
+  for (const category of SITE_LOGO_FILE_CATEGORIES) {
+    try {
+      const params = new URLSearchParams({ category });
+      if (size != null) {
+        params.set('size', String(size));
+      }
+      const result = await apiRequest<FilePreviewResponse>(
+        `/core/files/${fileUuid}/preview/public?${params.toString()}`,
+      );
+      previewUrlCache.set(cacheKey, result);
+      return result;
+    } catch (error) {
+      if (!isHttp404(error)) {
+        throw error;
+      }
+    }
+  }
+
+  missingSiteLogoKeys.add(cacheKey);
+  return null;
+}
 
 /**
  * 获取文件预览信息
@@ -297,7 +349,6 @@ export async function getFilePreview(
     previewUrlCache.set(cacheKey, result);
     return result;
   } catch (error) {
-    console.error('获取文件预览失败:', error);
     throw error;
   }
 }

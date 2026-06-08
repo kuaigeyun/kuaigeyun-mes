@@ -13,9 +13,14 @@ from infra.config.infra_config import infra_settings
 
 class BaseSchema(BaseModel):
     """
-    应用级schema基础类
+    应用级 schema 基础类。
 
-    提供统一的配置和基础功能，并自动处理时区展示转换（北京时间）。
+    时区展示（北京时间）仅作用于 API JSON 输出，不得参与 ORM 写库：
+
+    - **响应**：FastAPI 序列化走 ``mode='json'``，``field_serializer(when_used='json')`` 生效。
+    - **写库**：服务层 ``model_dump(exclude_unset=True)`` 须保持 ``datetime`` 等 Python 原生类型；
+      禁止将 ``when_used`` 改为 ``'always'``（会把 datetime 格式化成字符串，Tortoise UPDATE 报
+      ``expected datetime, got str``）。
     """
     model_config = ConfigDict(
         from_attributes=True,  # 支持从ORM模型转换
@@ -23,9 +28,9 @@ class BaseSchema(BaseModel):
         arbitrary_types_allowed=True,  # 允许任意类型
     )
 
-    @field_serializer('*', when_used='always')
+    @field_serializer('*', when_used='json')
     def serialize_datetime(self, value: Any, _info):
-        """全局 datetime 转换：数据库 UTC -> 系统配置时区 (Asia/Shanghai)"""
+        """API JSON 输出：数据库 UTC -> 系统配置时区 (Asia/Shanghai)。不参与 model_dump 写库。"""
         if value is None:
             return None
         

@@ -17,7 +17,7 @@ import {
 } from '../../../services/siteSetting';
 import { useConfigStore, getPersistedConfigs } from '../../../stores/configStore';
 import { useThemeStore } from '../../../stores/themeStore';
-import { uploadFile, getFilePreview, FileUploadResponse } from '../../../services/file';
+import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../services/file';
 import { 
   getDataDictionaryByCode, 
   getDictionaryItemList, 
@@ -137,20 +137,19 @@ const SiteSettingsPage: React.FC = () => {
 
     // 如果是UUID格式，获取文件预览URL
     if (isUUID(logoValue.trim())) {
-      try {
-        const previewInfo = await getFilePreview(logoValue.trim());
-        setLogoUrl(previewInfo.preview_url);
-        setLogoFileList([{
-          uid: logoValue.trim(),
-          name: t('pages.system.siteSettings.siteLogo'),
-          status: 'done',
-          url: previewInfo.preview_url,
-        }]);
-      } catch (error) {
-        console.error('获取LOGO预览URL失败:', error);
+      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      if (!previewInfo?.preview_url) {
         setLogoUrl(undefined);
         setLogoFileList([]);
+        return;
       }
+      setLogoUrl(previewInfo.preview_url);
+      setLogoFileList([{
+        uid: logoValue.trim(),
+        name: t('pages.system.siteSettings.siteLogo'),
+        status: 'done',
+        url: previewInfo.preview_url,
+      }]);
     } else {
       // 如果是URL格式，直接使用
       setLogoUrl(logoValue.trim());

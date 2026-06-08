@@ -5,6 +5,7 @@
 新租户未设置 site_name、site_logo 时，自动回退到平台级设置。
 """
 
+import re
 from datetime import datetime, timezone
 from typing import Dict, Any
 
@@ -13,6 +14,7 @@ from tortoise.exceptions import IntegrityError
 
 from core.models.site_setting import SiteSetting
 from core.schemas.site_setting import SiteSettingUpdate
+from infra.exceptions.exceptions import NotFoundError
 
 # 新建站点设置时的默认安全项（inactivity_timeout=0 表示不启用「无操作自动退出」）
 _DEFAULT_SITE_SECURITY: Dict[str, Any] = {
@@ -32,6 +34,13 @@ _PLATFORM_DEFAULT_VALUES = {
     "site_name": "RiverEdge SaaS",
     "site_logo": "",  # 无默认 logo 时留空
 }
+
+_LOGO_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    re.IGNORECASE,
+)
+_LOGO_FILE_CATEGORIES = ("site-logo", "platform-logo")
+
 
 class SiteSettingService:
     """
@@ -68,6 +77,44 @@ class SiteSettingService:
             canonical.id,
         )
         return canonical
+
+    @staticmethod
+    async def _resolve_site_logo_value(tenant_id: int, logo: Any) -> str:
+        """
+        校验 site_logo：URL 原样返回；UUID 须对应存在文件（本租户或 logo 分类跨租户）。
+        无效 UUID 返回空串，避免前端反复请求已删除文件。
+        """
+        if not logo or not isinstance(logo, str):
+            return ""
+        logo = logo.strip()
+        if not logo:
+            return ""
+        if not _LOGO_UUID_RE.match(logo):
+            return logo
+
+        from core.models.file import File
+        from core.services.file.file_service import FileService
+
+        try:
+            await FileService.get_file_by_uuid(tenant_id, logo)
+            return logo
+        except NotFoundError:
+            pass
+
+        file = await File.filter(
+            uuid=logo,
+            category__in=_LOGO_FILE_CATEGORIES,
+            deleted_at__isnull=True,
+        ).first()
+        if file:
+            return logo
+
+        logger.warning(
+            "site_logo 引用无效（文件不存在）: tenant_id={} uuid={}",
+            tenant_id,
+            logo,
+        )
+        return ""
 
     @staticmethod
     async def get_settings(tenant_id: int) -> SiteSetting:
@@ -121,6 +168,11 @@ class SiteSettingService:
                     tenant_settings[site_key] = platform_val
                 elif site_key in _PLATFORM_DEFAULT_VALUES and _PLATFORM_DEFAULT_VALUES[site_key]:
                     tenant_settings[site_key] = _PLATFORM_DEFAULT_VALUES[site_key]
+
+        tenant_settings["site_logo"] = await SiteSettingService._resolve_site_logo_value(
+            tenant_id,
+            tenant_settings.get("site_logo"),
+        )
 
         return tenant_settings
     

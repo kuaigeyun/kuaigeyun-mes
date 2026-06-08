@@ -64,7 +64,7 @@ const WorkCentersPage: React.FC = () => {
   useEffect(() => {
     const loadWorkstations = async () => {
       try {
-        const listRes = await workstationApi.list({ limit: 5000, is_active: true });
+        const listRes = await workstationApi.list({ limit: 1000, is_active: true });
         const list = factoryListItems(listRes);
         const map: Record<number, Workstation> = {};
         list.forEach((ws) => { map[ws.id] = ws; });

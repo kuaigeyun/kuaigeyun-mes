@@ -22,7 +22,7 @@ import {
   type PlatformSettings,
   type PlatformSettingsUpdateRequest,
 } from '../../../../services/platformSettings';
-import { uploadFile, getFilePreview, FileUploadResponse } from '../../../../services/file';
+import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
 
@@ -143,20 +143,19 @@ export default function PlatformSettingsPage() {
 
     // 如果是UUID格式，获取文件预览URL
     if (isUUID(logoValue.trim())) {
-      try {
-        const previewInfo = await getFilePreview(logoValue.trim());
-        setLogoUrl(previewInfo.preview_url);
-        setLogoFileList([{
-          uid: logoValue.trim(),
-          name: t('pages.infra.platform.platformLogo'),
-          status: 'done',
-          url: previewInfo.preview_url,
-        }]);
-      } catch (error) {
-        console.error('获取LOGO预览URL失败:', error);
+      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      if (!previewInfo?.preview_url) {
         setLogoUrl(undefined);
         setLogoFileList([]);
+        return;
       }
+      setLogoUrl(previewInfo.preview_url);
+      setLogoFileList([{
+        uid: logoValue.trim(),
+        name: t('pages.infra.platform.platformLogo'),
+        status: 'done',
+        url: previewInfo.preview_url,
+      }]);
     } else {
       // 如果是URL格式，直接使用
       setLogoUrl(logoValue.trim());
