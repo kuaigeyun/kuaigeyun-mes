@@ -271,18 +271,32 @@ export function isInfraSuperAdminUser(userInfo?: any | null): boolean {
  *
  * - 平台超级管理员：JWT / user_type
  * - 租户内平台管理员：User.is_infra_admin（/auth/me）
+ *
+ * 合并 store 与 localStorage，避免 /auth/me 刷新后 is_infra_admin 丢失。
  */
 export function hasPlatformAdministrativeAuthority(userInfo?: any | null): boolean {
   if (isInfraSuperAdminFromToken()) {
     return true;
   }
-  if (!userInfo) {
+
+  const saved = typeof window !== 'undefined' ? getUserInfo() : null;
+  const merged =
+    userInfo || saved
+      ? {
+          ...(saved ?? {}),
+          ...(userInfo ?? {}),
+          is_infra_admin: Boolean(userInfo?.is_infra_admin || saved?.is_infra_admin),
+          user_type: userInfo?.user_type ?? saved?.user_type,
+        }
+      : null;
+
+  if (!merged) {
     return false;
   }
-  if (userInfo.user_type === 'infra_superadmin') {
+  if (merged.user_type === 'infra_superadmin') {
     return true;
   }
-  if (userInfo.is_infra_admin === true) {
+  if (merged.is_infra_admin === true) {
     return true;
   }
   return false;

@@ -1,8 +1,10 @@
 import { useMemo } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
 import { hasPermission } from '../utils/permission';
 import { hasPlatformAdministrativeAuthority } from '../utils/auth';
+import { isPlatformInfraPath } from '../utils/platformScope';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
 
 export type ResourcePermissionGates = {
@@ -54,12 +56,18 @@ export function useResourcePermissions(
   resource: string | null | undefined,
   options?: ResourcePermissionOptions,
 ): ResourcePermissionGates {
+  const location = useLocation();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const completeSource = options?.completeCreateSourceResource?.trim() || '';
 
   return useMemo(() => {
     if (hasPlatformAdministrativeAuthority(currentUser)) {
       return INFRA_ADMIN_OPEN;
+    }
+
+    // /infra/* 无 manifest 资源码：仅平台管理员可展示操作按钮（后端 infra API 强校验）
+    if (isPlatformInfraPath(location.pathname)) {
+      return FAIL_CLOSED;
     }
 
     const prefix = (resource || '').trim();
@@ -83,5 +91,5 @@ export function useResourcePermissions(
       canExport: check('export'),
       canPrint: check('print'),
     };
-  }, [currentUser, resource, completeSource]);
+  }, [currentUser, resource, completeSource, location.pathname]);
 }

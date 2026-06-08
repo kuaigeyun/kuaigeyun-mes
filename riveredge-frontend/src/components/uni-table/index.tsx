@@ -1224,6 +1224,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const gatedShowEditButton = showEditButton && permissionGates.canUpdate
   const gatedShowImportButton = showImportButton && permissionGates.canImport
   const gatedShowExportButton = showExportButton && permissionGates.canExport
+  const hasStringHeaderTitle =
+    typeof headerTitle === 'string' && headerTitle.trim().length > 0
+  const actionsInSearchRow = searchPlacement === 'searchRow' && !hasStringHeaderTitle
   const { token } = theme.useToken()
   const queryClient = useQueryClient()
   const getConfig = useConfigStore((s) => s.getConfig);
@@ -2339,16 +2342,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
   const memoizedRightActions = !isMobile ? buildRightActions(dataActionIconOnly) : undefined
 
+  const showRightActionsInSearchRow = actionsInSearchRow && Boolean(memoizedRightActions)
+
   const memoizedToolbar = React.useMemo(() => ({
     actions: [
-      ...(memoizedRightActions ? [memoizedRightActions] : []),
+      ...(memoizedRightActions && !showRightActionsInSearchRow ? [memoizedRightActions] : []),
       ...(restProps.toolbar?.actions
         ? Array.isArray(restProps.toolbar.actions)
           ? restProps.toolbar.actions
           : [restProps.toolbar.actions]
         : []),
     ],
-  }), [memoizedRightActions, restProps.toolbar?.actions])
+  }), [memoizedRightActions, restProps.toolbar?.actions, showRightActionsInSearchRow])
 
   const normalizedUserRowSelection = React.useMemo(() => {
     const userRowSelection = (restProps as { rowSelection?: unknown }).rowSelection
@@ -2619,6 +2624,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         Boolean(beforeSearchButtons) ||
         Boolean(afterSearchButtons) ||
         Boolean(betweenFuzzyAndAdvancedButtons) ||
+        (actionsInSearchRow && Boolean(memoizedHeaderActions || memoizedRightActions)) ||
         (isMobile && gatedShowCreateButton && onCreate)
       : (!isMobile && viewTypes && viewTypes.length > 1) ||
         (isMobile && gatedShowCreateButton && onCreate)
@@ -2696,7 +2702,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   )
 
   const memoizedHeaderTitle = React.useMemo(() => {
-    const leftActions = memoizedHeaderActions || headerTitle
+    const leftActions = memoizedHeaderActions || (hasStringHeaderTitle ? headerTitle : undefined)
     if (searchPlacement === 'toolbarLeft') {
       return (
         <div
@@ -2715,8 +2721,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         </div>
       )
     }
+    if (actionsInSearchRow) {
+      return hasStringHeaderTitle ? headerTitle : undefined
+    }
     return leftActions || undefined
-  }, [headerTitle, memoizedHeaderActions, memoizedUniSearch, searchPlacement])
+  }, [
+    headerTitle,
+    memoizedHeaderActions,
+    memoizedUniSearch,
+    searchPlacement,
+    hasStringHeaderTitle,
+    actionsInSearchRow,
+  ])
 
   return (
     <>
@@ -2891,7 +2907,26 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               minWidth: 0,
             }}
           >
-            {searchPlacement === 'searchRow' ? memoizedUniSearch : null}
+            {searchPlacement === 'searchRow' ? (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  flex: 1,
+                  minWidth: 0,
+                  flexWrap: isMobile ? 'wrap' : 'nowrap',
+                }}
+              >
+                {actionsInSearchRow && memoizedHeaderActions ? (
+                  <div style={{ flexShrink: 0 }}>{memoizedHeaderActions}</div>
+                ) : null}
+                {memoizedUniSearch}
+              </div>
+            ) : null}
+            {searchPlacement === 'searchRow' && actionsInSearchRow && memoizedRightActions ? (
+              <div style={{ flexShrink: 0 }}>{memoizedRightActions}</div>
+            ) : null}
             {!isMobile && viewTypes && viewTypes.length > 1 ? (
               <div style={{ flexShrink: 0, marginLeft: 8 }}>
                 <UniView
@@ -2955,7 +2990,11 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                     })
                   }
                 }
-                return memoizedRightActions ? [memoizedRightActions] : []
+                return showRightActionsInSearchRow
+                  ? []
+                  : memoizedRightActions
+                    ? [memoizedRightActions]
+                    : []
               }}
               {...(() => {
                 // 过滤 toolBarRender/search；scroll：调用方优先，否则默认 x 为 max-content（antd）；拖拽开启时注入数值 x
