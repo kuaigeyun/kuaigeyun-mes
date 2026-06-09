@@ -17,7 +17,7 @@ from apps.kuaicaiwu.schemas.invoice import (
     InvoiceStatisticsResponse,
 )
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -52,13 +52,7 @@ def _http_exception_with_trace(
 @router.post("", response_model=InvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_invoice(
     data: InvoiceCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "create",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -76,13 +70,7 @@ async def list_invoices(
     category: Optional[str] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     items, total = await invoice_service.list_invoices(
@@ -98,13 +86,7 @@ async def list_invoices(
 
 @router.get("/statistics", response_model=InvoiceStatisticsResponse, summary="Invoice list statistics (KPI cards)")
 async def get_invoice_statistics(
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     """须在 `/{code}` 之前注册。"""
@@ -115,13 +97,7 @@ async def get_invoice_statistics(
 @router.get("/{code}", response_model=InvoiceResponse)
 async def get_invoice(
     code: str,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
@@ -135,14 +111,8 @@ async def get_invoice(
 async def update_invoice(
     code: str,
     data: InvoiceUpdate,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "update",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
-    tenant_id: int = Depends(get_current_tenant)
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:update")),
+    tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         invoice = await invoice_service.update_invoice(tenant_id, code, data)
@@ -154,14 +124,8 @@ async def update_invoice(
 @router.delete("/{code}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_invoice(
     code: str,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "delete",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
-    tenant_id: int = Depends(get_current_tenant)
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:invoice:delete")),
+    tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         await invoice_service.delete_invoice(tenant_id, code)

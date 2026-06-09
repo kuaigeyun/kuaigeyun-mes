@@ -6,7 +6,7 @@
 
 from typing import List, Optional
 
-from fastapi import APIRouter, Body, Depends, Path, Query
+from fastapi import APIRouter, Body, Depends, Path, Query, Request
 
 from apps.kuaizhizao.schemas.defect_record import DefectRecordListResponse, DefectRecordResponse
 from apps.kuaizhizao.schemas.quality_improvement import (
@@ -24,7 +24,7 @@ from apps.kuaizhizao.schemas.quality_improvement import (
 )
 from apps.kuaizhizao.services.defect_record_service import DefectRecordService
 from apps.kuaizhizao.services.quality_improvement_service import OQCInspectionService, Quality8DService, SPCService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_access, get_auth_context, ensure_permission_codes, AuthContext
 from core.api.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
@@ -94,11 +94,25 @@ _OQC_UPDATE = Depends(
         required_permissions=["kuaizhizao:quality-management-oqc-inspection:update"],
     )
 )
-_OQC_APPROVE = Depends(
+_OQC_DELETE = Depends(
     require_access(
         "kuaizhizao.quality-management-oqc-inspection",
-        "approve",
-        required_permissions=["kuaizhizao:quality-management-oqc-inspection:approve"],
+        "delete",
+        required_permissions=["kuaizhizao:quality-management-oqc-inspection:delete"],
+    )
+)
+_OQC_EXPORT = Depends(
+    require_access(
+        "kuaizhizao.quality-management-oqc-inspection",
+        "export",
+        required_permissions=["kuaizhizao:quality-management-oqc-inspection:export"],
+    )
+)
+_OQC_REVOKE = Depends(
+    require_access(
+        "kuaizhizao.quality-management-oqc-inspection",
+        "revoke",
+        required_permissions=["kuaizhizao:quality-management-oqc-inspection:revoke"],
     )
 )
 _SPC_READ = Depends(
@@ -360,13 +374,74 @@ async def conduct_oqc_inspection(
 
 @router.post("/oqc-inspections/{inspection_id}/approve", response_model=OQCInspectionResponse, summary="Approve OQC inspection")
 async def approve_oqc_inspection(
+    request: Request,
     inspection_id: int = Path(...),
+    auth: AuthContext = Depends(get_auth_context),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
     approve: bool = Query(True, description="true=通过 false=驳回"),
-    _auth= _OQC_APPROVE,
+) -> OQCInspectionResponse:
+    if approve:
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            [
+                "kuaizhizao:quality-management-oqc-inspection:approve",
+                "kuaizhizao:quality-management-oqc-inspection:audit",
+            ],
+            require_all=False,
+        )
+    else:
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            [
+                "kuaizhizao:quality-management-oqc-inspection:reject",
+                "kuaizhizao:quality-management-oqc-inspection:audit",
+            ],
+            require_all=False,
+        )
+    return await oqc_service.approve(
+        tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id, approve=approve
+    )
+
+
+@router.post("/oqc-inspections/{inspection_id}/unapprove", response_model=OQCInspectionResponse, summary="Revoke OQC approval")
+async def revoke_oqc_inspection(
+    inspection_id: int = Path(...),
+    _auth=_OQC_REVOKE,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> OQCInspectionResponse:
-    return await oqc_service.approve(tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id, approve=approve)
+    _ = _auth
+    return await oqc_service.revoke_approval(
+        tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id
+    )
+
+
+@router.delete("/oqc-inspections/{inspection_id}", summary="Delete OQC inspection")
+async def delete_oqc_inspection(
+    inspection_id: int = Path(...),
+    _auth=_OQC_DELETE,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    await oqc_service.delete_inspection(tenant_id=tenant_id, inspection_id=inspection_id, user_id=current_user.id)
+    return {"success": True}
+
+
+@router.get("/oqc-inspections/export", summary="Export OQC inspections")
+async def export_oqc_inspections(
+    status: Optional[str] = Query(None),
+    _auth=_OQC_EXPORT,
+    tenant_id: int = Depends(get_current_tenant),
+):
+    _ = _auth
+    result = await oqc_service.list(tenant_id=tenant_id, skip=0, limit=10000, status=status)
+    return result
 
 
 @router.post("/spc/samples", response_model=SPCSampleResponse, summary="Create SPC sample")

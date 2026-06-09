@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.tool import (
 )
 from apps.kuaizhizao.services.tool_service import ToolService, ToolUsageService, ToolMaintenanceService, ToolMaintenanceReminderService
 from core.api.deps.deps import get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -30,7 +30,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(
     prefix="/tools",
     tags=["App · Kuaige Zhizao · Tools"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "equipment-management-tool-ledger"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("equipment-management-tool-ledger"))],
 )
 
 

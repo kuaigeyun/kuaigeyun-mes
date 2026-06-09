@@ -138,6 +138,15 @@ export const qualityImprovementApi = {
         method: 'POST',
         params: { approve },
       }),
+    revoke: async (id: number) =>
+      apiRequest<OQCInspection>(`/apps/kuaizhizao/oqc-inspections/${id}/unapprove`, { method: 'POST' }),
+    delete: async (id: number) =>
+      apiRequest(`/apps/kuaizhizao/oqc-inspections/${id}`, { method: 'DELETE' }),
+    export: async (params?: Record<string, unknown>) =>
+      apiRequest<{ items: OQCInspection[]; total: number }>('/apps/kuaizhizao/oqc-inspections/export', {
+        method: 'GET',
+        params,
+      }),
   },
 
   spc: {

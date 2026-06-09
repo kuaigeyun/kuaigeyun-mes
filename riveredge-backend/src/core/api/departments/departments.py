@@ -20,6 +20,13 @@ from core.schemas.department import (
 )
 from core.services.organization.department_service import DepartmentService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.system_module_access import (
+    require_department_create,
+    require_department_delete,
+    require_department_import,
+    require_department_read,
+    require_department_update,
+)
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
@@ -73,6 +80,7 @@ async def create_department(
     data: DepartmentCreate,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_create),
 ):
     """
     创建部门
@@ -142,6 +150,7 @@ async def get_department_tree(
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
 ):
     """
     获取部门树形结构
@@ -192,6 +201,7 @@ async def get_department_tree(
 async def get_department_preset_preview(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
 ):
     """返回预设部门清单（静态），供前端勾选后再创建。"""
     return list(DepartmentService.PRESET_DEPARTMENTS)
@@ -201,6 +211,7 @@ async def get_department_preset_preview(
 async def get_department_dataset_binding(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
 ):
     row = await DepartmentDatasetBinding.filter(tenant_id=tenant_id).first()
     return _serialize_department_dataset_binding(row)
@@ -211,6 +222,7 @@ async def put_department_dataset_binding(
     body: DepartmentDatasetBindingUpsert,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
 ):
     ds = (body.dataset_uuid or "").strip()
     if not ds:
@@ -242,6 +254,7 @@ async def put_department_dataset_binding(
 async def sync_departments_from_dataset(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
 ):
     try:
         result = await DepartmentService.sync_departments_from_dataset(
@@ -261,6 +274,7 @@ async def get_department(
     department_uuid: str,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_read),
 ):
     """
     获取部门详情
@@ -324,6 +338,7 @@ async def update_department(
     data: DepartmentUpdate,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
 ):
     """
     更新部门
@@ -399,6 +414,7 @@ async def delete_department(
     department_uuid: str,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_delete),
 ):
     """
     删除部门
@@ -441,6 +457,7 @@ async def update_department_order(
     department_orders: List[Dict[str, Any]] = Body(..., description="部门排序列表"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_update),
 ):
     """
     批量更新部门排序
@@ -481,6 +498,7 @@ async def import_departments(
     request: DepartmentImportRequestSchema,
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_department_import),
 ):
     """
     批量导入部门
@@ -523,6 +541,7 @@ async def load_preset_departments(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     body: Optional[LoadDepartmentPresetRequest] = Body(None),
+    _auth: object = Depends(require_department_create),
 ):
     """
     加载中国中小制造业极简部门预设数据。

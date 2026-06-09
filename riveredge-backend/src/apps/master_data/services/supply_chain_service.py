@@ -27,6 +27,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 RESOURCE_SUPPLIER = "master-data:supply-chain:supplier"
+RESOURCE_CUSTOMER = "master-data:supply-chain:customer"
 
 CUSTOMER_POOL_MANAGED_FIELDS = frozenset(
     {
@@ -322,9 +323,14 @@ class SupplyChainService:
                 | Q(invoice_title__icontains=kw)
             )
 
-        # 业务员数据隔离：普通用户只能看到自己负责的客户 + 公海客户
-        if current_user and current_user.is_regular_user():
-            query = query.filter(Q(salesman_id=current_user.id) | Q(pool_status="pool"))
+        # 客户行级范围：统一走 DataScopeService（含公海 + 业务员默认解析器）
+        if current_user:
+            query = await DataScopeService.apply(
+                query,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=RESOURCE_CUSTOMER,
+            )
 
         total = await query.count()
         allowed_sort = {"code", "name", "category", "created_at", "is_active", "salesman_name", "short_name"}

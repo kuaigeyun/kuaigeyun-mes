@@ -12,7 +12,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PaymentRecordCreate
 )
 from apps.kuaicaiwu.services.finance_service import PayableService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -47,13 +47,7 @@ def _http_exception_with_trace(
 @router.post("", response_model=PayableResponse, status_code=status.HTTP_201_CREATED)
 async def create_payable(
     data: PayableCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "create",
-            required_permissions=["kuaicaiwu:payable:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -71,13 +65,7 @@ async def list_payables(
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
     pending_settlement: bool = Query(False, description="仅返回待核销应付（remaining_amount > 0）"),
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     payables, total = await payable_service.list_payables(
@@ -98,13 +86,7 @@ async def list_payables(
 
 @router.get("/statistics")
 async def get_payable_statistics(
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await payable_service.get_payable_statistics(tenant_id)
@@ -112,13 +94,7 @@ async def get_payable_statistics(
 
 @router.get("/aging")
 async def get_payable_aging(
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await payable_service.get_payable_aging_analysis(tenant_id)
@@ -127,13 +103,7 @@ async def get_payable_aging(
 @router.get("/{id}", response_model=PayableResponse)
 async def get_payable(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
@@ -147,13 +117,7 @@ async def get_payable(
 async def record_payment(
     id: int,
     data: PaymentRecordCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -168,13 +132,7 @@ async def record_payment(
 async def approve_payable(
     id: int,
     rejection_reason: Optional[str] = Query(None),
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:audit")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -188,13 +146,7 @@ async def approve_payable(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_payable(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payable",
-            "delete",
-            required_permissions=["kuaicaiwu:payable:delete"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payable:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):

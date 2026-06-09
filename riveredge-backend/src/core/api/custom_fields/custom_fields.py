@@ -19,12 +19,20 @@ from core.schemas.custom_field import (
 )
 from core.services.business.custom_field_service import CustomFieldService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.system_module_access import (
+    require_custom_field_create,
+    require_custom_field_delete,
+    require_custom_field_read,
+    require_custom_field_update,
+)
 from core.services.system.installed_feature_scope import (
     get_installed_application_codes,
     is_page_path_in_installed_apps,
 )
 from core.services.custom_field.custom_field_page_discovery import apply_manifest_display_overlay
+from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from infra.models.user import User
 
 router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
 
@@ -33,6 +41,7 @@ router = APIRouter(prefix="/custom-fields", tags=["Core · Custom Fields"])
 async def create_field(
     data: CustomFieldCreate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_create),
 ):
     """
     创建自定义字段
@@ -69,6 +78,7 @@ async def list_fields(
     table_name: Optional[str] = Query(None, description="表名（可选，用于筛选）"),
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取自定义字段列表
@@ -108,28 +118,44 @@ async def get_associated_options(
     table: str = Query(..., description="关联表名"),
     display_field: str = Query("name", description="显示字段（id/name/code/title/label/description）"),
     limit: int = Query(500, ge=1, le=1000, description="最大返回数量"),
+    host_resource: Optional[str] = Query(None, description="宿主 {app}:{module}，引用 display 隐式鉴权"),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取关联对象类型的下拉选项
 
-    根据 table_name 和 display_field 查询关联表数据，返回 { value, label } 列表。
-    用于自定义字段「关联对象」类型的选项加载。
+    已注册 reference_resources 的表走 ReferenceDisplayService（含 DataScope）；
+    其余表需 custom-field:read，且仅返回租户内 id/label（遗留表逐步迁入 registry）。
     """
-    from core.config.associated_table_registry import get_associated_options as _get_options
+    from core.config.associated_table_registry import reference_resource_for_table
+    from core.services.reference.reference_display_service import ReferenceDisplayService
 
-    options = await _get_options(
-        table_name=table,
-        display_field=display_field,
-        tenant_id=tenant_id,
-        limit=limit,
+    resource_key = reference_resource_for_table(table)
+    if resource_key:
+        result = await ReferenceDisplayService.search(
+            tenant_id=tenant_id,
+            user=current_user,
+            resource_key=resource_key,
+            page=1,
+            page_size=limit,
+            host_resource=host_resource,
+            is_infra_admin=bool(getattr(current_user, "is_infra_admin", False)),
+            is_tenant_admin=bool(getattr(current_user, "is_tenant_admin", False)),
+        )
+        return [{"value": item.id, "label": item.label} for item in result["items"] if item.id is not None]
+
+    raise HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail=f"关联表 {table!r} 未注册 reference_resources，禁止裸 ORM 查询",
     )
-    return options
 
 
 @router.get("/pages", response_model=List[CustomFieldPageConfigResponse])
 async def list_custom_field_pages(
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取自定义字段功能页面配置列表
@@ -157,6 +183,7 @@ async def get_fields_by_table(
     table_name: str,
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取指定表的所有自定义字段
@@ -183,6 +210,7 @@ async def get_fields_by_table(
 async def get_field(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取自定义字段详情
@@ -217,6 +245,7 @@ async def update_field(
     uuid: str,
     data: CustomFieldUpdate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_update),
 ):
     """
     更新自定义字段
@@ -252,6 +281,7 @@ async def update_field(
 async def delete_field(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_delete),
 ):
     """
     删除自定义字段（软删除）
@@ -281,6 +311,7 @@ async def delete_field(
 async def batch_set_field_values(
     data: BatchSetFieldValuesRequest,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_update),
 ):
     """
     批量设置字段值
@@ -309,6 +340,7 @@ async def get_field_values(
     record_table: str,
     record_id: int,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
 ):
     """
     获取记录的所有自定义字段值

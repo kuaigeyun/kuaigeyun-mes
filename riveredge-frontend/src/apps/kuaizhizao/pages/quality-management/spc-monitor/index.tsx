@@ -6,7 +6,9 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityImprovementApi, SPCSample } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const SPC_RESOURCE = 'kuaizhizao:quality-management-spc-monitor';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 
 const SpcLineChart = lazy(async () => {
@@ -24,7 +26,7 @@ const SPCMonitorPage: React.FC = () => {
   const [createVisible, setCreateVisible] = useState(false);
   const [characteristicName, setCharacteristicName] = useState<string>('');
   const [chartData, setChartData] = useState<any>(null);
-  const canCreate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-spc-monitor:create');
+  const { canCreate } = useResourcePermissions(SPC_RESOURCE);
 
   const columns: ProColumns<SPCSample>[] = [
     { title: '质量特性', dataIndex: 'characteristic_name', width: 180 },

@@ -6,8 +6,11 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+
+const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
 const statusTextMap: Record<string, string> = {
   d1_team: 'D1 组建团队',
@@ -30,9 +33,8 @@ const EightDReportsPage: React.FC = () => {
   const [createVisible, setCreateVisible] = useState(false);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<Quality8DReport | null>(null);
-  const canCreate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:create');
-  const canUpdate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:update');
-  const canClose = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:close');
+  const { canCreate, canUpdate } = useResourcePermissions(EIGHT_D_RESOURCE);
+  const canClose = hasModulePermission(currentUser ?? undefined, EIGHT_D_RESOURCE, 'close');
 
   const columns: ProColumns<Quality8DReport>[] = [
     {

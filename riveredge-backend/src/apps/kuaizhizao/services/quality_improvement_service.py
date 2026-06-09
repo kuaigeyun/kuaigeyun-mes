@@ -199,6 +199,40 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         await row.save()
         return OQCInspectionResponse.model_validate(row)
 
+    async def delete_inspection(self, tenant_id: int, inspection_id: int, user_id: int) -> None:
+        from datetime import datetime
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        if (row.status or "") not in ("待检验",):
+            raise BusinessLogicError("仅待检验状态的出货检验单可删除")
+        row.deleted_at = datetime.now()
+        await row.save(update_fields=["deleted_at"])
+
+    async def revoke_approval(
+        self, tenant_id: int, inspection_id: int, user_id: int
+    ) -> OQCInspectionResponse:
+        from infra.exceptions.exceptions import BusinessLogicError
+
+        row = await OQCInspection.get_or_none(
+            id=inspection_id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if not row:
+            raise NotFoundError("OQC 检验单不存在")
+        if (row.status or "") != "已审核":
+            raise BusinessLogicError("仅已审核通过的出货检验单可撤销审核")
+        row.status = "已检验"
+        row.review_status = "待审核"
+        row.reviewer_id = None
+        row.reviewer_name = None
+        row.review_time = None
+        await row.save()
+        return OQCInspectionResponse.model_validate(row)
+
     async def create_from_shipment_notice(
         self,
         tenant_id: int,

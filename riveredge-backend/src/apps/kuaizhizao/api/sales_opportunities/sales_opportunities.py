@@ -17,14 +17,14 @@ from apps.kuaizhizao.schemas.sales_opportunity import (
 )
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(
     prefix="/sales-opportunities",
     tags=["App · Kuaige Zhizao · Sales Opportunity"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "sales-opportunity"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("sales-opportunity"))],
 )
 
 _service = SalesOpportunityService()

@@ -8,7 +8,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from loguru import logger
 
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -32,7 +32,7 @@ billing_service = ContractMilestoneBillingService()
 router = APIRouter(
     prefix="/sales-contracts",
     tags=["App · Kuaige Zhizao · Sales Contracts"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "sales-contract"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("sales-contract"))],
 )
 
 
@@ -168,6 +168,97 @@ async def reject_contract(
         raise HTTPException(status_code=404, detail=str(e))
     except BusinessLogicError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{contract_id}/withdraw", response_model=SalesContractResponse, summary="Withdraw submitted contract")
+async def withdraw_contract(
+    contract_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """待审核合同撤回到草稿。"""
+    try:
+        return await service.withdraw_contract(tenant_id, contract_id, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/{contract_id}/revoke-review", response_model=SalesContractResponse, summary="Revoke contract approval")
+async def revoke_contract_review(
+    contract_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """已生效且未释放的合同撤回审核，回到待审核。"""
+    try:
+        return await service.revoke_contract_approval(tenant_id, contract_id, current_user.id)
+    except NotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.get("/{contract_id}/print", summary="Print sales contract")
+async def print_contract(
+    contract_id: int = Path(...),
+    template_code: Optional[str] = Query(None, description="打印模板代码"),
+    template_uuid: Optional[str] = Query(None, description="打印模板UUID"),
+    output_format: str = Query("html", description="输出格式"),
+    response_format: str = Query("json", description="响应格式"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    import base64
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse, Response
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_contract",
+            document_id=contract_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if (
+        (output_format or "html").lower() == "pdf"
+        and (response_format or "json").lower() in {"pdf", "binary", "raw"}
+        and result.get("mime_type") == "application/pdf"
+    ):
+        raw = base64.b64decode(result.get("content") or "")
+        return Response(
+            content=raw,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'inline; filename="sales-contract-{contract_id}.pdf"'},
+        )
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get("/{contract_id}/print-variables", summary="Sales contract print variables")
+async def get_contract_print_variables(
+    contract_id: int = Path(...),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id, "sales_contract", contract_id
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
 
 
 @router.post("/from-quotation/{quotation_id}", response_model=SalesContractResponse, summary="Convert quotation to contract")

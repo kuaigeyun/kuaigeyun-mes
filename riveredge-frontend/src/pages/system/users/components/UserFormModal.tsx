@@ -19,8 +19,7 @@ import {
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
-import { customerApi, supplierApi, unwrapSupplyPagedList } from '../../../../apps/master-data/services/supply-chain';
-import type { Customer, Supplier } from '../../../../apps/master-data/types/supply-chain';
+import { searchReferenceDisplay } from '../../../../utils/referenceDisplay';
 
 /** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
 const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
@@ -93,12 +92,20 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   }, [roleUuidsDraft, roleMetaByUuid]);
 
   const loadReferenceOptions = useCallback(async () => {
-    const [deptResponse, posResponse, roleResponse, supplierResponse, customerResponse] = await Promise.all([
+    const [deptResponse, posResponse, roleResponse, supplierDisplay, customerDisplay] = await Promise.all([
       getDepartmentTree(),
       getPositionList({ page_size: 100 }),
       getRoleList({ page_size: 100 }),
-      supplierApi.list({ skip: 0, limit: 1000, isActive: true }),
-      customerApi.list({ skip: 0, limit: 1000, isActive: true }),
+      searchReferenceDisplay({
+        resource: 'master-data:supply-chain:supplier',
+        hostResource: 'system:user',
+        pageSize: 1000,
+      }),
+      searchReferenceDisplay({
+        resource: 'master-data:supply-chain:customer',
+        hostResource: 'system:user',
+        pageSize: 1000,
+      }),
     ]);
 
     const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
@@ -134,21 +141,19 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         return acc;
       }, {} as Record<string, { role_type?: string; external_partner_type?: string }>),
     );
-    const customers = unwrapSupplyPagedList<Customer>(customerResponse);
     setCustomerOptions(
-      customers
+      customerDisplay.items
         .map((x) => ({
-          label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
-          value: x.code,
+          label: x.label || `${x.name ?? ''}${x.code ? ` (${x.code})` : ''}`,
+          value: x.code ?? '',
         }))
         .filter((x) => !!x.value),
     );
-    const suppliers = unwrapSupplyPagedList<Supplier>(supplierResponse);
     setSupplierOptions(
-      suppliers
+      supplierDisplay.items
         .map((x) => ({
-          label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
-          value: x.code,
+          label: x.label || `${x.name ?? ''}${x.code ? ` (${x.code})` : ''}`,
+          value: x.code ?? '',
         }))
         .filter((x) => !!x.value),
     );

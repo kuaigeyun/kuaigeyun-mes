@@ -161,6 +161,8 @@ class RolePermissionMatrixService:
             norm = normalize_permission_code(p.code or "")
             if not norm or norm in merged_review_codes:
                 continue
+            if action_key == "display":
+                continue
             actions_out.append(
                 FunctionGrantActionSchema(
                     action=action_key,

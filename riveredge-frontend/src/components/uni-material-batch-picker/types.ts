@@ -9,4 +9,6 @@ export interface UniMaterialBatchPickerProps {
   zIndex?: number;
   /** 弹窗宽度，默认 960 */
   width?: number;
+  /** 宿主 {app}:{module}，供隐式 display 鉴权 */
+  hostResource?: string;
 }

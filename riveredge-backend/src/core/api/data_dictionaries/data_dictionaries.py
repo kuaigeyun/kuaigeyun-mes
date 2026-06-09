@@ -20,6 +20,13 @@ from core.schemas.dictionary_item import (
 )
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.system_module_access import (
+    require_data_dictionary_create,
+    require_data_dictionary_delete,
+    require_data_dictionary_read,
+    require_data_dictionary_update,
+    require_data_dictionary_code_read,
+)
 from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
@@ -29,6 +36,7 @@ router = APIRouter(prefix="/data-dictionaries", tags=["Core · Data Dictionaries
 @router.post("/initialize-system", status_code=status.HTTP_200_OK)
 async def initialize_system_dictionaries(
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_update),
 ):
     """
     初始化系统字典
@@ -58,6 +66,7 @@ async def initialize_system_dictionaries(
 async def create_dictionary(
     data: DataDictionaryCreate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_create),
 ):
     """
     创建数据字典
@@ -95,6 +104,7 @@ async def list_dictionaries(
     name: Optional[str] = Query(None, description="字典名称（模糊搜索）"),
     code: Optional[str] = Query(None, description="字典代码（模糊搜索）"),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_read),
 ):
     """
     获取数据字典列表
@@ -131,6 +141,7 @@ async def list_dictionaries(
 async def get_dictionary(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_read),
 ):
     """
     获取数据字典详情
@@ -164,6 +175,7 @@ async def get_dictionary(
 async def get_dictionary_by_code(
     code: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_code_read),
 ):
     """
     根据代码获取数据字典
@@ -205,6 +217,7 @@ async def update_dictionary(
     uuid: str,
     data: DataDictionaryUpdate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_update),
 ):
     """
     更新数据字典
@@ -245,6 +258,7 @@ async def update_dictionary(
 async def delete_dictionary(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_delete),
 ):
     """
     删除数据字典（软删除）
@@ -281,6 +295,7 @@ async def create_item(
     dictionary_uuid: str,
     data: DictionaryItemCreate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_update),
 ):
     """
     创建字典项
@@ -329,6 +344,7 @@ async def list_items(
     dictionary_uuid: str,
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_read),
 ):
     """
     获取字典项列表
@@ -374,6 +390,7 @@ async def update_item(
     uuid: str,
     data: DictionaryItemUpdate,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_update),
 ):
     """
     更新字典项
@@ -416,6 +433,7 @@ async def update_item(
 async def delete_item(
     uuid: str,
     tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_data_dictionary_delete),
 ):
     """
     删除字典项（软删除）

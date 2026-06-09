@@ -5,7 +5,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Path, Query, status as http_status
 
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import BusinessLogicError
 from infra.models.user import User
 from apps.kuaizhizao.schemas.order_change import (
@@ -28,7 +28,7 @@ async def create_from_order(
     change_reason: str = Query("订单变更"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.create_from_order(tenant_id, order_id, current_user.id, change_reason)
 
@@ -38,7 +38,7 @@ async def create_change_order(
     data: PurchaseOrderChangeCreate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.create_change_order(tenant_id, data, current_user.id)
 
@@ -51,7 +51,7 @@ async def list_change_orders(
     status: Optional[str] = Query(None),
     lifecycle_stage: Optional[str] = Query(None),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.list_change_orders(
         tenant_id, skip=skip, limit=limit, source_order_id=source_order_id,
@@ -63,7 +63,7 @@ async def list_change_orders(
 async def list_by_order(
     order_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.list_by_order(tenant_id, order_id)
 
@@ -72,7 +72,7 @@ async def list_by_order(
 async def get_change_order(
     change_id: int = Path(...),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.get_by_id(tenant_id, change_id)
 
@@ -83,7 +83,7 @@ async def update_change_order(
     data: PurchaseOrderChangeUpdate,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.update_change_order(tenant_id, change_id, data, current_user.id)
 
@@ -92,7 +92,7 @@ async def update_change_order(
 async def delete_change_order(
     change_id: int,
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     await service.delete_change_order(tenant_id, change_id)
 
@@ -102,7 +102,7 @@ async def submit_change_order(
     change_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.submit(tenant_id, change_id, current_user.id)
 
@@ -113,7 +113,7 @@ async def approve_change_order(
     body: ApproveChangeRequest,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.approve(tenant_id, change_id, body, current_user.id)
 
@@ -123,7 +123,7 @@ async def withdraw_change_order(
     change_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.withdraw(tenant_id, change_id, current_user.id)
 
@@ -133,7 +133,7 @@ async def apply_change_order(
     change_id: int,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.apply(tenant_id, change_id, current_user.id)
 
@@ -142,6 +142,6 @@ async def apply_change_order(
 async def preview_impact(
     change_id: int,
     tenant_id: int = Depends(get_current_tenant),
-    _: None = Depends(require_module_access("kuaizhizao", "purchase-order-change")),
+    _: None = Depends(require_kuaizhizao_module_access("purchase-order-change")),
 ):
     return await service.preview_impact(tenant_id, change_id)

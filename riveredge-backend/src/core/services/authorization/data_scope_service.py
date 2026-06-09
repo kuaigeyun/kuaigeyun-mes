@@ -29,6 +29,7 @@ from core.services.authorization.data_scope_resolvers import (
     register_builtin_scope_resolvers,
 )
 from core.services.authorization.user_data_scope_binding_service import UserDataScopeBindingService
+from core.services.authorization.user_permission_service import UserPermissionService
 from infra.models.user import User
 
 _BUILTIN_REGISTERED = False
@@ -42,9 +43,9 @@ class DataScopeService:
             register_builtin_scope_resolvers()
             _BUILTIN_REGISTERED = True
 
-    @staticmethod
-    def _admin_bypass(user: User) -> bool:
-        return bool(getattr(user, "is_tenant_admin", False) or getattr(user, "is_infra_admin", False))
+    @classmethod
+    async def _admin_bypass(cls, user: User, tenant_id: int) -> bool:
+        return await UserPermissionService.is_admin_bypass(user, tenant_id)
 
     @classmethod
     async def _load_role_uuids(cls, user_id: int, tenant_id: int) -> list[str]:
@@ -232,7 +233,7 @@ class DataScopeService:
         resource: str,
     ):
         cls._ensure_builtin_resolvers()
-        if cls._admin_bypass(user):
+        if await cls._admin_bypass(user, tenant_id):
             return queryset
 
         resource_key = normalize_resource_key(resource)
@@ -254,6 +255,22 @@ class DataScopeService:
             )
             if default_external_q is not None:
                 return queryset.filter(default_external_q)
+            default_resolver = (getattr(profile, "no_policy_default_resolver", None) or "").strip().lower()
+            if default_resolver:
+                custom = get_scope_resolver(default_resolver)
+                if custom is not None:
+                    ctx = ScopeResolveContext(
+                        tenant_id=tenant_id,
+                        user_id=user.id,
+                        resource=resource_key,
+                        profile=profile,
+                        scope_payload=None,
+                        department_uuid=None,
+                        department_user_ids=[user.id],
+                    )
+                    part = await custom(ctx)
+                    if part is not None:
+                        return queryset.filter(part)
             return queryset.filter(id=-1)
 
         if any((p.scope_type or "").strip().lower() == DataScopeType.ALL for p in policies):
@@ -294,7 +311,7 @@ class DataScopeService:
     ) -> bool:
         if row is None:
             return False
-        if cls._admin_bypass(user):
+        if await cls._admin_bypass(user, tenant_id):
             return True
         model = row.__class__
         pk = getattr(row, "id", None)
@@ -342,7 +359,7 @@ class DataScopeService:
         dimension: str,
     ) -> None:
         """外协/供应商等维度：在仅合作方数据范围下，写入的编码须在用户绑定列表中。"""
-        if cls._admin_bypass(user):
+        if await cls._admin_bypass(user, tenant_id):
             return
         code = (partner_code or "").strip()
         if not code:

@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 
 from tortoise.transactions import in_transaction
 
@@ -21,8 +21,12 @@ from apps.kuaizhizao.schemas.sales_opportunity import (
     SalesOpportunityUpdate,
 )
 from apps.master_data.models.customer import Customer
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+
+RESOURCE_SALES_OPPORTUNITY = "kuaizhizao:sales-opportunity"
+RESOURCE_SALES_OPPORTUNITY_CUSTOMER = "kuaizhizao:customer-follow-up-customer"
 
 
 def _status_for_stage(stage_code: str) -> str:
@@ -49,22 +53,25 @@ class SalesOpportunityService:
         ).first()
         if not customer:
             raise NotFoundError(f"客户不存在: {customer_id}")
-        if current_user and current_user.is_regular_user():
-            if customer.salesman_id != current_user.id or customer.pool_status != "owned":
-                raise ValidationError("无权操作该客户")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                customer,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=RESOURCE_SALES_OPPORTUNITY_CUSTOMER,
+            )
         return customer
 
     @staticmethod
-    async def _allowed_customer_ids(tenant_id: int, current_user: Optional[User]) -> Optional[Set[int]]:
-        if not current_user or not current_user.is_regular_user():
-            return None
-        rows = await Customer.filter(
+    async def _apply_list_scope(query, tenant_id: int, current_user: Optional[User]):
+        if not current_user:
+            return query
+        return await DataScopeService.apply(
+            query,
             tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            salesman_id=current_user.id,
-            pool_status="owned",
-        ).values_list("id", flat=True)
-        return set(rows)
+            user=current_user,
+            resource=RESOURCE_SALES_OPPORTUNITY,
+        )
 
     @staticmethod
     async def _resolve_quotation(
@@ -385,8 +392,12 @@ class SalesOpportunityService:
         ).first()
         if not row:
             raise NotFoundError(f"商机不存在: {opportunity_id}")
-        allowed = await cls._allowed_customer_ids(tenant_id, current_user)
-        if allowed is not None and row.customer_id not in allowed:
+        if current_user and not await DataScopeService.row_visible(
+            row,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_SALES_OPPORTUNITY,
+        ):
             raise NotFoundError(f"商机不存在: {opportunity_id}")
         await cls._load_customer(tenant_id, row.customer_id, current_user)
         return SalesOpportunityResponse.model_validate(row)
@@ -402,13 +413,8 @@ class SalesOpportunityService:
         status: Optional[str] = None,
         current_user: Optional[User] = None,
     ) -> SalesOpportunityListEnvelope:
-        allowed = await cls._allowed_customer_ids(tenant_id, current_user)
-        if allowed is not None and len(allowed) == 0:
-            return SalesOpportunityListEnvelope(items=[], total=0)
-
         query = SalesOpportunity.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if allowed is not None:
-            query = query.filter(customer_id__in=list(allowed))
+        query = await cls._apply_list_scope(query, tenant_id, current_user)
         if customer_id is not None:
             query = query.filter(customer_id=customer_id)
         if status is not None:

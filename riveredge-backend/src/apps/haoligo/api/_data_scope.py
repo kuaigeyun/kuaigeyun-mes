@@ -16,6 +16,7 @@ from apps.haoligo.constants.mold_trial_failure_handling import (
 from apps.haoligo.services.trial_sheet_side_effects import _effective_unqualified_result
 from core.services.authorization.data_scope_constants import DIMENSION_SUPPLIER
 from core.services.authorization.data_scope_service import DataScopeService
+from core.services.authorization.user_permission_service import UserPermissionService
 from infra.models.user import User
 
 RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
@@ -26,7 +27,7 @@ RESOURCE_TRIAL_RECORD = "haoligo:molds-reports-trial-record"
 
 
 async def user_is_external_partner(tenant_id: int, user: User) -> bool:
-    if DataScopeService._admin_bypass(user):
+    if await UserPermissionService.is_admin_bypass(user, tenant_id):
         return False
     roles = await DataScopeService._load_active_roles(user.id, tenant_id)
     return any(
@@ -95,14 +96,6 @@ async def assert_trial_row_visible(row, *, tenant_id: int, user: User, resource:
                     "resource": resource,
                 },
             },
-        )
-
-
-async def assert_trial_external_operator(tenant_id: int, user: User) -> None:
-    if not await user_is_external_partner(tenant_id, user):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="该操作仅限外协厂商账号",
         )
 
 

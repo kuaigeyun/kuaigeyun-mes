@@ -25,6 +25,8 @@ from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
+RESOURCE_CUSTOMER_POOL = "kuaizhizao:customer-pool"
+
 
 class CustomerPoolService:
     @staticmethod
@@ -240,17 +242,8 @@ class CustomerPoolService:
 
         normalized_scope = (scope or "pool").strip().lower()
         if normalized_scope == "mine":
-            # 私有客户：仅当前用户持有的客户（owned + salesman_id=me）
             query = query.filter(pool_status="owned", salesman_id=current_user.id)
-        elif normalized_scope == "all":
-            if current_user.is_regular_user():
-                # 全部客户：公共池 + 本人持有
-                query = query.filter(
-                    Q(pool_status="pool")
-                    | Q(pool_status="owned", salesman_id=current_user.id)
-                )
-        else:
-            # 公共客户：公海待领取
+        elif normalized_scope == "pool":
             query = query.filter(pool_status="pool")
 
         normalized_pool_status = (pool_status or "").strip().lower()
@@ -269,6 +262,13 @@ class CustomerPoolService:
                 | Q(contact_person__icontains=kw)
                 | Q(phone__icontains=kw)
             )
+
+        query = await DataScopeService.apply(
+            query,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_POOL,
+        )
 
         total = await query.count()
         rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)

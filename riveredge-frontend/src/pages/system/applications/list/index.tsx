@@ -667,7 +667,7 @@ const ApplicationListPage: React.FC = () => {
       }
       messageApi.loading({
         content: t('pages.system.applications.syncAllLoading', {
-          defaultValue: '正在执行：① 各应用清单同步 ② 菜单全量写入数据库…',
+          defaultValue: '正在同步菜单，请稍候…',
         }),
         key: 'sync-all',
       });
@@ -723,7 +723,7 @@ const ApplicationListPage: React.FC = () => {
         messageApi.success({
           content: t('pages.system.applications.syncAllSuccess', {
             count: successCount,
-            defaultValue: `第 1 步「应用清单」${successCount} 个已全部同步；第 2 步「菜单入库」已成功。`,
+            defaultValue: `已完成 ${successCount} 个应用的菜单同步，导航菜单已更新。`,
           }),
           key: 'sync-all',
         });
@@ -732,7 +732,7 @@ const ApplicationListPage: React.FC = () => {
       refreshApplicationMenusAfterBackendMenuChange();
     } catch (error: any) {
       messageApi.error({
-        content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '一键同步菜单失败' }),
+        content: error?.message || t('pages.system.applications.syncAllFailed', { defaultValue: '菜单同步失败' }),
         key: 'sync-all',
       });
     } finally {

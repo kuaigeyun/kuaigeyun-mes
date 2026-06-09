@@ -1,4 +1,4 @@
-"""快智造路由鉴权：打印 / 派工等子路径 action 在应用内显式映射。"""
+"""快智造路由鉴权：子路径 action 在应用内显式映射（唯一真源，不回落 core 路径推断）。"""
 
 from __future__ import annotations
 
@@ -6,21 +6,74 @@ from fastapi import Depends, Request
 
 from core.api.deps.access import (
     AuthContext,
-    _resolve_action_by_request,
     ensure_permission_codes,
     get_auth_context,
 )
 from core.api.deps.deps import get_current_tenant
 from core.config.permission_contract import build_permission_code
 
+# 审核走 audit 而非 approve 的模块（与 manifest 一致）
+_AUDIT_APPROVE_MODULES = frozenset({
+    "purchase-order-change",
+    "sales-order-change",
+})
 
-def resolve_kuaizhizao_module_action(module_code: str, method: str, path: str, *, resolve_print: bool = True) -> str:
+
+def resolve_kuaizhizao_module_action(
+    method: str,
+    path: str,
+    *,
+    module_code: str = "",
+    resolve_print: bool = True,
+) -> str:
+    """快智造子路径 action；与 manifest STANDARD_ACTIONS 一一对应。"""
     p = (path or "").lower()
     if resolve_print and "/print" in p:
         return "print"
     if module_code == "work-order" and "/operations/" in p and "/dispatch" in p:
         return "assign"
-    return _resolve_action_by_request(method, path)
+    if "/recall-and-retrial" in p:
+        return "recall"
+    if "/revoke-approval" in p:
+        return "audit"
+    if "/mark-adjustment-complete" in p:
+        return "confirm_adjustment"
+    if "/dispatch" in p:
+        return "dispatch"
+    if "/unapprove" in p:
+        return "revoke"
+    if "/approve" in p:
+        if module_code in _AUDIT_APPROVE_MODULES:
+            return "audit"
+        return "approve"
+    if "/reject" in p:
+        return "reject"
+    if "/audit" in p or "/review" in p:
+        return "audit"
+    if "/recall" in p:
+        return "recall"
+    m = (method or "").upper()
+    if m == "GET":
+        return "read"
+    if m in {"PUT", "PATCH"}:
+        return "update"
+    if m == "DELETE":
+        return "delete"
+    if m == "POST":
+        if any(k in p for k in ("/batch-delete", "/delete", "/remove")):
+            return "delete"
+        if any(k in p for k in ("/import", "/upload")):
+            return "import"
+        if any(k in p for k in ("/export", "/download")):
+            return "export"
+        if any(k in p for k in ("/submit",)):
+            return "submit"
+        if any(k in p for k in ("/revoke", "/cancel", "/withdraw")):
+            return "revoke"
+        if any(k in p for k in ("/execute", "/confirm", "/checkin", "/checkout")):
+            return "execute"
+        return "create"
+    raise ValueError(f"Kuaizhizao: unsupported HTTP method {method!r} for path {path!r}")
 
 
 def require_kuaizhizao_module_access(
@@ -36,9 +89,9 @@ def require_kuaizhizao_module_access(
         tenant_id: int = Depends(get_current_tenant),
     ) -> AuthContext:
         action = resolve_kuaizhizao_module_action(
-            module_code,
             request.method,
             request.url.path,
+            module_code=module_code,
             resolve_print=resolve_print,
         )
         if (

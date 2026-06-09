@@ -14,7 +14,7 @@ from apps.kuaicaiwu.schemas.finance import (
 )
 from apps.kuaicaiwu.models.receipt import Receipt
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
@@ -65,13 +65,7 @@ async def _serialize(tenant_id: int, user_id: int, obj: Receipt) -> ReceiptVouch
 @router.post("", response_model=ReceiptVoucherResponse, status_code=status.HTTP_201_CREATED)
 async def create_receipt(
     data: ReceiptVoucherCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "create",
-            required_permissions=["kuaicaiwu:receivable:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -109,13 +103,7 @@ async def list_receipts(
     settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
@@ -157,13 +145,7 @@ async def list_receipts(
 @router.get("/{id}", response_model=ReceiptVoucherResponse)
 async def get_receipt(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
@@ -176,13 +158,7 @@ async def get_receipt(
 async def update_receipt(
     id: int,
     data: ReceiptVoucherUpdate,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -198,15 +174,9 @@ async def update_receipt(
 @router.post("/{id}/confirm", response_model=ReceiptVoucherResponse)
 async def confirm_receipt(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:audit")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """确认收款单"""
     receipt = await _get_or_404(tenant_id, id)
@@ -229,15 +199,9 @@ async def confirm_receipt(
 @router.post("/{id}/cancel", response_model=ReceiptVoucherResponse)
 async def cancel_receipt(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:revoke")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """作废收款单"""
     receipt = await _get_or_404(tenant_id, id)
@@ -250,13 +214,7 @@ async def cancel_receipt(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_receipt(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receipt",
-            "delete",
-            required_permissions=["kuaicaiwu:receivable:delete"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receipt:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):

@@ -3,6 +3,9 @@ import { Space, Button, Modal, App, Input } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, SendOutlined, UndoOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
+import { useGlobalStore } from '../../stores';
+import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
+import { hasPlatformAdministrativeAuthority } from '../../utils/auth';
 
 export type WorkflowStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | string;
 
@@ -67,6 +70,8 @@ export interface UniWorkflowActionsProps {
   };
   /** 审核关闭时，是否强制隐藏审核语义动作（审核/驳回/撤销审核/确认） */
   hideAuditActionsWhenDisabled?: boolean;
+  /** manifest 资源前缀（app:module），用于 submit/audit/revoke RBAC 门控 */
+  resourcePrefix?: string;
 }
 
 /**
@@ -96,9 +101,16 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   size = 'middle',
   confirmMessages = {},
   hideAuditActionsWhenDisabled = true,
+  resourcePrefix,
 }) => {
   const { message } = App.useApp();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const adminOpen = hasPlatformAdministrativeAuthority(currentUser);
+  const resource = (resourcePrefix || '').trim();
+  const canSubmit = adminOpen || !resource || hasModulePermission(currentUser ?? undefined, resource, 'submit');
+  const canReview = adminOpen || !resource || hasReviewPermission(currentUser ?? undefined, resource);
+  const canRevoke = adminOpen || !resource || hasModulePermission(currentUser ?? undefined, resource, 'revoke');
 
   const inferNodeKey = (): string => {
     if (auditNodeKey) return auditNodeKey;
@@ -239,7 +251,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
 
   return (
     <Space>
-      {(isDraft || isRejected) && (actions.submit || apiPrefix) && (
+      {(isDraft || isRejected) && (actions.submit || apiPrefix) && canSubmit && (
         <Button
           key="submit"
           {...getBtnProps('submit')}
@@ -250,7 +262,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         </Button>
       )}
 
-      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && (
+      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && canReview && (
         <Button
           key="approve"
           {...getBtnProps('approve')}
@@ -260,7 +272,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
           {approveLabel}
         </Button>
       )}
-      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && (
+      {canShowAuditSemanticActions && isPending && (actions.approve || apiPrefix) && (actions.reject || apiPrefix) && canReview && (
         <Button
           key="reject"
           {...getBtnProps('reject')}
@@ -272,7 +284,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
         </Button>
       )}
 
-      {canShowAuditSemanticActions && isApproved && (actions.revoke || apiPrefix) && (
+      {canShowAuditSemanticActions && isApproved && (actions.revoke || apiPrefix) && canRevoke && (
         <Button
           key="revoke"
           {...getBtnProps('revoke')}

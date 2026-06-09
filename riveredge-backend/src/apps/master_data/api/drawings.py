@@ -19,7 +19,7 @@ from apps.master_data.schemas.drawing_schemas import (
 )
 from apps.master_data.services.drawing_service import DrawingService
 from apps.master_data.services.drawing_step_bom_service import DrawingStepBomService
-from core.api.deps.access import require_module_access
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.services.business.code_generation_service import CodeGenerationService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -29,7 +29,7 @@ from loguru import logger
 router = APIRouter(
     prefix="/process/drawings",
     tags=["App · Master Data · Drawings"],
-    dependencies=[Depends(require_module_access("master-data", "process"))],
+    dependencies=[Depends(require_master_data_module_access("process:drawing"))],
 )
 
 

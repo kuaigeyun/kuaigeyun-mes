@@ -157,6 +157,7 @@
     ]
   },
   "permissions": [
+    "kuaicaiwu:entry:read",
     "kuaicaiwu:bank-account:approve",
     "kuaicaiwu:bank-account:audit",
     "kuaicaiwu:bank-account:create",

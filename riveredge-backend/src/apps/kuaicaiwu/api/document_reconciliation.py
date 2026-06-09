@@ -5,14 +5,16 @@
 from datetime import date
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from apps.kuaicaiwu.services.document_reconciliation_service import DocumentReconciliationService
 from core.api.deps.deps import get_current_user
 
 router = APIRouter(
     prefix="/document-reconciliation",
     tags=["App · Kuaicaiwu · Document Reconciliation"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("document-reconciliation"))],
 )
 service = DocumentReconciliationService()
 

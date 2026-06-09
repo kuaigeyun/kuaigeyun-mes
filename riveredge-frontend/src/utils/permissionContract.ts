@@ -20,6 +20,7 @@ export type StandardAction =
   | 'import'
   | 'export'
   | 'print'
+  | 'display'
   | 'audit'
   | 'approve'
   | 'reject'

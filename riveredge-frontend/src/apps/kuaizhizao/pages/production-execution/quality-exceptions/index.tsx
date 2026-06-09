@@ -22,7 +22,9 @@ import { apiRequest } from '../../../../../services/api';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
 import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
 /**
  * 质量异常接口定义
@@ -70,7 +72,7 @@ const QualityExceptionsPage: React.FC = () => {
   const [currentRecord, setCurrentRecord] = useState<QualityException | null>(null);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
-  const canCreate8D = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:create');
+  const { canCreate: canCreate8D } = useResourcePermissions(EIGHT_D_RESOURCE);
   // 用户列表交由 UniUserSelect 内置管理
   const handleFormRef = useRef<any>(null);
 

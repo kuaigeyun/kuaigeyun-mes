@@ -2264,6 +2264,7 @@ const SalesOrdersPage: React.FC = () => {
             rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
             autoApproveWhenSubmit={!auditEnabled}
             workflowAuditEnabled={auditEnabled}
+            resourcePrefix="kuaizhizao:sales-order"
             theme="link"
             size="small"
             actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
@@ -2618,6 +2619,7 @@ const SalesOrdersPage: React.FC = () => {
                 rules={[{ required: true, message: '请选择客户' }]}
               >
                 <CustomerSelectDropdown
+                  hostResource="kuaizhizao:sales-order"
                   placeholder="请选择客户"
                   style={{ width: '100%' }}
                   customers={customers}
@@ -3158,6 +3160,7 @@ const SalesOrdersPage: React.FC = () => {
   const salesOrderFormAuxModals = (
     <>
         <UniMaterialBatchPicker
+          hostResource="kuaizhizao:sales-order"
           open={materialPickerOpen}
           zIndex={nestedElevatedPopupZIndex}
           onCancel={() => setMaterialPickerOpen(false)}
@@ -3702,6 +3705,7 @@ const SalesOrdersPage: React.FC = () => {
                   rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
                   autoApproveWhenSubmit={!auditEnabled}
                   workflowAuditEnabled={auditEnabled}
+                  resourcePrefix="kuaizhizao:sales-order"
                   theme="default"
                   actions={{
                     submit: async (id) => submitSalesOrder(id),

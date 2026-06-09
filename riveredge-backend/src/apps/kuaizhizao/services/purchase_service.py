@@ -275,9 +275,15 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         """
         query = PurchaseOrder.filter(tenant_id=tenant_id)
 
-        # 采购员数据隔离：普通用户只能看到自己负责的订单
-        if current_user and current_user.is_regular_user():
-            query = query.filter(buyer_id=current_user.id)
+        if current_user:
+            from core.services.authorization.data_scope_service import DataScopeService
+
+            query = await DataScopeService.apply(
+                query,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:purchase-order",
+            )
 
         # 应用筛选条件
         if params.supplier_id:

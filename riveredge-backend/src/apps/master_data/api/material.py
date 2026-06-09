@@ -11,7 +11,7 @@ from loguru import logger
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.material_service import MaterialService
 from apps.master_data.services.material_code_mapping_service import MaterialCodeMappingService
@@ -59,7 +59,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(
     prefix="/materials",
     tags=["App · Master Data · Materials"],
-    dependencies=[Depends(require_module_access("master-data", "material"))],
+    dependencies=[Depends(require_master_data_module_access("material"))],
 )
 
 

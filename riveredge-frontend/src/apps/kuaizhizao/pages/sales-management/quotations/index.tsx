@@ -94,6 +94,8 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
@@ -693,6 +695,8 @@ const QuotationFormSummary: React.FC = () => {
   );
 };
 
+const QUOTATION_RESOURCE = 'kuaizhizao:quotation';
+
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { token } = AntdTheme.useToken();
@@ -860,6 +864,10 @@ const QuotationsPage: React.FC = () => {
   }, []);
 
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const quotationPerms = useResourcePermissions(QUOTATION_RESOURCE);
+  const canSubmitQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'submit');
+  const canRevokeQuotation = hasModulePermission(currentUser ?? undefined, QUOTATION_RESOURCE, 'revoke');
+  const canReviewQuotation = hasReviewPermission(currentUser ?? undefined, QUOTATION_RESOURCE);
 
   useEffect(() => {
     let cancelled = false;
@@ -1137,8 +1145,8 @@ const QuotationsPage: React.FC = () => {
             详情
           </Button>,
         ];
-        const canEdit = record.status === '草稿';
-        const deletable = canDeleteQuotation(record);
+        const canEdit = record.status === '草稿' && quotationPerms.canUpdate;
+        const deletable = canDeleteQuotation(record) && quotationPerms.canDelete;
         parts.push(
           <Button key="e" type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
             编辑
@@ -1149,35 +1157,35 @@ const QuotationsPage: React.FC = () => {
             删除
           </Button>
         );
-        if (record.status === '草稿') {
+        if (record.status === '草稿' && canSubmitQuotation) {
           parts.push(
             <Button key="sub" type="link" size="small" onClick={() => handleSubmit(record)}>
               提交
             </Button>
           );
         }
-        if (canWithdrawQuotation(record, quotationAuditRequired)) {
+        if (canWithdrawQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
           parts.push(
             <Button key="w" type="link" size="small" onClick={() => handleWithdraw(record)}>
               撤回
             </Button>
           );
         }
-        if (canApproveQuotation(record, quotationAuditRequired)) {
+        if (canApproveQuotation(record, quotationAuditRequired) && canReviewQuotation) {
           parts.push(
             <Button key="ap" type="link" size="small" onClick={() => handleApprove(record)}>
               审核通过
             </Button>
           );
         }
-        if (canRejectQuotation(record, quotationAuditRequired)) {
+        if (canRejectQuotation(record, quotationAuditRequired) && canReviewQuotation) {
           parts.push(
             <Button key="rj" type="link" size="small" onClick={() => openRejectModal(record)}>
               驳回
             </Button>
           );
         }
-        if (canRevokeReviewQuotation(record, quotationAuditRequired)) {
+        if (canRevokeReviewQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
           parts.push(
             <Button key="rv" type="link" size="small" onClick={() => handleRevokeReview(record)}>
               撤回审核
@@ -2577,6 +2585,7 @@ const QuotationsPage: React.FC = () => {
         <Col span={12}>
           <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
             <CustomerSelectDropdown
+              hostResource="kuaizhizao:quotation"
               placeholder="请选择客户"
               style={{ width: '100%' }}
               customers={customerList.length > 0 ? customerList : undefined}
@@ -3083,6 +3092,7 @@ const QuotationsPage: React.FC = () => {
       <DocumentAttachmentsField category="quotation_attachments" />
       <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
       <UniMaterialBatchPicker
+        hostResource="kuaizhizao:quotation"
         open={materialPickerOpen}
         zIndex={quotationNestedElevatedPopupZIndex}
         onCancel={() => setMaterialPickerOpen(false)}
@@ -3358,22 +3368,22 @@ const QuotationsPage: React.FC = () => {
         extra={
           quotationDetail && (
             <Space wrap>
-              {canDeleteQuotation(quotationDetail) && (
+              {canDeleteQuotation(quotationDetail) && quotationPerms.canDelete && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
               )}
-              {quotationDetail.status === '草稿' && (
+              {quotationDetail.status === '草稿' && canSubmitQuotation && (
                 <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
               )}
-              {canWithdrawQuotation(quotationDetail, quotationAuditRequired) && (
+              {canWithdrawQuotation(quotationDetail, quotationAuditRequired) && canRevokeQuotation && (
                 <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(quotationDetail)}>撤回</Button>
               )}
-              {canApproveQuotation(quotationDetail, quotationAuditRequired) && (
+              {canApproveQuotation(quotationDetail, quotationAuditRequired) && canReviewQuotation && (
                 <Button icon={<CheckOutlined />} onClick={() => handleApprove(quotationDetail)}>审核通过</Button>
               )}
-              {canRejectQuotation(quotationDetail, quotationAuditRequired) && (
+              {canRejectQuotation(quotationDetail, quotationAuditRequired) && canReviewQuotation && (
                 <Button icon={<CloseCircleOutlined />} onClick={() => openRejectModal(quotationDetail)}>驳回</Button>
               )}
-              {canRevokeReviewQuotation(quotationDetail, quotationAuditRequired) && (
+              {canRevokeReviewQuotation(quotationDetail, quotationAuditRequired) && canRevokeQuotation && (
                 <Button icon={<UndoOutlined />} onClick={() => handleRevokeReview(quotationDetail)}>撤回审核</Button>
               )}
               {canConfirmCustomerQuotation(quotationDetail, quotationAuditRequired) && (

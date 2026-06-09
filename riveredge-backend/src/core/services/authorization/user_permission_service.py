@@ -30,6 +30,42 @@ class UserPermissionService:
     ADMIN_ROLE_NAME = "系统管理员"
 
     @staticmethod
+    def is_platform_or_tenant_admin(user: User) -> bool:
+        return bool(getattr(user, "is_tenant_admin", False) or getattr(user, "is_infra_admin", False))
+
+    @classmethod
+    async def is_admin_bypass_flags(
+        cls,
+        user_id: int,
+        tenant_id: int,
+        *,
+        is_infra_admin: bool = False,
+        is_tenant_admin: bool = False,
+    ) -> bool:
+        """平台/组织管理员 + 系统管理员角色（无 User 对象时的第三路径）。"""
+        if is_infra_admin or is_tenant_admin:
+            return True
+        roles = await cls.get_user_roles(user_id, tenant_id)
+        return any(
+            (r.code or "").strip().upper() in cls.ADMIN_ROLE_CODES
+            or (r.name or "").strip() == cls.ADMIN_ROLE_NAME
+            for r in roles
+        )
+
+    @classmethod
+    async def is_admin_bypass(cls, user: User, tenant_id: int) -> bool:
+        """平台/组织管理员 + 系统管理员角色（与 permission-responsibility 三路径合一）。"""
+        is_infra = bool(getattr(user, "is_infra_admin", False)) or bool(
+            getattr(user, "_is_infra_superadmin", False)
+        )
+        return await cls.is_admin_bypass_flags(
+            user.id,
+            tenant_id,
+            is_infra_admin=is_infra,
+            is_tenant_admin=bool(getattr(user, "is_tenant_admin", False)),
+        )
+
+    @staticmethod
     def _normalize_permission_code(code: str) -> str:
         return (code or "").strip().lower()
     
@@ -163,19 +199,16 @@ class UserPermissionService:
         Returns:
             bool: 如果用户具有任意一个权限则返回True，否则返回False
         """
-        # 如果是组织管理员或平台管理员，默认拥有所有权限
         user = await User.get_or_none(id=user_id)
-        if user:
-            if user.is_tenant_admin or user.is_infra_admin:
-                return True
-        
-        # 获取用户的所有权限
+        if user and await UserPermissionService.is_admin_bypass(user, tenant_id):
+            return True
+
         user_permissions = await UserPermissionService.get_user_permissions(
             user_id=user_id,
             tenant_id=tenant_id,
             include_inactive_roles=include_inactive_roles
         )
-        
+
         # 检查是否具有任意一个权限
         normalized_codes = {
             UserPermissionService._normalize_permission_code(c)
@@ -203,19 +236,16 @@ class UserPermissionService:
         Returns:
             bool: 如果用户具有所有权限则返回True，否则返回False
         """
-        # 如果是组织管理员或平台管理员，默认拥有所有权限
         user = await User.get_or_none(id=user_id)
-        if user:
-            if user.is_tenant_admin or user.is_infra_admin:
-                return True
-        
-        # 获取用户的所有权限
+        if user and await UserPermissionService.is_admin_bypass(user, tenant_id):
+            return True
+
         user_permissions = await UserPermissionService.get_user_permissions(
             user_id=user_id,
             tenant_id=tenant_id,
             include_inactive_roles=include_inactive_roles
         )
-        
+
         # 检查是否具有所有权限
         normalized_codes = {
             UserPermissionService._normalize_permission_code(c)

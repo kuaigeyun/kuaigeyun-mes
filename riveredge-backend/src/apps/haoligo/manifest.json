@@ -918,6 +918,96 @@
       "handler_name"
     ]
   },
+  "reference_resources": {
+    "molds-ledger": {
+      "permission_prefix": "haoligo:molds-ledger",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:molds-ledger"
+    },
+    "molds-warehouse": {
+      "permission_prefix": "haoligo:molds-warehouse",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:molds-warehouse"
+    },
+    "equipment-ledger": {
+      "permission_prefix": "haoligo:equipment-ledger",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:equipment-ledger"
+    },
+    "equipment-categories": {
+      "permission_prefix": "haoligo:equipment-categories",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:equipment-categories"
+    },
+    "equipment-manufacturers": {
+      "permission_prefix": "haoligo:equipment-manufacturers",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:equipment-manufacturers"
+    },
+    "master-data-factory-workshops": {
+      "permission_prefix": "haoligo:master-data-factory-workshops",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "haoligo:master-data-factory-workshops"
+    }
+  },
+  "module_references": {
+    "molds-documents-trial": [
+      "haoligo:molds-ledger",
+      "master-data:supply-chain:supplier",
+      "master-data:factory:workshop",
+      "system:user"
+    ],
+    "molds-documents-borrow": [
+      "haoligo:molds-ledger",
+      "haoligo:molds-warehouse",
+      "system:user",
+      "system:department"
+    ],
+    "molds-documents-return": [
+      "haoligo:molds-ledger",
+      "haoligo:molds-warehouse",
+      "system:user"
+    ],
+    "molds-documents-maintenance": [
+      "haoligo:molds-ledger",
+      "system:user"
+    ],
+    "molds-documents-outsource-maintenance": [
+      "haoligo:molds-ledger",
+      "master-data:supply-chain:supplier",
+      "system:user"
+    ],
+    "equipment-documents-spot-check": [
+      "haoligo:equipment-ledger",
+      "haoligo:equipment-categories",
+      "system:user"
+    ],
+    "equipment-documents-route-patrol": [
+      "haoligo:equipment-ledger",
+      "system:user"
+    ],
+    "equipment-documents-upkeep-sheet": [
+      "haoligo:equipment-ledger",
+      "system:user"
+    ],
+    "equipment-documents-upkeep-complete": [
+      "haoligo:equipment-ledger",
+      "system:user"
+    ],
+    "equipment-documents-output-record": [
+      "haoligo:equipment-ledger",
+      "system:user"
+    ],
+    "equipment-documents-status-adjustment": [
+      "haoligo:equipment-ledger",
+      "system:user"
+    ],
+    "equipment-ledger": [
+      "haoligo:equipment-categories",
+      "haoligo:equipment-manufacturers",
+      "haoligo:master-data-factory-workshops"
+    ]
+  },
   "permissions": [
     "haoligo:equipment:read",
     "haoligo:equipment:create",

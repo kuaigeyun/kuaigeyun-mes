@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.cost import (
 )
 from apps.kuaicaiwu.services.cost_service import CostCalculationService
 from apps.kuaicaiwu.models.cost_calculation import CostCalculation
-from core.api.deps.access import require_module_access
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -31,7 +31,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(
     prefix="/cost/calculations",
     tags=["App · Kuaicaiwu · Cost Calculations"],
-    dependencies=[Depends(require_module_access("kuaicaiwu", "cost"))],
+    dependencies=[Depends(require_kuaicaiwu_module_access("cost"))],
 )
 
 

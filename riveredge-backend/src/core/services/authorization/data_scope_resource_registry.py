@@ -15,6 +15,8 @@ class DataScopeResourceProfile:
     created_by_user_id_field: Optional[str] = None
     partner_code_field: Optional[str] = None
     partner_dimension: Optional[str] = None
+    """无数据策略配置时的默认解析器（scope_custom resolver 名）；禁止在业务 service 内手写行过滤。"""
+    no_policy_default_resolver: Optional[str] = None
 
 
 _PROFILES: dict[str, DataScopeResourceProfile] = {}

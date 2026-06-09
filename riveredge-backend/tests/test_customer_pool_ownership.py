@@ -6,8 +6,6 @@ import asyncio
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from tortoise.expressions import Q
-
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from apps.master_data.schemas.supply_chain_schemas import CustomerUpdate
 from apps.master_data.services import supply_chain_service as scs
@@ -147,7 +145,6 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_list_customers_regular_user_sees_own_and_pool_only(self):
         user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
-        user.is_regular_user = MagicMock(return_value=True)
 
         mock_query = MagicMock()
         mock_query.filter.return_value = mock_query
@@ -160,18 +157,17 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "apps.master_data.services.supply_chain_service.Customer.filter",
             return_value=mock_query,
         ):
-            await SupplyChainService.list_customers(tenant_id=1, current_user=user)
-
-        scope_filter = None
-        for call in mock_query.filter.call_args_list:
-            args = call.args
-            if args and isinstance(args[0], Q) and args[0].join_type == Q.OR:
-                scope_filter = args[0]
-                break
-        self.assertIsNotNone(scope_filter)
-        child_filters = [child.filters for child in scope_filter.children]
-        self.assertIn({"salesman_id": 5}, child_filters)
-        self.assertIn({"pool_status": "pool"}, child_filters)
+            with patch(
+                "apps.master_data.services.supply_chain_service.DataScopeService.apply",
+                new_callable=AsyncMock,
+                return_value=mock_query,
+            ) as mock_apply:
+                await SupplyChainService.list_customers(tenant_id=1, current_user=user)
+                mock_apply.assert_awaited_once()
+                self.assertEqual(
+                    mock_apply.await_args.kwargs["resource"],
+                    "master-data:supply-chain:customer",
+                )
 
 
     async def test_list_customer_pool_mine_only_current_user_owned(self):
@@ -185,11 +181,16 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
             return_value=mock_query,
         ):
-            await CustomerPoolService.list_customers(
-                tenant_id=1,
-                current_user=user,
-                scope="mine",
-            )
+            with patch(
+                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
+                new_callable=AsyncMock,
+                return_value=mock_query,
+            ):
+                await CustomerPoolService.list_customers(
+                    tenant_id=1,
+                    current_user=user,
+                    scope="mine",
+                )
 
         mine_filter = None
         for call in mock_query.filter.call_args_list:
@@ -198,6 +199,33 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 mine_filter = kwargs
                 break
         self.assertIsNotNone(mine_filter)
+
+    async def test_list_customer_pool_all_applies_data_scope(self):
+        user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.count = AsyncMock(return_value=0)
+        mock_query.order_by.return_value.offset.return_value.limit = AsyncMock(return_value=[])
+
+        with patch(
+            "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
+            return_value=mock_query,
+        ):
+            with patch(
+                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
+                new_callable=AsyncMock,
+                return_value=mock_query,
+            ) as mock_apply:
+                await CustomerPoolService.list_customers(
+                    tenant_id=1,
+                    current_user=user,
+                    scope="all",
+                )
+                mock_apply.assert_awaited_once()
+                self.assertEqual(
+                    mock_apply.await_args.kwargs["resource"],
+                    "kuaizhizao:customer-pool",
+                )
 
     async def test_list_customer_pool_filters_salesman_and_pool_status(self):
         user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
@@ -210,13 +238,18 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
             "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
             return_value=mock_query,
         ):
-            await CustomerPoolService.list_customers(
-                tenant_id=1,
-                current_user=user,
-                scope="all",
-                salesman_id=9,
-                pool_status="owned",
-            )
+            with patch(
+                "apps.kuaizhizao.services.customer_pool_service.DataScopeService.apply",
+                new_callable=AsyncMock,
+                return_value=mock_query,
+            ):
+                await CustomerPoolService.list_customers(
+                    tenant_id=1,
+                    current_user=user,
+                    scope="all",
+                    salesman_id=9,
+                    pool_status="owned",
+                )
 
         salesman_filter = None
         pool_status_filter = None

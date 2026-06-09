@@ -34,17 +34,25 @@ class PermissionRegistryService:
         "system:user:delete",
         "system:department:create",
         "system:department:read",
+        "system:department:display",
         "system:department:update",
         "system:department:delete",
+        "system:department:import",
+        "system:department:export",
         "system:position:create",
         "system:position:read",
+        "system:position:display",
         "system:position:update",
         "system:position:delete",
+        "system:position:import",
+        "system:position:export",
         "system:role:create",
         "system:role:read",
         "system:role:update",
         "system:role:delete",
         "system:role:assign",
+        "system:role:import",
+        "system:role:export",
         "system:permission:read",
         "system:permission:update",
         "system:menu:create",
@@ -59,6 +67,7 @@ class PermissionRegistryService:
         "system:user:export",
         "system:file:create",
         "system:file:read",
+        "system:file:display",
         "system:file:update",
         "system:file:delete",
         "system:file:export",
@@ -68,6 +77,7 @@ class PermissionRegistryService:
         "system:config-center:update",
         "system:data-dictionary:create",
         "system:data-dictionary:read",
+        "system:data-dictionary:display",
         "system:data-dictionary:update",
         "system:data-dictionary:delete",
         "system:language:create",
@@ -153,6 +163,10 @@ class PermissionRegistryService:
         for item in cls._load_manifest_permissions(enabled_apps=enabled_apps):
             definitions[item.code] = item
 
+        for item in cls._load_reference_display_permissions(enabled_apps=enabled_apps):
+            if item.code not in definitions:
+                definitions[item.code] = item
+
         return definitions
 
     @classmethod
@@ -219,6 +233,26 @@ class PermissionRegistryService:
                 )
 
         return list(out.values())
+
+    @staticmethod
+    def _load_reference_display_permissions(enabled_apps: set[str]) -> list[PermissionDefinition]:
+        from core.services.authorization.reference_registry_service import ReferenceRegistryService
+
+        out: list[PermissionDefinition] = []
+        for display_code, source_path in ReferenceRegistryService.collect_display_permission_codes(
+            enabled_apps=enabled_apps,
+        ):
+            code = PermissionRegistryService._clean_code(display_code)
+            if not code:
+                continue
+            out.append(
+                PermissionDefinition(
+                    code=code,
+                    source_type="reference",
+                    source_path=source_path or "reference_resources",
+                )
+            )
+        return out
 
     @staticmethod
     def _collect_menu_permissions(

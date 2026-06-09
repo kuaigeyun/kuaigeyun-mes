@@ -5,14 +5,14 @@ from typing import List
 from fastapi import APIRouter, Depends, Query
 
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from apps.kuaizhizao.schemas.work_order_group import WorkOrderGroupResponse
 from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
 
 router = APIRouter(
     tags=["App · Kuaige Zhizao · Work Order Groups"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "work-order"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("work-order"))],
 )
 
 

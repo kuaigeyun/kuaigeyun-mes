@@ -10,9 +10,12 @@ _MASTER_DATA_BUYER_PROFILE = DataScopeResourceProfile(
     department_uuid_field=None,
 )
 
+from core.services.authorization.data_scope_constants import RESOLVER_CUSTOMER_SALESMAN_POOL
+
 _MASTER_DATA_SALESMAN_PROFILE = DataScopeResourceProfile(
     applicant_user_id_field="salesman_id",
     department_uuid_field=None,
+    no_policy_default_resolver=RESOLVER_CUSTOMER_SALESMAN_POOL,
 )
 
 _registered = False

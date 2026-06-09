@@ -19,7 +19,8 @@ from apps.kuaizhizao.schemas.customer_pool import (
 )
 from apps.kuaizhizao.services.customer_pool_service import CustomerPoolService
 from core.api.deps import get_current_tenant, get_current_user
-from core.api.deps.access import require_access, require_module_access
+from core.api.deps.access import require_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
@@ -39,7 +40,7 @@ async def list_customer_pool(
     pool_status: Optional[str] = Query(None, alias="poolStatus", description="pool/owned"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_module_access("kuaizhizao", "customer-pool")),
+    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
 ):
     return await CustomerPoolService.list_customers(
         tenant_id=tenant_id,
@@ -193,7 +194,7 @@ async def recycle_customer(
 async def get_pool_rules(
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_module_access("kuaizhizao", "customer-pool")),
+    _auth: object = Depends(require_kuaizhizao_module_access("customer-pool")),
 ):
     return await CustomerPoolService.get_rule(tenant_id=tenant_id)
 

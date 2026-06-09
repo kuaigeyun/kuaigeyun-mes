@@ -4,9 +4,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App } from 'antd';
 import { UniDropdown, type UniDropdownProps } from '../../../components/uni-dropdown';
-import { supplierApi } from '../services/supply-chain';
 import type { Supplier } from '../types/supply-chain';
 import { SupplierFormModal } from './SupplierFormModal';
+import { useGlobalStore } from '../../../stores/globalStore';
+import {
+  ReferenceDisplayAccessError,
+  canReadReferenceResource,
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../utils/referenceDisplay';
 
 function formatSupplierLabel(s: Supplier | Record<string, unknown>): string {
   const row = s as Record<string, unknown>;
@@ -32,6 +38,7 @@ export type SupplierSelectDropdownProps = Omit<
   onSupplierPick?: (supplier: Supplier | null) => void;
   modalZIndex?: number;
   autoLoad?: boolean;
+  hostResource?: string;
 };
 
 export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
@@ -41,10 +48,12 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
   onSupplierPick,
   modalZIndex,
   autoLoad = true,
+  hostResource,
   onChange,
   ...rest
 }) => {
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [internalSuppliers, setInternalSuppliers] = useState<Supplier[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -67,19 +76,34 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
   const refreshSuppliers = useCallback(async () => {
     setInternalLoading(true);
     try {
-      const res = await supplierApi.list?.({ isActive: true, limit: 500 } as Parameters<NonNullable<typeof supplierApi.list>>[0]);
-      const list = (Array.isArray(res) ? res : (res as { data?: Supplier[] })?.data ?? (res as { results?: Supplier[] })?.results ?? (res as { items?: Supplier[] })?.items ?? []) as Supplier[];
+      const res = await searchReferenceDisplay({
+        resource: 'master-data:supply-chain:supplier',
+        hostResource,
+        pageSize: 500,
+      });
+      const list = res.items.map(
+        (item) =>
+          ({
+            id: item.id,
+            uuid: item.uuid,
+            code: item.code,
+            name: item.name,
+          }) as Supplier,
+      );
       if (suppliersProp == null) {
         setInternalSuppliers(list);
       }
       onSuppliersChange?.(list);
       return list;
-    } catch {
+    } catch (err) {
+      if (err instanceof ReferenceDisplayAccessError) {
+        messageApi.warning(err.message);
+      }
       return [];
     } finally {
       setInternalLoading(false);
     }
-  }, [onSuppliersChange, suppliersProp]);
+  }, [hostResource, messageApi, onSuppliersChange, suppliersProp]);
 
   useEffect(() => {
     if (autoLoad && suppliersProp == null) {
@@ -142,6 +166,8 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
     [mergeSupplierList, onChange, onSupplierPick, onSuppliersChange, suppliers, suppliersProp],
   );
 
+  const canManageSupplier = canReadReferenceResource(currentUser, 'master-data:supply-chain:supplier');
+
   return (
     <>
       <UniDropdown
@@ -151,30 +177,38 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
         loading={loading}
         options={options}
         onChange={handleChange}
-        quickCreate={{
-          label: '快速新建',
-          onClick: openCreate,
-        }}
-        quickEdit={{
-          label: '编辑供应商',
-          onEdit: openEdit,
-        }}
+        quickCreate={
+          canManageSupplier
+            ? {
+                label: '快速新建',
+                onClick: openCreate,
+              }
+            : undefined
+        }
+        quickEdit={
+          canManageSupplier
+            ? {
+                label: '编辑供应商',
+                onEdit: openEdit,
+              }
+            : undefined
+        }
         advancedSearch={{
           label: '高级搜索',
-          fields: [
-            { name: 'code', label: '供应商编号' },
-            { name: 'name', label: '供应商名称' },
-            { name: 'contact_person', label: '联系人' },
-          ],
+          fields: [{ name: 'keyword', label: '关键词' }],
           onSearch: async (values) => {
             try {
-              const res = await supplierApi.list?.({ ...values, limit: 100 } as Parameters<NonNullable<typeof supplierApi.list>>[0]);
-              const list = (Array.isArray(res) ? res : (res as { data?: Supplier[] })?.data ?? []) as Supplier[];
-              return list.map((s) => ({
-                value: getSupplierId(s),
-                label: formatSupplierLabel(s),
-              }));
-            } catch {
+              const res = await searchReferenceDisplay({
+                resource: 'master-data:supply-chain:supplier',
+                hostResource,
+                keyword: values.keyword,
+                pageSize: 200,
+              });
+              return referenceDisplayToIdOptions(res.items);
+            } catch (err) {
+              if (err instanceof ReferenceDisplayAccessError) {
+                messageApi.warning(err.message);
+              }
               return [];
             }
           },

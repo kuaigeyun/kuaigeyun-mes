@@ -26,6 +26,7 @@ export type ContractItemsFormTableProps = {
   materialList: Material[];
   onOpenMaterialPicker: () => void;
   onOpenImport: () => void;
+  showImportButton?: boolean;
   onPriceTypeToggle: (checked: boolean) => void;
   onRefreshLinePriceByVariant: (index: number, attrs?: Record<string, unknown>) => void | Promise<void>;
   editingIncl: { index: number; value: number | null } | null;
@@ -38,6 +39,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   materialList,
   onOpenMaterialPicker,
   onOpenImport,
+  showImportButton = true,
   onPriceTypeToggle,
   onRefreshLinePriceByVariant,
   editingIncl,
@@ -385,13 +387,15 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                 )}
                 headerExtra={(
                   <Space size={8}>
-                    <Button
-                      type="default"
-                      icon={<ImportOutlined />}
-                      onClick={onOpenImport}
-                    >
-                      导入明细
-                    </Button>
+                    {showImportButton ? (
+                      <Button
+                        type="default"
+                        icon={<ImportOutlined />}
+                        onClick={onOpenImport}
+                      >
+                        导入明细
+                      </Button>
+                    ) : null}
                     <Button
                       type="dashed"
                       icon={<PlusOutlined />}

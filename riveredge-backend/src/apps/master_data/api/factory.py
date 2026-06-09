@@ -11,6 +11,7 @@ from uuid import UUID
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.factory_service import FactoryService
 from apps.master_data.schemas.factory_schemas import (
@@ -37,7 +38,11 @@ from apps.master_data.schemas.work_group_schemas import (
 from apps.master_data.services.work_group_service import WorkGroupService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/factory", tags=["App · Master Data · Factory"])
+router = APIRouter(
+    prefix="/factory",
+    tags=["App · Master Data · Factory"],
+    dependencies=[Depends(require_master_data_module_access("factory"))],
+)
 
 
 def _http_exception_with_trace(

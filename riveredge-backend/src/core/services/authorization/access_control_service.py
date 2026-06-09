@@ -47,7 +47,12 @@ class AccessControlService:
         required_permissions: list[str] | None = None,
         env: dict[str, Any] | None = None,
     ) -> AccessDecision:
-        if is_infra_admin or is_tenant_admin:
+        if await UserPermissionService.is_admin_bypass_flags(
+            user_id,
+            tenant_id,
+            is_infra_admin=is_infra_admin,
+            is_tenant_admin=is_tenant_admin,
+        ):
             return AccessDecision(True, "admin_bypass", [])
 
         needed = required_permissions or [AccessControlService.build_permission_code(resource, action)]
@@ -160,3 +165,65 @@ class AccessControlService:
                 return False
 
         return True
+
+    @staticmethod
+    async def check_reference_display(
+        *,
+        user_id: int,
+        tenant_id: int,
+        resource_key: str,
+        is_infra_admin: bool = False,
+        is_tenant_admin: bool = False,
+        host_resource: str | None = None,
+    ) -> AccessDecision:
+        """
+        引用展示鉴权：read/display 显式授予，或宿主 module_references 隐式授予。
+        """
+        if await UserPermissionService.is_admin_bypass_flags(
+            user_id,
+            tenant_id,
+            is_infra_admin=is_infra_admin,
+            is_tenant_admin=is_tenant_admin,
+        ):
+            return AccessDecision(True, "admin_bypass", [])
+
+        from core.services.authorization.reference_registry_service import ReferenceRegistryService
+
+        key = (resource_key or "").strip().lower()
+        registry = ReferenceRegistryService.build()
+        defn = registry.resources.get(key)
+        if defn is None:
+            return AccessDecision(False, "unknown_reference_resource", [key])
+        if defn.sensitive:
+            return AccessDecision(
+                False,
+                "sensitive_reference_denied",
+                [f"{defn.permission_prefix}:read"],
+            )
+
+        explicit = [
+            f"{defn.permission_prefix}:read",
+            f"{defn.permission_prefix}:display",
+        ]
+        user_perms = await UserPermissionService.get_user_permissions(
+            user_id=user_id,
+            tenant_id=tenant_id,
+        )
+        if any(code in user_perms for code in explicit):
+            return AccessDecision(True, "explicit_read_or_display", explicit)
+
+        implicit_hosts = registry.implicit_display_by_target.get(key, set())
+        if host_resource:
+            host = host_resource.strip().lower()
+            host_codes = {
+                AccessControlService.build_permission_code(host, action)
+                for action in ("read", "create", "update")
+            }
+            implicit_hosts = implicit_hosts & host_codes
+
+        matched = implicit_hosts & user_perms
+        if matched:
+            return AccessDecision(True, "implicit_host_grant", sorted(matched))
+
+        required = explicit + sorted(implicit_hosts)[:5]
+        return AccessDecision(False, "reference_display_denied", required)

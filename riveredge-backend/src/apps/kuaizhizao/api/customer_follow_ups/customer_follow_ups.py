@@ -17,14 +17,14 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
 )
 from apps.kuaizhizao.services.customer_follow_up_service import CustomerFollowUpService
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
 
 router = APIRouter(
     prefix="/customer-follow-ups",
     tags=["App · Kuaige Zhizao · Customer Follow-up"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "customer-follow-up"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("customer-follow-up"))],
 )
 
 _service = CustomerFollowUpService()

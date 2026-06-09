@@ -6499,17 +6499,16 @@ export default {
   'pages.system.applications.scanFailed': 'Failed to scan applications',
   'pages.system.applications.syncAllMenus': 'Sync All Menus',
   'pages.system.applications.syncAllNoApps': 'No installed applications',
-  'pages.system.applications.syncAllLoading':
-    'Running: (1) sync each app manifest (2) write all menus to the database…',
+  'pages.system.applications.syncAllLoading': 'Syncing menus, please wait…',
   'pages.system.applications.syncAllSuccess':
-    'Step 1 (app manifests): all {{count}} done. Step 2 (menu DB sync): succeeded.',
+    'Menu sync completed for {{count}} application(s). Navigation has been updated.',
   'pages.system.applications.syncAllPartial':
-    'Step 1 (app manifests): {{success}}/{{total}} done. Still pending or failed (includes step 2 if listed):\n{{errors}}',
-  'pages.system.applications.syncAllErrManifest': '[Manifest · {{code}}] {{detail}}',
+    'Menu sync partially completed ({{success}}/{{total}}).\n{{errors}}',
+  'pages.system.applications.syncAllErrManifest': 'Application "{{code}}": {{detail}}',
   'pages.system.applications.syncAllErrMenusDb':
-    '[Menu DB sync · full] {{detail}}. If you see permission denied, you usually need system.menu **update** (menu administration); grant it on the role or run as a tenant admin.',
+    'Failed to update navigation menus: {{detail}}. Contact an administrator if you lack menu management permissions.',
   'pages.system.applications.syncAllErrUnknown': 'Unknown error',
-  'pages.system.applications.syncAllFailed': 'Failed to sync all menus',
+  'pages.system.applications.syncAllFailed': 'Menu sync failed',
   'pages.system.applications.editModalTitle': 'App settings - {{name}}',
   'pages.system.applications.upgradeModalTitle': 'Upgrade - {{name}}',
   'pages.system.applications.restoreDefault': 'Restore default',

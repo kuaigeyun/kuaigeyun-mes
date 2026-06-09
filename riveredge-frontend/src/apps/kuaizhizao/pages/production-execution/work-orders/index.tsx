@@ -195,7 +195,7 @@ import ReportableQuantityPanel from '../../../components/ReportableQuantityPanel
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
 import type { CurrentUser } from '../../../../../types/api'
-import { hasPermission } from '../../../../../utils/permission'
+import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores'
 import { UniUserSelect } from '../../../../../components/uni-user-select'
 
@@ -1579,7 +1579,7 @@ const WorkOrdersPage: React.FC = () => {
   const quickReportingProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null)
   const currentUser = useGlobalStore((s) => s.currentUser)
   const canProxyReporting = useMemo(
-    () => hasPermission(currentUser ?? undefined, 'kuaizhizao:reporting:proxy'),
+    () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:reporting', 'proxy'),
     [currentUser]
   )
 

@@ -4,14 +4,14 @@
 
 from fastapi import APIRouter, Depends, Query
 from typing import Dict, Any
-from core.api.deps.access import require_module_access
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.management_report_service import ManagementReportService
 
 router = APIRouter(
     prefix="/management-report",
     tags=["App · Kuaicaiwu · Management Accounting Reports"],
-    dependencies=[Depends(require_module_access("kuaicaiwu", "cost-report"))],
+    dependencies=[Depends(require_kuaicaiwu_module_access("cost-report"))],
 )
 service = ManagementReportService()
 

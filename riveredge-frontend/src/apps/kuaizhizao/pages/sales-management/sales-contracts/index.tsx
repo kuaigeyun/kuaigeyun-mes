@@ -102,6 +102,10 @@ import {
 
   FileTextOutlined,
 
+  PrinterOutlined,
+
+  RollbackOutlined,
+
 } from '@ant-design/icons';
 
 import dayjs from 'dayjs';
@@ -140,6 +144,12 @@ import { DictionaryLabel } from '../../../../../components/dictionary-label';
 
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
+import { useGlobalStore } from '../../../../../stores';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
+import { getPrintTemplateList, type PrintTemplate } from '../../../../../services/printTemplate';
+import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
+import { UniPdfPreview } from '../../../../../components/uni-preview';
 
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
@@ -198,6 +208,43 @@ import {
   defaultContractItem,
 
 } from './contract-line-items-shared';
+
+const SALES_CONTRACT_RESOURCE = SC;
+
+const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
+
+function isApprovedReview(rs: string | undefined): boolean {
+  const r = (rs || '').trim();
+  return ['已通过', 'APPROVED', '审核通过', '通过', '已审核'].includes(r);
+}
+
+function canWithdrawContract(c: SalesContract): boolean {
+  return (c.status || '') === '待审核' && PENDING_REVIEW_STATUSES.has((c.review_status || '').trim());
+}
+
+function canApproveContract(c: SalesContract): boolean {
+  if ((c.status || '') !== '待审核') return false;
+  const rs = (c.review_status || '').trim();
+  return PENDING_REVIEW_STATUSES.has(rs) || rs === '';
+}
+
+function canRejectContract(c: SalesContract): boolean {
+  return canApproveContract(c);
+}
+
+function canRevokeContractApproval(c: SalesContract): boolean {
+  if ((c.status || '') !== '已生效') return false;
+  if (!isApprovedReview(c.review_status)) return false;
+  const relQty = Number(c.released_quantity ?? 0);
+  const relAmt = Number(c.released_amount ?? 0);
+  return relQty <= 0 && relAmt <= 0;
+}
+
+function canPrintContract(c: SalesContract): boolean {
+  const st = (c.status || '').trim();
+  if (!['已生效', '执行中', '已关闭'].includes(st)) return false;
+  return isApprovedReview(c.review_status);
+}
 
 
 
@@ -366,6 +413,12 @@ const SalesContractsPage: React.FC = () => {
 
   const { t } = useTranslation();
 
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const contractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
+  const canSubmitContract = hasModulePermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE, 'submit');
+  const canRevokeContract = hasModulePermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE, 'revoke');
+  const canReviewContract = hasReviewPermission(currentUser ?? undefined, SALES_CONTRACT_RESOURCE);
+
   const actionRef = useRef<ActionType>();
 
   const formRef = useRef<ProFormInstance>();
@@ -436,6 +489,16 @@ const SalesContractsPage: React.FC = () => {
   const [termTemplateTerms, setTermTemplateTerms] = useState<SalesContractTermSnapshot[]>([]);
   const [termPlaceholderValues, setTermPlaceholderValues] = useState<Record<string, string>>({});
   const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
+
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [printModalVisible, setPrintModalVisible] = useState(false);
+  const [printSubmitting, setPrintSubmitting] = useState(false);
+  const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
+  const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>();
+  const [printingRecord, setPrintingRecord] = useState<SalesContract | null>(null);
+  const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
+  const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
+  const [pdfPreviewFileName, setPdfPreviewFileName] = useState('销售合同.pdf');
 
   const termPlaceholderKeys = useMemo(
     () => extractPlaceholdersFromTerms(termTemplateTerms),
@@ -1288,7 +1351,14 @@ const SalesContractsPage: React.FC = () => {
 
         onOpenMaterialPicker={() => setMaterialPickerOpen(true)}
 
-        onOpenImport={() => setImportModalVisible(true)}
+        onOpenImport={() => {
+          if (!contractPerms.canImport) {
+            messageApi.warning('无导入权限');
+            return;
+          }
+          setImportModalVisible(true);
+        }}
+        showImportButton={contractPerms.canImport}
 
         onPriceTypeToggle={handleContractPriceTypeToggle}
 
@@ -1753,6 +1823,110 @@ const SalesContractsPage: React.FC = () => {
 
 
 
+  const handleWithdraw = (record: SalesContract) => {
+    Modal.confirm({
+      title: '撤回提交',
+      content: `确定撤回合同「${record.contract_code || record.id}」？撤回后可继续编辑。`,
+      onOk: async () => {
+        try {
+          await salesContractApi.withdraw(record.id!);
+          messageApi.success('已撤回');
+          if (detail?.id === record.id) await refreshDetail(record.id!);
+          else reload();
+        } catch (e: any) {
+          messageApi.error(e?.message || '撤回失败');
+        }
+      },
+    });
+  };
+
+  const handleRevokeReview = (record: SalesContract) => {
+    Modal.confirm({
+      title: '撤回审核',
+      content: `确定撤回合同「${record.contract_code || record.id}」的审核？将回到待审核状态。`,
+      onOk: async () => {
+        try {
+          await salesContractApi.revokeReview(record.id!);
+          messageApi.success('已撤回审核');
+          if (detail?.id === record.id) await refreshDetail(record.id!);
+          else reload();
+        } catch (e: any) {
+          messageApi.error(e?.message || '撤回审核失败');
+        }
+      },
+    });
+  };
+
+  const handlePrint = async (record: SalesContract) => {
+    try {
+      const templates = await getPrintTemplateList({
+        is_active: true,
+        document_type: 'sales_contract',
+      });
+      setPrintTemplates(templates || []);
+      const defaultTpl = templates.find((tpl) => tpl.is_default) ?? templates[0];
+      setSelectedPrintTemplateUuid(defaultTpl?.uuid);
+    } catch {
+      setPrintTemplates([]);
+      setSelectedPrintTemplateUuid(undefined);
+    }
+    setPrintingRecord(record);
+    setPrintModalVisible(true);
+  };
+
+  const handleConfirmPrint = async () => {
+    const record = printingRecord;
+    if (!record?.id) return;
+    const safeCode = String(record.contract_code || record.id).replace(/[/\\?%*:|"<>]/g, '-');
+    const fileName = `销售合同_${safeCode}.pdf`;
+    try {
+      setPrintSubmitting(true);
+      const result: DocumentPrintApiResult = await salesContractApi.print(record.id, {
+        templateUuid: selectedPrintTemplateUuid,
+        outputFormat: 'pdf',
+        responseFormat: 'json',
+      });
+      const raw = result?.content || '';
+      if (result?.content_encoding === 'base64' && result?.mime_type === 'application/pdf' && raw) {
+        const binary = atob(raw);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
+        setPdfPreviewBlobUrl(blobUrl);
+        setPdfPreviewFileName(fileName);
+        setPdfPreviewVisible(true);
+        setPrintModalVisible(false);
+        setPrintingRecord(null);
+        messageApi.success('已打开预览');
+        return;
+      }
+      messageApi.warning('打印内容为空');
+    } catch (e: any) {
+      messageApi.error(e?.message || '打印失败');
+    } finally {
+      setPrintSubmitting(false);
+    }
+  };
+
+  const handleToolbarPrint = async (keys: React.Key[]) => {
+    if (!keys || keys.length !== 1) return;
+    const numericId = Number(keys[0]);
+    if (!Number.isFinite(numericId) || numericId <= 0) {
+      messageApi.warning('请选择一条有效记录');
+      return;
+    }
+    try {
+      const latest = await salesContractApi.get(numericId, false);
+      if (!canPrintContract(latest)) {
+        messageApi.warning('仅已审核通过且已生效的合同可打印');
+        return;
+      }
+      await handlePrint(latest);
+    } catch (e: any) {
+      messageApi.error(e?.message || '加载合同失败');
+    }
+  };
+
   const handleCloseContract = async () => {
 
     if (!detail?.id) return;
@@ -2169,25 +2343,25 @@ const SalesContractsPage: React.FC = () => {
 
               record.status === '草稿' ? (
 
-                <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-
-                  编辑
-
-                </Button>
-
-              ) : null,
-
-              record.status === '草稿' ? (
-
-                <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(record)}>
-
-                  删除
-
-                </Button>
+                contractPerms.canUpdate ? (
+                  <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+                    编辑
+                  </Button>
+                ) : null
 
               ) : null,
 
               record.status === '草稿' ? (
+
+                contractPerms.canDelete ? (
+                  <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(record)}>
+                    删除
+                  </Button>
+                ) : null
+
+              ) : null,
+
+              record.status === '草稿' && canSubmitContract ? (
 
                 <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
 
@@ -2197,7 +2371,17 @@ const SalesContractsPage: React.FC = () => {
 
               ) : null,
 
-              record.status === '待审核' ? (
+              canWithdrawContract(record) && canRevokeContract ? (
+
+                <Button key="withdraw" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdraw(record)}>
+
+                  撤回
+
+                </Button>
+
+              ) : null,
+
+              canApproveContract(record) && canReviewContract ? (
 
                 <Button key="approve" type="link" size="small" icon={<CheckOutlined />} onClick={() => openReviewModal(record, 'approve')}>
 
@@ -2207,11 +2391,31 @@ const SalesContractsPage: React.FC = () => {
 
               ) : null,
 
-              record.status === '待审核' ? (
+              canRejectContract(record) && canReviewContract ? (
 
                 <Button key="reject" type="link" size="small" icon={<CloseOutlined />} onClick={() => openReviewModal(record, 'reject')}>
 
                   驳回
+
+                </Button>
+
+              ) : null,
+
+              canRevokeContractApproval(record) && canRevokeContract ? (
+
+                <Button key="revoke-review" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRevokeReview(record)}>
+
+                  撤回审核
+
+                </Button>
+
+              ) : null,
+
+              canPrintContract(record) && contractPerms.canPrint ? (
+
+                <Button key="print" type="link" size="small" icon={<PrinterOutlined />} onClick={() => void handlePrint(record)}>
+
+                  打印
 
                 </Button>
 
@@ -2237,7 +2441,14 @@ const SalesContractsPage: React.FC = () => {
 
     ],
 
-    [],
+    [
+      canReviewContract,
+      canRevokeContract,
+      canSubmitContract,
+      contractPerms.canDelete,
+      contractPerms.canPrint,
+      contractPerms.canUpdate,
+    ],
 
   );
 
@@ -2533,11 +2744,19 @@ const SalesContractsPage: React.FC = () => {
 
         rowKey="id"
 
+        permissionResource={SALES_CONTRACT_RESOURCE}
+
         columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-contracts"
 
         columns={columns}
 
         showAdvancedSearch
+
+        selectedRowKeys={selectedRowKeys}
+
+        onRowSelectionChange={setSelectedRowKeys}
+
+        rowSelection={{ type: 'checkbox' }}
 
         headerTitle={
 
@@ -2566,6 +2785,46 @@ const SalesContractsPage: React.FC = () => {
             {t('app.kuaizhizao.salesContract.terms.manageBtn')}
           </Button>,
         ]}
+
+        toolBarActionsAfterBatch={contractPerms.canPrint ? [
+          <Button
+            key="contract-print"
+            icon={<PrinterOutlined />}
+            size="middle"
+            disabled={selectedRowKeys.length !== 1}
+            onClick={() => void handleToolbarPrint(selectedRowKeys)}
+          >
+            打印合同
+          </Button>,
+        ] : undefined}
+
+        showExportButton={contractPerms.canExport}
+
+        onExport={async (type, keys, pageData) => {
+          try {
+            const res = await salesContractApi.list({ skip: 0, limit: 10000 });
+            let items = res.items || [];
+            if (type === 'currentPage' && pageData?.length) {
+              items = pageData as SalesContract[];
+            } else if (type === 'selected' && keys?.length) {
+              items = items.filter((d) => d.id != null && keys.includes(d.id));
+            }
+            if (items.length === 0) {
+              messageApi.warning('暂无数据可导出');
+              return;
+            }
+            const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `sales-contracts-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            messageApi.success(`已导出 ${items.length} 条记录`);
+          } catch (error: any) {
+            messageApi.error(error?.message || '导出失败');
+          }
+        }}
 
         request={async (params, _sort, _filter, searchFormValues) => {
 
@@ -2623,27 +2882,41 @@ const SalesContractsPage: React.FC = () => {
 
                 <>
 
-                  <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>编辑</Button>
+                  {contractPerms.canUpdate ? (
+                    <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>编辑</Button>
+                  ) : null}
 
-                  <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>删除</Button>
+                  {contractPerms.canDelete ? (
+                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>删除</Button>
+                  ) : null}
 
-                  <Button icon={<SendOutlined />} onClick={() => handleSubmit(detail)}>提交</Button>
-
-                </>
-
-              )}
-
-              {detail.status === '待审核' && (
-
-                <>
-
-                  <Button icon={<CheckOutlined />} onClick={() => openReviewModal(detail, 'approve')}>审核通过</Button>
-
-                  <Button icon={<CloseOutlined />} onClick={() => openReviewModal(detail, 'reject')}>驳回</Button>
+                  {canSubmitContract ? (
+                    <Button icon={<SendOutlined />} onClick={() => handleSubmit(detail)}>提交</Button>
+                  ) : null}
 
                 </>
 
               )}
+
+              {canWithdrawContract(detail) && canRevokeContract ? (
+                <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(detail)}>撤回</Button>
+              ) : null}
+
+              {canApproveContract(detail) && canReviewContract ? (
+                <Button icon={<CheckOutlined />} onClick={() => openReviewModal(detail, 'approve')}>审核通过</Button>
+              ) : null}
+
+              {canRejectContract(detail) && canReviewContract ? (
+                <Button icon={<CloseOutlined />} onClick={() => openReviewModal(detail, 'reject')}>驳回</Button>
+              ) : null}
+
+              {canRevokeContractApproval(detail) && canRevokeContract ? (
+                <Button icon={<RollbackOutlined />} onClick={() => handleRevokeReview(detail)}>撤回审核</Button>
+              ) : null}
+
+              {canPrintContract(detail) && contractPerms.canPrint ? (
+                <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>打印</Button>
+              ) : null}
 
               {['已生效', '执行中'].includes(detail.status || '') && (
 
@@ -3253,6 +3526,56 @@ const SalesContractsPage: React.FC = () => {
       </Modal>
 
 
+
+      <Modal
+        open={printModalVisible}
+        title="选择打印模板"
+        width={MODAL_CONFIG.TINY_WIDTH}
+        onCancel={() => {
+          if (printSubmitting) return;
+          setPrintModalVisible(false);
+          setPrintingRecord(null);
+        }}
+        onOk={handleConfirmPrint}
+        okText="预览打印"
+        okButtonProps={{ icon: <PrinterOutlined /> }}
+        confirmLoading={printSubmitting}
+        destroyOnHidden
+      >
+        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
+          <Typography.Text type="secondary">
+            合同：{printingRecord?.contract_code ?? printingRecord?.id ?? '-'}
+          </Typography.Text>
+          {printTemplates.length === 0 ? (
+            <Typography.Text type="secondary">暂无可用模板，请先在系统设置中配置 sales_contract 打印模板。</Typography.Text>
+          ) : (
+            printTemplates.map((tpl) => (
+              <Button
+                key={tpl.uuid}
+                block
+                type={selectedPrintTemplateUuid === tpl.uuid ? 'primary' : 'default'}
+                onClick={() => setSelectedPrintTemplateUuid(tpl.uuid)}
+              >
+                {tpl.name}
+                {tpl.is_default ? '（默认）' : ''}
+              </Button>
+            ))
+          )}
+        </Space>
+      </Modal>
+
+      <UniPdfPreview
+        open={pdfPreviewVisible}
+        blobUrl={pdfPreviewBlobUrl}
+        fileName={pdfPreviewFileName}
+        onClose={() => {
+          setPdfPreviewVisible(false);
+          if (pdfPreviewBlobUrl) {
+            URL.revokeObjectURL(pdfPreviewBlobUrl);
+            setPdfPreviewBlobUrl(null);
+          }
+        }}
+      />
 
       <UniMaterialBatchPicker
 

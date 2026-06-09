@@ -66,7 +66,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getUserInfo } from '../../../../../utils/auth';
-import { hasPermission } from '../../../../../utils/permission';
+import { hasModulePermission } from '../../../../../utils/permissionContract';
 import { useGlobalStore } from '../../../../../stores';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
@@ -273,7 +273,7 @@ const ReportingPage: React.FC = () => {
 
   const currentUser = useGlobalStore((s) => s.currentUser);
   const canProxyReporting = useMemo(
-    () => hasPermission(currentUser ?? undefined, 'kuaizhizao:reporting:proxy'),
+    () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:reporting', 'proxy'),
     [currentUser],
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);

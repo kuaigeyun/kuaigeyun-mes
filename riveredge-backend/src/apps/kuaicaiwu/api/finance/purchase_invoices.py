@@ -11,7 +11,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PurchaseInvoiceCreate, PurchaseInvoiceUpdate, PurchaseInvoiceResponse, PurchaseInvoiceListResponse,
 )
 from apps.kuaicaiwu.services.finance_service import PurchaseInvoiceService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -46,13 +46,7 @@ def _http_exception_with_trace(
 @router.post("", response_model=PurchaseInvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_purchase_invoice(
     data: PurchaseInvoiceCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "create",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -70,13 +64,7 @@ async def list_purchase_invoices(
     status: Optional[str] = None,
     supplier_id: Optional[int] = None,
     purchase_order_id: Optional[int] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     invoices = await invoice_service.list_purchase_invoices(
@@ -94,13 +82,7 @@ async def list_purchase_invoices(
 @router.get("/{id}", response_model=PurchaseInvoiceResponse)
 async def get_purchase_invoice(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
@@ -114,15 +96,9 @@ async def get_purchase_invoice(
 async def approve_purchase_invoice(
     id: int,
     rejection_reason: Optional[str] = Query(None),
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "update",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:purchase-invoice:audit")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         invoice = await invoice_service.approve_invoice(tenant_id, id, current_user.id, rejection_reason)

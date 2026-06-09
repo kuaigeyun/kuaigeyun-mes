@@ -5,7 +5,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-from typing import List, Optional, Set, Tuple
+from typing import List, Optional, Tuple
 
 from tortoise.models import Q
 from tortoise.transactions import in_transaction
@@ -24,8 +24,12 @@ from apps.kuaizhizao.schemas.customer_follow_up import (
 from apps.kuaizhizao.schemas.sales_opportunity import SalesOpportunityEnsure
 from apps.kuaizhizao.services.sales_opportunity_service import SalesOpportunityService
 from apps.master_data.models.customer import Customer
+from core.services.authorization.data_scope_service import DataScopeService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
+
+RESOURCE_CUSTOMER_FOLLOW_UP = "kuaizhizao:customer-follow-up"
+RESOURCE_CUSTOMER_FOLLOW_UP_CUSTOMER = "kuaizhizao:customer-follow-up-customer"
 
 
 class CustomerFollowUpService:
@@ -108,23 +112,25 @@ class CustomerFollowUpService:
         ).first()
         if not customer:
             raise NotFoundError(f"客户不存在: {customer_id}")
-        if current_user and current_user.is_regular_user():
-            if customer.salesman_id != current_user.id or customer.pool_status != "owned":
-                raise ValidationError("无权操作该客户")
+        if current_user:
+            await DataScopeService.assert_row_visible(
+                customer,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource=RESOURCE_CUSTOMER_FOLLOW_UP_CUSTOMER,
+            )
         return customer
 
     @staticmethod
-    async def _allowed_customer_ids(tenant_id: int, current_user: Optional[User]) -> Optional[Set[int]]:
-        """普通业务员返回其负责客户 ID 集合；管理员等返回 None 表示不限制。"""
-        if not current_user or not current_user.is_regular_user():
-            return None
-        rows = await Customer.filter(
+    async def _apply_list_scope(query, tenant_id: int, current_user: Optional[User]):
+        if not current_user:
+            return query
+        return await DataScopeService.apply(
+            query,
             tenant_id=tenant_id,
-            deleted_at__isnull=True,
-            salesman_id=current_user.id,
-            pool_status="owned",
-        ).values_list("id", flat=True)
-        return set(rows)
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_FOLLOW_UP,
+        )
 
     @staticmethod
     async def _resolve_quotation(
@@ -373,8 +379,12 @@ class CustomerFollowUpService:
         ).first()
         if not row:
             raise NotFoundError(f"跟进记录不存在: {follow_id}")
-        allowed = await cls._allowed_customer_ids(tenant_id, current_user)
-        if allowed is not None and row.customer_id not in allowed:
+        if current_user and not await DataScopeService.row_visible(
+            row,
+            tenant_id=tenant_id,
+            user=current_user,
+            resource=RESOURCE_CUSTOMER_FOLLOW_UP,
+        ):
             raise NotFoundError(f"跟进记录不存在: {follow_id}")
         await cls._load_customer(tenant_id, row.customer_id, current_user)
         await cls._attach_creator_names([row])
@@ -386,7 +396,6 @@ class CustomerFollowUpService:
     def _filter_query(
         cls,
         tenant_id: int,
-        allowed: Optional[Set[int]],
         customer_id: Optional[int],
         keyword: Optional[str],
         occurred_from: Optional[datetime],
@@ -394,8 +403,6 @@ class CustomerFollowUpService:
         pending_only: bool,
     ):
         query = CustomerFollowUp.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        if allowed is not None:
-            query = query.filter(customer_id__in=list(allowed))
         if customer_id is not None:
             query = query.filter(customer_id=customer_id)
         if occurred_from is not None:
@@ -429,19 +436,15 @@ class CustomerFollowUpService:
         pending_only: bool = False,
         current_user: Optional[User] = None,
     ) -> CustomerFollowUpListEnvelope:
-        allowed = await cls._allowed_customer_ids(tenant_id, current_user)
-        if allowed is not None and len(allowed) == 0:
-            return CustomerFollowUpListEnvelope(items=[], total=0)
-
         query = cls._filter_query(
             tenant_id,
-            allowed,
             customer_id,
             keyword,
             occurred_from,
             occurred_to,
             pending_only,
         )
+        query = await cls._apply_list_scope(query, tenant_id, current_user)
         total = await query.count()
         if pending_only:
             # 已到期的回访队列：按计划时间升序，最早到期优先

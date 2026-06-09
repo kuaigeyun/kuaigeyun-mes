@@ -72,7 +72,10 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const FINISHED_RESOURCE = 'kuaizhizao:quality-management-finished-goods-inspection';
+const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -188,7 +191,8 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['finished-goods-inspection-statistics'] });
-  const canReadNcLedger = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-nonconforming-ledger:read');
+  const { canUpdate: canRegisterDefect } = useResourcePermissions(FINISHED_RESOURCE);
+  const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
 
@@ -1026,7 +1030,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 inspection={inspectionDetail}
                 inspectionType="finished"
                 onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
-                canRegisterDefect={hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-finished-goods-inspection:update')}
+                canRegisterDefect={canRegisterDefect}
               />
               <DetailDrawerSection title="基本信息">
                 <Descriptions

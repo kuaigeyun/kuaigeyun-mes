@@ -32,6 +32,7 @@ def _get_model(table_name: str) -> Optional[Type[Model]]:
         "master_data_operations": "apps.master_data.models.process.Operation",
         "master_data_process_routes": "apps.master_data.models.process.ProcessRoute",
         "master_data_sops": "apps.master_data.models.process.SOP",
+        "apps_master_data_engineering_drawings": "apps.master_data.models.drawing.EngineeringDrawing",
         # 主数据 - 供应链
         "master_data_customers": "apps.master_data.models.customer.Customer",
         "master_data_suppliers": "apps.master_data.models.supplier.Supplier",
@@ -52,6 +53,14 @@ def _get_model(table_name: str) -> Optional[Type[Model]]:
         "apps_kuaizhizao_production_plans": "apps.kuaizhizao.models.production_plan.ProductionPlan",
         "apps_kuaizhizao_equipment": "apps.kuaizhizao.models.equipment.Equipment",
         "apps_kuaizhizao_molds": "apps.kuaizhizao.models.mold.Mold",
+        "apps_kuaizhizao_production_pickings": "apps.kuaizhizao.models.production_picking.ProductionPicking",
+        "apps_kuaizhizao_production_returns": "apps.kuaizhizao.models.production_return.ProductionReturn",
+        "apps_kuaizhizao_other_inbounds": "apps.kuaizhizao.models.other_inbound.OtherInbound",
+        "apps_kuaizhizao_other_outbounds": "apps.kuaizhizao.models.other_outbound.OtherOutbound",
+        "apps_kuaizhizao_finished_goods_receipts": "apps.kuaizhizao.models.finished_goods_receipt.FinishedGoodsReceipt",
+        "apps_kuaizhizao_incoming_inspections": "apps.kuaizhizao.models.incoming_inspection.IncomingInspection",
+        "apps_kuaizhizao_process_inspections": "apps.kuaizhizao.models.process_inspection.ProcessInspection",
+        "apps_kuaizhizao_finished_goods_inspections": "apps.kuaizhizao.models.finished_goods_inspection.FinishedGoodsInspection",
     }
     path = _TABLE_TO_MODEL.get(table_name)
     if not path:
@@ -67,6 +76,55 @@ def _get_model(table_name: str) -> Optional[Type[Model]]:
 
 # 允许的显示字段（防止 SQL 注入）
 ALLOWED_DISPLAY_FIELDS = frozenset({"id", "name", "code", "title", "label", "description"})
+
+# 关联表 → 引用资源 global key（走 ReferenceDisplayService + DataScope / RBAC display）
+TABLE_REFERENCE_RESOURCE: Dict[str, str] = {
+    "master_data_factory_plants": "master-data:factory:plant",
+    "master_data_factory_workshops": "master-data:factory:workshop",
+    "master_data_factory_production_lines": "master-data:factory:production-line",
+    "master_data_factory_workstations": "master-data:factory:workstation",
+    "master_data_factory_work_centers": "master-data:factory:work-center",
+    "master_data_warehouse_warehouses": "master-data:warehouse:warehouse",
+    "master_data_warehouse_storage_areas": "master-data:warehouse:storage-area",
+    "master_data_warehouse_storage_locations": "master-data:warehouse:storage-location",
+    "master_data_material_groups": "master-data:material:group",
+    "master_data_materials": "master-data:material",
+    "master_data_boms": "master-data:material:bom",
+    "master_data_defect_types": "master-data:process:defect-type",
+    "master_data_operations": "master-data:process:operation",
+    "master_data_process_routes": "master-data:process:route",
+    "master_data_sops": "master-data:process:sop",
+    "apps_master_data_engineering_drawings": "master-data:process:drawing",
+    "master_data_customers": "master-data:supply-chain:customer",
+    "master_data_suppliers": "master-data:supply-chain:supplier",
+    "master_data_holidays": "kuaizhizao:performance-holidays",
+    "master_data_skills": "kuaizhizao:performance-skills",
+    "apps_kuaizhizao_work_orders": "kuaizhizao:work-order",
+    "apps_kuaizhizao_rework_orders": "kuaizhizao:rework-order",
+    "apps_kuaizhizao_outsource_orders": "kuaizhizao:outsource-order",
+    "apps_kuaizhizao_purchase_orders": "kuaizhizao:purchase-order",
+    "apps_kuaizhizao_sales_orders": "kuaizhizao:sales-order",
+    "apps_kuaizhizao_outsource_work_orders": "kuaizhizao:outsource-work-order",
+    "apps_kuaizhizao_purchase_receipts": "kuaizhizao:purchase-receipt",
+    "apps_kuaizhizao_purchase_returns": "kuaizhizao:purchase-return",
+    "apps_kuaizhizao_sales_deliveries": "kuaizhizao:sales-delivery",
+    "apps_kuaizhizao_sales_returns": "kuaizhizao:sales-return",
+    "apps_kuaizhizao_production_plans": "kuaizhizao:production-plan",
+    "apps_kuaizhizao_equipment": "kuaizhizao:equipment",
+    "apps_kuaizhizao_molds": "kuaizhizao:mold",
+    "apps_kuaizhizao_production_pickings": "kuaizhizao:production-picking",
+    "apps_kuaizhizao_production_returns": "kuaizhizao:production-return",
+    "apps_kuaizhizao_other_inbounds": "kuaizhizao:other-inbound",
+    "apps_kuaizhizao_other_outbounds": "kuaizhizao:other-outbound",
+    "apps_kuaizhizao_finished_goods_receipts": "kuaizhizao:finished-goods-receipt",
+    "apps_kuaizhizao_incoming_inspections": "kuaizhizao:quality-management-incoming-inspection",
+    "apps_kuaizhizao_process_inspections": "kuaizhizao:quality-management-process-inspection",
+    "apps_kuaizhizao_finished_goods_inspections": "kuaizhizao:quality-management-finished-goods-inspection",
+}
+
+
+def reference_resource_for_table(table_name: str) -> str | None:
+    return TABLE_REFERENCE_RESOURCE.get((table_name or "").strip())
 
 
 async def get_associated_options(

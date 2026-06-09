@@ -29,7 +29,7 @@ from apps.kuaicaiwu.models.invoice import Invoice, InvoiceItem
 from apps.kuaicaiwu.constants import RECEIVABLE_SOURCE_SALES_INVOICE
 from apps.kuaicaiwu.services.finance_service import ReceivableService
 from apps.kuaicaiwu.services.invoice_service import InvoiceService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.api.deps.deps import get_current_user
@@ -126,7 +126,7 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
     masked = await PermissionPolicyService.apply_field_masks_to_dict(
         tenant_id=tenant_id,
         user_id=user_id,
-        resource="kuaicaiwu:invoice",
+        resource="kuaicaiwu:sales-invoice",
         payload=payload,
     )
     return SalesInvoiceResponse.model_validate(masked)
@@ -154,7 +154,7 @@ async def _serialize_detail(tenant_id: int, user_id: int, obj: Invoice) -> Sales
     masked = await PermissionPolicyService.apply_field_masks_to_dict(
         tenant_id=tenant_id,
         user_id=user_id,
-        resource="kuaicaiwu:invoice",
+        resource="kuaicaiwu:sales-invoice",
         payload=base,
     )
     return SalesInvoiceDetailResponse.model_validate(masked)
@@ -230,13 +230,7 @@ async def _maybe_auto_generate_receivable_for_sales_invoice(
 @router.post("", response_model=SalesInvoiceResponse, status_code=status.HTTP_201_CREATED)
 async def create_sales_invoice(
     data: SalesInvoiceCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "create",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -278,13 +272,7 @@ async def list_sales_invoices(
     customer_id: Optional[int] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
@@ -311,13 +299,7 @@ async def list_sales_invoices(
 @router.get("/{id}", response_model=SalesInvoiceDetailResponse)
 async def get_sales_invoice(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "read",
-            required_permissions=["kuaicaiwu:invoice:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:read")),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ):
@@ -330,15 +312,9 @@ async def get_sales_invoice(
 async def update_sales_invoice(
     id: int,
     data: SalesInvoiceUpdate,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "update",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:update")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """更新销售发票"""
     invoice = await _get_or_404(tenant_id, id)
@@ -372,15 +348,9 @@ async def update_sales_invoice(
 async def approve_sales_invoice(
     id: int,
     rejection_reason: Optional[str] = Query(None),
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "update",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:audit")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """审核销售发票"""
     invoice = await _get_or_404(tenant_id, id)
@@ -399,15 +369,9 @@ async def approve_sales_invoice(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_sales_invoice(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "delete",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:delete")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """删除销售发票"""
     invoice = await _get_or_404(tenant_id, id)
@@ -425,13 +389,7 @@ async def delete_sales_invoice(
 async def void_sales_invoice(
     id: int,
     body: SalesInvoiceVoidRequest,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "update",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:revoke")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -471,13 +429,7 @@ async def void_sales_invoice(
 async def create_red_letter_sales_invoice(
     id: int,
     body: SalesInvoiceRedLetterRequest,
-    _auth: object = Depends(
-        require_access(
-            "finance.invoice",
-            "create",
-            required_permissions=["kuaicaiwu:invoice:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:sales-invoice:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

@@ -62,8 +62,6 @@
       {
         "title": "app.master-data.menu.warehouse",
         "icon": "archive",
-        "path": "/apps/master-data/warehouse",
-        "permission": "master-data:warehouse:read",
         "sort_order": 2,
         "children": [
           {
@@ -215,6 +213,98 @@
         ]
       }
     ]
+  },
+  "reference_resources": {
+    "factory:plant": {
+      "permission_prefix": "master-data:factory:plant",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:factory:plant"
+    },
+    "factory:workshop": {
+      "permission_prefix": "master-data:factory:workshop",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:factory:workshop"
+    },
+    "factory:work-center": {
+      "permission_prefix": "master-data:factory:work-center",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:factory:work-center"
+    },
+    "warehouse:warehouse": {
+      "permission_prefix": "master-data:warehouse:warehouse",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:warehouse:warehouse"
+    },
+    "material": {
+      "permission_prefix": "master-data:material",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:material"
+    },
+    "supply-chain:customer": {
+      "permission_prefix": "master-data:supply-chain:customer",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:supply-chain:customer"
+    },
+    "supply-chain:supplier": {
+      "permission_prefix": "master-data:supply-chain:supplier",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:supply-chain:supplier"
+    },
+    "factory:production-line": {
+      "permission_prefix": "master-data:factory:production-line",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:factory:production-line"
+    },
+    "factory:workstation": {
+      "permission_prefix": "master-data:factory:workstation",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:factory:workstation"
+    },
+    "warehouse:storage-area": {
+      "permission_prefix": "master-data:warehouse:storage-area",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:warehouse:storage-area"
+    },
+    "warehouse:storage-location": {
+      "permission_prefix": "master-data:warehouse:storage-location",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:warehouse:storage-location"
+    },
+    "material:group": {
+      "permission_prefix": "master-data:material",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:material"
+    },
+    "material:bom": {
+      "permission_prefix": "master-data:material",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:material"
+    },
+    "process:defect-type": {
+      "permission_prefix": "master-data:process:defect-type",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:process:defect-type"
+    },
+    "process:operation": {
+      "permission_prefix": "master-data:process:operation",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:process:operation"
+    },
+    "process:route": {
+      "permission_prefix": "master-data:process:route",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:process:route"
+    },
+    "process:sop": {
+      "permission_prefix": "master-data:process:sop",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "master-data:process:sop"
+    },
+    "process:drawing": {
+      "permission_prefix": "master-data:process:drawing",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    }
   },
   "permissions": [
     "master-data:factory:plant:approve",
@@ -441,17 +531,6 @@
     "master-data:supply-chain:supplier-price-book:delete",
     "master-data:supply-chain:supplier-price-book:import",
     "master-data:supply-chain:supplier-price-book:export",
-    "master-data:warehouse:approve",
-    "master-data:warehouse:audit",
-    "master-data:warehouse:create",
-    "master-data:warehouse:delete",
-    "master-data:warehouse:export",
-    "master-data:warehouse:import",
-    "master-data:warehouse:read",
-    "master-data:warehouse:reject",
-    "master-data:warehouse:revoke",
-    "master-data:warehouse:submit",
-    "master-data:warehouse:update",
     "master-data:warehouse:storage-area:approve",
     "master-data:warehouse:storage-area:audit",
     "master-data:warehouse:storage-area:create",
@@ -491,7 +570,6 @@
     "master-data:factory:workstation:print",
     "master-data:factory:work-center:print",
     "master-data:factory:work-group:print",
-    "master-data:warehouse:print",
     "master-data:warehouse:warehouse:print",
     "master-data:warehouse:storage-area:print",
     "master-data:warehouse:storage-location:print",

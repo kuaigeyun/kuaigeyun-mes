@@ -51,6 +51,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from core.api.users.users import router as users_router
+from core.api.reference.display import router as reference_display_router
 from core.api.roles.roles import router as roles_router
 from core.api.permissions.permissions import router as permissions_router
 from core.api.permissions.permission_policies import router as permission_policies_router
@@ -192,6 +193,14 @@ async def lifespan(app: FastAPI):
     register_haoligo_data_scope_profiles()
     register_kuaizhizao_data_scope_profiles()
     register_master_data_data_scope_profiles()
+    from apps.master_data.reference_display.setup import register_master_data_reference_display_providers
+    from apps.haoligo.reference_display.setup import register_haoligo_reference_display_providers
+    from apps.kuaizhizao.reference_display.setup import register_kuaizhizao_reference_display_providers
+
+    register_master_data_reference_display_providers()
+    register_haoligo_reference_display_providers()
+    register_kuaizhizao_reference_display_providers()
+    logger.info("✅ 引用资源 DisplayProvider 已注册")
     logger.info("✅ 数据权限框架（DataScopeService）已注册")
 
     # 确保平台超级管理员存在（表为空时从 .env 创建；未登录过的账号可与 .env 同步密码）
@@ -744,6 +753,7 @@ app.include_router(application_dedicated_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹
 app.include_router(users_router, prefix="/api/v1/core")
+app.include_router(reference_display_router, prefix="/api/v1/core")
 app.include_router(roles_router, prefix="/api/v1/core")
 app.include_router(permissions_router, prefix="/api/v1/core")
 app.include_router(permission_policies_router, prefix="/api/v1/core")

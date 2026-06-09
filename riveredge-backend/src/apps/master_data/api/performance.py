@@ -12,7 +12,7 @@ from datetime import date
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_access
+from apps.master_data.api._performance_route_access import require_performance_module_access
 from infra.models.user import User
 from apps.master_data.services.performance_service import PerformanceService
 from apps.master_data.schemas.performance_schemas import (
@@ -54,7 +54,11 @@ from apps.master_data.schemas.employee_performance_schemas import (
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/performance", tags=["App · Master Data · Performance"])
+router = APIRouter(
+    prefix="/performance",
+    tags=["App · Master Data · Performance"],
+    dependencies=[Depends(require_performance_module_access())],
+)
 
 
 def _http_exception_with_trace(
@@ -607,10 +611,6 @@ async def delete_kpi_definition(
 
 @router.get("/summaries", response_model=List[PerformanceSummaryResponse], summary="List performance summaries")
 async def get_performance_summaries(
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "read",
-        required_permissions=["kuaizhizao:performance-summaries:read"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: Optional[str] = Query(None, description="周期（YYYY-MM）"),
@@ -624,10 +624,6 @@ async def get_performance_summaries(
 
 @router.get("/details", response_model=PerformanceDetailResponse, summary="Get performance detail")
 async def get_performance_details(
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "read",
-        required_permissions=["kuaizhizao:performance-summaries:read"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: str = Query(..., description="周期（YYYY-MM）"),
@@ -639,10 +635,6 @@ async def get_performance_details(
 
 @router.post("/calculate", response_model=List[PerformanceSummaryResponse], summary="Trigger performance calculation")
 async def calculate_performance(
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "update",
-        required_permissions=["kuaizhizao:performance-summaries:update"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     period: str = Query(..., description="周期（YYYY-MM）"),
@@ -697,10 +689,6 @@ async def distribute_by_work_group(
 @router.post("/summaries/{summary_id}/confirm", response_model=PerformanceSummaryResponse, summary="Confirm performance summary")
 async def confirm_performance_summary(
     summary_id: int = Path(..., description="汇总ID"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "audit",
-        required_permissions=["kuaizhizao:performance-summaries:approve"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -715,10 +703,6 @@ async def confirm_performance_summary(
 @router.post("/summaries/{summary_id}/reopen", response_model=PerformanceSummaryResponse, summary="Reopen confirmed summary")
 async def reopen_performance_summary(
     summary_id: int = Path(..., description="汇总ID"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "audit",
-        required_permissions=["kuaizhizao:performance-summaries:approve"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -733,10 +717,6 @@ async def reopen_performance_summary(
 @router.post("/summaries/batch-confirm", summary="Batch confirm summaries by period")
 async def batch_confirm_summaries(
     period: str = Query(..., description="周期（YYYY-MM）"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "audit",
-        required_permissions=["kuaizhizao:performance-summaries:approve"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -746,10 +726,6 @@ async def batch_confirm_summaries(
 @router.get("/summaries/payroll-total", summary="Confirmed payroll total for finance import")
 async def get_payroll_total(
     period: str = Query(..., description="周期（YYYY-MM）"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "read",
-        required_permissions=["kuaizhizao:performance-summaries:read"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -771,10 +747,6 @@ async def get_payroll_total(
 async def export_performance_summaries(
     period: str = Query(..., description="周期（YYYY-MM）"),
     status_filter: str = Query("confirmed", alias="status", description="汇总状态"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-summaries", "export",
-        required_permissions=["kuaizhizao:performance-summaries:export"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -797,10 +769,6 @@ async def export_performance_summaries(
 async def list_kpi_scores(
     period: Optional[str] = Query(None, description="周期（YYYY-MM）"),
     employee_id: Optional[int] = Query(None, description="员工ID"),
-    _auth: object = Depends(require_access(
-        "kuaizhizao:performance-kpi-definitions", "read",
-        required_permissions=["kuaizhizao:performance-kpi-definitions:read"],
-    )),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):

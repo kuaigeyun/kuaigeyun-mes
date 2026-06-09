@@ -12,7 +12,7 @@ from apps.kuaicaiwu.schemas.finance import (
     ReceiptRecordCreate
 )
 from apps.kuaicaiwu.services.finance_service import ReceivableService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -47,13 +47,7 @@ def _http_exception_with_trace(
 @router.post("", response_model=ReceivableResponse, status_code=status.HTTP_201_CREATED)
 async def create_receivable(
     data: ReceivableCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "create",
-            required_permissions=["kuaicaiwu:receivable:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -71,13 +65,7 @@ async def list_receivables(
     status: Optional[str] = None,
     customer_id: Optional[int] = None,
     pending_settlement: bool = Query(False, description="仅返回待核销应收（remaining_amount > 0）"),
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     receivables, total = await receivable_service.list_receivables(
@@ -98,13 +86,7 @@ async def list_receivables(
 
 @router.get("/statistics")
 async def get_receivable_statistics(
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await receivable_service.get_receivable_statistics(tenant_id)
@@ -112,13 +94,7 @@ async def get_receivable_statistics(
 
 @router.get("/aging")
 async def get_receivable_aging(
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await receivable_service.get_receivable_aging_analysis(tenant_id)
@@ -127,13 +103,7 @@ async def get_receivable_aging(
 @router.get("/{id}", response_model=ReceivableResponse)
 async def get_receivable(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     try:
@@ -147,15 +117,9 @@ async def get_receivable(
 async def record_receipt(
     id: int,
     data: ReceiptRecordCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:update")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         receivable = await receivable_service.record_receipt(tenant_id, id, data, current_user.id)
@@ -168,15 +132,9 @@ async def record_receipt(
 async def approve_receivable(
     id: int,
     rejection_reason: Optional[str] = Query(None),
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:audit")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     try:
         receivable = await receivable_service.approve_receivable(tenant_id, id, current_user.id, rejection_reason)
@@ -188,13 +146,7 @@ async def approve_receivable(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_receivable(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.receivable",
-            "delete",
-            required_permissions=["kuaicaiwu:receivable:delete"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:receivable:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):

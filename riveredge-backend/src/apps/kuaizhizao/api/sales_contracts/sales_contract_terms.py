@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Path, Query, status as ht
 from loguru import logger
 
 from core.api.deps import get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 
 from apps.kuaizhizao.schemas.sales_contract_term import (
@@ -27,7 +27,7 @@ term_service = SalesContractTermService()
 router = APIRouter(
     prefix="/sales-contracts",
     tags=["App · Kuaige Zhizao · Sales Contract Terms"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "sales-contract"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("sales-contract"))],
 )
 
 

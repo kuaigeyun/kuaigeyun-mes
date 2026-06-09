@@ -7,7 +7,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import BusinessLogicError
 
@@ -22,7 +22,7 @@ from apps.kuaizhizao.schemas.station import (
 router = APIRouter(
     prefix="/station",
     tags=["App · Kuaige Zhizao · Station Terminal"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "production-execution-terminal"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("production-execution-terminal"))],
 )
 
 station_service = StationService()

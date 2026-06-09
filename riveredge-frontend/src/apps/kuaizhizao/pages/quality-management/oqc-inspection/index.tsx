@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Modal, Space, Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import {
   qualifiedQuantityColumnProps,
@@ -16,13 +17,14 @@ import {
   fetchSalesDeliveriesForOqc,
   fetchShipmentNoticesForOqc,
 } from '../components/inspectionCreateSourceUtils';
-import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+
+const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
 const OQCInspectionPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
+  const { canCreate, canUpdate } = useResourcePermissions(OQC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const conductFormRef = useRef<any>(null);
   const [conductVisible, setConductVisible] = useState(false);
@@ -35,9 +37,6 @@ const OQCInspectionPage: React.FC = () => {
   const [deliveryOptions, setDeliveryOptions] = useState<{ label: string; value: number }[]>([]);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | undefined>();
   const [creatingFromDelivery, setCreatingFromDelivery] = useState(false);
-  const canCreate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-oqc-inspection:create');
-  const canUpdate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-oqc-inspection:update');
-  const canApprove = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-oqc-inspection:approve');
 
   const openFromNoticeModal = async () => {
     try {
@@ -122,7 +121,7 @@ const OQCInspectionPage: React.FC = () => {
       width: 200,
       render: (_, row) => (
         <Space>
-          {canUpdate && (
+          {canUpdate && row.status === '待检验' && (
             <Button
               type="link"
               onClick={() => {
@@ -144,19 +143,26 @@ const OQCInspectionPage: React.FC = () => {
               执行检验
             </Button>
           )}
-          {canApprove && row.status === '已检验' && (
-            <Button
-              type="link"
-              onClick={async () => {
-                if (!row.id) return;
-                await qualityImprovementApi.oqc.approve(row.id, true);
-                messageApi.success('审核通过，可放行出库');
-                actionRef.current?.reload();
-              }}
-            >
-              审核通过
-            </Button>
-          )}
+          <UniWorkflowActions
+            key="wf"
+            record={row}
+            entityName="出货检验单"
+            statusField="status"
+            reviewStatusField="review_status"
+            draftStatuses={[]}
+            pendingStatuses={['待审核', '已检验']}
+            approvedStatuses={['已审核']}
+            rejectedStatuses={['已驳回']}
+            theme="link"
+            size="small"
+            resourcePrefix={OQC_RESOURCE}
+            actions={{
+              approve: (id) => qualityImprovementApi.oqc.approve(id, true),
+              reject: (id) => qualityImprovementApi.oqc.approve(id, false),
+              revoke: (id) => qualityImprovementApi.oqc.revoke(id),
+            }}
+            onSuccess={() => actionRef.current?.reload()}
+          />
         </Space>
       ),
     },
@@ -172,8 +178,48 @@ const OQCInspectionPage: React.FC = () => {
           headerTitle="出货检验 (OQC)"
           actionRef={actionRef}
           rowKey="id"
+          permissionResource={OQC_RESOURCE}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection"
+          showExportButton
+          onExport={async () => {
+            try {
+              const res = await qualityImprovementApi.oqc.export();
+              const items = res.items || [];
+              if (items.length === 0) {
+                messageApi.warning('暂无数据可导出');
+                return;
+              }
+              const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = `oqc-inspections-${new Date().toISOString().slice(0, 10)}.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+              messageApi.success(`已导出 ${items.length} 条记录`);
+            } catch (e: any) {
+              messageApi.error(e?.message || '导出失败');
+            }
+          }}
+          showDeleteButton
+          onDelete={async (keys) => {
+            Modal.confirm({
+              title: '确认删除',
+              content: `确定删除选中的 ${keys.length} 张出货检验单？仅「待检验」状态可删除。`,
+              onOk: async () => {
+                try {
+                  for (const key of keys) {
+                    await qualityImprovementApi.oqc.delete(Number(key));
+                  }
+                  messageApi.success(`已删除 ${keys.length} 条记录`);
+                  actionRef.current?.reload();
+                } catch (e: any) {
+                  messageApi.error(e?.message || '删除失败');
+                }
+              },
+            });
+          }}
           toolBarRender={() =>
             canCreate
               ? [

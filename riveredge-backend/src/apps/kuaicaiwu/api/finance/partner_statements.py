@@ -19,7 +19,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PartnerStatementResponse,
 )
 from apps.kuaicaiwu.services.partner_statement_service import PartnerStatementService
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
@@ -60,13 +60,7 @@ async def preview_partner_statement(
     partner_type: str = Query(..., description="Customer 或 Supplier"),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "read",
-            required_permissions=["kuaicaiwu:partner-statement:read"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -79,13 +73,7 @@ async def preview_partner_statement(
 @router.post("", response_model=PartnerStatementResponse, status_code=status.HTTP_201_CREATED)
 async def create_partner_statement(
     data: PartnerStatementCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "create",
-            required_permissions=["kuaicaiwu:partner-statement:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -113,13 +101,7 @@ async def list_partner_statements(
     partner_id: Optional[int] = None,
     statement_period: Optional[str] = None,
     status: Optional[str] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "read",
-            required_permissions=["kuaicaiwu:partner-statement:read"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     items, total = await service.list_statements(
@@ -142,13 +124,7 @@ async def list_partner_statements(
 @router.get("/{id}", response_model=PartnerStatementResponse)
 async def get_partner_statement(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "read",
-            required_permissions=["kuaicaiwu:partner-statement:read"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:read")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -161,13 +137,7 @@ async def get_partner_statement(
 @router.post("/{id}/confirm", response_model=PartnerStatementResponse)
 async def confirm_partner_statement(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "update",
-            required_permissions=["kuaicaiwu:partner-statement:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -183,13 +153,7 @@ async def confirm_partner_statement(
 async def mark_partner_statement_sent(
     id: int,
     body: PartnerStatementMarkSentRequest,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "update",
-            required_permissions=["kuaicaiwu:partner-statement:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -207,13 +171,7 @@ async def mark_partner_statement_sent(
 async def dispute_partner_statement(
     id: int,
     body: PartnerStatementDisputeRequest,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "update",
-            required_permissions=["kuaicaiwu:partner-statement:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:update")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -227,13 +185,7 @@ async def dispute_partner_statement(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_partner_statement(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "delete",
-            required_permissions=["kuaicaiwu:partner-statement:delete"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:delete")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -247,13 +199,7 @@ async def delete_partner_statement(
 async def export_partner_statement(
     id: int,
     format: str = Query("xlsx", description="xlsx 或 pdf"),
-    _auth: object = Depends(
-        require_access(
-            "finance.partner_statement",
-            "read",
-            required_permissions=["kuaicaiwu:partner-statement:export"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:partner-statement:export")),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:

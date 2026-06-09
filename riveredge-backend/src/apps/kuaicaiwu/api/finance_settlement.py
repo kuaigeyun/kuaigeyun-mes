@@ -8,7 +8,7 @@ from typing import Any, Optional
 from datetime import date
 from decimal import Decimal
 from loguru import logger
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_user
 from apps.kuaicaiwu.services.finance_service import AccountSettlementService
 
@@ -41,13 +41,7 @@ def _http_exception_with_trace(
 async def get_receivable_suggestions(
     customer_id: int | None = Query(None, description="客户ID（可选，不传则返回全部客户建议）"),
     limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
     current_user: Any = Depends(get_current_user),
 ):
     items = await service.suggest_receivable_matches(
@@ -62,13 +56,7 @@ async def get_receivable_suggestions(
 async def get_payable_suggestions(
     supplier_id: int | None = Query(None, description="供应商ID（可选，不传则返回全部供应商建议）"),
     limit: int = Query(50, ge=1, le=200, description="返回建议数量上限"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
     current_user: Any = Depends(get_current_user),
 ):
     items = await service.suggest_payable_matches(
@@ -86,13 +74,7 @@ async def settle_receivable(
     currency: str = Query("CNY", description="币种"),
     invoice_exchange_rate: Decimal | None = Query(None, description="发票日汇率"),
     payment_exchange_rate: Decimal | None = Query(None, description="付款/收款日汇率"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user)
 ):
     return await service.settle_receivable(
@@ -114,13 +96,7 @@ async def settle_payable(
     currency: str = Query("CNY", description="币种"),
     invoice_exchange_rate: Decimal | None = Query(None, description="发票日汇率"),
     payment_exchange_rate: Decimal | None = Query(None, description="付款/收款日汇率"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user)
 ):
     return await service.settle_payable(
@@ -137,13 +113,7 @@ async def settle_payable(
 @router.post("/auto-settle/receivables", summary="Auto-settle all receivables for customer (FIFO)")
 async def auto_settle_receivables(
     customer_id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user)
 ):
     count = await service.fifo_auto_settle_receivables(
@@ -159,13 +129,7 @@ async def revaluate_period_end(
     book_rate: Decimal = Query(..., description="账面汇率"),
     period_end_rate: Decimal = Query(..., description="期末汇率"),
     doc_type: str = Query("all", description="all/receivable/payable"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "update",
-            required_permissions=["kuaicaiwu:receivable:update", "kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:update")),
     current_user: Any = Depends(get_current_user),
 ):
     if doc_type not in {"all", "receivable", "payable"}:
@@ -191,13 +155,7 @@ async def get_statement(
     partner_type: str = Query(..., description="Customer/Supplier"),
     start_date: date = Query(...),
     end_date: date = Query(...),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "read",
-            required_permissions=["kuaicaiwu:receivable:view", "kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:read")),
     current_user: Any = Depends(get_current_user)
 ):
     return await service.generate_partner_statement(
@@ -209,13 +167,7 @@ async def archive_statement(
     partner_id: int,
     partner_type: str,
     period: str = Query(..., description="YYYY-MM"),
-    _auth: object = Depends(
-        require_access(
-            "finance.settlement",
-            "create",
-            required_permissions=["kuaicaiwu:receivable:update", "kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:settlement:create")),
     current_user: Any = Depends(get_current_user)
 ):
     return await service.generate_formal_statement(

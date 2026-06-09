@@ -10,7 +10,7 @@ from typing import Any, Optional, Annotated
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.supply_chain_service import SupplyChainService
 from apps.master_data.schemas.supply_chain_schemas import (
@@ -60,7 +60,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
     "/customers",
     response_model=CustomerResponse,
     summary="Create customer",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:customer"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
 )
 async def create_customer(
     data: CustomerCreate,
@@ -95,7 +95,7 @@ def _is_missing_db_column_error(exc: BaseException) -> bool:
     "/customers",
     response_model=CustomerListResponse,
     summary="List customers",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:customer"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
 )
 async def list_customers(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -152,7 +152,7 @@ async def list_customers(
     "/customers/{customer_uuid}",
     response_model=CustomerResponse,
     summary="Get customer",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:customer"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
 )
 async def get_customer(
     customer_uuid: str,
@@ -174,7 +174,7 @@ async def get_customer(
     "/customers/{customer_uuid}",
     response_model=CustomerResponse,
     summary="Update customer",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:customer"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
 )
 async def update_customer(
     customer_uuid: str,
@@ -207,7 +207,7 @@ async def update_customer(
 @router.delete(
     "/customers/{customer_uuid}",
     summary="Delete customer",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:customer"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:customer"))],
 )
 async def delete_customer(
     customer_uuid: str,
@@ -232,7 +232,7 @@ async def delete_customer(
     "/suppliers",
     response_model=SupplierResponse,
     summary="Create supplier",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:supplier"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
 )
 async def create_supplier(
     data: SupplierCreate,
@@ -262,7 +262,7 @@ async def create_supplier(
     "/suppliers",
     response_model=SupplierListResponse,
     summary="List suppliers",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:supplier"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
 )
 async def list_suppliers(
     current_user: Annotated[User, Depends(get_current_user)],
@@ -310,7 +310,7 @@ async def list_suppliers(
     "/suppliers/{supplier_uuid}",
     response_model=SupplierResponse,
     summary="Get supplier",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:supplier"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
 )
 async def get_supplier(
     supplier_uuid: str,
@@ -332,7 +332,7 @@ async def get_supplier(
     "/suppliers/{supplier_uuid}",
     response_model=SupplierResponse,
     summary="Update supplier",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:supplier"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
 )
 async def update_supplier(
     supplier_uuid: str,
@@ -365,7 +365,7 @@ async def update_supplier(
 @router.delete(
     "/suppliers/{supplier_uuid}",
     summary="Delete supplier",
-    dependencies=[Depends(require_module_access("master-data", "supply-chain:supplier"))],
+    dependencies=[Depends(require_master_data_module_access("supply-chain:supplier"))],
 )
 async def delete_supplier(
     supplier_uuid: str,

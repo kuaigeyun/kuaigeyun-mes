@@ -49,6 +49,8 @@ from apps.kuaizhizao.models.other_outbound import OtherOutbound
 from apps.kuaizhizao.models.other_outbound_item import OtherOutboundItem
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.quotation_item import QuotationItem
+from apps.kuaizhizao.models.sales_contract import SalesContract
+from apps.kuaizhizao.models.sales_contract_item import SalesContractItem
 from apps.master_data.models.material import Material
 from core.services.file.file_preview_service import FilePreviewService
 from core.services.file.file_service import FileService
@@ -379,6 +381,14 @@ def _quotation_formal_print_allowed(quotation: Quotation) -> bool:
     return False
 
 
+def _sales_contract_formal_print_allowed(contract: SalesContract) -> bool:
+    """正式销售合同 PDF：已审核通过且处于已生效/执行中/已关闭。"""
+    st = (contract.status or "").strip()
+    if st in ("已生效", "执行中", "已关闭") and _is_approved(contract.review_status):
+        return True
+    return False
+
+
 def _first_material_image_ref_for_print(images: Any) -> Tuple[str, str]:
     """
     解析物料 images 的首个引用。
@@ -537,6 +547,7 @@ class DocumentPrintService:
         "other_inbound": "OTHER_INBOUND_PRINT",
         "other_outbound": "OTHER_OUTBOUND_PRINT",
         "quotation": "QUOTATION_PRINT",
+        "sales_contract": "SALES_CONTRACT_PRINT",
         "material_borrow": "MATERIAL_BORROW_PRINT",
         "material_return": "MATERIAL_RETURN_PRINT",
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
@@ -823,6 +834,16 @@ class DocumentPrintService:
                     "正式报价单需在审核通过、客户确认或已转订单后方可打印"
                 )
             return await self._format_quotation_data(document)
+
+        elif document_type == "sales_contract":
+            document = await SalesContract.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not document:
+                raise NotFoundError(f"销售合同不存在: {document_id}")
+            if not _sales_contract_formal_print_allowed(document):
+                raise BusinessLogicError("正式销售合同需在审核通过且已生效后方可打印")
+            return await self._format_sales_contract_data(document)
         
         elif document_type == "material_borrow":
             document = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
@@ -1387,6 +1408,90 @@ class DocumentPrintService:
             "payment_terms": quotation.payment_terms,
             "notes": quotation.notes,
             "created_at": quotation.created_at.isoformat() if quotation.created_at else None,
+            "items": items_data,
+        }
+
+    async def _format_sales_contract_data(self, contract: SalesContract) -> Dict[str, Any]:
+        """格式化销售合同数据"""
+        items = await SalesContractItem.filter(
+            tenant_id=contract.tenant_id, contract_id=contract.id
+        ).all()
+        material_by_id: Dict[int, Material] = {}
+        mids = [i.material_id for i in items if getattr(i, "material_id", None)]
+        if mids:
+            mats = await Material.filter(tenant_id=contract.tenant_id, id__in=list(set(mids))).all()
+            material_by_id = {m.id: m for m in mats}
+
+        items_data = []
+        for i in items:
+            mat = material_by_id.get(i.material_id) if getattr(i, "material_id", None) else None
+            chinese_short_name = (mat.name if mat else None) or i.material_name or ""
+            model_number = ""
+            if mat and getattr(mat, "model", None) and str(mat.model).strip():
+                model_number = str(mat.model).strip()
+            if not model_number:
+                model_number = (i.material_spec or "").strip()
+            image_url = ""
+            if mat:
+                image_url = await _material_image_data_url_for_pdfme(contract.tenant_id, mat.images)
+            items_data.append(
+                {
+                    "material_code": i.material_code,
+                    "material_name": i.material_name,
+                    "material_spec": i.material_spec,
+                    "material_unit": i.material_unit,
+                    "contract_quantity": str(i.contract_quantity),
+                    "released_quantity": str(i.released_quantity or 0),
+                    "unit_price": str(i.unit_price),
+                    "tax_rate": str(getattr(i, "tax_rate", None) or 0),
+                    "total_amount": str(i.total_amount),
+                    "delivery_date": i.delivery_date.isoformat() if i.delivery_date else None,
+                    "notes": i.notes,
+                    "chinese_short_name": chinese_short_name,
+                    "model_number": model_number,
+                    "image_url": image_url,
+                    "quote_quantity": str(i.contract_quantity),
+                }
+            )
+        rem_qty = max(
+            0,
+            float(contract.total_quantity or 0) - float(contract.released_quantity or 0),
+        )
+        rem_amt = max(
+            0,
+            float(contract.total_amount or 0) - float(contract.released_amount or 0),
+        )
+        return {
+            "document_type": "sales_contract",
+            "code": contract.contract_code,
+            "contract_code": contract.contract_code,
+            "contract_type": contract.contract_type,
+            "version_no": int(getattr(contract, "version_no", None) or 1),
+            "review_status": contract.review_status,
+            "currency_code": contract.currency_code or "CNY",
+            "customer_name": contract.customer_name,
+            "customer_contact": contract.customer_contact,
+            "customer_phone": contract.customer_phone,
+            "contract_date": contract.contract_date.isoformat() if contract.contract_date else None,
+            "valid_from": contract.valid_from.isoformat() if contract.valid_from else None,
+            "valid_to": contract.valid_to.isoformat() if contract.valid_to else None,
+            "total_quantity": str(contract.total_quantity),
+            "total_amount": str(contract.total_amount),
+            "released_quantity": str(contract.released_quantity or 0),
+            "released_amount": str(contract.released_amount or 0),
+            "remaining_quantity": str(rem_qty),
+            "remaining_amount": str(rem_amt),
+            "price_type": getattr(contract, "price_type", None) or "tax_exclusive",
+            "status": contract.status,
+            "salesman_name": contract.salesman_name,
+            "shipping_address": contract.shipping_address,
+            "shipping_method": contract.shipping_method,
+            "payment_terms": contract.payment_terms,
+            "quotation_code": contract.quotation_code,
+            "term_group_name": contract.term_group_name,
+            "contract_terms": contract.contract_terms,
+            "notes": contract.notes,
+            "created_at": contract.created_at.isoformat() if contract.created_at else None,
             "items": items_data,
         }
 

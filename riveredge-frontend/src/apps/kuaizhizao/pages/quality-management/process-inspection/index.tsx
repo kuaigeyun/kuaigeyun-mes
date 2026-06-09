@@ -73,7 +73,10 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
+const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -238,7 +241,8 @@ const ProcessInspectionPage: React.FC = () => {
   const currentUser = useGlobalStore((s) => s.currentUser);
   const { token } = AntdTheme.useToken();
   const processInspectionDetailDrawerZIndex = token.zIndexPopupBase;
-  const canReadNcLedger = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-nonconforming-ledger:read');
+  const { canUpdate: canRegisterDefect } = useResourcePermissions(PROCESS_RESOURCE);
+  const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
@@ -1080,7 +1084,7 @@ const ProcessInspectionPage: React.FC = () => {
                 inspection={inspectionDetail}
                 inspectionType="process"
                 onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
-                canRegisterDefect={hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-process-inspection:update')}
+                canRegisterDefect={canRegisterDefect}
               />
               <DetailDrawerSection title="基本信息">
                 <Descriptions

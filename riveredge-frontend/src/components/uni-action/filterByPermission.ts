@@ -34,7 +34,7 @@ export function filterActionsByResourcePermission(
         if (isCreateLikeAction(text)) return gates.canCreate;
         return true;
       default:
-        return true;
+        return false;
     }
   });
 }

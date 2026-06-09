@@ -8,6 +8,8 @@
 
 import { apiRequest } from '../../../services/api';
 
+import type { DocumentPrintApiResult } from '../../../utils/printResponseHelpers';
+
 import type { BackendLifecycle } from '../utils/backendLifecycle';
 import type { SalesContractTermSnapshot } from './sales-contract-term';
 
@@ -397,6 +399,37 @@ export const salesContractApi = {
 
   executionSummary: () => apiRequest<SalesContractExecutionSummary[]>(`${BASE}/execution-summary`),
 
+  withdraw: (id: number) =>
+    apiRequest<SalesContract>(`${BASE}/${id}/withdraw`, { method: 'POST' }),
+
+  revokeReview: (id: number) =>
+    apiRequest<SalesContract>(`${BASE}/${id}/revoke-review`, { method: 'POST' }),
+
+  print: (
+    id: number,
+    options?: {
+      templateUuid?: string;
+      outputFormat?: 'html' | 'pdf';
+      responseFormat?: 'json' | 'html';
+    },
+  ) =>
+    apiRequest<DocumentPrintApiResult>(
+      `${BASE}/${id}/print`,
+      {
+        method: 'GET',
+        params: {
+          template_uuid: options?.templateUuid,
+          output_format: options?.outputFormat ?? 'pdf',
+          response_format: options?.responseFormat ?? 'json',
+        },
+      },
+    ),
+
+  getPrintVariables: (id: number) =>
+    apiRequest<{ success: boolean; variables: Record<string, unknown> }>(
+      `${BASE}/${id}/print-variables`,
+      { method: 'GET' },
+    ),
 };
 
 

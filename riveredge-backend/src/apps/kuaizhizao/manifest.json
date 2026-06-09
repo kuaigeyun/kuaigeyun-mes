@@ -1360,6 +1360,194 @@
       }
     ]
   },
+  "reference_resources": {
+    "work-order": {
+      "permission_prefix": "kuaizhizao:work-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:work-order"
+    },
+    "sales-order": {
+      "permission_prefix": "kuaizhizao:sales-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:sales-order"
+    },
+    "purchase-order": {
+      "permission_prefix": "kuaizhizao:purchase-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:purchase-order"
+    },
+    "rework-order": {
+      "permission_prefix": "kuaizhizao:rework-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:rework-order"
+    },
+    "outsource-order": {
+      "permission_prefix": "kuaizhizao:outsource-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:outsource-order"
+    },
+    "performance-holidays": {
+      "permission_prefix": "kuaizhizao:performance-holidays",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "performance-skills": {
+      "permission_prefix": "kuaizhizao:performance-skills",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "outsource-work-order": {
+      "permission_prefix": "kuaizhizao:outsource-order",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:outsource-order"
+    },
+    "purchase-receipt": {
+      "permission_prefix": "kuaizhizao:inbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:inbound"
+    },
+    "purchase-return": {
+      "permission_prefix": "kuaizhizao:purchase-return",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:purchase-return"
+    },
+    "sales-delivery": {
+      "permission_prefix": "kuaizhizao:outbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:outbound"
+    },
+    "sales-return": {
+      "permission_prefix": "kuaizhizao:sales-return",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:sales-return"
+    },
+    "production-plan": {
+      "permission_prefix": "kuaizhizao:plan-management-scheduling",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:plan-management-scheduling"
+    },
+    "equipment": {
+      "permission_prefix": "kuaizhizao:equipment-management-equipment",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "mold": {
+      "permission_prefix": "kuaizhizao:equipment-management-molds",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "production-picking": {
+      "permission_prefix": "kuaizhizao:inbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:inbound"
+    },
+    "production-return": {
+      "permission_prefix": "kuaizhizao:inbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:inbound"
+    },
+    "other-inbound": {
+      "permission_prefix": "kuaizhizao:other-inbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:other-inbound"
+    },
+    "other-outbound": {
+      "permission_prefix": "kuaizhizao:other-outbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:other-outbound"
+    },
+    "finished-goods-receipt": {
+      "permission_prefix": "kuaizhizao:inbound",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": "kuaizhizao:inbound"
+    },
+    "quality-management-incoming-inspection": {
+      "permission_prefix": "kuaizhizao:quality-management-incoming-inspection",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "quality-management-process-inspection": {
+      "permission_prefix": "kuaizhizao:quality-management-process-inspection",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "quality-management-finished-goods-inspection": {
+      "permission_prefix": "kuaizhizao:quality-management-finished-goods-inspection",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    },
+    "quality-management-oqc-inspection": {
+      "permission_prefix": "kuaizhizao:quality-management-oqc-inspection",
+      "display_fields": ["id", "uuid", "code", "name", "label"],
+      "data_scope_key": null
+    }
+  },
+  "module_references": {
+    "sales-order": [
+      "master-data:supply-chain:customer",
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "sales-order-change": [
+      "master-data:supply-chain:customer",
+      "master-data:material"
+    ],
+    "quotation": [
+      "master-data:supply-chain:customer",
+      "master-data:material"
+    ],
+    "purchase-order": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "purchase-order-change": [
+      "master-data:supply-chain:supplier",
+      "master-data:material"
+    ],
+    "purchase-requisition": [
+      "master-data:supply-chain:supplier",
+      "master-data:material"
+    ],
+    "work-order": [
+      "master-data:material",
+      "master-data:factory:workshop",
+      "master-data:factory:work-center",
+      "master-data:supply-chain:supplier"
+    ],
+    "sales-delivery": [
+      "master-data:supply-chain:customer",
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "sales-return": [
+      "master-data:supply-chain:customer",
+      "master-data:material"
+    ],
+    "purchase-receipt": [
+      "master-data:supply-chain:supplier",
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "purchase-return": [
+      "master-data:supply-chain:supplier",
+      "master-data:material"
+    ],
+    "inbound": [
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "outbound": [
+      "master-data:material",
+      "master-data:warehouse:warehouse"
+    ],
+    "customer-follow-up": [
+      "master-data:supply-chain:customer"
+    ],
+    "customer-pool": [
+      "master-data:supply-chain:customer"
+    ]
+  },
   "permissions": [
     "kuaizhizao:customer-follow-up:approve",
     "kuaizhizao:customer-follow-up:audit",
@@ -1908,12 +2096,17 @@
     "kuaizhizao:quality-management-eight-d-reports:approve",
     "kuaizhizao:quality-management-eight-d-reports:close",
     "kuaizhizao:quality-management-eight-d-reports:export",
-    "kuaizhizao:quality-management-oqc-inspection:read",
-    "kuaizhizao:quality-management-oqc-inspection:create",
-    "kuaizhizao:quality-management-oqc-inspection:update",
     "kuaizhizao:quality-management-oqc-inspection:approve",
-    "kuaizhizao:quality-management-oqc-inspection:close",
+    "kuaizhizao:quality-management-oqc-inspection:audit",
+    "kuaizhizao:quality-management-oqc-inspection:create",
+    "kuaizhizao:quality-management-oqc-inspection:delete",
     "kuaizhizao:quality-management-oqc-inspection:export",
+    "kuaizhizao:quality-management-oqc-inspection:import",
+    "kuaizhizao:quality-management-oqc-inspection:read",
+    "kuaizhizao:quality-management-oqc-inspection:reject",
+    "kuaizhizao:quality-management-oqc-inspection:revoke",
+    "kuaizhizao:quality-management-oqc-inspection:submit",
+    "kuaizhizao:quality-management-oqc-inspection:update",
     "kuaizhizao:quality-management-spc-monitor:read",
     "kuaizhizao:quality-management-spc-monitor:create",
     "kuaizhizao:quality-management-spc-monitor:update",
@@ -1953,8 +2146,12 @@
     "kuaizhizao:sales-contract:approve",
     "kuaizhizao:sales-contract:create",
     "kuaizhizao:sales-contract:delete",
+    "kuaizhizao:sales-contract:export",
+    "kuaizhizao:sales-contract:import",
+    "kuaizhizao:sales-contract:print",
     "kuaizhizao:sales-contract:read",
     "kuaizhizao:sales-contract:reject",
+    "kuaizhizao:sales-contract:revoke",
     "kuaizhizao:sales-contract:submit",
     "kuaizhizao:sales-contract:update",
     "kuaizhizao:receipt-notice:approve",
@@ -1992,6 +2189,7 @@
     "kuaizhizao:sales-forecast:update",
     "kuaizhizao:sales-management-reports-customer-sales-reconciliation:read",
     "kuaizhizao:sales-management-reports-customer-sales-summary:read",
+    "kuaizhizao:sales-management-reports-contract-execution:read",
     "kuaizhizao:sales-management-reports-forecast-vs-actual:read",
     "kuaizhizao:sales-management-reports-order-execution-tracking:read",
     "kuaizhizao:sales-management-reports-product-sales-ranking:read",
@@ -2265,6 +2463,7 @@
     "kuaizhizao:customer-follow-up:print",
     "kuaizhizao:sales-forecast:print",
     "kuaizhizao:sales-order:print",
+    "kuaizhizao:sales-contract:print",
     "kuaizhizao:shipment-notice:print",
     "kuaizhizao:sales-return:print",
     "kuaizhizao:sales-management-reports-sales-order-query:print",
@@ -2281,6 +2480,8 @@
     "kuaizhizao:sales-management-reports-forecast-vs-actual:export",
     "kuaizhizao:sales-management-reports-quotation-query:print",
     "kuaizhizao:sales-management-reports-quotation-query:export",
+    "kuaizhizao:sales-management-reports-contract-execution:print",
+    "kuaizhizao:sales-management-reports-contract-execution:export",
     "kuaizhizao:sales-management-reports-sales-trend-analysis:print",
     "kuaizhizao:sales-management-reports-sales-trend-analysis:export",
     "kuaizhizao:sales-management-reports-sales-return-analysis:print",
@@ -2369,6 +2570,7 @@
     "kuaizhizao:quality-management-incoming-inspection:print",
     "kuaizhizao:quality-management-process-inspection:print",
     "kuaizhizao:quality-management-finished-goods-inspection:print",
+    "kuaizhizao:quality-management-oqc-inspection:print",
     "kuaizhizao:quality-management-traceability:print",
     "kuaizhizao:quality-management-inspection-plans:print",
     "kuaizhizao:quality-management-reports-incoming-inspection-report:print",

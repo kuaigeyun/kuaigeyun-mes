@@ -13,7 +13,7 @@ from apps.kuaicaiwu.schemas.finance import (
     PaymentVoucherResponse, PaymentVoucherListResponse,
 )
 from apps.kuaicaiwu.models.payment import Payment
-from core.api.deps.access import require_access
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
 from infra.models.user import User
@@ -59,13 +59,7 @@ def _serialize(obj: Payment) -> PaymentVoucherResponse:
 @router.post("", response_model=PaymentVoucherResponse, status_code=status.HTTP_201_CREATED)
 async def create_payment(
     data: PaymentVoucherCreate,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "create",
-            required_permissions=["kuaicaiwu:payable:create"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:create")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -104,13 +98,7 @@ async def list_payments(
     settlement_type: Optional[str] = None,
     start_date: Optional[date] = None,
     end_date: Optional[date] = None,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """获取付款单列表"""
@@ -139,13 +127,7 @@ async def list_payments(
 @router.get("/{id}", response_model=PaymentVoucherResponse)
 async def get_payment(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "read",
-            required_permissions=["kuaicaiwu:payable:view"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:read")),
     tenant_id: int = Depends(get_current_tenant)
 ):
     """获取付款单详情"""
@@ -157,13 +139,7 @@ async def get_payment(
 async def update_payment(
     id: int,
     data: PaymentVoucherUpdate,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:update")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):
@@ -179,15 +155,9 @@ async def update_payment(
 @router.post("/{id}/confirm", response_model=PaymentVoucherResponse)
 async def confirm_payment(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:audit")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """确认付款单"""
     payment = await _get_or_404(tenant_id, id)
@@ -210,15 +180,9 @@ async def confirm_payment(
 @router.post("/{id}/cancel", response_model=PaymentVoucherResponse)
 async def cancel_payment(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "update",
-            required_permissions=["kuaicaiwu:payable:update"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:revoke")),
     current_user: User = Depends(get_current_user),
-    tenant_id: int = Depends(get_current_tenant)
+    tenant_id: int = Depends(get_current_tenant),
 ):
     """作废付款单"""
     payment = await _get_or_404(tenant_id, id)
@@ -231,13 +195,7 @@ async def cancel_payment(
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_payment(
     id: int,
-    _auth: object = Depends(
-        require_access(
-            "finance.payment",
-            "delete",
-            required_permissions=["kuaicaiwu:payable:delete"],
-        )
-    ),
+    _auth: object = Depends(require_permission_codes("kuaicaiwu:payment:delete")),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant)
 ):

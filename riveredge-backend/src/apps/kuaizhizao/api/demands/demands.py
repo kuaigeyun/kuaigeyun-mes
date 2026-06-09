@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTP
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, NotFoundError, BusinessLogicError
 
@@ -41,7 +41,7 @@ document_relation_service = DocumentRelationNewService()
 router = APIRouter(
     prefix="/demands",
     tags=["App · Kuaige Zhizao · Demand Management"],
-    dependencies=[Depends(require_module_access("kuaizhizao", "demand"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("demand"))],
 )
 
 

@@ -11,8 +11,11 @@ import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+
+const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
+const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
 function sourceInspectionPath(row: DefectLedgerItem): string | null {
   if (row.incoming_inspection_id) {
@@ -45,8 +48,8 @@ const NonconformingLedgerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [currentRow, setCurrentRow] = useState<DefectLedgerItem | null>(null);
   const [open, setOpen] = useState(false);
-  const canUpdate = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-nonconforming-ledger:update');
-  const canStart8d = hasPermission(currentUser ?? undefined, 'kuaizhizao:quality-management-eight-d-reports:create');
+  const { canUpdate } = useResourcePermissions(NC_RESOURCE);
+  const { canCreate: canStart8d } = useResourcePermissions(EIGHT_D_RESOURCE);
 
   const initialFilter = useMemo(
     () => ({

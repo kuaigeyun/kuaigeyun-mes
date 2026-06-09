@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field, ConfigDict
 from loguru import logger
 
 from core.api.deps.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from infra.models.user import User
 from apps.master_data.services.process_service import ProcessService
 from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
@@ -39,7 +39,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError
 router = APIRouter(
     prefix="/process",
     tags=["App · Master Data · Process"],
-    dependencies=[Depends(require_module_access("master-data", "process"))],
+    dependencies=[Depends(require_master_data_module_access("process"))],
 )
 
 

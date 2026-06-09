@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, Query, Path, HTTPException as FastAPIHTT
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
-from core.api.deps.access import require_module_access
+from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_module_access
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
 
@@ -43,7 +43,7 @@ def _http_exception(status_code: int, message: str, route: str = "/purchase-inqu
     "/purchase-inquiries",
     response_model=PurchaseInquiryResponse,
     summary="Create purchase inquiry",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def create_inquiry(
     data: PurchaseInquiryCreate,
@@ -56,7 +56,7 @@ async def create_inquiry(
 @router.get(
     "/purchase-inquiries",
     summary="List purchase inquiries",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def list_inquiries(
     skip: int = Query(0, ge=0),
@@ -76,7 +76,7 @@ async def list_inquiries(
     "/purchase-inquiries/{inquiry_id}",
     response_model=PurchaseInquiryResponse,
     summary="Get purchase inquiry",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def get_inquiry(
     inquiry_id: int = Path(...),
@@ -89,7 +89,7 @@ async def get_inquiry(
     "/purchase-inquiries/{inquiry_id}",
     response_model=PurchaseInquiryResponse,
     summary="Update purchase inquiry",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def update_inquiry(
     data: PurchaseInquiryUpdate,
@@ -103,7 +103,7 @@ async def update_inquiry(
 @router.delete(
     "/purchase-inquiries/{inquiry_id}",
     summary="Delete purchase inquiry",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def delete_inquiry(
     inquiry_id: int = Path(...),
@@ -118,7 +118,7 @@ async def delete_inquiry(
     "/purchase-inquiries/from-requisition/{requisition_id}",
     response_model=PurchaseInquiryResponse,
     summary="Create inquiry from purchase requisition",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def create_from_requisition(
     data: CreateFromRequisitionRequest,
@@ -134,7 +134,7 @@ async def create_from_requisition(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/publish",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def publish_inquiry(
     inquiry_id: int = Path(...),
@@ -147,7 +147,7 @@ async def publish_inquiry(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/close-quoting",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def close_quoting(
     inquiry_id: int = Path(...),
@@ -160,7 +160,7 @@ async def close_quoting(
 @router.get(
     "/purchase-inquiries/{inquiry_id}/comparison",
     response_model=ComparisonMatrixResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def get_comparison(
     inquiry_id: int = Path(...),
@@ -172,7 +172,7 @@ async def get_comparison(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/supplier-quotes",
     response_model=PurchaseSupplierQuoteResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def upsert_supplier_quote(
     data: UpsertSupplierQuoteRequest,
@@ -188,7 +188,7 @@ async def upsert_supplier_quote(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/award",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def award_quotes(
     data: AwardQuotesRequest,
@@ -201,7 +201,7 @@ async def award_quotes(
 
 @router.post(
     "/purchase-inquiries/{inquiry_id}/convert-to-purchase-order",
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def convert_to_po(
     data: ConvertInquiryToPORequest,
@@ -217,7 +217,7 @@ async def convert_to_po(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/submit",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def submit_inquiry(
     inquiry_id: int = Path(...),
@@ -230,7 +230,7 @@ async def submit_inquiry(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/approve",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def approve_inquiry(
     data: ApproveInquiryRequest,
@@ -246,7 +246,7 @@ async def approve_inquiry(
 @router.post(
     "/purchase-inquiries/{inquiry_id}/withdraw-approval",
     response_model=PurchaseInquiryResponse,
-    dependencies=[Depends(require_module_access("kuaizhizao", "purchase-inquiry"))],
+    dependencies=[Depends(require_kuaizhizao_module_access("purchase-inquiry"))],
 )
 async def withdraw_approval(
     inquiry_id: int = Path(...),

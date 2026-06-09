@@ -12,7 +12,7 @@ from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
 
 from apps.common.base_service import AppBaseService
-from apps.kuaizhizao.constants import DemandStatus, ReviewStatus
+from apps.kuaizhizao.constants import LEGACY_PENDING_VALUES, DemandStatus, ReviewStatus
 from apps.kuaizhizao.models.quotation import Quotation
 from apps.kuaizhizao.models.quotation_item import QuotationItem
 from apps.kuaizhizao.models.sales_contract import SalesContract
@@ -517,6 +517,63 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract.review_time = datetime.now()
         contract.review_remarks = review_remarks
         contract.updated_by = reviewer_id
+        await contract.save()
+        return await self.get_contract_by_id(tenant_id, contract_id)
+
+    async def withdraw_contract(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        operator_id: int,
+    ) -> SalesContractResponse:
+        """撤回提交：待审核 → 草稿。"""
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError("销售合同不存在")
+        if (contract.status or "") != "待审核":
+            raise BusinessLogicError("仅待审核合同可撤回提交")
+        rs = (contract.review_status or "").strip()
+        if rs not in LEGACY_PENDING_VALUES and rs != ReviewStatus.PENDING.value:
+            raise BusinessLogicError(f"仅待审核合同可撤回提交，当前审核状态: {contract.review_status}")
+        contract.status = "草稿"
+        contract.review_status = ReviewStatus.PENDING.value
+        contract.reviewer_id = None
+        contract.reviewer_name = None
+        contract.review_time = None
+        contract.review_remarks = None
+        contract.updated_by = operator_id
+        await contract.save()
+        return await self.get_contract_by_id(tenant_id, contract_id)
+
+    async def revoke_contract_approval(
+        self,
+        tenant_id: int,
+        contract_id: int,
+        operator_id: int,
+    ) -> SalesContractResponse:
+        """撤回审核：已生效且未释放 → 待审核。"""
+        contract = await SalesContract.get_or_none(
+            tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True
+        )
+        if not contract:
+            raise NotFoundError("销售合同不存在")
+        if (contract.status or "") != "已生效":
+            raise BusinessLogicError("仅已生效且未下推的合同可撤回审核")
+        if not _is_approved(contract.review_status):
+            raise BusinessLogicError(f"仅已审核通过的合同可撤回审核，当前审核状态: {contract.review_status}")
+        rel_qty = Decimal(str(contract.released_quantity or 0))
+        rel_amt = Decimal(str(contract.released_amount or 0))
+        if rel_qty > 0 or rel_amt > 0:
+            raise BusinessLogicError("合同已有释放记录，无法撤回审核")
+        contract.status = "待审核"
+        contract.review_status = ReviewStatus.PENDING.value
+        contract.reviewer_id = None
+        contract.reviewer_name = None
+        contract.review_time = None
+        contract.review_remarks = None
+        contract.updated_by = operator_id
         await contract.save()
         return await self.get_contract_by_id(tenant_id, contract_id)
 

@@ -7,6 +7,9 @@ from tortoise.expressions import Q
 from core.models.data_permission_policy import DataScopeType
 from core.services.authorization.data_scope_constants import (
     DIMENSION_OUTSOURCED_UNIT,
+    RESOLVER_CUSTOMER_OWNED_ONLY,
+    RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID,
+    RESOLVER_CUSTOMER_SALESMAN_POOL,
     RESOLVER_OUTSOURCED_UNIT,
     RESOLVER_PARTNER,
 )
@@ -97,9 +100,39 @@ async def _resolve_outsourced_unit(ctx: ScopeResolveContext) -> Q:
     return await resolve_partner_scope(child)
 
 
+async def resolve_customer_salesman_pool(ctx: ScopeResolveContext) -> Q:
+    """客户默认可见性：归属业务员 + 公海（与 master-data 客户池业务一致）。"""
+    field = ctx.profile.applicant_user_id_field or "salesman_id"
+    return Q(**{field: ctx.user_id}) | Q(pool_status="pool")
+
+
+async def resolve_customer_owned_only(ctx: ScopeResolveContext) -> Q:
+    """客户归属业务员（非公海），用于跟进/商机父客户校验。"""
+    field = ctx.profile.applicant_user_id_field or "salesman_id"
+    return Q(**{field: ctx.user_id}) & Q(pool_status="owned")
+
+
+async def resolve_customer_owned_via_customer_id(ctx: ScopeResolveContext) -> Q:
+    """子表通过 customer_id 关联仅 owned 客户（跟进、商机列表）。"""
+    from apps.master_data.models.customer import Customer
+
+    ids = await Customer.filter(
+        tenant_id=ctx.tenant_id,
+        deleted_at__isnull=True,
+        salesman_id=ctx.user_id,
+        pool_status="owned",
+    ).values_list("id", flat=True)
+    if not ids:
+        return Q(id=-1)
+    return Q(customer_id__in=list(ids))
+
+
 def register_builtin_scope_resolvers() -> None:
     register_scope_resolver(RESOLVER_PARTNER, resolve_partner_scope)
     register_scope_resolver(RESOLVER_OUTSOURCED_UNIT, _resolve_outsourced_unit)
+    register_scope_resolver(RESOLVER_CUSTOMER_SALESMAN_POOL, resolve_customer_salesman_pool)
+    register_scope_resolver(RESOLVER_CUSTOMER_OWNED_ONLY, resolve_customer_owned_only)
+    register_scope_resolver(RESOLVER_CUSTOMER_OWNED_VIA_CUSTOMER_ID, resolve_customer_owned_via_customer_id)
 
 
 BUILTIN_SCOPE_RESOLVERS = {

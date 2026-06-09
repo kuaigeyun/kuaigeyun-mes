@@ -9,12 +9,17 @@ from typing import Any, List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 
+from apps.kuaicaiwu.api._kuaicaiwu_route_access import require_kuaicaiwu_module_access
 from apps.kuaicaiwu.services.bank_account_service import BankAccountService
 from core.api.deps.deps import get_current_user
 from core.schemas.base import BaseSchema
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 
-router = APIRouter(prefix="/bank-accounts", tags=["App · Kuaicaiwu · Bank Accounts"])
+router = APIRouter(
+    prefix="/bank-accounts",
+    tags=["App · Kuaicaiwu · Bank Accounts"],
+    dependencies=[Depends(require_kuaicaiwu_module_access("bank-account"))],
+)
 service = BankAccountService()
 
 

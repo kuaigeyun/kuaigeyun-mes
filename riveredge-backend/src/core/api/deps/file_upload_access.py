@@ -9,6 +9,7 @@ from fastapi import Depends, Query, Request, status
 from core.api.deps.access import AuthContext, _make_error, get_auth_context
 from core.api.deps.deps import get_current_tenant
 from core.services.authorization.access_control_service import AccessControlService
+from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.file.business_upload_access import business_upload_permission_codes
 
 
@@ -28,7 +29,12 @@ def require_file_upload_access():
                 reason="missing_tenant",
             )
 
-        if auth.is_infra_admin or auth.is_tenant_admin:
+        if await UserPermissionService.is_admin_bypass_flags(
+            auth.user_id,
+            tenant_id,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+        ):
             auth.tenant_id = tenant_id
             return auth
 
@@ -44,8 +50,8 @@ def require_file_upload_access():
             tenant_id=tenant_id,
             resource="system.file",
             action="create",
-            is_infra_admin=False,
-            is_tenant_admin=False,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
             check_abac=True,
             required_permissions=["system:file:create"],
             env=env,
@@ -61,8 +67,8 @@ def require_file_upload_access():
                 tenant_id=tenant_id,
                 resource="system.file",
                 action="create",
-                is_infra_admin=False,
-                is_tenant_admin=False,
+                is_infra_admin=auth.is_infra_admin,
+                is_tenant_admin=auth.is_tenant_admin,
                 check_abac=True,
                 require_all=False,
                 required_permissions=biz_perms,

@@ -19,7 +19,7 @@ from apps.master_data.schemas.partner_price_book_schemas import (
     PartnerPriceResolveResponse,
 )
 from apps.master_data.services.partner_price_book_service import PartnerPriceBookService
-from core.api.deps.access import require_module_access
+from apps.master_data.api._master_data_route_access import require_master_data_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.models.user import User
@@ -44,7 +44,7 @@ def _http_exception(status_code: int, message: str, route: str = "/supply-chain"
 def _register_price_book_routes(partner_type: str, resource: str) -> None:
     base = f"/{resource}"
     module_name = f"supply-chain:{'customer-price-book' if partner_type == 'customer' else 'supplier-price-book'}"
-    module_dep = Depends(require_module_access("master-data", module_name))
+    module_dep = Depends(require_master_data_module_access(module_name))
 
     @router.post(base, response_model=PartnerPriceBookResponse, dependencies=[module_dep])
     async def create_price_book(

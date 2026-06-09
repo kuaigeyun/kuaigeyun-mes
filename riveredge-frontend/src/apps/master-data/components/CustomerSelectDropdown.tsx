@@ -4,9 +4,15 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { App } from 'antd';
 import { UniDropdown, type UniDropdownProps } from '../../../components/uni-dropdown';
-import { customerApi } from '../services/supply-chain';
 import type { Customer } from '../types/supply-chain';
 import { CustomerFormModal } from './CustomerFormModal';
+import { useGlobalStore } from '../../../stores/globalStore';
+import {
+  ReferenceDisplayAccessError,
+  canReadReferenceResource,
+  referenceDisplayToIdOptions,
+  searchReferenceDisplay,
+} from '../../../utils/referenceDisplay';
 
 function formatCustomerLabel(c: Customer | Record<string, unknown>): string {
   const row = c as Record<string, unknown>;
@@ -34,6 +40,8 @@ export type CustomerSelectDropdownProps = Omit<
   modalZIndex?: number;
   /** 未传入 customers 时是否自动加载 */
   autoLoad?: boolean;
+  /** 宿主 {app}:{module}，供隐式 display 鉴权 */
+  hostResource?: string;
 };
 
 export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
@@ -43,10 +51,12 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
   onCustomerPick,
   modalZIndex,
   autoLoad = true,
+  hostResource,
   onChange,
   ...rest
 }) => {
   const { message: messageApi } = App.useApp();
+  const currentUser = useGlobalStore((s) => s.currentUser);
   const [internalCustomers, setInternalCustomers] = useState<Customer[]>([]);
   const [internalLoading, setInternalLoading] = useState(false);
   const [formOpen, setFormOpen] = useState(false);
@@ -72,19 +82,34 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
   const refreshCustomers = useCallback(async () => {
     setInternalLoading(true);
     try {
-      const res = await customerApi.list({ limit: 1000, isActive: true });
-      const list = (Array.isArray(res) ? res : (res as { data?: Customer[]; items?: Customer[] })?.data ?? (res as { items?: Customer[] })?.items ?? []) as Customer[];
+      const res = await searchReferenceDisplay({
+        resource: 'master-data:supply-chain:customer',
+        hostResource,
+        pageSize: 1000,
+      });
+      const list = res.items.map(
+        (item) =>
+          ({
+            id: item.id,
+            uuid: item.uuid,
+            code: item.code,
+            name: item.name,
+          }) as Customer,
+      );
       if (customersProp == null) {
         setInternalCustomers(list);
       }
       onCustomersChange?.(list);
       return list;
-    } catch {
+    } catch (err) {
+      if (err instanceof ReferenceDisplayAccessError) {
+        messageApi.warning(err.message);
+      }
       return [];
     } finally {
       setInternalLoading(false);
     }
-  }, [customersProp, onCustomersChange]);
+  }, [customersProp, hostResource, messageApi, onCustomersChange]);
 
   useEffect(() => {
     if (autoLoad && customersProp == null) {
@@ -147,6 +172,8 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
     [customers, customersProp, mergeCustomerList, onChange, onCustomerPick, onCustomersChange],
   );
 
+  const canManageCustomer = canReadReferenceResource(currentUser, 'master-data:supply-chain:customer');
+
   return (
     <>
       <UniDropdown
@@ -156,46 +183,42 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
         loading={loading}
         options={options}
         onChange={handleChange}
-        quickCreate={{
-          label: '快速新建',
-          onClick: openCreate,
-        }}
-        quickEdit={{
-          label: '编辑客户',
-          onEdit: openEdit,
-        }}
+        quickCreate={
+          canManageCustomer
+            ? {
+                label: '快速新建',
+                onClick: openCreate,
+              }
+            : undefined
+        }
+        quickEdit={
+          canManageCustomer
+            ? {
+                label: '编辑客户',
+                onEdit: openEdit,
+              }
+            : undefined
+        }
         advancedSearch={{
           label: '高级搜索',
           fields: [
-            { name: 'code', label: '客户编号' },
-            { name: 'name', label: '客户名称' },
-            { name: 'contactPerson', label: '联系人' },
+            { name: 'keyword', label: '关键词' },
           ],
           onSearch: async (values) => {
-            let list: Customer[] = [];
             try {
-              const res = await customerApi.list({ limit: 200, skip: 0 });
-              list = (Array.isArray(res) ? res : (res as { data?: Customer[]; items?: Customer[] })?.data ?? (res as { items?: Customer[] })?.items ?? []) as Customer[];
-            } catch {
+              const res = await searchReferenceDisplay({
+                resource: 'master-data:supply-chain:customer',
+                hostResource,
+                keyword: values.keyword,
+                pageSize: 200,
+              });
+              return referenceDisplayToIdOptions(res.items);
+            } catch (err) {
+              if (err instanceof ReferenceDisplayAccessError) {
+                messageApi.warning(err.message);
+              }
               return [];
             }
-            let filtered = list;
-            if (values.code?.trim()) {
-              const k = values.code.trim().toLowerCase();
-              filtered = filtered.filter((c) => (c.code ?? '').toLowerCase().includes(k));
-            }
-            if (values.name?.trim()) {
-              const k = values.name.trim().toLowerCase();
-              filtered = filtered.filter((c) => (c.name ?? '').toLowerCase().includes(k));
-            }
-            if (values.contactPerson?.trim()) {
-              const k = values.contactPerson.trim().toLowerCase();
-              filtered = filtered.filter((c) => (c.contactPerson ?? '').toLowerCase().includes(k));
-            }
-            return filtered.map((c) => ({
-              value: getCustomerId(c),
-              label: formatCustomerLabel(c),
-            }));
           },
         }}
       />

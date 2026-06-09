@@ -8,7 +8,11 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App, Flex, Input, Modal, Select, Table, Tooltip, TreeSelect } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useTranslation } from 'react-i18next';
-import { materialApi, materialGroupApi } from '../../apps/master-data/services/material';
+import {
+  ReferenceDisplayAccessError,
+  searchReferenceDisplay,
+} from '../../utils/referenceDisplay';
+import { materialGroupApi } from '../../apps/master-data/services/material';
 import type { Material } from '../../apps/master-data/types/material';
 import { SecureImage } from '../secure-image';
 import { UniTableStackedPrimaryCell } from '../uni-table/stackedPrimaryColumn';
@@ -37,6 +41,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   onConfirm,
   zIndex,
   width = DEFAULT_WIDTH,
+  hostResource,
 }) => {
   const { t } = useTranslation();
   const { message } = App.useApp();
@@ -87,44 +92,45 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
       const seq = ++fetchSeqRef.current;
       setLoading(true);
       try {
-        const skip = (p - 1) * PAGE_SIZE;
-        const response: unknown = await materialApi.list({
+        const res = await searchReferenceDisplay({
+          resource: 'master-data:material',
+          hostResource,
           keyword: kw.trim() || undefined,
+          page: p,
+          pageSize: PAGE_SIZE,
           groupId: gid,
           sourceType: st,
-          isActive: true,
-          skip,
-          limit: PAGE_SIZE,
         });
         if (seq !== fetchSeqRef.current) return;
-        let arr: Material[] = [];
-        let totalFromApi: number | undefined;
-        if (Array.isArray(response)) {
-          arr = response as Material[];
-        } else if (response && typeof response === 'object') {
-          const r = response as { items?: Material[]; data?: Material[]; total?: number };
-          const rows = r.items ?? r.data;
-          arr = Array.isArray(rows) ? rows : [];
-          totalFromApi = typeof r.total === 'number' ? r.total : undefined;
-        }
+        const arr: Material[] = res.items.map((item) => ({
+          id: item.id as number,
+          uuid: item.uuid ?? '',
+          name: item.name ?? '',
+          code: item.code ?? undefined,
+          mainCode: (item.extra?.main_code as string) ?? item.code ?? '',
+          specification: (item.extra?.specification as string) ?? undefined,
+          baseUnit: (item.extra?.base_unit as string) ?? undefined,
+          sourceType: (item.extra?.source_type as string) ?? undefined,
+          groupId: item.extra?.group_id as number | undefined,
+        }));
         setList(arr);
-        if (totalFromApi != null && totalFromApi >= 0) {
-          setTotalHint(totalFromApi);
-        } else {
-          setTotalHint(arr.length < PAGE_SIZE ? skip + arr.length : skip + arr.length + 1);
-        }
-      } catch {
+        setTotalHint(res.total);
+      } catch (err) {
         if (seq !== fetchSeqRef.current) return;
         setList([]);
         setTotalHint(0);
-        message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadListFailed'));
+        if (err instanceof ReferenceDisplayAccessError) {
+          message.warning(err.message);
+        } else {
+          message.error(t('app.kuaizhizao.salesOrder.materialPickerLoadListFailed'));
+        }
       } finally {
         if (seq === fetchSeqRef.current) {
           setLoading(false);
         }
       }
     },
-    [message, t],
+    [hostResource, message, t],
   );
 
   useEffect(() => {
