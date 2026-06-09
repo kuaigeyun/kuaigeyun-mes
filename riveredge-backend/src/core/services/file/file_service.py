@@ -12,6 +12,7 @@ from datetime import datetime
 from uuid import UUID
 
 import aiofiles
+from tortoise.expressions import Q
 from tortoise.exceptions import IntegrityError
 
 from core.models.file import File
@@ -193,6 +194,71 @@ class FileService:
         return file
     
     @staticmethod
+    async def _linked_file_uuids_for_category(tenant_id: int, category: str) -> List[str]:
+        """业务表引用的 core_files UUID（历史上传可能未写入 category）。"""
+        uuids: set[str] = set()
+        if category == "material_images":
+            from apps.master_data.models.material import Material
+
+            rows = await Material.filter(tenant_id=tenant_id, deleted_at__isnull=True).only("images")
+            for row in rows:
+                images = row.images
+                if isinstance(images, list):
+                    uuids.update(str(item).strip() for item in images if item)
+        elif category == "engineering_drawing":
+            from apps.master_data.models.drawing import EngineeringDrawing
+
+            rows = await EngineeringDrawing.filter(
+                tenant_id=tenant_id, deleted_at__isnull=True
+            ).only("file_uuid", "supplementary_file_uuids")
+            for row in rows:
+                if row.file_uuid:
+                    uuids.add(str(row.file_uuid).strip())
+                extras = row.supplementary_file_uuids
+                if isinstance(extras, list):
+                    uuids.update(str(item).strip() for item in extras if item)
+        return [u for u in uuids if u]
+
+    UNCATEGORIZED_CATEGORY = "@uncategorized"
+    LINKED_ATTACHMENT_CATEGORIES: tuple[str, ...] = ("material_images", "engineering_drawing")
+
+    @staticmethod
+    async def collect_all_linked_attachment_file_uuids(tenant_id: int) -> List[str]:
+        """业务 attachment 引用的 core_files UUID（category 可能为空）。"""
+        uuids: set[str] = set()
+        for category in FileService.LINKED_ATTACHMENT_CATEGORIES:
+            uuids.update(await FileService._linked_file_uuids_for_category(tenant_id, category))
+        return [u for u in uuids if u]
+
+    @staticmethod
+    async def collect_nonempty_attachment_categories(tenant_id: int) -> List[str]:
+        """有可见文件的 attachment category（含业务表引用但 core_files.category 为空的情况）。"""
+        categories: set[str] = set()
+        direct_rows = await File.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).exclude(category__isnull=True).exclude(category="").distinct().values_list("category", flat=True)
+        for raw in direct_rows:
+            if raw and str(raw).strip():
+                categories.add(str(raw).strip())
+
+        for category in FileService.LINKED_ATTACHMENT_CATEGORIES:
+            if category in categories:
+                continue
+            linked_uuids = await FileService._linked_file_uuids_for_category(tenant_id, category)
+            if not linked_uuids:
+                continue
+            exists = await File.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                uuid__in=linked_uuids,
+            ).exists()
+            if exists:
+                categories.add(category)
+
+        return sorted(categories)
+
+    @staticmethod
     async def list_files(
         tenant_id: int,
         page: int = 1,
@@ -229,8 +295,17 @@ class FileService:
             )
         
         # 筛选条件
-        if category:
-            query = query.filter(category=category)
+        if category == FileService.UNCATEGORIZED_CATEGORY:
+            linked_uuids = await FileService.collect_all_linked_attachment_file_uuids(tenant_id)
+            query = query.filter(Q(category__isnull=True) | Q(category=""))
+            if linked_uuids:
+                query = query.exclude(uuid__in=linked_uuids)
+        elif category:
+            linked_uuids = await FileService._linked_file_uuids_for_category(tenant_id, category)
+            if linked_uuids:
+                query = query.filter(Q(category=category) | Q(uuid__in=linked_uuids))
+            else:
+                query = query.filter(category=category)
         
         if file_type:
             query = query.filter(file_type=file_type)

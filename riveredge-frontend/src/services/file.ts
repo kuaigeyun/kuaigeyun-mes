@@ -41,6 +41,8 @@ export interface FileListResponse {
   total: number;
   page: number;
   page_size: number;
+  /** 有文件的 attachment category（含物料/图纸等业务引用） */
+  non_empty_attachment_categories?: string[];
 }
 
 export interface FileUpdate {
@@ -175,12 +177,17 @@ export async function uploadMultipleFiles(
     }
   });
   
-  // 添加可选参数
+  // 构建查询参数（与单文件上传一致：category 走 Query，后端 multipart 只解析 files 字段）
+  const queryParams = new URLSearchParams();
   if (options?.category) {
-    formData.append('category', options.category);
+    queryParams.append('category', options.category);
   }
-  
-  return apiRequest<FileUploadResponse[]>('/core/files/upload/multiple', {
+
+  const url = queryParams.toString()
+    ? `/core/files/upload/multiple?${queryParams.toString()}`
+    : '/core/files/upload/multiple';
+
+  return apiRequest<FileUploadResponse[]>(url, {
     method: 'POST',
     body: formData,
     headers: {},

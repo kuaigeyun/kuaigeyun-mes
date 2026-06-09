@@ -5,7 +5,7 @@
 """
 
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File as FastAPIFile, Request, Header
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File as FastAPIFile, Request, Header, Form
 from fastapi.responses import FileResponse, StreamingResponse
 
 from core.schemas.file import (
@@ -129,6 +129,7 @@ async def upload_file(
 async def upload_multiple_files(
     files: List[UploadFile] = FastAPIFile(...),
     category: Optional[str] = Query(None, description="文件分类（可选）"),
+    category_from_form: Optional[str] = Form(None, alias="category"),
     _auth: AuthContext = Depends(require_file_upload_access()),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -147,6 +148,7 @@ async def upload_multiple_files(
         List[FileUploadResponse]: 上传的文件信息列表
     """
     results = []
+    resolved_category = (category or category_from_form or "").strip() or None
     for file in files:
         try:
             # 读取文件内容
@@ -176,7 +178,7 @@ async def upload_multiple_files(
                 tenant_id=tenant_id,
                 file_content=file_content,
                 original_name=original_filename,
-                category=category,
+                category=resolved_category,
             )
             
             results.append(FileUploadResponse(
@@ -233,6 +235,12 @@ async def list_files(
         file_type=file_type,
     )
     
+    non_empty_attachment_categories = None
+    if category is None:
+        non_empty_attachment_categories = await FileService.collect_nonempty_attachment_categories(
+            tenant_id=tenant_id,
+        )
+    
     items = []
     from core.services.file.file_preview_service import FilePreviewService
     for file in result["items"]:
@@ -252,6 +260,7 @@ async def list_files(
         total=result["total"],
         page=result["page"],
         page_size=result["page_size"],
+        non_empty_attachment_categories=non_empty_attachment_categories,
     )
 
 

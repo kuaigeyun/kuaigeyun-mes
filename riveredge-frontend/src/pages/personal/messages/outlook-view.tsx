@@ -19,6 +19,7 @@ import {
 } from 'antd';
 import {
   CheckOutlined,
+  ClearOutlined,
   MailOutlined,
   ReloadOutlined,
   SearchOutlined,
@@ -374,46 +375,41 @@ const OutlookMessagesView: React.FC = () => {
               background: leftPaneHeaderBg,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-              <Text strong>{t('pages.personal.messages.headerTitle')}</Text>
-              <Space size={4}>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<ReloadOutlined />}
-                  onClick={() => {
-                    void loadStats();
-                    void loadMessages();
-                  }}
-                  aria-label={t('pages.personal.messages.refresh')}
-                />
-                <Button
-                  type="default"
-                  size="small"
-                  icon={<CheckOutlined />}
-                  onClick={() => void handleMarkAllUnreadOnPage()}
-                >
-                  {t('pages.personal.messages.markAllRead')}
-                </Button>
-              </Space>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <Input
+                allowClear
+                prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
+                placeholder={t('pages.personal.messages.searchPlaceholder')}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                onClear={() => {
+                  setSearchText('');
+                  setAppliedKeyword('');
+                  setPage(1);
+                }}
+                onPressEnter={() => {
+                  setAppliedKeyword(searchText);
+                  setPage(1);
+                }}
+                style={{ flex: 1, minWidth: 0 }}
+              />
+              <Button
+                type="default"
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  void loadStats();
+                  void loadMessages();
+                }}
+                aria-label={t('pages.personal.messages.refresh')}
+              />
+              <Button
+                type="default"
+                icon={<ClearOutlined />}
+                onClick={() => void handleMarkAllUnreadOnPage()}
+              >
+                {t('pages.personal.messages.markAllRead', { defaultValue: '全部已读' })}
+              </Button>
             </div>
-            <Input
-              allowClear
-              prefix={<SearchOutlined style={{ color: token.colorTextQuaternary }} />}
-              placeholder={t('pages.personal.messages.searchPlaceholder')}
-              value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
-              onClear={() => {
-                setSearchText('');
-                setAppliedKeyword('');
-                setPage(1);
-              }}
-              onPressEnter={() => {
-                setAppliedKeyword(searchText);
-                setPage(1);
-              }}
-              style={{ marginBottom: 8 }}
-            />
             <Segmented<StatusFilter>
               block
               value={statusFilter}

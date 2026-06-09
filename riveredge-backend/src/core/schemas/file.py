@@ -77,6 +77,10 @@ class FileListResponse(BaseModel):
     total: int = Field(..., ge=0, description="总数")
     page: int = Field(..., ge=1, description="当前页")
     page_size: int = Field(..., ge=1, description="每页数量")
+    non_empty_attachment_categories: Optional[List[str]] = Field(
+        None,
+        description="有文件的 attachment category（含业务表引用、category 未写入 core_files 的情况）",
+    )
 
 
 class FilePreviewResponse(BaseModel):

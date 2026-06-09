@@ -11,7 +11,8 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormText, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, theme } from 'antd';
+import { App, Button, Space, Modal, Upload, Breadcrumb, Table, Menu, Input, Tooltip, Select, Checkbox, theme } from 'antd';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 import { TwoColumnLayout, FormModalTemplate } from '../../../../components/layout-templates';
 import {
   MODAL_CONFIG,
@@ -30,8 +31,8 @@ import {
   FileExcelOutlined,
   FileWordOutlined,
   FilePptOutlined,
-  FolderOutlined,
-  FolderOpenOutlined,
+  FolderFilled,
+  FolderOpenFilled,
   ReloadOutlined,
   ArrowLeftOutlined,
   ArrowRightOutlined,
@@ -57,7 +58,19 @@ import {
   FileListParams,
 } from '../../../../services/file';
 import FilePreviewModal from '../../../../components/file-preview';
-import { resolveFileUploadCategoryDisplayName } from '../../../../core/constants/fileUploadCategories';
+import { useNavigationMenuTreeQuery } from '../../../../hooks/useNavigationMenuTreeQuery';
+import { collectNavigationMenuPaths } from '../../../../utils/navigationMenuPaths';
+import { 
+  FILE_ATTACHMENTS_GROUP_KEY,
+  FILE_SYSTEM_FOLDERS_GROUP_KEY,
+  FILE_USER_FOLDERS_GROUP_KEY,
+  FILE_UNCATEGORIZED_GROUP_KEY,
+  collectDocumentAttachmentCategories,
+  isDocumentAttachmentCategory,
+  isSystemFolderCategory,
+  isUserFolderCategory,
+  resolveFileUploadCategoryDisplayName,
+} from '../../../../core/constants/fileUploadCategories';
 
 /**
  * 判断是否为图片类型（用于图标视图缩略图与预览）
@@ -68,6 +81,31 @@ const isImageFile = (file: File): boolean => {
   const ext = (file.file_extension || file.original_name?.split('.').pop() || '').toLowerCase();
   return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'ico'].includes(ext);
 };
+
+/** 文件类型筛选（工具栏分段控制器） */
+type FileTypeFilter = 'all' | 'image' | 'document' | 'drawing' | 'other';
+
+function classifyFileTypeFilter(file: File): Exclude<FileTypeFilter, 'all'> {
+  if (isImageFile(file)) return 'image';
+  const ext = (file.file_extension || file.original_name?.split('.').pop() || '').toLowerCase();
+  const mime = (file.file_type || '').toLowerCase();
+  if (['dwg', 'dxf', 'step', 'stp'].includes(ext)) return 'drawing';
+  if (
+    ext === 'pdf' ||
+    ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json'].includes(ext) ||
+    mime.includes('pdf') ||
+    mime.includes('word') ||
+    mime.includes('document') ||
+    mime.includes('excel') ||
+    mime.includes('spreadsheet') ||
+    mime.includes('powerpoint') ||
+    mime.includes('presentation') ||
+    mime.startsWith('text/')
+  ) {
+    return 'document';
+  }
+  return 'other';
+}
 
 /**
  * 根据文件类型获取图标
@@ -115,10 +153,34 @@ type SortOrder = 'ascend' | 'descend' | null;
  */
 type ViewType = 'icons' | 'list' | 'details';
 
+type FolderIconKind = 'system' | 'user' | 'uncategorized';
+
+const FILE_TREE_FOLDER_COLORS: Record<FolderIconKind, string> = {
+  system: '#0078D4',
+  user: '#FDB813',
+  uncategorized: '#8c8c8c',
+};
+
+function createFolderTreeIcon(kind: FolderIconKind, open = false) {
+  const Icon = open ? FolderOpenFilled : FolderFilled;
+  return <Icon style={{ color: FILE_TREE_FOLDER_COLORS[kind], fontSize: 16 }} />;
+}
+
 type FileFolderNode = DataNode & {
   rawCategory?: string;
   displayTitle?: string;
+  folderKind?: 'system-group' | 'user-group' | 'uncategorized' | 'attachments-group' | 'category';
 };
+
+const CLIENT_FILTER_TREE_KEYS = new Set([
+  FILE_ATTACHMENTS_GROUP_KEY,
+  FILE_SYSTEM_FOLDERS_GROUP_KEY,
+  FILE_USER_FOLDERS_GROUP_KEY,
+]);
+
+function isValidUserFolderName(name: string): boolean {
+  return /[\u4e00-\u9fff]/.test(name.trim());
+}
 
 /**
  * 缩略图渲染组件 - 抽离到外部避免 Parent Re-render 时物理销毁重建组件（解决闪烁根本原因）
@@ -162,11 +224,13 @@ const FileListPage: React.FC = () => {
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [fileList, setFileList] = useState<File[]>([]);
   const [allFiles, setAllFiles] = useState<File[]>([]); // 核心：维护一份全量文件列表用于构建树，避免过滤时树节点消失
+  const [nonEmptyAttachmentCategories, setNonEmptyAttachmentCategories] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
   // 排序（Windows 资源管理器逻辑：默认按名称升序）
-  const [sortField, setSortField] = useState<SortField>('original_name');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('ascend');
+  const [sortField, setSortField] = useState<SortField>('updated_at');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('descend');
+  const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all');
   
   // 文件夹树状态
   const [treeData, setTreeData] = useState<DataNode[]>([]);
@@ -181,6 +245,12 @@ const FileListPage: React.FC = () => {
     (category?: string): string => resolveFileUploadCategoryDisplayName(category, t),
     [t],
   );
+
+  const { data: navigationMenuTree } = useNavigationMenuTreeQuery();
+  const enabledMenuPaths = useMemo(
+    () => (navigationMenuTree ? collectNavigationMenuPaths(navigationMenuTree) : undefined),
+    [navigationMenuTree],
+  );
   
   // Modal 相关状态
   const [uploadVisible, setUploadVisible] = useState(false);
@@ -194,40 +264,140 @@ const FileListPage: React.FC = () => {
   const [createFolderVisible, setCreateFolderVisible] = useState(false);
   const createFolderFormRef = useRef<ProFormInstance>();
   const [creatingFolder, setCreatingFolder] = useState(false);
+  const [editFolderVisible, setEditFolderVisible] = useState(false);
+  const editFolderFormRef = useRef<ProFormInstance>();
+  const [editingFolderCategory, setEditingFolderCategory] = useState<string | null>(null);
+  const [savingFolderEdit, setSavingFolderEdit] = useState(false);
   
   // 右键菜单状态
   const [contextMenuVisible, setContextMenuVisible] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   const [contextMenuFile, setContextMenuFile] = useState<File | null>(null);
+  const [treeContextMenuVisible, setTreeContextMenuVisible] = useState(false);
+  const [treeContextMenuPosition, setTreeContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [treeContextMenuNode, setTreeContextMenuNode] = useState<FileFolderNode | null>(null);
+  const lastSelectedFileUuidRef = useRef<string | null>(null);
   
   // 剪贴板状态（用于复制/剪切）
   const [clipboard, setClipboard] = useState<{ type: 'copy' | 'cut' | null; files: File[] }>({ type: null, files: [] });
 
+  const collectExistingCategories = useCallback((): Set<string> => {
+    const categories = new Set<string>();
+    allFiles.forEach(file => {
+      if (file.category) categories.add(file.category);
+    });
+    return categories;
+  }, [allFiles]);
+
   /**
    * 加载文件列表
+   * @param treeKey undefined / 'all' = 全部；@ 开头 = 虚拟分组；其余 = 指定 category
    */
-  const loadFileList = useCallback(async (category?: string) => {
+  const loadFileList = useCallback(async (treeKey?: string) => {
     try {
       setLoading(true);
+      const key = treeKey === 'all' ? undefined : treeKey;
+      const isClientFilter = Boolean(key && CLIENT_FILTER_TREE_KEYS.has(key));
+      const category =
+        key === FILE_UNCATEGORIZED_GROUP_KEY
+          ? FILE_UNCATEGORIZED_GROUP_KEY
+          : key && !isClientFilter
+            ? key
+            : undefined;
+
       const params: FileListParams = {
         page: 1,
-        page_size: 1000, // 加载所有文件
-        category: category,
-        include_preview_url: true, // 核心优化：一次性返回缩略图 URL，减少数百个请求
+        page_size: 1000,
+        category: isClientFilter ? undefined : category,
+        include_preview_url: true,
       };
       const response = await getFileList(params);
-      setFileList(response.items);
-      
-      // 如果没有筛选分类，更新全量列表以同步树形菜单
-      if (!category) {
+
+      if (response.non_empty_attachment_categories) {
+        setNonEmptyAttachmentCategories(response.non_empty_attachment_categories);
+      }
+
+      if (!key) {
+        setAllFiles(response.items);
+        setFileList(response.items);
+        return;
+      }
+
+      if (isClientFilter) {
         setAllFiles(response.items);
       }
+
+      if (key === FILE_ATTACHMENTS_GROUP_KEY) {
+        setFileList(
+          response.items.filter(
+            file => file.category && isDocumentAttachmentCategory(file.category),
+          ),
+        );
+        return;
+      }
+
+      if (key === FILE_SYSTEM_FOLDERS_GROUP_KEY) {
+        setFileList(
+          response.items.filter(
+            file => file.category && isSystemFolderCategory(file.category),
+          ),
+        );
+        return;
+      }
+
+      if (key === FILE_USER_FOLDERS_GROUP_KEY) {
+        setFileList(
+          response.items.filter(
+            file => file.category && isUserFolderCategory(file.category),
+          ),
+        );
+        return;
+      }
+
+      setFileList(response.items);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.loadListFailed'));
     } finally {
       setLoading(false);
     }
   }, [messageApi, t]);
+
+  const reloadCurrentFolder = useCallback(() => {
+    const key = selectedTreeKeys[0] as string | undefined;
+    if (!key || key === 'all') {
+      loadFileList(undefined);
+      return;
+    }
+    loadFileList(key);
+  }, [loadFileList, selectedTreeKeys]);
+
+  const resolvePathDisplayName = useCallback(
+    (pathKey: string): string => {
+      if (pathKey === ROOT_PATH_KEY) return t('pages.system.files.allFiles');
+      if (pathKey === FILE_SYSTEM_FOLDERS_GROUP_KEY) return t('pages.system.files.systemFolders');
+      if (pathKey === FILE_USER_FOLDERS_GROUP_KEY) return t('pages.system.files.userFolders');
+      if (pathKey === FILE_UNCATEGORIZED_GROUP_KEY) return t('pages.system.files.uncategorizedFolder');
+      if (pathKey === FILE_ATTACHMENTS_GROUP_KEY) return t('pages.system.files.attachmentsFolder');
+      return resolveCategoryDisplayName(pathKey);
+    },
+    [resolveCategoryDisplayName, t],
+  );
+
+  const resolveTreePath = useCallback((key: string): string[] => {
+    if (key === 'all') return [ROOT_PATH_KEY];
+    if (key === FILE_UNCATEGORIZED_GROUP_KEY) return [ROOT_PATH_KEY, FILE_UNCATEGORIZED_GROUP_KEY];
+    if (key === FILE_USER_FOLDERS_GROUP_KEY) return [ROOT_PATH_KEY, FILE_USER_FOLDERS_GROUP_KEY];
+    if (key === FILE_SYSTEM_FOLDERS_GROUP_KEY) return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY];
+    if (key === FILE_ATTACHMENTS_GROUP_KEY) {
+      return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY, FILE_ATTACHMENTS_GROUP_KEY];
+    }
+    if (isDocumentAttachmentCategory(key)) {
+      return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY, FILE_ATTACHMENTS_GROUP_KEY, key];
+    }
+    if (isUserFolderCategory(key)) return [ROOT_PATH_KEY, FILE_USER_FOLDERS_GROUP_KEY, key];
+    if (isSystemFolderCategory(key)) return [ROOT_PATH_KEY, FILE_SYSTEM_FOLDERS_GROUP_KEY, key];
+    return [ROOT_PATH_KEY, key];
+  }, []);
 
   /**
    * 初始化文件夹树：仅一个根节点「全部文件」，其他文件夹作为其子节点
@@ -240,25 +410,98 @@ const FileListPage: React.FC = () => {
         categories.add(file.category);
       }
     });
+    nonEmptyAttachmentCategories.forEach(category => categories.add(category));
 
-    const categoryNodes: FileFolderNode[] = Array.from(categories)
-      .map(category => ({
-        title: resolveCategoryDisplayName(category),
-        key: category,
-        rawCategory: category,
-        displayTitle: resolveCategoryDisplayName(category),
-        icon: <FolderOutlined />,
-        isLeaf: false,
-      }))
+    const makeCategoryNode = (category: string, iconKind: FolderIconKind): FileFolderNode => ({
+      title: resolveCategoryDisplayName(category),
+      key: category,
+      rawCategory: category,
+      displayTitle: resolveCategoryDisplayName(category),
+      folderKind: 'category',
+      icon: createFolderTreeIcon(iconKind),
+    });
+
+    const normalizeFolderNode = (node: FileFolderNode): FileFolderNode => {
+      const normalizedChildren = node.children?.length
+        ? node.children.map(child => normalizeFolderNode(child as FileFolderNode))
+        : undefined;
+      const hasChildFolders = Boolean(normalizedChildren?.length);
+      return {
+        ...node,
+        children: normalizedChildren,
+        isLeaf: node.isLeaf ?? !hasChildFolders,
+      };
+    };
+
+    const attachmentCategories = collectDocumentAttachmentCategories(categories, enabledMenuPaths);
+    const systemCategories: string[] = [];
+    const userCategories: string[] = [];
+    categories.forEach(category => {
+      if (isUserFolderCategory(category)) {
+        userCategories.push(category);
+      } else if (!isDocumentAttachmentCategory(category)) {
+        systemCategories.push(category);
+      }
+    });
+
+    const attachmentChildren = attachmentCategories
+      .map(category => makeCategoryNode(category, 'system'))
       .sort((a, b) => naturalCompare(String(a.displayTitle), String(b.displayTitle)));
 
-    const allFilesNode: DataNode = {
+    const systemCategoryNodes = systemCategories
+      .map(category => makeCategoryNode(category, 'system'))
+      .sort((a, b) => naturalCompare(String(a.displayTitle), String(b.displayTitle)));
+
+    const userFolderNodes = userCategories
+      .map(category => makeCategoryNode(category, 'user'))
+      .sort((a, b) => naturalCompare(String(a.displayTitle), String(b.displayTitle)));
+
+    const systemChildren: FileFolderNode[] = [];
+    if (attachmentChildren.length > 0) {
+      systemChildren.push({
+        title: t('pages.system.files.attachmentsFolder'),
+        key: FILE_ATTACHMENTS_GROUP_KEY,
+        displayTitle: t('pages.system.files.attachmentsFolder'),
+        folderKind: 'attachments-group',
+        icon: createFolderTreeIcon('system'),
+        children: attachmentChildren,
+      });
+    }
+    systemChildren.push(...systemCategoryNodes);
+
+    const topLevelChildren: FileFolderNode[] = [
+      normalizeFolderNode({
+        title: t('pages.system.files.systemFolders'),
+        key: FILE_SYSTEM_FOLDERS_GROUP_KEY,
+        displayTitle: t('pages.system.files.systemFolders'),
+        folderKind: 'system-group',
+        icon: createFolderTreeIcon('system'),
+        children: systemChildren.length > 0 ? systemChildren : undefined,
+      }),
+      normalizeFolderNode({
+        title: t('pages.system.files.userFolders'),
+        key: FILE_USER_FOLDERS_GROUP_KEY,
+        displayTitle: t('pages.system.files.userFolders'),
+        folderKind: 'user-group',
+        icon: createFolderTreeIcon('user'),
+        children: userFolderNodes.length > 0 ? userFolderNodes : undefined,
+      }),
+      {
+        title: t('pages.system.files.uncategorizedFolder'),
+        key: FILE_UNCATEGORIZED_GROUP_KEY,
+        displayTitle: t('pages.system.files.uncategorizedFolder'),
+        folderKind: 'uncategorized',
+        icon: createFolderTreeIcon('uncategorized'),
+        isLeaf: true,
+      },
+    ];
+
+    const allFilesNode = normalizeFolderNode({
       title: t('pages.system.files.allFiles'),
       key: 'all',
-      icon: <FolderOpenOutlined />,
-      isLeaf: categoryNodes.length === 0,
-      children: categoryNodes.length > 0 ? categoryNodes : undefined,
-    };
+      icon: createFolderTreeIcon('system', true),
+      children: topLevelChildren.length > 0 ? topLevelChildren : undefined,
+    });
 
     const treeNodes: DataNode[] = [allFilesNode];
     setTreeData(treeNodes);
@@ -269,14 +512,22 @@ const FileListPage: React.FC = () => {
     if (selectedTreeKeys.length === 0) {
       setSelectedTreeKeys(['all']);
     }
-    // 有子文件夹时默认展开「全部文件」
-    if (categoryNodes.length > 0) {
-      setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
+    if (topLevelChildren.length > 0) {
+      setExpandedKeys(prev => {
+        const next = new Set(prev);
+        next.add('all');
+        next.add(FILE_SYSTEM_FOLDERS_GROUP_KEY);
+        next.add(FILE_USER_FOLDERS_GROUP_KEY);
+        if (attachmentChildren.length > 0) {
+          next.add(FILE_ATTACHMENTS_GROUP_KEY);
+        }
+        return Array.from(next);
+      });
     }
-  }, [allFiles, t, selectedTreeKeys.length, treeSearchValue, resolveCategoryDisplayName]);
+  }, [allFiles, nonEmptyAttachmentCategories, t, selectedTreeKeys.length, treeSearchValue, resolveCategoryDisplayName, enabledMenuPaths]);
 
   /**
-   * 过滤文件夹树（根据搜索关键词）：保留「全部文件」根节点，只过滤其子文件夹
+   * 过滤文件夹树（根据搜索关键词）：递归匹配「全部文件」及其子文件夹
    */
   useEffect(() => {
     if (!treeSearchValue.trim()) {
@@ -290,24 +541,46 @@ const FileListPage: React.FC = () => {
       return;
     }
 
-    const root = treeData[0];
-    const children = (root.children || []) as FileFolderNode[];
-    const filteredChildren = children.filter(node => {
-      const title = (node.title as string) || '';
-      const rawCategory = (node.rawCategory || '').toLowerCase();
-      return title.toLowerCase().includes(searchLower) || rawCategory.includes(searchLower);
-    });
+    const filterNodes = (nodes: DataNode[]): DataNode[] =>
+      nodes.reduce<DataNode[]>((acc, node) => {
+        const folderNode = node as FileFolderNode;
+        const title = ((node.title as string) || '').toLowerCase();
+        const rawCategory = (folderNode.rawCategory || '').toLowerCase();
+        const keyStr = String(node.key).toLowerCase();
+        const selfMatch =
+          title.includes(searchLower) ||
+          rawCategory.includes(searchLower) ||
+          keyStr.includes(searchLower);
 
+        const childMatches = node.children ? filterNodes(node.children as DataNode[]) : [];
+
+        if (selfMatch) {
+          acc.push(node);
+        } else if (childMatches.length > 0) {
+          acc.push({ ...node, children: childMatches });
+        }
+        return acc;
+      }, []);
+
+    const root = treeData[0];
+    const filteredChildren = filterNodes((root.children || []) as DataNode[]);
+    const matchesRoot = ((root.title as string) || '').toLowerCase().includes(searchLower);
     const filteredRoot: DataNode = {
       ...root,
       children: filteredChildren.length > 0 ? filteredChildren : undefined,
     };
-    const matchesRoot = ((root.title as string) || '').toLowerCase().includes(searchLower);
     const filtered = matchesRoot || filteredChildren.length > 0 ? [filteredRoot] : [];
 
     setFilteredTreeData(filtered);
     if (filtered.length > 0) {
-      setExpandedKeys(prev => (prev.includes('all') ? prev : ['all', ...prev]));
+      setExpandedKeys(prev => {
+        const next = new Set(prev);
+        next.add('all');
+        next.add(FILE_SYSTEM_FOLDERS_GROUP_KEY);
+        next.add(FILE_USER_FOLDERS_GROUP_KEY);
+        next.add(FILE_ATTACHMENTS_GROUP_KEY);
+        return Array.from(next);
+      });
     }
   }, [treeData, treeSearchValue]);
 
@@ -318,11 +591,16 @@ const FileListPage: React.FC = () => {
     loadFileList();
   }, [loadFileList]);
 
+  const filteredFileList = useMemo(() => {
+    if (fileTypeFilter === 'all') return fileList;
+    return fileList.filter(file => classifyFileTypeFilter(file) === fileTypeFilter);
+  }, [fileList, fileTypeFilter]);
+
   /**
    * 排序后的文件列表（Windows 资源管理器逻辑：名称自然排序，支持按大小/类型/日期）
    */
   const sortedFileList = useMemo(() => {
-    const list = [...fileList];
+    const list = [...filteredFileList];
     const asc = sortOrder === 'ascend';
     const cmp = (a: number, b: number) => (asc ? a - b : b - a);
     const cmpStr = (a: string, b: string) => (asc ? naturalCompare(a, b) : naturalCompare(b, a));
@@ -347,7 +625,65 @@ const FileListPage: React.FC = () => {
       }
     });
     return list;
-  }, [fileList, sortField, sortOrder]);
+  }, [filteredFileList, sortField, sortOrder]);
+
+  const displayedFileUuids = useMemo(
+    () => sortedFileList.map(file => file.uuid),
+    [sortedFileList],
+  );
+
+  const isAllDisplayedSelected =
+    displayedFileUuids.length > 0 && displayedFileUuids.every(uuid => selectedRowKeys.includes(uuid));
+
+  const isPartialDisplayedSelected =
+    selectedRowKeys.length > 0 &&
+    !isAllDisplayedSelected &&
+    displayedFileUuids.some(uuid => selectedRowKeys.includes(uuid));
+
+  const handleSelectAllChange = useCallback(
+    (checked: boolean) => {
+      setSelectedRowKeys(checked ? displayedFileUuids : []);
+      lastSelectedFileUuidRef.current = null;
+    },
+    [displayedFileUuids],
+  );
+
+  const handleFileCheckboxChange = useCallback((file: File, checked: boolean) => {
+    setSelectedRowKeys(prev =>
+      checked ? (prev.includes(file.uuid) ? prev : [...prev, file.uuid]) : prev.filter(key => key !== file.uuid),
+    );
+    lastSelectedFileUuidRef.current = file.uuid;
+  }, []);
+
+  const handleFileItemClick = useCallback(
+    (file: File, index: number, e: React.MouseEvent) => {
+      if (e.shiftKey && lastSelectedFileUuidRef.current) {
+        const lastIndex = sortedFileList.findIndex(item => item.uuid === lastSelectedFileUuidRef.current);
+        if (lastIndex >= 0) {
+          const start = Math.min(lastIndex, index);
+          const end = Math.max(lastIndex, index);
+          const rangeUuids = sortedFileList.slice(start, end + 1).map(item => item.uuid);
+          if (e.ctrlKey || e.metaKey) {
+            setSelectedRowKeys(prev => Array.from(new Set([...prev, ...rangeUuids])));
+          } else {
+            setSelectedRowKeys(rangeUuids);
+          }
+          lastSelectedFileUuidRef.current = file.uuid;
+          return;
+        }
+      }
+
+      if (e.ctrlKey || e.metaKey) {
+        setSelectedRowKeys(prev =>
+          prev.includes(file.uuid) ? prev.filter(key => key !== file.uuid) : [...prev, file.uuid],
+        );
+      } else {
+        setSelectedRowKeys([file.uuid]);
+      }
+      lastSelectedFileUuidRef.current = file.uuid;
+    },
+    [sortedFileList],
+  );
 
   /**
    * 处理文件夹树选择
@@ -356,16 +692,28 @@ const FileListPage: React.FC = () => {
     if (selectedKeys.length > 0) {
       const key = selectedKeys[0] as string;
       setSelectedTreeKeys(selectedKeys);
-      
+      setSelectedRowKeys([]);
+      lastSelectedFileUuidRef.current = null;
+      setCurrentPath(resolveTreePath(key));
       if (key === 'all') {
-        setCurrentPath([ROOT_PATH_KEY]);
-        loadFileList();
+        loadFileList(undefined);
       } else {
-        setCurrentPath([ROOT_PATH_KEY, key]);
         loadFileList(key);
       }
     }
   };
+
+  const selectUserFolder = useCallback((category: string) => {
+    setSelectedTreeKeys([category]);
+    setCurrentPath([ROOT_PATH_KEY, FILE_USER_FOLDERS_GROUP_KEY, category]);
+    setExpandedKeys(prev => {
+      const next = new Set(prev);
+      next.add('all');
+      next.add(FILE_USER_FOLDERS_GROUP_KEY);
+      return Array.from(next);
+    });
+    loadFileList(category);
+  }, [loadFileList]);
 
   /**
    * 处理文件上传
@@ -387,7 +735,7 @@ const FileListPage: React.FC = () => {
       messageApi.success(t('pages.system.files.uploadSuccess'));
       setUploadVisible(false);
       setUploadFileList([]);
-      loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
+      reloadCurrentFolder();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.uploadFailed'));
     } finally {
@@ -404,10 +752,11 @@ const FileListPage: React.FC = () => {
       messageApi.warning(t('pages.system.files.enterFolderName'));
       return;
     }
-    const categories = new Set<string>();
-    fileList.forEach(file => {
-      if (file.category) categories.add(file.category);
-    });
+    if (!isValidUserFolderName(name)) {
+      messageApi.warning(t('pages.system.files.enterFolderName'));
+      return;
+    }
+    const categories = collectExistingCategories();
     if (categories.has(name)) {
       messageApi.warning(t('pages.system.files.folderNameExists'));
       return;
@@ -423,15 +772,84 @@ const FileListPage: React.FC = () => {
       messageApi.success(t('pages.system.files.folderCreateSuccess'));
       setCreateFolderVisible(false);
       createFolderFormRef.current?.resetFields();
-      await loadFileList();
-      setSelectedTreeKeys([name]);
-      setCurrentPath([ROOT_PATH_KEY, name]);
+      await loadFileList(undefined);
+      selectUserFolder(name);
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.folderCreateFailed'));
     } finally {
       setCreatingFolder(false);
     }
   };
+
+  const handleEditFolderSubmit = async (values: { folderName?: string }) => {
+    const newName = (values?.folderName ?? '').trim();
+    const oldName = editingFolderCategory;
+    if (!oldName || !newName) {
+      messageApi.warning(t('pages.system.files.enterFolderName'));
+      return;
+    }
+    if (!isValidUserFolderName(newName)) {
+      messageApi.warning(t('pages.system.files.enterFolderName'));
+      return;
+    }
+    if (newName === oldName) {
+      setEditFolderVisible(false);
+      setEditingFolderCategory(null);
+      return;
+    }
+    const categories = collectExistingCategories();
+    if (categories.has(newName)) {
+      messageApi.warning(t('pages.system.files.folderNameExists'));
+      return;
+    }
+    const filesInFolder = allFiles.filter(file => file.category === oldName);
+    if (filesInFolder.length === 0) {
+      messageApi.warning(t('pages.system.files.loadListFailed'));
+      return;
+    }
+    try {
+      setSavingFolderEdit(true);
+      await Promise.all(
+        filesInFolder.map(file =>
+          updateFile(file.uuid, { category: newName } as FileUpdate),
+        ),
+      );
+      messageApi.success(t('pages.system.files.folderEditSuccess'));
+      setEditFolderVisible(false);
+      editFolderFormRef.current?.resetFields();
+      setEditingFolderCategory(null);
+      await loadFileList(undefined);
+      selectUserFolder(newName);
+    } catch (error: any) {
+      messageApi.error(error.message || t('pages.system.files.folderCreateFailed'));
+    } finally {
+      setSavingFolderEdit(false);
+    }
+  };
+
+  const handleDeleteFolder = useCallback((category: string) => {
+    const filesInFolder = allFiles.filter(file => file.category === category);
+    Modal.confirm({
+      title: t('pages.system.files.contextDeleteFolder'),
+      content: t('pages.system.files.deleteFolderConfirm'),
+      okType: 'danger',
+      onOk: async () => {
+        if (filesInFolder.length === 0) {
+          await loadFileList(undefined);
+          return;
+        }
+        try {
+          await batchDeleteFiles(filesInFolder.map(file => file.uuid));
+          messageApi.success(t('pages.system.files.folderDeleteSuccess'));
+          setSelectedTreeKeys(['all']);
+          setCurrentPath([ROOT_PATH_KEY]);
+          await loadFileList(undefined);
+        } catch (error: any) {
+          messageApi.error(error.message || t('pages.system.files.deleteFailed'));
+        }
+      },
+    });
+  }, [allFiles, loadFileList, messageApi, t]);
 
   /**
    * 处理文件预览
@@ -473,7 +891,7 @@ const FileListPage: React.FC = () => {
       await batchDeleteFiles(filesToDelete.map(f => f.uuid));
       messageApi.success(t('pages.system.files.deleteSuccess'));
       setSelectedRowKeys([]);
-      loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
+      reloadCurrentFolder();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.deleteFailed'));
     }
@@ -496,11 +914,74 @@ const FileListPage: React.FC = () => {
       setRenameVisible(false);
       setRenameFile(null);
       setRenameValue('');
-      loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string);
+      reloadCurrentFolder();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.files.renameFailed'));
     }
   };
+
+  /**
+   * 文件夹树右键菜单
+   */
+  const handleTreeRightClick: TreeProps['onRightClick'] = ({ event, node }) => {
+    event.preventDefault();
+    const folderNode = node as FileFolderNode;
+    const key = String(node.key);
+    const isUserGroup = key === FILE_USER_FOLDERS_GROUP_KEY;
+    const isUserFolder = isUserFolderCategory(folderNode.rawCategory || key);
+    if (!isUserGroup && !isUserFolder) return;
+
+    setTreeContextMenuNode(folderNode);
+    setTreeContextMenuPosition({ x: event.clientX, y: event.clientY });
+    setTreeContextMenuVisible(true);
+  };
+
+  const treeContextMenuItems: MenuProps['items'] = useMemo(() => {
+    if (!treeContextMenuNode) return [];
+    const key = String(treeContextMenuNode.key);
+    const isUserGroup = key === FILE_USER_FOLDERS_GROUP_KEY;
+    const category = treeContextMenuNode.rawCategory || key;
+
+    const items: MenuProps['items'] = [
+      {
+        key: 'new-folder',
+        label: t('pages.system.files.contextNewFolder'),
+        icon: <PlusOutlined />,
+        onClick: () => {
+          setCreateFolderVisible(true);
+          setTreeContextMenuVisible(false);
+        },
+      },
+    ];
+
+    if (!isUserGroup && isUserFolderCategory(category)) {
+      items.push(
+        {
+          key: 'edit-folder',
+          label: t('pages.system.files.contextEditFolder'),
+          icon: <EditOutlined />,
+          onClick: () => {
+            setEditingFolderCategory(category);
+            setEditFolderVisible(true);
+            editFolderFormRef.current?.setFieldsValue({ folderName: category });
+            setTreeContextMenuVisible(false);
+          },
+        },
+        {
+          key: 'delete-folder',
+          label: t('pages.system.files.contextDeleteFolder'),
+          icon: <DeleteOutlined />,
+          danger: true,
+          onClick: () => {
+            handleDeleteFolder(category);
+            setTreeContextMenuVisible(false);
+          },
+        },
+      );
+    }
+
+    return items;
+  }, [handleDeleteFolder, t, treeContextMenuNode]);
 
   /**
    * 处理右键菜单
@@ -661,11 +1142,13 @@ const FileListPage: React.FC = () => {
         }}
         onContextMenu={(e) => handleContextMenu(e)}
       >
-        {sortedFileList.map(file => {
+        {sortedFileList.map((file, index) => {
+          const isSelected = selectedRowKeys.includes(file.uuid);
           return (
             <div
               key={file.uuid}
               style={{
+                position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
@@ -673,23 +1156,19 @@ const FileListPage: React.FC = () => {
                 borderRadius: '4px',
                 cursor: 'pointer',
                 transition: 'all 0.2s',
-                border: selectedRowKeys.includes(file.uuid) ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
-                backgroundColor: selectedRowKeys.includes(file.uuid) ? `${token.colorPrimary}10` : 'transparent',
+                border: isSelected ? `2px solid ${token.colorPrimary}` : '2px solid transparent',
+                backgroundColor: isSelected ? `${token.colorPrimary}10` : 'transparent',
               }}
-              onClick={(e) => {
-                if (e.ctrlKey || e.metaKey) {
-                  setSelectedRowKeys(prev =>
-                    prev.includes(file.uuid)
-                      ? prev.filter(key => key !== file.uuid)
-                      : [...prev, file.uuid]
-                  );
-                } else {
-                  setSelectedRowKeys([file.uuid]);
-                }
-              }}
+              onClick={(e) => handleFileItemClick(file, index, e)}
               onDoubleClick={() => handlePreview(file)}
               onContextMenu={(e) => handleContextMenu(e, file)}
             >
+              <Checkbox
+                checked={isSelected}
+                onClick={(e) => e.stopPropagation()}
+                onChange={(e) => handleFileCheckboxChange(file, e.target.checked)}
+                style={{ position: 'absolute', top: 6, left: 6, zIndex: 1 }}
+              />
               <div style={{ 
                 width: imageThumbSize, 
                 height: imageThumbSize, 
@@ -734,7 +1213,9 @@ const FileListPage: React.FC = () => {
         }}
         onContextMenu={(e) => handleContextMenu(e)}
       >
-        {sortedFileList.map(file => (
+        {sortedFileList.map((file, index) => {
+          const isSelected = selectedRowKeys.includes(file.uuid);
+          return (
           <div
             key={file.uuid}
             style={{
@@ -743,23 +1224,19 @@ const FileListPage: React.FC = () => {
               padding: '8px 12px',
               borderRadius: '4px',
               cursor: 'pointer',
-              backgroundColor: selectedRowKeys.includes(file.uuid) ? '#e6f7ff' : 'transparent',
-              border: selectedRowKeys.includes(file.uuid) ? '1px solid #1890ff' : '1px solid transparent',
+              backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
+              border: isSelected ? '1px solid #1890ff' : '1px solid transparent',
             }}
-            onClick={(e) => {
-              if (e.ctrlKey || e.metaKey) {
-                setSelectedRowKeys(prev =>
-                  prev.includes(file.uuid)
-                    ? prev.filter(key => key !== file.uuid)
-                    : [...prev, file.uuid]
-                );
-              } else {
-                setSelectedRowKeys([file.uuid]);
-              }
-            }}
+            onClick={(e) => handleFileItemClick(file, index, e)}
             onDoubleClick={() => handlePreview(file)}
             onContextMenu={(e) => handleContextMenu(e, file)}
           >
+            <Checkbox
+              checked={isSelected}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => handleFileCheckboxChange(file, e.target.checked)}
+              style={{ marginRight: 12, flexShrink: 0 }}
+            />
             <Space style={{ flex: 1, minWidth: 0 }}>
               {getFileIcon(file.file_type, 20)}
               <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -773,7 +1250,8 @@ const FileListPage: React.FC = () => {
               </span>
             </Space>
           </div>
-        ))}
+          );
+        })}
       </div>
     );
   };
@@ -819,24 +1297,26 @@ const FileListPage: React.FC = () => {
             ),
             showIcon: true,
             blockNode: true,
+            switcherIcon: ({ isLeaf }) => (isLeaf ? false : undefined),
             className: 'file-manager-tree',
+            onRightClick: handleTreeRightClick,
           },
         }}
         rightPanel={{
+          contentPadding: 0,
           header: {
             left: (
               <Space>
                 <Button icon={<ArrowLeftOutlined />} disabled />
                 <Button icon={<ArrowRightOutlined />} disabled />
                 <Button icon={<UpOutlined />} disabled />
-                <Button icon={<ReloadOutlined />} onClick={() => loadFileList(selectedTreeKeys[0] === 'all' ? undefined : selectedTreeKeys[0] as string)} />
+                <Button icon={<ReloadOutlined />} onClick={reloadCurrentFolder} />
               </Space>
             ),
             center: (
               <Breadcrumb
                 items={currentPath.map((path, index) => {
-                  const displayPath =
-                    path === ROOT_PATH_KEY ? t('pages.system.files.allFiles') : resolveCategoryDisplayName(path);
+                  const displayPath = resolvePathDisplayName(path);
                   return {
                     title: index === currentPath.length - 1 ? (
                       <span style={{ fontWeight: 500 }}>{displayPath}</span>
@@ -886,6 +1366,15 @@ const FileListPage: React.FC = () => {
                   flexWrap: 'wrap',
                 }}
               >
+                <Checkbox
+                  indeterminate={isPartialDisplayedSelected}
+                  checked={isAllDisplayedSelected}
+                  disabled={sortedFileList.length === 0}
+                  onChange={(e) => handleSelectAllChange(e.target.checked)}
+                >
+                  {t('pages.system.files.selectAll')}
+                </Checkbox>
+                <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 4px' }} />
                 <Button
                   type="primary"
                   icon={<UploadOutlined />}
@@ -931,6 +1420,23 @@ const FileListPage: React.FC = () => {
                     size="middle"
                   />
                 </Space>
+                <div style={{ width: 1, height: 16, backgroundColor: token.colorSplit, margin: '0 8px' }} />
+                <Space>
+                  <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('pages.system.files.fileTypeLabel')}</span>
+                  <ThemedSegmented
+                    surfaceBackground
+                    size="middle"
+                    value={fileTypeFilter}
+                    options={[
+                      { label: t('pages.system.files.fileType.all'), value: 'all' },
+                      { label: t('pages.system.files.fileType.image'), value: 'image' },
+                      { label: t('pages.system.files.fileType.document'), value: 'document' },
+                      { label: t('pages.system.files.fileType.drawing'), value: 'drawing' },
+                      { label: t('pages.system.files.fileType.other'), value: 'other' },
+                    ]}
+                    onChange={(value) => setFileTypeFilter(value as FileTypeFilter)}
+                  />
+                </Space>
               </div>
 
               {/* 文件列表区域 */}
@@ -952,7 +1458,11 @@ const FileListPage: React.FC = () => {
                     }}
                     rowSelection={{
                       selectedRowKeys,
-                      onChange: setSelectedRowKeys,
+                      onChange: (keys) => {
+                        setSelectedRowKeys(keys);
+                        lastSelectedFileUuidRef.current =
+                          keys.length > 0 ? String(keys[keys.length - 1]) : null;
+                      },
                     }}
                     onRow={(record) => ({
                       onDoubleClick: () => handlePreview(record),
@@ -970,7 +1480,7 @@ const FileListPage: React.FC = () => {
               <span>
                 {selectedRowKeys.length > 0
                   ? t('pages.system.files.selectedCount', { n: selectedRowKeys.length, size: formatFileSize(selectedFilesSize) })
-                  : t('pages.system.files.totalCount', { n: fileList.length })}
+                  : t('pages.system.files.totalCount', { n: sortedFileList.length })}
               </span>
               <span>{formatFileSize(fileList.reduce((total, file) => total + file.file_size, 0))}</span>
             </>
@@ -1064,7 +1574,32 @@ const FileListPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 右键菜单与全屏遮罩 */}
+      {/* 编辑文件夹 Modal */}
+      <FormModalTemplate
+        title={t('pages.system.files.editFolderModalTitle')}
+        open={editFolderVisible}
+        onClose={() => {
+          setEditFolderVisible(false);
+          setEditingFolderCategory(null);
+          editFolderFormRef.current?.resetFields();
+        }}
+        onFinish={handleEditFolderSubmit}
+        isEdit
+        loading={savingFolderEdit}
+        formRef={editFolderFormRef as React.RefObject<ProFormInstance>}
+        initialValues={{ folderName: editingFolderCategory ?? '' }}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+      >
+        <ProFormText
+          name="folderName"
+          label={t('pages.system.files.folderNameLabel')}
+          placeholder={t('pages.system.files.folderNamePlaceholder')}
+          rules={[{ required: true, message: t('pages.system.files.enterFolderName') }]}
+          fieldProps={{ autoFocus: true }}
+        />
+      </FormModalTemplate>
+
+      {/* 文件右键菜单与全屏遮罩 */}
       {contextMenuVisible && (
         <>
           <div
@@ -1097,6 +1632,46 @@ const FileListPage: React.FC = () => {
             <Menu
               items={contextMenuItems}
               onClick={() => setContextMenuVisible(false)}
+              selectable={false}
+              style={{ border: 'none', minWidth: '160px' }}
+            />
+          </div>
+        </>
+      )}
+
+      {/* 文件夹树右键菜单 */}
+      {treeContextMenuVisible && (
+        <>
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 999,
+              backgroundColor: 'transparent',
+            }}
+            onClick={() => setTreeContextMenuVisible(false)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setTreeContextMenuVisible(false);
+            }}
+          />
+          <div
+            style={{
+              position: 'fixed',
+              left: treeContextMenuPosition.x,
+              top: treeContextMenuPosition.y,
+              zIndex: 1000,
+              boxShadow: '0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05)',
+              borderRadius: '8px',
+              overflow: 'hidden',
+            }}
+          >
+            <Menu
+              items={treeContextMenuItems}
+              onClick={() => setTreeContextMenuVisible(false)}
               selectable={false}
               style={{ border: 'none', minWidth: '160px' }}
             />

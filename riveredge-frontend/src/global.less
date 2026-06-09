@@ -819,6 +819,98 @@ code {
   white-space: nowrap !important;
 }
 
+/* 文件管理侧栏树：展开箭头 hover 背景与行内图标/标题垂直居中 */
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-treenode,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-treenode {
+  display: flex !important;
+  align-items: center !important;
+  padding: 2px 0 !important;
+  margin: 2px 4px !important;
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  flex-shrink: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+  margin-inline-end: 0 !important;
+  line-height: 1 !important;
+  background: transparent !important;
+
+  /* hover 背景仅由 ant 的 ::before 绘制，避免与容器背景叠加 */
+  &:hover {
+    background-color: transparent !important;
+  }
+
+  &::before {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: none !important;
+    border-radius: 4px !important;
+  }
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher .ant-tree-switcher-icon {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-switcher-noop,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-switcher-noop {
+  /* 叶子节点保留展开箭头占位，保证同级文件夹图标/标题对齐 */
+  display: inline-flex !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  margin-inline-end: 0 !important;
+  padding: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-node-content-wrapper,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-node-content-wrapper {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  flex: 1;
+  min-width: 0 !important;
+  min-height: 28px !important;
+  line-height: 1.5 !important;
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-node-content-wrapper > .ant-tree-iconEle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: center !important;
+  width: 20px !important;
+  min-width: 20px !important;
+  margin-inline-end: 4px !important;
+}
+
+.left-panel-scroll-container .file-manager-tree.ant-tree .ant-tree-title,
+.two-column-layout-left-tree .file-manager-tree.ant-tree .ant-tree-title {
+  flex: 1 !important;
+  min-width: 0 !important;
+  display: block !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
 /* 排除弹窗中的树组件 */
 .ant-popover .ant-tree .ant-tree-treenode,
 .ant-pro-table-column-setting-list .ant-tree .ant-tree-treenode,
