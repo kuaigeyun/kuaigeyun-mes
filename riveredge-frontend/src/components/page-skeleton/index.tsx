@@ -1,12 +1,12 @@
 /**
- * 路由懒加载 / 权限等待：主内容区居中 antd Spin（与 SystemDashboardRouteGate 等一致）
- *
- * 全屏鉴权等待仍使用 PageLoadingLottie，不在此组件内处理。
+ * 路由懒加载占位：登录后首屏用全屏 Lottie，其余用 antd Spin。
  */
 
 import React from 'react';
 import { Spin } from 'antd';
 import type { SpinProps } from 'antd';
+import { PageLoadingFullscreen } from '../page-loading-lottie';
+import { isPostLoginLoading } from '../../utils/postLoginLoading';
 
 /** @deprecated variant 已废弃，保留类型以兼容旧调用 */
 export type PageSkeletonVariant = 'content' | 'compact';
@@ -26,20 +26,26 @@ export interface PageSkeletonProps {
 const PageSkeleton: React.FC<PageSkeletonProps> = ({
   minHeight = 'min(58vh, 520px)',
   size = 'large',
-}) => (
-  <div
-    style={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      width: '100%',
-      minHeight,
-      padding: 48,
-      boxSizing: 'border-box',
-    }}
-  >
-    <Spin size={size} />
-  </div>
-);
+}) => {
+  if (isPostLoginLoading()) {
+    return <PageLoadingFullscreen />;
+  }
+
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '100%',
+        minHeight,
+        padding: 48,
+        boxSizing: 'border-box',
+      }}
+    >
+      <Spin size={size} />
+    </div>
+  );
+};
 
 export default PageSkeleton;

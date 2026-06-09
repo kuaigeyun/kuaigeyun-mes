@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
 import { App as AntdApp, ConfigProvider, message } from 'antd';
 import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
-import PageLoadingLottie from './components/page-loading-lottie';
+import { PageLoadingFullscreen } from './components/page-loading-lottie';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
 import { useQuery } from '@tanstack/react-query';
@@ -25,8 +25,7 @@ import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
-import { useConfigStore } from './stores/configStore';
-import RedirectToTenantHome from './components/redirect-to-tenant-home';
+import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
@@ -192,8 +191,12 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       setLoading(false);
       return;
     }
+    // 登录后 store/localStorage 已有用户时，/auth/me 后台刷新不阻塞 UI
+    if (currentUser && isLoading) {
+      return;
+    }
     setLoading(isLoading);
-  }, [isLoading, isPublicPath, setLoading]);
+  }, [isLoading, isPublicPath, setLoading, currentUser]);
 
   // 引入 useConfigStore
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
@@ -410,9 +413,9 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (isInfraLoginPage && currentUser.is_infra_admin) {
         return '/infra/operation';
       }
-      // 普通用户已登录仍访问登录页：由 RedirectToTenantHome 异步解析自定义首页，禁止同步落应用中心
+      // 普通用户已登录仍访问登录页：立刻落本地默认首页（与 Git 原逻辑一致，不等待 effective-home）
       if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-        return 'TENANT_HOME';
+        return getDefaultTenantHomePath();
       }
     }
 
@@ -436,7 +439,8 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   const shouldBypassAuth = isMasterDataPath || isDebugPath;
-  const shouldShowLoading = !isPublicPath && (loading || isLoading);
+  const hasAuthenticatedUser = currentUser || buildRestoredUserFromStorage();
+  const shouldShowLoading = !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
   const shouldRedirect = redirectTarget !== null;
 
   if (shouldBypassAuth) {
@@ -444,14 +448,10 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
   }
 
   if (shouldShowLoading) {
-    // 根节点加载：全屏 Lottie，延迟显示避免极短跳转闪烁
-    return <DelayedFallback delayMs={200} fullHeight />;
+    return <DelayedFallback delayMs={0} fullHeight />;
   }
 
   if (shouldRedirect) {
-    if (redirectTarget === 'TENANT_HOME') {
-      return <RedirectToTenantHome />;
-    }
     return <Navigate to={redirectTarget} replace />;
   }
 
@@ -485,20 +485,7 @@ const DelayedFallback: React.FC<{
   if (!show) return null;
 
   if (fullHeight) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100vh',
-          width: '100vw',
-          background: 'transparent',
-        }}
-      >
-        <PageLoadingLottie size={128} />
-      </div>
-    );
+    return <PageLoadingFullscreen />;
   }
 
   return <PageSkeleton variant={variant} />;

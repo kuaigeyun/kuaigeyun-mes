@@ -126,6 +126,8 @@ import { OrderLineVariantAttributesCell } from '../../../../master-data/componen
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import dayjs from 'dayjs';
 import { formatApiErrorDetail } from '../../../../../services/api';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { coerceFormDate, toApiDateString } from '../../../../../utils/formDate';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -298,7 +300,7 @@ function computeSalesOrderFormTotals(
   priceType: string | undefined,
 ) {
   const pt = priceType ?? 'tax_exclusive';
-  const rows = Array.isArray(items) ? items : [];
+  const rows = normalizeFormListItems<any>(items);
   let goodsExclCents = 0;
   let taxAmountCents = 0;
   let goodsInclCents = 0;
@@ -1128,8 +1130,10 @@ const SalesOrdersPage: React.FC = () => {
    */
   const handleSaveInternal = async (values: any, isDraft: boolean) => {
     try {
-      const items = values.items ?? [];
-      if (!items.length) {
+      const validItems = normalizeFormListItems<SalesOrderItem>(values.items).filter(
+        (it) => it.material_id && Number((it as any).required_quantity) > 0,
+      );
+      if (!validItems.length) {
         messageApi.warning(t('app.kuaizhizao.salesOrder.itemsRequired'));
         return;
       }
@@ -1150,25 +1154,20 @@ const SalesOrdersPage: React.FC = () => {
       // 计算金额汇总（对齐采购订单逻辑）
       values.price_type = values.price_type || 'tax_exclusive';
       const feeDetails = values.fee_details ?? [];
-      const sums = computeSalesOrderFormTotals(items, feeDetails, values.price_type);
+      const sums = computeSalesOrderFormTotals(validItems, feeDetails, values.price_type);
       values.total_amount = sums.estimatedReceivable;
       values.total_fee_amount = sums.ourFees + sums.customerFees;
 
       // 格式化主表日期字段，避免后端报错
-      if (values.order_date) {
-        values.order_date = dayjs(values.order_date).format('YYYY-MM-DD');
-      }
-      if (values.delivery_date) {
-        values.delivery_date = dayjs(values.delivery_date).format('YYYY-MM-DD');
-      }
+      values.order_date = toApiDateString(values.order_date);
+      values.delivery_date = toApiDateString(values.delivery_date);
 
-      const mainDeliveryStr = values.delivery_date != null ? dayjs(values.delivery_date).format('YYYY-MM-DD') : undefined;
-      values.items = items.map((it: SalesOrderItem) => {
+      const mainDeliveryStr = toApiDateString(values.delivery_date);
+      values.items = validItems.map((it: SalesOrderItem) => {
         const line = calcSalesLineAmounts(q(it), p(it), taxR(it), values.price_type);
         const material = materials.find((m) => m.id === Number((it as any).material_id));
         const conversionFactor = resolveSaleUnitConversionFactor(material, (it as any).material_unit);
-        const d = (it as any).delivery_date;
-        const deliveryDateStr = d != null ? (typeof d === 'string' ? d.slice(0, 10) : dayjs(d).format('YYYY-MM-DD')) : mainDeliveryStr;
+        const deliveryDateStr = toApiDateString((it as any).delivery_date) ?? mainDeliveryStr;
         return {
           material_id: (it as any).material_id,
           material_code: (it as any).material_code ?? '',
@@ -1281,7 +1280,8 @@ const SalesOrdersPage: React.FC = () => {
 
   const handleSaveDraft = async () => {
     try {
-      const values = await formRef.current?.validateFields();
+      await formRef.current?.validateFields();
+      const values = formRef.current?.getFieldsValue(true);
       if (values) await handleSaveInternal(values, true);
     } catch (err: any) {
       if (err?.errorFields?.length) {
@@ -1827,7 +1827,7 @@ const SalesOrdersPage: React.FC = () => {
           material_unit: material?.baseUnit || unit,
           required_quantity: quantity,
           unit_price: unitPrice,
-          delivery_date: deliveryDate ? (dayjs(deliveryDate).isValid() ? dayjs(deliveryDate) : undefined) : undefined,
+          delivery_date: deliveryDate ? coerceFormDate(deliveryDate) ?? undefined : undefined,
           tax_rate: taxR,
         };
       })
@@ -1838,7 +1838,7 @@ const SalesOrdersPage: React.FC = () => {
       return;
     }
 
-    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const currentItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems],
     });
@@ -1865,7 +1865,7 @@ const SalesOrdersPage: React.FC = () => {
       if (pt === 'tax_inclusive' && up > 0) {
         up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
       }
-      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+      const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
         items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
         formRef.current?.setFieldsValue({ items });
@@ -1879,8 +1879,7 @@ const SalesOrdersPage: React.FC = () => {
     async (selected: Material[]) => {
       const pt = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
       const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-      const defaultDelivery =
-        mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
+      const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
       const customerId = formRef.current?.getFieldValue('customer_id');
       const orderDate = formRef.current?.getFieldValue('order_date');
       const asOf = orderDate != null ? (dayjs.isDayjs(orderDate) ? orderDate : dayjs(orderDate)) : dayjs();
@@ -1938,7 +1937,7 @@ const SalesOrdersPage: React.FC = () => {
         return code == null || String(code).trim() === '';
       };
       const queue = selected.map(rowFromMaterial);
-      const items = [...(formRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
           items[i] = queue.shift()!;
@@ -1955,9 +1954,8 @@ const SalesOrdersPage: React.FC = () => {
 
   const appendEmptyOrderItem = React.useCallback(() => {
     const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-    const defaultDelivery =
-      mainDelivery != null ? (dayjs.isDayjs(mainDelivery) ? mainDelivery : dayjs(mainDelivery)) : dayjs();
-    const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+    const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
+    const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
     items.push({
       material_id: undefined,
       material_code: '',
@@ -2601,10 +2599,12 @@ const SalesOrdersPage: React.FC = () => {
                 rules={[{ required: true, message: '请选择交货日期' }]}
                 fieldProps={{
                   style: { width: '100%' },
-                  onChange: (val: any) => {
-                    const items = formRef.current?.getFieldValue('items') ?? [];
-                    if (items.length && val != null) {
-                      const next = items.map((it: any) => ({ ...it, delivery_date: val }));
+                  onChange: (val: unknown) => {
+                    const coerced = coerceFormDate(val);
+                    if (coerced == null) return;
+                    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
+                    if (items.length) {
+                      const next = items.map((it: any) => ({ ...it, delivery_date: coerced }));
                       formRef.current?.setFieldsValue({ items: next });
                     }
                   },
@@ -2727,7 +2727,7 @@ const SalesOrdersPage: React.FC = () => {
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                           {({ getFieldValue }: any) => {
-                            const row = getFieldValue('items')?.[index];
+                            const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                             const mid = row?.material_id ? Number(row.material_id) : null;
                             const fallback = mid && (row?.material_code || row?.material_name)
                               ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
@@ -2884,7 +2884,7 @@ const SalesOrdersPage: React.FC = () => {
                             render: (_: any, __: any, index: number) => (
                               <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue }: any) => {
-                                  const items = getFieldValue('items') ?? [];
+                                  const items = normalizeFormListItems<any>(getFieldValue('items'));
                                   const row = items[index];
                                   const line = calcSalesLineAmounts(
                                     row?.required_quantity,
@@ -2906,7 +2906,7 @@ const SalesOrdersPage: React.FC = () => {
                               <span>
                                 {t('app.kuaizhizao.salesOrder.taxRate')}
                                 <Button type="link" size="small" style={{ padding: '0 4px', height: 'auto' }} onClick={() => {
-                                  const items = formRef.current?.getFieldValue('items') ?? [];
+                                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                                   if (items.length === 0) return;
                                   const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
                                   if (rate != null && rate !== '') {
@@ -2937,7 +2937,7 @@ const SalesOrdersPage: React.FC = () => {
                             render: (_: any, __: any, index: number) => (
                               <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue }: any) => {
-                                  const items = getFieldValue('items') ?? [];
+                                  const items = normalizeFormListItems<any>(getFieldValue('items'));
                                   const row = items[index];
                                   const line = calcSalesLineAmounts(
                                     row?.required_quantity,
@@ -2961,7 +2961,7 @@ const SalesOrdersPage: React.FC = () => {
                       render: (_: any, __: any, index: number) => (
                         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                           {({ getFieldValue }: any) => {
-                            const items = getFieldValue('items') ?? [];
+                            const items = normalizeFormListItems<any>(getFieldValue('items'));
                             const row = items[index];
                             const qty = Number(row?.required_quantity) || 0;
                             const taxRate = Number(row?.tax_rate) || 0;
@@ -3019,7 +3019,13 @@ const SalesOrdersPage: React.FC = () => {
                       dataIndex: 'delivery_date',
                       width: 130,
                       render: (_: any, __: any, index: number) => (
-                        <AntForm.Item name={[index, 'delivery_date']} rules={[{ required: true, message: '必填' }]} style={{ margin: 0 }}>
+                        <AntForm.Item
+                          name={[index, 'delivery_date']}
+                          rules={[{ required: true, message: '必填' }]}
+                          style={{ margin: 0 }}
+                          getValueProps={(value) => ({ value: coerceFormDate(value) ?? undefined })}
+                          normalize={(value) => coerceFormDate(value) ?? undefined}
+                        >
                           <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
                         </AntForm.Item>
                       ),
@@ -3086,12 +3092,7 @@ const SalesOrdersPage: React.FC = () => {
                   disabledAdd
                   initialValue={() => {
                     const mainDelivery = formRef.current?.getFieldValue('delivery_date');
-                    const defaultDelivery =
-                      mainDelivery != null
-                        ? dayjs.isDayjs(mainDelivery)
-                          ? mainDelivery
-                          : dayjs(mainDelivery)
-                        : dayjs();
+                    const defaultDelivery = coerceFormDate(mainDelivery) ?? dayjs();
                     return {
                       material_id: undefined,
                       material_code: '',
@@ -3228,9 +3229,10 @@ const SalesOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onFinish={async (values) => {
+                onFinish={async () => {
                   setModalSubmitting(true);
                   try {
+                    const values = formRef.current?.getFieldsValue(true);
                     await handleSaveInternal(values, false);
                   } finally {
                     setModalSubmitting(false);

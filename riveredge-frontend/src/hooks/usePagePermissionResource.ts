@@ -23,7 +23,6 @@ export function usePagePermissionResource(pathname?: string): string | null {
     () =>
       [
         NAVIGATION_MENU_TREE_QUERY_KEY,
-        'permissionResource',
         currentUser?.tenant_id ?? null,
         currentUser?.permission_version ?? 0,
       ] as const,

@@ -8,6 +8,7 @@ import { ProLayout } from '@ant-design/pro-components';
 import { useNavigate, useLocation, Navigate, Link } from 'react-router-dom';
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Spin, theme } from 'antd';
+import { PageLoadingFullscreen } from '../components/page-loading-lottie';
 import type { MenuDataItem } from '@ant-design/pro-components';
 import {
   LogoutOutlined,
@@ -140,8 +141,7 @@ function clearCachedSiteLogoUrl(logoUuid: string): void {
   }
 }
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
-import { useConfigStore, resolveEffectiveHomePath } from '../stores/configStore';
-import RedirectToTenantHome from '../components/redirect-to-tenant-home';
+import { useConfigStore, resolveEffectiveHomePath, getDefaultTenantHomePath } from '../stores/configStore';
 import { useThemeStore } from '../stores/themeStore';
 import { getMenuBadgeCounts } from '../services/dashboard';
 import { verifyCopyright } from '../utils/copyrightIntegrity';
@@ -336,17 +336,28 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     }
   }, [userData, setCurrentUser]);
 
-  React.useEffect(() => {
-    setLoading(isLoading);
-  }, [isLoading, setLoading]);
-
-  // 公开页面（登录页面包含注册功能，通过 Drawer 实现）
   const publicPaths = ['/login', '/debug/'];
-  // 平台登录页是公开的，但其他平台页面需要登录
   const isInfraLoginPage = location.pathname === '/infra/login';
-  // 报表/大屏分享页（通过 token 公开访问，无需登录）
-  const isSharedReportOrDashboard = location.pathname === '/apps/kuaireport/dashboards/shared' || location.pathname === '/apps/kuaireport/reports/shared';
-  const isPublicPath = publicPaths.some(path => location.pathname.startsWith(path)) || isInfraLoginPage || isSharedReportOrDashboard;
+  const isSharedReportOrDashboard =
+    location.pathname === '/apps/kuaireport/dashboards/shared' ||
+    location.pathname === '/apps/kuaireport/reports/shared';
+  const isPublicPath =
+    publicPaths.some((path) => location.pathname.startsWith(path)) ||
+    isInfraLoginPage ||
+    isSharedReportOrDashboard;
+
+  React.useEffect(() => {
+    if (isPublicPath) {
+      setLoading(false);
+      return;
+    }
+    if (currentUser && isLoading) {
+      return;
+    }
+    setLoading(isLoading);
+  }, [isLoading, isPublicPath, setLoading, currentUser]);
+
+  const renderAuthLoading = () => <PageLoadingFullscreen />;
 
   // ⚠️ 关键修复：如果是平台超级管理员访问系统级页面，但没有选择组织，则重定向到平台首页
   // 必须放在所有 Hook 之后，避免 Hook 顺序问题
@@ -361,33 +372,14 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     return <>{children}</>;
   }
 
-  // 如果正在加载，显示加载状态
-  if (loading || isLoading) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
-        <Spin size="large" />
-      </div>
-    );
+  // 如果正在加载，显示全屏 Lottie（与 App AuthGuard 一致，避免 Spin 叠 Lottie）
+  if (!currentUser && (loading || isLoading)) {
+    return renderAuthLoading();
   }
 
-  // ⚠️ 关键修复：如果有 token 但 currentUser 不存在，且正在获取用户信息，等待加载完成
-  // 避免在数据加载过程中误判为未登录
+  // 有 token 但 currentUser 尚未就绪（仅平台超管补拉 /auth/me）
   if (getToken() && !currentUser && shouldFetchUser) {
-    return (
-      <div style={{
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        height: '100vh'
-      }}>
-        <Spin size="large" />
-      </div>
-    );
+    return renderAuthLoading();
   }
 
   // 如果是公开页面且已登录，根据用户类型重定向
@@ -396,9 +388,9 @@ const AuthGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     if (isInfraLoginPage && currentUser.is_infra_admin) {
       return <Navigate to="/infra/operation" replace />;
     }
-    // 普通用户登录后，如果访问的是登录页，异步解析租户有效首页（含自定义首页）
+    // 普通用户登录后，如果访问的是登录页，立刻跳到本地默认首页
     if (location.pathname === '/login' && !currentUser.is_infra_admin) {
-      return <RedirectToTenantHome />;
+      return <Navigate to={getDefaultTenantHomePath()} replace />;
     }
   }
 

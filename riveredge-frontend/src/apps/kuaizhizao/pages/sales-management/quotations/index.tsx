@@ -34,7 +34,7 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
-import { customerApi } from '../../../../master-data/services/supply-chain';
+import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import {
   getMaterialDefaultTaxRate,
   pickSaleUnitPrice,
@@ -86,6 +86,7 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { batchImport } from '../../../../../utils/batchOperations';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { getApiErrorMessage } from '../../../../../utils/errorHandler';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -93,6 +94,8 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useConfigStore } from '../../../../../stores/configStore';
 import { useGlobalStore } from '../../../../../stores';
+import { searchUserDisplay, type User } from '../../../../../services/user';
+import { displayItemsToUsers, formatUserDisplayLabel } from '../../../../../utils/userDisplay';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -458,7 +461,56 @@ const convertUnitPriceByPriceType = (
   return fromCents(unitPriceCents);
 };
 
-/** 与销售订单明细表同一套 Table + Form.List 用法；物料列样式见 .quotation-detail-table */
+/** 归属业务员：与销售订单一致，用 display API 选项并在无匹配时用 salesman_name 回显 */
+const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
+  const form = Form.useFormInstance();
+  const salesmanId = Form.useWatch('salesman_id', form);
+  const salesmanName = Form.useWatch('salesman_name', form);
+
+  const options = useMemo(() => {
+    const base = userList.map((u) => ({
+      value: Number(u.id),
+      label: formatUserDisplayLabel(u),
+    }));
+    const sid =
+      salesmanId != null && salesmanId !== '' && Number.isFinite(Number(salesmanId))
+        ? Number(salesmanId)
+        : NaN;
+    if (Number.isFinite(sid) && !base.some((o) => o.value === sid)) {
+      const label = String(salesmanName || '').trim() || `用户#${sid}`;
+      return [{ value: sid, label }, ...base];
+    }
+    return base;
+  }, [userList, salesmanId, salesmanName]);
+
+  return (
+    <>
+      <ProForm.Item
+        name="salesman_id"
+        label="归属业务员"
+        normalize={(v) =>
+          v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
+        }
+      >
+        <UniDropdown
+          placeholder="请选择归属业务员"
+          showSearch
+          allowClear
+          loading={loading}
+          style={{ width: '100%' }}
+          options={options}
+          onChange={(_val, opt: any) => {
+            form.setFieldsValue({ salesman_name: opt?.label });
+          }}
+        />
+      </ProForm.Item>
+      <Form.Item name="salesman_name" hidden>
+        <Input />
+      </Form.Item>
+    </>
+  );
+};
+
 const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
   const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
@@ -548,12 +600,6 @@ const QuotationAmountCell: React.FC<{ index: number }> = ({ index }) => {
     />
   );
 };
-
-function normalizeFormListItems<T>(raw: unknown): T[] {
-  if (Array.isArray(raw)) return raw;
-  if (raw && typeof raw === 'object') return Object.values(raw as Record<string, T>);
-  return [];
-}
 
 function resolveQuotationLineMaterialFields(
   it: any,
@@ -788,7 +834,7 @@ const QuotationsPage: React.FC = () => {
 
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [customersLoading, setCustomersLoading] = useState(false);
-  const [userList, setUserList] = useState<any[]>([]);
+  const [userList, setUserList] = useState<User[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [materialList, setMaterialList] = useState<any[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -813,41 +859,65 @@ const QuotationsPage: React.FC = () => {
     actionRef.current?.reload();
   }, []);
 
+  const currentUser = useGlobalStore((s) => s.currentUser);
+
   useEffect(() => {
-    const load = async () => {
+    let cancelled = false;
+    const loadCustomers = async () => {
       setCustomersLoading(true);
-      setUsersLoading(true);
       try {
-        const [custRes, matRes, userRes] = await Promise.all([
-          apiRequest<unknown>('/apps/master-data/supply-chain/customers', { params: { limit: 1000, is_active: true } }),
-          apiRequest<unknown>('/apps/master-data/materials', { params: { limit: 1000, is_active: true } }),
-          apiRequest<unknown>('/core/users', { params: { limit: 1000, is_active: true } }),
-        ]);
-        const custList = Array.isArray(custRes) ? custRes : (custRes as any)?.data ?? (custRes as any)?.items ?? [];
-        const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
-        const usrList = Array.isArray(userRes) ? userRes : (userRes as any)?.data ?? (userRes as any)?.items ?? [];
-        setCustomerList(Array.isArray(custList) ? custList : []);
-        setMaterialList(Array.isArray(matList) ? matList : []);
-        setUserList(Array.isArray(usrList) ? usrList : []);
+        const result = await customerApi.list({ limit: 1000, isActive: true });
+        if (!cancelled) {
+          setCustomerList(unwrapSupplyPagedList(result));
+        }
       } catch {
-        setCustomerList([]);
-        setMaterialList([]);
-        setUserList([]);
+        if (!cancelled) setCustomerList([]);
       } finally {
-        setCustomersLoading(false);
-        setUsersLoading(false);
+        if (!cancelled) setCustomersLoading(false);
       }
     };
-    load();
-  }, []);
+    const loadMaterials = async () => {
+      try {
+        const matRes = await apiRequest<unknown>('/apps/master-data/materials', {
+          params: { limit: 1000, is_active: true },
+        });
+        if (cancelled) return;
+        const matList = Array.isArray(matRes) ? matRes : (matRes as any)?.data ?? (matRes as any)?.items ?? [];
+        setMaterialList(Array.isArray(matList) ? matList : []);
+      } catch {
+        if (!cancelled) setMaterialList([]);
+      }
+    };
+    const loadUsers = async () => {
+      setUsersLoading(true);
+      try {
+        const userRes = await searchUserDisplay({ page: 1, page_size: 500, is_active: true });
+        if (!cancelled) {
+          setUserList(displayItemsToUsers(userRes.items || []));
+        }
+      } catch {
+        if (!cancelled) setUserList([]);
+      } finally {
+        if (!cancelled) setUsersLoading(false);
+      }
+    };
+    void loadCustomers();
+    void loadMaterials();
+    void loadUsers();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser]);
 
   const applyCustomerToQuotationForm = useCallback(
     (c: Record<string, any>) => {
       if (!c) return;
-      const sId = c.salesmanId ?? c.salesman_id;
-      const salesman = userList.find((u) => u.id === sId);
+      const sIdRaw = c.salesmanId ?? c.salesman_id;
+      const sId =
+        sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
+      const salesman = sId != null ? userList.find((u) => Number(u.id) === sId) : undefined;
       const sName =
-        c.salesmanName ?? c.salesman_name ?? (salesman ? salesman.full_name || salesman.username : '');
+        c.salesmanName ?? c.salesman_name ?? (salesman ? formatUserDisplayLabel(salesman) : '');
       formRef.current?.setFieldsValue({
         customer_id: c.id ?? c.customer_id,
         customer_name: c.name ?? c.customer_name,
@@ -2025,7 +2095,7 @@ const QuotationsPage: React.FC = () => {
         customer_name: detail.customer_name,
         customer_contact: detail.customer_contact,
         customer_phone: detail.customer_phone,
-        salesman_id: detail.salesman_id,
+        salesman_id: detail.salesman_id != null ? Number(detail.salesman_id) : undefined,
         salesman_name: detail.salesman_name,
         shipping_address: detail.shipping_address,
         shipping_method: detail.shipping_method,
@@ -2133,7 +2203,8 @@ const QuotationsPage: React.FC = () => {
 
   const handleSaveDraft = async () => {
     try {
-      const values = await formRef.current?.validateFields();
+      await formRef.current?.validateFields();
+      const values = formRef.current?.getFieldsValue(true);
       if (values) await submitCreate(values, { asDraft: true });
     } catch (err: any) {
       if (err?.errorFields?.length) {
@@ -2144,7 +2215,8 @@ const QuotationsPage: React.FC = () => {
     }
   };
 
-  const handleFormSubmit = async (values: any) => {
+  const handleFormSubmit = async () => {
+    const values = formRef.current?.getFieldsValue(true);
     try {
       if (isCreatePage) {
         await submitCreate(values);
@@ -2441,10 +2513,12 @@ const QuotationsPage: React.FC = () => {
       if ('customer_id' in changed && changed.customer_id != null) {
         const c = customerList.find((x: any) => (x.id ?? x.customer_id) === changed.customer_id);
         if (c) {
-          const sId = c.salesmanId ?? c.salesman_id;
-          const salesman = userList.find((u) => u.id === sId);
+          const sIdRaw = c.salesmanId ?? c.salesman_id;
+          const sId =
+            sIdRaw != null && sIdRaw !== '' && Number.isFinite(Number(sIdRaw)) ? Number(sIdRaw) : undefined;
+          const salesman = sId != null ? userList.find((u) => Number(u.id) === sId) : undefined;
           const sName =
-            c.salesmanName ?? c.salesman_name ?? (salesman ? salesman.full_name || salesman.username : '');
+            c.salesmanName ?? c.salesman_name ?? (salesman ? formatUserDisplayLabel(salesman) : '');
           formRef.current?.setFieldsValue({
             customer_name: c.name ?? c.customer_name,
             customer_contact: c.contactPerson ?? c.contact_person ?? c.contact ?? c.customer_contact,
@@ -2505,10 +2579,10 @@ const QuotationsPage: React.FC = () => {
             <CustomerSelectDropdown
               placeholder="请选择客户"
               style={{ width: '100%' }}
-              customers={customerList}
+              customers={customerList.length > 0 ? customerList : undefined}
               loading={customersLoading}
               onCustomersChange={setCustomerList}
-              autoLoad={false}
+              autoLoad
               modalZIndex={quotationNestedElevatedPopupZIndex}
               onCustomerPick={(c) => {
                 if (c) {
@@ -2531,25 +2605,7 @@ const QuotationsPage: React.FC = () => {
       {/* 归属业务员 + 日期 + 发货方式：五列等分（各约 20%） */}
       <Row gutter={16}>
         <Col flex={1} style={{ minWidth: 0 }}>
-          <ProForm.Item name="salesman_id" label="归属业务员">
-            <UniDropdown
-              placeholder="请选择归属业务员"
-              showSearch
-              allowClear
-              loading={usersLoading}
-              style={{ width: '100%' }}
-              options={userList.map((u: any) => ({
-                value: u.id,
-                label: u.full_name || u.username,
-              }))}
-              onChange={(_val, opt: any) => {
-                formRef.current?.setFieldsValue({ salesman_name: opt?.label });
-              }}
-            />
-          </ProForm.Item>
-          <Form.Item name="salesman_name" hidden>
-            <Input />
-          </Form.Item>
+          <QuotationSalesmanField userList={userList} loading={usersLoading} />
         </Col>
         <Col flex={1} style={{ minWidth: 0 }}>
           <ProFormDatePicker
@@ -3123,6 +3179,7 @@ const QuotationsPage: React.FC = () => {
         <UniTable
           className="kuaizhizao-quotations-table"
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.quotations"
+          permissionResource={QUOTATION_FIELD_RESOURCE}
           tanstackQuery={{
             queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.quotations', listScopeFilter],
           }}

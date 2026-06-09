@@ -3,6 +3,7 @@ import { Table, Form as AntForm, Button, Space } from 'antd';
 import type { TableProps, ColumnsType } from 'antd/es/table';
 import { PlusOutlined, ImportOutlined, DeleteOutlined, AppstoreAddOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
+import { hasFormListItems } from '../../utils/formListItems';
 import './index.less';
 
 export interface UniTableDetailProps<RecordType = any> {
@@ -206,7 +207,7 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
         rules={[
           {
             validator: async (_, value) => {
-              if (required && (!value || value.length < 1)) {
+              if (required && !hasFormListItems(value)) {
                 return Promise.reject(new Error(requiredMessage ?? t('common.itemsRequired')));
               }
             },

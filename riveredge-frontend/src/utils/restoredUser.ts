@@ -33,6 +33,15 @@ export function buildRestoredUserFromStorage(): CurrentUser | null {
   };
 }
 
+/** 登录成功：同步写入 localStorage 与 globalStore，避免 navigate 时 AuthGuard 仍无 currentUser */
+export function applySessionUserAfterLogin(userInfo: Parameters<typeof setUserInfo>[0]): void {
+  setUserInfo(userInfo);
+  useGlobalStore.getState().setCurrentUser(userInfo as CurrentUser);
+  if (userInfo?.tenant_id != null) {
+    setTenantId(userInfo.tenant_id);
+  }
+}
+
 /** 在 React 首帧之前调用：有 token 且 store 尚无用户时，用 user_info 填满 currentUser */
 export function seedCurrentUserFromAuthStorage(): void {
   if (typeof window === 'undefined') return;
