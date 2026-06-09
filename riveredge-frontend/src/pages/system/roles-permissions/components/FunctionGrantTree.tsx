@@ -93,15 +93,22 @@ export function filterFunctionGrantTree(
     .filter((node): node is FunctionGrantMenuNode => node !== null);
 }
 
-export function collectMenuExpandKeysFromGrantTree(nodes: FunctionGrantMenuNode[]): React.Key[] {
+export function collectMenuExpandKeysFromGrantTree(
+  nodes: FunctionGrantMenuNode[],
+  maxDepth = Number.POSITIVE_INFINITY,
+): React.Key[] {
   const keys: React.Key[] = [];
-  const walk = (list: FunctionGrantMenuNode[]) => {
+  const walk = (list: FunctionGrantMenuNode[], depth: number) => {
     for (const n of list) {
-      keys.push(`menu-${n.menu_uuid}`);
-      if (n.children?.length) walk(n.children);
+      if (n.children?.length) {
+        if (depth < maxDepth) {
+          keys.push(`menu-${n.menu_uuid}`);
+        }
+        walk(n.children, depth + 1);
+      }
     }
   };
-  walk(nodes);
+  walk(nodes, 0);
   return keys;
 }
 

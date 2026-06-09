@@ -1,4 +1,4 @@
-/** 与角色字段权限 / 后端 PermissionPolicyService 的 resource 键一致 */
+/** 与角色字段权限 / 后端 field_permission_resource_registry 的 resource 键一致 */
 
 /** kuaizhizao */
 export const KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE = 'kuaizhizao:sales-order';

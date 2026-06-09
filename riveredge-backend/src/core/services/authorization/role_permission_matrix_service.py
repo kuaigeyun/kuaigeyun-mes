@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from core.config.permission_action_spec import canonical_action
 from core.config.permission_contract import display_label_for_permission_code
@@ -87,10 +87,24 @@ class RolePermissionMatrixService:
         return codes
 
     @staticmethod
+    def _index_pool_by_resource(pool: List[Permission]) -> Dict[Tuple[str, str], List[Permission]]:
+        index: Dict[Tuple[str, str], List[Permission]] = {}
+        for p in pool:
+            if not p.code:
+                continue
+            parsed = parse_permission_code(p.code)
+            if not parsed:
+                continue
+            app, resource, _action = parsed
+            index.setdefault((app, resource), []).append(p)
+        return index
+
+    @staticmethod
     def _permissions_for_menu_node(
         menu: MenuTreeResponse,
         pool_by_code: Dict[str, Permission],
         pool: List[Permission],
+        pool_by_resource: Optional[Dict[Tuple[str, str], List[Permission]]] = None,
     ) -> List[Permission]:
         target = resolve_menu_target_resource(
             permission_code=menu.permission_code,
@@ -99,6 +113,11 @@ class RolePermissionMatrixService:
         app = app_code_from_menu(permission_code=menu.permission_code, path=menu.path)
         if not target or not app:
             return []
+
+        if pool_by_resource is not None:
+            matched = list(pool_by_resource.get((app, target), []))
+            matched.sort(key=lambda x: x.code or "")
+            return matched
 
         matched: List[Permission] = []
         seen: Set[str] = set()
@@ -191,6 +210,7 @@ class RolePermissionMatrixService:
         granted_codes: Set[str],
         visible_granted: Set[str],
         code_order: Dict[str, int],
+        pool_by_resource: Optional[Dict[Tuple[str, str], List[Permission]]] = None,
     ) -> List[FunctionGrantMenuNodeSchema]:
         nodes: List[FunctionGrantMenuNodeSchema] = []
         for menu in sorted(menus, key=lambda m: m.sort_order or 0):
@@ -201,8 +221,11 @@ class RolePermissionMatrixService:
                 granted_codes,
                 visible_granted,
                 code_order,
+                pool_by_resource,
             )
-            matched = RolePermissionMatrixService._permissions_for_menu_node(menu, pool_by_code, pool)
+            matched = RolePermissionMatrixService._permissions_for_menu_node(
+                menu, pool_by_code, pool, pool_by_resource
+            )
             actions = RolePermissionMatrixService._build_action_schemas(
                 matched, granted_codes, code_order
             )
@@ -258,8 +281,9 @@ class RolePermissionMatrixService:
         )
         visible_granted: Set[str] = set()
         code_order = await PermissionRegistryService.manifest_permission_order(tenant_id)
+        pool_by_resource = RolePermissionMatrixService._index_pool_by_resource(pool)
         tree = RolePermissionMatrixService._build_menu_tree_nodes(
-            menus, pool, pool_by_code, granted_codes, visible_granted, code_order
+            menus, pool, pool_by_code, granted_codes, visible_granted, code_order, pool_by_resource
         )
 
         all_pool_codes = set(pool_by_code.keys())

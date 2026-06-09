@@ -58,7 +58,6 @@ import {
   deleteRole,
   getRoleFunctionGrants,
   replaceRoleFunctionGrants,
-  getAllPermissions,
   type RoleFunctionGrants,
   loadPresetRoles,
   getRolePresetPreview,
@@ -81,8 +80,7 @@ import { RoleFormModal } from '../roles/components/RoleFormModal';
 import { UserFormModal } from '../users/components/UserFormModal';
 import {
   PERMISSION_TEMPLATES,
-  getPermissionCodesByTemplate,
-  getPermissionUuidsByTemplate,
+  filterPermissionCodesByTemplate,
 } from '../../../config/permission-modules';
 import { ThemedSegmented } from '../../../components/themed-segmented';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
@@ -115,6 +113,10 @@ import {
   type ResourceOption,
 } from './components/dataPermissionFilters';
 import { filterVisibleFieldPolicyIndexes, upsertFieldPolicyMask } from './components/fieldPermissionFilters';
+import {
+  buildDataPolicySavePayload,
+  defaultCustomPayloadForResource,
+} from './components/dataPolicySave';
 import {
   collectGrantedResourceKeysFromGrantTree,
   collectGrantedResourceOptionsFromGrantTree,
@@ -498,11 +500,10 @@ const RolesPermissionsPage: React.FC = () => {
   const [userFormOpen, setUserFormOpen] = useState(false);
   const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
   // 权限相关状态
-  const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
   const [functionGrants, setFunctionGrants] = useState<RoleFunctionGrants | null>(null);
   const [grantedCodes, setGrantedCodes] = useState<string[]>([]);
-  const [permissionsLoading, setPermissionsLoading] = useState(false);
+  const [menuTreeLoading, setMenuTreeLoading] = useState(false);
   const [savingPermissions, setSavingPermissions] = useState(false);
   const [permissionLayer, setPermissionLayer] = useState<'function' | 'data' | 'field'>('function');
   const [permissionSearchKeyword, setPermissionSearchKeyword] = useState('');
@@ -540,8 +541,9 @@ const RolesPermissionsPage: React.FC = () => {
   const [selectedPresetRoleCodes, setSelectedPresetRoleCodes] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
-  /** 与侧栏一致的菜单树（名称/顺序来自后端 + 菜单翻译） */
+  /** 与侧栏一致的菜单树（数据/字段权限筛选用，按需加载） */
   const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
+  const menuTreeLoadPromiseRef = useRef<Promise<void> | null>(null);
 
   // 按快制造业务单据流排序：销售 -> 采购 -> 生产 -> 质量 -> 仓储 -> 财务 -> 行政 -> 通用
   const ROLE_ORDER_BY_CODE: Record<string, number> = {
@@ -749,45 +751,25 @@ const RolesPermissionsPage: React.FC = () => {
   }, [roleTreeData, roleSearchKeyword]);
 
   /**
-   * 加载所有权限（仅拉取数据，树形结构由 useEffect 根据筛选条件构建）
+   * 数据/字段权限筛选所需菜单树（按需加载，避免首屏多一次全量菜单请求）
    */
-  const loadAllPermissions = async () => {
-    try {
-      setPermissionsLoading(true);
-      try {
-        const trees = await getMenuTree({ is_active: true });
-        setMenuTree(Array.isArray(trees) ? trees : []);
-      } catch {
-        setMenuTree([]);
-      }
-
-      let allItems: Permission[] = [];
-      let page = 1;
-      let hasMore = true;
-
-      // 后端限制 page_size <= 1000；使用分页聚合拿全量，避免参数越界。
-      const pageSize = 1000;
-      while (hasMore) {
-        const response = await getAllPermissions({
-          page,
-          page_size: pageSize,
-          exclude_derived_data: true,
-        });
-        allItems = [...allItems, ...response.items];
-        if (response.items.length < pageSize || allItems.length >= response.total) {
-          hasMore = false;
-        } else {
-          page++;
+  const ensureMenuTreeLoaded = useCallback(async () => {
+    if (menuTree.length > 0) return;
+    if (!menuTreeLoadPromiseRef.current) {
+      menuTreeLoadPromiseRef.current = (async () => {
+        try {
+          setMenuTreeLoading(true);
+          const trees = await getMenuTree({ is_active: true });
+          setMenuTree(Array.isArray(trees) ? trees : []);
+        } catch {
+          setMenuTree([]);
+        } finally {
+          setMenuTreeLoading(false);
         }
-      }
-
-      setAllPermissions(allItems);
-    } catch (error: any) {
-      messageApi.error(error.message || t('pages.system.roles.loadPermissionsFailed'));
-    } finally {
-      setPermissionsLoading(false);
+      })();
     }
-  };
+    await menuTreeLoadPromiseRef.current;
+  }, [menuTree.length]);
 
   /**
    * 按菜单树结构展示权限：菜单标题与侧栏翻译一致，带 permission_code 的节点下挂同资源前缀的操作权限
@@ -808,21 +790,18 @@ const RolesPermissionsPage: React.FC = () => {
     setFunctionGrants(data);
     setGrantedCodes(data.granted_codes || []);
     if (!initializedExpandRef.current && data.tree?.length) {
-      const keys: React.Key[] = [];
-      const walk = (nodes: RoleFunctionGrants['tree']) => {
-        nodes.forEach((n) => {
-          keys.push(`menu-${n.menu_uuid}`);
-          if (n.children?.length) walk(n.children);
-        });
-      };
-      walk(data.tree);
-      setPermissionTreeExpandedKeys(keys);
+      setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(data.tree, 1));
       initializedExpandRef.current = true;
     }
     return data;
   }, []);
 
   const functionGrantBaseTree = functionGrants?.tree ?? [];
+
+  const functionGrantPermissionCodes = useMemo(
+    () => collectCodesFromGrantTree(functionGrantBaseTree),
+    [functionGrantBaseTree],
+  );
 
   const functionFilterPickOptions = useMemo(() => {
     if (functionFilterMode === 'app') {
@@ -912,7 +891,7 @@ const RolesPermissionsPage: React.FC = () => {
 
   const dataPolicyByResource = useMemo(() => {
     const map = new Map<string, DataPermissionPolicy>();
-    dataPolicies.forEach((p) => map.set(p.resource, p));
+    dataPolicies.forEach((p) => map.set(normalizeResourceKey(p.resource), p));
     return map;
   }, [dataPolicies]);
 
@@ -980,29 +959,21 @@ const RolesPermissionsPage: React.FC = () => {
       .catch(() => {});
   }, [permissionLayer, selectedRole?.uuid, grantedCodes.length]);
 
-  const defaultCustomPayloadForResource = (resource: string) => {
-    if (/outsource-maintenance|outsource-complete/.test(resource)) {
-      return { resolver: 'outsourced_unit' };
-    }
-    if (/molds-documents-trial|molds-reports-trial-record/.test(resource)) {
-      return { resolver: 'partner', dimension: 'supplier', code_field: 'supplier_code' };
-    }
-    return undefined;
-  };
-
   const upsertDataPolicyScope = useCallback(
     (resource: string, scopeType: DataPermissionPolicy['scope_type']) => {
+      const nk = normalizeResourceKey(resource);
       setDataPolicies((prev) => {
-        const idx = prev.findIndex((p) => p.resource === resource);
+        const idx = prev.findIndex((p) => normalizeResourceKey(p.resource) === nk);
         if (idx >= 0) {
           return prev.map((p, i) => {
             if (i !== idx) return p;
             return {
               ...p,
+              resource: nk,
               scope_type: scopeType,
               scope_payload:
                 scopeType === 'scope_custom'
-                  ? p.scope_payload ?? defaultCustomPayloadForResource(resource)
+                  ? p.scope_payload ?? defaultCustomPayloadForResource(nk)
                   : undefined,
             };
           });
@@ -1010,12 +981,12 @@ const RolesPermissionsPage: React.FC = () => {
         return [
           ...prev,
           {
-            uuid: `tmp-data-${Date.now()}-${resource}`,
+            uuid: `tmp-data-${Date.now()}-${nk}`,
             role_uuid: selectedRole?.uuid || '',
-            resource,
+            resource: nk,
             scope_type: scopeType,
             scope_payload:
-              scopeType === 'scope_custom' ? defaultCustomPayloadForResource(resource) : undefined,
+              scopeType === 'scope_custom' ? defaultCustomPayloadForResource(nk) : undefined,
           },
         ].sort((a, b) => a.resource.localeCompare(b.resource));
       });
@@ -1024,22 +995,25 @@ const RolesPermissionsPage: React.FC = () => {
   );
 
   const removeDataPolicy = useCallback((resource: string) => {
-    setDataPolicies((prev) => prev.filter((p) => p.resource !== resource));
-    setSelectedDataResources((prev) => prev.filter((r) => r !== resource));
+    const nk = normalizeResourceKey(resource);
+    setDataPolicies((prev) => prev.filter((p) => normalizeResourceKey(p.resource) !== nk));
+    setSelectedDataResources((prev) => prev.filter((r) => normalizeResourceKey(r) !== nk));
   }, []);
 
   const applyScopeToResources = useCallback(
     (resources: string[], scope: DataPermissionPolicy['scope_type']) => {
       if (resources.length === 0) return 0;
       setDataPolicies((prev) => {
-        const map = new Map(prev.map((x) => [x.resource, x]));
+        const map = new Map(prev.map((x) => [normalizeResourceKey(x.resource), x]));
         resources.forEach((r) => {
-          const row = map.get(r);
+          const nk = normalizeResourceKey(r);
+          const row = map.get(nk);
           const defaultCustomPayload =
-            scope === 'scope_custom' ? defaultCustomPayloadForResource(r) : undefined;
+            scope === 'scope_custom' ? defaultCustomPayloadForResource(nk) : undefined;
           if (row) {
-            map.set(r, {
+            map.set(nk, {
               ...row,
+              resource: nk,
               scope_type: scope,
               scope_payload:
                 scope === 'scope_custom'
@@ -1047,10 +1021,10 @@ const RolesPermissionsPage: React.FC = () => {
                   : undefined,
             });
           } else {
-            map.set(r, {
-              uuid: `tmp-data-${Date.now()}-${r}`,
+            map.set(nk, {
+              uuid: `tmp-data-${Date.now()}-${nk}`,
               role_uuid: selectedRole?.uuid || '',
-              resource: r,
+              resource: nk,
               scope_type: scope,
               scope_payload: scope === 'scope_custom' ? defaultCustomPayload : undefined,
             });
@@ -1075,37 +1049,6 @@ const RolesPermissionsPage: React.FC = () => {
         return next;
       });
       return indexes.length;
-    },
-    []
-  );
-
-  const applyFieldMaskByKeywords = useCallback(
-    (
-      keywords: string[],
-      level: FieldPermissionPolicy['mask_level'],
-      scopeIndexes: number[],
-      source: FieldPermissionPolicy[]
-    ) => {
-      const norms = keywords.map((k) => k.trim().toLowerCase()).filter(Boolean);
-      if (norms.length === 0 || scopeIndexes.length === 0) return 0;
-      const toUpdate: FieldPermissionPolicy[] = [];
-      for (const idx of scopeIndexes) {
-        const item = source[idx];
-        if (!item) continue;
-        const fieldLower = (item.field_name || '').toLowerCase();
-        const labelLower = (item.field_label || '').toLowerCase();
-        const hit = norms.some((k) => fieldLower.includes(k) || labelLower.includes(k));
-        if (hit) toUpdate.push(item);
-      }
-      if (toUpdate.length === 0) return 0;
-      setFieldPolicies((prev) => {
-        let next = prev;
-        for (const item of toUpdate) {
-          next = upsertFieldPolicyMask(next, item, level);
-        }
-        return next;
-      });
-      return toUpdate.length;
     },
     []
   );
@@ -1160,18 +1103,12 @@ const RolesPermissionsPage: React.FC = () => {
    */
   const handleApplyTemplate = useCallback(
     (templateKey: string) => {
-      const uuids = getPermissionUuidsByTemplate(templateKey, allPermissions);
-      const codes = uuids
-        .map((uuid) => {
-          const p = allPermissions.find((x) => x.uuid === uuid);
-          return p ? normalizeFunctionPermissionCode(p.code || '') : '';
-        })
-        .filter(Boolean);
+      const codes = filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes);
       setGrantedCodes(codes);
       const template = PERMISSION_TEMPLATES.find((tmpl) => tmpl.key === templateKey);
       messageApi.success(t('pages.system.roles.templateApplied', { name: template?.name || templateKey, count: codes.length }));
     },
-    [allPermissions, messageApi, t]
+    [functionGrantPermissionCodes, messageApi, t]
   );
 
   /**
@@ -1199,7 +1136,8 @@ const RolesPermissionsPage: React.FC = () => {
       return;
     }
     if (filteredFunctionGrantTree.length > 0) {
-      setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(filteredFunctionGrantTree));
+      const depth = functionFilterMode === 'all' ? 1 : Number.POSITIVE_INFINITY;
+      setPermissionTreeExpandedKeys(collectMenuExpandKeysFromGrantTree(filteredFunctionGrantTree, depth));
     }
   }, [functionFilterMode, permissionSearchKeyword, filteredFunctionGrantTree]);
 
@@ -1301,16 +1239,15 @@ const RolesPermissionsPage: React.FC = () => {
       setFieldFilterTarget('');
       setFieldSearchKeyword('');
       setSelectedFieldIndexes([]);
-      const detail = await getRoleByUuid(role.uuid);
-      setSelectedRole(detail);
+      setSelectedRole(role);
 
-      // 并行加载三层权限数据
+      // 并行加载三层权限数据（列表项已含角色基础信息，无需再拉详情）
       initializedExpandRef.current = false;
       const [, roleDataPolicies, roleFieldPolicies] = await Promise.all([
-        loadFunctionGrantsForRole(detail.uuid),
-        getRoleDataPolicies(detail.uuid),
-        getRoleFieldPolicies(detail.uuid),
-        loadRoleUsers(detail.uuid),
+        loadFunctionGrantsForRole(role.uuid),
+        getRoleDataPolicies(role.uuid),
+        getRoleFieldPolicies(role.uuid),
+        loadRoleUsers(role.uuid),
       ]);
       setDataPolicies(roleDataPolicies);
       setFieldPolicies(roleFieldPolicies);
@@ -1340,21 +1277,31 @@ const RolesPermissionsPage: React.FC = () => {
         setFieldPolicies(roleFieldPolicies);
         messageApi.success(t('pages.system.roles.functionGrantSuccess', { count: refreshed.granted_codes?.length ?? 0, defaultValue: `功能权限保存成功：${refreshed.granted_codes?.length ?? 0} 项` }));
       } else if (permissionLayer === 'data') {
-        const payload = dataPolicies
-          .filter(
-            (x) =>
-              x.resource && grantedDataResourceKeys.has(normalizeResourceKey(x.resource))
-          )
-          .map((x) => ({
-            resource: x.resource,
-            scope_type: x.scope_type,
-            scope_payload: x.scope_payload,
-          }));
-        await saveRoleDataPolicies(
-          selectedRole.uuid,
-          payload
+        const payload = buildDataPolicySavePayload({
+          dataPolicies,
+          selectedResources: selectedDataResources,
+          visibleResources: visibleDataResourceKeys,
+          batchScope: dataBatchScope,
+          grantedKeys: grantedDataResourceKeys,
+        });
+        if (payload.length === 0) {
+          messageApi.warning(
+            t('pages.system.roles.dataSaveEmpty', {
+              defaultValue:
+                '请先勾选资源、将批量范围设为「全部/本部门/自定义」后保存，或修改单行范围后再保存',
+            })
+          );
+          return;
+        }
+        const saved = await saveRoleDataPolicies(selectedRole.uuid, payload);
+        setDataPolicies(saved);
+        setSelectedDataResources([]);
+        messageApi.success(
+          t('pages.system.roles.dataGrantSuccess', {
+            count: saved.length,
+            defaultValue: `数据权限保存成功：${saved.length} 条`,
+          })
         );
-        messageApi.success(t('pages.system.roles.dataGrantSuccess', { count: payload.length, defaultValue: `数据权限保存成功：${payload.length} 条` }));
       } else {
         const dedupMap = new Map<string, Pick<FieldPermissionPolicy, 'resource' | 'field_name' | 'mask_level'>>();
         fieldPolicies.forEach((x) => {
@@ -1432,11 +1379,16 @@ const RolesPermissionsPage: React.FC = () => {
 
   useSubmitShortcut(copyModalVisible ? handleCopyPermissions : undefined, copyModalVisible);
 
-  // 初始化加载
+  // 初始化：仅加载角色列表；权限矩阵随选中角色按需拉取
   useEffect(() => {
     loadRoles();
-    loadAllPermissions();
   }, []);
+
+  useEffect(() => {
+    if (permissionLayer === 'data' || permissionLayer === 'field') {
+      void ensureMenuTreeLoaded();
+    }
+  }, [permissionLayer, ensureMenuTreeLoaded]);
 
   /**
    * 一键展开/收起权限树
@@ -1498,7 +1450,9 @@ const RolesPermissionsPage: React.FC = () => {
         return;
       }
       const visible = new Set(visibleFunctionPermissionCodes);
-      const templateCodes = new Set(getPermissionCodesByTemplate(templateKey, allPermissions));
+      const templateCodes = new Set(
+        filterPermissionCodesByTemplate(templateKey, functionGrantPermissionCodes)
+      );
       setGrantedCodes((prev) => {
         const kept = prev.filter((c) => !visible.has(c));
         const next = [...kept];
@@ -1519,7 +1473,7 @@ const RolesPermissionsPage: React.FC = () => {
         })
       );
     },
-    [allPermissions, messageApi, t, visibleFunctionPermissionCodes]
+    [functionGrantPermissionCodes, messageApi, t, visibleFunctionPermissionCodes]
   );
 
   return (
@@ -1548,20 +1502,20 @@ const RolesPermissionsPage: React.FC = () => {
             height: '100%',
           }}
         >
-          {/* 左侧栏 Header：搜索 + 操作按钮，与中间/右侧同高 */}
-          <div className="roles-permissions-column-header roles-permissions-column-header--left">
-            <div className="roles-permissions-column-header__row">
-              <Input
-                placeholder={t('pages.system.roles.searchRole')}
-                prefix={<SearchOutlined />}
-                value={roleSearchKeyword}
-                onChange={(e) => setRoleSearchKeyword(e.target.value)}
-                allowClear
-                size="middle"
-              />
-            </div>
-            <div className="roles-permissions-column-header__row">
-              <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+          {/* 左侧栏 Header：首行搜索与中间/右侧首行同高 */}
+          <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--left">
+            <Input
+              placeholder={t('pages.system.roles.searchRole')}
+              prefix={<SearchOutlined />}
+              value={roleSearchKeyword}
+              onChange={(e) => setRoleSearchKeyword(e.target.value)}
+              allowClear
+              size="middle"
+              style={{ width: '100%' }}
+            />
+          </div>
+          <div className="roles-permissions-column-header-row roles-permissions-column-header-row--secondary roles-permissions-column-header-row--left">
+            <div style={{ display: 'flex', gap: 8, width: '100%' }}>
                 <Button type="primary" block onClick={handleCreateRole}>
                   {t('pages.system.roles.createRole')}
                 </Button>
@@ -1617,7 +1571,6 @@ const RolesPermissionsPage: React.FC = () => {
                 </Tooltip>
                 )}
               </div>
-            </div>
           </div>
           {/* 角色列表 */}
           <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '8px' }}>
@@ -1668,24 +1621,21 @@ const RolesPermissionsPage: React.FC = () => {
             flexDirection: 'column',
           }}
         >
-        {/* 顶部工具栏 */}
-        <div className="roles-permissions-column-header roles-permissions-column-header--center">
-          <div className="roles-permissions-column-header__toolbar">
-            <Space size="middle" style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
-                <Space size="small">
-                  <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
-                  <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
-                  {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
-                </Space>
-              </div>
-              <Divider orientation="vertical" style={{ height: 24 }} />
-              <Space>
+        {/* 顶部工具栏：首行与左/右栏首行同高 */}
+        <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--center">
+          <div className="roles-permissions-center-toolbar">
+            <div className="roles-permissions-center-toolbar__meta">
+              <Space size="small" style={{ minWidth: 0 }}>
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
+                <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
+                {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
+              </Space>
+              <Divider orientation="vertical" style={{ height: 24, margin: '0 8px' }} />
+              <Space size="small">
                 <Button
                   icon={<ReloadOutlined />}
                   onClick={() => {
                     loadRoles();
-                    loadAllPermissions();
                     if (selectedRole) {
                       handleSelectRole(selectedRole);
                     }
@@ -1702,13 +1652,12 @@ const RolesPermissionsPage: React.FC = () => {
                     : t('pages.system.roles.expandAll')}
                 </Button>
               </Space>
-            </Space>
-
-            <Space wrap>
+            </div>
+            <div className="roles-permissions-center-toolbar__actions">
                 {permissionLayer === 'function' && (
                   <Select
                     placeholder={t('pages.system.roles.applyTemplate')}
-                    style={{ width: 180 }}
+                    style={{ width: 160 }}
                     allowClear
                     onSelect={(key) => handleApplyTemplate(String(key))}
                     options={PERMISSION_TEMPLATES.map((tmpl) => ({
@@ -1731,10 +1680,11 @@ const RolesPermissionsPage: React.FC = () => {
                 >
                   {t('pages.system.roles.savePermissions')}
                 </Button>
-              </Space>
+            </div>
           </div>
+        </div>
 
-          <div className="roles-permissions-column-header__tabs">
+          <div className="roles-permissions-column-header-row roles-permissions-column-header-row--secondary roles-permissions-column-header-row--center">
             <Tabs
               activeKey={permissionLayer}
               onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
@@ -1745,7 +1695,6 @@ const RolesPermissionsPage: React.FC = () => {
               ]}
             />
           </div>
-        </div>
 
         {/* 权限编辑区域：功能权限占满可滚动；数据/字段随内容高度，避免列表下方大块空白 */}
         <div
@@ -1763,7 +1712,7 @@ const RolesPermissionsPage: React.FC = () => {
                 }
           }
         >
-            <Spin spinning={selectedRoleLoading || permissionsLoading}>
+            <Spin spinning={selectedRoleLoading || (permissionLayer !== 'function' && menuTreeLoading)}>
               {permissionLayer === 'function' && (
                 <Space orientation="vertical" style={{ width: '100%' }} size={12}>
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
@@ -1882,7 +1831,7 @@ const RolesPermissionsPage: React.FC = () => {
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
                     {t('pages.system.roles.dataGrantHint', {
                       defaultValue:
-                        '仅展示已在「功能权限」中勾选的业务资源。数据范围在能访问该功能的前提下生效；可用全部、按 APP、按模块或搜索在当前列表内筛选，勾选后批量设置范围并保存。',
+                        '仅展示已在「功能权限」中勾选的业务资源。批量范围选「全部/本部门/自定义」后点保存，会对当前列表内资源生效（勾选时仅作用于已选）；也可勾选后点「应用到已选」预览再保存。',
                     })}
                   </div>
                   <Flex gap={8} wrap="wrap" align="center">
@@ -1963,7 +1912,7 @@ const RolesPermissionsPage: React.FC = () => {
                   {visibleDataResourceOptions.length > 0 ? (
                       <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                         {visibleDataResourceOptions.map((opt) => {
-                          const policy = dataPolicyByResource.get(opt.value);
+                          const policy = dataPolicyByResource.get(normalizeResourceKey(opt.value));
                           const scopeType = policy?.scope_type ?? 'scope_self';
                           const configured = Boolean(policy);
                           return (
@@ -2033,7 +1982,7 @@ const RolesPermissionsPage: React.FC = () => {
                   <div style={{ color: token.colorTextSecondary, fontSize: 12 }}>
                     {t('pages.system.roles.fieldGrantHint', {
                       defaultValue:
-                        '仅展示「功能权限」已授权资源下的字段策略（明文/脱敏/隐藏）。可用全部、按 APP、按模块或搜索筛选当前列表；勾选后批量设置显示方式并保存。',
+                        '仅展示「功能权限」已授权、且业务单据确有金额/客户等敏感字段的资源（如销售订单、报价单）；消息、偏好设置等页面不会出现。可用全部、按 APP、按模块或搜索筛选；勾选后批量设置显示方式并保存。',
                     })}
                   </div>
                   <Flex gap={8} wrap="wrap" align="center">
@@ -2109,45 +2058,6 @@ const RolesPermissionsPage: React.FC = () => {
                     />
                     <Button type="primary" onClick={applyFieldMaskToVisibleSelection}>
                       {t('pages.system.roles.applyFieldMaskToSelected', { defaultValue: '应用到已选' })}
-                    </Button>
-                    <Divider type="vertical" style={{ margin: 0, height: 32 }} />
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        const n = applyFieldMaskByKeywords(
-                          ['amount', 'price', 'unit_price', 'total_amount', 'tax_amount'],
-                          'masked',
-                          visibleFieldPolicyIndexes,
-                          fieldPolicies
-                        );
-                        messageApi.success(
-                          t('pages.system.roles.fieldTemplateAmountApplied', {
-                            defaultValue: '已对当前范围内 {{count}} 条金额类字段应用脱敏',
-                            count: n,
-                          })
-                        );
-                      }}
-                    >
-                      {t('pages.system.roles.fieldTemplateAmount', { defaultValue: '金额字段脱敏' })}
-                    </Button>
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        const n = applyFieldMaskByKeywords(
-                          ['customer_name', 'customername', 'client_name', 'clientname'],
-                          'masked',
-                          visibleFieldPolicyIndexes,
-                          fieldPolicies
-                        );
-                        messageApi.success(
-                          t('pages.system.roles.fieldTemplateCustomerApplied', {
-                            defaultValue: '已对当前范围内 {{count}} 条客户名称字段应用脱敏',
-                            count: n,
-                          })
-                        );
-                      }}
-                    >
-                      {t('pages.system.roles.fieldTemplateCustomer', { defaultValue: '客户名称脱敏' })}
                     </Button>
                   </Flex>
                   {visibleFieldPolicyIndexes.length > 0 ? (
@@ -2271,7 +2181,7 @@ const RolesPermissionsPage: React.FC = () => {
             <Space separator={<Divider orientation="vertical" />}>
               <span>
                 系统功能权限：
-                {functionGrants?.stats?.total_function_codes ?? allPermissions.length} 项
+                {functionGrants?.stats?.total_function_codes ?? functionGrantPermissionCodes.length} 项
               </span>
               <span>
                 当前已授权：
@@ -2303,7 +2213,7 @@ const RolesPermissionsPage: React.FC = () => {
             minHeight: 0,
           }}
         >
-          <div className="roles-permissions-column-header roles-permissions-column-header--right">
+          <div className="roles-permissions-column-header-row roles-permissions-column-header-row--primary roles-permissions-column-header-row--right">
             <Space size={6}>
               <TeamOutlined />
               <span style={{ fontWeight: 600 }}>
@@ -2312,7 +2222,8 @@ const RolesPermissionsPage: React.FC = () => {
               <Tag color="blue">{roleUsers.length}</Tag>
             </Space>
           </div>
-          <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+          <div className="roles-permissions-users-panel-body">
+            <div className="scrollbar-like-modal roles-permissions-users-list-body">
             <Spin spinning={roleUsersLoading}>
               {roleUsers.length > 0 ? (
                 <List
@@ -2359,6 +2270,7 @@ const RolesPermissionsPage: React.FC = () => {
                 />
               )}
             </Spin>
+          </div>
           </div>
         </div>
           </>

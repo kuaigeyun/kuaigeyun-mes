@@ -106,18 +106,27 @@ function permissionMatchesTemplateKey(code: string, templateKey: string): boolea
   return template.codes.some((c) => code === c || code.startsWith(c));
 }
 
+/** 按模板从给定 code 列表筛选（无需拉全量 permissions API） */
+export function filterPermissionCodesByTemplate(
+  templateKey: string,
+  codes: string[],
+): string[] {
+  const normalized = [...new Set(codes.map((c) => (c || '').trim().toLowerCase()).filter(Boolean))];
+  if (templateKey === 'admin' || templateKey === 'manager') {
+    return normalized;
+  }
+  return normalized.filter((code) => permissionMatchesTemplateKey(code, templateKey));
+}
+
 /** 按模板返回权限 code 列表（功能权限勾选使用 code 真源） */
 export function getPermissionCodesByTemplate(
   templateKey: string,
   allPermissions: Array<{ code: string }>
 ): string[] {
-  const normalized = allPermissions
-    .map((p) => (p.code || '').trim().toLowerCase())
-    .filter(Boolean);
-  if (templateKey === 'admin' || templateKey === 'manager') {
-    return [...new Set(normalized)];
-  }
-  return [...new Set(normalized.filter((code) => permissionMatchesTemplateKey(code, templateKey)))];
+  return filterPermissionCodesByTemplate(
+    templateKey,
+    allPermissions.map((p) => p.code),
+  );
 }
 
 export function getPermissionUuidsByTemplate(

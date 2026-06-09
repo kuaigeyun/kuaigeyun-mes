@@ -935,7 +935,7 @@ class RoleService:
         if existing_field == 0:
             field_items = []
             for res in resources:
-                for field_name in sorted(PermissionPolicyService.BUILTIN_MASKED_FIELD_NAMES):
+                for field_name in sorted(PermissionPolicyService._masked_fields_for_resource(res)):
                     field_items.append(
                         FieldPermissionPolicy(
                             tenant_id=tenant_id,

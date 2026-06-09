@@ -5,6 +5,10 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
+from core.config.field_permission_resource_registry import (
+    field_names_for_resource,
+    is_valid_field_policy,
+)
 from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
 from core.models.field_name_alias import FieldNameAlias
 from core.models.field_permission_policy import FieldMaskLevel, FieldPermissionPolicy
@@ -79,6 +83,21 @@ class PermissionPolicyService:
         "price": "价格",
         "customer_name": "客户名称",
     }
+
+    @classmethod
+    def _masked_fields_for_resource(cls, resource: str) -> frozenset[str]:
+        normalized = cls._normalize_resource(resource)
+        builtin = cls.BUILTIN_MASKED_FIELD_NAMES
+        return frozenset(
+            f for f in field_names_for_resource(normalized) if f in builtin
+        )
+
+    @classmethod
+    def _is_valid_field_policy_pair(cls, resource: str, field_name: str) -> bool:
+        canonical = cls.canonicalize_field_name(field_name)
+        if not canonical:
+            return False
+        return is_valid_field_policy(cls._normalize_resource(resource), canonical)
 
     @staticmethod
     def _normalize_resource(raw: str) -> str:
@@ -324,7 +343,10 @@ class PermissionPolicyService:
             tenant_id, role_uuid
         )
         visible_rows = [
-            r for r in rows if cls._normalize_resource(r.resource) in role_resources
+            r
+            for r in rows
+            if cls._normalize_resource(r.resource) in role_resources
+            and cls._is_valid_field_policy_pair(r.resource, r.field_name)
         ]
         dedup: dict[tuple[str, str], FieldPermissionPolicy] = {}
         for r in visible_rows:
@@ -390,7 +412,7 @@ class PermissionPolicyService:
             normalized_resource = cls._normalize_resource(resource)
             if not normalized_resource:
                 continue
-            for field_name in sorted(cls.BUILTIN_MASKED_FIELD_NAMES):
+            for field_name in sorted(cls._masked_fields_for_resource(normalized_resource)):
                 canonical_field = cls._canonicalize_field_name_with_aliases(field_name, alias_map)
                 key = (normalized_resource, canonical_field)
                 if key in existing_keys or key in synthetic_keys:
@@ -518,6 +540,10 @@ class PermissionPolicyService:
             key = cls._field_policy_key(item.resource, item.field_name, alias_map)
             if not key:
                 raise ValidationError("字段名不能为空")
+            if not cls._is_valid_field_policy_pair(key[0], key[1]):
+                raise ValidationError(
+                    f"字段权限资源/字段不在真源注册表: {item.resource} / {item.field_name}"
+                )
             explicit[key] = FieldPermissionPolicyUpsert(
                 resource=key[0],
                 field_name=key[1],
@@ -529,7 +555,7 @@ class PermissionPolicyService:
             await cls._role_field_policy_resource_keys(tenant_id, role_uuid)
         )
         for resource in normalized_resources:
-            for field_name in sorted(cls.BUILTIN_MASKED_FIELD_NAMES):
+            for field_name in sorted(cls._masked_fields_for_resource(resource)):
                 key = cls._field_policy_key(resource, field_name, alias_map)
                 if not key or key in explicit:
                     continue
