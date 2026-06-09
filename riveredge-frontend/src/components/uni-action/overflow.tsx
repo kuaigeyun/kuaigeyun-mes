@@ -17,7 +17,8 @@ import {
   normalizeActionLabelText,
   resolveActionKind,
   readActionPriority,
-  resolveButtonTone,
+  resolveButtonToneFromNode,
+  readExplicitActionKind,
 } from './actionText'
 import { normalizeActionTree } from './normalize'
 
@@ -185,7 +186,8 @@ function isClickableVisibleAction(node: React.ReactNode): boolean {
 function toMenuItem(node: React.ReactNode, key: string) {
   const text = normalizeActionLabelText(readNodeText(node)) || '操作'
   const interactive = findInteractiveElement(node)
-  const tone = resolveButtonTone(text)
+  const inheritedExplicit = readExplicitActionKind(node)
+  const tone = resolveButtonToneFromNode(interactive ?? node, inheritedExplicit)
 
   if (interactive) {
     const props = (interactive.props || {}) as Record<string, unknown>

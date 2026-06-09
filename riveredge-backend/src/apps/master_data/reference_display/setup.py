@@ -25,10 +25,10 @@ from infra.models.user import User
 _registered = False
 
 
-def _row(*, record_id: int, uuid: str | None, code: str | None, name: str | None, **extra: Any) -> dict[str, Any]:
+def _row(*, id: int, uuid: str | None, code: str | None, name: str | None, **extra: Any) -> dict[str, Any]:
     label_parts = [p for p in [(code or "").strip(), (name or "").strip()] if p]
-    label = " - ".join(label_parts) if label_parts else str(record_id)
-    return {"id": record_id, "uuid": uuid, "code": code, "name": name, "label": label, **extra}
+    label = " - ".join(label_parts) if label_parts else str(id)
+    return {"id": id, "uuid": uuid, "code": code, "name": name, "label": label, **extra}
 
 
 class _CustomerDisplayProvider:

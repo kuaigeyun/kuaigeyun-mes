@@ -21,4 +21,6 @@ export type RenderRowActionsOverflowOptions = {
 
 export type NormalizeActionContext = {
   suppressAuditSemanticActions: boolean
+  /** Popconfirm / Tooltip 外层显式 action，供内层 Button 继承语义色与权限标记 */
+  inheritedExplicitKind?: import('./actionText').RowActionPermissionKind | null
 }

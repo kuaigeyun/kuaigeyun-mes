@@ -45,11 +45,17 @@ export type RowActionPermissionKind =
   | 'obsolete'
 
 export const ROW_ACTION_KIND_ATTR = 'data-action-kind' as const
+export const ROW_ACTION_TONE_ATTR = 'data-action-tone' as const
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
 ): { [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind } {
   return { [ROW_ACTION_KIND_ATTR]: kind }
+}
+
+/** 行内高风险操作语义色（如重置密码）；RBAC 仍用 rowActionKind 的 manifest action */
+export function rowActionToneDestructive(): { [ROW_ACTION_TONE_ATTR]: 'destructive' } {
+  return { [ROW_ACTION_TONE_ATTR]: 'destructive' }
 }
 
 /** 溢出排序 / 样式用的语义分类（仅来自显式 `data-action-kind`） */
@@ -148,8 +154,18 @@ export function resolveButtonTone(_text: string): ResolvedRowActionTone {
   return { mode: 'default', type: 'text' }
 }
 
-export function resolveButtonToneFromNode(node: React.ReactNode): ResolvedRowActionTone {
-  const explicit = readExplicitActionKind(node)
+export function resolveButtonToneFromNode(
+  node: React.ReactNode,
+  inheritedExplicit?: RowActionPermissionKind | null,
+): ResolvedRowActionTone {
+  if (React.isValidElement(node)) {
+    const props = node.props as Record<string, unknown>
+    if (props[ROW_ACTION_TONE_ATTR] === 'destructive') {
+      return { mode: 'destructive', type: 'text', danger: true }
+    }
+  }
+
+  const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (
     explicit === 'delete' ||
     explicit === 'obsolete' ||

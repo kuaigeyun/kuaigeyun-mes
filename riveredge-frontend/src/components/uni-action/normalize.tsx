@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button } from 'antd'
+import { Button, Popconfirm, Tooltip } from 'antd'
 import {
   EyeOutlined,
   EditOutlined,
@@ -34,7 +34,9 @@ import {
   resolveActionKind,
   resolveButtonToneFromNode,
   readExplicitActionKind,
+  explicitKindToActionKind,
   type ResolvedRowActionTone,
+  type RowActionPermissionKind,
   isAppLocalAuditAction,
 } from './actionText'
 
@@ -76,9 +78,20 @@ function rowActionClassName(kind: ReturnType<typeof resolveActionKind>): string 
   return ['ant-btn-row-action', kind === 'detail' ? 'ant-btn-row-action-detail' : ''].filter(Boolean).join(' ')
 }
 
-/** 主行展示用默认图标（按显式 `data-action-kind`） */
-function defaultIconForRowAction(node: React.ReactNode): React.ReactNode | undefined {
-  const explicit = readExplicitActionKind(node)
+function resolveEffectiveActionKind(
+  node: React.ReactNode,
+  inheritedExplicit?: RowActionPermissionKind | null,
+) {
+  const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
+  if (!explicit) return resolveActionKind(node)
+  return explicitKindToActionKind(explicit)
+}
+
+function defaultIconForRowActionWithKind(
+  node: React.ReactNode,
+  inheritedExplicit?: RowActionPermissionKind | null,
+): React.ReactNode | undefined {
+  const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />
   if (explicit === 'update') return <EditOutlined />
   if (explicit === 'delete' || explicit === 'obsolete') return <DeleteOutlined />
@@ -130,12 +143,13 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     ) {
       return null
     }
-    const tone = resolveButtonToneFromNode(node)
+    const inheritedExplicit = ctx.inheritedExplicitKind ?? null
+    const tone = resolveButtonToneFromNode(node, inheritedExplicit)
     const rawChildrenText = readNodeText(props.children)
     const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
-    const kind = resolveActionKind(node)
+    const kind = resolveEffectiveActionKind(node, inheritedExplicit)
     const currentIcon = props.icon
-    const defaultIcon = defaultIconForRowAction(node)
+    const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     const nextIcon = currentIcon ?? defaultIcon
     const targetClass = rowActionClassName(kind)
 
@@ -162,9 +176,10 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
   if (typeof node.type === 'string' && node.type.toLowerCase() === 'a') {
     const props = (node.props || {}) as Record<string, unknown>
     const text = normalizeActionLabelText(readNodeText(node))
-    const tone = resolveButtonToneFromNode(node)
-    const kind = resolveActionKind(node)
-    const defaultIcon = defaultIconForRowAction(node)
+    const inheritedExplicit = ctx.inheritedExplicitKind ?? null
+    const tone = resolveButtonToneFromNode(node, inheritedExplicit)
+    const kind = resolveEffectiveActionKind(node, inheritedExplicit)
+    const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     if (
       ctx.suppressAuditSemanticActions &&
       isAuditSemanticRowAction(node) &&
@@ -233,11 +248,19 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
   }
 
   if (node.props?.children) {
+    const inheritedExplicit =
+      elementType === Popconfirm || elementType === Tooltip
+        ? readExplicitActionKind(node) ?? ctx.inheritedExplicitKind ?? null
+        : ctx.inheritedExplicitKind ?? null
+    const childCtx: NormalizeActionContext = {
+      suppressAuditSemanticActions: ctx.suppressAuditSemanticActions,
+      inheritedExplicitKind: inheritedExplicit,
+    }
     const originalArray = React.Children.toArray(node.props.children)
     let anyChildChanged = false
     const normalizedArray: React.ReactNode[] = []
     React.Children.forEach(node.props.children, (child) => {
-      const normalizedChild = normalizeActionTree(child, ctx)
+      const normalizedChild = normalizeActionTree(child, childCtx)
       if (normalizedChild !== child) anyChildChanged = true
       normalizedArray.push(normalizedChild as React.ReactNode)
     })

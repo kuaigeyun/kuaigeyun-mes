@@ -2,7 +2,7 @@
  * 用户新建/编辑弹窗
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance, ProFormSelect, ProFormSwitch, ProFormText } from '@ant-design/pro-components';
 import { App } from 'antd';
@@ -16,10 +16,13 @@ import {
   CreateUserData,
   UpdateUserData,
 } from '../../../../services/user';
-import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
-import { getPositionList } from '../../../../services/position';
-import { getRoleList } from '../../../../services/role';
-import { searchReferenceDisplay } from '../../../../utils/referenceDisplay';
+import {
+  getUserFormCoreReferenceOptions,
+  getUserFormPartnerOptions,
+  roleUuidsNeedPartnerDimension,
+  type UserFormSelectOption,
+  type UserFormRoleMeta,
+} from '../userFormReferenceOptions';
 
 /** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
 const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
@@ -59,6 +62,12 @@ function parseErrorMessage(error: any, t: (key: string) => string): string {
   return message;
 }
 
+function applyFormValues(formRef: React.RefObject<ProFormInstance | undefined>, values: Record<string, unknown>) {
+  requestAnimationFrame(() => {
+    formRef.current?.setFieldsValue(values);
+  });
+}
+
 export const UserFormModal: React.FC<UserFormModalProps> = ({
   open,
   onClose,
@@ -69,14 +78,15 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
   const [roleUuidsDraft, setRoleUuidsDraft] = useState<string[]>([]);
-  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, { role_type?: string; external_partner_type?: string }>>({});
-  const [customerOptions, setCustomerOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [supplierOptions, setSupplierOptions] = useState<Array<{ label: string; value: string }>>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<UserFormSelectOption[]>([]);
+  const [positionOptions, setPositionOptions] = useState<UserFormSelectOption[]>([]);
+  const [roleOptions, setRoleOptions] = useState<UserFormSelectOption[]>([]);
+  const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, UserFormRoleMeta>>({});
+  const [customerOptions, setCustomerOptions] = useState<UserFormSelectOption[]>([]);
+  const [supplierOptions, setSupplierOptions] = useState<UserFormSelectOption[]>([]);
 
   const isEdit = Boolean(editUuid);
 
@@ -91,114 +101,55 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     return types;
   }, [roleUuidsDraft, roleMetaByUuid]);
 
-  const loadReferenceOptions = useCallback(async () => {
-    const [deptResponse, posResponse, roleResponse, supplierDisplay, customerDisplay] = await Promise.all([
-      getDepartmentTree(),
-      getPositionList({ page_size: 100 }),
-      getRoleList({ page_size: 100 }),
-      searchReferenceDisplay({
-        resource: 'master-data:supply-chain:supplier',
-        hostResource: 'system:user',
-        pageSize: 1000,
-      }),
-      searchReferenceDisplay({
-        resource: 'master-data:supply-chain:customer',
-        hostResource: 'system:user',
-        pageSize: 1000,
-      }),
-    ]);
-
-    const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
-      const options: Array<{ label: string; value: string }> = [];
-      items.forEach((item) => {
-        const prefix = '  '.repeat(level);
-        options.push({
-          label: `${prefix}${item.name}`,
-          value: item.uuid,
-        });
-        if (item.children && item.children.length > 0) {
-          options.push(...buildDeptOptions(item.children, level + 1));
-        }
-      });
-      return options;
-    };
-
-    setDepartmentOptions(buildDeptOptions(deptResponse.items));
-    setPositionOptions(posResponse.items.map((pos) => ({
-      label: pos.name,
-      value: pos.uuid,
-    })));
-    setRoleOptions(roleResponse.items.map((role) => ({
-      label: role.name,
-      value: role.uuid,
-    })));
-    setRoleMetaByUuid(
-      roleResponse.items.reduce((acc, role) => {
-        acc[role.uuid] = {
-          role_type: role.role_type,
-          external_partner_type: role.external_partner_type,
-        };
-        return acc;
-      }, {} as Record<string, { role_type?: string; external_partner_type?: string }>),
-    );
-    setCustomerOptions(
-      customerDisplay.items
-        .map((x) => ({
-          label: x.label || `${x.name ?? ''}${x.code ? ` (${x.code})` : ''}`,
-          value: x.code ?? '',
-        }))
-        .filter((x) => !!x.value),
-    );
-    setSupplierOptions(
-      supplierDisplay.items
-        .map((x) => ({
-          label: x.label || `${x.name ?? ''}${x.code ? ` (${x.code})` : ''}`,
-          value: x.code ?? '',
-        }))
-        .filter((x) => !!x.value),
-    );
-  }, []);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadReferenceOptions().catch((error) => {
-      if (typeof window !== 'undefined') {
-        window.console.error('加载选项数据失败:', error);
-      }
-    });
-  }, [open, loadReferenceOptions]);
+  const applyCoreReferenceOptions = (core: Awaited<ReturnType<typeof getUserFormCoreReferenceOptions>>) => {
+    setDepartmentOptions(core.departmentOptions);
+    setPositionOptions(core.positionOptions);
+    setRoleOptions(core.roleOptions);
+    setRoleMetaByUuid(core.roleMetaByUuid);
+  };
 
   useEffect(() => {
     if (!open) {
       setFormInitialValues(undefined);
       setRoleUuidsDraft([]);
+      setDetailLoading(false);
+      setCustomerOptions([]);
+      setSupplierOptions([]);
       return;
     }
 
-    if (!editUuid) {
-      setRoleUuidsDraft([]);
-      setFormInitialValues({
-        is_active: true,
-        is_tenant_admin: false,
-        supplier_scope_codes: [],
-        customer_scope_codes: [],
-      });
-      return;
-    }
+    let cancelled = false;
 
     void (async () => {
       try {
-        const detail = await getUserByUuid(editUuid);
-        const userUuid = detail.uuid || editUuid;
-        const [supplierBindings, customerBindings] = await Promise.all([
-          getUserDataScopeBindings(userUuid, 'supplier'),
-          getUserDataScopeBindings(userUuid, 'customer'),
+        formRef.current?.resetFields();
+
+        if (!editUuid) {
+          const core = await getUserFormCoreReferenceOptions();
+          if (cancelled) return;
+          applyCoreReferenceOptions(core);
+          const defaults = {
+            is_active: true,
+            is_tenant_admin: false,
+            supplier_scope_codes: [],
+            customer_scope_codes: [],
+          };
+          setRoleUuidsDraft([]);
+          setFormInitialValues(defaults);
+          applyFormValues(formRef, defaults);
+          return;
+        }
+
+        setDetailLoading(true);
+        const [detail, core] = await Promise.all([
+          getUserByUuid(editUuid),
+          getUserFormCoreReferenceOptions(),
         ]);
-        const supplierCodes = supplierBindings.map((x) => x.scope_code).filter(Boolean);
-        const customerCodes = customerBindings.map((x) => x.scope_code).filter(Boolean);
+        if (cancelled) return;
+
+        applyCoreReferenceOptions(core);
         const editRoleUuids = detail.roles?.map((r) => r.uuid) || [];
-        setRoleUuidsDraft(editRoleUuids);
-        setFormInitialValues({
+        const baseValues = {
           username: detail.username,
           email: detail.email,
           full_name: detail.full_name,
@@ -208,15 +159,68 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
           role_uuids: editRoleUuids,
           is_active: detail.is_active,
           is_tenant_admin: detail.is_tenant_admin,
-          supplier_scope_codes: supplierCodes,
-          customer_scope_codes: customerCodes,
-        });
+          supplier_scope_codes: [] as string[],
+          customer_scope_codes: [] as string[],
+        };
+        setRoleUuidsDraft(editRoleUuids);
+        setFormInitialValues(baseValues);
+        applyFormValues(formRef, baseValues);
+        setDetailLoading(false);
+
+        const userUuid = detail.uuid || editUuid;
+        const needsSupplier = roleUuidsNeedPartnerDimension(editRoleUuids, core.roleMetaByUuid, 'supplier');
+        const needsCustomer = roleUuidsNeedPartnerDimension(editRoleUuids, core.roleMetaByUuid, 'customer');
+        if (!needsSupplier && !needsCustomer) return;
+
+        const [supplierBindings, customerBindings, supplierOpts, customerOpts] = await Promise.all([
+          needsSupplier ? getUserDataScopeBindings(userUuid, 'supplier') : Promise.resolve([]),
+          needsCustomer ? getUserDataScopeBindings(userUuid, 'customer') : Promise.resolve([]),
+          needsSupplier ? getUserFormPartnerOptions('supplier') : Promise.resolve([]),
+          needsCustomer ? getUserFormPartnerOptions('customer') : Promise.resolve([]),
+        ]);
+        if (cancelled) return;
+
+        if (needsSupplier) {
+          setSupplierOptions(supplierOpts);
+        }
+        if (needsCustomer) {
+          setCustomerOptions(customerOpts);
+        }
+        const scopePatch = {
+          supplier_scope_codes: supplierBindings.map((x) => x.scope_code).filter(Boolean),
+          customer_scope_codes: customerBindings.map((x) => x.scope_code).filter(Boolean),
+        };
+        setFormInitialValues((prev) => ({ ...(prev || {}), ...scopePatch }));
+        applyFormValues(formRef, scopePatch);
       } catch (error: any) {
+        if (cancelled) return;
         messageApi.error(error.message || t('field.user.fetchDetailFailed'));
         onClose();
+      } finally {
+        if (!cancelled) {
+          setDetailLoading(false);
+        }
       }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, editUuid, messageApi, onClose, t]);
+
+  useEffect(() => {
+    if (!open) return;
+    if (selectedExternalPartnerTypes.has('supplier') && supplierOptions.length === 0) {
+      void getUserFormPartnerOptions('supplier')
+        .then(setSupplierOptions)
+        .catch(() => {});
+    }
+    if (selectedExternalPartnerTypes.has('customer') && customerOptions.length === 0) {
+      void getUserFormPartnerOptions('customer')
+        .then(setCustomerOptions)
+        .catch(() => {});
+    }
+  }, [open, selectedExternalPartnerTypes, supplierOptions.length, customerOptions.length]);
 
   const handleClose = () => {
     onClose();
@@ -305,7 +309,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
       onFinish={handleSubmit}
       isEdit={isEdit}
       initialValues={formInitialValues}
-      loading={formLoading}
+      loading={formLoading || detailLoading}
       formRef={formRef}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       grid={true}

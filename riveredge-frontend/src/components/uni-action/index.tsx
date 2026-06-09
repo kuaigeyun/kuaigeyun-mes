@@ -17,7 +17,9 @@ export { collectOperationActions } from './collect'
 export { normalizeActionTree } from './normalize'
 export {
   rowActionKind,
+  rowActionToneDestructive,
   ROW_ACTION_KIND_ATTR,
+  ROW_ACTION_TONE_ATTR,
   readExplicitActionKind,
   type RowActionPermissionKind,
 } from './actionText'

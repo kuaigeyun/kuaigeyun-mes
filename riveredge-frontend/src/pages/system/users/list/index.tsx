@@ -28,10 +28,8 @@ import {
 } from '../../../../services/user';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
-import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
-import { getPositionList } from '../../../../services/position';
-import { getRoleList } from '../../../../services/role';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
+import { getUserFormCoreReferenceOptions, primeUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
+import { renderRowActionsOverflow, rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
 
 /**
@@ -131,36 +129,10 @@ const UserListPage: React.FC = () => {
 
   const loadReferenceOptions = useCallback(async () => {
     try {
-      const [deptResponse, posResponse, roleResponse] = await Promise.all([
-        getDepartmentTree(),
-        getPositionList({ page_size: 100 }),
-        getRoleList({ page_size: 100 }),
-      ]);
-
-      const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
-        const options: Array<{ label: string; value: string }> = [];
-        items.forEach(item => {
-          const prefix = '  '.repeat(level);
-          options.push({
-            label: `${prefix}${item.name}`,
-            value: item.uuid,
-          });
-          if (item.children && item.children.length > 0) {
-            options.push(...buildDeptOptions(item.children, level + 1));
-          }
-        });
-        return options;
-      };
-
-      setDepartmentOptions(buildDeptOptions(deptResponse.items));
-      setPositionOptions(posResponse.items.map(pos => ({
-        label: pos.name,
-        value: pos.uuid,
-      })));
-      setRoleOptions(roleResponse.items.map(role => ({
-        label: role.name,
-        value: role.uuid,
-      })));
+      const core = await getUserFormCoreReferenceOptions();
+      setDepartmentOptions(core.departmentOptions);
+      setPositionOptions(core.positionOptions);
+      setRoleOptions(core.roleOptions);
     } catch (error) {
       if (typeof window !== 'undefined') {
         window.console.error('加载选项数据失败:', error);
@@ -169,6 +141,7 @@ const UserListPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    primeUserFormCoreReferenceOptions();
     loadReferenceOptions();
   }, [loadReferenceOptions]);
 
@@ -551,9 +524,16 @@ const UserListPage: React.FC = () => {
             >
               {t('field.user.edit')}
             </Button>,
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
+                {t('field.user.delete')}
+              </Button>
+            </Popconfirm>,
             <Button
               key="reset"
               {...rowActionKind('update')}
+              {...rowActionToneDestructive()}
+              data-action-priority={3}
               type="link"
               size="small"
               icon={<ReloadOutlined />}
@@ -561,11 +541,6 @@ const UserListPage: React.FC = () => {
             >
               {t('field.user.reset')}
             </Button>,
-            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
-              <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-                {t('field.user.delete')}
-              </Button>
-            </Popconfirm>,
           ],
           `user-${record.uuid}`,
         ),
