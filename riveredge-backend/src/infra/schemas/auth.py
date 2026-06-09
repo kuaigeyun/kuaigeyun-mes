@@ -5,6 +5,7 @@
 """
 
 from typing import Optional, List
+from datetime import datetime
 
 from pydantic import BaseModel, Field, EmailStr, field_validator
 
@@ -307,6 +308,8 @@ class CurrentUserResponse(BaseModel):
     avatar: Optional[str] = Field(None, description="用户头像")
     tenant_id: Optional[int] = Field(None, description="组织 ID（平台管理可能没有组织）")
     tenant_name: Optional[str] = Field(None, description="组织名称（可选，如果用户有组织则返回）")
+    tenant_plan: Optional[str] = Field(None, description="组织套餐（与组织管理 plan 一致）")
+    tenant_expires_at: Optional[datetime] = Field(None, description="组织到期时间（与组织管理 expires_at 一致）")
     is_active: bool = Field(..., description="是否激活")
     is_infra_admin: bool = Field(..., description="是否为平台管理（系统级超级管理员）")
     is_tenant_admin: bool = Field(..., description="是否为组织管理员")

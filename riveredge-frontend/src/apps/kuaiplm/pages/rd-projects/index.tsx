@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../components/uni-action';
 /**
  * 研发项目列表
  */
@@ -180,7 +181,7 @@ const RdProjectsListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="detail"
               type="link"
               size="small"
@@ -221,7 +222,7 @@ const RdProjectsListPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             {'新建项目' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

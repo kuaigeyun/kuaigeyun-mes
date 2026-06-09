@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography } from 'antd';
@@ -82,7 +83,7 @@ const DashboardList: React.FC = () => {
 
     const renderDashboardRowActions = (record: Dashboard) => {
         const nodes: React.ReactNode[] = [
-            <Button
+            <Button {...rowActionKind('update')}
                 key="edit"
                 type="link"
                 size="small"
@@ -91,7 +92,7 @@ const DashboardList: React.FC = () => {
             >
                 编辑
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
                 key="preview"
                 type="link"
                 size="small"
@@ -100,7 +101,7 @@ const DashboardList: React.FC = () => {
             >
                 预览
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
                 key="share"
                 type="link"
                 size="small"
@@ -109,7 +110,7 @@ const DashboardList: React.FC = () => {
             >
                 分享
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
                 key="mount"
                 type="link"
                 size="small"
@@ -118,7 +119,7 @@ const DashboardList: React.FC = () => {
             >
                 挂载到菜单
             </Button>,
-            <Button
+            <Button {...rowActionKind('delete')}
                 key="delete"
                 type="link"
                 size="small"

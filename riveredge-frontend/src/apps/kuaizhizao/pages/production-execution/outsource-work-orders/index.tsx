@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工单委外管理页面
  *
@@ -899,7 +900,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const renderOwoRowActionNodes = (record: OutsourceWorkOrder): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     nodes.push(
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -913,7 +914,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       </Button>
     );
     nodes.push(
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -929,7 +930,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     );
     if (record.status === 'released' || record.status === 'in_progress') {
       nodes.push(
-        <Button
+        <Button {...rowActionKind('dispatch')}
           key="issue"
           type="link"
           size="small"
@@ -942,7 +943,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         </Button>
       );
       nodes.push(
-        <Button
+        <Button {...rowActionKind('read')}
           key="receipt"
           type="link"
           size="small"

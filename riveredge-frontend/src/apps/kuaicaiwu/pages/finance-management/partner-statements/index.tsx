@@ -2,6 +2,7 @@
  * 往来对账列表页
  */
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   App,
@@ -216,7 +217,7 @@ const PartnerStatementsPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="det"
               type="link"
               size="small"
@@ -226,7 +227,7 @@ const PartnerStatementsPage: React.FC = () => {
               详情
             </Button>,
             record.status === 'Draft' ? (
-              <Button
+              <Button {...rowActionKind('delete')}
                 key="del"
                 type="link"
                 size="small"
@@ -266,7 +267,7 @@ const PartnerStatementsPage: React.FC = () => {
       search={{ labelWidth: 100 }}
       showCreateButton={false}
       toolBarRender={() => [
-        <Button
+        <Button {...rowActionKind('create')}
           key="create"
           type="primary"
           icon={<PlusOutlined />}
@@ -295,7 +296,7 @@ const PartnerStatementsPage: React.FC = () => {
       search={{ labelWidth: 100 }}
       showCreateButton={false}
       toolBarRender={() => [
-        <Button
+        <Button {...rowActionKind('create')}
           key="create"
           type="primary"
           icon={<PlusOutlined />}
@@ -335,13 +336,13 @@ const PartnerStatementsPage: React.FC = () => {
           resetCreate();
         }}
         footer={[
-          <Button key="cancel" onClick={() => { setCreateOpen(false); resetCreate(); }}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => { setCreateOpen(false); resetCreate(); }}>
             取消
           </Button>,
-          <Button key="preview" loading={previewLoading} onClick={() => void handlePreview()}>
+          <Button {...rowActionKind('read')} key="preview" loading={previewLoading} onClick={() => void handlePreview()}>
             预览
           </Button>,
-          <Button
+          <Button {...rowActionKind('skip')}
             key="ok"
             type="primary"
             loading={submitting}

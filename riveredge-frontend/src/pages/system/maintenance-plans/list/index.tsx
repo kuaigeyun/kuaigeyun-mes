@@ -9,6 +9,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -418,7 +419,7 @@ const MaintenancePlanListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="view"
               type="link"
               size="small"
@@ -427,7 +428,7 @@ const MaintenancePlanListPage: React.FC = () => {
             >
               {t('pages.system.maintenancePlans.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -436,7 +437,7 @@ const MaintenancePlanListPage: React.FC = () => {
             >
               {t('pages.system.maintenancePlans.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.maintenancePlans.confirmDelete')}
               onConfirm={() => handleDelete(record)}

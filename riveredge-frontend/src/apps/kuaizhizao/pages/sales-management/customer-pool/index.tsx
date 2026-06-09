@@ -20,7 +20,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow } from '../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { getUserOptions } from '../../../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { CustomerDetailDrawer } from '../../../../master-data/components/CustomerDetailDrawer';
@@ -286,7 +286,7 @@ const CustomerPoolPage: React.FC = () => {
           const actions: React.ReactNode[] = [];
           if (row.uuid) {
             actions.push(
-              <Button
+              <Button {...rowActionKind('read')}
                 key="detail"
                 type="link"
                 size="small"
@@ -297,7 +297,7 @@ const CustomerPoolPage: React.FC = () => {
             );
             if (canUpdateCustomer) {
               actions.push(
-                <Button
+                <Button {...rowActionKind('update')}
                   key="edit"
                   type="link"
                   size="small"
@@ -312,32 +312,32 @@ const CustomerPoolPage: React.FC = () => {
           if (row.pool_status === 'pool') {
             if (canClaim) {
               actions.push(
-                <Button key="claim" type="link" size="small" icon={<UserAddOutlined />} onClick={() => claimAndQuote(row)}>
+                <Button {...rowActionKind('claim')} key="claim" type="link" size="small" icon={<UserAddOutlined />} onClick={() => claimAndQuote(row)}>
                   领取并报价
                 </Button>
               );
             }
             if (canAssign) {
               actions.push(
-                <Button key="assign" type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssignModal(row)}>
+                <Button {...rowActionKind('assign')} key="assign" type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssignModal(row)}>
                   分配
                 </Button>
               );
             }
           } else {
             actions.push(
-              <Button key="follow-up" type="link" size="small" icon={<PlusOutlined />} onClick={() => openFollowUp(row.id)}>
+              <Button {...rowActionKind('create')} key="follow-up" type="link" size="small" icon={<PlusOutlined />} onClick={() => openFollowUp(row.id)}>
                 新建跟进
               </Button>
             );
             actions.push(
-              <Button key="quote" type="link" size="small" onClick={() => toQuotation(row.id)}>
+              <Button {...rowActionKind('create')} key="quote" type="link" size="small" onClick={() => toQuotation(row.id)}>
                 去报价
               </Button>
             );
             if (canRelease) {
               actions.push(
-                <Button
+                <Button {...rowActionKind('release')}
                   key="release"
                   type="link"
                   size="small"
@@ -352,7 +352,7 @@ const CustomerPoolPage: React.FC = () => {
             }
             if (canRecycle) {
               actions.push(
-                <Button
+                <Button {...rowActionKind('recycle')}
                   key="recycle"
                   type="link"
                   size="small"
@@ -405,14 +405,14 @@ const CustomerPoolPage: React.FC = () => {
             const buttons: React.ReactNode[] = [];
             if (canCreateCustomer) {
               buttons.push(
-                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreateCustomer}>
+                <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={openCreateCustomer}>
                   {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
                 </Button>,
               );
             }
             if (canUpdateRules) {
               buttons.push(
-                <Button key="rules" onClick={openRules}>
+                <Button {...rowActionKind('update')} key="rules" onClick={openRules}>
                   回收规则
                 </Button>,
               );

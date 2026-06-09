@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSwitch, ProFormDigit, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -487,10 +488,10 @@ const LanguageListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('field.language.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
               key="translations"
               type="link"
               size="small"
@@ -499,10 +500,10 @@ const LanguageListPage: React.FC = () => {
             >
               {t('field.language.translations')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('field.language.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('field.language.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
@@ -676,7 +677,7 @@ const LanguageListPage: React.FC = () => {
             showSizeChanger: true,
           }}
           toolBarRender={() => [
-            <Button
+            <Button {...rowActionKind('update')}
               key="initialize"
               icon={<SettingOutlined />}
               onClick={handleInitializeSystemLanguages}

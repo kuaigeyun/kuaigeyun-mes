@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 技能管理页面
  */
@@ -163,13 +164,13 @@ const SkillsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => handleOpenDetail(record)}>
             详情
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>
-          <Popconfirm title="确定要删除这个技能吗？" onConfirm={() => handleDelete(record)}>
+          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个技能吗？" onConfirm={() => handleDelete(record)}>
             <Button type="link" danger size="small" icon={<DeleteOutlined />}>
               删除
             </Button>

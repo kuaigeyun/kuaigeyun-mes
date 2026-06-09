@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 报工管理页面
  *
@@ -634,7 +635,7 @@ const ReportingPage: React.FC = () => {
   const renderReportingRowActionNodes = (record: ReportingRecord): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     nodes.push(
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -648,8 +649,8 @@ const ReportingPage: React.FC = () => {
     );
     if (record.status === 'pending') {
       nodes.push(
-        <span key="wf" onClick={(e) => e.stopPropagation()}>
-          <UniWorkflowActions
+        <span {...rowActionKind('skip')} key="wf" onClick={(e) => e.stopPropagation()}>
+          <UniWorkflowActions {...rowActionKind('skip')}
             record={record}
             entityName="报工记录"
             statusField="status"
@@ -683,7 +684,7 @@ const ReportingPage: React.FC = () => {
         </span>
       );
       nodes.push(
-        <Button
+        <Button {...rowActionKind('update')}
           key="corr"
           type="link"
           size="small"
@@ -696,7 +697,7 @@ const ReportingPage: React.FC = () => {
         </Button>
       );
       nodes.push(
-        <Button
+        <Button {...rowActionKind('delete')}
           key="del"
           type="link"
           size="small"
@@ -731,7 +732,7 @@ const ReportingPage: React.FC = () => {
     }
     if (record.status === 'approved') {
       nodes.push(
-        <Button
+        <Button {...rowActionKind('revoke')}
           key="revoke"
           type="link"
           size="small"
@@ -770,7 +771,7 @@ const ReportingPage: React.FC = () => {
       );
       if ((record.unqualified_quantity || 0) > 0) {
         nodes.push(
-          <Button
+          <Button {...rowActionKind('create')}
             key="defect"
             type="link"
             size="small"
@@ -784,7 +785,7 @@ const ReportingPage: React.FC = () => {
           </Button>
         );
         nodes.push(
-          <Button
+          <Button {...rowActionKind('obsolete')}
             key="scrap"
             type="link"
             size="small"
@@ -799,7 +800,7 @@ const ReportingPage: React.FC = () => {
         );
       }
       nodes.push(
-        <Button
+        <Button {...rowActionKind('update')}
           key="corr2"
           type="link"
           size="small"
@@ -814,7 +815,7 @@ const ReportingPage: React.FC = () => {
     }
     if (record.status === 'rejected') {
       nodes.push(
-        <Button
+        <Button {...rowActionKind('delete')}
           key="del2"
           type="link"
           size="small"
@@ -1104,7 +1105,7 @@ const ReportingPage: React.FC = () => {
         })}
         toolBarRender={(_, { selectedRowKeys }) => [
           selectedRowKeys && selectedRowKeys.length > 0 && (
-            <Button
+            <Button {...rowActionKind('revoke')}
               key="batch-revoke"
               icon={<RollbackOutlined />}
               onClick={() => {

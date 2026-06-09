@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Space, Tag, Typography } from 'antd';
 import { EyeOutlined, ToolOutlined } from '@ant-design/icons';
@@ -198,11 +199,11 @@ const PatrolHazardsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openRemediate(record, true)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openRemediate(record, true)}>
             详情
           </Button>
           {record.status !== '已治理' && (
-            <Button type="link" size="small" icon={<ToolOutlined />} onClick={() => void openRemediate(record, false)}>
+            <Button key="remediate" {...rowActionKind('update')} type="link" size="small" icon={<ToolOutlined />} onClick={() => void openRemediate(record, false)}>
               治理
             </Button>
           )}

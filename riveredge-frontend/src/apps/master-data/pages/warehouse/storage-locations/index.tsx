@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
@@ -609,23 +610,20 @@ const StorageLocationsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             {t('field.customField.view')}
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm
-            title={t('app.master-data.storageLocations.deleteConfirm')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.storageLocations.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -749,14 +747,14 @@ const StorageLocationsPage: React.FC = () => {
         createButtonText={t('app.master-data.storageLocations.create')}
         onCreate={handleCreate}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="batchCreate"
             icon={<PlusOutlined />}
             onClick={() => setBatchCreateModalVisible(true)}
           >
             {t('app.master-data.storageLocations.batchCreate')}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="batchDelete"
             title={t('app.master-data.storageLocations.batchDeleteTitle')}
             description={t('app.master-data.storageLocations.batchDeleteDescription', { count: selectedRowKeys.length })}

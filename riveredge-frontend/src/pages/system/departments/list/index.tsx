@@ -7,6 +7,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -638,13 +639,13 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) => {
         const canDelete = checkCanDelete(record);
         const actions: React.ReactNode[] = [
-          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+          <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             {t('field.department.view')}
           </Button>,
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('field.department.edit')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('create')}
             key="addChild"
             type="link"
             size="small"
@@ -653,7 +654,7 @@ const DepartmentListPage: React.FC = () => {
           >
             {t('field.department.addChild')}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('field.department.deleteConfirm', { name: record.name })}
             description={t('field.department.deleteConfirmDesc')}
@@ -702,7 +703,7 @@ const DepartmentListPage: React.FC = () => {
         deleteConfirmDescription={(c) => t('field.department.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
           trialRunMode && (
-          <Button
+          <Button {...rowActionKind('import')}
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -722,7 +723,7 @@ const DepartmentListPage: React.FC = () => {
             {t('field.department.loadPreset')}
           </Button>
           ),
-          <Button
+          <Button {...rowActionKind('skip')}
             key="toggleExpand"
             onClick={() => {
               if (expandedRowKeys.length > 0) {
@@ -771,10 +772,10 @@ const DepartmentListPage: React.FC = () => {
         width={560}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('audit')}
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}
@@ -854,10 +855,10 @@ const DepartmentListPage: React.FC = () => {
         width={560}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button key="sync" type="primary" onClick={handleStartDatasetSync}>
+          <Button {...rowActionKind('update')} key="sync" type="primary" onClick={handleStartDatasetSync}>
             {t('common.confirm')}
           </Button>,
         ]}
@@ -875,10 +876,10 @@ const DepartmentListPage: React.FC = () => {
         width={640}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBindingModalOpen(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
             {t('common.save')}
           </Button>,
         ]}

@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 销售预测页面
  *
@@ -1063,7 +1064,7 @@ export default function SalesForecastsPage() {
           </Button>,
         ];
         parts.push(
-          <Tooltip
+          <Tooltip {...rowActionKind('update')}
             key="edit-tip"
             title={!canEdit ? t('app.kuaizhizao.salesForecast.editDisabledTip') : undefined}
           >
@@ -1081,7 +1082,7 @@ export default function SalesForecastsPage() {
           </Tooltip>,
         );
         parts.push(
-          <UniWorkflowActions
+          <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.salesForecast.title')}
@@ -1111,7 +1112,7 @@ export default function SalesForecastsPage() {
         );
         if (pushUi.visible) {
           parts.push(
-            <span key="push-tip" data-action-priority={1} data-row-action-visible-when-disabled>
+            <span {...rowActionKind('skip')} key="push-tip" data-action-priority={1} data-row-action-visible-when-disabled>
               <Tooltip title={pushUi.clickable ? undefined : pushUi.disabledTip}>
                 <span>
                   <Button
@@ -1129,7 +1130,7 @@ export default function SalesForecastsPage() {
           );
         }
         parts.push(
-          <Tooltip
+          <Tooltip {...rowActionKind('skip')}
             key="del-tip"
             title={!canDelete ? t('app.kuaizhizao.salesForecast.deleteDisabledTip') : undefined}
           >
@@ -1706,7 +1707,7 @@ export default function SalesForecastsPage() {
               >
                 <DeleteOutlined /> {t('common.batchDelete')}
               </Button>
-              <Dropdown
+              <Dropdown {...rowActionKind('skip')}
                 disabled={selectedRowKeys.length === 0}
                 trigger={['click']}
                 menu={{
@@ -1833,7 +1834,7 @@ export default function SalesForecastsPage() {
                   </>
                 );
               })()}
-              <UniWorkflowActions
+              <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentForecast}
                 entityName={t('app.kuaizhizao.salesForecast.title')}
                 statusField="status"

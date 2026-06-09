@@ -26,7 +26,7 @@ import {
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 
 const { TextArea } = Input;
 
@@ -219,6 +219,7 @@ const ApprovalInstanceListPage: React.FC = () => {
         const actions = [
           <Button
             key="view"
+            {...rowActionKind('read')}
             type="link"
             size="small"
             icon={<EyeOutlined />}
@@ -233,6 +234,7 @@ const ApprovalInstanceListPage: React.FC = () => {
             actions.push(
               <Button
                 key="approve"
+                {...rowActionKind('approve')}
                 type="link"
                 size="small"
                 icon={<CheckOutlined />}
@@ -242,6 +244,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               </Button>,
               <Button
                 key="reject"
+                {...rowActionKind('reject')}
                 type="link"
                 size="small"
                 danger
@@ -252,6 +255,7 @@ const ApprovalInstanceListPage: React.FC = () => {
               </Button>,
               <Button
                 key="transfer"
+                {...rowActionKind('assign')}
                 type="link"
                 size="small"
                 icon={<SwapOutlined />}
@@ -264,9 +268,10 @@ const ApprovalInstanceListPage: React.FC = () => {
           const isSubmitter = currentUser?.id != null && record.submitter_id === currentUser.id;
           if (isSubmitter) {
             actions.push(
-              <Tooltip key="cancel-tt" title={t('pages.system.approvalInstances.cancelOnlySubmitter')}>
+              <Tooltip {...rowActionKind('skip')} key="cancel-tt" title={t('pages.system.approvalInstances.cancelOnlySubmitter')}>
                 <Button
                   key="cancel"
+                  {...rowActionKind('revoke')}
                   type="link"
                   size="small"
                   icon={<StopOutlined />}

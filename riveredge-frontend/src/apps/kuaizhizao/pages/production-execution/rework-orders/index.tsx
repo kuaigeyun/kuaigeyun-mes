@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
@@ -312,9 +313,9 @@ const ReworkOrdersPage: React.FC = () => {
           lifecycle.stageName === '已下达' || lifecycle.stageName === '执行中';
         return (
           <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
             {canReport ? (
-              <Button
+              <Button{...rowActionKind('delete')} key="delete"
                 type="link"
                 size="small"
                 icon={<FormOutlined />}
@@ -323,8 +324,7 @@ const ReworkOrdersPage: React.FC = () => {
                 报工
               </Button>
             ) : null}
-            <Button
-              type="link"
+            <Button key="edit" {...rowActionKind('update')} type="link"
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
@@ -333,7 +333,7 @@ const ReworkOrdersPage: React.FC = () => {
               编辑
             </Button>
             {canDelete && (
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+              <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
             )}
           </Space>
         );

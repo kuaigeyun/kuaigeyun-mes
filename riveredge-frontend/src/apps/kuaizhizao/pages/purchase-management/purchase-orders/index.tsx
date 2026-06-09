@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -842,27 +843,27 @@ const PurchaseOrdersPage: React.FC = () => {
       hideInSearch: true,
       render: (_: any, record: PurchaseOrder) => {
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>,
-          <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             编辑
           </Button>,
         ];
         if (isDraftStatus(record.status)) {
           parts.push(
-            <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(record)}>
+            <Button {...rowActionKind('submit')} key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(record)}>
               提交
             </Button>
           );
           parts.push(
-            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+            <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
               删除
             </Button>
           );
         }
         parts.push(
-          <UniWorkflowActions
+          <UniWorkflowActions {...rowActionKind('skip')}
             key="wf"
             record={record}
             entityName="采购订单"
@@ -2839,7 +2840,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 {
                   key: 'workflow',
                   render: () => (
-                    <UniWorkflowActions
+                    <UniWorkflowActions {...rowActionKind('skip')}
                       record={orderDetail}
                       entityName="采购订单"
                       statusField="status"
@@ -2869,7 +2870,7 @@ const PurchaseOrdersPage: React.FC = () => {
                   key: 'push',
                   visible: isAuditedStatus(orderDetail.status),
                   render: () => (
-                    <Dropdown
+                    <Dropdown {...rowActionKind('skip')}
                       menu={{
                         items: [
                           { key: 'receipt-notice', label: '收货通知', icon: <FileTextOutlined />, onClick: () => handlePushToNotice(orderDetail) },

@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
@@ -1411,7 +1412,7 @@ const InboundPage: React.FC = () => {
             st === '待入库' ||
             st === '待退料');
         const nodes: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
@@ -1423,7 +1424,7 @@ const InboundPage: React.FC = () => {
         ];
         if (pending) {
           nodes.push(
-            <Button
+            <Button {...rowActionKind('audit')}
               key="confirm"
               type="link"
               size="small"
@@ -1441,7 +1442,7 @@ const InboundPage: React.FC = () => {
             record.receipt_type === 'semi_finished_goods'
           ) {
             nodes.push(
-              <Button
+              <Button {...rowActionKind('delete')}
                 key="delete"
                 type="link"
                 size="small"
@@ -1456,7 +1457,7 @@ const InboundPage: React.FC = () => {
         }
         if (posted) {
           nodes.push(
-            <Button
+            <Button {...rowActionKind('revoke')}
               key="withdraw"
               type="link"
               size="small"
@@ -1658,7 +1659,7 @@ const InboundPage: React.FC = () => {
               },
             ])}
           />,
-          <Button
+          <Button {...rowActionKind('skip')}
             key="batch"
             icon={<InboxOutlined />}
             onClick={() => {

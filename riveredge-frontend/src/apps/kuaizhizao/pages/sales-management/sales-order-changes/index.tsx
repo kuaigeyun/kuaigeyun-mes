@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Form, Input, Modal, Space, Tag } from 'antd';
@@ -220,16 +221,16 @@ const SalesOrderChangesPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
               详情
             </Button>,
             isOrderChangeDraft(record) ? (
-              <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+              <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
                 编辑
               </Button>
             ) : null,
             isOrderChangeDraft(record) ? (
-              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => {
+              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => {
                 modal.confirm({
                   title: '确认删除？',
                   onOk: async () => {
@@ -270,7 +271,7 @@ const SalesOrderChangesPage: React.FC = () => {
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
         pinnedTabsValueEnum={buildOrderChangeLifecycleValueEnum()}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -355,7 +356,7 @@ const SalesOrderChangesPage: React.FC = () => {
               {isOrderChangeDraft(detail) && (
                 <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>提交</Button>
               )}
-              <UniWorkflowActions
+              <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName="销售变更单"
                 statusField="status"

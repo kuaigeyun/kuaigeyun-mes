@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工位管理页面
  * 
@@ -616,23 +617,20 @@ const WorkstationsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             {t('field.customField.view')}
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm
-            title={t('app.master-data.workstations.deleteConfirm')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.workstations.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -760,7 +758,7 @@ const WorkstationsPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -768,7 +766,7 @@ const WorkstationsPage: React.FC = () => {
           >
             {t('app.master-data.workstations.create') + NEW_SHORTCUT_HINT}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="batchDelete"
             title={t('app.master-data.workstations.batchDeleteTitle')}
             description={t('app.master-data.workstations.batchDeleteDescription', { count: selectedRowKeys.length })}

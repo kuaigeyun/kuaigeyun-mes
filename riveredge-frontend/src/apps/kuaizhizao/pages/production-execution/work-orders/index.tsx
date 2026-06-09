@@ -196,6 +196,7 @@ import { coerceReportingCreateStrings } from '../../../utils/reportingPayload'
 import { getUserInfo } from '../../../../../utils/auth'
 import type { CurrentUser } from '../../../../../types/api'
 import { hasModulePermission } from '../../../../../utils/permissionContract';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../stores'
 import { UniUserSelect } from '../../../../../components/uni-user-select'
 
@@ -5260,7 +5261,7 @@ const WorkOrdersPage: React.FC = () => {
           if (groupId == null) return null
           return renderRowActionsOverflow(
             [
-              <Button
+              <Button {...rowActionKind('update')}
                 key="dissolve-group"
                 type="link"
                 size="small"
@@ -5304,7 +5305,7 @@ const WorkOrdersPage: React.FC = () => {
 
         const rowKey = record.id ?? 'row'
         const parts: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
@@ -5315,7 +5316,7 @@ const WorkOrdersPage: React.FC = () => {
           </Button>,
         ]
         parts.push(
-          <Button
+          <Button {...rowActionKind('update')}
             key="edit"
             type="link"
             size="small"
@@ -5327,7 +5328,7 @@ const WorkOrdersPage: React.FC = () => {
         )
         if (isDraft) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('release')}
               key="release"
               type="link"
               size="small"
@@ -5339,7 +5340,7 @@ const WorkOrdersPage: React.FC = () => {
           )
         }
         parts.push(
-          <Button
+          <Button {...rowActionKind('print')}
             key="print"
             type="link"
             size="small"
@@ -5351,7 +5352,7 @@ const WorkOrdersPage: React.FC = () => {
         )
         if (!isTerminal) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="rework"
               type="link"
               size="small"
@@ -5363,7 +5364,7 @@ const WorkOrdersPage: React.FC = () => {
           )
           if (isCompleted) {
             parts.push(
-              <Button
+              <Button {...rowActionKind('dispatch')}
                 key="notifyInbound"
                 type="link"
                 size="small"
@@ -5380,7 +5381,7 @@ const WorkOrdersPage: React.FC = () => {
             )
           } else {
             parts.push(
-              <Button
+              <Button {...rowActionKind('dispatch')}
                 key="outsource"
                 type="link"
                 size="small"
@@ -5394,7 +5395,7 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (canSplit) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="split"
               type="link"
               size="small"
@@ -5407,7 +5408,7 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (record.is_frozen) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="unfreeze"
               type="link"
               size="small"
@@ -5419,7 +5420,7 @@ const WorkOrdersPage: React.FC = () => {
           )
         } else if (canFreeze) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="freeze"
               type="link"
               size="small"
@@ -5433,7 +5434,7 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (canRevoke) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('revoke')}
               key="revoke"
               type="link"
               size="small"
@@ -5447,7 +5448,7 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (canComplete) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('complete')}
               key="complete"
               type="link"
               size="small"
@@ -5459,7 +5460,7 @@ const WorkOrdersPage: React.FC = () => {
           )
         }
         parts.push(
-          <Button
+          <Button {...rowActionKind('delete')}
             key="delete"
             type="link"
             size="small"
@@ -5842,7 +5843,7 @@ const WorkOrdersPage: React.FC = () => {
                 },
               ])}
             />,
-            <Button
+            <Button {...rowActionKind('release')}
               key="smartRelease"
               size="middle"
               style={{ backgroundColor: '#52c41a', color: '#fff', borderColor: '#52c41a' }}
@@ -8039,7 +8040,7 @@ const WorkOrdersPage: React.FC = () => {
         }}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         footer={[
-          <Button
+          <Button {...rowActionKind('revoke')}
             key="cancel"
             onClick={() => {
               setBatchReleaseModalVisible(false)
@@ -8048,14 +8049,14 @@ const WorkOrdersPage: React.FC = () => {
           >
             取消
           </Button>,
-          <Button
+          <Button {...rowActionKind('skip')}
             key="ignore"
             onClick={() => handleSubmitBatchRelease(true)}
             disabled={batchReleaseLoading}
           >
             忽略异常，强制下达所有
           </Button>,
-          <Button
+          <Button {...rowActionKind('submit')}
             key="submit"
             type="primary"
             onClick={() => handleSubmitBatchRelease(false)}

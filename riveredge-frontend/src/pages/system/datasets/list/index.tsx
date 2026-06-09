@@ -18,7 +18,7 @@ import {
 } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Badge, Table, Descriptions } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, FormOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, PlayCircleOutlined, CopyOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -43,7 +43,7 @@ import {
   getDataConnectionsForDataset,
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 
 /**
  * 数据集管理列表页面组件
@@ -579,20 +579,22 @@ const DatasetListPage: React.FC = () => {
       title: t('pages.system.datasets.columnActions'),
       valueType: 'option',
       fixed: 'right',
+      uniActionRenderOptions: { directMax: 5 },
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="design" type="link" size="small" icon={<FormOutlined />} onClick={() => handleDesign(record)}>
-              {t('pages.system.datasets.design')}
-            </Button>,
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.datasets.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.datasets.edit')}
+            </Button>,
+            <Button key="design" {...rowActionKind('update')} type="link" size="small" icon={<HighlightOutlined />} onClick={() => handleDesign(record)} data-action-priority={2}>
+              {t('pages.system.datasets.design')}
             </Button>,
             <Button
               key="execute"
+              {...rowActionKind('execute')}
               type="link"
               size="small"
               icon={<PlayCircleOutlined />}
@@ -601,11 +603,12 @@ const DatasetListPage: React.FC = () => {
             >
               {t('pages.system.datasets.executeQuery')}
             </Button>,
-            <Button key="copy" type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record)}>
+            <Button key="copy" {...rowActionKind('create')} type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record)}>
               {t('pages.system.datasets.copy')}
             </Button>,
             <Popconfirm
               key="delete"
+              {...rowActionKind('delete')}
               title={t('pages.system.datasets.confirmDelete')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
@@ -697,8 +700,8 @@ const DatasetListPage: React.FC = () => {
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.datasets.batchEnable')}</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.datasets.batchDisable')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.datasets.batchEnable')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.datasets.batchDisable')}</Button>,
                 ]
               : []
           }
@@ -921,7 +924,7 @@ const DatasetListPage: React.FC = () => {
         open={executeVisible}
         onCancel={() => setExecuteVisible(false)}
         footer={[
-          <Button key="close" onClick={() => setExecuteVisible(false)}>
+          <Button {...rowActionKind('close')} key="close" onClick={() => setExecuteVisible(false)}>
             {t('pages.system.datasets.close')}
           </Button>,
         ]}

@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -1089,13 +1090,13 @@ const MoldLedgerPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" onClick={() => void handleOpenMoldDetail(record)}>
+          <Button{...rowActionKind('delete')} key="delete" type="link" size="small" onClick={() => void handleOpenMoldDetail(record)}>
             详情
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
             删除
           </Button>
         </Space>
@@ -1119,7 +1120,7 @@ const MoldLedgerPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           toolBarActionsAfterCreate={[
-            <Button
+            <Button {...rowActionKind('update')}
               key="mold-batch-lifecycle"
               disabled={selectedRowKeys.length === 0 && listMatchTotal <= 0}
               onClick={handleOpenBatchModal}
@@ -1505,10 +1506,10 @@ const MoldLedgerPage: React.FC = () => {
         width={560}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBatchModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBatchModalOpen(false)}>
             取消
           </Button>,
-          <Button key="ok" type="primary" loading={batchModalBusy} onClick={() => void handleBatchSubmit()}>
+          <Button {...rowActionKind('skip')} key="ok" type="primary" loading={batchModalBusy} onClick={() => void handleBatchSubmit()}>
             {batchScope === 'selected'
               ? `应用到已选 ${selectedRowKeys.length} 条`
               : `应用到当前筛选全部（${listMatchTotal} 条）`}
@@ -1589,10 +1590,10 @@ const MoldLedgerPage: React.FC = () => {
         width={560}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setSyncIntroModalOpen(false)}>
             取消
           </Button>,
-          <Button key="sync" type="primary" onClick={handleStartDatasetSync}>
+          <Button {...rowActionKind('update')} key="sync" type="primary" onClick={handleStartDatasetSync}>
             开始同步
           </Button>,
         ]}
@@ -1623,10 +1624,10 @@ const MoldLedgerPage: React.FC = () => {
         width={640}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消
           </Button>,
-          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
             保存
           </Button>,
         ]}

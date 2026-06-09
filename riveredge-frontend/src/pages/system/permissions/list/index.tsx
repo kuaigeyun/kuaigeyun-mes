@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Tag, message, Descriptions } from 'antd';
@@ -181,7 +182,7 @@ const PermissionListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('field.permission.view')}
             </Button>,
           ],

@@ -8,11 +8,11 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Button, Card, Select, Space, Table, Steps, Modal, Input, Form, Typography, Segmented, Alert } from 'antd';
-import { ApartmentOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { HighlightOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi, unwrapProcessPagedList } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import type { ProcessRoute, Operation } from '../../../types/process';
 import type { Material, MaterialGroup, MaterialListResponse } from '../../../types/material';
 import type { SOP } from '../../../types/process';
@@ -490,10 +490,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   render: (_: any, record: OperationItem, index: number) =>
                     renderRowActionsOverflow(
                       [
-                        <Button key="move-up" size="small" onClick={() => moveUp(index)} disabled={index === 0}>
+                        <Button {...rowActionKind('skip')} key="move-up" size="small" onClick={() => moveUp(index)} disabled={index === 0}>
                           上移
                         </Button>,
-                        <Button
+                        <Button {...rowActionKind('skip')}
                           key="move-down"
                           size="small"
                           onClick={() => moveDown(index)}
@@ -501,7 +501,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                         >
                           下移
                         </Button>,
-                        <Button
+                        <Button {...rowActionKind('delete')}
                           key="delete"
                           size="small"
                           danger
@@ -646,15 +646,17 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                       [
                         <Button
                           key="design"
+                          {...rowActionKind('update')}
                           type="link"
                           size="small"
-                          icon={<ApartmentOutlined />}
+                          icon={<HighlightOutlined />}
                           onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
                         >
                           设计流程
                         </Button>,
                         <Button
                           key="edit"
+                          {...rowActionKind('update')}
                           type="link"
                           size="small"
                           icon={<FormOutlined />}
@@ -685,10 +687,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
         open={createRouteModalVisible}
         onCancel={closeCreateRouteModal}
         footer={[
-          <Button key="cancel" onClick={closeCreateRouteModal}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={closeCreateRouteModal}>
             取消
           </Button>,
-          <Button key="submit" type="primary" loading={newRouteSaving} onClick={handleSaveNewRoute}>
+          <Button {...rowActionKind('submit')} key="submit" type="primary" loading={newRouteSaving} onClick={handleSaveNewRoute}>
             保存为新工艺路线并绑定
           </Button>,
         ]}

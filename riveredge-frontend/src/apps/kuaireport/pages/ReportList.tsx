@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../components/uni-action';
 /**
  * 报表列表（积木专业报表，历史入口；主入口为报表中心 ReportCenter）
  */
@@ -88,7 +89,7 @@ const ReportList: React.FC = () => {
       width: 180,
       render: (_, record) => {
         const nodes: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('update')}
             key="design"
             type="link"
             size="small"
@@ -97,7 +98,7 @@ const ReportList: React.FC = () => {
           >
             设计
           </Button>,
-          <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => messageApi.info('功能开发中')}>
+          <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => messageApi.info('功能开发中')}>
             删除
           </Button>,
         ];
@@ -135,7 +136,7 @@ const ReportList: React.FC = () => {
         }}
         rowKey="id"
         toolBarActions={[
-          <Button key="new" type="primary" icon={<PlusOutlined />} onClick={() => navigate('../jimu-designer')}>
+          <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={() => navigate('../jimu-designer')}>
             新建专业报表
           </Button>,
         ]}

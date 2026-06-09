@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -438,7 +439,7 @@ export const OutsourceOrdersTable: React.FC = () => {
   const renderOoRowActionNodes = (record: OutsourceOrder): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     nodes.push(
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -452,7 +453,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       </Button>
     );
     nodes.push(
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -467,7 +468,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       </Button>
     );
     nodes.push(
-      <Button
+      <Button {...rowActionKind('delete')}
         key="delete"
         type="link"
         size="small"

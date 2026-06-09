@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设计评审（Phase2）
  */
@@ -52,7 +53,7 @@ const DesignReviewsPage: React.FC = () => {
       render: (_, row) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('delete')}
               key="del"
               type="link"
               size="small"
@@ -106,7 +107,7 @@ const DesignReviewsPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             {'新建评审' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

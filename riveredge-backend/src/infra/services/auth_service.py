@@ -789,6 +789,8 @@ class AuthService:
         requires_tenant_selection = len(user_tenants_list) > 1
 
         tenant_name = None
+        tenant_plan = None
+        tenant_expires_at = None
         if final_tenant_id is not None:
             tenant = await Tenant.get_or_none(
                 id=final_tenant_id, status=TenantStatus.ACTIVE
@@ -799,6 +801,8 @@ class AuthService:
                     detail="所属组织不存在或已停用，无法登录",
                 )
             tenant_name = tenant.name
+            tenant_plan = tenant.plan.value if tenant.plan else None
+            tenant_expires_at = tenant.expires_at
             if not user_tenants_list and not is_infra_admin:
                 user_tenants_list = [
                     {
@@ -854,6 +858,8 @@ class AuthService:
                 "avatar": user.avatar,
                 "tenant_id": final_tenant_id,
                 "tenant_name": tenant_name,
+                "tenant_plan": tenant_plan,
+                "tenant_expires_at": tenant_expires_at,
                 "is_infra_admin": user.is_infra_admin,
                 "is_tenant_admin": user.is_tenant_admin,
                 "permissions": permissions,

@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -388,16 +389,14 @@ const ScheduledTaskListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
             {t('field.scheduledTask.view')}
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -405,8 +404,7 @@ const ScheduledTaskListPage: React.FC = () => {
             {t('field.scheduledTask.edit')}
           </Button>
           {record.is_active ? (
-            <Button
-              type="link"
+            <Button key="stop" {...rowActionKind('execute')} type="link"
               size="small"
               icon={<PauseCircleOutlined />}
               onClick={() => handleStop(record)}
@@ -414,8 +412,7 @@ const ScheduledTaskListPage: React.FC = () => {
               {t('field.scheduledTask.stop')}
             </Button>
           ) : (
-            <Button
-              type="link"
+            <Button key="execute" {...rowActionKind('execute')} type="link"
               size="small"
               icon={<PlayCircleOutlined />}
               onClick={() => handleStart(record)}
@@ -423,8 +420,7 @@ const ScheduledTaskListPage: React.FC = () => {
               {t('field.scheduledTask.start')}
             </Button>
           )}
-          <Popconfirm
-            title={t('field.scheduledTask.deleteConfirm')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.scheduledTask.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button

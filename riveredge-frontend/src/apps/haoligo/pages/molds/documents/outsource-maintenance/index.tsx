@@ -24,7 +24,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-de
 import { UniTable } from '../../../../../../components/uni-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
-import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores';
 import {
   canCompleteSourceDocument,
@@ -579,7 +579,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         const approved = isMoldSheetApproved(record.sheet_status);
         const canRepair = canInitiateComplete && Boolean(record.can_complete);
         const actions: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
@@ -591,7 +591,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         ];
         if (canRepair) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('complete')}
               key="complete"
               type="link"
               size="small"
@@ -604,7 +604,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         }
         if (canUpdateMaintenance) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -618,7 +618,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         }
         if (canDeleteMaintenance) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('delete')}
               key="delete"
               type="link"
               size="small"
@@ -866,7 +866,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
               actionRender={(field, action, _defaultActionDom, count) => {
                 if (isDetailView || count <= 1) return [];
                 return [
-                  <Tooltip key="remove" title="删除">
+                  <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
                     <Button
                       type="text"
                       danger

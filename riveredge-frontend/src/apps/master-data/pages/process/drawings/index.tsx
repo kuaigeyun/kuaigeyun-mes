@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工程图纸管理页面（两栏：左导航树 + 右表/预览）
  */
@@ -673,13 +674,12 @@ const DrawingsPage: React.FC = () => {
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, record) => (
           <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-            <Button type="link" size="small" onClick={() => loadDetail(record.uuid)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => loadDetail(record.uuid)}>
               {t('common.detail')}
             </Button>
             {record.status === 'Draft' && (
               <>
-                <Button
-                  type="link"
+                <Button key="edit" {...rowActionKind('update')} type="link"
                   size="small"
                   icon={<EditOutlined />}
                   onClick={() => {
@@ -689,11 +689,10 @@ const DrawingsPage: React.FC = () => {
                 >
                   {t('common.edit')}
                 </Button>
-                <Button type="link" size="small" icon={<SendOutlined />} onClick={() => handleRelease(record)}>
+                <Button key="submit" {...rowActionKind('submit')} type="link" size="small" icon={<SendOutlined />} onClick={() => handleRelease(record)}>
                   {t('app.master-data.drawings.release')}
                 </Button>
-                <Popconfirm
-                  title={t('common.confirmDelete')}
+                <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
                   onConfirm={() => handleDeleteDrawing(record)}
                 >
                   <Button
@@ -710,17 +709,16 @@ const DrawingsPage: React.FC = () => {
             )}
             {record.status === 'Released' && (
               <>
-                <Button type="link" size="small" icon={<BranchesOutlined />} onClick={() => handleRevision(record)}>
+                <Button key="create" {...rowActionKind('create')} type="link" size="small" icon={<BranchesOutlined />} onClick={() => handleRevision(record)}>
                   {t('app.master-data.drawings.newRevision')}
                 </Button>
-                <Button type="link" size="small" icon={<StopOutlined />} onClick={() => handleObsolete(record)}>
+                <Button key="obsolete" {...rowActionKind('obsolete')} type="link" size="small" icon={<StopOutlined />} onClick={() => handleObsolete(record)}>
                   {t('app.master-data.drawings.obsolete')}
                 </Button>
               </>
             )}
             {record.status === 'Obsolete' && (
-              <Popconfirm
-                title={t('common.confirmDelete')}
+              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
                 onConfirm={() => handleDeleteDrawing(record)}
               >
                 <Button
@@ -735,7 +733,7 @@ const DrawingsPage: React.FC = () => {
               </Popconfirm>
             )}
             {record.file && !showInlinePreview && (
-              <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.file)}>
+              <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.file)}>
                 {t('app.master-data.drawings.preview')}
               </Button>
             )}
@@ -796,7 +794,7 @@ const DrawingsPage: React.FC = () => {
             </Tooltip>
           }
           toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
               {t('common.create') + NEW_SHORTCUT_HINT}
             </Button>,
           ]}

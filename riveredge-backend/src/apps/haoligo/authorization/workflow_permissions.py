@@ -13,6 +13,8 @@ RESOURCE_MOLD_REPAIR = "haoligo:molds-documents-repair"
 RESOURCE_MOLD_REPAIR_COMPLETE = "haoligo:molds-documents-repair-complete"
 RESOURCE_OUTSOURCE_MAINTENANCE = "haoligo:molds-documents-outsource-maintenance"
 RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE = "haoligo:molds-documents-outsource-complete"
+RESOURCE_EQUIPMENT_UPKEEP_SHEET = "haoligo:equipment-documents-upkeep-sheet"
+RESOURCE_EQUIPMENT_UPKEEP_COMPLETE = "haoligo:equipment-documents-upkeep-complete"
 
 
 from core.config.permission_contract import build_permission_code
@@ -71,4 +73,9 @@ UPKEEP_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
 REPAIR_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
     source_resource=RESOURCE_MOLD_REPAIR,
     target_resource=RESOURCE_MOLD_REPAIR_COMPLETE,
+)
+
+EQUIPMENT_UPKEEP_COMPLETE_CREATE_PERMISSIONS = permission_codes_for_complete_create(
+    source_resource=RESOURCE_EQUIPMENT_UPKEEP_SHEET,
+    target_resource=RESOURCE_EQUIPMENT_UPKEEP_COMPLETE,
 )

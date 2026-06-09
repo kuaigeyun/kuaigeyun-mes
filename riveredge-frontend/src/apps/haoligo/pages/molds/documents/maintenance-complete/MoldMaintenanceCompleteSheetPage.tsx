@@ -3,6 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -904,11 +905,11 @@ export function MoldMaintenanceCompleteSheetPage({
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
           </Button>
           {canPrintComplete ? (
-            <Button
+            <Button{...rowActionKind('update')} key="edit"
               type="link"
               size="small"
               icon={<PrinterOutlined />}
@@ -920,8 +921,7 @@ export function MoldMaintenanceCompleteSheetPage({
               打印报告
             </Button>
           ) : null}
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             disabled={!canUpdateComplete}
@@ -929,8 +929,7 @@ export function MoldMaintenanceCompleteSheetPage({
           >
             编辑
           </Button>
-          <Button
-            type="link"
+          <Button key="delete" {...rowActionKind('delete')} type="link"
             size="small"
             danger
             icon={<DeleteOutlined />}
@@ -1146,7 +1145,7 @@ export function MoldMaintenanceCompleteSheetPage({
               actionRender={(field, action, _defaultActionDom, count) => {
                 if (!isEdit || isDetailView || count <= 1) return [];
                 return [
-                  <Tooltip key="remove" title="删除">
+                  <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
                     <Button
                       type="text"
                       danger

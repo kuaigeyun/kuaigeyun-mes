@@ -25,6 +25,7 @@ from apps.haoligo.constants.equipment_maintenance import (
 from apps.haoligo.constants.equipment_sheet_rule_codes import HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_SHEET_NO
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
 from apps.haoligo.services.equipment_upkeep_scheme import build_equipment_upkeep_completion_storage
+from apps.haoligo.authorization.workflow_permissions import EQUIPMENT_UPKEEP_COMPLETE_CREATE_PERMISSIONS
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -33,7 +34,14 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/equipment/upkeep-complete-sheets",
     tags=["App · HaoliGO · 设备维保完成单"],
-    dependencies=[Depends(require_haoligo_module_access("equipment-documents-upkeep-complete"))],
+    dependencies=[
+        Depends(
+            require_haoligo_module_access(
+                "equipment-documents-upkeep-complete",
+                collection_create_permissions=EQUIPMENT_UPKEEP_COMPLETE_CREATE_PERMISSIONS,
+            )
+        )
+    ],
 )
 
 ServiceTypeLiteral = Literal["维修", "保养"]

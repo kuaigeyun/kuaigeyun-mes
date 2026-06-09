@@ -2,6 +2,7 @@
  * 应付单列表页
  */
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
@@ -211,7 +212,7 @@ const PayableList: React.FC = () => {
             render: (_, record) =>
                 renderRowActionsOverflow(
                     [
-                        <Button
+                        <Button {...rowActionKind('read')}
                             key="det"
                             type="link"
                             size="small"
@@ -220,7 +221,7 @@ const PayableList: React.FC = () => {
                         >
                             详情
                         </Button>,
-                        <UniWorkflowActions
+                        <UniWorkflowActions {...rowActionKind('skip')}
                             key="wf"
                             record={record}
                             entityName="应付单"
@@ -239,7 +240,7 @@ const PayableList: React.FC = () => {
                             onSuccess={() => actionRef.current?.reload()}
                         />,
                         record.remaining_amount > 0 ? (
-                            <Button
+                            <Button {...rowActionKind('execute')}
                                 key="pay"
                                 type="link"
                                 size="small"

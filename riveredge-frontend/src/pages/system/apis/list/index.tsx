@@ -59,7 +59,7 @@ import {
 } from '../../../../services/apiManagement'
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts'
 import { extractProTableSort, mergeListKeyword, mapApiListSortField } from '../../../../utils/tableQueryKey'
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow'
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action'
 
 const { TextArea } = Input
 const { Text, Paragraph } = Typography
@@ -579,19 +579,19 @@ const APIListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
             {t('pages.system.apis.view')}
           </Button>,
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('pages.system.apis.edit')}
           </Button>,
-          <Button key="test" type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleTest(record)}>
+          <Button key="test" {...rowActionKind('read')} type="link" size="small" icon={<ThunderboltOutlined />} onClick={() => handleTest(record)}>
             {t('pages.system.apis.test')}
           </Button>,
         ]
         if (!record.is_system) {
           actions.push(
-            <Popconfirm key="delete" title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.system.apis.deleteConfirmTitle')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                 {t('pages.system.apis.delete')}
               </Button>

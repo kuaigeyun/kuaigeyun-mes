@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -129,8 +130,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button
-              type="link"
+            <Button key="edit" {...rowActionKind('update')} type="link"
               size="small"
               icon={<EditOutlined />}
               onClick={() => {
@@ -140,8 +140,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             >
               {t('common.edit')}
             </Button>
-            <Button
-              type="link"
+            <Button key="delete" {...rowActionKind('delete')} type="link"
               size="small"
               danger
               icon={<DeleteOutlined />}
@@ -183,8 +182,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button
-              type="link"
+            <Button key="edit" {...rowActionKind('update')} type="link"
               size="small"
               icon={<EditOutlined />}
               onClick={async () => {
@@ -200,8 +198,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             >
               {t('common.edit')}
             </Button>
-            <Button
-              type="link"
+            <Button key="delete" {...rowActionKind('delete')} type="link"
               size="small"
               danger
               icon={<DeleteOutlined />}

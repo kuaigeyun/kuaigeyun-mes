@@ -15,7 +15,8 @@
         "build:saas": "cross-env NODE_OPTIONS=--max-old-space-size=8192 vite build src",
         "install:all": "npm install",
         "postinstall": "patch-package --patch-dir static/patch-package && node scripts/sync-libredwg-wasm.mjs",
-        "clean": "rm -rf node_modules"
+        "clean": "rm -rf node_modules",
+        "scan:row-action-kind": "node scripts/scan-row-action-kind.mjs"
     },
     "engines": {
         "node": ">=22.0.0",

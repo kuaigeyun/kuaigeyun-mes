@@ -31,7 +31,7 @@ import { qrcodeApi } from '../../../../services/qrcode';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
 
 /**
@@ -533,6 +533,7 @@ const UserListPage: React.FC = () => {
           [
             <Button
               key="view"
+              {...rowActionKind('read')}
               type="link"
               size="small"
               icon={<EyeOutlined />}
@@ -542,6 +543,7 @@ const UserListPage: React.FC = () => {
             </Button>,
             <Button
               key="edit"
+              {...rowActionKind('update')}
               type="link"
               size="small"
               icon={<EditOutlined />}
@@ -551,6 +553,7 @@ const UserListPage: React.FC = () => {
             </Button>,
             <Button
               key="reset"
+              {...rowActionKind('update')}
               type="link"
               size="small"
               icon={<ReloadOutlined />}
@@ -558,7 +561,7 @@ const UserListPage: React.FC = () => {
             >
               {t('field.user.reset')}
             </Button>,
-            <Popconfirm key="delete" title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.user.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                 {t('field.user.delete')}
               </Button>
@@ -730,7 +733,7 @@ const UserListPage: React.FC = () => {
         showExportButton={true}
         onExport={handleExport}
         toolBarActionsAfterBatch={[
-          <Button
+          <Button {...rowActionKind('read')}
             key="batch-qrcode"
             icon={<QrcodeOutlined />}
             disabled={selectedRowKeys.length === 0}

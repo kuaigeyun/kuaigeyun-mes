@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -150,7 +151,7 @@ const NonconformingLedgerPage: React.FC = () => {
       render: (_, row) => (
         <Space>
           {canUpdate && (
-            <Button
+            <Button{...rowActionKind('execute')} key="execute"
               type="link"
               onClick={() => {
                 setCurrentRow(row);
@@ -162,7 +163,7 @@ const NonconformingLedgerPage: React.FC = () => {
             </Button>
           )}
           {canStart8d && (
-            <Button type="link" onClick={() => handleStart8d(row)}>
+            <Button key="execute" {...rowActionKind('execute')} type="link" onClick={() => handleStart8d(row)}>
               发起 8D
             </Button>
           )}

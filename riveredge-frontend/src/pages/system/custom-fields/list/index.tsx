@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
@@ -866,13 +867,13 @@ const CustomFieldListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('field.customField.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('field.customField.edit')}
             </Button>,
-            <Popconfirm key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                 {t('field.customField.delete')}
               </Button>

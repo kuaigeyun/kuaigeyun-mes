@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../components/uni-action';
 /**
  * 研发知识库 — 空间与文章
  */
@@ -63,7 +64,7 @@ const KnowledgeBasePage: React.FC = () => {
       render: (_, row) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -134,7 +135,7 @@ const KnowledgeBasePage: React.FC = () => {
               }
             }}
             toolBarRender={() => [
-              <Button key="new" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+              <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
                 {'新建文章' + NEW_SHORTCUT_HINT}
               </Button>,
             ]}

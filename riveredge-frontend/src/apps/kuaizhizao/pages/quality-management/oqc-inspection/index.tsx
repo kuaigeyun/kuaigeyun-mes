@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Modal, Space, Tag, Typography } from 'antd';
@@ -122,8 +123,7 @@ const OQCInspectionPage: React.FC = () => {
       render: (_, row) => (
         <Space>
           {canUpdate && row.status === '待检验' && (
-            <Button
-              type="link"
+            <Button key="submit" {...rowActionKind('submit')} type="link"
               onClick={() => {
                 setCurrentRow(row);
                 setConductVisible(true);
@@ -143,7 +143,7 @@ const OQCInspectionPage: React.FC = () => {
               执行检验
             </Button>
           )}
-          <UniWorkflowActions
+          <UniWorkflowActions {...rowActionKind('skip')}
             key="wf"
             record={row}
             entityName="出货检验单"
@@ -223,10 +223,10 @@ const OQCInspectionPage: React.FC = () => {
           toolBarRender={() =>
             canCreate
               ? [
-                  <Button key="from-notice" type="primary" onClick={() => void openFromNoticeModal()}>
+                  <Button {...rowActionKind('create')} key="from-notice" type="primary" onClick={() => void openFromNoticeModal()}>
                     从发货通知创建
                   </Button>,
-                  <Button key="from-delivery" onClick={() => void openFromDeliveryModal()}>
+                  <Button {...rowActionKind('create')} key="from-delivery" onClick={() => void openFromDeliveryModal()}>
                     从销售出库创建
                   </Button>,
                 ]

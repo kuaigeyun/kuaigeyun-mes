@@ -3,6 +3,7 @@
  * 不走 UniWorkflowActions、站点 audit-required 或平台审批实例。
  */
 import React from 'react';
+import { rowActionKind } from '../../../components/uni-action';
 import { App, Button, Dropdown, Modal, Popconfirm, Space } from 'antd';
 import type { MenuProps } from 'antd';
 import type { MessageInstance } from 'antd/es/message/interface';
@@ -90,7 +91,7 @@ export function buildMoldSheetAuditActionElements({
       },
     ];
     return [
-      <Dropdown key="audit" menu={{ items: menuItems }} trigger={['click']}>
+      <Dropdown {...rowActionKind('skip')} key="audit" menu={{ items: menuItems }} trigger={['click']}>
         <Button type="link" size="small" icon={<AuditOutlined />} {...auditBtnProps}>
           审核
           <DownOutlined style={{ fontSize: 10, marginLeft: 2 }} />
@@ -101,7 +102,7 @@ export function buildMoldSheetAuditActionElements({
 
   if (st === '已通过' && handlers.onRevoke) {
     return [
-      <Popconfirm
+      <Popconfirm {...rowActionKind('revoke')}
         key="revoke"
         title="确认撤销审核？撤销后将回到待审核。"
         onConfirm={() => void run(handlers.onRevoke!, '已撤销审核')}

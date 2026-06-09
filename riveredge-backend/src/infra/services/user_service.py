@@ -343,6 +343,8 @@ class UserService:
         )
 
         tenant_name: Optional[str] = None
+        tenant_plan: Optional[str] = None
+        tenant_expires_at = None
         if effective_tenant_id is not None:
             tenant = await Tenant.get_or_none(id=effective_tenant_id)
             if not tenant:
@@ -351,6 +353,8 @@ class UserService:
                     detail=f"组织不存在 (id={effective_tenant_id})",
                 )
             tenant_name = tenant.name
+            tenant_plan = tenant.plan.value if tenant.plan else None
+            tenant_expires_at = tenant.expires_at
 
         from core.services.authorization.data_scope_service import DataScopeService
 
@@ -391,6 +395,8 @@ class UserService:
             "avatar": user.avatar,
             "tenant_id": effective_tenant_id,
             "tenant_name": tenant_name,
+            "tenant_plan": tenant_plan,
+            "tenant_expires_at": tenant_expires_at,
             "is_active": user.is_active,
             "is_infra_admin": user.is_infra_admin,
             "is_tenant_admin": user.is_tenant_admin,

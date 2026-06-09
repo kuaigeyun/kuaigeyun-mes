@@ -8,6 +8,7 @@
  */
 
 import React from 'react';
+import { rowActionKind, type RowActionPermissionKind } from '../uni-action';
 import { Space, Button, Dropdown, Modal, Tooltip } from 'antd';
 import type { MenuProps } from 'antd';
 
@@ -42,6 +43,8 @@ export interface DocumentActionButtonProps {
 
 export interface ActionDescriptor {
   key: string;
+  /** manifest 标准 action，行内 RBAC 唯一依据 */
+  permissionKind: RowActionPermissionKind;
   label: React.ReactNode;
   onClick?: () => void;
   visible?: boolean;
@@ -62,7 +65,7 @@ export function DetailButton({
   icon?: React.ReactNode;
 }) {
   return (
-    <Button type="link" size="small" icon={icon} onClick={onClick}>
+    <Button {...rowActionKind('read')} type="link" size="small" icon={icon} onClick={onClick}>
       {label}
     </Button>
   );
@@ -83,7 +86,7 @@ export function EditButton({
   disabledReason?: string;
 }) {
   const btn = (
-    <Button type="link" size="small" icon={icon} onClick={onClick} disabled={disabled}>
+    <Button {...rowActionKind('update')} type="link" size="small" icon={icon} onClick={onClick} disabled={disabled}>
       {label}
     </Button>
   );
@@ -128,7 +131,7 @@ export function DeleteButton({
     }
   };
   const btn = (
-    <Button type="link" size="small" danger icon={icon} onClick={handleClick} disabled={disabled}>
+    <Button {...rowActionKind('delete')} type="link" size="small" danger icon={icon} onClick={handleClick} disabled={disabled}>
       {label}
     </Button>
   );
@@ -165,7 +168,7 @@ export function MoreDropdown({
     onClick: it.onClick,
   }));
   return (
-    <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+    <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
       {children ?? (
         <Button type="link" size="small">
           更多
@@ -227,6 +230,7 @@ export function UnifiedRowActions({
     const btn = (
       <Button
         key={action.key}
+        {...rowActionKind(action.permissionKind)}
         type="link"
         size="small"
         danger={action.danger}
@@ -238,7 +242,7 @@ export function UnifiedRowActions({
     );
     if (action.disabled && action.disabledReason) {
       return (
-        <Tooltip key={action.key} title={action.disabledReason}>
+        <Tooltip key={action.key} {...rowActionKind('skip')} title={action.disabledReason}>
           {btn}
         </Tooltip>
       );

@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 统一需求计算页面
  *
@@ -1440,26 +1441,26 @@ const DemandComputationPage: React.FC = () => {
         const canRecompute =
           record.computation_status === '完成' || record.computation_status === '失败'
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
+          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
             详情
           </Button>,
         ]
         if (canExecute) {
           parts.push(
-            <Button key="ex" type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
+            <Button {...rowActionKind('execute')} key="ex" type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
               执行计算
             </Button>
           )
         }
         if (canRecompute) {
           parts.push(
-            <Button key="rc" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
+            <Button {...rowActionKind('recycle')} key="rc" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
               重新计算
             </Button>
           )
         }
         parts.push(
-          <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+          <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
             删除
           </Button>
         )

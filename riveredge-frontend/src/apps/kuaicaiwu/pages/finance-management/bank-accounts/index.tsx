@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -47,7 +48,7 @@ const BankAccountsPage: React.FC = () => {
         <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>流水</a>,
         <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>导入</a>,
         <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>编辑</a>,
-        <Popconfirm
+        <Popconfirm {...rowActionKind('delete')}
           key="del"
           title="确认删除该银行账户？"
           onConfirm={async () => {

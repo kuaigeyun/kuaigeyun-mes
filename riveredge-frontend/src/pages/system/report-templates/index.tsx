@@ -20,11 +20,12 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Descriptions } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, HighlightOutlined, EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
+import { rowActionKind } from '../../../components/uni-action';
 import { apiRequest } from '../../../services/api';
 
 /**
@@ -313,6 +314,7 @@ const ReportTemplatesPage: React.FC = () => {
             type="link"
             size="small"
             icon={<EyeOutlined />}
+            {...rowActionKind('read')}
             onClick={() => handleDetail([record.id!])}
           >
             {t('pages.system.reportTemplates.view')}
@@ -320,7 +322,8 @@ const ReportTemplatesPage: React.FC = () => {
           <Button
             type="link"
             size="small"
-            icon={<EditOutlined />}
+            icon={<HighlightOutlined />}
+            {...rowActionKind('update')}
             onClick={() => handleDesign(record)}
           >
             {t('pages.system.reportTemplates.design')}
@@ -330,6 +333,7 @@ const ReportTemplatesPage: React.FC = () => {
             size="small"
             danger
             icon={<DeleteOutlined />}
+            {...rowActionKind('delete')}
             onClick={() => handleDelete([record.id!])}
           >
             {t('pages.system.reportTemplates.delete')}

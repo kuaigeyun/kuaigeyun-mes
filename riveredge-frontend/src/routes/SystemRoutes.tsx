@@ -221,7 +221,7 @@ const SystemRoutes: React.FC = () => (
 
     <Route path="/system/print-devices" element={withPermission(withSuspense(PrintDevicesPage), ['system:print-device:read'])} />
     <Route path="/system/print-templates" element={withPermission(withSuspense(PrintTemplatesPage), ['system:print-template:read'])} />
-    <Route path="/system/print-templates/design/:uuid" element={withPermission(withSuspense(PrintTemplateDesignPage), ['system:print-template:read'])} />
+    <Route path="/system/print-templates/design/:uuid" element={withPermission(withSuspense(PrintTemplateDesignPage), ['system:print-template:update'])} />
     <Route path="/system/code-rules" element={withPermission(withSuspense(CodeRulesPage), ['system:code-rule:read'])} />
     <Route path="/system/data-dictionaries" element={withPermission(withSuspense(DataDictionariesPage), ['system:data-dictionary:read'])} />
     <Route path="/system/data-sources" element={withPermission(withSuspense(DataSourcesPage), ['system:data-source:read'])} />
@@ -231,7 +231,7 @@ const SystemRoutes: React.FC = () => (
       element={withPermission(withSuspense(InitialDataImportPage), ['kuaizhizao:warehouse-management-initial-data:read'])}
     />
     <Route path="/system/datasets" element={withPermission(withSuspense(DatasetsPage), ['system:dataset:read'])} />
-    <Route path="/system/datasets/designer" element={withPermission(withSuspense(DatasetDesignerPage), ['system:dataset:read'])} />
+    <Route path="/system/datasets/designer" element={withPermission(withSuspense(DatasetDesignerPage), ['system:dataset:update'])} />
 
     <Route path="/system/data-backups" element={withPermission(withSuspense(DataBackupsPage), ['system:data-backup:read'])} />
     <Route path="/system/custom-fields" element={withPermission(withSuspense(CustomFieldsPage), ['system:custom-field:read'])} />
@@ -245,7 +245,7 @@ const SystemRoutes: React.FC = () => (
     <Route path="/system/menus" element={withPermission(withSuspense(MenusPage), ['system:menu:read'])} />
     <Route path="/system/files" element={withPermission(withSuspense(FilesPage), ['system:file:read'])} />
     <Route path="/system/approval-processes" element={withPermission(withSuspense(ApprovalProcessesPage), ['system:approval-process:read'])} />
-    <Route path="/system/approval-processes/designer" element={withPermission(withSuspense(ApprovalProcessDesignerPage), ['system:approval-process:read'])} />
+    <Route path="/system/approval-processes/designer" element={withPermission(withSuspense(ApprovalProcessDesignerPage), ['system:approval-process:update'])} />
     <Route path="/system/approval-instances" element={withPermission(withSuspense(ApprovalInstancesPage), ['system:approval-instance:read'])} />
     <Route path="/system/report-templates" element={withPermission(withSuspense(ReportTemplatesPage), ['system:report-template:read'])} />
     <Route path="/system/report-templates/:id/design" element={withPermission(withSuspense(ReportDesignPage), ['system:report-template:read'])} />

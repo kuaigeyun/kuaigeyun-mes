@@ -4,6 +4,7 @@
  * 记录从客户收取的款项，可用于核销应收单。
  */
 import React, { useRef, useState, useEffect } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -359,26 +360,26 @@ const ReceiptsPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+            <Button {...rowActionKind('read')} key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
               详情
             </Button>,
             record.status === 'Draft' ? (
-              <Button key="cf" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+              <Button {...rowActionKind('audit')} key="cf" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
                 确认
               </Button>
             ) : null,
             record.status === 'Confirmed' ? (
-              <Button key="st" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
+              <Button {...rowActionKind('submit')} key="st" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
                 核销
               </Button>
             ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 ? (
-              <Button key="ca" type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancel(record)}>
+              <Button {...rowActionKind('revoke')} key="ca" type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancel(record)}>
                 作废
               </Button>
             ) : null,
             record.status !== 'Confirmed' ? (
-              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
                 删除
               </Button>
             ) : null,

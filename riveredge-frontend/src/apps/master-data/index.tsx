@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PageSkeleton from '../../components/page-skeleton';
 import SuspendedModalFloatingButton from './components/SuspendedModalFloatingButton';
+import PermissionGuard from '../../components/permission/PermissionGuard';
 
 /** 页面懒加载包装：Suspense + Spin fallback */
 const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.ComponentType<any>>) => (
@@ -88,10 +89,18 @@ const MasterDataApp: React.FC = () => {
       <Route path="process/product-process" element={withPageSuspense(ProductProcessPage)} />
       <Route path="process/drawings" element={withPageSuspense(DrawingsPage)} />
       <Route path="process/engineering-bom" element={withPageSuspense(BOMPage)} />
-      <Route path="process/engineering-bom/designer" element={withPageSuspense(BOMDesignerPage)} />
+      <Route path="process/engineering-bom/designer" element={
+        <PermissionGuard permission="master-data:process:engineering-bom:update" fallback={<Navigate to="../engineering-bom" replace />}>
+          {withPageSuspense(BOMDesignerPage)}
+        </PermissionGuard>
+      } />
       <Route path="process/sop" element={withPageSuspense(SOPPage)} />
       <Route path="process/sop/create" element={<Navigate to="../sop?create=1" replace />} />
-      <Route path="process/sop/designer" element={withPageSuspense(ESOPDesignerPage)} />
+      <Route path="process/sop/designer" element={
+        <PermissionGuard permission="master-data:process:sop:update" fallback={<Navigate to="../sop" replace />}>
+          {withPageSuspense(ESOPDesignerPage)}
+        </PermissionGuard>
+      } />
       <Route path="process/sop/execution" element={withPageSuspense(SOPExecutionPage)} />
 
       {/* 供应链路由 */}

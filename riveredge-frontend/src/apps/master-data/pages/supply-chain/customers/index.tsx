@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -735,23 +736,20 @@ const CustomersPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             {t('field.customField.view')}
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm
-            title={t('app.master-data.customers.deleteConfirm')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.customers.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -972,7 +970,7 @@ const CustomersPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -980,7 +978,7 @@ const CustomersPage: React.FC = () => {
           >
             {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}

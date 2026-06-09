@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 异常处理流程管理页面
  *
@@ -364,26 +365,26 @@ const ExceptionProcessPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>
           {record.process_status === 'pending' && (
-            <Button type="link" size="small" icon={<UserOutlined />} onClick={() => openAssignModal(record)}>
+            <Button{...rowActionKind('audit')} key="approve" type="link" size="small" icon={<UserOutlined />} onClick={() => openAssignModal(record)}>
               分配
             </Button>
           )}
           {record.process_status === 'processing' && (
             <>
-              <Button type="link" size="small" icon={<ArrowRightOutlined />} onClick={() => openStepTransitionModal(record)}>
+              <Button{...rowActionKind('audit')} key="approve" type="link" size="small" icon={<ArrowRightOutlined />} onClick={() => openStepTransitionModal(record)}>
                 流转
               </Button>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => openResolveModal(record)}>
+              <Button key="approve" {...rowActionKind('audit')} type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => openResolveModal(record)}>
                 解决
               </Button>
             </>
           )}
           {['pending', 'processing'].includes(record.process_status || '') && (
-            <Button type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(record)}>
+            <Button key="reject" {...rowActionKind('reject')} type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(record)}>
               取消
             </Button>
           )}

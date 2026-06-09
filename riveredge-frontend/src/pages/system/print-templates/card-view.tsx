@@ -8,7 +8,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { App, Card, Tag, Space, Button, Modal, Descriptions, Popconfirm, Statistic, Row, Col, Badge, Typography, Empty, Tooltip, Alert, Input, List, Divider, Select, theme } from 'antd';
-import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, CodeOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
+import { EyeOutlined, EditOutlined, DeleteOutlined, PrinterOutlined, ReloadOutlined, FileTextOutlined, HighlightOutlined, SettingOutlined, FileOutlined, PlusOutlined } from '@ant-design/icons';
 import { PageContainer, ProFormText, ProFormTextArea, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
@@ -426,7 +426,7 @@ const CardView: React.FC = () => {
                           />
                         </Tooltip>,
                         <Tooltip title={t('pages.system.printTemplates.design')}>
-                          <CodeOutlined
+                          <HighlightOutlined
                             key="designer"
                             onClick={() => handleOpenDesigner(template)}
                             style={{ fontSize: 16, color: '#52c41a' }}

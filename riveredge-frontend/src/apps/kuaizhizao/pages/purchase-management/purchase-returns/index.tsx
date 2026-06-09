@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useMemo, useEffect, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -652,7 +653,7 @@ const PurchaseReturnsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="d"
             type="link"
             size="small"
@@ -667,7 +668,7 @@ const PurchaseReturnsPage: React.FC = () => {
         ];
         if (record.status === '待退货' || record.status === '草稿') {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="e"
               type="link"
               size="small"
@@ -683,7 +684,7 @@ const PurchaseReturnsPage: React.FC = () => {
         }
         if (record.status === '待退货') {
           parts.push(
-            <Button
+            <Button {...rowActionKind('read')}
               key="c"
               type="link"
               size="small"
@@ -700,7 +701,7 @@ const PurchaseReturnsPage: React.FC = () => {
         }
         if (record.status === '已退货') {
           parts.push(
-            <Button
+            <Button {...rowActionKind('skip')}
               key="w"
               type="link"
               size="small"

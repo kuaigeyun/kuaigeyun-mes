@@ -1,4 +1,5 @@
 import React, { useState, useRef, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
 import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button } from 'antd';
@@ -390,7 +391,7 @@ const SettlementPage: React.FC = () => {
         open={helpOpen}
         onCancel={() => setHelpOpen(false)}
         footer={[
-          <Button key="close" type="primary" onClick={() => setHelpOpen(false)}>
+          <Button {...rowActionKind('close')} key="close" type="primary" onClick={() => setHelpOpen(false)}>
             知道了
           </Button>,
         ]}

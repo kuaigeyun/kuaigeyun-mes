@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -347,7 +348,7 @@ const SystemParameterListPage: React.FC = () => {
           borderRadius: themeToken.borderRadiusLG,
         }}
         actions={[
-          <Button
+          <Button {...rowActionKind('read')}
             key="view"
             type="link"
             icon={<EyeOutlined />}
@@ -355,7 +356,7 @@ const SystemParameterListPage: React.FC = () => {
           >
             {t('field.systemParameter.view')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('update')}
             key="edit"
             type="link"
             icon={<EditOutlined />}
@@ -363,7 +364,7 @@ const SystemParameterListPage: React.FC = () => {
           >
             {t('field.systemParameter.edit')}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('field.systemParameter.deleteConfirm')}
             onConfirm={() => handleDelete(item)}
@@ -518,7 +519,7 @@ const SystemParameterListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="view"
               type="link"
               size="small"
@@ -527,7 +528,7 @@ const SystemParameterListPage: React.FC = () => {
             >
               {t('field.systemParameter.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -536,7 +537,7 @@ const SystemParameterListPage: React.FC = () => {
             >
               {t('field.systemParameter.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('field.systemParameter.deleteConfirm')}
               onConfirm={() => handleDelete(record)}

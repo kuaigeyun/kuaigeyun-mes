@@ -7,6 +7,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { rowActionKind } from '../../../components/uni-action';
 import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
   DeleteOutlined,
@@ -596,13 +597,13 @@ const MenuListPage: React.FC = () => {
             const canSetHome =
               record.is_active && !record.is_external && !!(record.path && String(record.path).trim());
             const actions: React.ReactNode[] = [
-              <Button key="detail" type="default" size="small" onClick={() => handleView(record)}>
+              <Button {...rowActionKind('read')} key="detail" type="default" size="small" onClick={() => handleView(record)}>
                 {t('common.detail')}
               </Button>,
-              <Button key="edit" type="primary" size="small" onClick={() => handleEdit(record)}>
+              <Button {...rowActionKind('update')} key="edit" type="primary" size="small" onClick={() => handleEdit(record)}>
                 {t('pages.system.menus.edit')}
               </Button>,
-              <Tooltip
+              <Tooltip {...rowActionKind('update')}
                 key="setHome"
                 title={canSetHome ? undefined : t('pages.system.menus.setBackendHomeDisabled')}
               >
@@ -618,7 +619,7 @@ const MenuListPage: React.FC = () => {
                   </Button>
                 </span>
               </Tooltip>,
-              <Popconfirm
+              <Popconfirm {...rowActionKind('delete')}
                 key="delete"
                 title={t('pages.system.menus.deleteConfirm')}
                 onConfirm={() => handleDelete(record)}
@@ -638,7 +639,7 @@ const MenuListPage: React.FC = () => {
                   </span>
                 </Tooltip>
               </Popconfirm>,
-              <Tooltip
+              <Tooltip {...rowActionKind('create')}
                 key="addChild"
                 title={isAppMenu ? t('menu.system.appMenuAddDisabled') : undefined}
               >
@@ -714,7 +715,7 @@ const MenuListPage: React.FC = () => {
             toolBarRender={() => [
               ...(backendHome?.menu_uuid
                 ? [
-                    <Popconfirm
+                    <Popconfirm {...rowActionKind('update')}
                       key="clearBackendHome"
                       title={t('pages.system.menus.clearBackendHomeConfirm')}
                       onConfirm={() => void handleClearBackendHome()}
@@ -723,7 +724,7 @@ const MenuListPage: React.FC = () => {
                     </Popconfirm>,
                   ]
                 : []),
-                 <Button
+                 <Button {...rowActionKind('skip')}
                     key="toggleExpand"
                     onClick={() => {
                     if (expandedRowKeys.length > 0) {

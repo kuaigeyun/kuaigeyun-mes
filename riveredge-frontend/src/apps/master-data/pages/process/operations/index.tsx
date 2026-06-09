@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions, Select, Typography } from 'antd';
@@ -585,23 +586,20 @@ const OperationsPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: Operation) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             详情
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
-          <Popconfirm
-            title={t('common.confirmDelete')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             description={t('app.master-data.operations.deleteConfirmDesc')}
             onConfirm={() => handleDelete(record)}
           >
@@ -676,7 +674,7 @@ const OperationsPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -685,7 +683,7 @@ const OperationsPage: React.FC = () => {
             {'新建工序' + NEW_SHORTCUT_HINT}
           </Button>,
           trialRunMode && (
-          <Button
+          <Button {...rowActionKind('import')}
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -708,7 +706,7 @@ const OperationsPage: React.FC = () => {
             {t('field.operation.loadPreset')}
           </Button>
           ),
-          <Button
+          <Button {...rowActionKind('read')}
             key="batch-qrcode"
             icon={<QrcodeOutlined />}
             disabled={selectedRowKeys.length === 0}
@@ -716,7 +714,7 @@ const OperationsPage: React.FC = () => {
           >
             批量生成二维码
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}
@@ -800,8 +798,8 @@ const OperationsPage: React.FC = () => {
         onCancel={() => setPresetModalVisible(false)}
         width={760}
         footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
-          <Button
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button {...rowActionKind('audit')}
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}

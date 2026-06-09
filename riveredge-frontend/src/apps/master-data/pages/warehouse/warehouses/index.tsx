@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 仓库管理页面
  * 
@@ -633,23 +634,20 @@ const WarehousesPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             {t('field.customField.view')}
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             {t('field.customField.edit')}
           </Button>
-          <Popconfirm
-            title={t('app.master-data.warehouses.deleteConfirm')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.warehouses.deleteConfirm')}
             description={t('app.master-data.warehouses.deleteDescription')}
             onConfirm={() => handleDelete(record)}
           >
@@ -781,7 +779,7 @@ const WarehousesPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -790,7 +788,7 @@ const WarehousesPage: React.FC = () => {
             {t('app.master-data.warehouses.create') + NEW_SHORTCUT_HINT}
           </Button>,
           trialRunMode && (
-          <Button
+          <Button {...rowActionKind('import')}
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -810,7 +808,7 @@ const WarehousesPage: React.FC = () => {
             {t('field.warehouse.loadPreset')}
           </Button>
           ),
-          <Button
+          <Button {...rowActionKind('update')}
             key="syncLineSide"
             loading={syncLineSideLoading}
             onClick={async () => {
@@ -828,7 +826,7 @@ const WarehousesPage: React.FC = () => {
           >
             {t('field.warehouse.syncLineSide')}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="batchDelete"
             title={t('app.master-data.warehouses.batchDeleteTitle')}
             description={t('app.master-data.warehouses.batchDeleteDescription', { count: selectedRowKeys.length })}
@@ -918,8 +916,8 @@ const WarehousesPage: React.FC = () => {
         onCancel={() => setPresetModalVisible(false)}
         width={560}
         footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
-          <Button
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>{t('common.cancel')}</Button>,
+          <Button {...rowActionKind('audit')}
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}

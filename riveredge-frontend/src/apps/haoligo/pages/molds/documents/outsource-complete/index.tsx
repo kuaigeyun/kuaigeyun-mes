@@ -53,7 +53,7 @@ import {
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
-import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
 import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
@@ -869,12 +869,12 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           onRevoke: () => revokeApprovalMoldOutsourceMaintenanceCompleteSheet(record.id),
         };
         const actions: React.ReactNode[] = [
-          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             详情
           </Button>,
           ...(canPrintComplete
             ? [
-                <Button
+                <Button {...rowActionKind('print')}
                   key="print"
                   type="link"
                   size="small"
@@ -888,7 +888,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                 </Button>,
               ]
             : []),
-          <Button
+          <Button {...rowActionKind('update')}
             key="edit"
             type="link"
             size="small"
@@ -898,7 +898,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           >
             编辑
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="delete"
             type="link"
             size="small"
@@ -1151,7 +1151,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                 actionRender={(field, action, _defaultActionDom, count) => {
                   if (!isEdit || isDetailView || count <= 1) return [];
                   return [
-                    <Tooltip key="remove" title="删除">
+                    <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
                       <Button
                         type="text"
                         danger

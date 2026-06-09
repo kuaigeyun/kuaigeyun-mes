@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工装领用归还页面
  *
@@ -192,7 +193,7 @@ const ToolUsagesPage: React.FC = () => {
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
         toolBarRender={() => [
-          <Button key="checkout" type="primary" icon={<PlusOutlined />} onClick={handleCheckout}>
+          <Button {...rowActionKind('update')} key="checkout" type="primary" icon={<PlusOutlined />} onClick={handleCheckout}>
             新建工装领用
           </Button>,
         ]}

@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -406,13 +407,13 @@ const PrintDeviceListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title={t('pages.system.printDevices.viewDetail')}>
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.printDevices.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(device)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="test" title={t('pages.system.printDevices.testConnection')}>
+          <Tooltip {...rowActionKind('read')} key="test" title={t('pages.system.printDevices.testConnection')}>
             <CheckCircleOutlined
               onClick={() => handleTest(device)}
               disabled={!device.is_active}
@@ -422,7 +423,7 @@ const PrintDeviceListPage: React.FC = () => {
               }}
             />
           </Tooltip>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('pages.system.printDevices.deleteConfirmTitle')}
             onConfirm={() => handleDelete(device)}
@@ -614,13 +615,13 @@ const PrintDeviceListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.printTemplates.detail')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.printTemplates.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.printDevices.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
@@ -631,7 +632,7 @@ const PrintDeviceListPage: React.FC = () => {
                 {t('pages.system.printDevices.deleteTooltip')}
               </Button>
             </Popconfirm>,
-            <Button
+            <Button {...rowActionKind('read')}
               key="test"
               type="link"
               size="small"
@@ -641,7 +642,7 @@ const PrintDeviceListPage: React.FC = () => {
             >
               {t('pages.system.printDevices.testConnection')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('print')}
               key="print"
               type="link"
               size="small"
@@ -651,7 +652,7 @@ const PrintDeviceListPage: React.FC = () => {
             >
               {t('pages.system.printDevices.printTask')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('print')}
               key="print-test"
               type="link"
               size="small"

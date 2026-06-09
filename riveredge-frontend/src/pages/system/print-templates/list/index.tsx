@@ -11,7 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance, ProForm } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Modal, Form, Space, Typography, Tooltip, Card, theme, Descriptions } from 'antd';
-import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EyeOutlined, PrinterOutlined, FileTextOutlined, EditOutlined, HighlightOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
@@ -33,7 +33,7 @@ import {
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 import dayjs from 'dayjs';
@@ -379,20 +379,20 @@ const PrintTemplateListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title={t('pages.system.printTemplates.viewDetail')}>
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.printTemplates.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(template)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
-          <Tooltip key="render" title={t('pages.system.printTemplates.renderTemplate')}>
+          <Tooltip {...rowActionKind('print')} key="render" title={t('pages.system.printTemplates.renderTemplate')}>
             <PrinterOutlined
               onClick={() => handleRender(template)}
               disabled={!template.is_active}
               style={{ fontSize: 16, color: template.is_active ? '#722ed1' : '#d9d9d9' }}
             />
           </Tooltip>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('pages.system.printTemplates.deleteConfirmTitle')}
             onConfirm={() => handleDelete(template)}
@@ -557,17 +557,30 @@ const PrintTemplateListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
+      uniActionRenderOptions: { directMax: 4 },
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.printTemplates.detail')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.printTemplates.edit')}
+            </Button>,
+            <Button
+              key="design"
+              {...rowActionKind('update')}
+              type="link"
+              size="small"
+              icon={<HighlightOutlined />}
+              onClick={() => handleOpenDesigner(record)}
+              data-action-priority={2}
+            >
+              {t('pages.system.printTemplates.design')}
             </Button>,
             <Popconfirm
               key="delete"
+              {...rowActionKind('delete')}
               title={t('pages.system.printTemplates.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
@@ -577,15 +590,6 @@ const PrintTemplateListPage: React.FC = () => {
                 {t('pages.system.printTemplates.deleteTooltip')}
               </Button>
             </Popconfirm>,
-            <Button
-              key="design"
-              type="link"
-              size="small"
-              icon={<ApartmentOutlined />}
-              onClick={() => handleOpenDesigner(record)}
-            >
-              {t('pages.system.printTemplates.design')}
-            </Button>,
           ],
           `print-template-${record.uuid}`,
         ),
@@ -702,7 +706,7 @@ const PrintTemplateListPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteButtonText={t('pages.system.printTemplates.batchDelete')}
           toolBarRender={() => [
-            <Button key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
+            <Button {...rowActionKind('import')} key="loadPreset" onClick={handleLoadPreset} loading={presetLoading}>
               {t('pages.system.printTemplates.loadPresetButton')}
             </Button>
           ]}

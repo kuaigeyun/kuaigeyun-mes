@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -405,14 +406,14 @@ const DataBackupsPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title={t('pages.system.dataBackups.viewDetail')}>
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.dataBackups.viewDetail')}>
             <EyeOutlined
               onClick={() => handleViewDetail(backup)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
           backup.status === 'success' ? (
-            <Tooltip key="download" title={t('pages.system.dataBackups.downloadBackup')}>
+            <Tooltip {...rowActionKind('read')} key="download" title={t('pages.system.dataBackups.downloadBackup')}>
               <DownloadOutlined
                 onClick={() => handleDownload(backup)}
                 style={{ fontSize: 16, color: '#52c41a' }}
@@ -420,14 +421,14 @@ const DataBackupsPage: React.FC = () => {
             </Tooltip>
           ) : null,
           backup.status === 'success' ? (
-            <Tooltip key="restore" title={t('pages.system.dataBackups.restoreBackup')}>
+            <Tooltip {...rowActionKind('update')} key="restore" title={t('pages.system.dataBackups.restoreBackup')}>
               <ReloadOutlined
                 onClick={() => handleRestore(backup)}
                 style={{ fontSize: 16, color: '#1890ff' }}
               />
             </Tooltip>
           ) : null,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('pages.system.dataBackups.deleteConfirmTitle')}
             onConfirm={() => handleDelete(backup)}
@@ -610,13 +611,13 @@ const DataBackupsPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: DataBackup) => {
         const actions: React.ReactNode[] = [
-          <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+          <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
         if (record.status === 'success') {
           actions.push(
-            <Button
+            <Button {...rowActionKind('read')}
               key="download"
               type="link"
               size="small"
@@ -627,13 +628,13 @@ const DataBackupsPage: React.FC = () => {
             </Button>,
           );
           actions.push(
-            <Button key="restore" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRestore(record)}>
+            <Button {...rowActionKind('update')} key="restore" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRestore(record)}>
               {t('pages.system.dataBackups.restore')}
             </Button>,
           );
         }
         actions.push(
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('pages.system.dataBackups.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}
@@ -803,7 +804,7 @@ const DataBackupsPage: React.FC = () => {
           showExportButton={true}
           exportButtonText={t('pages.system.dataBackups.downloadBackup')}
           rightToolBarActionsBeforeExport={[
-            <Button
+            <Button {...rowActionKind('import')}
               key="upload"
               icon={<UploadOutlined />}
               onClick={() => setUploadModalVisible(true)}

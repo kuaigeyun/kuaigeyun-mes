@@ -7,6 +7,7 @@
  * - /finance-management/purchase-invoices -> 进项发票(采购)
  */
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Popconfirm, Typography } from 'antd';
 import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -186,7 +187,7 @@ const InvoiceList: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="det"
               type="link"
               size="small"
@@ -195,7 +196,7 @@ const InvoiceList: React.FC = () => {
             >
               详情
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="ed"
               type="link"
               size="small"
@@ -204,7 +205,7 @@ const InvoiceList: React.FC = () => {
             >
               编辑
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="del"
               title="确定要删除吗？"
               onConfirm={async () => {

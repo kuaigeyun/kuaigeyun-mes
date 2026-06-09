@@ -32,11 +32,16 @@ import {
   readNodeText,
   normalizeActionLabelText,
   resolveActionKind,
-  resolveButtonTone,
+  resolveButtonToneFromNode,
+  readExplicitActionKind,
   type ResolvedRowActionTone,
-  isAuditSemanticAction,
   isAppLocalAuditAction,
 } from './actionText'
+
+function isAuditSemanticRowAction(node: React.ReactNode): boolean {
+  const explicit = readExplicitActionKind(node)
+  return explicit === 'audit' || explicit === 'approve' || explicit === 'reject'
+}
 
 function rowActionToneMatchesProps(tone: ResolvedRowActionTone, props: Record<string, unknown>): boolean {
   const danger =
@@ -71,39 +76,21 @@ function rowActionClassName(kind: ReturnType<typeof resolveActionKind>): string 
   return ['ant-btn-row-action', kind === 'detail' ? 'ant-btn-row-action-detail' : ''].filter(Boolean).join(' ')
 }
 
-/** 主行展示用默认图标（含从「更多」提升的常见操作），与详情/编辑/删除对齐 */
+/** 主行展示用默认图标（按显式 `data-action-kind`） */
 function defaultIconForRowAction(node: React.ReactNode): React.ReactNode | undefined {
-  const label = normalizeActionLabelText(readNodeText(node))
-  const n = label.replace(/\s+/g, '')
-  const kind = resolveActionKind(node)
-
-  if (kind === 'detail') return <EyeOutlined />
-  if (kind === 'edit') return <EditOutlined />
-  if (kind === 'delete') return <DeleteOutlined />
-  if (kind === 'items') return <UnorderedListOutlined />
-
-  if (/下推/.test(n)) return <VerticalAlignBottomOutlined />
-  if (/提交/.test(n)) return <SendOutlined />
-  if (/审核|审批/.test(n)) return <AuditOutlined />
-  if (/确认/.test(n)) return <CheckCircleOutlined />
-  if (/驳回/.test(n)) return <CloseCircleOutlined />
-  if (/执行/.test(n)) return <PlayCircleOutlined />
-  if (/发布/.test(n)) return <CloudUploadOutlined />
-  if (/启用/.test(n)) return <CheckCircleOutlined />
-  if (/停用/.test(n)) return <StopOutlined />
-  if (/同步/.test(n)) return <SyncOutlined />
-  if (/复制|拷贝/.test(n)) return <CopyOutlined />
-  if (/pdf|PDF/.test(label)) return <FilePdfOutlined />
-  if (/另存为新版本|另存为新/.test(n)) return <SaveOutlined />
-  if (/修订版|新建修订|创建新版/.test(n)) return <BranchesOutlined />
-  if (/打印/.test(n)) return <PrinterOutlined />
-  if (/导出/.test(n)) return <ExportOutlined />
-  if (/导入/.test(n)) return <ImportOutlined />
-  if (/提醒/.test(n)) return <BellOutlined />
-  if (/添加|新增|创建/.test(n)) return <PlusOutlined />
-  if (/关联/.test(n)) return <LinkOutlined />
-  if (/撤回/.test(n)) return <RollbackOutlined />
-  if (n) return <FormOutlined />
+  const explicit = readExplicitActionKind(node)
+  if (explicit === 'read' || explicit === 'display') return <EyeOutlined />
+  if (explicit === 'update') return <EditOutlined />
+  if (explicit === 'delete' || explicit === 'obsolete') return <DeleteOutlined />
+  if (explicit === 'print') return <PrinterOutlined />
+  if (explicit === 'submit') return <SendOutlined />
+  if (explicit === 'audit' || explicit === 'approve') return <AuditOutlined />
+  if (explicit === 'reject') return <CloseCircleOutlined />
+  if (explicit === 'revoke') return <RollbackOutlined />
+  if (explicit === 'execute') return <PlayCircleOutlined />
+  if (explicit === 'create') return <PlusOutlined />
+  if (explicit === 'export') return <ExportOutlined />
+  if (explicit === 'import') return <ImportOutlined />
   return undefined
 }
 
@@ -138,12 +125,12 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const props = (node as React.ReactElement<any>).props || {}
     if (
       ctx.suppressAuditSemanticActions &&
-      isAuditSemanticAction(actionText) &&
+      isAuditSemanticRowAction(node) &&
       !isAppLocalAuditAction(props as Record<string, unknown>)
     ) {
       return null
     }
-    const tone = resolveButtonTone(actionText)
+    const tone = resolveButtonToneFromNode(node)
     const rawChildrenText = readNodeText(props.children)
     const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
     const kind = resolveActionKind(node)
@@ -175,12 +162,12 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
   if (typeof node.type === 'string' && node.type.toLowerCase() === 'a') {
     const props = (node.props || {}) as Record<string, unknown>
     const text = normalizeActionLabelText(readNodeText(node))
-    const tone = resolveButtonTone(text)
+    const tone = resolveButtonToneFromNode(node)
     const kind = resolveActionKind(node)
     const defaultIcon = defaultIconForRowAction(node)
     if (
       ctx.suppressAuditSemanticActions &&
-      isAuditSemanticAction(text) &&
+      isAuditSemanticRowAction(node) &&
       !isAppLocalAuditAction(props)
     ) {
       return null

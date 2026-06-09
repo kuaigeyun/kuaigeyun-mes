@@ -1,4 +1,5 @@
 import React from 'react'
+import { Popconfirm, Tooltip } from 'antd'
 
 export function readNodeText(node: React.ReactNode): string {
   if (node == null || typeof node === 'boolean') return ''
@@ -15,18 +16,118 @@ export function normalizeActionLabelText(text: string): string {
   return trimmed
 }
 
+/** 行内操作显式权限标记（与 manifest 标准 action 对齐；skip = 组件自管 RBAC） */
+export type RowActionPermissionKind =
+  | 'skip'
+  | 'create'
+  | 'read'
+  | 'update'
+  | 'delete'
+  | 'import'
+  | 'export'
+  | 'print'
+  | 'display'
+  | 'submit'
+  | 'audit'
+  | 'approve'
+  | 'reject'
+  | 'revoke'
+  | 'execute'
+  | 'complete'
+  | 'assign'
+  | 'dispatch'
+  | 'recall'
+  | 'confirm_adjustment'
+  | 'claim'
+  | 'recycle'
+  | 'release'
+  | 'close'
+  | 'obsolete'
+
+export const ROW_ACTION_KIND_ATTR = 'data-action-kind' as const
+
+export function rowActionKind(
+  kind: RowActionPermissionKind,
+): { [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind } {
+  return { [ROW_ACTION_KIND_ATTR]: kind }
+}
+
+/** 溢出排序 / 样式用的语义分类（仅来自显式 `data-action-kind`） */
 export type ActionKind = 'detail' | 'edit' | 'delete' | 'print' | 'items' | 'common' | 'other'
 
+function readPropsActionKind(props: Record<string, unknown> | undefined): RowActionPermissionKind | null {
+  const raw = props?.[ROW_ACTION_KIND_ATTR]
+  if (typeof raw !== 'string') return null
+  const kind = raw.trim().toLowerCase()
+  return kind ? (kind as RowActionPermissionKind) : null
+}
+
+/** 从按钮树读取 `data-action-kind`（Popconfirm / Tooltip / 外层包裹均支持） */
+export function readExplicitActionKind(node: React.ReactNode): RowActionPermissionKind | null {
+  if (!React.isValidElement(node)) return null
+
+  const props = node.props as Record<string, unknown>
+  const onSelf = readPropsActionKind(props)
+  if (onSelf) return onSelf
+
+  const t = node.type
+  if (t === Popconfirm || t === Tooltip) {
+    return readExplicitActionKind(props.children as React.ReactNode)
+  }
+
+  const children = props.children
+  if (children != null) {
+    for (const child of React.Children.toArray(children)) {
+      const found = readExplicitActionKind(child)
+      if (found) return found
+    }
+  }
+
+  return null
+}
+
+/** 显式 manifest action → 溢出排序语义 */
+export function explicitKindToActionKind(kind: RowActionPermissionKind): ActionKind {
+  switch (kind) {
+    case 'read':
+    case 'display':
+      return 'detail'
+    case 'update':
+      return 'edit'
+    case 'delete':
+    case 'obsolete':
+      return 'delete'
+    case 'print':
+      return 'print'
+    case 'create':
+    case 'submit':
+    case 'audit':
+    case 'approve':
+    case 'reject':
+    case 'revoke':
+    case 'execute':
+    case 'complete':
+    case 'import':
+    case 'export':
+    case 'assign':
+    case 'dispatch':
+    case 'recall':
+    case 'confirm_adjustment':
+    case 'claim':
+    case 'recycle':
+    case 'release':
+    case 'close':
+      return 'common'
+    case 'skip':
+    default:
+      return 'other'
+  }
+}
+
 export function resolveActionKind(node: React.ReactNode): ActionKind {
-  const text = readNodeText(node).replace(/\s+/g, '').trim()
-  if (!text) return 'other'
-  if (text.includes('详情') || text.includes('查看')) return 'detail'
-  if (text.includes('编辑') || text.includes('修改') || text.includes('设置') || text.includes('配置')) return 'edit'
-  if (text.includes('删除')) return 'delete'
-  if (text.includes('打印')) return 'print'
-  if (text.includes('项') || text.includes('列表') || text.includes('明细')) return 'items'
-  if (/下推|提交|审核|确认|执行|发布|启用|停用|同步|添加|新增/.test(text)) return 'common'
-  return 'other'
+  const explicit = readExplicitActionKind(node)
+  if (!explicit) return 'other'
+  return explicitKindToActionKind(explicit)
 }
 
 export function readActionPriority(node: React.ReactNode): number | undefined {
@@ -43,9 +144,19 @@ export type ResolvedRowActionTone =
   | { mode: 'destructive'; type: 'text'; danger: true }
   | { mode: 'default'; type: 'text'; danger?: boolean }
 
-export function resolveButtonTone(text: string): ResolvedRowActionTone {
-  const normalized = text.replace(/\s+/g, '')
-  if (/删除|驳回|报废|重置|清空|清除|卸载/.test(normalized)) {
+export function resolveButtonTone(_text: string): ResolvedRowActionTone {
+  return { mode: 'default', type: 'text' }
+}
+
+export function resolveButtonToneFromNode(node: React.ReactNode): ResolvedRowActionTone {
+  const explicit = readExplicitActionKind(node)
+  if (
+    explicit === 'delete' ||
+    explicit === 'obsolete' ||
+    explicit === 'reject' ||
+    explicit === 'revoke' ||
+    explicit === 'recycle'
+  ) {
     return { mode: 'destructive', type: 'text', danger: true }
   }
   return { mode: 'default', type: 'text' }
@@ -55,16 +166,4 @@ export function resolveButtonTone(text: string): ResolvedRowActionTone {
 export function isAppLocalAuditAction(props: Record<string, unknown> | undefined): boolean {
   if (!props) return false
   return props['data-mold-sheet-audit'] != null
-}
-
-export function isAuditSemanticAction(text: string): boolean {
-  const normalized = text.replace(/\s+/g, '')
-  // 撤回/撤销审核不属于「发起审核」语义，不应被站点审核开关隐藏
-  if (/撤回|撤销/.test(normalized)) return false
-  return (
-    normalized === '确认' ||
-    normalized.includes('审核') ||
-    normalized.includes('审批') ||
-    normalized.includes('驳回')
-  )
 }

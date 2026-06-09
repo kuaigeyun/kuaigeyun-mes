@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../../components/uni-action';
 /**
  * 好力 GO — 设备维保单（维修/保养；单台设备；对齐厂内维保单头区）
  */
@@ -414,13 +415,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
             {t('app.haoligo.equipment.documents.actionDelete')}
           </Button>
         </Space>

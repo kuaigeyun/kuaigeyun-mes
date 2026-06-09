@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import type { DescriptionsProps } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -514,7 +515,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const renderFinishedRowNodes = (record: FinishedGoodsInspection): React.ReactNode[] => {
     if (record.status === '待检验' || record.inspection_result === '待检验') {
       return [
-        <Button
+        <Button {...rowActionKind('execute')}
           key="inspect"
           size="small"
           type="primary"
@@ -528,7 +529,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       ];
     }
     const nodes: React.ReactNode[] = [
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         size="small"
         type="link"
@@ -540,7 +541,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
       >
         详情
       </Button>,
-      <UniWorkflowActions
+      <UniWorkflowActions {...rowActionKind('skip')}
         key="wf"
         record={record}
         entityName="成品检验单"
@@ -576,7 +577,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
     ];
     if (record.quality_status === '不合格' && (record.unqualified_quantity || 0) > 0) {
       nodes.push(
-        <Button
+        <Button {...rowActionKind('create')}
           key="defect"
           size="small"
           type="link"
@@ -989,7 +990,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         column={3}
         extra={
           inspectionDetail && (
-            <UniWorkflowActions
+            <UniWorkflowActions {...rowActionKind('skip')}
               record={inspectionDetail}
               entityName="成品检验单"
               statusField="status"

@@ -8,6 +8,7 @@
  */
 
 import React, { useRef, useState, useEffect, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useTranslation } from 'react-i18next';
@@ -288,15 +289,15 @@ const SalesReturnsPage: React.FC = () => {
       width: 220,
       fixed: 'right',
       render: (_, record) => renderSalesReturnRowActions([
-        <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
         ...(record.status === '待退货' || record.status === '草稿' ? [
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>编辑</Button>,
+          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>编辑</Button>,
         ] : []),
         ...(record.status === '待退货' ? [
-          <Button key="confirm" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)}>确认退货</Button>,
+          <Button {...rowActionKind('audit')} key="confirm" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)}>确认退货</Button>,
         ] : []),
         ...(record.status === '已退货' ? [
-          <Button key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
+          <Button {...rowActionKind('revoke')} key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
         ] : []),
       ]),
     },

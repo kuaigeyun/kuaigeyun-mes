@@ -36,7 +36,7 @@
         "title": "app.haoligo.menu.molds",
         "path": "/apps/haoligo/molds",
         "icon": "Package",
-        "permission": "haoligo:molds:read",
+        "permission": "haoligo:workspace:read",
         "sort_order": 10,
         "children": [
           {
@@ -180,7 +180,7 @@
         "title": "app.haoligo.menu.equipment",
         "path": "/apps/haoligo/equipment",
         "icon": "Wrench",
-        "permission": "haoligo:equipment:read",
+        "permission": "haoligo:workspace:read",
         "sort_order": 20,
         "children": [
           {
@@ -339,7 +339,7 @@
         "title": "app.haoligo.menu.patrol",
         "path": "/apps/haoligo/patrol",
         "icon": "ClipboardCheck",
-        "permission": "haoligo:patrol:read",
+        "permission": "haoligo:workspace:read",
         "sort_order": 30,
         "children": [
           {
@@ -532,6 +532,9 @@
                 "icon": "check-decagram-outline",
                 "route": "/equip/upkeep-complete",
                 "permission": "haoligo:equipment-documents-upkeep-complete:read",
+                "permissions_any": [
+                  "complete_create:haoligo:equipment-documents-upkeep-sheet:haoligo:equipment-documents-upkeep-complete"
+                ],
                 "internal_only": true,
                 "icon_group": "equipUpkeep"
               },
@@ -581,7 +584,7 @@
                 "label": "巡查看板",
                 "icon": "chart-bar",
                 "route": "/patrol/dashboard",
-                "permission": "haoligo:patrol:read",
+                "permission": "haoligo:workspace:read",
                 "permissions_any": [
                   "haoligo:patrol-reports-group-volume:read",
                   "haoligo:patrol-reports-group-completion:read",
@@ -1045,12 +1048,6 @@
     ]
   },
   "permissions": [
-    "haoligo:equipment:read",
-    "haoligo:equipment:create",
-    "haoligo:equipment:delete",
-    "haoligo:equipment:update",
-    "haoligo:equipment:import",
-    "haoligo:equipment:export",
     "haoligo:equipment-categories:read",
     "haoligo:equipment-categories:create",
     "haoligo:equipment-categories:delete",
@@ -1105,6 +1102,7 @@
     "haoligo:equipment-documents-upkeep-sheet:import",
     "haoligo:equipment-documents-upkeep-sheet:export",
     "haoligo:equipment-documents-upkeep-sheet:print",
+    "haoligo:equipment-documents-upkeep-sheet:complete",
     "haoligo:equipment-documents:read",
     "haoligo:equipment-documents:create",
     "haoligo:equipment-documents:delete",
@@ -1177,12 +1175,6 @@
     "haoligo:master-data-factory-workshops:update",
     "haoligo:master-data-factory-workshops:import",
     "haoligo:master-data-factory-workshops:export",
-    "haoligo:molds:read",
-    "haoligo:molds:create",
-    "haoligo:molds:delete",
-    "haoligo:molds:update",
-    "haoligo:molds:import",
-    "haoligo:molds:export",
     "haoligo:molds-documents-borrow-out:read",
     "haoligo:molds-documents-borrow-out:create",
     "haoligo:molds-documents-borrow-out:delete",
@@ -1315,12 +1307,6 @@
     "haoligo:molds-reports-trial-record:update",
     "haoligo:molds-reports-trial-record:import",
     "haoligo:molds-reports-trial-record:export",
-    "haoligo:patrol:read",
-    "haoligo:patrol:create",
-    "haoligo:patrol:delete",
-    "haoligo:patrol:update",
-    "haoligo:patrol:import",
-    "haoligo:patrol:export",
     "haoligo:patrol-daily-form:read",
     "haoligo:patrol-daily-form:create",
     "haoligo:patrol-daily-form:delete",

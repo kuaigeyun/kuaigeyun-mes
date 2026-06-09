@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 装箱打包绑定管理页面
  *
@@ -484,7 +485,7 @@ const PackingBindingPage: React.FC = () => {
   const renderPbRowActionNodes = (record: PackingBinding): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
     nodes.push(
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -498,7 +499,7 @@ const PackingBindingPage: React.FC = () => {
       </Button>
     );
     nodes.push(
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -512,7 +513,7 @@ const PackingBindingPage: React.FC = () => {
       </Button>
     );
     nodes.push(
-      <Popconfirm
+      <Popconfirm {...rowActionKind('delete')}
         key="del"
         title="确定要删除这个装箱绑定记录吗？"
         onConfirm={() => void handleDeleteOne(record)}
@@ -728,10 +729,10 @@ const PackingBindingPage: React.FC = () => {
           onDelete={handleBatchDelete}
           scroll={{ x: 1900 }}
           toolBarRender={() => [
-            <Button key="task-pool" onClick={() => void openTaskPool()}>
+            <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
               待装箱任务池
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
               key="batch-qrcode"
               icon={<QrcodeOutlined />}
               disabled={selectedRowKeys.length === 0}

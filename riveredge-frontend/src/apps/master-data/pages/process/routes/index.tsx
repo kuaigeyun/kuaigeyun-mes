@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Descriptions } from 'antd';
@@ -470,23 +471,20 @@ const ProcessRoutesPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: ProcessRoute) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             详情
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定要删除这个工艺路线吗？"
+          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个工艺路线吗？"
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -560,7 +558,7 @@ const ProcessRoutesPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -568,7 +566,7 @@ const ProcessRoutesPage: React.FC = () => {
           >
             {'新建工艺路线' + NEW_SHORTCUT_HINT}
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}

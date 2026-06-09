@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Badge, Tag, Button, Space, Typography } from 'antd';
@@ -283,8 +284,7 @@ const UserTasksPage: React.FC = () => {
         const isPending = record.status === 'pending' && taskType === 'pending';
         return (
           <Space>
-            <Button
-              type="link"
+            <Button key="view" {...rowActionKind('read')} type="link"
               size="small"
               icon={<EyeOutlined />}
               onClick={() => handleView(record)}
@@ -293,8 +293,7 @@ const UserTasksPage: React.FC = () => {
             </Button>
             {isPending && (
               <>
-                <Button
-                  type="link"
+                <Button key="approve" {...rowActionKind('audit')} type="link"
                   size="small"
                   icon={<CheckCircleOutlined />}
                   onClick={() => handleProcessTask(record, 'approve')}
@@ -302,8 +301,7 @@ const UserTasksPage: React.FC = () => {
                   {record.data?.is_personal ? t('pages.personal.tasks.complete') : t('pages.personal.tasks.approve')}
                 </Button>
                 {!record.data?.is_personal && (
-                  <Button
-                    type="link"
+                  <Button key="reject" {...rowActionKind('reject')} type="link"
                     size="small"
                     danger
                     icon={<CloseCircleOutlined />}
@@ -315,8 +313,7 @@ const UserTasksPage: React.FC = () => {
               </>
             )}
             {taskType === 'submitted' && (
-              <Button
-                type="link"
+              <Button key="delete" {...rowActionKind('delete')} type="link"
                 size="small"
                 danger
                 icon={<DeleteOutlined />}

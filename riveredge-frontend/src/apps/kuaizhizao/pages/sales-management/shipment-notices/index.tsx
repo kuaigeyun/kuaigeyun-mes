@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
@@ -251,17 +252,17 @@ const ShipmentNoticesPage: React.FC = () => {
       width: 200,
       fixed: 'right',
       render: (_, record) => renderShipmentNoticeRowActions([
-        <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
         ...(record.status === '待发货'
           ? [
-              <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>,
-              <Button key="notify" type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)}>通知仓库</Button>,
-              <Button key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>,
+              <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>,
+              <Button {...rowActionKind('dispatch')} key="notify" type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)}>通知仓库</Button>,
+              <Button {...rowActionKind('delete')} key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>,
             ]
           : []),
         ...(record.status === '已通知'
           ? [
-              <Button key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
+              <Button {...rowActionKind('revoke')} key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
             ]
           : []),
       ]),

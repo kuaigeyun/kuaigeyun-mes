@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../components/uni-action';
 /**
  * 消息模板管理列表页面
  * 
@@ -308,13 +309,13 @@ const MessageTemplateListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.messageConfig.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.messageConfig.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.messageTemplate.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
@@ -452,7 +453,7 @@ const MessageTemplateListPage: React.FC = () => {
         deleteConfirmTitle={t('pages.system.messageConfig.batchDeleteTitle')}
         deleteConfirmDescription={(c) => t('pages.system.messageConfig.batchDeleteDescription', { count: c })}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('import')}
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {
@@ -573,7 +574,7 @@ const MessageTemplateListPage: React.FC = () => {
                 }}
                 actionRender={(_, __, defaultAction) => [
                   defaultAction[0],
-                  <span key="delete" style={{ color: '#ff4d4f' }}>
+                  <span {...rowActionKind('delete')} key="delete" style={{ color: '#ff4d4f' }}>
                     {defaultAction[1]}
                   </span>,
                 ]}

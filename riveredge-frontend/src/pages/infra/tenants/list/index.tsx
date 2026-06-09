@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -889,15 +890,13 @@ const SuperAdminTenantList: React.FC = () => {
 
         return (
           <Space wrap size={[4, 4]}>
-            <Button
-              type="link"
+            <Button key="view" {...rowActionKind('read')} type="link"
               size="small"
               onClick={() => handleOpenDetail(record.id)}
             >
               {t('pages.infra.tenant.detail')}
             </Button>
-            <Button
-              type="link"
+            <Button key="edit" {...rowActionKind('update')} type="link"
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record.id)}
@@ -905,8 +904,7 @@ const SuperAdminTenantList: React.FC = () => {
               {t('common.edit')}
             </Button>
             {isSuspended && (
-              <Popconfirm
-                title={t('pages.infra.tenant.deleteRowConfirmTitle')}
+              <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.infra.tenant.deleteRowConfirmTitle')}
                 description={t('pages.infra.tenant.deleteRowConfirmContent')}
                 onConfirm={() => handleDeleteRow(record.id)}
               >
@@ -916,8 +914,7 @@ const SuperAdminTenantList: React.FC = () => {
               </Popconfirm>
             )}
             {isInactive && (
-              <Popconfirm
-                title={t('pages.infra.tenant.approveConfirm')}
+              <Popconfirm key="approve" {...rowActionKind('audit')} title={t('pages.infra.tenant.approveConfirm')}
                 onConfirm={async () => {
                   const success = await approveTenant(record.id);
                   if (success) {
@@ -931,8 +928,7 @@ const SuperAdminTenantList: React.FC = () => {
               </Popconfirm>
             )}
             {isInactive && (
-              <Popconfirm
-                title={t('pages.infra.tenant.rejectConfirm')}
+              <Popconfirm key="reject" {...rowActionKind('reject')} title={t('pages.infra.tenant.rejectConfirm')}
                 onConfirm={async () => {
                   const success = await rejectTenant(record.id);
                   if (success) {
@@ -946,8 +942,7 @@ const SuperAdminTenantList: React.FC = () => {
               </Popconfirm>
             )}
             {isSuspended && (
-              <Popconfirm
-                title={t('pages.infra.tenant.activateConfirm')}
+              <Popconfirm key="activate" {...rowActionKind('update')} title={t('pages.infra.tenant.activateConfirm')}
                 onConfirm={async () => {
                   const success = await activateTenant(record.id);
                   if (success) {
@@ -961,8 +956,7 @@ const SuperAdminTenantList: React.FC = () => {
               </Popconfirm>
             )}
             {isActive && (
-              <Popconfirm
-                title={t('pages.infra.tenant.deactivateConfirm')}
+              <Popconfirm key="activate" {...rowActionKind('update')} title={t('pages.infra.tenant.deactivateConfirm')}
                 onConfirm={async () => {
                   const success = await deactivateTenant(record.id);
                   if (success) {

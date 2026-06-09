@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -608,13 +609,13 @@ const EquipmentLedgerPage: React.FC = () => {
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
               {t('common.detail')}
             </Button>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
               {t('app.haoligo.equipment.ledger.actionEdit')}
             </Button>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
               {t('app.haoligo.equipment.ledger.actionDelete')}
             </Button>
           </Space>

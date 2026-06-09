@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备故障维修管理页面
  *
@@ -375,7 +376,7 @@ const EquipmentFaultsPage: React.FC = () => {
 
   const renderFaultRowNodes = (record: EquipmentFault): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -387,7 +388,7 @@ const EquipmentFaultsPage: React.FC = () => {
       >
         详情
       </Button>,
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -399,7 +400,7 @@ const EquipmentFaultsPage: React.FC = () => {
       >
         编辑
       </Button>,
-      <Button
+      <Button {...rowActionKind('delete')}
         key="del"
         type="link"
         size="small"
@@ -419,7 +420,7 @@ const EquipmentFaultsPage: React.FC = () => {
     ];
     if (record.repair_required && record.status !== '已修复') {
       nodes.push(
-        <Button key="repair" type="link" size="small" onClick={(e) => {
+        <Button {...rowActionKind('update')} key="repair" type="link" size="small" onClick={(e) => {
           e.stopPropagation();
           handleCreateRepair(record);
         }}

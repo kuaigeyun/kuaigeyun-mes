@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space, Tag } from 'antd';
@@ -67,8 +68,7 @@ const EightDReportsPage: React.FC = () => {
       render: (_, row) => (
         <Space>
           {(canUpdate || canClose) && (
-            <Button
-              type="link"
+            <Button key="execute" {...rowActionKind('execute')} type="link"
               onClick={() => {
                 setCurrentRow(row);
                 setTransitionVisible(true);
@@ -98,7 +98,7 @@ const EightDReportsPage: React.FC = () => {
           toolBarRender={() =>
             canCreate
               ? [
-                  <Button key="create" type="primary" onClick={() => setCreateVisible(true)}>
+                  <Button {...rowActionKind('create')} key="create" type="primary" onClick={() => setCreateVisible(true)}>
                     新建8D
                   </Button>,
                 ]

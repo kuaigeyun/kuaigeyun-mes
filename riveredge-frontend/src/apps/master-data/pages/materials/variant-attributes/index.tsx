@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -171,16 +172,14 @@ const VariantAttributesPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: VariantAttributeDefinition) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
-          <Popconfirm
-            title={t('common.confirmDelete')}
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             onConfirm={() => handleDelete(record.uuid)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
@@ -395,7 +394,7 @@ const VariantAttributesPage: React.FC = () => {
                 {'新建属性定义' + NEW_SHORTCUT_HINT}
               </Button>
               {trialRunMode && (
-              <Button
+              <Button {...rowActionKind('import')}
                 key="loadPreset"
                 loading={loadPresetLoading}
                 onClick={async () => {
@@ -539,10 +538,10 @@ const VariantAttributesPage: React.FC = () => {
         onCancel={() => setPresetModalVisible(false)}
         width={640}
         footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('audit')}
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}

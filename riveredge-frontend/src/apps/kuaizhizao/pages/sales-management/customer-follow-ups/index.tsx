@@ -23,7 +23,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
-import { renderRowActionsOverflow } from '../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
@@ -394,13 +394,13 @@ const CustomerFollowUpsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" onClick={() => handleDetail(record.id)}>
+          <Button {...rowActionKind('read')} key="d" type="link" size="small" onClick={() => handleDetail(record.id)}>
             {t('common.detail')}
           </Button>,
-          <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
             {t('common.edit')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('create')}
             key="nf"
             type="link"
             size="small"
@@ -409,7 +409,7 @@ const CustomerFollowUpsPage: React.FC = () => {
           >
             {t('app.kuaizhizao.customerFollowUp.new')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="del"
             type="link"
             size="small"
@@ -464,10 +464,10 @@ const CustomerFollowUpsPage: React.FC = () => {
             />
           }
           toolBarRender={() => [
-            <Button key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,
-            <Button
+            <Button {...rowActionKind('delete')}
               key="batchDelete"
               danger
               icon={<DeleteOutlined />}

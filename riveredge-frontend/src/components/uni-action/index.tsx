@@ -15,6 +15,13 @@ export {
 export { renderUniTableOperationCell } from './renderCell'
 export { collectOperationActions } from './collect'
 export { normalizeActionTree } from './normalize'
+export {
+  rowActionKind,
+  ROW_ACTION_KIND_ATTR,
+  readExplicitActionKind,
+  type RowActionPermissionKind,
+} from './actionText'
+export { filterActionsByResourcePermission } from './filterByPermission'
 export { UniActionGroup, type UniActionGroupProps }
 
 export const UniAction = {

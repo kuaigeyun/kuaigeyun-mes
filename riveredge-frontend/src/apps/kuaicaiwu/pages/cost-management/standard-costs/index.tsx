@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -40,7 +41,7 @@ const StandardCostsPage: React.FC = () => {
       width: 120,
       render: (_, record) => [
         <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>编辑</a>,
-        <Popconfirm
+        <Popconfirm {...rowActionKind('delete')}
           key="del"
           title="确认删除该标准成本？"
           onConfirm={async () => {

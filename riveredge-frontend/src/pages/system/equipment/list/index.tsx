@@ -9,6 +9,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormSelect, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
@@ -376,7 +377,7 @@ const EquipmentListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="view"
               type="link"
               size="small"
@@ -385,7 +386,7 @@ const EquipmentListPage: React.FC = () => {
             >
               {t('pages.system.equipment.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -394,7 +395,7 @@ const EquipmentListPage: React.FC = () => {
             >
               {t('pages.system.equipment.edit')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
               key="trace"
               type="link"
               size="small"
@@ -403,7 +404,7 @@ const EquipmentListPage: React.FC = () => {
             >
               {t('pages.system.equipment.trace')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.equipment.confirmDeleteOne')}
               onConfirm={() => handleDelete(record)}
@@ -487,7 +488,7 @@ const EquipmentListPage: React.FC = () => {
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
           toolBarRender={() => [
-            <Button
+            <Button {...rowActionKind('read')}
               key="batch-qrcode"
               icon={<QrcodeOutlined />}
               disabled={selectedRowKeys.length === 0}

@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../components/uni-action';
 import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
@@ -104,8 +105,7 @@ export default function LicenseCenterTab() {
       width: 140,
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="copy" {...rowActionKind('read')} type="link"
             size="small"
             icon={<CopyOutlined />}
             onClick={async () => {
@@ -120,8 +120,7 @@ export default function LicenseCenterTab() {
           >
             {t('pages.infra.licenseCenter.copyKey', { defaultValue: '复制KEY' })}
           </Button>
-          <Button
-            type="link"
+          <Button key="revoke" {...rowActionKind('revoke')} type="link"
             size="small"
             danger
             disabled={!record.is_active}
@@ -166,7 +165,7 @@ export default function LicenseCenterTab() {
         showExportButton={false}
         showImportButton={false}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>
             {t('pages.infra.licenseCenter.createButton', { defaultValue: '新增许可证' })}
           </Button>,
         ]}

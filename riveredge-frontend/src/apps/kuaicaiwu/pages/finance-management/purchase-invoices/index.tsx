@@ -2,6 +2,7 @@
  * 采购发票列表页
  */
 import React, { useRef, useState, useEffect } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Space, Dropdown, Modal, Input, Table, Tag } from 'antd';
 import { EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
@@ -371,7 +372,7 @@ const PurchaseInvoiceList: React.FC = () => {
             render: (_, record) =>
                 renderRowActionsOverflow(
                     [
-                        <Button
+                        <Button {...rowActionKind('read')}
                             key="det"
                             type="link"
                             size="small"
@@ -381,7 +382,7 @@ const PurchaseInvoiceList: React.FC = () => {
                             详情
                         </Button>,
                         record.review_status === '待审核' ? (
-                            <UniWorkflowActions
+                            <UniWorkflowActions {...rowActionKind('skip')}
                                 key="wf"
                                 record={record}
                                 entityName="采购发票"

@@ -9,7 +9,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Descriptions } from 'antd';
-import { EditOutlined, DeleteOutlined, EyeOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined, HighlightOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -27,7 +27,7 @@ import {
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 
 /**
  * 审批流程管理列表页面组件
@@ -312,17 +312,30 @@ const ApprovalProcessListPage: React.FC = () => {
       title: t('pages.system.approvalProcesses.actions'),
       valueType: 'option',
       fixed: 'right',
+      uniActionRenderOptions: { directMax: 4 },
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.approvalProcesses.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.approvalProcesses.edit')}
+            </Button>,
+            <Button
+              key="design"
+              {...rowActionKind('update')}
+              type="link"
+              size="small"
+              icon={<HighlightOutlined />}
+              onClick={() => handleDesign(record)}
+              data-action-priority={2}
+            >
+              {t('pages.system.approvalProcesses.design')}
             </Button>,
             <Popconfirm
               key="delete"
+              {...rowActionKind('delete')}
               title={t('pages.system.approvalProcesses.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
@@ -332,15 +345,6 @@ const ApprovalProcessListPage: React.FC = () => {
                 {t('pages.system.approvalProcesses.delete')}
               </Button>
             </Popconfirm>,
-            <Button
-              key="design"
-              type="link"
-              size="small"
-              icon={<ApartmentOutlined />}
-              onClick={() => handleDesign(record)}
-            >
-              {t('pages.system.approvalProcesses.design')}
-            </Button>,
           ],
           `approval-process-${record.uuid}`,
         ),
@@ -416,7 +420,7 @@ const ApprovalProcessListPage: React.FC = () => {
         onDelete={handleBatchDelete}
         deleteButtonText={t('pages.system.approvalProcesses.batchDelete')}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('import')}
             key="loadPreset"
             loading={loadPresetLoading}
             onClick={async () => {

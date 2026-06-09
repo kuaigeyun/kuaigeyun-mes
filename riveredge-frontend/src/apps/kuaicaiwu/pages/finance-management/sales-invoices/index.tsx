@@ -4,6 +4,7 @@
  * 管理向客户开具的销项发票，支持关联销售订单和应收单。
  */
 import React, { useRef, useState, useEffect } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag } from 'antd';
 import { useNavigate } from 'react-router-dom';
@@ -442,7 +443,7 @@ const SalesInvoicesPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="det"
               type="link"
               size="small"
@@ -452,12 +453,12 @@ const SalesInvoicesPage: React.FC = () => {
               详情
             </Button>,
             record.review_status === '待审核' ? (
-              <Button key="ap" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
+              <Button {...rowActionKind('audit')} key="ap" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
                 审核
               </Button>
             ) : null,
             canDeleteSalesInvoice(record) ? (
-              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
                 删除
               </Button>
             ) : null,

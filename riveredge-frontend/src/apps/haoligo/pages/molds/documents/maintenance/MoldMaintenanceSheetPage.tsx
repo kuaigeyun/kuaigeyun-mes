@@ -44,7 +44,7 @@ import {
   type MoldRow,
 } from '../../../../services/haoligo';
 import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
-import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
 import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
@@ -512,7 +512,7 @@ export function MoldMaintenanceSheetPage({
           onRevoke: () => revokeMoldMaintenanceSheetApproval(record.id),
         };
         const actions: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
@@ -521,7 +521,7 @@ export function MoldMaintenanceSheetPage({
           >
             详情
           </Button>,
-          <Button
+          <Button {...rowActionKind('update')}
             key="edit"
             type="link"
             size="small"
@@ -531,7 +531,7 @@ export function MoldMaintenanceSheetPage({
           >
             编辑
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="delete"
             type="link"
             size="small"
@@ -753,7 +753,7 @@ export function MoldMaintenanceSheetPage({
               actionRender={(field, action, _defaultActionDom, count) => {
                 if (count <= 1) return [];
                 return [
-                  <Tooltip key="remove" title="删除">
+                  <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
                     <Button
                       type="text"
                       danger

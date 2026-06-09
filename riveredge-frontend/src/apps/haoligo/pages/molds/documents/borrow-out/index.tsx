@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import { useDebounceFn } from 'ahooks';
 import {
   ActionType,
@@ -629,13 +630,13 @@ const MoldBorrowOutPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
             删除
           </Button>
         </Space>
@@ -657,7 +658,7 @@ const MoldBorrowOutPage: React.FC = () => {
           createButtonText="从制令单新建"
           onCreate={handleCreateFromWorkOrder}
           toolBarActionsAfterCreate={[
-            <Button key="create-from-casting" onClick={handleCreateFromCastingProduct}>
+            <Button {...rowActionKind('create')} key="create-from-casting" onClick={handleCreateFromCastingProduct}>
               从浇铸货品新建
             </Button>,
           ]}
@@ -876,10 +877,10 @@ const MoldBorrowOutPage: React.FC = () => {
         width={720}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消
           </Button>,
-          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
             保存
           </Button>,
         ]}

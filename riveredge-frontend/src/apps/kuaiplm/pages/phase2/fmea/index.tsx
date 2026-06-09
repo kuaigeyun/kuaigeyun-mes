@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * FMEA 记录（Phase2）
  */
@@ -65,7 +66,7 @@ const FmeaPage: React.FC = () => {
       render: (_, row) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('delete')}
               key="del"
               type="link"
               size="small"
@@ -119,7 +120,7 @@ const FmeaPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             {'新建 FMEA' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

@@ -1,3 +1,4 @@
+import { rowActionKind } from '../uni-action';
 /**
  * 业务配置 · 消息提醒（平台通用 + 已开通定制 APP 合并展示）
  */
@@ -612,7 +613,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                 toolBarActionsAfterCreate={
                   showPresetButton
                     ? [
-                        <Button key="load-presets" loading={loadingPresets} onClick={() => void handleLoadPresets()}>
+                        <Button {...rowActionKind('import')} key="load-presets" loading={loadingPresets} onClick={() => void handleLoadPresets()}>
                           {t('pages.system.configCenter.notification.preset.button')}
                         </Button>,
                       ]
@@ -646,13 +647,13 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                     width: 220,
                     render: (_: unknown, row: { id: string }) => {
                       const actions: React.ReactNode[] = [
-                        <Button key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row as never)}>
+                        <Button {...rowActionKind('read')} key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row as never)}>
                           {t('pages.system.configCenter.notification.action.view')}
                         </Button>,
-                        <Button key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row as never)}>
+                        <Button {...rowActionKind('update')} key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row as never)}>
                           {t('pages.system.configCenter.notification.action.edit')}
                         </Button>,
-                        <Button key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>
+                        <Button {...rowActionKind('delete')} key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>
                           {t('pages.system.configCenter.notification.action.delete')}
                         </Button>,
                       ];

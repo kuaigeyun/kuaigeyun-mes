@@ -18,6 +18,7 @@ import {
   MenuUnfoldOutlined,
   MenuOutlined,
   AppstoreOutlined,
+  SettingOutlined,
   TranslationOutlined,
   BgColorsOutlined,
   FullscreenOutlined,
@@ -81,6 +82,7 @@ import { RouteTransition } from '../components/route-transition';
 const TenantBootstrapModal = React.lazy(() => import('../components/tenant-bootstrap-modal'));
 import { getCurrentUser } from '../services/auth';
 import { getCurrentInfraSuperAdmin } from '../services/infraAdmin';
+import { getTenantById, TenantPlan } from '../services/tenant';
 import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
@@ -659,9 +661,9 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
         { path: '/system/datasets', name: t('menu.system.datasets'), icon: getMenuIcon(t('menu.system.datasets'), '/system/datasets'), permissionCodes: ['system:dataset:create', 'system:dataset:read', 'system:dataset:update', 'system:dataset:delete'] },
       ]},
       { key: 'process-management-group', type: 'group', name: t('menu.group.process-management'), label: t('menu.group.process-management'), className: 'riveredge-menu-group-title', children: [
-        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true }] },
+        { path: '/system/approval-processes', name: t('menu.system.approval-processes'), icon: getMenuIcon(t('menu.system.approval-processes'), '/system/approval-processes'), permissionCodes: ['system:approval-process:create', 'system:approval-process:read', 'system:approval-process:update', 'system:approval-process:delete'], children: [{ path: '/system/approval-processes/designer', name: t('path.system.approval-processes.designer'), hideInMenu: true, permissionCodes: ['system:approval-process:update'] }] },
         { path: '/system/messages/template', name: t('menu.system.messages.template'), icon: getMenuIcon(t('menu.system.messages.template'), '/system/messages/template'), permissionCodes: ['system:message-template:create', 'system:message-template:read', 'system:message-template:update', 'system:message-template:delete'] },
-        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true }] },
+        { path: '/system/print-templates', name: t('menu.system.print-templates'), icon: getMenuIcon(t('menu.system.print-templates'), '/system/print-templates'), permissionCodes: ['system:print-template:create', 'system:print-template:read', 'system:print-template:update', 'system:print-template:delete'], children: [{ path: '/system/print-templates/design', name: t('path.system.print-templates.design'), hideInMenu: true, permissionCodes: ['system:print-template:update'] }] },
         { path: '/system/approval-instances', name: t('menu.system.approval-instances'), icon: getMenuIcon(t('menu.system.approval-instances'), '/system/approval-instances'), permissionCodes: ['system:approval-instance:read', 'system:approval-instance:update'] },
         { path: '/system/messages/config', name: t('menu.system.messages.config'), icon: getMenuIcon(t('menu.system.messages.config'), '/system/messages/config'), permissionCodes: ['system:message-config:create', 'system:message-config:read', 'system:message-config:update', 'system:message-config:delete'] },
         { path: '/system/print-devices', name: t('menu.system.print-devices'), icon: getMenuIcon(t('menu.system.print-devices'), '/system/print-devices'), permissionCodes: ['system:print-device:create', 'system:print-device:read', 'system:print-device:update', 'system:print-device:delete'] },
@@ -1306,6 +1308,37 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return Math.max(6, Math.min(24, maxRowSpan));
   }, [systemSettingsGroups]);
 
+  const isInfraSuperAdmin = isInfraSuperAdminUser(currentUser) || isInfraSuperAdminFromToken();
+
+  const { data: infraTenantInfo } = useQuery({
+    queryKey: ['systemPanelTenantInfo', currentUser?.tenant_id],
+    queryFn: () => getTenantById(currentUser!.tenant_id!, true),
+    enabled: systemSettingsPanelMounted && !!currentUser?.tenant_id && isInfraSuperAdmin,
+    staleTime: 60_000,
+  });
+
+  const systemSettingsTenantPlan = infraTenantInfo?.plan ?? currentUser?.tenant_plan;
+  const systemSettingsTenantExpiresAt = infraTenantInfo?.expires_at ?? currentUser?.tenant_expires_at;
+
+  const systemSettingsPlanLabel = useMemo(() => {
+    if (!systemSettingsTenantPlan) return undefined;
+    const planKeyMap: Record<string, string> = {
+      [TenantPlan.TRIAL]: 'pages.infra.tenant.planTrial',
+      [TenantPlan.BASIC]: 'pages.infra.tenant.planBasic',
+      [TenantPlan.PROFESSIONAL]: 'pages.infra.tenant.planProfessional',
+      [TenantPlan.ENTERPRISE]: 'pages.infra.tenant.planEnterprise',
+    };
+    const labelKey = planKeyMap[systemSettingsTenantPlan];
+    return labelKey ? t(labelKey) : systemSettingsTenantPlan;
+  }, [systemSettingsTenantPlan, t]);
+
+  const systemSettingsExpiresLabel = useMemo(() => {
+    if (!systemSettingsTenantExpiresAt) return '2099-12-31';
+    return dayjs(systemSettingsTenantExpiresAt).format('YYYY-MM-DD HH:mm');
+  }, [systemSettingsTenantExpiresAt]);
+
+  const showSystemSettingsTenantMeta = !!currentUser?.tenant_id;
+
   const systemSettingsPanelWidth = useMemo(() => {
     // 与现有 24 栅格视觉密度保持一致：按列数线性缩放面板宽度
     const columns = systemSettingsPanelGridColumns;
@@ -1567,7 +1600,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     [isDarkSiderFooter, token.colorPrimary],
   );
 
-  /** 开始菜单（底栏入口 + 浮层）配色：随深色/浅色侧栏切换，遵循主流中性底 + 主题色强调 */
+  /** 开始菜单（底栏入口 + 浮层）三层磨砂：托盘 blur → 分组半透明卡片 → 图标磁贴 */
   const startMenuTheme = React.useMemo(() => {
     const primary = String(token.colorPrimary);
     if (isDarkSiderFooter) {
@@ -1577,21 +1610,29 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         settingsBtnBgActive: 'rgba(255, 255, 255, 0.16)',
         settingsBtnBorder: 'rgba(255, 255, 255, 0.14)',
         settingsBtnColor: primary,
-        panelBg: 'rgba(28, 30, 36, 0.92)',
+        /** L1 托盘：唯一 backdrop-filter（与 L2 配色对调试验） */
+        panelBg: `color-mix(in srgb, ${primary} 8%, rgba(255, 255, 255, 0.05))`,
         panelBgFallback: '#1f2128',
-        panelBorder: 'rgba(255, 255, 255, 0.12)',
+        panelBorder: `color-mix(in srgb, ${primary} 14%, rgba(255, 255, 255, 0.10))`,
         panelShadow: '0 16px 48px rgba(0, 0, 0, 0.48)',
         panelBlur: true,
-        panelHeaderBorder: 'rgba(255, 255, 255, 0.1)',
+        panelBlurAmount: '24px',
+        panelBlurSaturate: '180%',
+        panelHeaderBorder: 'rgba(255, 255, 255, 0.08)',
         panelTitleColor: 'rgba(255, 255, 255, 0.92)',
         panelCloseColor: 'rgba(255, 255, 255, 0.85)',
         panelCloseHoverBg: 'rgba(255, 255, 255, 0.1)',
-        panelGroupBg: 'rgba(255, 255, 255, 0.04)',
-        panelGroupBorder: 'rgba(255, 255, 255, 0.08)',
-        panelGroupTitle: 'rgba(255, 255, 255, 0.72)',
+        /** L2 分组 */
+        panelGroupBg: 'rgba(22, 24, 30, 0.62)',
+        panelGroupBorder: 'rgba(255, 255, 255, 0.14)',
+        panelGroupInsetShadow: `inset 0 1px 0 color-mix(in srgb, ${primary} 6%, rgba(255, 255, 255, 0.08))`,
+        panelGroupTitle: `color-mix(in srgb, ${primary} 28%, rgba(255, 255, 255, 0.78))`,
+        /** L3 图标磁贴：最内层，hover 再提亮 */
         panelItemColor: 'rgba(255, 255, 255, 0.88)',
-        panelItemBg: 'rgba(255, 255, 255, 0.02)',
-        panelItemHoverBg: 'rgba(255, 255, 255, 0.08)',
+        panelItemBg: 'rgba(255, 255, 255, 0.04)',
+        panelItemBorder: 'rgba(255, 255, 255, 0.08)',
+        panelItemHoverBg: 'rgba(255, 255, 255, 0.11)',
+        panelItemHoverBorder: 'rgba(255, 255, 255, 0.14)',
       };
     }
     return {
@@ -1600,21 +1641,30 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
       settingsBtnBgActive: String(siderFooterToken.colorPrimaryBorder),
       settingsBtnBorder: String(siderFooterToken.colorPrimaryBorder),
       settingsBtnColor: primary,
-      panelBg: String(token.colorBgElevated),
+      /** L1 托盘（与 L2 配色对调试验） */
+      panelBg: `color-mix(in srgb, ${primary} 6%, rgba(255, 255, 255, 0.48))`,
       panelBgFallback: String(token.colorBgElevated),
-      panelBorder: String(token.colorBorderSecondary),
-      panelShadow: String(token.boxShadowSecondary ?? '0 6px 16px 0 rgba(0, 0, 0, 0.08)'),
-      panelBlur: false,
-      panelHeaderBorder: String(token.colorSplit),
+      panelBorder: `color-mix(in srgb, ${primary} 12%, rgba(15, 23, 42, 0.08))`,
+      panelShadow:
+        `0 0 0 1px rgba(15, 23, 42, 0.06), 0 16px 48px rgba(15, 23, 42, 0.14), inset 0 1px 0 color-mix(in srgb, ${primary} 5%, rgba(255, 255, 255, 0.75))`,
+      panelBlur: true,
+      panelBlurAmount: '24px',
+      panelBlurSaturate: '180%',
+      panelHeaderBorder: 'rgba(0, 0, 0, 0.06)',
       panelTitleColor: String(token.colorText),
       panelCloseColor: String(token.colorTextSecondary),
-      panelCloseHoverBg: String(token.colorFillSecondary),
-      panelGroupBg: String(token.colorFillQuaternary),
-      panelGroupBorder: String(token.colorBorderSecondary),
-      panelGroupTitle: String(token.colorTextSecondary),
+      panelCloseHoverBg: 'rgba(0, 0, 0, 0.04)',
+      /** L2 分组 */
+      panelGroupBg: 'rgba(255, 255, 255, 0.58)',
+      panelGroupBorder: 'rgba(15, 23, 42, 0.16)',
+      panelGroupInsetShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.72)',
+      panelGroupTitle: String(siderFooterToken.colorPrimaryText ?? token.colorTextSecondary),
+      /** L3 图标磁贴 */
       panelItemColor: String(token.colorText),
-      panelItemBg: 'transparent',
-      panelItemHoverBg: String(token.colorFillTertiary),
+      panelItemBg: 'rgba(255, 255, 255, 0.22)',
+      panelItemBorder: 'rgba(255, 255, 255, 0.40)',
+      panelItemHoverBg: 'rgba(255, 255, 255, 0.48)',
+      panelItemHoverBorder: 'rgba(255, 255, 255, 0.62)',
     };
   }, [isDarkSiderFooter, token, siderFooterToken]);
 
@@ -3281,7 +3331,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: ${Number(token.borderRadiusLG || 8)}px;
           border: 1px solid ${startMenuTheme.panelBorder};
           background: ${startMenuTheme.panelBg};
-          ${startMenuTheme.panelBlur ? 'backdrop-filter: blur(20px) saturate(120%); -webkit-backdrop-filter: blur(20px) saturate(120%);' : ''}
+          ${startMenuTheme.panelBlur ? `backdrop-filter: blur(${startMenuTheme.panelBlurAmount}) saturate(${startMenuTheme.panelBlurSaturate}); -webkit-backdrop-filter: blur(${startMenuTheme.panelBlurAmount}) saturate(${startMenuTheme.panelBlurSaturate});` : ''}
           box-shadow: ${startMenuTheme.panelShadow};
           z-index: 1200;
           overflow: hidden;
@@ -3310,6 +3360,31 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           font-weight: 700;
           color: ${startMenuTheme.panelTitleColor};
         }
+        .riveredge-system-settings-panel-header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-left: auto;
+          min-width: 0;
+        }
+        .riveredge-system-settings-panel-meta {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          justify-content: flex-end;
+          gap: 12px;
+          padding: 4px 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          line-height: 1.4;
+          color: ${startMenuTheme.panelTitleColor};
+          background: ${startMenuTheme.panelGroupBg};
+          border: 1px solid ${startMenuTheme.panelGroupBorder};
+          box-shadow: ${startMenuTheme.panelGroupInsetShadow};
+        }
+        .riveredge-system-settings-panel-meta-item {
+          white-space: nowrap;
+        }
         .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close,
         .riveredge-system-settings-panel-header .riveredge-system-settings-panel-close .anticon {
           color: ${startMenuTheme.panelCloseColor} !important;
@@ -3326,18 +3401,27 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           grid-template-columns: repeat(var(--riveredge-system-panel-columns, 24), minmax(0, 1fr));
           align-content: start;
           gap: 12px;
+          background: transparent;
+        }
+        .riveredge-system-settings-group-wrap {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          min-width: 0;
         }
         .riveredge-system-settings-group {
           border-radius: ${Number(token.borderRadiusLG || 8)}px;
           padding: 12px;
           background: ${startMenuTheme.panelGroupBg};
           border: 1px solid ${startMenuTheme.panelGroupBorder};
+          box-shadow: ${startMenuTheme.panelGroupInsetShadow};
         }
         .riveredge-system-settings-group-title {
           font-size: 13px;
           font-weight: 600;
           color: ${startMenuTheme.panelGroupTitle};
-          margin-bottom: 10px;
+          padding: 0 2px;
+          line-height: 1.3;
         }
         .riveredge-system-settings-grid {
           display: grid;
@@ -3346,7 +3430,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .riveredge-system-settings-item {
           width: 100%;
-          border: none;
+          border: 1px solid ${startMenuTheme.panelItemBorder};
           background: ${startMenuTheme.panelItemBg};
           display: flex;
           flex-direction: column;
@@ -3358,10 +3442,11 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: ${Number(token.borderRadius || 6)}px;
           min-height: 76px;
           cursor: pointer;
-          transition: all 0.2s ease;
+          transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
         }
         .riveredge-system-settings-item:hover {
           background: ${startMenuTheme.panelItemHoverBg};
+          border-color: ${startMenuTheme.panelItemHoverBorder};
           transform: translateY(-1px);
           box-shadow: none;
         }
@@ -3412,7 +3497,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           .riveredge-system-settings-panel-body {
             grid-template-columns: repeat(6, minmax(0, 1fr));
           }
-          .riveredge-system-settings-group {
+          .riveredge-system-settings-group-wrap {
             grid-column: span 6 !important;
           }
         }
@@ -4705,7 +4790,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     ref={systemSettingsTriggerRef}
                     className="riveredge-footer-settings-btn"
                     type="default"
-                    icon={<AppstoreOutlined style={{ color: settingsAccentColor }} />}
+                    icon={<SettingOutlined style={{ color: settingsAccentColor }} />}
                     onClick={() => {
                       if (systemSettingsPanelExiting) return;
                       if (systemSettingsPanelMounted) {
@@ -5604,47 +5689,63 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         >
           <div className="riveredge-system-settings-panel-header">
             <span className="riveredge-system-settings-panel-title">{t('menu.system')}</span>
-            <Button
-              type="text"
-              size="small"
-              className="riveredge-system-settings-panel-close"
-              onClick={closeSystemSettingsPanelAnimated}
-              title={t('common.close')}
-              aria-label={t('common.close')}
-              icon={<CloseOutlined />}
-            />
+            <div className="riveredge-system-settings-panel-header-actions">
+              {showSystemSettingsTenantMeta && (
+                <div className="riveredge-system-settings-panel-meta">
+                  {systemSettingsPlanLabel && (
+                    <span className="riveredge-system-settings-panel-meta-item">
+                      {t('ui.systemSettingsPanel.versionLabel')}：{systemSettingsPlanLabel}
+                    </span>
+                  )}
+                  <span className="riveredge-system-settings-panel-meta-item">
+                    {t('ui.systemSettingsPanel.expiresLabel')}：{systemSettingsExpiresLabel}
+                  </span>
+                </div>
+              )}
+              <Button
+                type="text"
+                size="small"
+                className="riveredge-system-settings-panel-close"
+                onClick={closeSystemSettingsPanelAnimated}
+                title={t('common.close')}
+                aria-label={t('common.close')}
+                icon={<CloseOutlined />}
+              />
+            </div>
           </div>
           <div className="riveredge-system-settings-panel-body">
             {systemSettingsGroups.map((group) => {
               return (
                 <section
                   key={group.key}
-                  className="riveredge-system-settings-group"
+                  className="riveredge-system-settings-group-wrap"
                   style={{ gridColumn: `span ${group.groupSpan}` }}
                 >
                   <div className="riveredge-system-settings-group-title">{group.name as React.ReactNode}</div>
-                  <div
-                    className="riveredge-system-settings-grid"
-                    style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
-                  >
-                    {group.items.map((child) => {
-                      return (
-                        <button
-                          key={String(child.key || child.path)}
-                          type="button"
-                          className="riveredge-system-settings-item"
-                          onClick={() => handleSystemSettingsNavigate(child.path)}
-                          title={typeof child.name === 'string' ? child.name : undefined}
-                        >
-                          <span
-                            className="riveredge-system-settings-item-icon"
+                  <div className="riveredge-system-settings-group">
+                    <div
+                      className="riveredge-system-settings-grid"
+                      style={{ gridTemplateColumns: `repeat(${group.itemCols}, minmax(0, 1fr))` }}
+                    >
+                      {group.items.map((child) => {
+                        return (
+                          <button
+                            key={String(child.key || child.path)}
+                            type="button"
+                            className="riveredge-system-settings-item"
+                            onClick={() => handleSystemSettingsNavigate(child.path)}
+                            title={typeof child.name === 'string' ? child.name : undefined}
                           >
-                            {getSystemPanelIcon(child.path)}
-                          </span>
-                          <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
-                        </button>
-                      );
-                    })}
+                            <span
+                              className="riveredge-system-settings-item-icon"
+                            >
+                              {getSystemPanelIcon(child.path)}
+                            </span>
+                            <span className="riveredge-system-settings-item-label">{child.name as React.ReactNode}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </section>
               );

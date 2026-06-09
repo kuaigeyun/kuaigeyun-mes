@@ -70,7 +70,7 @@ import {
 } from '../../../../services/applicationDedicatedBindings';
 import { syncAllMenus } from '../../../../services/menu';
 import { apiRequest } from '../../../../services/api';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 
 /** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
 const OTHER_PLACEHOLDER_CODES = [
@@ -1127,6 +1127,7 @@ const ApplicationListPage: React.FC = () => {
         const actions: React.ReactNode[] = [
           <Button
             key="view"
+            {...rowActionKind('read')}
             type="link"
             size="small"
             icon={<EyeOutlined />}
@@ -1140,6 +1141,7 @@ const ApplicationListPage: React.FC = () => {
         actions.push(
           <Button
             key="edit"
+            {...rowActionKind('update')}
             type="link"
             size="small"
             icon={<SettingOutlined />}
@@ -1156,6 +1158,7 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="sync"
+              {...rowActionKind('update')}
               title={t('pages.system.applications.syncMenu')}
               description={t('pages.system.applications.syncMenuConfirm')}
               onConfirm={async () => {
@@ -1189,6 +1192,7 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Button
               key="dedicated-binding"
+              {...rowActionKind('skip')}
               type="link"
               size="small"
               icon={<TeamOutlined />}
@@ -1204,6 +1208,7 @@ const ApplicationListPage: React.FC = () => {
             actions.push(
               <Button
                 key="reset"
+                {...rowActionKind('skip')}
                 type="link"
                 danger
                 size="small"
@@ -1223,6 +1228,7 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="uninstall"
+              {...rowActionKind('update')}
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(record)}
               disabled={record.is_system || !canManageAppLifecycle}
@@ -1242,6 +1248,7 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="install"
+              {...rowActionKind('update')}
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(record)}
               disabled={!canManageAppLifecycle}
@@ -1715,7 +1722,7 @@ const ApplicationListPage: React.FC = () => {
             </Tooltip>
           </div>,
           <div key="more" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
               <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
                 {t('pages.system.applications.moreActions')}
               </Button>
@@ -2238,7 +2245,7 @@ const ApplicationListPage: React.FC = () => {
             pageSizeOptions: ['10', '20', '50', '100'],
           }}
           toolBarRender={() => [
-            <Button
+            <Button {...rowActionKind('read')}
               key="scan"
               type="primary"
               icon={<AppstoreOutlined />}
@@ -2247,7 +2254,7 @@ const ApplicationListPage: React.FC = () => {
             >
               {t('pages.system.applications.scanApplications', { defaultValue: '扫描应用' })}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="sync-all"
               icon={<SyncOutlined />}
               loading={syncAllLoading}

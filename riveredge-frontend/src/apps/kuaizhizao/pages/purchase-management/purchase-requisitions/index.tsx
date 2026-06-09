@@ -3,6 +3,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -457,25 +458,25 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const s = (record.status ?? '').toString().trim();
         const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>,
         ];
         if (isDraft) {
           parts.push(
-            <Button key="submit" type="link" size="small" onClick={() => handleSubmitRequisition(record)}>
+            <Button {...rowActionKind('submit')} key="submit" type="link" size="small" onClick={() => handleSubmitRequisition(record)}>
               提交
             </Button>
           );
           parts.push(
-            <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               编辑
             </Button>
           );
         }
         parts.push(
-          <span key="wf">
-            <UniWorkflowActions
+          <span {...rowActionKind('skip')} key="wf">
+            <UniWorkflowActions {...rowActionKind('skip')}
               record={record}
               entityName="采购申请"
               statusField="status"
@@ -500,7 +501,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
         );
         if (isDraft) {
           parts.push(
-            <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
               删除
             </Button>
           );
@@ -1539,7 +1540,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
               <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
                 新建采购申请
               </Button>
-              <Dropdown
+              <Dropdown {...rowActionKind('skip')}
                 trigger={['click']}
                 menu={{
                   items: [
@@ -1743,7 +1744,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                   ),
                 },
                 { key: 'workflow', visible: true, render: () => (
-                  <UniWorkflowActions
+                  <UniWorkflowActions {...rowActionKind('skip')}
                     record={currentReq}
                     entityName="采购申请"
                     statusField="status"

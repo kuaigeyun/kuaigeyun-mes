@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Tag } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
@@ -244,11 +245,10 @@ const PatrolIssueRegisterPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openForm(record, true)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openForm(record, true)}>
             详情
           </Button>
-          <Button
-            type="link"
+          <Button key="remediate" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             disabled={record.status === '已治理'}
@@ -256,7 +256,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
           >
             编辑
           </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
             删除
           </Button>
         </Space>

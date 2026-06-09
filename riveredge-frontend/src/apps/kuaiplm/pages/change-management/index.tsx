@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../components/uni-action';
 /**
  * ECR/ECO 变更工作台
  */
@@ -121,7 +122,7 @@ const ChangeManagementPage: React.FC = () => {
         return renderRowActionsOverflow(
           [
             pending ? (
-              <Button
+              <Button {...rowActionKind('audit')}
                 key="approve"
                 type="link"
                 size="small"
@@ -132,7 +133,7 @@ const ChangeManagementPage: React.FC = () => {
               </Button>
             ) : null,
             row.status === 'approved' || row.status === '已审批' ? (
-              <Button
+              <Button {...rowActionKind('execute')}
                 key="execute"
                 type="link"
                 size="small"

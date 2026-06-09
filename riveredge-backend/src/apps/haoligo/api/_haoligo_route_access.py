@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fastapi import Depends, Request
-from apps.haoligo.authorization.workflow_permissions import permission_codes_for_complete_create
 from core.api.deps.access import (
     AuthContext,
     ensure_permission_codes,
@@ -82,16 +81,13 @@ def require_haoligo_module_access(
             and complete_list_source_module
             and complete_list_target_module
         ):
-            required = permission_codes_for_complete_create(
-                source_resource=f"haoligo:{complete_list_source_module.strip()}",
-                target_resource=f"haoligo:{complete_list_target_module.strip()}",
-            )
-            # 设备维保单无来源 :complete，workflow 仅 read + 目标 create
-            if complete_list_source_module == "equipment-documents-upkeep-sheet":
-                required = [
-                    build_permission_code("haoligo", complete_list_source_module, "read"),
-                    build_permission_code("haoligo", complete_list_target_module, "create"),
-                ]
+            src_mod = complete_list_source_module.strip()
+            tgt_mod = complete_list_target_module.strip()
+            required = [
+                build_permission_code("haoligo", src_mod, "read"),
+                build_permission_code("haoligo", src_mod, "complete"),
+                build_permission_code("haoligo", tgt_mod, "create"),
+            ]
         elif (request.method or "").upper() == "GET" and _open_for_complete_query(request):
             required = [
                 build_permission_code("haoligo", mod, "read"),

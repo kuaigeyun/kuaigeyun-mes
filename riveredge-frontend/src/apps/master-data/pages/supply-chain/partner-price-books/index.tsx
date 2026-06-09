@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import {
@@ -375,10 +376,10 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         width: 140,
         fixed: 'right',
         render: (_, record) => [
-          <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>,
-          <Popconfirm key="delete" title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
+          <Popconfirm {...rowActionKind('delete')} key="delete" title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>
               {t('common.delete')}
             </Button>
@@ -402,7 +403,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           columns={columns}
           headerTitle={pageTitle}
           toolBarRender={() => [
-            <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
               {createButtonLabel + NEW_SHORTCUT_HINT}
             </Button>,
           ]}

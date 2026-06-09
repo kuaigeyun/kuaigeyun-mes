@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备管理页面
  *
@@ -475,7 +476,7 @@ const EquipmentPage: React.FC = () => {
 
   const renderEquipmentRowNodes = (record: Equipment): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -487,7 +488,7 @@ const EquipmentPage: React.FC = () => {
       >
         详情
       </Button>,
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -499,7 +500,7 @@ const EquipmentPage: React.FC = () => {
       >
         编辑
       </Button>,
-      <Button
+      <Button {...rowActionKind('delete')}
         key="del"
         type="link"
         size="small"
@@ -516,7 +517,7 @@ const EquipmentPage: React.FC = () => {
       >
         删除
       </Button>,
-      <Button
+      <Button {...rowActionKind('read')}
         key="trace"
         type="link"
         size="small"
@@ -1009,7 +1010,7 @@ const EquipmentPage: React.FC = () => {
         }}
         width={MODAL_CONFIG.LARGE_WIDTH}
         footer={[
-          <Button key="close" onClick={() => {
+          <Button {...rowActionKind('close')} key="close" onClick={() => {
             setTraceVisible(false);
             setTraceData(null);
           }}>

@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -434,10 +435,10 @@ const MessageConfigListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.messageConfig.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -447,7 +448,7 @@ const MessageConfigListPage: React.FC = () => {
             >
               {t('pages.system.messageConfig.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.messageConfig.deleteConfirm')}
               disabled={isBuiltInChannel(record)}

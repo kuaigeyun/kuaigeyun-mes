@@ -9,6 +9,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -356,7 +357,7 @@ const MoldListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('read')}
               key="view"
               type="link"
               size="small"
@@ -365,7 +366,7 @@ const MoldListPage: React.FC = () => {
             >
               {t('pages.system.molds.view')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -374,7 +375,7 @@ const MoldListPage: React.FC = () => {
             >
               {t('pages.system.molds.edit')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.molds.confirmDeleteOne')}
               onConfirm={() => handleDelete(record)}

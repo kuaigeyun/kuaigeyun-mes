@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 报价单管理页面
  *
@@ -1141,74 +1142,74 @@ const QuotationsPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button key="d" type="link" size="small" onClick={() => handleDetail(record.id!)}>
+          <Button {...rowActionKind('read')} key="d" type="link" size="small" onClick={() => handleDetail(record.id!)}>
             详情
           </Button>,
         ];
         const canEdit = record.status === '草稿' && quotationPerms.canUpdate;
         const deletable = canDeleteQuotation(record) && quotationPerms.canDelete;
         parts.push(
-          <Button key="e" type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="e" type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
             编辑
           </Button>
         );
         parts.push(
-          <Button key="del" type="link" size="small" danger disabled={!deletable} onClick={() => deletable && handleDelete(record)}>
+          <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger disabled={!deletable} onClick={() => deletable && handleDelete(record)}>
             删除
           </Button>
         );
         if (record.status === '草稿' && canSubmitQuotation) {
           parts.push(
-            <Button key="sub" type="link" size="small" onClick={() => handleSubmit(record)}>
+            <Button {...rowActionKind('submit')} key="sub" type="link" size="small" onClick={() => handleSubmit(record)}>
               提交
             </Button>
           );
         }
         if (canWithdrawQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
           parts.push(
-            <Button key="w" type="link" size="small" onClick={() => handleWithdraw(record)}>
+            <Button {...rowActionKind('skip')} key="w" type="link" size="small" onClick={() => handleWithdraw(record)}>
               撤回
             </Button>
           );
         }
         if (canApproveQuotation(record, quotationAuditRequired) && canReviewQuotation) {
           parts.push(
-            <Button key="ap" type="link" size="small" onClick={() => handleApprove(record)}>
+            <Button {...rowActionKind('audit')} key="ap" type="link" size="small" onClick={() => handleApprove(record)}>
               审核通过
             </Button>
           );
         }
         if (canRejectQuotation(record, quotationAuditRequired) && canReviewQuotation) {
           parts.push(
-            <Button key="rj" type="link" size="small" onClick={() => openRejectModal(record)}>
+            <Button {...rowActionKind('reject')} key="rj" type="link" size="small" onClick={() => openRejectModal(record)}>
               驳回
             </Button>
           );
         }
         if (canRevokeReviewQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
           parts.push(
-            <Button key="rv" type="link" size="small" onClick={() => handleRevokeReview(record)}>
+            <Button {...rowActionKind('revoke')} key="rv" type="link" size="small" onClick={() => handleRevokeReview(record)}>
               撤回审核
             </Button>
           );
         }
         if (canReopenQuotation(record)) {
           parts.push(
-            <Button key="ro" type="link" size="small" onClick={() => handleReopen(record)}>
+            <Button {...rowActionKind('read')} key="ro" type="link" size="small" onClick={() => handleReopen(record)}>
               重新编辑
             </Button>
           );
         }
         if (canRevokePushQuotation(record)) {
           parts.push(
-            <Button key="rp" type="link" size="small" onClick={() => handleRevokePush(record)}>
+            <Button {...rowActionKind('print')} key="rp" type="link" size="small" onClick={() => handleRevokePush(record)}>
               撤回下推
             </Button>
           );
         }
         if (record.customer_id != null && Number.isFinite(Number(record.customer_id))) {
           parts.push(
-            <Button key="fu" type="link" size="small" onClick={() => openFollowUpFromQuotation(record)}>
+            <Button {...rowActionKind('create')} key="fu" type="link" size="small" onClick={() => openFollowUpFromQuotation(record)}>
               {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
             </Button>
           );
@@ -3260,7 +3261,7 @@ const QuotationsPage: React.FC = () => {
             />,
           ]}
           toolBarActionsAfterBatch={[
-            <Button
+            <Button {...rowActionKind('create')}
               key="quotation-revision"
               icon={<BranchesOutlined />}
               size="middle"
@@ -3269,7 +3270,7 @@ const QuotationsPage: React.FC = () => {
             >
               {t('app.kuaizhizao.quotation.saveAsRevision')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('print')}
               key="quotation-print"
               icon={<PrinterOutlined />}
               size="middle"

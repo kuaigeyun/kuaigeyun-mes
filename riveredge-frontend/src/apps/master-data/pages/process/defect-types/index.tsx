@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Modal, List, Typography, Descriptions } from 'antd';
@@ -445,23 +446,20 @@ const DefectTypesPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: DefectType) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             详情
           </Button>
-          <Button
-            type="link"
+          <Button key="edit" {...rowActionKind('update')} type="link"
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
             编辑
           </Button>
-          <Popconfirm
-            title="确定要删除这个不良品信息吗？"
+          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个不良品信息吗？"
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -537,7 +535,7 @@ const DefectTypesPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('create')}
             key="create"
             type="primary"
             icon={<PlusOutlined />}
@@ -545,7 +543,7 @@ const DefectTypesPage: React.FC = () => {
           >
             {t('field.defectType.createTitle') + NEW_SHORTCUT_HINT}
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}

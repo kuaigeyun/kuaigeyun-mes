@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormItem } from '@ant-design/pro-components';
@@ -327,7 +328,7 @@ const ReceiptNoticesPage: React.FC = () => {
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="d"
             type="link"
             size="small"
@@ -342,7 +343,7 @@ const ReceiptNoticesPage: React.FC = () => {
         ];
         if (record.status === '待收货') {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="e"
               type="link"
               size="small"
@@ -356,7 +357,7 @@ const ReceiptNoticesPage: React.FC = () => {
             </Button>
           );
           parts.push(
-            <Button
+            <Button {...rowActionKind('dispatch')}
               key="n"
               type="link"
               size="small"
@@ -371,7 +372,7 @@ const ReceiptNoticesPage: React.FC = () => {
             </Button>
           );
           parts.push(
-            <Button
+            <Button {...rowActionKind('delete')}
               key="del"
               type="link"
               size="small"
@@ -388,7 +389,7 @@ const ReceiptNoticesPage: React.FC = () => {
         }
         if (record.status === '已通知') {
           parts.push(
-            <Button
+            <Button {...rowActionKind('skip')}
               key="w"
               type="link"
               size="small"
@@ -403,7 +404,7 @@ const ReceiptNoticesPage: React.FC = () => {
         }
         if (record.purchase_receipt_id) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('read')}
               key="to-pr"
               type="link"
               size="small"

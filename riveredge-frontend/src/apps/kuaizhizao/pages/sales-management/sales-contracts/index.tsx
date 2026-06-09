@@ -7,6 +7,7 @@
 
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -2335,7 +2336,7 @@ const SalesContractsPage: React.FC = () => {
 
             [
 
-              <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record.id!)}>
+              <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record.id!)}>
 
                 详情
 
@@ -2344,7 +2345,7 @@ const SalesContractsPage: React.FC = () => {
               record.status === '草稿' ? (
 
                 contractPerms.canUpdate ? (
-                  <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+                  <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
                     编辑
                   </Button>
                 ) : null
@@ -2354,7 +2355,7 @@ const SalesContractsPage: React.FC = () => {
               record.status === '草稿' ? (
 
                 contractPerms.canDelete ? (
-                  <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(record)}>
+                  <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(record)}>
                     删除
                   </Button>
                 ) : null
@@ -2363,7 +2364,7 @@ const SalesContractsPage: React.FC = () => {
 
               record.status === '草稿' && canSubmitContract ? (
 
-                <Button key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
+                <Button {...rowActionKind('submit')} key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmit(record)}>
 
                   提交
 
@@ -2373,7 +2374,7 @@ const SalesContractsPage: React.FC = () => {
 
               canWithdrawContract(record) && canRevokeContract ? (
 
-                <Button key="withdraw" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdraw(record)}>
+                <Button {...rowActionKind('revoke')} key="withdraw" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleWithdraw(record)}>
 
                   撤回
 
@@ -2383,7 +2384,7 @@ const SalesContractsPage: React.FC = () => {
 
               canApproveContract(record) && canReviewContract ? (
 
-                <Button key="approve" type="link" size="small" icon={<CheckOutlined />} onClick={() => openReviewModal(record, 'approve')}>
+                <Button {...rowActionKind('audit')} key="approve" type="link" size="small" icon={<CheckOutlined />} onClick={() => openReviewModal(record, 'approve')}>
 
                   审核
 
@@ -2393,7 +2394,7 @@ const SalesContractsPage: React.FC = () => {
 
               canRejectContract(record) && canReviewContract ? (
 
-                <Button key="reject" type="link" size="small" icon={<CloseOutlined />} onClick={() => openReviewModal(record, 'reject')}>
+                <Button {...rowActionKind('reject')} key="reject" type="link" size="small" icon={<CloseOutlined />} onClick={() => openReviewModal(record, 'reject')}>
 
                   驳回
 
@@ -2403,7 +2404,7 @@ const SalesContractsPage: React.FC = () => {
 
               canRevokeContractApproval(record) && canRevokeContract ? (
 
-                <Button key="revoke-review" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRevokeReview(record)}>
+                <Button {...rowActionKind('revoke')} key="revoke-review" type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleRevokeReview(record)}>
 
                   撤回审核
 
@@ -2413,7 +2414,7 @@ const SalesContractsPage: React.FC = () => {
 
               canPrintContract(record) && contractPerms.canPrint ? (
 
-                <Button key="print" type="link" size="small" icon={<PrinterOutlined />} onClick={() => void handlePrint(record)}>
+                <Button {...rowActionKind('print')} key="print" type="link" size="small" icon={<PrinterOutlined />} onClick={() => void handlePrint(record)}>
 
                   打印
 
@@ -2423,7 +2424,7 @@ const SalesContractsPage: React.FC = () => {
 
               ['已生效', '执行中'].includes(record.status || '') ? (
 
-                <Button key="release" type="link" size="small" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(record)}>
+                <Button {...rowActionKind('release')} key="release" type="link" size="small" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(record)}>
 
                   下推订单
 
@@ -2781,13 +2782,13 @@ const SalesContractsPage: React.FC = () => {
         onCreate={handleCreate}
 
         toolBarActionsAfterCreate={[
-          <Button key="terms-manage" icon={<FileTextOutlined />} onClick={() => setTermsManageOpen(true)}>
+          <Button {...rowActionKind('update')} key="terms-manage" icon={<FileTextOutlined />} onClick={() => setTermsManageOpen(true)}>
             {t('app.kuaizhizao.salesContract.terms.manageBtn')}
           </Button>,
         ]}
 
         toolBarActionsAfterBatch={contractPerms.canPrint ? [
-          <Button
+          <Button {...rowActionKind('print')}
             key="contract-print"
             icon={<PrinterOutlined />}
             size="middle"

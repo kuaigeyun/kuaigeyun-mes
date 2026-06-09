@@ -102,7 +102,7 @@ import {
   type MoldTrialSheetRow,
 } from '../../../../services/haoligo';
 import { buildMoldSheetAuditActionElements, MoldSheetAuditActions } from '../../../../components/MoldSheetAuditActions';
-import { renderRowActionsOverflow } from '../../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
 import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
@@ -1497,7 +1497,7 @@ const MoldTrialSheetsPage: React.FC = () => {
 
   const createToolbarActions = useMemo(
     () => [
-      <Tooltip
+      <Tooltip {...rowActionKind('skip')}
         key="from-po-tip"
         title={
           canCreateFromPo
@@ -1506,7 +1506,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
       >
         <span>
-          <Button
+          <Button {...rowActionKind('create')}
             key="from-mold-po"
             type="primary"
             icon={<ShoppingOutlined />}
@@ -1517,7 +1517,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           </Button>
         </span>
       </Tooltip>,
-      <Button key="from-pending-mold" icon={<CodeSandboxOutlined />} onClick={handleOpenMoldPicker}>
+      <Button {...rowActionKind('create')} key="from-pending-mold" icon={<CodeSandboxOutlined />} onClick={handleOpenMoldPicker}>
         从待启用模具创建
       </Button>,
     ],
@@ -2416,13 +2416,13 @@ const MoldTrialSheetsPage: React.FC = () => {
           onRevoke: () => revokeMoldTrialSheetApproval(record.id),
         };
         const actions: React.ReactNode[] = [
-          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             详情
           </Button>,
         ];
         if (trialPerms.canUpdate) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -2436,7 +2436,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
         if (trialPerms.canDelete) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('delete')}
               key="delete"
               type="link"
               size="small"
@@ -2463,7 +2463,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
         if (canDispatchTrial && canDispatchTrialSheet(record)) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('dispatch')}
               key="dispatch"
               type="link"
               size="small"
@@ -2476,7 +2476,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
         if (canShowMarkAdjustment) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('confirm_adjustment')}
               key="adjustment-done"
               type="link"
               size="small"
@@ -2500,7 +2500,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
         if (canRecallTrial && canConfirmRecallTrialSheet(record)) {
           actions.push(
-            <Button
+            <Button {...rowActionKind('recall')}
               key="recall"
               type="link"
               size="small"
@@ -3197,10 +3197,10 @@ const MoldTrialSheetsPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setRecallModalOpen(false)} disabled={recallSubmitting}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setRecallModalOpen(false)} disabled={recallSubmitting}>
             取消
           </Button>,
-          <Button
+          <Button {...rowActionKind('recall')}
             key="recall"
             loading={recallSubmitting}
             disabled={recallModalLoading || recallTargetOptions.length === 0}
@@ -3208,7 +3208,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           >
             确认收回
           </Button>,
-          <Button
+          <Button {...rowActionKind('recall')}
             key="recall-retrial"
             type="primary"
             loading={recallSubmitting}
@@ -3256,10 +3256,10 @@ const MoldTrialSheetsPage: React.FC = () => {
         width={640}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBindingModalOpen(false)}>
             取消
           </Button>,
-          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
             保存
           </Button>,
         ]}
@@ -3394,7 +3394,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         width={960}
         destroyOnHidden
         footer={[
-          <Button
+          <Button {...rowActionKind('revoke')}
             key="cancel"
             onClick={() => {
               setPoPickerOpen(false);
@@ -3405,7 +3405,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           >
             取消
           </Button>,
-          <Button key="ok" type="primary" onClick={() => void handlePoPickerConfirm()}>
+          <Button {...rowActionKind('skip')} key="ok" type="primary" onClick={() => void handlePoPickerConfirm()}>
             使用该采购单
           </Button>,
         ]}

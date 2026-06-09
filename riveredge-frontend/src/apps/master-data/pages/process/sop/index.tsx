@@ -10,11 +10,11 @@ import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, Pr
 import SafeProFormSelect from '../../../../../components/safe-pro-form-select';
 import { App, Popconfirm, Button, Tag, Space, Modal, Row, Col, List, Typography, Descriptions } from 'antd';
 import dayjs from 'dayjs';
-import { EditOutlined, DeleteOutlined, PlusOutlined, ApartmentOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, HighlightOutlined } from '@ant-design/icons';
 import SOPBatchCreateSteps from './SOPBatchCreateSteps';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
-import { ROW_ACTIONS_INLINE_GAP } from '../../../../../components/uni-action';
+import { ROW_ACTIONS_INLINE_GAP, rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
@@ -837,27 +837,33 @@ const SOPPage: React.FC = () => {
         };
         return (
           <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-            <Button type="link" size="small" onClick={() => handleOpenDetail(record)}>
+            <Button key="view" type="link" size="small" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
               详情
             </Button>
             <Button
+              key="design"
               type="link"
               size="small"
-              icon={<ApartmentOutlined />}
+              icon={<HighlightOutlined />}
+              {...rowActionKind('update')}
               onClick={goDesigner}
               title="打开图形化流程设计"
             >
               设计
             </Button>
             <Button
+              key="edit"
               type="link"
               size="small"
               icon={<EditOutlined />}
+              {...rowActionKind('update')}
               onClick={() => handleEdit(record)}
             >
               编辑
             </Button>
             <Popconfirm
+              key="delete"
+              {...rowActionKind('delete')}
               title="确定要删除这个SOP吗？"
               onConfirm={() => handleDelete(record)}
             >
@@ -942,13 +948,13 @@ const SOPPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleSelectSingleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleSelectSingleCreate}>
             {'新建SOP' + NEW_SHORTCUT_HINT}
           </Button>,
-          <Button key="batch-create" type="default" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
+          <Button {...rowActionKind('create')} key="batch-create" type="default" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
             按工艺路线批量创建
           </Button>,
-          <Button
+          <Button {...rowActionKind('delete')}
             key="batch-delete"
             danger
             icon={<DeleteOutlined />}

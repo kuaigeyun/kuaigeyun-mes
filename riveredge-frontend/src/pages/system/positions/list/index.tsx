@@ -7,6 +7,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, message, Modal, Table, Descriptions } from 'antd';
@@ -264,13 +265,13 @@ const PositionListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('field.position.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('field.position.edit')}
             </Button>,
-            <Popconfirm key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+            <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.position.deleteConfirm')} onConfirm={() => handleDelete(record)}>
               <Button type="link" danger size="small" icon={<DeleteOutlined />}>
                 {t('field.position.delete')}
               </Button>
@@ -314,7 +315,7 @@ const PositionListPage: React.FC = () => {
           onCreate={handleCreate}
           toolBarRender={() => [
             trialRunMode && (
-            <Button
+            <Button {...rowActionKind('import')}
               key="loadPreset"
               loading={loadPresetLoading}
               onClick={async () => {
@@ -355,10 +356,10 @@ const PositionListPage: React.FC = () => {
         width={560}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setPresetModalVisible(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setPresetModalVisible(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('audit')}
             key="confirm"
             type="primary"
             loading={presetConfirmLoading}

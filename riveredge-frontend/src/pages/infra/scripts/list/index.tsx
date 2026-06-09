@@ -6,6 +6,7 @@
  */
 
 import React, { useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
@@ -334,7 +335,7 @@ const ScriptListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => {
         return [
-          <Button
+          <Button {...rowActionKind('read')}
             key="view"
             type="link"
             size="small"
@@ -343,7 +344,7 @@ const ScriptListPage: React.FC = () => {
           >
             {t('pages.infra.scripts.view')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('update')}
             key="edit"
             type="link"
             size="small"
@@ -352,7 +353,7 @@ const ScriptListPage: React.FC = () => {
           >
             {t('pages.infra.scripts.edit')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('execute')}
             key="execute"
             type="link"
             size="small"
@@ -362,7 +363,7 @@ const ScriptListPage: React.FC = () => {
           >
             {t('pages.infra.scripts.execute')}
           </Button>,
-          <Popconfirm
+          <Popconfirm {...rowActionKind('delete')}
             key="delete"
             title={t('pages.infra.scripts.deleteConfirmTitle')}
             onConfirm={() => handleDelete(record)}

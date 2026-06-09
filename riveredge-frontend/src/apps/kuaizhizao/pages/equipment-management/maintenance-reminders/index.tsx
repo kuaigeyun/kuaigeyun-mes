@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 设备维护提醒页面
  *
@@ -403,16 +404,14 @@ const MaintenanceRemindersPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
+          <Button key="view" {...rowActionKind('read')} type="link"
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
           >
             查看
           </Button>
           {!record.is_read && (
-            <Button
-              type="link"
+            <Button key="approve" {...rowActionKind('audit')} type="link"
               icon={<CheckOutlined />}
               onClick={() => handleMarkAsRead(record)}
             >
@@ -420,8 +419,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             </Button>
           )}
           {!record.is_handled && (
-            <Button
-              type="link"
+            <Button key="approve" {...rowActionKind('audit')} type="link"
               icon={<CheckCircleOutlined />}
               onClick={() => handleMarkAsHandled(record)}
             >
@@ -506,7 +504,7 @@ const MaintenanceRemindersPage: React.FC = () => {
           },
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('update')}
             key="batch-read"
             disabled={selectedRows.length === 0}
             onClick={() => handleBatchMarkAsRead(selectedRows)}

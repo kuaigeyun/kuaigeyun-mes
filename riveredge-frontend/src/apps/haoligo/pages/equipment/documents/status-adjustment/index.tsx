@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -185,13 +186,13 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         width: 168,
         fixed: 'right',
         render: (_, row) => [
-          <Button key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
+          <Button {...rowActionKind('read')} key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>,
-          <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
+          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('read')}
             key="d"
             type="link"
             size="small"

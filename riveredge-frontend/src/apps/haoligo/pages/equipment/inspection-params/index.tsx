@@ -6,6 +6,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -418,13 +419,13 @@ const InspectionParamsPage: React.FC = () => {
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
               {t('common.detail')}
             </Button>
-            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('app.haoligo.equipment.inspectionParams.actionEdit')}
             </Button>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
               {t('app.haoligo.equipment.inspectionParams.actionDelete')}
             </Button>
           </Space>
@@ -447,7 +448,7 @@ const InspectionParamsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           toolBarActionsAfterCreate={[
-            <Button
+            <Button {...rowActionKind('update')}
               key="batch-level1-category"
               disabled={selectedRowKeys.length === 0}
               onClick={handleOpenBatchCategory}

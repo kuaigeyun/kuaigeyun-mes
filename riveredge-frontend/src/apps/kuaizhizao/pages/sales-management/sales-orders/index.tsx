@@ -141,7 +141,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import { renderRowActionsOverflow } from '../../../../../components/uni-action';
+import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -2252,7 +2252,7 @@ const SalesOrdersPage: React.FC = () => {
           </Tooltip>
         );
         parts.push(
-          <UniWorkflowActions
+          <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.salesOrder.entityName')}
@@ -3694,7 +3694,7 @@ const SalesOrdersPage: React.FC = () => {
                     </>
                   );
                 })()}
-                <UniWorkflowActions
+                <UniWorkflowActions {...rowActionKind('skip')}
                   record={currentSalesOrder}
                   entityName={t('app.kuaizhizao.salesOrder.entityName')}
                   statusField="status"
@@ -3724,7 +3724,7 @@ const SalesOrdersPage: React.FC = () => {
                   }}
                 />
                 {canPushDownSalesOrder(currentSalesOrder) && (
-                  <Dropdown
+                  <Dropdown {...rowActionKind('skip')}
                     menu={{
                       items: buildUniPushMenuItems([
                         {

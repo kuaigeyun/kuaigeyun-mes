@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -430,13 +431,13 @@ const OutputRecordDocumentsPage: React.FC = () => {
         width: 168,
         fixed: 'right',
         render: (_, row) => [
-          <Button key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
+          <Button {...rowActionKind('read')} key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>,
-          <Button key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
+          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('read')}
             key="d"
             type="link"
             size="small"
@@ -537,10 +538,10 @@ const OutputRecordDocumentsPage: React.FC = () => {
         width={720}
         destroyOnHidden
         footer={[
-          <Button key="cancel" onClick={() => setBindingModalOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setBindingModalOpen(false)}>
             {t('app.haoligo.equipment.documents.btnCancel')}
           </Button>,
-          <Button key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={bindingModalBusy} onClick={() => void handleBindingSave()}>
             {t('app.haoligo.equipment.documents.btnSave')}
           </Button>,
         ]}

@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 研发需求（Phase2）
  */
@@ -74,7 +75,7 @@ const RequirementsPage: React.FC = () => {
       render: (_, row) =>
         renderRowActionsOverflow(
           [
-            <Button
+            <Button {...rowActionKind('delete')}
               key="del"
               type="link"
               size="small"
@@ -128,7 +129,7 @@ const RequirementsPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
             {'新建需求' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

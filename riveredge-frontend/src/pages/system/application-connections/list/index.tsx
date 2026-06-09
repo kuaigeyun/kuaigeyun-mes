@@ -5,6 +5,7 @@
  */
 
 import React, { useRef, useState, useMemo } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -745,13 +746,13 @@ const ApplicationConnectionsListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
               {t('pages.system.applicationConnections.view')}
             </Button>,
-            <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
               {t('pages.system.applicationConnections.edit')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('read')}
               key="test"
               type="link"
               size="small"
@@ -760,7 +761,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
             >
               {t('pages.system.applicationConnections.testConnection')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.applicationConnections.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
@@ -882,9 +883,9 @@ const ApplicationConnectionsListPage: React.FC = () => {
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-test" onClick={handleBatchTest}>{t('pages.system.applicationConnections.batchTestButton')}</Button>,
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.applicationConnections.batchEnableButton')}</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.applicationConnections.batchDisableButton')}</Button>,
+                  <Button {...rowActionKind('read')} key="batch-test" onClick={handleBatchTest}>{t('pages.system.applicationConnections.batchTestButton')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.applicationConnections.batchEnableButton')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.applicationConnections.batchDisableButton')}</Button>,
                 ]
               : []
           }

@@ -13,9 +13,10 @@ import { App, Button, Tag, Space, Modal, Input, Tree, Spin, Table, Form as AntFo
 import type { MenuProps } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import type { ColumnsType } from 'antd/es/table';
-import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, ApartmentOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -1931,6 +1932,7 @@ const BOMPage: React.FC = () => {
         return [
           <Button
             key="detail"
+            {...rowActionKind('read')}
             type="link"
             size="small"
             onClick={() => handleOpenDetail(r)}
@@ -1941,6 +1943,7 @@ const BOMPage: React.FC = () => {
           </Button>,
           <Button
             key="edit"
+            {...rowActionKind('update')}
             type="link"
             size="small"
             icon={<EditOutlined />}
@@ -1954,9 +1957,10 @@ const BOMPage: React.FC = () => {
           </Button>,
           <Button
             key="design"
+            {...rowActionKind('update')}
             type="link"
             size="small"
-            icon={<ApartmentOutlined />}
+            icon={<HighlightOutlined />}
             onClick={goDesigner}
             title={t('app.master-data.bom.designerTitle')}
             data-action-priority={2}
@@ -1966,6 +1970,7 @@ const BOMPage: React.FC = () => {
           r.approvalStatus !== 'approved' ? (
             <Button
               key="approve"
+              {...rowActionKind('audit')}
               type="link"
               size="small"
               icon={<CheckCircleOutlined />}
@@ -1978,6 +1983,7 @@ const BOMPage: React.FC = () => {
           ) : (
             <Button
               key="unapprove"
+              {...rowActionKind('revoke')}
               type="link"
               size="small"
               icon={<UndoOutlined />}
@@ -1988,7 +1994,7 @@ const BOMPage: React.FC = () => {
               {t('app.master-data.bom.unapprove')}
             </Button>
           ),
-          <Dropdown key="more" menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
+          <Dropdown key="more" {...rowActionKind('skip')} menu={{ items: moreItems }} trigger={['click']} data-action-priority={4}>
             <Button type="text" className="ant-btn-row-action" icon={<MoreOutlined />}>
               {t('app.master-data.bom.more')}
             </Button>
@@ -3101,7 +3107,7 @@ const BOMPage: React.FC = () => {
           setApprovalGroupKey(null);
         }}
         footer={[
-          <Button
+          <Button {...rowActionKind('reject')}
             key="reject"
             danger
             loading={approvalLoading}
@@ -3109,7 +3115,7 @@ const BOMPage: React.FC = () => {
           >
             {t('app.master-data.bom.reject')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('audit')}
             key="approve"
             type="primary"
             loading={approvalLoading}
@@ -3215,7 +3221,7 @@ const BOMPage: React.FC = () => {
           setVersionList([]);
         }}
         footer={[
-          <Button key="close" onClick={() => {
+          <Button {...rowActionKind('close')} key="close" onClick={() => {
             setVersionHistoryModalVisible(false);
             setVersionList([]);
           }}>
@@ -3315,7 +3321,7 @@ const BOMPage: React.FC = () => {
           setSelectedVersions(null);
         }}
         footer={[
-          <Button key="close" onClick={() => {
+          <Button {...rowActionKind('close')} key="close" onClick={() => {
             setVersionCompareModalVisible(false);
             setVersionCompareResult(null);
             setSelectedVersions(null);

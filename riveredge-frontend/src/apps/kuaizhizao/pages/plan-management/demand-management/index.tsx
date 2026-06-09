@@ -10,6 +10,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -543,7 +544,7 @@ const DemandManagementPage: React.FC = () => {
           record.demand_type === 'demand_plan' &&
           (isDemandDraft(record) || isDemandPendingReview(record));
         const parts: React.ReactNode[] = [
-          <Button
+          <Button {...rowActionKind('read')}
             key="detail"
             type="link"
             size="small"
@@ -555,7 +556,7 @@ const DemandManagementPage: React.FC = () => {
         ];
         if (canEdit) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -568,7 +569,7 @@ const DemandManagementPage: React.FC = () => {
         }
         if (canDelete) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('delete')}
               key="del"
               type="link"
               size="small"
@@ -582,7 +583,7 @@ const DemandManagementPage: React.FC = () => {
         }
         if (record.pushed_to_computation) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('revoke')}
               key="withdraw"
               type="link"
               size="small"
@@ -594,7 +595,7 @@ const DemandManagementPage: React.FC = () => {
           );
         } else if (isDemandAuditedAndApproved(record)) {
           parts.push(
-            <Button
+            <Button {...rowActionKind('submit')}
               key="push"
               type="link"
               size="small"
@@ -607,7 +608,7 @@ const DemandManagementPage: React.FC = () => {
         }
 
         parts.push(
-          <UniWorkflowActions
+          <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
             record={record}
             entityName="需求"
@@ -788,7 +789,7 @@ const DemandManagementPage: React.FC = () => {
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
           toolBarActions={[
-            <Button
+            <Button {...rowActionKind('create')}
               key="create-plan"
               type="primary"
               icon={<PlusOutlined />}
@@ -796,11 +797,11 @@ const DemandManagementPage: React.FC = () => {
             >
               新建需求计划
             </Button>,
-            <Tooltip
+            <Tooltip {...rowActionKind('skip')}
               key="merge-computation-tooltip"
               title="合并选中需求进入统一需求计算，随后在计算单中下推半成品工单等下游单据"
             >
-              <Button
+              <Button {...rowActionKind('execute')}
                 key="merge-computation"
                 type="primary"
                 icon={<MergeCellsOutlined />}
@@ -1162,7 +1163,7 @@ const DemandManagementPage: React.FC = () => {
         extra={
           currentDemand && (
             <Space>
-              <UniWorkflowActions
+              <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentDemand}
                 entityName="需求"
                 statusField="status"

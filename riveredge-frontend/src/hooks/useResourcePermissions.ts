@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
 import { hasPermission } from '../utils/permission';
+import { hasReviewPermission } from '../utils/permissionContract';
 import { hasPlatformAdministrativeAuthority } from '../utils/auth';
 import { isPlatformInfraPath } from '../utils/platformScope';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
@@ -18,6 +19,8 @@ export type ResourcePermissionGates = {
   canImport: boolean;
   canExport: boolean;
   canPrint: boolean;
+  /** manifest 标准 action；`skip` 由 filter 层直接放行 */
+  canAction?: (action: string) => boolean;
 };
 
 const FAIL_CLOSED: ResourcePermissionGates = {
@@ -29,6 +32,7 @@ const FAIL_CLOSED: ResourcePermissionGates = {
   canImport: false,
   canExport: false,
   canPrint: false,
+  canAction: () => false,
 };
 
 /** 平台级管理员：不受租户 manifest RBAC 拦截（与 hasPermission 唯一真源一致） */
@@ -79,6 +83,17 @@ export function useResourcePermissions(
     const canCreate = completeSource
       ? canInitiateCompleteCreate(currentUser, completeSource, prefix)
       : check('create');
+    const canAction = (action: string) => {
+      const act = (action || '').trim().toLowerCase();
+      if (!act || act === 'skip') return true;
+      if (act === 'create' && completeSource) {
+        return canInitiateCompleteCreate(currentUser, completeSource, prefix);
+      }
+      if (act === 'audit' || act === 'approve' || act === 'reject') {
+        return hasReviewPermission(currentUser, prefix);
+      }
+      return check(act);
+    };
 
     return {
       enabled: true,
@@ -90,6 +105,7 @@ export function useResourcePermissions(
       canImport: check('import'),
       canExport: check('export'),
       canPrint: check('print'),
+      canAction,
     };
   }, [currentUser, resource, completeSource, location.pathname]);
 }

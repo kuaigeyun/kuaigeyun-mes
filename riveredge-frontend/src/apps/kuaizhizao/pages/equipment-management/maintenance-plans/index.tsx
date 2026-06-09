@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 维护保养计划管理页面
  *
@@ -372,7 +373,7 @@ const MaintenancePlansPage: React.FC = () => {
 
   const renderPlanRowNodes = (record: MaintenancePlan): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [
-      <Button
+      <Button {...rowActionKind('read')}
         key="detail"
         type="link"
         size="small"
@@ -384,7 +385,7 @@ const MaintenancePlansPage: React.FC = () => {
       >
         详情
       </Button>,
-      <Button
+      <Button {...rowActionKind('update')}
         key="edit"
         type="link"
         size="small"
@@ -396,7 +397,7 @@ const MaintenancePlansPage: React.FC = () => {
       >
         编辑
       </Button>,
-      <Button
+      <Button {...rowActionKind('delete')}
         key="del"
         type="link"
         size="small"
@@ -416,7 +417,7 @@ const MaintenancePlansPage: React.FC = () => {
     ];
     if (record.status === '待执行') {
       nodes.push(
-        <Button
+        <Button {...rowActionKind('execute')}
           key="exec"
           type="link"
           size="small"

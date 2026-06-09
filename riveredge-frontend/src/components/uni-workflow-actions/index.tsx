@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Space, Button, Modal, App, Input } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, SendOutlined, UndoOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../services/api';
+import { rowActionKind } from '../uni-action';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
@@ -250,7 +251,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   const canShowAuditSemanticActions = effectiveAuditEnabled || !hideAuditActionsWhenDisabled;
 
   return (
-    <Space>
+    <Space {...rowActionKind('skip')}>
       {(isDraft || isRejected) && (actions.submit || apiPrefix) && canSubmit && (
         <Button
           key="submit"

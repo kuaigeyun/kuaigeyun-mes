@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../components/uni-action';
 /**
  * 物料管理合并页面
  *
@@ -2372,19 +2373,17 @@ const MaterialsManagementPage: React.FC = () => {
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button type="link" size="small" onClick={() => handleViewMaterial(record)}>
+            <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => handleViewMaterial(record)}>
               {t('app.master-data.bom.detail')}
             </Button>
-            <Button
-              type="link"
+            <Button key="edit" {...rowActionKind('update')} type="link"
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditMaterial(record)}
             >
               {t('app.master-data.bom.editTitle')}
             </Button>
-            <Popconfirm
-              title={t('app.master-data.materials.deleteMaterialConfirm')}
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.materials.deleteMaterialConfirm')}
               description={t('app.master-data.materials.deleteMaterialDesc')}
               onConfirm={() => handleDeleteMaterial(record)}
             >
@@ -3197,10 +3196,10 @@ const MaterialsManagementPage: React.FC = () => {
         width={960}
         destroyOnHidden
         footer={[
-          <Button key="cancel" disabled={standardPresetSubmitting} onClick={() => setStandardPresetOpen(false)}>
+          <Button {...rowActionKind('revoke')} key="cancel" disabled={standardPresetSubmitting} onClick={() => setStandardPresetOpen(false)}>
             {t('common.cancel')}
           </Button>,
-          <Button
+          <Button {...rowActionKind('skip')}
             key="ok"
             type="primary"
             loading={standardPresetSubmitting}

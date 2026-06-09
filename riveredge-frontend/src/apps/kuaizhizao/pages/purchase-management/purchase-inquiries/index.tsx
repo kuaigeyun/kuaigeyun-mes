@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
@@ -482,12 +483,12 @@ const PurchaseInquiriesPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>详情</Button>,
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>详情</Button>,
             isInquiryDraft(record) ? (
-              <Button key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
+              <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
             ) : null,
             isInquiryDraft(record) ? (
-              <Button key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => {
+              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => {
                 modal.confirm({
                   title: '确认删除？',
                   onOk: async () => {
@@ -873,7 +874,7 @@ const PurchaseInquiriesPage: React.FC = () => {
               {isInquiryAwarded(detail) && (
                 <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>下推采购订单</Button>
               )}
-              <UniWorkflowActions
+              <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
                 entityName="采购询价单"
                 statusField="status"

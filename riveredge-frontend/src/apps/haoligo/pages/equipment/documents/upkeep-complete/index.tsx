@@ -3,6 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -20,7 +21,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tabs, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
-import { HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE } from '../../../../constants/documentPermissionResources';
+import { HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE, HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET } from '../../../../constants/documentPermissionResources';
 import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../../stores';
@@ -587,11 +588,11 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>
           {canPrintUpkeepComplete ? (
-            <Button
+            <Button{...rowActionKind('update')} key="edit"
               type="link"
               size="small"
               icon={<PrinterOutlined />}
@@ -603,10 +604,10 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               {t('app.haoligo.print.printButton')}
             </Button>
           ) : null}
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>
-          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
             {t('app.haoligo.equipment.documents.actionDelete')}
           </Button>
         </Space>
@@ -620,6 +621,8 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         <UniTable<EquipmentUpkeepCompleteSheetRow>
           headerTitle={title}
           columnPersistenceId="apps.haoligo.pages.equipment.documents.upkeep-complete"
+          completeCreateSourceResource={HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET}
+          permissionResource={HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}

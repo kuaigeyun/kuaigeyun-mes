@@ -7,6 +7,7 @@
  */
 
 import React, { useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
   ActionType,
@@ -393,10 +394,10 @@ const DataDictionaryListPage: React.FC = () => {
       render: (_, record) =>
         renderRowActionsOverflow(
           [
-            <Button key="view" type="link" size="small" onClick={() => handleView(record)}>
+            <Button {...rowActionKind('read')} key="view" type="link" size="small" onClick={() => handleView(record)}>
               {t('common.detail')}
             </Button>,
-            <Button
+            <Button {...rowActionKind('update')}
               key="edit"
               type="link"
               size="small"
@@ -405,10 +406,10 @@ const DataDictionaryListPage: React.FC = () => {
             >
               {t('field.dataDictionary.edit')}
             </Button>,
-            <Button key="items" type="link" size="small" onClick={() => handleManageItems(record)}>
+            <Button {...rowActionKind('read')} key="items" type="link" size="small" onClick={() => handleManageItems(record)}>
               {t('field.dataDictionary.items')}
             </Button>,
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('field.dataDictionary.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
@@ -484,11 +485,10 @@ const DataDictionaryListPage: React.FC = () => {
         const isPresetItem = Boolean(record.is_system_managed);
         return (
           <Space size={4}>
-            <Button type="link" size="small" onClick={() => handleEditItem(record)}>
+            <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => handleEditItem(record)}>
               {t('field.dataDictionary.edit')}
             </Button>
-            <Popconfirm
-              title={t('field.dataDictionary.itemDeleteConfirm')}
+            <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.dataDictionary.itemDeleteConfirm')}
               onConfirm={() => handleDeleteItem(record)}
               disabled={isPresetItem}
             >
@@ -601,7 +601,7 @@ const DataDictionaryListPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button
+          <Button {...rowActionKind('update')}
             key="initialize"
             icon={<SettingOutlined />}
             onClick={handleInitializeSystemDictionaries}

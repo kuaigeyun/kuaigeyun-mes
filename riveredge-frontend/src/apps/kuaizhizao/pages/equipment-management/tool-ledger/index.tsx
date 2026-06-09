@@ -1,3 +1,4 @@
+import { rowActionKind } from '../../../../../components/uni-action';
 /**
  * 工装台账页面
  *
@@ -501,7 +502,7 @@ const ToolLedgerPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => [
-        <Button
+        <Button {...rowActionKind('read')}
           key="detail"
           type="link"
           size="small"
@@ -513,7 +514,7 @@ const ToolLedgerPage: React.FC = () => {
         >
           详情
         </Button>,
-        <Button
+        <Button {...rowActionKind('update')}
           key="edit"
           type="link"
           size="small"

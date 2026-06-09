@@ -45,6 +45,8 @@ export interface CurrentUser {
   is_tenant_admin?: boolean;
   tenant_id?: number;
   tenant_name?: string; // ⚠️ 关键修复：添加租户名称字段
+  tenant_plan?: string;
+  tenant_expires_at?: string;
   is_active?: boolean;
   permissions?: string[];
   permission_version?: number;

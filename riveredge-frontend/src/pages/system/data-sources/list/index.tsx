@@ -48,7 +48,7 @@ import { updateIntegrationConfig } from '../../../../services/integrationConfig'
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
+import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
 import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
@@ -513,28 +513,28 @@ const DataSourceListPage: React.FC = () => {
         hoverable
         style={{ height: '100%' }}
         actions={[
-          <Tooltip key="view" title={t('pages.system.dataSources.viewDetail')}>
+          <Tooltip {...rowActionKind('read')} key="view" title={t('pages.system.dataSources.viewDetail')}>
             <EyeOutlined
               onClick={() => handleView(dataSource)}
               style={{ fontSize: 16 }}
             />
           </Tooltip>,
           ...(dataSource.is_editable !== false ? [
-            <Tooltip key="edit" title={t('pages.system.dataSources.editDataSource')}>
+            <Tooltip {...rowActionKind('update')} key="edit" title={t('pages.system.dataSources.editDataSource')}>
               <EditOutlined
                 onClick={() => handleEdit(dataSource)}
                 style={{ fontSize: 16 }}
               />
             </Tooltip>,
           ] : []),
-          <Tooltip key="test" title={t('pages.system.dataSources.testConnection')}>
+          <Tooltip {...rowActionKind('read')} key="test" title={t('pages.system.dataSources.testConnection')}>
             <ThunderboltOutlined
               onClick={() => handleTestConnection(dataSource)}
               style={{ fontSize: 16, color: '#1890ff' }}
             />
           </Tooltip>,
           ...(dataSource.is_editable !== false ? [
-            <Popconfirm
+            <Popconfirm {...rowActionKind('delete')}
               key="delete"
               title={t('pages.system.dataSources.deleteConfirmTitle')}
               onConfirm={() => handleDelete(dataSource)}
@@ -743,6 +743,7 @@ const DataSourceListPage: React.FC = () => {
         const actions: React.ReactNode[] = [
           <Button
             key="view"
+            {...rowActionKind('read')}
             type="link"
             size="small"
             icon={<EyeOutlined />}
@@ -755,6 +756,7 @@ const DataSourceListPage: React.FC = () => {
           actions.push(
             <Button
               key="edit"
+              {...rowActionKind('update')}
               type="link"
               size="small"
               icon={<EditOutlined />}
@@ -767,6 +769,7 @@ const DataSourceListPage: React.FC = () => {
         actions.push(
           <Button
             key="test"
+            {...rowActionKind('read')}
             type="link"
             size="small"
             icon={<ThunderboltOutlined />}
@@ -779,6 +782,7 @@ const DataSourceListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="delete"
+              {...rowActionKind('delete')}
               title={t('pages.system.dataSources.deleteConfirmTitle')}
               onConfirm={() => handleDelete(record)}
               okText={t('common.confirm')}
@@ -971,9 +975,9 @@ const DataSourceListPage: React.FC = () => {
           toolBarRender={() =>
             selectedRowKeys.length > 0
               ? [
-                  <Button key="batch-test" onClick={handleBatchTest}>{t('pages.system.dataSources.batchTest')}</Button>,
-                  <Button key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.dataSources.batchEnable')}</Button>,
-                  <Button key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.dataSources.batchDisable')}</Button>,
+                  <Button {...rowActionKind('read')} key="batch-test" onClick={handleBatchTest}>{t('pages.system.dataSources.batchTest')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-enable" onClick={() => handleBatchStatus(true)}>{t('pages.system.dataSources.batchEnable')}</Button>,
+                  <Button {...rowActionKind('update')} key="batch-disable" onClick={() => handleBatchStatus(false)}>{t('pages.system.dataSources.batchDisable')}</Button>,
                 ]
               : []
           }

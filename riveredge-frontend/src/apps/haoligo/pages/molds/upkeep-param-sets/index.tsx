@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   ActionType,
   ProColumns,
@@ -339,14 +340,13 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
       width: 200,
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
             {t('common.detail')}
           </Button>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditEditor(record)}>
+          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditEditor(record)}>
             {t('common.edit')}
           </Button>
-          <Button
-            type="link"
+          <Button key="delete" {...rowActionKind('delete')} type="link"
             size="small"
             danger
             icon={<DeleteOutlined />}
@@ -443,10 +443,10 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
         onCancel={closeEditor}
         width={960}
         footer={[
-          <Button key="cancel" onClick={closeEditor}>
+          <Button {...rowActionKind('revoke')} key="cancel" onClick={closeEditor}>
             {t('common.cancel')}
           </Button>,
-          <Button key="save" type="primary" loading={editorSaving} onClick={() => void saveEditor()}>
+          <Button {...rowActionKind('skip')} key="save" type="primary" loading={editorSaving} onClick={() => void saveEditor()}>
             {t('common.save')}
           </Button>,
         ]}
