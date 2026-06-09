@@ -73,7 +73,6 @@ import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { User } from '../../../../../services/user';
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting';
 import { coerceReportingCreateStrings } from '../../../utils/reportingPayload';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -138,7 +137,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */

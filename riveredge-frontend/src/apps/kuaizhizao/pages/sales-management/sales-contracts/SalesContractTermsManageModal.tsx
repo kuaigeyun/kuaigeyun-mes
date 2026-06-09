@@ -130,7 +130,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button key="edit" {...rowActionKind('update')} type="link"
+            <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => {
@@ -140,7 +140,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             >
               {t('common.edit')}
             </Button>
-            <Button key="delete" {...rowActionKind('delete')} type="link"
+            <Button key="delete" {...rowActionKind('delete')}
               size="small"
               danger
               icon={<DeleteOutlined />}
@@ -182,7 +182,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button key="edit" {...rowActionKind('update')} type="link"
+            <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={async () => {
@@ -198,7 +198,7 @@ export const SalesContractTermsManageModal: React.FC<SalesContractTermsManageMod
             >
               {t('common.edit')}
             </Button>
-            <Button key="delete" {...rowActionKind('delete')} type="link"
+            <Button key="delete" {...rowActionKind('delete')}
               size="small"
               danger
               icon={<DeleteOutlined />}

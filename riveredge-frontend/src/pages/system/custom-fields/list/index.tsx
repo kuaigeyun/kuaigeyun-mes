@@ -38,7 +38,6 @@ import {
   buildMenuPathNameMap,
   enrichPagesWithMenuNames,
 } from '../../../../utils/featurePageDisplay';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 获取所有可用的表名选项（用于关联表名选择框）
@@ -864,13 +863,11 @@ const CustomFieldListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.customField.view')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('field.customField.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')} key="delete" title={t('field.customField.deleteConfirm')} onConfirm={() => handleDelete(record)}>
@@ -879,8 +876,6 @@ const CustomFieldListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `custom-field-${record.uuid}`,
-        ),
     },
   ];
 

@@ -50,7 +50,6 @@ import {
 } from '../../../../services/department';
 import { executeDatasetQuery, getDatasetList } from '../../../../services/dataset';
 import { downloadFile } from '../../../../utils';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 const DepartmentListPage: React.FC = () => {
@@ -639,10 +638,10 @@ const DepartmentListPage: React.FC = () => {
       render: (_, record) => {
         const canDelete = checkCanDelete(record);
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+          <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
             {t('field.department.view')}
           </Button>,
-          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
             {t('field.department.edit')}
           </Button>,
           <Button {...rowActionKind('create')}
@@ -678,7 +677,7 @@ const DepartmentListPage: React.FC = () => {
             </Tooltip>
           </Popconfirm>,
         ];
-        return renderRowActionsOverflow(actions, `dept-${record.uuid ?? 'row'}`);
+        return actions;
       },
     },
   ];

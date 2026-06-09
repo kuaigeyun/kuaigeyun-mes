@@ -70,7 +70,7 @@ import {
 } from '../../../../services/applicationDedicatedBindings';
 import { syncAllMenus } from '../../../../services/menu';
 import { apiRequest } from '../../../../services/api';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind } from '../../../../components/uni-action';
 
 /** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
 const OTHER_PLACEHOLDER_CODES = [
@@ -1265,7 +1265,7 @@ const ApplicationListPage: React.FC = () => {
           );
         }
 
-        return renderRowActionsOverflow(actions, `app-${record.uuid}`);
+        return actions;
       },
     },
   ];

@@ -26,6 +26,7 @@ import {
   FilePdfOutlined,
   SaveOutlined,
   BranchesOutlined,
+  CommentOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -38,7 +39,14 @@ import {
   type ResolvedRowActionTone,
   type RowActionPermissionKind,
   isAppLocalAuditAction,
+  readActionVisualProfile,
 } from './actionText'
+import {
+  ROW_ACTION_LABEL_KEEP_ATTR,
+  rowActionLabel,
+  rowActionVisualProfileLabel,
+  shouldInjectRowActionCatalogLabel,
+} from './actionCatalog'
 
 function isAuditSemanticRowAction(node: React.ReactNode): boolean {
   const explicit = readExplicitActionKind(node)
@@ -91,6 +99,9 @@ function defaultIconForRowActionWithKind(
   node: React.ReactNode,
   inheritedExplicit?: RowActionPermissionKind | null,
 ): React.ReactNode | undefined {
+  if (readActionVisualProfile(node) === 'add-follow-up-from-document') {
+    return <CommentOutlined />
+  }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />
   if (explicit === 'update') return <EditOutlined />
@@ -101,10 +112,38 @@ function defaultIconForRowActionWithKind(
   if (explicit === 'reject') return <CloseCircleOutlined />
   if (explicit === 'revoke') return <RollbackOutlined />
   if (explicit === 'execute') return <PlayCircleOutlined />
+  if (explicit === 'complete') return <CheckCircleOutlined />
   if (explicit === 'create') return <PlusOutlined />
   if (explicit === 'export') return <ExportOutlined />
   if (explicit === 'import') return <ImportOutlined />
+  if (explicit === 'assign') return <BranchesOutlined />
+  if (explicit === 'dispatch') return <SendOutlined />
+  if (explicit === 'recall') return <RollbackOutlined />
+  if (explicit === 'confirm_adjustment') return <CheckCircleOutlined />
+  if (explicit === 'claim') return <BellOutlined />
+  if (explicit === 'recycle') return <SyncOutlined />
+  if (explicit === 'release') return <CloudUploadOutlined />
+  if (explicit === 'close') return <StopOutlined />
+  if (explicit === 'display') return <EyeOutlined />
   return undefined
+}
+
+function resolveCatalogButtonLabel(
+  node: React.ReactNode,
+  inheritedExplicit?: RowActionPermissionKind | null,
+): string | null {
+  if (!React.isValidElement(node)) return null
+  const props = (node.props || {}) as Record<string, unknown>
+  const labelKeep = props[ROW_ACTION_LABEL_KEEP_ATTR] === true
+  const profile = readActionVisualProfile(node)
+  if (profile && !labelKeep) {
+    return rowActionVisualProfileLabel(profile)
+  }
+  const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
+  if (!shouldInjectRowActionCatalogLabel(explicit, labelKeep)) {
+    return null
+  }
+  return rowActionLabel(explicit!)
 }
 
 /**
@@ -146,21 +185,26 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const inheritedExplicit = ctx.inheritedExplicitKind ?? null
     const tone = resolveButtonToneFromNode(node, inheritedExplicit)
     const rawChildrenText = readNodeText(props.children)
-    const normalizedText = normalizeActionLabelText(rawChildrenText) || props.children
+    const catalogLabel = resolveCatalogButtonLabel(node, inheritedExplicit)
+    const normalizedText =
+      catalogLabel ?? (normalizeActionLabelText(rawChildrenText) || props.children)
     const kind = resolveEffectiveActionKind(node, inheritedExplicit)
     const currentIcon = props.icon
     const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
-    const nextIcon = currentIcon ?? defaultIcon
+    const nextIcon = defaultIcon ?? currentIcon
     const targetClass = rowActionClassName(kind)
 
     const sameTone = rowActionToneMatchesProps(tone, props as Record<string, unknown>)
     const sameClass = String(props.className || '').trim() === targetClass
     const sameChildren =
-      typeof normalizedText === 'string'
-        ? normalizedText === rawChildrenText
-        : normalizedText === props.children
-    const sameIcon = nextIcon === props.icon
-    if (sameTone && sameClass && sameChildren && sameIcon) {
+      catalogLabel != null
+        ? rawChildrenText !== catalogLabel
+        : typeof normalizedText === 'string'
+          ? normalizedText === rawChildrenText
+          : normalizedText === props.children
+    const sameIcon = nextIcon === currentIcon
+    const needsRetype = props.type != null && props.type !== tone.type
+    if (sameTone && sameClass && sameChildren && sameIcon && !needsRetype) {
       return node
     }
 

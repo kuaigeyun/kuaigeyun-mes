@@ -23,7 +23,6 @@ import {
   InvitationCode,
 } from '../../../../services/invitationCode';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const InvitationCodeListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -268,13 +267,11 @@ const InvitationCodeListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.invitationCode.view')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('field.invitationCode.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
@@ -287,8 +284,6 @@ const InvitationCodeListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `invitation-code-${record.uuid}`,
-        ),
     },
   ];
 

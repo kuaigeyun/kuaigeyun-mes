@@ -73,7 +73,6 @@ import {
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { formatPurchaseRequisitionSourceType } from '../../../utils/purchaseRequisitionSourceType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -118,7 +117,7 @@ type PullDemandComputationCandidate = {
 };
 
 function renderPurchaseRequisitionRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 function canPushPurchaseRequisition(record: PurchaseRequisition): boolean {
@@ -458,18 +457,18 @@ const PurchaseRequisitionsPage: React.FC = () => {
         const s = (record.status ?? '').toString().trim();
         const isDraft = ['草稿', 'draft', 'DRAFT'].includes(s);
         const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             详情
           </Button>,
         ];
         if (isDraft) {
           parts.push(
-            <Button {...rowActionKind('submit')} key="submit" type="link" size="small" onClick={() => handleSubmitRequisition(record)}>
+            <Button {...rowActionKind('submit')} key="submit" onClick={() => handleSubmitRequisition(record)}>
               提交
             </Button>
           );
           parts.push(
-            <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
               编辑
             </Button>
           );
@@ -501,12 +500,12 @@ const PurchaseRequisitionsPage: React.FC = () => {
         );
         if (isDraft) {
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteOne(record)}>
               删除
             </Button>
           );
         }
-        return renderPurchaseRequisitionRowActions(parts, `pr-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

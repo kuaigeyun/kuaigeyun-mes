@@ -17,7 +17,6 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import dayjs from 'dayjs';
 import { getFinanceVoucherLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { payableService } from '../../../services/finance/payable';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { paymentService } from '../../../services/finance/payment';
@@ -363,30 +362,26 @@ const PaymentsPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 220,
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="det" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
               详情
             </Button>,
             record.status === 'Draft' ? (
-              <Button {...rowActionKind('audit')} key="cf" type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+              <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
                 确认
               </Button>
             ) : null,
             record.status === 'Confirmed' ? (
-              <Button {...rowActionKind('submit')} key="st" type="link" size="small" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
+              <Button {...rowActionKind('submit')} key="st" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
                 核销
               </Button>
             ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 ? (
-              <Button {...rowActionKind('revoke')} key="ca" type="link" size="small" danger icon={<StopOutlined />} onClick={() => handleCancelVoucher(record)}>
+              <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancelVoucher(record)}>
                 作废
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
-          `pay-${record.id}`,
-        ),
     },
   ];
 

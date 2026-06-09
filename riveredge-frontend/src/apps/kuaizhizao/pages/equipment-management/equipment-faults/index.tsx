@@ -36,7 +36,6 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { getEquipmentFaultLifecycle } from '../../../utils/equipmentLifecycle';
 import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 
@@ -71,7 +70,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderFaultRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 interface EquipmentFault {
@@ -420,7 +419,7 @@ const EquipmentFaultsPage: React.FC = () => {
     ];
     if (record.repair_required && record.status !== '已修复') {
       nodes.push(
-        <Button {...rowActionKind('update')} key="repair" type="link" size="small" onClick={(e) => {
+        <Button {...rowActionKind('update')} key="repair" onClick={(e) => {
           e.stopPropagation();
           handleCreateRepair(record);
         }}

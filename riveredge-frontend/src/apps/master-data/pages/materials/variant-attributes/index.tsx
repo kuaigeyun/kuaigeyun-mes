@@ -172,7 +172,7 @@ const VariantAttributesPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: VariantAttributeDefinition) => (
         <Space>
-          <Button key="edit" {...rowActionKind('update')} type="link"
+          <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}

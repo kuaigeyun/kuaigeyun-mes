@@ -245,10 +245,10 @@ const PatrolIssueRegisterPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openForm(record, true)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void openForm(record, true)}>
             详情
           </Button>
-          <Button key="remediate" {...rowActionKind('update')} type="link"
+          <Button key="remediate" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             disabled={record.status === '已治理'}
@@ -256,7 +256,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
           >
             编辑
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
             删除
           </Button>
         </Space>

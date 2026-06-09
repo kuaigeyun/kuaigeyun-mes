@@ -404,14 +404,14 @@ const MaintenanceRemindersPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link"
+          <Button key="view" {...rowActionKind('read')}
             icon={<EyeOutlined />}
             onClick={() => handleViewDetail(record)}
           >
             查看
           </Button>
           {!record.is_read && (
-            <Button key="approve" {...rowActionKind('audit')} type="link"
+            <Button key="approve" {...rowActionKind('audit')}
               icon={<CheckOutlined />}
               onClick={() => handleMarkAsRead(record)}
             >
@@ -419,7 +419,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             </Button>
           )}
           {!record.is_handled && (
-            <Button key="approve" {...rowActionKind('audit')} type="link"
+            <Button key="approve" {...rowActionKind('audit')}
               icon={<CheckCircleOutlined />}
               onClick={() => handleMarkAsHandled(record)}
             >

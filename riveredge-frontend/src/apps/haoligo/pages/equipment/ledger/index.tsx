@@ -609,13 +609,13 @@ const EquipmentLedgerPage: React.FC = () => {
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
               {t('common.detail')}
             </Button>
-            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
               {t('app.haoligo.equipment.ledger.actionEdit')}
             </Button>
-            <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
               {t('app.haoligo.equipment.ledger.actionDelete')}
             </Button>
           </Space>

@@ -186,10 +186,10 @@ const StatusAdjustmentDocumentsPage: React.FC = () => {
         width: 168,
         fixed: 'right',
         render: (_, row) => [
-          <Button {...rowActionKind('read')} key="v" type="link" size="small" icon={<EyeOutlined />} onClick={() => openEdit(row.id, true)}>
+          <Button {...rowActionKind('read')} key="v" onClick={() => openEdit(row.id, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>,
-          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(row.id, false)}>
+          <Button {...rowActionKind('update')} key="e" onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>,
           <Button {...rowActionKind('read')}

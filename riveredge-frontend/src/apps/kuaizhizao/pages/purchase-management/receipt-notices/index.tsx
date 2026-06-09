@@ -59,7 +59,6 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { SimpleSparkline } from '../../../../../components';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { receiptNoticeApi } from '../../../services/receipt-notice';
@@ -155,7 +154,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderReceiptNoticeRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 const ReceiptNoticesPage: React.FC = () => {
@@ -417,7 +416,7 @@ const ReceiptNoticesPage: React.FC = () => {
             </Button>
           );
         }
-        return renderReceiptNoticeRowActions(parts, `rn-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

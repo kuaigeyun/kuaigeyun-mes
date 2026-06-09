@@ -20,7 +20,6 @@ import {
   type ChangeDeskCategory,
 } from '../../services/change-desk';
 import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../services/master-data-links';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 
@@ -119,8 +118,7 @@ const ChangeManagementPage: React.FC = () => {
       width: 200,
       render: (_, row) => {
         const pending = (row.status ?? '').toLowerCase().includes('pending') || row.status === '待审批';
-        return renderRowActionsOverflow(
-          [
+        return [
             pending ? (
               <Button {...rowActionKind('audit')}
                 key="approve"
@@ -143,9 +141,7 @@ const ChangeManagementPage: React.FC = () => {
                 执行
               </Button>
             ) : null,
-          ].filter(Boolean) as React.ReactNode[],
-          `chg-${row.uuid}`,
-        );
+          ].filter(Boolean) as React.ReactNode[];
       },
     },
   ];

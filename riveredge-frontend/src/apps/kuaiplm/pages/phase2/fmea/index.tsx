@@ -17,7 +17,6 @@ import {
   deleteFmeaRecord,
   type RdFmeaRecord,
 } from '../../../services/phase2';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
@@ -63,9 +62,7 @@ const FmeaPage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       width: 80,
-      render: (_, row) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, row) => [
             <Button {...rowActionKind('delete')}
               key="del"
               type="link"
@@ -85,8 +82,6 @@ const FmeaPage: React.FC = () => {
               删除
             </Button>,
           ],
-          `fmea-${row.id}`,
-        ),
     },
   ];
 
@@ -120,7 +115,7 @@ const FmeaPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
             {'新建 FMEA' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

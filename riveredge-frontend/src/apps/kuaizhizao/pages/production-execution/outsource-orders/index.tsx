@@ -60,7 +60,6 @@ import { supplierApi, unwrapSupplyPagedList } from '../../../../master-data/serv
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
 interface OutsourceOrder {
@@ -132,7 +131,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 const OO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];

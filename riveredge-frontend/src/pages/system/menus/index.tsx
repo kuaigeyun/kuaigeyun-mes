@@ -46,10 +46,7 @@ import {
   mapMenuTreeWithTranslatedLabels,
   translateAppMenuItemName,
 } from '../../../utils/menuTranslation';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
-
-// 动态图标组件
-const IconItem = ({ icon }: { icon?: string }) => {
+import { { icon }: { icon?: string } => {
   if (!icon) return null;
   const AntdIcons = Icons as unknown as Record<string, React.ComponentType>;
   const Icon = AntdIcons[icon];
@@ -597,10 +594,10 @@ const MenuListPage: React.FC = () => {
             const canSetHome =
               record.is_active && !record.is_external && !!(record.path && String(record.path).trim());
             const actions: React.ReactNode[] = [
-              <Button {...rowActionKind('read')} key="detail" type="default" size="small" onClick={() => handleView(record)}>
+              <Button {...rowActionKind('read')} key="detail" type="default" onClick={() => handleView(record)}>
                 {t('common.detail')}
               </Button>,
-              <Button {...rowActionKind('update')} key="edit" type="primary" size="small" onClick={() => handleEdit(record)}>
+              <Button {...rowActionKind('update')} key="edit" type="primary" onClick={() => handleEdit(record)}>
                 {t('pages.system.menus.edit')}
               </Button>,
               <Tooltip {...rowActionKind('update')}
@@ -656,7 +653,7 @@ const MenuListPage: React.FC = () => {
                 </span>
               </Tooltip>,
             ];
-            return renderRowActionsOverflow(actions, `menu-${record.uuid ?? 'row'}`, 5);
+            return actions;
         }
     }
   ], [backendHome?.menu_uuid, checkCanDelete, handleCreate, handleDelete, handleEdit, handleSetBackendHome, handleView, t]);

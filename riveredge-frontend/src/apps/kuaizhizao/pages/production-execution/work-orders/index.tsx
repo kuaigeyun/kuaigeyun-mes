@@ -209,7 +209,6 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate'
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
 
 interface WorkOrder {
@@ -5259,8 +5258,7 @@ const WorkOrdersPage: React.FC = () => {
         if (rowKind === 'work_order_group') {
           const groupId = resolveWorkOrderGroupIdFromListRow(record)
           if (groupId == null) return null
-          return renderRowActionsOverflow(
-            [
+          return [
               <Button {...rowActionKind('update')}
                 key="dissolve-group"
                 type="link"
@@ -5272,9 +5270,7 @@ const WorkOrdersPage: React.FC = () => {
               >
                 解除编组
               </Button>,
-            ],
-            `wo-group-${groupId}`
-          )
+            ];
         }
 
         const rawStatus = record.status || ''
@@ -5489,7 +5485,7 @@ const WorkOrdersPage: React.FC = () => {
           </Button>
         )
 
-        return renderRowActionsOverflow(parts, `wo-${rowKey}`)
+        return parts;
       },
     },
   ]

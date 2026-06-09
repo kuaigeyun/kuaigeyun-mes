@@ -38,7 +38,6 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
 
@@ -73,7 +72,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPlanRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 interface MaintenancePlan {

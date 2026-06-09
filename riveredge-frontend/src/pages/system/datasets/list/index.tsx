@@ -43,7 +43,7 @@ import {
   getDataConnectionsForDataset,
   IntegrationConfig,
 } from '../../../../services/integrationConfig';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind } from '../../../../components/uni-action';
 
 /**
  * 数据集管理列表页面组件
@@ -580,16 +580,14 @@ const DatasetListPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       uniActionRenderOptions: { directMax: 5 },
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
               {t('pages.system.datasets.view')}
             </Button>,
-            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('pages.system.datasets.edit')}
             </Button>,
-            <Button key="design" {...rowActionKind('update')} type="link" size="small" icon={<HighlightOutlined />} onClick={() => handleDesign(record)} data-action-priority={2}>
+            <Button key="design" {...rowActionKind('update')} onClick={() => handleDesign(record)} data-action-priority={2}>
               {t('pages.system.datasets.design')}
             </Button>,
             <Button
@@ -603,7 +601,7 @@ const DatasetListPage: React.FC = () => {
             >
               {t('pages.system.datasets.executeQuery')}
             </Button>,
-            <Button key="copy" {...rowActionKind('create')} type="link" size="small" icon={<CopyOutlined />} onClick={() => handleCopy(record)}>
+            <Button key="copy" {...rowActionKind('create')} onClick={() => handleCopy(record)}>
               {t('pages.system.datasets.copy')}
             </Button>,
             <Popconfirm
@@ -619,8 +617,6 @@ const DatasetListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `dataset-${record.uuid}`,
-        ),
     },
   ];
 

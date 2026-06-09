@@ -41,16 +41,7 @@ import {
 } from '../../../services/dataBackup';
 import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
-import dayjs from 'dayjs';
-
-const { Text } = Typography;
-const { useToken } = theme;
-
-/**
- * 格式化文件大小
- */
-const formatFileSize = (bytes?: number): string => {
+import { bytes?: number: string => {
   if (!bytes) return '-';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
@@ -611,7 +602,7 @@ const DataBackupsPage: React.FC = () => {
       fixed: 'right',
       render: (_: any, record: DataBackup) => {
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+          <Button {...rowActionKind('read')} key="view" onClick={() => handleViewDetail(record)}>
             {t('common.detail')}
           </Button>,
         ];
@@ -628,7 +619,7 @@ const DataBackupsPage: React.FC = () => {
             </Button>,
           );
           actions.push(
-            <Button {...rowActionKind('update')} key="restore" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRestore(record)}>
+            <Button {...rowActionKind('update')} key="restore" onClick={() => handleRestore(record)}>
               {t('pages.system.dataBackups.restore')}
             </Button>,
           );
@@ -646,7 +637,7 @@ const DataBackupsPage: React.FC = () => {
             </Button>
           </Popconfirm>,
         );
-        return renderRowActionsOverflow(actions, `backup-${record.uuid}`);
+        return actions;
       },
     },
   ];

@@ -63,15 +63,7 @@ import {
   testApplicationConnectionConfig,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import {
-  buildFactoryImportTemplate,
-  resolveFactoryImportHeaderIndexMap,
-} from '../../../../utils/spreadsheetImportTemplate';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
+import { relativeTime;
 
 const {  } = Typography;
 
@@ -744,12 +736,11 @@ const ApplicationConnectionsListPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+        [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('pages.system.applicationConnections.view')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('pages.system.applicationConnections.edit')}
             </Button>,
             <Button {...rowActionKind('read')}
@@ -773,8 +764,6 @@ const ApplicationConnectionsListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `app-conn-${record.uuid}`,
-        ),
     },
   ];
 

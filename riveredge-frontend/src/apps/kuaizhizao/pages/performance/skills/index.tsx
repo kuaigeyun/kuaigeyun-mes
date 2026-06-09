@@ -164,10 +164,10 @@ const SkillsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => handleOpenDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
             详情
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
             编辑
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个技能吗？" onConfirm={() => handleDelete(record)}>

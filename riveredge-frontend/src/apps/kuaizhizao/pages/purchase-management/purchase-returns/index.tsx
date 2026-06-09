@@ -76,7 +76,6 @@ import { warehouseApi } from '../../../services/production';
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 interface PurchaseReturn {
   id?: number;
@@ -187,7 +186,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPurchaseReturnRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 const PurchaseReturnsPage: React.FC = () => {
@@ -714,7 +713,7 @@ const PurchaseReturnsPage: React.FC = () => {
             </Button>
           );
         }
-        return renderPurchaseReturnRowActions(parts, `pr-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

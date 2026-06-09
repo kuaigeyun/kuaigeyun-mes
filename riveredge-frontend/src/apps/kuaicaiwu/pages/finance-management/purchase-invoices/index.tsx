@@ -15,7 +15,6 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
@@ -369,9 +368,7 @@ const PurchaseInvoiceList: React.FC = () => {
             valueType: 'option',
             fixed: 'right',
             width: 200,
-            render: (_, record) =>
-                renderRowActionsOverflow(
-                    [
+            render: (_, record) => [
                         <Button {...rowActionKind('read')}
                             key="det"
                             type="link"
@@ -402,8 +399,6 @@ const PurchaseInvoiceList: React.FC = () => {
                             />
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
-                    `pi-${record.id}`,
-                ),
         },
     ];
 

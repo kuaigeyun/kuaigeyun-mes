@@ -44,7 +44,6 @@ import {
   UpdateMessageConfigData,
   testMessageConfig,
 } from '../../../../services/messageConfig';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 消息配置管理列表页面组件
@@ -432,10 +431,8 @@ const MessageConfigListPage: React.FC = () => {
       title: t('pages.system.messageConfig.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('pages.system.messageConfig.view')}
             </Button>,
             <Button {...rowActionKind('update')}
@@ -465,8 +462,6 @@ const MessageConfigListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `message-config-${record.uuid}`,
-        ),
     },
   ];
 

@@ -2373,10 +2373,10 @@ const MaterialsManagementPage: React.FC = () => {
         fixed: 'right',
         render: (_, record) => (
           <Space>
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => handleViewMaterial(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleViewMaterial(record)}>
               {t('app.master-data.bom.detail')}
             </Button>
-            <Button key="edit" {...rowActionKind('update')} type="link"
+            <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEditMaterial(record)}

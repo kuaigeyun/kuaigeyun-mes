@@ -41,7 +41,6 @@ import {
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 语言管理列表页面组件
@@ -485,10 +484,8 @@ const LanguageListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.language.view')}
             </Button>,
             <Button {...rowActionKind('read')}
@@ -500,7 +497,7 @@ const LanguageListPage: React.FC = () => {
             >
               {t('field.language.translations')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('field.language.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
@@ -514,8 +511,6 @@ const LanguageListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `language-${record.uuid}`,
-        ),
     },
   ];
 

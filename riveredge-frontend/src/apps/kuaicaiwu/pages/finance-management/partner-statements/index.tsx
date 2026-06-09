@@ -22,7 +22,6 @@ import { useNavigate } from 'react-router-dom';
 import dayjs, { Dayjs } from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import {
   partnerStatementService,
   PartnerStatement,
@@ -214,9 +213,7 @@ const PartnerStatementsPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 160,
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="det"
               type="link"
@@ -239,8 +236,6 @@ const PartnerStatementsPage: React.FC = () => {
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
-          `ps-${record.id}`,
-        ),
     },
   ];
 

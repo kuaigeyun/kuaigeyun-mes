@@ -163,7 +163,7 @@ const NonconformingLedgerPage: React.FC = () => {
             </Button>
           )}
           {canStart8d && (
-            <Button key="execute" {...rowActionKind('execute')} type="link" onClick={() => handleStart8d(row)}>
+            <Button key="execute" {...rowActionKind('execute')} onClick={() => handleStart8d(row)}>
               发起 8D
             </Button>
           )}

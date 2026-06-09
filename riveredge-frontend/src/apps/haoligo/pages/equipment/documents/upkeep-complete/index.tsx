@@ -588,7 +588,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void openSheetForm(record, true)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void openSheetForm(record, true)}>
             {t('app.haoligo.equipment.documents.actionView')}
           </Button>
           {canPrintUpkeepComplete ? (
@@ -604,10 +604,10 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
               {t('app.haoligo.print.printButton')}
             </Button>
           ) : null}
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openSheetForm(record, false)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => void openSheetForm(record, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
             {t('app.haoligo.equipment.documents.actionDelete')}
           </Button>
         </Space>

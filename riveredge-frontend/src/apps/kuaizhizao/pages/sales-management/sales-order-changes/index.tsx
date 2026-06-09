@@ -19,7 +19,6 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -218,19 +217,17 @@ const SalesOrderChangesPage: React.FC = () => {
       valueType: 'option',
       width: 180,
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetail(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
               详情
             </Button>,
             isOrderChangeDraft(record) ? (
-              <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
+              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
                 编辑
               </Button>
             ) : null,
             isOrderChangeDraft(record) ? (
-              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => {
+              <Button {...rowActionKind('delete')} key="del" onClick={() => {
                 modal.confirm({
                   title: '确认删除？',
                   onOk: async () => {
@@ -244,8 +241,6 @@ const SalesOrderChangesPage: React.FC = () => {
               </Button>
             ) : null,
           ],
-          `soc-${record.id}`,
-        ),
     },
   ];
 

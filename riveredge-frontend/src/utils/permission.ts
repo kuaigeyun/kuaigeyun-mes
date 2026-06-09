@@ -10,8 +10,25 @@
 import { CurrentUser } from '../types/api';
 import { hasPlatformAdministrativeAuthority } from './auth';
 
-const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'];
+export const SYSTEM_ADMIN_ROLE_CODES = ['ADMIN', 'SYSTEM_ADMIN', 'SUPER_ADMIN'] as const;
 const SYSTEM_ADMIN_ROLE_NAME = '系统管理员';
+
+/** 与后端 UserPermissionService.is_admin_bypass / permission-responsibility 三路径合一 */
+export function isSystemAdminRole(user: CurrentUser | undefined): boolean {
+  if (!user?.roles?.length) return false;
+  return user.roles.some(
+    (r) =>
+      SYSTEM_ADMIN_ROLE_CODES.includes((r.code || '').trim().toUpperCase() as (typeof SYSTEM_ADMIN_ROLE_CODES)[number]) ||
+      (r.name || '').trim() === SYSTEM_ADMIN_ROLE_NAME
+  );
+}
+
+/** 平台/组织管理员 + 系统管理员角色：关闭按钮级 RBAC 过滤（与后端 is_admin_bypass 一致） */
+export function isAdminBypass(user: CurrentUser | undefined): boolean {
+  if (hasPlatformAdministrativeAuthority(user)) return true;
+  if (!user) return false;
+  return Boolean(user.is_tenant_admin) || isSystemAdminRole(user);
+}
 /** 与后端权限码规范一致：仅做大小写与空白统一。 */
 export function normalizePermissionCode(code: string): string {
   return String(code ?? '').trim().toLowerCase();
@@ -30,18 +47,6 @@ function matchesRequiredPermission(userPerms: Set<string>, required: string): bo
 }
 
 /**
- * 判断用户是否拥有「系统管理员」角色（与后端判定一致，用于菜单等前端权限展示）
- */
-function isSystemAdminRole(user: CurrentUser | undefined): boolean {
-  if (!user?.roles?.length) return false;
-  return user.roles.some(
-    (r) =>
-      SYSTEM_ADMIN_ROLE_CODES.includes((r.code || '').trim().toUpperCase()) ||
-      (r.name || '').trim() === SYSTEM_ADMIN_ROLE_NAME
-  );
-}
-
-/**
  * 检查用户是否具有指定权限
  * 
  * @param user - 当前用户
@@ -49,16 +54,11 @@ function isSystemAdminRole(user: CurrentUser | undefined): boolean {
  * @returns 是否具有权限
  */
 export function hasPermission(user: CurrentUser | undefined, permissionCode: string): boolean {
-  if (hasPlatformAdministrativeAuthority(user)) {
+  if (isAdminBypass(user)) {
     return true;
   }
   if (!user) {
     return false;
-  }
-
-  // 组织管理员或系统管理员角色默认拥有所有权限
-  if (user.is_tenant_admin || isSystemAdminRole(user)) {
-    return true;
   }
 
   const userPerms = buildUserPermissionSet(user);
@@ -76,15 +76,11 @@ export function hasAnyPermission(
   user: CurrentUser | undefined,
   permissionCodes: string[]
 ): boolean {
-  if (hasPlatformAdministrativeAuthority(user)) {
+  if (isAdminBypass(user)) {
     return true;
   }
   if (!user) {
     return false;
-  }
-
-  if (user.is_tenant_admin || isSystemAdminRole(user)) {
-    return true;
   }
 
   const userPerms = buildUserPermissionSet(user);
@@ -102,15 +98,11 @@ export function hasAllPermissions(
   user: CurrentUser | undefined,
   permissionCodes: string[]
 ): boolean {
-  if (hasPlatformAdministrativeAuthority(user)) {
+  if (isAdminBypass(user)) {
     return true;
   }
   if (!user) {
     return false;
-  }
-
-  if (user.is_tenant_admin || isSystemAdminRole(user)) {
-    return true;
   }
 
   const userPerms = buildUserPermissionSet(user);
@@ -163,11 +155,10 @@ function userHasMenuPermission(user: CurrentUser, permissionCode: string): boole
 }
 
 function hasAnyMenuPermission(user: CurrentUser | undefined, permissionCodes: string[]): boolean {
-  if (hasPlatformAdministrativeAuthority(user)) {
+  if (isAdminBypass(user)) {
     return true;
   }
   if (!user) return false;
-  if (user.is_tenant_admin || isSystemAdminRole(user)) return true;
   return permissionCodes.some((code) => userHasMenuPermission(user, code));
 }
 

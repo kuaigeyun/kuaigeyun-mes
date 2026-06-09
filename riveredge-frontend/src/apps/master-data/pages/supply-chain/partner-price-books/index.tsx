@@ -376,7 +376,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         width: 140,
         fixed: 'right',
         render: (_, record) => [
-          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
             {t('common.edit')}
           </Button>,
           <Popconfirm {...rowActionKind('delete')} key="delete" title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
@@ -403,7 +403,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           columns={columns}
           headerTitle={pageTitle}
           toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
               {createButtonLabel + NEW_SHORTCUT_HINT}
             </Button>,
           ]}

@@ -68,7 +68,6 @@ import {
 } from '../components/inspectionCreateSourceUtils';
 import { downloadFile } from '../../../services/common';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
@@ -107,7 +106,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderProcessRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 // 过程检验接口定义

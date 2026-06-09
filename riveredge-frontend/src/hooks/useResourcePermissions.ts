@@ -2,9 +2,8 @@ import { useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useGlobalStore } from '../stores';
 import { buildPermissionCode } from '../utils/permissionResource';
-import { hasPermission } from '../utils/permission';
+import { hasPermission, isAdminBypass } from '../utils/permission';
 import { hasReviewPermission } from '../utils/permissionContract';
-import { hasPlatformAdministrativeAuthority } from '../utils/auth';
 import { isPlatformInfraPath } from '../utils/platformScope';
 import { canInitiateCompleteCreate } from '../utils/documentWorkflowPermission';
 
@@ -35,8 +34,8 @@ const FAIL_CLOSED: ResourcePermissionGates = {
   canAction: () => false,
 };
 
-/** 平台级管理员：不受租户 manifest RBAC 拦截（与 hasPermission 唯一真源一致） */
-const INFRA_ADMIN_OPEN: ResourcePermissionGates = {
+/** 管理员 bypass：关闭按钮级 RBAC 过滤（与 hasPermission / 后端 is_admin_bypass 一致） */
+const ADMIN_BYPASS_OPEN: ResourcePermissionGates = {
   enabled: false,
   canRead: true,
   canCreate: true,
@@ -54,7 +53,7 @@ export type ResourcePermissionOptions = {
 
 /**
  * 按 manifest 资源前缀（app:module）判断标准 CRUD / 导入导出权限。
- * 平台管理员（JWT / is_infra_admin）始终放行；resource 为空时普通用户 fail-closed。
+ * 平台管理员 / 组织管理员 / 系统管理员角色始终放行；resource 为空时普通用户 fail-closed。
  */
 export function useResourcePermissions(
   resource: string | null | undefined,
@@ -65,8 +64,8 @@ export function useResourcePermissions(
   const completeSource = options?.completeCreateSourceResource?.trim() || '';
 
   return useMemo(() => {
-    if (hasPlatformAdministrativeAuthority(currentUser)) {
-      return INFRA_ADMIN_OPEN;
+    if (isAdminBypass(currentUser)) {
+      return ADMIN_BYPASS_OPEN;
     }
 
     // /infra/* 无 manifest 资源码：仅平台管理员可展示操作按钮（后端 infra API 强校验）

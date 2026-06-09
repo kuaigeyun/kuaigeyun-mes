@@ -37,7 +37,6 @@ import {
   CreateMoldData,
   UpdateMoldData,
 } from '../../../../services/mold';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 模具管理列表页面组件
@@ -354,9 +353,7 @@ const MoldListPage: React.FC = () => {
       title: t('pages.system.molds.columnActions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="view"
               type="link"
@@ -385,8 +382,6 @@ const MoldListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `mold-${record.uuid}`,
-        ),
     },
   ];
 

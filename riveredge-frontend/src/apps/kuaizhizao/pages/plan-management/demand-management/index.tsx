@@ -68,7 +68,6 @@ import { getDemandLifecycle } from '../../../utils/demandLifecycle';
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
@@ -634,7 +633,7 @@ const DemandManagementPage: React.FC = () => {
             }}
           />
         );
-        return renderRowActionsOverflow(parts, `demand-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

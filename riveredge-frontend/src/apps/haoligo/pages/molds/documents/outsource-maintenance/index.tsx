@@ -24,61 +24,7 @@ import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-de
 import { UniTable } from '../../../../../../components/uni-table';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
-import { useGlobalStore } from '../../../../../../stores';
-import {
-  canCompleteSourceDocument,
-  canInitiateCompleteCreate,
-} from '../../../../../../utils/documentWorkflowPermission';
-import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
-import { refreshCurrentUserInStore } from '../../../../../../services/auth';
-import { buildOutsourceCompleteCreateFromMaintenanceUrl } from '../../../../utils/outsourceCompleteNavigation';
-import {
-  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
-  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
-} from '../../../../constants/documentPermissionResources';
-import { DictionarySelect } from '../../../../../../components/dictionary-select';
-import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
-import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
-import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
-import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
-import { uploadFile } from '../../../../../../services/file';
-import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
-import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
-import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
-import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
-import {
-  approveMoldOutsourceMaintenanceSheet,
-  createMoldOutsourceMaintenanceSheet,
-  deleteMoldOutsourceMaintenanceSheet,
-  getMoldOutsourceMaintenanceSheet,
-  listMoldOutsourceMaintenanceSheets,
-  listOutsourceMaintenanceSupplierOptions,
-  rejectMoldOutsourceMaintenanceSheet,
-  revokeMoldOutsourceMaintenanceSheetApproval,
-  updateMoldOutsourceMaintenanceSheet,
-  type MoldOutsourceMaintenanceSheetCreatePayload,
-  type MoldOutsourceMaintenanceSheetRow,
-  type MoldRow,
-} from '../../../../services/haoligo';
-import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
-import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
-import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
-import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
-import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
-import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
-import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-
-const sheetStatusEnum: Record<string, { text: string }> = {
-  待审核: { text: '待审核' },
-  已通过: { text: '已通过' },
-  已驳回: { text: '已驳回' },
-};
-
-type SupplierOpt = { key: string; value: string; label: string; code: string };
-
-function normUploadUuids(val: unknown): string[] {
+import {val: unknown: string[] {
   if (!Array.isArray(val)) return [];
   const out: string[] = [];
   for (const item of val) {
@@ -644,7 +590,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
             reload: reloadTableAndMoldLedger,
           }),
         );
-        return renderRowActionsOverflow(actions, `outsource-maint-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
+        return actions;
       },
     },
   ];

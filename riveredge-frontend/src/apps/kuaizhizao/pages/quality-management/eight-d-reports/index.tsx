@@ -68,7 +68,7 @@ const EightDReportsPage: React.FC = () => {
       render: (_, row) => (
         <Space>
           {(canUpdate || canClose) && (
-            <Button key="execute" {...rowActionKind('execute')} type="link"
+            <Button key="execute" {...rowActionKind('execute')}
               onClick={() => {
                 setCurrentRow(row);
                 setTransitionVisible(true);

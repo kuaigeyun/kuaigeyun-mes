@@ -27,7 +27,7 @@ import {
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind } from '../../../../components/uni-action';
 
 /**
  * 审批流程管理列表页面组件
@@ -313,13 +313,11 @@ const ApprovalProcessListPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       uniActionRenderOptions: { directMax: 4 },
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
               {t('pages.system.approvalProcesses.view')}
             </Button>,
-            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('pages.system.approvalProcesses.edit')}
             </Button>,
             <Button
@@ -346,8 +344,6 @@ const ApprovalProcessListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `approval-process-${record.uuid}`,
-        ),
     },
   ];
 

@@ -22,7 +22,6 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getReceivableLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 const ReceivableList: React.FC = () => {
@@ -209,9 +208,7 @@ const ReceivableList: React.FC = () => {
             valueType: 'option',
             fixed: 'right',
             width: 220,
-            render: (_, record) =>
-                renderRowActionsOverflow(
-                    [
+            render: (_, record) => [
                         <Button {...rowActionKind('read')}
                             key="det"
                             type="link"
@@ -251,8 +248,6 @@ const ReceivableList: React.FC = () => {
                             </Button>
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
-                    `rec-${record.id}`,
-                ),
         },
     ];
 

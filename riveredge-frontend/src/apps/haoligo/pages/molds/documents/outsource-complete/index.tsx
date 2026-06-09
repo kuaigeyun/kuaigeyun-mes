@@ -53,26 +53,7 @@ import {
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
-import { useGlobalStore } from '../../../../../../stores/globalStore';
-import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
-import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
-import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
-import {
-  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
-  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
-} from '../../../../constants/documentPermissionResources';
-import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
-import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
-import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
-import {
-  canAuditMoldSheet,
-  isMoldSheetApproved,
-  moldSheetAuditStatusTag,
-} from '../../../../utils/moldSheetStatus';
-import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-
-function normUploadUuids(val: unknown): string[] {
+import {val: unknown: string[] {
   if (!Array.isArray(val)) return [];
   const out: string[] = [];
   for (const item of val) {
@@ -869,7 +850,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           onRevoke: () => revokeApprovalMoldOutsourceMaintenanceCompleteSheet(record.id),
         };
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="detail" onClick={() => void handleDetail(record)}>
             详情
           </Button>,
           ...(canPrintComplete
@@ -917,7 +898,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
             reload: reloadTableAndMoldLedger,
           }),
         ];
-        return renderRowActionsOverflow(actions, `out-complete-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
+        return actions;
       },
     },
   ];

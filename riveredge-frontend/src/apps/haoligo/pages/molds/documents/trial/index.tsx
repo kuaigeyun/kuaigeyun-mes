@@ -102,35 +102,7 @@ import {
   type MoldTrialSheetRow,
 } from '../../../../services/haoligo';
 import { buildMoldSheetAuditActionElements, MoldSheetAuditActions } from '../../../../components/MoldSheetAuditActions';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../../components/uni-action';
-import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
-import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
-import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
-import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
-import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
-import { hasModulePermission } from '../../../../../../utils/permissionContract';
-import { userIsExternalPartner } from '../../../../../../utils/externalPartner';
-import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
-import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
-
-const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
-
-const sheetStatusEnum: Record<string, { text: string }> = {
-  待审核: { text: '待审核' },
-  已通过: { text: '已通过' },
-  已驳回: { text: '已驳回' },
-};
-import { executeDatasetQuery, getDatasetList } from '../../../../../../services/dataset';
-
-const trialResultEnum: Record<string, { text: string }> = {
-  合格: { text: '合格' },
-  不合格: { text: '不合格' },
-};
-
-type PoPickerTrialFilter = 'all' | 'pending' | 'trialed';
-
-/** 分页统计各采购订单号在本系统的试模单条数（采购单选择器展示试模次数） */
-async function fetchTrialCountByPurchaseOrderNoForPoPicker(): Promise<Map<string, number>> {
+import {: Promise<Map<string, number>> {
   const limit = 200;
   let skip = 0;
   const map = new Map<string, number>();
@@ -1517,7 +1489,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           </Button>
         </span>
       </Tooltip>,
-      <Button {...rowActionKind('create')} key="from-pending-mold" icon={<CodeSandboxOutlined />} onClick={handleOpenMoldPicker}>
+      <Button {...rowActionKind('create')} key="from-pending-mold" onClick={handleOpenMoldPicker}>
         从待启用模具创建
       </Button>,
     ],
@@ -2416,7 +2388,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           onRevoke: () => revokeMoldTrialSheetApproval(record.id),
         };
         const actions: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>
             详情
           </Button>,
         ];
@@ -2511,7 +2483,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>,
           );
         }
-        return renderRowActionsOverflow(actions, `trial-${record.id}`, MOLD_SHEET_TABLE_ACTION_OPTIONS);
+        return actions;
       },
     },
   ];

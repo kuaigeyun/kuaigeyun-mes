@@ -29,7 +29,7 @@ import {
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
 import { getUserFormCoreReferenceOptions, primeUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
-import { renderRowActionsOverflow, rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
+import { rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
 
 /**
@@ -501,9 +501,7 @@ const UserListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button
               key="view"
               {...rowActionKind('read')}
@@ -542,8 +540,6 @@ const UserListPage: React.FC = () => {
               {t('field.user.reset')}
             </Button>,
           ],
-          `user-${record.uuid}`,
-        ),
     },
   ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete]);
 

@@ -1928,7 +1928,7 @@ const BOMPage: React.FC = () => {
             disabled: isApproved,
           },
         ];
-        /** 返回数组，交给 UniTable → renderUniTableOperationCell → normalizeActionTree + renderRowActionsOverflow；顺序：详情 → 编辑 → …（与 uni-action 详情优先一致） */
+        /** 返回数组，交给 UniTable → renderUniTableOperationCell → normalizeActionTree；顺序：详情 → 编辑 → … */
         return [
           <Button
             key="detail"

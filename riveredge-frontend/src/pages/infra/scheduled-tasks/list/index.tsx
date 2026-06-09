@@ -389,14 +389,14 @@ const ScheduledTaskListPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link"
+          <Button key="view" {...rowActionKind('read')}
             size="small"
             icon={<EyeOutlined />}
             onClick={() => handleView(record)}
           >
             {t('field.scheduledTask.view')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link"
+          <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -404,7 +404,7 @@ const ScheduledTaskListPage: React.FC = () => {
             {t('field.scheduledTask.edit')}
           </Button>
           {record.is_active ? (
-            <Button key="stop" {...rowActionKind('execute')} type="link"
+            <Button key="stop" {...rowActionKind('execute')}
               size="small"
               icon={<PauseCircleOutlined />}
               onClick={() => handleStop(record)}
@@ -412,7 +412,7 @@ const ScheduledTaskListPage: React.FC = () => {
               {t('field.scheduledTask.stop')}
             </Button>
           ) : (
-            <Button key="execute" {...rowActionKind('execute')} type="link"
+            <Button key="execute" {...rowActionKind('execute')}
               size="small"
               icon={<PlayCircleOutlined />}
               onClick={() => handleStart(record)}

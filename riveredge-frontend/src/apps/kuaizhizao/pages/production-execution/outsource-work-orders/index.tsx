@@ -71,7 +71,6 @@ import { warehouseApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
 interface OutsourceWorkOrder {
@@ -176,7 +175,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderOwoRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 const OWO_STAT_SPARK_1 = [2, 3, 4, 3, 5, 4, 6];

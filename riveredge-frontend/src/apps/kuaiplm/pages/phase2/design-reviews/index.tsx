@@ -17,7 +17,6 @@ import {
   deleteDesignReview,
   type RdDesignReview,
 } from '../../../services/phase2';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
@@ -50,9 +49,7 @@ const DesignReviewsPage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       width: 80,
-      render: (_, row) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, row) => [
             <Button {...rowActionKind('delete')}
               key="del"
               type="link"
@@ -72,8 +69,6 @@ const DesignReviewsPage: React.FC = () => {
               删除
             </Button>,
           ],
-          `dr-${row.id}`,
-        ),
     },
   ];
 
@@ -107,7 +102,7 @@ const DesignReviewsPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
             {'新建评审' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

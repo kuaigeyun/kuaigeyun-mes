@@ -124,13 +124,13 @@ const ManufacturersPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
             {t('common.detail')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
             {t('app.haoligo.equipment.manufacturers.actionEdit')}
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
             {t('app.haoligo.equipment.manufacturers.actionDelete')}
           </Button>
         </Space>

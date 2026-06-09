@@ -531,13 +531,13 @@ const PlantsPage: React.FC = () => {
         fixed: 'right' as const,
         render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link"
+          <Button key="view" {...rowActionKind('read')}
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
             {t('field.customField.view')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link"
+          <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}

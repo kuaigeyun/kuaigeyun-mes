@@ -84,7 +84,6 @@ import { UniWorkflowActions } from '../../../../../components/uni-workflow-actio
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
 import { downloadFile } from '../../../services/common'
-import { renderRowActionsOverflow } from '../../../../../components/uni-action'
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments'
 
@@ -219,7 +218,7 @@ export default function SalesForecastsPage() {
   };
 
   const renderSalesForecastRowActions = (nodes: React.ReactNode[], keyPrefix: string): React.ReactNode => {
-    return renderRowActionsOverflow(nodes, keyPrefix);
+    return nodes;
   };
 
   useEffect(() => {
@@ -1148,7 +1147,7 @@ export default function SalesForecastsPage() {
             </span>
           </Tooltip>,
         );
-        return renderSalesForecastRowActions(parts, `sales-forecast-${record.id ?? 'row'}`);
+        return parts;
       },
       onCell: (record) => {
         if (dataViewMode === 'order') return {};

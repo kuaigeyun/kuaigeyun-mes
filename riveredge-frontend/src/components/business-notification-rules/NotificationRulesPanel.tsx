@@ -11,7 +11,6 @@ import type { ActionType, ProFormInstance } from '@ant-design/pro-components';
 import { ProFormSelect, ProFormDependency, ProFormCheckbox, ProFormSwitch } from '@ant-design/pro-components';
 import { UniTable } from '../uni-table';
 import { FormModalTemplate } from '../layout-templates';
-import { renderRowActionsOverflow } from '../../utils/renderRowActionsOverflow';
 import { getBusinessConfig, batchUpdateProcessParameters } from '../../services/businessConfig';
 import { getMessageConfigList, type MessageConfig } from '../../services/messageConfig';
 import { getMessageTemplateList, type MessageTemplate } from '../../services/messageTemplate';
@@ -647,17 +646,17 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                     width: 220,
                     render: (_: unknown, row: { id: string }) => {
                       const actions: React.ReactNode[] = [
-                        <Button {...rowActionKind('read')} key="detail" type="link" size="small" onClick={() => handleViewNotificationRule(row as never)}>
+                        <Button {...rowActionKind('read')} key="detail" onClick={() => handleViewNotificationRule(row as never)}>
                           {t('pages.system.configCenter.notification.action.view')}
                         </Button>,
-                        <Button {...rowActionKind('update')} key="edit" type="link" size="small" onClick={() => handleEditNotificationRule(row as never)}>
+                        <Button {...rowActionKind('update')} key="edit" onClick={() => handleEditNotificationRule(row as never)}>
                           {t('pages.system.configCenter.notification.action.edit')}
                         </Button>,
-                        <Button {...rowActionKind('delete')} key="delete" type="link" size="small" danger onClick={() => handleDeleteNotificationRule(row)}>
+                        <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDeleteNotificationRule(row)}>
                           {t('pages.system.configCenter.notification.action.delete')}
                         </Button>,
                       ];
-                      return renderRowActionsOverflow(actions, `notification-rule-${row.id}`);
+                      return actions;
                     },
                   },
                 ]}

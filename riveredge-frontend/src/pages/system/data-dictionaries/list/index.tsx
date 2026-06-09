@@ -31,7 +31,6 @@ import {
 } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { DataDictionaryFormModal } from '../components/DataDictionaryFormModal';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import {
   getDataDictionaryList,
   getDataDictionaryByUuid,
@@ -391,10 +390,8 @@ const DataDictionaryListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('common.detail')}
             </Button>,
             <Button {...rowActionKind('update')}
@@ -406,7 +403,7 @@ const DataDictionaryListPage: React.FC = () => {
             >
               {t('field.dataDictionary.edit')}
             </Button>,
-            <Button {...rowActionKind('read')} key="items" type="link" size="small" onClick={() => handleManageItems(record)}>
+            <Button {...rowActionKind('read')} key="items" onClick={() => handleManageItems(record)}>
               {t('field.dataDictionary.items')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
@@ -426,8 +423,6 @@ const DataDictionaryListPage: React.FC = () => {
               </Tooltip>
             </Popconfirm>,
           ],
-          `data-dict-${record.uuid}`,
-        ),
     },
   ];
 
@@ -485,7 +480,7 @@ const DataDictionaryListPage: React.FC = () => {
         const isPresetItem = Boolean(record.is_system_managed);
         return (
           <Space size={4}>
-            <Button key="edit" {...rowActionKind('update')} type="link" size="small" onClick={() => handleEditItem(record)}>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEditItem(record)}>
               {t('field.dataDictionary.edit')}
             </Button>
             <Popconfirm key="delete" {...rowActionKind('delete')} title={t('field.dataDictionary.itemDeleteConfirm')}

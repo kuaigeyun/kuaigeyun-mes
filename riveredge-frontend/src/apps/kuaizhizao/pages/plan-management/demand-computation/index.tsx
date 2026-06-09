@@ -105,7 +105,6 @@ import { getDemandComputationLifecycle } from '../../../utils/demandComputationL
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode'
 import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType'
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag'
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow'
 import { listDemands, getDemand, pushDemandToComputation, Demand, DemandStatus, ReviewStatus } from '../../../services/demand'
 import { getBusinessConfig } from '../../../../../services/businessConfig'
 import { bomApi } from '../../../../master-data/services/material'
@@ -153,7 +152,7 @@ type PullDemandCandidate = {
 const DEMAND_COMPUTATION_DETAIL_ITEMS_MIN_WIDTH = 1920
 
 function renderDemandComputationRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix)
+  return nodes;
 }
 
 function normalizeComputationSourceNote(computation?: DemandComputation): string {
@@ -1441,26 +1440,26 @@ const DemandComputationPage: React.FC = () => {
         const canRecompute =
           record.computation_status === '完成' || record.computation_status === '失败'
         const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail([record.id!])}>
+          <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail([record.id!])}>
             详情
           </Button>,
         ]
         if (canExecute) {
           parts.push(
-            <Button {...rowActionKind('execute')} key="ex" type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(record)}>
+            <Button {...rowActionKind('execute')} key="ex" onClick={() => handleExecute(record)}>
               执行计算
             </Button>
           )
         }
         if (canRecompute) {
           parts.push(
-            <Button {...rowActionKind('recycle')} key="rc" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleRecompute(record)}>
+            <Button {...rowActionKind('recycle')} key="rc" onClick={() => handleRecompute(record)}>
               重新计算
             </Button>
           )
         }
         parts.push(
-          <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+          <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
             删除
           </Button>
         )

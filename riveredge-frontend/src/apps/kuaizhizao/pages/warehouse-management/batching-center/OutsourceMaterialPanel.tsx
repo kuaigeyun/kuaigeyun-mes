@@ -283,7 +283,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
         columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}`}
         headerTitle={isIssue ? '委外发料单' : '委外收货单'}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreate}>
             {isIssue ? '新建委外发料' : '新建委外收货'}
           </Button>,
         ]}

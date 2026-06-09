@@ -674,12 +674,12 @@ const DrawingsPage: React.FC = () => {
         onCell: () => ({ style: { whiteSpace: 'nowrap' } }),
         render: (_, record) => (
           <Space size={0} style={{ whiteSpace: 'nowrap', flexWrap: 'nowrap' }}>
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => loadDetail(record.uuid)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => loadDetail(record.uuid)}>
               {t('common.detail')}
             </Button>
             {record.status === 'Draft' && (
               <>
-                <Button key="edit" {...rowActionKind('update')} type="link"
+                <Button key="edit" {...rowActionKind('update')}
                   size="small"
                   icon={<EditOutlined />}
                   onClick={() => {
@@ -689,7 +689,7 @@ const DrawingsPage: React.FC = () => {
                 >
                   {t('common.edit')}
                 </Button>
-                <Button key="submit" {...rowActionKind('submit')} type="link" size="small" icon={<SendOutlined />} onClick={() => handleRelease(record)}>
+                <Button key="submit" {...rowActionKind('submit')} onClick={() => handleRelease(record)}>
                   {t('app.master-data.drawings.release')}
                 </Button>
                 <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
@@ -709,10 +709,10 @@ const DrawingsPage: React.FC = () => {
             )}
             {record.status === 'Released' && (
               <>
-                <Button key="create" {...rowActionKind('create')} type="link" size="small" icon={<BranchesOutlined />} onClick={() => handleRevision(record)}>
+                <Button key="create" {...rowActionKind('create')} onClick={() => handleRevision(record)}>
                   {t('app.master-data.drawings.newRevision')}
                 </Button>
-                <Button key="obsolete" {...rowActionKind('obsolete')} type="link" size="small" icon={<StopOutlined />} onClick={() => handleObsolete(record)}>
+                <Button key="obsolete" {...rowActionKind('obsolete')} onClick={() => handleObsolete(record)}>
                   {t('app.master-data.drawings.obsolete')}
                 </Button>
               </>
@@ -733,7 +733,7 @@ const DrawingsPage: React.FC = () => {
               </Popconfirm>
             )}
             {record.file && !showInlinePreview && (
-              <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => openPreview(record.file)}>
+              <Button key="view" {...rowActionKind('read')} onClick={() => openPreview(record.file)}>
                 {t('app.master-data.drawings.preview')}
               </Button>
             )}
@@ -794,7 +794,7 @@ const DrawingsPage: React.FC = () => {
             </Tooltip>
           }
           toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
               {t('common.create') + NEW_SHORTCUT_HINT}
             </Button>,
           ]}

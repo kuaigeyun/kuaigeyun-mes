@@ -20,7 +20,7 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import { getUserOptions } from '../../../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { CustomerDetailDrawer } from '../../../../master-data/components/CustomerDetailDrawer';
@@ -312,26 +312,26 @@ const CustomerPoolPage: React.FC = () => {
           if (row.pool_status === 'pool') {
             if (canClaim) {
               actions.push(
-                <Button {...rowActionKind('claim')} key="claim" type="link" size="small" icon={<UserAddOutlined />} onClick={() => claimAndQuote(row)}>
+                <Button {...rowActionKind('claim')} key="claim" onClick={() => claimAndQuote(row)}>
                   领取并报价
                 </Button>
               );
             }
             if (canAssign) {
               actions.push(
-                <Button {...rowActionKind('assign')} key="assign" type="link" size="small" icon={<UserSwitchOutlined />} onClick={() => openAssignModal(row)}>
+                <Button {...rowActionKind('assign')} key="assign" onClick={() => openAssignModal(row)}>
                   分配
                 </Button>
               );
             }
           } else {
             actions.push(
-              <Button {...rowActionKind('create')} key="follow-up" type="link" size="small" icon={<PlusOutlined />} onClick={() => openFollowUp(row.id)}>
+              <Button {...rowActionKind('create')} key="follow-up" onClick={() => openFollowUp(row.id)}>
                 新建跟进
               </Button>
             );
             actions.push(
-              <Button {...rowActionKind('create')} key="quote" type="link" size="small" onClick={() => toQuotation(row.id)}>
+              <Button {...rowActionKind('create')} key="quote" onClick={() => toQuotation(row.id)}>
                 去报价
               </Button>
             );
@@ -372,7 +372,7 @@ const CustomerPoolPage: React.FC = () => {
               );
             }
           }
-          return renderRowActionsOverflow(actions, `pool-${row.id}`);
+          return actions;
         },
       },
     ],
@@ -405,7 +405,7 @@ const CustomerPoolPage: React.FC = () => {
             const buttons: React.ReactNode[] = [];
             if (canCreateCustomer) {
               buttons.push(
-                <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={openCreateCustomer}>
+                <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreateCustomer}>
                   {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
                 </Button>,
               );

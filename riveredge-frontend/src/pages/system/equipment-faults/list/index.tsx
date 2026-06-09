@@ -38,7 +38,6 @@ import {
   UpdateEquipmentFaultData,
 } from '../../../../services/equipmentFault';
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 设备故障维修管理列表页面组件
@@ -390,9 +389,7 @@ const EquipmentFaultListPage: React.FC = () => {
       title: t('pages.system.equipmentFaults.columnActions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="view"
               type="link"
@@ -421,8 +418,6 @@ const EquipmentFaultListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `equipment-fault-${record.uuid}`,
-        ),
     },
   ];
 

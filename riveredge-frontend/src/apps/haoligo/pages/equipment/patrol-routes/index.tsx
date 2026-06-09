@@ -580,13 +580,13 @@ const EquipmentPatrolRoutesPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space wrap>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
             {t('common.detail')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditEditor(record)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => void openEditEditor(record)}>
             {t('app.haoligo.equipment.patrolRoutes.actionEditRoute')}
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteRoute(record)}>
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteRoute(record)}>
             {t('app.haoligo.equipment.patrolRoutes.actionDelete')}
           </Button>
         </Space>

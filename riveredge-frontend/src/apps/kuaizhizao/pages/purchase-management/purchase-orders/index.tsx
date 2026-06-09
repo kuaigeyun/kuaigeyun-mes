@@ -82,7 +82,6 @@ import {
 } from '../../../../master-data/utils/resolve-partner-material-price';
 import { getApprovalStatus, ApprovalStatusResponse } from '../../../../../services/approvalInstance';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -190,7 +189,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPurchaseOrderRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 // 使用从服务文件导入的接口
@@ -843,21 +842,21 @@ const PurchaseOrdersPage: React.FC = () => {
       hideInSearch: true,
       render: (_: any, record: PurchaseOrder) => {
         const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="d" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record)}>
             详情
           </Button>,
-          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+          <Button {...rowActionKind('update')} key="e" onClick={() => handleEdit(record)}>
             编辑
           </Button>,
         ];
         if (isDraftStatus(record.status)) {
           parts.push(
-            <Button {...rowActionKind('submit')} key="submit" type="link" size="small" icon={<SendOutlined />} onClick={() => handleSubmitOrder(record)}>
+            <Button {...rowActionKind('submit')} key="submit" onClick={() => handleSubmitOrder(record)}>
               提交
             </Button>
           );
           parts.push(
-            <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+            <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
               删除
             </Button>
           );
@@ -888,7 +887,7 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
           />
         );
-        return renderPurchaseOrderRowActions(parts, `po-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

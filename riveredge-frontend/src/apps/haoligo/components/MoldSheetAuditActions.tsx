@@ -36,7 +36,7 @@ type BuildParams = {
   revokeOnly?: boolean;
 };
 
-/** 平铺按钮节点，供 renderRowActionsOverflow 使用（避免组件节点被溢出逻辑丢弃） */
+/** 平铺按钮节点，供 UniTable 操作列使用（避免组件节点被溢出逻辑丢弃） */
 export function buildMoldSheetAuditActionElements({
   canAudit,
   sheetStatus,

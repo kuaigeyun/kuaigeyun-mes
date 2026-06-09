@@ -19,7 +19,9 @@ import {
   readActionPriority,
   resolveButtonToneFromNode,
   readExplicitActionKind,
+  readActionVisualProfile,
 } from './actionText'
+import { rowActionSortRank } from './actionCatalog'
 import { normalizeActionTree } from './normalize'
 
 /**
@@ -53,11 +55,12 @@ function normalizeAndSortActions(
 
   const withMeta = flat.map((node, index) => {
     const kind = resolveActionKind(node)
+    const explicit = readExplicitActionKind(node)
+    const profile = readActionVisualProfile(node)
     const explicitPriority = readActionPriority(node)
-    const kindRank =
-      kind === 'detail' ? 0 : kind === 'edit' ? 1 : kind === 'delete' ? 2 : kind === 'common' ? 3 : 4
+    const kindRank = rowActionSortRank(explicit, profile)
     const finalPriority = explicitPriority ?? kindRank
-    return { node, index, finalPriority, kindRank }
+    return { node, index, finalPriority, kindRank, kind }
   })
 
   withMeta.sort((a, b) => {

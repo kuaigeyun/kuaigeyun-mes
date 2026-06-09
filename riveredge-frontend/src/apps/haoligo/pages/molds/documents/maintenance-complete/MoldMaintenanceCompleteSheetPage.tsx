@@ -905,7 +905,7 @@ export function MoldMaintenanceCompleteSheetPage({
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
             详情
           </Button>
           {canPrintComplete ? (
@@ -921,7 +921,7 @@ export function MoldMaintenanceCompleteSheetPage({
               打印报告
             </Button>
           ) : null}
-          <Button key="edit" {...rowActionKind('update')} type="link"
+          <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             disabled={!canUpdateComplete}
@@ -929,7 +929,7 @@ export function MoldMaintenanceCompleteSheetPage({
           >
             编辑
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link"
+          <Button key="delete" {...rowActionKind('delete')}
             size="small"
             danger
             icon={<DeleteOutlined />}

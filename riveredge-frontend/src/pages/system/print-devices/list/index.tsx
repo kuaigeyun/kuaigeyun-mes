@@ -32,12 +32,7 @@ import {
 } from '../../../../services/printDevice';
 import { getPrintTemplateList } from '../../../../services/printTemplate';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
+import { relativeTime;
 
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -613,12 +608,11 @@ const PrintDeviceListPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+        [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('pages.system.printTemplates.detail')}
             </Button>,
-            <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
               {t('pages.system.printTemplates.edit')}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}
@@ -663,8 +657,6 @@ const PrintDeviceListPage: React.FC = () => {
               {t('pages.system.printDevices.printTestPage')}
             </Button>,
           ],
-          `print-device-${record.uuid}`,
-        ),
     },
   ];
 

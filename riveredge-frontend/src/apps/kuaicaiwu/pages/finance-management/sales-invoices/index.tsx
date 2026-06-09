@@ -16,7 +16,6 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import {
   INVOICE_TYPE_OPTIONS,
   formatSalesInvoiceTypeZh,
@@ -440,9 +439,7 @@ const SalesInvoicesPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 200,
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="det"
               type="link"
@@ -453,18 +450,16 @@ const SalesInvoicesPage: React.FC = () => {
               详情
             </Button>,
             record.review_status === '待审核' ? (
-              <Button {...rowActionKind('audit')} key="ap" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleApprove(record)}>
+              <Button {...rowActionKind('audit')} key="ap" onClick={() => handleApprove(record)}>
                 审核
               </Button>
             ) : null,
             canDeleteSalesInvoice(record) ? (
-              <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
                 删除
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
-          `si-${record.id}`,
-        ),
     },
   ];
 

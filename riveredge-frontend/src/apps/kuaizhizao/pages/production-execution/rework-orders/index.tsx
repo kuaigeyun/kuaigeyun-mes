@@ -313,7 +313,7 @@ const ReworkOrdersPage: React.FC = () => {
           lifecycle.stageName === '已下达' || lifecycle.stageName === '执行中';
         return (
           <Space>
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>详情</Button>
             {canReport ? (
               <Button{...rowActionKind('delete')} key="delete"
                 type="link"
@@ -324,7 +324,7 @@ const ReworkOrdersPage: React.FC = () => {
                 报工
               </Button>
             ) : null}
-            <Button key="edit" {...rowActionKind('update')} type="link"
+            <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
@@ -333,7 +333,7 @@ const ReworkOrdersPage: React.FC = () => {
               编辑
             </Button>
             {canDelete && (
-              <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+              <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>删除</Button>
             )}
           </Space>
         );

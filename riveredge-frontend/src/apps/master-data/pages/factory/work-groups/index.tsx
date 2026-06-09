@@ -496,10 +496,10 @@ const WorkGroupsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" onClick={() => handleOpenDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
             {t('field.customField.view')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link"
+          <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
@@ -609,7 +609,7 @@ const WorkGroupsPage: React.FC = () => {
             showSizeChanger: true,
           }}
           toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
               {t('field.workGroup.createTitle') + NEW_SHORTCUT_HINT}
             </Button>,
             <Popconfirm {...rowActionKind('delete')}

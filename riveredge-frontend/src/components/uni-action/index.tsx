@@ -15,13 +15,26 @@ export {
 export { renderUniTableOperationCell } from './renderCell'
 export { collectOperationActions } from './collect'
 export { normalizeActionTree } from './normalize'
+export { RowActionButton } from './RowActionButton'
+export {
+  rowActionLabel,
+  rowActionVisualProfileLabel,
+  rowActionSortRank,
+  rowActionLabelKeep,
+  ROW_ACTION_LABEL_KEEP_ATTR,
+  shouldInjectRowActionCatalogLabel,
+} from './actionCatalog'
 export {
   rowActionKind,
+  rowActionAddFollowUpFromDocument,
   rowActionToneDestructive,
   ROW_ACTION_KIND_ATTR,
   ROW_ACTION_TONE_ATTR,
+  ROW_ACTION_VISUAL_PROFILE_ATTR,
   readExplicitActionKind,
+  readActionVisualProfile,
   type RowActionPermissionKind,
+  type RowActionVisualProfile,
 } from './actionText'
 export { filterActionsByResourcePermission } from './filterByPermission'
 export { UniActionGroup, type UniActionGroupProps }

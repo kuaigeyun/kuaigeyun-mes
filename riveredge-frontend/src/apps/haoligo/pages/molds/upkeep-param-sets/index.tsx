@@ -340,13 +340,13 @@ const MoldUpkeepParamSetsPage: React.FC = () => {
       width: 200,
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => void handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
             {t('common.detail')}
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void openEditEditor(record)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => void openEditEditor(record)}>
             {t('common.edit')}
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link"
+          <Button key="delete" {...rowActionKind('delete')}
             size="small"
             danger
             icon={<DeleteOutlined />}

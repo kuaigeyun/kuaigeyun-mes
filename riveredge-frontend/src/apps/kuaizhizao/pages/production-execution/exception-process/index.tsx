@@ -365,26 +365,26 @@ const ExceptionProcessPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
             详情
           </Button>
           {record.process_status === 'pending' && (
-            <Button{...rowActionKind('audit')} key="approve" type="link" size="small" icon={<UserOutlined />} onClick={() => openAssignModal(record)}>
+            <Button{...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
               分配
             </Button>
           )}
           {record.process_status === 'processing' && (
             <>
-              <Button{...rowActionKind('audit')} key="approve" type="link" size="small" icon={<ArrowRightOutlined />} onClick={() => openStepTransitionModal(record)}>
+              <Button{...rowActionKind('audit')} key="approve" onClick={() => openStepTransitionModal(record)}>
                 流转
               </Button>
-              <Button key="approve" {...rowActionKind('audit')} type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => openResolveModal(record)}>
+              <Button key="approve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
                 解决
               </Button>
             </>
           )}
           {['pending', 'processing'].includes(record.process_status || '') && (
-            <Button key="reject" {...rowActionKind('reject')} type="link" size="small" danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(record)}>
+            <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
               取消
             </Button>
           )}

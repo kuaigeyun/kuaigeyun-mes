@@ -57,7 +57,6 @@ import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../.
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { getPackingBindingLifecycle } from '../../../utils/packingBindingLifecycle';
 import dayjs from 'dayjs';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 
 interface PackingBinding {
@@ -135,7 +134,7 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
 }
 
 function renderPbRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 function getBindingSourceLabel(record: PackingBinding): string {

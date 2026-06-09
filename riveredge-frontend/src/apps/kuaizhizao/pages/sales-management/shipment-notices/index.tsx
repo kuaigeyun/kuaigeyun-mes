@@ -42,7 +42,6 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
@@ -209,7 +208,7 @@ const ShipmentNoticesPage: React.FC = () => {
   };
 
   const renderShipmentNoticeRowActions = (actions: React.ReactNode[]) => {
-    return renderRowActionsOverflow(actions, 'shipment-notice');
+    return actions;
   };
 
   const columns: ProColumns<ShipmentNotice>[] = [
@@ -252,17 +251,17 @@ const ShipmentNoticesPage: React.FC = () => {
       width: 200,
       fixed: 'right',
       render: (_, record) => renderShipmentNoticeRowActions([
-        <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>详情</Button>,
         ...(record.status === '待发货'
           ? [
-              <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>,
-              <Button {...rowActionKind('dispatch')} key="notify" type="link" size="small" icon={<SendOutlined />} onClick={() => handleNotify(record as any)}>通知仓库</Button>,
-              <Button {...rowActionKind('delete')} key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record as any)}>删除</Button>,
+              <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>编辑</Button>,
+              <Button {...rowActionKind('dispatch')} key="notify" onClick={() => handleNotify(record as any)}>通知仓库</Button>,
+              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as any)}>删除</Button>,
             ]
           : []),
         ...(record.status === '已通知'
           ? [
-              <Button {...rowActionKind('revoke')} key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
+              <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
             ]
           : []),
       ]),

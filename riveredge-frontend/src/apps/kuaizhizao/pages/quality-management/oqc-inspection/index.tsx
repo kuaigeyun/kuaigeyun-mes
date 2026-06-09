@@ -123,7 +123,7 @@ const OQCInspectionPage: React.FC = () => {
       render: (_, row) => (
         <Space>
           {canUpdate && row.status === '待检验' && (
-            <Button key="submit" {...rowActionKind('submit')} type="link"
+            <Button key="submit" {...rowActionKind('submit')}
               onClick={() => {
                 setCurrentRow(row);
                 setConductVisible(true);

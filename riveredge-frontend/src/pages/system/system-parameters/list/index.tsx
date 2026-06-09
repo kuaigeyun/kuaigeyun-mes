@@ -36,7 +36,6 @@ import {
   CreateSystemParameterData,
   UpdateSystemParameterData,
 } from '../../../../services/systemParameter';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 系统参数管理列表页面组件
@@ -516,9 +515,7 @@ const SystemParameterListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="view"
               type="link"
@@ -554,8 +551,6 @@ const SystemParameterListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `sys-param-${record.uuid}`,
-        ),
     },
   ];
 

@@ -12,7 +12,7 @@ import { HighlightOutlined, FormOutlined, PlusOutlined, DeleteOutlined } from '@
 import { useNavigate } from 'react-router-dom';
 import { processRouteApi, operationApi, sopApi, unwrapProcessPagedList } from '../../../services/process';
 import { materialApi, materialGroupApi } from '../../../services/material';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind } from '../../../../../components/uni-action';
 import type { ProcessRoute, Operation } from '../../../types/process';
 import type { Material, MaterialGroup, MaterialListResponse } from '../../../types/material';
 import type { SOP } from '../../../types/process';
@@ -487,10 +487,8 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                   {
                     title: '操作',
                     width: 120,
-                  render: (_: any, record: OperationItem, index: number) =>
-                    renderRowActionsOverflow(
-                      [
-                        <Button {...rowActionKind('skip')} key="move-up" size="small" onClick={() => moveUp(index)} disabled={index === 0}>
+                  render: (_: any, record: OperationItem, index: number) => [
+                        <Button {...rowActionKind('skip')} key="move-up" onClick={() => moveUp(index)} disabled={index === 0}>
                           上移
                         </Button>,
                         <Button {...rowActionKind('skip')}
@@ -511,8 +509,6 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           删除
                         </Button>,
                       ],
-                      `sop-op-${record.uuid ?? index}`,
-                    ),
                   },
                 ]}
               />
@@ -641,9 +637,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 {
                   title: '操作',
                   width: 220,
-                  render: (_: any, record: SOP) =>
-                    renderRowActionsOverflow(
-                      [
+                  render: (_: any, record: SOP) => [
                         <Button
                           key="design"
                           {...rowActionKind('update')}
@@ -665,8 +659,6 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           编辑
                         </Button>,
                       ],
-                      `sop-created-${record.uuid ?? 'row'}`,
-                    ),
                 },
               ]}
             />

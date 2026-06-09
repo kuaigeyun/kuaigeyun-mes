@@ -48,13 +48,7 @@ import { updateIntegrationConfig } from '../../../../services/integrationConfig'
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
-import {
-  buildFactoryImportTemplate,
-  resolveFactoryImportHeaderIndexMap,
-} from '../../../../utils/spreadsheetImportTemplate';
-
-dayjs.extend(relativeTime);
+import { relativeTime;
 
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -794,7 +788,7 @@ const DataSourceListPage: React.FC = () => {
             </Popconfirm>,
           );
         }
-        return renderRowActionsOverflow(actions, `data-source-${record.uuid}`);
+        return actions;
       },
     },
   ];

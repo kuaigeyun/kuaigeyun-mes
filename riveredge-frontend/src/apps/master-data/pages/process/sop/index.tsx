@@ -837,7 +837,7 @@ const SOPPage: React.FC = () => {
         };
         return (
           <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-            <Button key="view" type="link" size="small" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
               详情
             </Button>
             <Button
@@ -948,10 +948,10 @@ const SOPPage: React.FC = () => {
           showSizeChanger: true,
         }}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleSelectSingleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleSelectSingleCreate}>
             {'新建SOP' + NEW_SHORTCUT_HINT}
           </Button>,
-          <Button {...rowActionKind('create')} key="batch-create" type="default" icon={<PlusOutlined />} onClick={() => setCreateModalVisible(true)}>
+          <Button {...rowActionKind('create')} key="batch-create" type="default" onClick={() => setCreateModalVisible(true)}>
             按工艺路线批量创建
           </Button>,
           <Button {...rowActionKind('delete')}

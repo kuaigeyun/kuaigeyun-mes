@@ -18,7 +18,6 @@ import {
   type KbSpace,
   type KbArticle,
 } from '../../services/knowledge-base';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 
@@ -61,9 +60,7 @@ const KnowledgeBasePage: React.FC = () => {
       title: '操作',
       valueType: 'option',
       width: 100,
-      render: (_, row) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, row) => [
             <Button {...rowActionKind('update')}
               key="edit"
               type="link"
@@ -74,8 +71,6 @@ const KnowledgeBasePage: React.FC = () => {
               编辑
             </Button>,
           ],
-          `kb-${row.id}`,
-        ),
     },
   ];
 
@@ -135,7 +130,7 @@ const KnowledgeBasePage: React.FC = () => {
               }
             }}
             toolBarRender={() => [
-              <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+              <Button {...rowActionKind('create')} key="new" type="primary" onClick={handleCreate}>
                 {'新建文章' + NEW_SHORTCUT_HINT}
               </Button>,
             ]}

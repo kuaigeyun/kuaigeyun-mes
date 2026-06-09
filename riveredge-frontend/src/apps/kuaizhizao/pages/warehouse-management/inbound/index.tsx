@@ -52,7 +52,6 @@ import { getPurchaseOrder, listPurchaseOrders, pushPurchaseOrderToReceipt } from
 import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
@@ -300,7 +299,7 @@ function isInboundStockPosted(record: InboundOrder): boolean {
 }
 
 function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
+  return nodes;
 }
 
 const InboundPage: React.FC = () => {
@@ -1469,7 +1468,7 @@ const InboundPage: React.FC = () => {
             </Button>
           );
         }
-        return renderInboundRowActions(nodes, `inbound-${record.receipt_type}-${record.id}`);
+        return nodes;
       },
     },
   ];

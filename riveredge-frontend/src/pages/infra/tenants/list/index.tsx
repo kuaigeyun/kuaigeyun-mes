@@ -890,13 +890,13 @@ const SuperAdminTenantList: React.FC = () => {
 
         return (
           <Space wrap size={[4, 4]}>
-            <Button key="view" {...rowActionKind('read')} type="link"
+            <Button key="view" {...rowActionKind('read')}
               size="small"
               onClick={() => handleOpenDetail(record.id)}
             >
               {t('pages.infra.tenant.detail')}
             </Button>
-            <Button key="edit" {...rowActionKind('update')} type="link"
+            <Button key="edit" {...rowActionKind('update')}
               size="small"
               icon={<EditOutlined />}
               onClick={() => openEditModal(record.id)}

@@ -31,7 +31,6 @@ import {
 } from '../../../../services/equipment';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 设备管理列表页面组件
@@ -374,9 +373,7 @@ const EquipmentListPage: React.FC = () => {
       title: t('pages.system.equipment.columnActions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="view"
               type="link"
@@ -414,8 +411,6 @@ const EquipmentListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `equipment-${record.uuid}`,
-        ),
     },
   ];
 

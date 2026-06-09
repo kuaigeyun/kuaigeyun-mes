@@ -37,7 +37,6 @@ import {
   UpdateMaintenancePlanData,
 } from '../../../../services/maintenancePlan';
 import { getEquipmentList, Equipment } from '../../../../services/equipment';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 /**
  * 维护保养计划管理列表页面组件
@@ -416,9 +415,7 @@ const MaintenancePlanListPage: React.FC = () => {
       title: t('pages.system.maintenancePlans.columnActions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="view"
               type="link"
@@ -447,8 +444,6 @@ const MaintenancePlanListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `maintenance-plan-${record.uuid}`,
-        ),
     },
   ];
 

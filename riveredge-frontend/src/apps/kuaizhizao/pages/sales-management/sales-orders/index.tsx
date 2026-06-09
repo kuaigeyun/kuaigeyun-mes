@@ -141,7 +141,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
 import { CustomerFollowUpFormModal, type CustomerFollowUpPreset } from '../../../components/CustomerFollowUpFormModal';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -2190,7 +2190,6 @@ const SalesOrdersPage: React.FC = () => {
     },
     {
       title: t('app.kuaizhizao.salesOrder.actions'),
-      width: 260,
       fixed: 'right' as const,
       valueType: 'option',
       render: (_: any, record: SalesOrder) => {
@@ -2199,15 +2198,13 @@ const SalesOrdersPage: React.FC = () => {
         const canDelete = (['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW') && !isSalesOrderClosed(record);
         const isDraft = record.status === SalesOrderStatus.DRAFT;
         const parts: React.ReactNode[] = [
-          <Button type="link" size="small" onClick={() => handleDetail([record.id!])}>
-            {t('app.kuaizhizao.salesOrder.viewDetail')}
-          </Button>,
+          <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail([record.id!])} />,
         ];
         if (isDraft) {
           parts.push(
             <Button
-              type="link"
-              size="small"
+              {...rowActionKind('submit')}
+              key="submit"
               onClick={() => {
                 Modal.confirm({
                   title: t('app.kuaizhizao.salesOrder.submitOrder'),
@@ -2228,29 +2225,15 @@ const SalesOrdersPage: React.FC = () => {
                   },
                 });
               }}
-            >
-              {t('app.kuaizhizao.salesOrder.submitOrder')}
-            </Button>
+            />,
           );
         }
-        parts.push(
-          <Tooltip title={!canEdit ? t('app.kuaizhizao.salesOrder.editDisabledTip', { defaultValue: '已审核、已生效或执行中的订单不可编辑' }) : undefined}>
-            <span>
-              <Button type="link" size="small" disabled={!canEdit} onClick={() => canEdit && handleEdit([record.id!])}>
-                {t('app.kuaizhizao.salesOrder.editAction')}
-              </Button>
-            </span>
-          </Tooltip>
-        );
-        parts.push(
-          <Tooltip title={!canDelete ? t('app.kuaizhizao.salesOrder.deleteDisabledTip', { defaultValue: '该状态下的订单不可删除' }) : undefined}>
-            <span>
-              <Button type="link" danger size="small" disabled={!canDelete} onClick={() => canDelete && handleDeleteSingle(record.id!)}>
-                {t('app.kuaizhizao.salesOrder.delete')}
-              </Button>
-            </span>
-          </Tooltip>
-        );
+        if (canEdit) {
+          parts.push(<Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit([record.id!])} />);
+        }
+        if (canDelete) {
+          parts.push(<Button {...rowActionKind('delete')} key="delete" onClick={() => handleDeleteSingle(record.id!)} />);
+        }
         parts.push(
           <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
@@ -2273,11 +2256,9 @@ const SalesOrdersPage: React.FC = () => {
           />
         );
         parts.push(
-          <Button type="link" size="small" onClick={() => openFollowUpFromSalesOrder(record)}>
-            {t('app.kuaizhizao.customerFollowUp.addFollowUpFromDocument')}
-          </Button>
+          <Button {...rowActionAddFollowUpFromDocument()} key="follow-up" onClick={() => openFollowUpFromSalesOrder(record)} />,
         );
-        return renderRowActionsOverflow(parts, `sales-order-${record.id ?? 'row'}`);
+        return parts;
       },
     },
   ];

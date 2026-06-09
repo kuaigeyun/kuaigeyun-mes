@@ -13,7 +13,6 @@ import { UniLifecycle } from '../../../components/uni-lifecycle';
 import { getReports } from '../services/kuaireport';
 import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
 import { countWithPagedRequests } from '../../../utils/pagedCount';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 interface ReportRow {
   id: number;
@@ -98,11 +97,11 @@ const ReportList: React.FC = () => {
           >
             设计
           </Button>,
-          <Button {...rowActionKind('delete')} key="del" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => messageApi.info('功能开发中')}>
+          <Button {...rowActionKind('delete')} key="del" onClick={() => messageApi.info('功能开发中')}>
             删除
           </Button>,
         ];
-        return renderRowActionsOverflow(nodes, `report-${record.id}`);
+        return nodes;
       },
     },
   ];
@@ -136,7 +135,7 @@ const ReportList: React.FC = () => {
         }}
         rowKey="id"
         toolBarActions={[
-          <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={() => navigate('../jimu-designer')}>
+          <Button {...rowActionKind('create')} key="new" type="primary" onClick={() => navigate('../jimu-designer')}>
             新建专业报表
           </Button>,
         ]}

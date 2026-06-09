@@ -33,13 +33,7 @@ import {
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
-
-import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
-import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
+import { relativeTime;
 
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;
@@ -559,12 +553,11 @@ const PrintTemplateListPage: React.FC = () => {
       fixed: 'right',
       uniActionRenderOptions: { directMax: 4 },
       render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+        [
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleView(record)}>
               {t('pages.system.printTemplates.detail')}
             </Button>,
-            <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+            <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
               {t('pages.system.printTemplates.edit')}
             </Button>,
             <Button
@@ -591,8 +584,6 @@ const PrintTemplateListPage: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `print-template-${record.uuid}`,
-        ),
     },
   ];
 

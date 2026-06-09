@@ -26,7 +26,6 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 import dayjs from 'dayjs';
 
 const InvoiceList: React.FC = () => {
@@ -184,9 +183,7 @@ const InvoiceList: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 200,
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="det"
               type="link"
@@ -220,8 +217,6 @@ const InvoiceList: React.FC = () => {
               </Button>
             </Popconfirm>,
           ],
-          `inv-${record.invoice_code}`,
-        ),
     },
   ];
 

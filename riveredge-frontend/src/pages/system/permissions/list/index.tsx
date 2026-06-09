@@ -21,7 +21,6 @@ import {
   Permission,
 } from '../../../../services/permission';
 import { extractProTableSort, mergeListKeyword, mapPermissionListSortField } from '../../../../utils/tableQueryKey';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 
 const PermissionListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -179,15 +178,11 @@ const PermissionListPage: React.FC = () => {
       title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
-            <Button {...rowActionKind('read')} key="view" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleView(record)}>
+      render: (_, record) => [
+            <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
               {t('field.permission.view')}
             </Button>,
           ],
-          `permission-${record.uuid}`,
-        ),
     },
   ];
 

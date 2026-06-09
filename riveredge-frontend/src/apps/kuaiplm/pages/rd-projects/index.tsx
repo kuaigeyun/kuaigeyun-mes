@@ -29,7 +29,6 @@ import {
   resolveRdProjectListLifecycleParams,
   LIST_LIFECYCLE_STAGE_FIELD,
 } from '../../utils/rdProjectLifecycle';
-import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 
@@ -178,9 +177,7 @@ const RdProjectsListPage: React.FC = () => {
       valueType: 'option',
       fixed: 'right',
       width: 120,
-      render: (_, record) =>
-        renderRowActionsOverflow(
-          [
+      render: (_, record) => [
             <Button {...rowActionKind('read')}
               key="detail"
               type="link"
@@ -191,8 +188,6 @@ const RdProjectsListPage: React.FC = () => {
               工作台
             </Button>,
           ],
-          `rd-${record.id}`,
-        ),
     },
   ];
 
@@ -222,7 +217,7 @@ const RdProjectsListPage: React.FC = () => {
           }
         }}
         toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
+          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
             {'新建项目' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}

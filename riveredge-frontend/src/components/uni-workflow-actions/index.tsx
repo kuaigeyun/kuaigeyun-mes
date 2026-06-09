@@ -6,7 +6,7 @@ import { rowActionKind } from '../uni-action';
 import { useAuditRequired } from '../../hooks/useAuditRequired';
 import { useGlobalStore } from '../../stores';
 import { hasModulePermission, hasReviewPermission } from '../../utils/permissionContract';
-import { hasPlatformAdministrativeAuthority } from '../../utils/auth';
+import { isAdminBypass } from '../../utils/permission';
 
 export type WorkflowStatus = 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'cancelled' | string;
 
@@ -107,7 +107,7 @@ export const UniWorkflowActions: React.FC<UniWorkflowActionsProps> = ({
   const { message } = App.useApp();
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const currentUser = useGlobalStore((s) => s.currentUser);
-  const adminOpen = hasPlatformAdministrativeAuthority(currentUser);
+  const adminOpen = isAdminBypass(currentUser);
   const resource = (resourcePrefix || '').trim();
   const canSubmit = adminOpen || !resource || hasModulePermission(currentUser ?? undefined, resource, 'submit');
   const canReview = adminOpen || !resource || hasReviewPermission(currentUser ?? undefined, resource);

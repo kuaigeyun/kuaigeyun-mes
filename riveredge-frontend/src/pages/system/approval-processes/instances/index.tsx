@@ -26,7 +26,7 @@ import {
   ApprovalInstanceActionData,
 } from '../../../../services/approvalInstance';
 import { getApprovalProcessList } from '../../../../services/approvalProcess';
-import { renderRowActionsOverflow, rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind } from '../../../../components/uni-action';
 
 const { TextArea } = Input;
 
@@ -284,7 +284,7 @@ const ApprovalInstanceListPage: React.FC = () => {
           }
         }
 
-        return renderRowActionsOverflow(actions, `approval-inst-${record.uuid}`);
+        return actions;
       },
     },
   ];

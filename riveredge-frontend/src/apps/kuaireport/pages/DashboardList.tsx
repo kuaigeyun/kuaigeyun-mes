@@ -21,7 +21,6 @@ import {
 } from '../services/kuaireport';
 import { UniLifecycle } from '../../../components/uni-lifecycle';
 import { getPublishDraftLifecycle } from '../utils/publishLifecycle';
-import { renderRowActionsOverflow } from '../../../utils/renderRowActionsOverflow';
 
 interface Dashboard {
     id: number;
@@ -130,7 +129,7 @@ const DashboardList: React.FC = () => {
                 删除
             </Button>,
         ];
-        return renderRowActionsOverflow(nodes, `db-act-${record.id}`);
+        return nodes;
     };
 
     const columns: ProColumns<Dashboard>[] = [

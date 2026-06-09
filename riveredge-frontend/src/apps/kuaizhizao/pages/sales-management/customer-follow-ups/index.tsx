@@ -1,8 +1,8 @@
 /**
  * 客户跟进（销售极简 CRM）
  *
- * 列表与详情抽屉风格对齐报价单：生命周期列、UniLifecycle、DetailDrawerTemplate、renderRowActionsOverflow；
- * 「待跟进」队列、回访闭环与同客户近期记录见规划落地。
+ * 列表与详情抽屉风格对齐报价单：生命周期列、UniLifecycle、DetailDrawerTemplate；
+ * 操作列仅返回 Button[] + rowActionKind，由 UniTable → uni-action 统一规范化。
  */
 
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
@@ -10,7 +10,7 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Modal, Space, Descriptions, Typography, Tag, Table, Empty, Spin } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
@@ -23,7 +23,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
-import {renderRowActionsOverflow, rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
@@ -53,10 +53,6 @@ function followUpPresetFromRecord(record: CustomerFollowUp): CustomerFollowUpPre
     preset.sales_order_code = record.sales_order_code ?? undefined;
   }
   return preset;
-}
-
-function renderFollowUpRowActions(nodes: React.ReactNode[], keyPrefix: string): React.ReactNode {
-  return renderRowActionsOverflow(nodes, keyPrefix);
 }
 
 const CustomerFollowUpsPage: React.FC = () => {
@@ -389,38 +385,17 @@ const CustomerFollowUpsPage: React.FC = () => {
     },
     {
       title: t('common.actions'),
-      minWidth: 120,
+      valueType: 'option',
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')} key="d" type="link" size="small" onClick={() => handleDetail(record.id)}>
-            {t('common.detail')}
-          </Button>,
-          <Button {...rowActionKind('update')} key="e" type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>
-            {t('common.edit')}
-          </Button>,
-          <Button {...rowActionKind('create')}
-            key="nf"
-            type="link"
-            size="small"
-            icon={<PlusOutlined />}
-            onClick={() => openCreateFromRow(record)}
-          >
-            {t('app.kuaizhizao.customerFollowUp.new')}
-          </Button>,
-          <Button {...rowActionKind('delete')}
-            key="del"
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            {t('common.delete')}
-          </Button>,
+          <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id)} />,
+          <Button {...rowActionKind('update')} key="e" onClick={() => openEdit(record)} />,
+          <Button {...rowActionAddFollowUpFromDocument('create')} key="nf" onClick={() => openCreateFromRow(record)} />,
+          <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)} />,
         ];
-        return renderFollowUpRowActions(parts, `cfu-${record.id}`);
+        return parts;
       },
     },
   ];
@@ -464,7 +439,7 @@ const CustomerFollowUpsPage: React.FC = () => {
             />
           }
           toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="new" type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+            <Button {...rowActionKind('create')} key="new" type="primary" onClick={openCreate}>
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,
             <Button {...rowActionKind('delete')}

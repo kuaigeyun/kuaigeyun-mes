@@ -630,13 +630,13 @@ const MoldBorrowOutPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button key="view" {...rowActionKind('read')} type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+          <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
             详情
           </Button>
-          <Button key="edit" {...rowActionKind('update')} type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>
+          <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
             编辑
           </Button>
-          <Button key="delete" {...rowActionKind('delete')} type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDeleteOne(record)}>
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
             删除
           </Button>
         </Space>

@@ -43,7 +43,6 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
-import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
 
 // 销售退货单接口定义
 interface SalesReturn {
@@ -207,7 +206,7 @@ const SalesReturnsPage: React.FC = () => {
   }, [modalVisible]);
 
   const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
-    return renderRowActionsOverflow(actions, 'sales-return');
+    return actions;
   };
 
   // 表格列定义
@@ -289,15 +288,15 @@ const SalesReturnsPage: React.FC = () => {
       width: 220,
       fixed: 'right',
       render: (_, record) => renderSalesReturnRowActions([
-        <Button {...rowActionKind('read')} key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>详情</Button>,
         ...(record.status === '待退货' || record.status === '草稿' ? [
-          <Button {...rowActionKind('update')} key="edit" type="link" size="small" icon={<EditOutlined />} onClick={() => void handleEdit(record)}>编辑</Button>,
+          <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>编辑</Button>,
         ] : []),
         ...(record.status === '待退货' ? [
-          <Button {...rowActionKind('audit')} key="confirm" type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)}>确认退货</Button>,
+          <Button {...rowActionKind('audit')} key="confirm" onClick={() => handleConfirm(record)}>确认退货</Button>,
         ] : []),
         ...(record.status === '已退货' ? [
-          <Button {...rowActionKind('revoke')} key="withdraw" type="link" size="small" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
+          <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
         ] : []),
       ]),
     },
