@@ -1225,6 +1225,9 @@ export default {
   'permission.action.update': 'Edit',
   'permission.action.delete': 'Delete',
   'permission.action.assign': 'Assign',
+  'permission.action.claim': 'Claim',
+  'permission.action.release': 'Release',
+  'permission.action.recycle': 'Recycle',
   'permission.action.manage': 'Manage',
   'permission.action.approve': 'Approve',
   'permission.action.submit': 'Submit',
@@ -1249,6 +1252,10 @@ export default {
   'permission.action.create-outbound': 'Create outbound',
   'permission.kuaizhizao.pricingView': 'View prices and amounts (Kuaizhizao)',
   'permission.kuaizhizao.workOrderAssign': 'Assign Work Order',
+  'permission.kuaizhizao.customerPoolAssign': 'Customer Pool · Assign',
+  'permission.kuaizhizao.customerPoolRelease': 'Customer Pool · Release',
+  'permission.kuaizhizao.customerPoolRecycle': 'Customer Pool · Force Recycle',
+  'permission.kuaizhizao.customerPoolClaim': 'Customer Pool · Claim',
 
   'permission.scope.all': 'All',
   'permission.scope.department': 'Department',
@@ -9789,6 +9796,8 @@ export default {
   'pages.system.roles.currentAssigned': 'Currently assigned: ',
   'pages.system.roles.assignedDetail': '(Visible in tree: {{visible}}, Unmounted: {{unmounted}})',
   'pages.system.roles.roleUsers': 'Associated users: ',
+  'pages.system.roles.roleUsersPanelTitle': 'Associated users',
+  'pages.system.roles.roleUsersEmpty': 'No users assigned to this role',
 
   // Dashboard
   'pages.dashboard.greetingEarlyMorning': 'Early morning',

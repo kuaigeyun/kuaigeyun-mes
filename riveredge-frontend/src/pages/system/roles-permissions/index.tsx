@@ -29,6 +29,8 @@ import {
   Tabs,
   Flex,
   Table,
+  List,
+  Typography,
 } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../hooks/useNewShortcut';
@@ -66,14 +68,17 @@ import {
   saveRoleDataPolicies,
   getRoleFieldPolicies,
   saveRoleFieldPolicies,
+  getRoleUsers,
   Role,
   Permission,
   DataPermissionPolicy,
   FieldPermissionPolicy,
+  RoleUserListItem,
 } from '../../../services/role';
 import { refreshCurrentUserInStore } from '../../../services/auth';
 import { useGlobalStore } from '../../../stores';
 import { RoleFormModal } from '../roles/components/RoleFormModal';
+import { UserFormModal } from '../users/components/UserFormModal';
 import {
   PERMISSION_TEMPLATES,
   getPermissionCodesByTemplate,
@@ -128,6 +133,18 @@ function permissionLeafDisplayLabel(
   }
   if (code === 'kuaizhizao:work-order:assign') {
     return t('permission.kuaizhizao.workOrderAssign', { defaultValue: '工单派工' });
+  }
+  if (code === 'kuaizhizao:customer-pool:assign') {
+    return t('permission.kuaizhizao.customerPoolAssign', { defaultValue: '客户池 · 分配客户' });
+  }
+  if (code === 'kuaizhizao:customer-pool:release') {
+    return t('permission.kuaizhizao.customerPoolRelease', { defaultValue: '客户池 · 释放客户' });
+  }
+  if (code === 'kuaizhizao:customer-pool:recycle') {
+    return t('permission.kuaizhizao.customerPoolRecycle', { defaultValue: '客户池 · 强制回收' });
+  }
+  if (code === 'kuaizhizao:customer-pool:claim') {
+    return t('permission.kuaizhizao.customerPoolClaim', { defaultValue: '客户池 · 领取客户' });
   }
   const parts = code.split(':').filter(Boolean);
   const n = parts.length;
@@ -476,6 +493,10 @@ const RolesPermissionsPage: React.FC = () => {
   // 选中角色相关状态
   const [selectedRole, setSelectedRole] = useState<Role | null>(null);
   const [selectedRoleLoading, setSelectedRoleLoading] = useState(false);
+  const [roleUsers, setRoleUsers] = useState<RoleUserListItem[]>([]);
+  const [roleUsersLoading, setRoleUsersLoading] = useState(false);
+  const [userFormOpen, setUserFormOpen] = useState(false);
+  const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
   // 权限相关状态
   const [allPermissions, setAllPermissions] = useState<Permission[]>([]);
   /** 功能权限：服务端矩阵（菜单树 + granted_codes） */
@@ -1253,9 +1274,22 @@ const RolesPermissionsPage: React.FC = () => {
     [applyScopeToResources, messageApi, selectedDataResources, t, visibleDataResourceKeys]
   );
 
+  const loadRoleUsers = useCallback(async (roleUuid: string) => {
+    try {
+      setRoleUsersLoading(true);
+      const res = await getRoleUsers(roleUuid);
+      setRoleUsers(res.items || []);
+    } catch {
+      setRoleUsers([]);
+    } finally {
+      setRoleUsersLoading(false);
+    }
+  }, []);
+
   const handleSelectRole = async (role: Role) => {
     try {
       setSelectedRoleLoading(true);
+      setRoleUsers([]);
       setPermissionSearchKeyword('');
       setFunctionFilterMode('all');
       setFunctionFilterMenuUuid('');
@@ -1276,6 +1310,7 @@ const RolesPermissionsPage: React.FC = () => {
         loadFunctionGrantsForRole(detail.uuid),
         getRoleDataPolicies(detail.uuid),
         getRoleFieldPolicies(detail.uuid),
+        loadRoleUsers(detail.uuid),
       ]);
       setDataPolicies(roleDataPolicies);
       setFieldPolicies(roleFieldPolicies);
@@ -1513,74 +1548,75 @@ const RolesPermissionsPage: React.FC = () => {
             height: '100%',
           }}
         >
-          {/* 搜索栏 */}
-          <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-            <Input
-              placeholder={t('pages.system.roles.searchRole')}
-              prefix={<SearchOutlined />}
-              value={roleSearchKeyword}
-              onChange={(e) => setRoleSearchKeyword(e.target.value)}
-              allowClear
-              size="middle"
-            />
-          </div>
-          {/* 操作按钮 */}
-          <div style={{ padding: '8px', borderBottom: `1px solid ${token.colorBorder}` }}>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <Button type="primary" block onClick={handleCreateRole}>
-                {t('pages.system.roles.createRole')}
-              </Button>
-              {trialRunMode && (
-              <Button
-                type="primary"
-                block
-                loading={loadPresetLoading}
-                onClick={async () => {
-                  try {
-                    setLoadPresetLoading(true);
-                    const list = await getRolePresetPreview();
-                    setPresetRoleList(list);
-                    setSelectedPresetRoleCodes(list.map((x) => x.code));
-                    setPresetModalVisible(true);
-                  } catch (e: any) {
-                    messageApi.error(e?.message || t('common.operationFailed'));
-                  } finally {
-                    setLoadPresetLoading(false);
-                  }
-                }}
-              >
-                {t('field.role.loadPreset')}
-              </Button>
-              )}
-              {trialRunMode && (
-              <Tooltip title={t('pages.system.roles.cleanOldRoles', { defaultValue: '清理旧角色' })}>
+          {/* 左侧栏 Header：搜索 + 操作按钮，与中间/右侧同高 */}
+          <div className="roles-permissions-column-header roles-permissions-column-header--left">
+            <div className="roles-permissions-column-header__row">
+              <Input
+                placeholder={t('pages.system.roles.searchRole')}
+                prefix={<SearchOutlined />}
+                value={roleSearchKeyword}
+                onChange={(e) => setRoleSearchKeyword(e.target.value)}
+                allowClear
+                size="middle"
+              />
+            </div>
+            <div className="roles-permissions-column-header__row">
+              <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                <Button type="primary" block onClick={handleCreateRole}>
+                  {t('pages.system.roles.createRole')}
+                </Button>
+                {trialRunMode && (
                 <Button
-                  icon={<ClearOutlined />}
-                  style={{ width: 32, minWidth: 32, padding: 0, flexShrink: 0 }}
-                  loading={cleanupLegacyLoading}
+                  type="primary"
+                  block
+                  loading={loadPresetLoading}
                   onClick={async () => {
                     try {
-                      setCleanupLegacyLoading(true);
-                      const res = await cleanupLegacyRoles();
-                      messageApi.success(
-                        t('pages.system.roles.cleanOldRolesResult', {
-                          message: res.message,
-                          renamed: res.renamed,
-                          merged: res.merged,
-                          deleted: res.soft_deleted,
-                          defaultValue: `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
-                        })
-                      );
-                      await loadRoles();
+                      setLoadPresetLoading(true);
+                      const list = await getRolePresetPreview();
+                      setPresetRoleList(list);
+                      setSelectedPresetRoleCodes(list.map((x) => x.code));
+                      setPresetModalVisible(true);
                     } catch (e: any) {
                       messageApi.error(e?.message || t('common.operationFailed'));
                     } finally {
-                      setCleanupLegacyLoading(false);
+                      setLoadPresetLoading(false);
                     }
                   }}
-                />
-              </Tooltip>
-              )}
+                >
+                  {t('field.role.loadPreset')}
+                </Button>
+                )}
+                {trialRunMode && (
+                <Tooltip title={t('pages.system.roles.cleanOldRoles', { defaultValue: '清理旧角色' })}>
+                  <Button
+                    icon={<ClearOutlined />}
+                    style={{ width: 32, minWidth: 32, padding: 0, flexShrink: 0 }}
+                    loading={cleanupLegacyLoading}
+                    onClick={async () => {
+                      try {
+                        setCleanupLegacyLoading(true);
+                        const res = await cleanupLegacyRoles();
+                        messageApi.success(
+                          t('pages.system.roles.cleanOldRolesResult', {
+                            message: res.message,
+                            renamed: res.renamed,
+                            merged: res.merged,
+                            deleted: res.soft_deleted,
+                            defaultValue: `${res.message}（重命名${res.renamed}，合并${res.merged}，删除${res.soft_deleted}）`
+                          })
+                        );
+                        await loadRoles();
+                      } catch (e: any) {
+                        messageApi.error(e?.message || t('common.operationFailed'));
+                      } finally {
+                        setCleanupLegacyLoading(false);
+                      }
+                    }}
+                  />
+                </Tooltip>
+                )}
+              </div>
             </div>
           </div>
           {/* 角色列表 */}
@@ -1617,27 +1653,24 @@ const RolesPermissionsPage: React.FC = () => {
           minWidth: 0,
           minHeight: 0,
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'row',
           backgroundColor: token.colorBgContainer,
         }}
       >
         {selectedRole ? (
           <>
-        {/* 顶部工具栏 */}
         <div
           style={{
-            backgroundColor: token.colorBgContainer,
-            zIndex: 1,
+            flex: 1,
+            minWidth: 0,
+            minHeight: 0,
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          {/* 第一层：状态、角色身份与全局操作 */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'space-between', 
-            padding: '16px 24px',
-            borderBottom: `1px solid ${token.colorBorderSecondary || 'rgba(0,0,0,0.06)'}`
-          }}>
+        {/* 顶部工具栏 */}
+        <div className="roles-permissions-column-header roles-permissions-column-header--center">
+          <div className="roles-permissions-column-header__toolbar">
             <Space size="middle" style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', minWidth: 0 }}>
                 <Space size="small">
@@ -1671,7 +1704,7 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
             </Space>
 
-            <Space>
+            <Space wrap>
                 {permissionLayer === 'function' && (
                   <Select
                     placeholder={t('pages.system.roles.applyTemplate')}
@@ -1701,20 +1734,17 @@ const RolesPermissionsPage: React.FC = () => {
               </Space>
           </div>
 
-          {/* 权限层 Tab */}
-            <div style={{ padding: '0 24px' }}>
-              <Tabs
-                activeKey={permissionLayer}
-                onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
-                items={[
-                  { key: 'function', label: t('pages.system.roles.functionPermission', { defaultValue: '功能权限' }) },
-                  { key: 'data', label: t('pages.system.roles.dataPermission', { defaultValue: '数据权限' }) },
-                  { key: 'field', label: t('pages.system.roles.fieldPermission', { defaultValue: '字段权限' }) },
-                ]}
-                style={{ marginBottom: 8 }}
-                tabBarStyle={{ marginBottom: 0 }}
-              />
-            </div>
+          <div className="roles-permissions-column-header__tabs">
+            <Tabs
+              activeKey={permissionLayer}
+              onChange={(key) => setPermissionLayer(key as 'function' | 'data' | 'field')}
+              items={[
+                { key: 'function', label: t('pages.system.roles.functionPermission', { defaultValue: '功能权限' }) },
+                { key: 'data', label: t('pages.system.roles.dataPermission', { defaultValue: '数据权限' }) },
+                { key: 'field', label: t('pages.system.roles.fieldPermission', { defaultValue: '字段权限' }) },
+              ]}
+            />
+          </div>
         </div>
 
         {/* 权限编辑区域：功能权限占满可滚动；数据/字段随内容高度，避免列表下方大块空白 */}
@@ -2258,6 +2288,79 @@ const RolesPermissionsPage: React.FC = () => {
               </span>
             </Space>
           </div>
+        </div>
+
+        <div
+          className="roles-permissions-users-panel"
+          style={{
+            width: 280,
+            minWidth: 280,
+            flexShrink: 0,
+            borderLeft: `1px solid ${token.colorBorder}`,
+            backgroundColor: token.colorBgContainer,
+            display: 'flex',
+            flexDirection: 'column',
+            minHeight: 0,
+          }}
+        >
+          <div className="roles-permissions-column-header roles-permissions-column-header--right">
+            <Space size={6}>
+              <TeamOutlined />
+              <span style={{ fontWeight: 600 }}>
+                {t('pages.system.roles.roleUsersPanelTitle', { defaultValue: '关联用户' })}
+              </span>
+              <Tag color="blue">{roleUsers.length}</Tag>
+            </Space>
+          </div>
+          <div className="scrollbar-like-modal" style={{ flex: 1, minHeight: 0, overflow: 'auto' }}>
+            <Spin spinning={roleUsersLoading}>
+              {roleUsers.length > 0 ? (
+                <List
+                  size="small"
+                  dataSource={roleUsers}
+                  renderItem={(user) => {
+                    const displayName = (user.full_name || '').trim() || user.username;
+                    return (
+                      <List.Item
+                        style={{ paddingInline: 16, cursor: 'pointer' }}
+                        onClick={() => {
+                          setUserEditUuid(user.uuid);
+                          setUserFormOpen(true);
+                        }}
+                      >
+                        <List.Item.Meta
+                          title={
+                            <Space size={6} wrap>
+                              <Typography.Text ellipsis style={{ maxWidth: 160 }}>
+                                {displayName}
+                              </Typography.Text>
+                              {!user.is_active ? (
+                                <Tag color="default">{t('common.disabled', { defaultValue: '禁用' })}</Tag>
+                              ) : null}
+                            </Space>
+                          }
+                          description={
+                            <Typography.Text type="secondary" ellipsis style={{ fontSize: 12 }}>
+                              {user.department_name
+                                ? `${user.department_name} · ${user.username}`
+                                : user.username}
+                            </Typography.Text>
+                          }
+                        />
+                      </List.Item>
+                    );
+                  }}
+                />
+              ) : (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={t('pages.system.roles.roleUsersEmpty', { defaultValue: '暂无用户拥有此角色' })}
+                  style={{ margin: '32px 0' }}
+                />
+              )}
+            </Spin>
+          </div>
+        </div>
           </>
         ) : (
           <div
@@ -2292,6 +2395,20 @@ const RolesPermissionsPage: React.FC = () => {
             } catch (e: any) {
               messageApi.error(e?.message || t('common.loadFailed'));
             }
+          }
+        }}
+      />
+
+      <UserFormModal
+        open={userFormOpen}
+        editUuid={userEditUuid}
+        onClose={() => {
+          setUserFormOpen(false);
+          setUserEditUuid(null);
+        }}
+        onSuccess={() => {
+          if (selectedRole?.uuid) {
+            void loadRoleUsers(selectedRole.uuid);
           }
         }}
       />

@@ -257,7 +257,7 @@ const PatrolHazardsPage: React.FC = () => {
           setModalVisible(false);
           setEditId(null);
           setIsDetailView(false);
-          setAfterFiles([]);
+          setAfterUuids([]);
           setContextRow(null);
         }}
         onFinish={handleSubmit}

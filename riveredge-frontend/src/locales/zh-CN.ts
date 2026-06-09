@@ -1217,6 +1217,9 @@ export default {
   'permission.action.update': '编辑',
   'permission.action.delete': '删除',
   'permission.action.assign': '分配',
+  'permission.action.claim': '认领',
+  'permission.action.release': '释放',
+  'permission.action.recycle': '回收',
   'permission.action.manage': '管理',
   'permission.action.approve': '审批/审核',
   'permission.action.audit': '审核',
@@ -1247,6 +1250,10 @@ export default {
   'permission.action.create-outbound': '生成出库单',
   'permission.kuaizhizao.pricingView': '查看价格与金额（快制造）',
   'permission.kuaizhizao.workOrderAssign': '工单派工',
+  'permission.kuaizhizao.customerPoolAssign': '客户池 · 分配客户',
+  'permission.kuaizhizao.customerPoolRelease': '客户池 · 释放客户',
+  'permission.kuaizhizao.customerPoolRecycle': '客户池 · 强制回收',
+  'permission.kuaizhizao.customerPoolClaim': '客户池 · 领取客户',
 
   'permission.scope.all': '全部',
   'permission.scope.department': '本部门',
@@ -9835,6 +9842,8 @@ export default {
   'pages.system.roles.currentAssigned': '当前已授权：',
   'pages.system.roles.assignedDetail': '（树上可见 {{visible}} 项，未挂载 {{unmounted}} 项）',
   'pages.system.roles.roleUsers': '角色关联用户：',
+  'pages.system.roles.roleUsersPanelTitle': '关联用户',
+  'pages.system.roles.roleUsersEmpty': '暂无用户拥有此角色',
 
   // 工作台
   'pages.dashboard.greetingEarlyMorning': '凌晨好',

@@ -1,6 +1,75 @@
 /* 角色权限页：左侧树 + 右侧权限区（布局壳由页面根节点承担，水平留白仅 UniTabs 16px） */
 
 .roles-permissions-page {
+  --roles-column-header-height: 112px;
+
+  .roles-permissions-column-header {
+    height: var(--roles-column-header-height);
+    min-height: var(--roles-column-header-height);
+    max-height: var(--roles-column-header-height);
+    flex-shrink: 0;
+    box-sizing: border-box;
+    border-bottom: 1px solid var(--ant-color-border);
+    overflow: hidden;
+  }
+
+  .roles-permissions-column-header--left {
+    display: grid;
+    grid-template-rows: 1fr 1fr;
+    background: var(--ant-color-fill-alter, #fafafa);
+  }
+
+  .roles-permissions-column-header--left .roles-permissions-column-header__row {
+    display: flex;
+    align-items: center;
+    min-height: 0;
+    padding: 0 8px;
+
+    &:first-child {
+      border-bottom: 1px solid var(--ant-color-border);
+    }
+  }
+
+  .roles-permissions-column-header--center {
+    display: flex;
+    flex-direction: column;
+    background: var(--ant-color-bg-container);
+  }
+
+  .roles-permissions-column-header--center .roles-permissions-column-header__toolbar {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 24px;
+    border-bottom: 1px solid var(--ant-color-border-secondary, rgba(0, 0, 0, 0.06));
+  }
+
+  .roles-permissions-column-header--center .roles-permissions-column-header__tabs {
+    flex-shrink: 0;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+
+    .ant-tabs {
+      width: 100%;
+      margin-bottom: 0;
+    }
+
+    .ant-tabs-nav {
+      margin-bottom: 0 !important;
+    }
+  }
+
+  .roles-permissions-column-header--right {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--ant-color-bg-container);
+  }
+
   .roles-permissions-tree.ant-tree .ant-tree-switcher,
   .roles-permissions-tree.ant-tree .ant-tree-switcher-leaf-line {
     display: none !important;

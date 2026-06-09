@@ -31,6 +31,7 @@ import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
 import type { Material } from '../../../../master-data/types/material';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -84,6 +85,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { renderRowActionsOverflow } from '../../../../../utils/renderRowActionsOverflow';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -522,6 +524,12 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
           showAdvancedSearch
           onChange={onMaterialPicked}
         />
+        <Form.Item name={[index, 'material_code']} hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name={[index, 'material_name']} hidden>
+          <Input />
+        </Form.Item>
       </div>
     </div>
   );
@@ -545,6 +553,40 @@ function normalizeFormListItems<T>(raw: unknown): T[] {
   if (Array.isArray(raw)) return raw;
   if (raw && typeof raw === 'object') return Object.values(raw as Record<string, T>);
   return [];
+}
+
+function resolveQuotationLineMaterialFields(
+  it: any,
+  materialList: any[],
+): { material_code: string; material_name: string } {
+  const mid = it?.material_id != null ? Number(it.material_id) : NaN;
+  const matched = Number.isFinite(mid)
+    ? materialList.find((m: any) => Number(m.id) === mid)
+    : undefined;
+  const material_code =
+    String(it?.material_code ?? '').trim() ||
+    String(getMaterialField(matched ?? {}, 'mainCode') ?? getMaterialField(matched ?? {}, 'code') ?? '').trim();
+  const material_name =
+    String(it?.material_name ?? '').trim() ||
+    String(getMaterialField(matched ?? {}, 'name') ?? '').trim();
+  return { material_code, material_name };
+}
+
+function mapQuotationSubmitItem(it: any, materialList: any[]) {
+  const { material_code, material_name } = resolveQuotationLineMaterialFields(it, materialList);
+  return {
+    material_id: it.material_id,
+    material_code,
+    material_name,
+    material_spec: it.material_spec,
+    material_unit: it.material_unit,
+    quote_quantity: it.quote_quantity,
+    unit_price: it.unit_price,
+    tax_rate: it.tax_rate ?? 0,
+    variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
+    delivery_date: toApiDateString(it.delivery_date),
+    notes: it.notes,
+  };
 }
 
 const QuotationFormSummary: React.FC = () => {
@@ -1209,7 +1251,7 @@ const QuotationsPage: React.FC = () => {
       return;
     }
 
-    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const currentItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems],
     });
@@ -2026,13 +2068,19 @@ const QuotationsPage: React.FC = () => {
   }
 
   const submitCreate = async (values: any, options?: { asDraft?: boolean }) => {
-    const validItems = (values.items || []).filter(
+    const validItems = normalizeFormListItems<any>(values.items).filter(
       (it: any) =>
         it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
     );
     if (!validItems.length) {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
+    }
+    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
+    const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
+    if (missingMaterialMeta) {
+      messageApi.error('明细行缺少物料编号或名称，请重新选择物料');
+      throw new Error('明细行缺少物料编号或名称，请重新选择物料');
     }
     let quotationCode = values.quotation_code;
     const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-quotation');
@@ -2042,7 +2090,9 @@ const QuotationsPage: React.FC = () => {
         const codeResponse = await generateCode({ rule_code: submitRuleCode });
         quotationCode = codeResponse.code;
       } catch (e) {
-        console.warn('报价单编号正式生成失败，使用当前值:', e);
+        const msg = getApiErrorMessage(e, '生成报价单编号失败');
+        messageApi.error(msg);
+        throw e;
       }
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
@@ -2066,19 +2116,7 @@ const QuotationsPage: React.FC = () => {
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
         price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
-        items: validItems.map((it: any) => ({
-          material_id: it.material_id,
-          material_code: it.material_code,
-          material_name: it.material_name,
-          material_spec: it.material_spec,
-          material_unit: it.material_unit,
-          quote_quantity: it.quote_quantity,
-          unit_price: it.unit_price,
-          tax_rate: it.tax_rate ?? 0,
-          variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
-          delivery_date: toApiDateString(it.delivery_date),
-          notes: it.notes,
-        })),
+        items: submitItems,
       },
       { autoSubmit: !options?.asDraft },
     );
@@ -2101,20 +2139,45 @@ const QuotationsPage: React.FC = () => {
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
       } else if (err?.message !== t('app.kuaizhizao.quotation.validLineHint')) {
-        messageApi.error(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
+        messageApi.error(getApiErrorMessage(err, t('app.kuaizhizao.quotation.completeRequired')));
       }
+    }
+  };
+
+  const handleFormSubmit = async (values: any) => {
+    try {
+      if (isCreatePage) {
+        await submitCreate(values);
+      } else {
+        await submitEdit(values);
+      }
+    } catch (err: any) {
+      if (err?.errorFields?.length) {
+        messageApi.warning(err?.message ?? t('app.kuaizhizao.quotation.completeRequired'));
+        return;
+      }
+      if (err?.message === t('app.kuaizhizao.quotation.validLineHint')) {
+        return;
+      }
+      messageApi.error(getApiErrorMessage(err, isCreatePage ? '创建报价单失败' : '更新报价单失败'));
     }
   };
 
   const submitEdit = async (values: any) => {
     if (!editingId) return;
-    const validItems = (values.items || []).filter(
+    const validItems = normalizeFormListItems<any>(values.items).filter(
       (it: any) =>
         it.material_id && Number(it.quote_quantity) > 0 && Number(it.unit_price) > 0,
     );
     if (!validItems.length) {
       messageApi.error(t('app.kuaizhizao.quotation.validLineHint'));
       throw new Error(t('app.kuaizhizao.quotation.validLineHint'));
+    }
+    const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
+    const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
+    if (missingMaterialMeta) {
+      messageApi.error('明细行缺少物料编号或名称，请重新选择物料');
+      throw new Error('明细行缺少物料编号或名称，请重新选择物料');
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
@@ -2135,19 +2198,7 @@ const QuotationsPage: React.FC = () => {
       notes: values.notes,
       attachments: normalizeDocumentAttachments(values.attachments),
       price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
-      items: validItems.map((it: any) => ({
-        material_id: it.material_id,
-        material_code: it.material_code,
-        material_name: it.material_name,
-        material_spec: it.material_spec,
-        material_unit: it.material_unit,
-        quote_quantity: it.quote_quantity,
-        unit_price: it.unit_price,
-        tax_rate: it.tax_rate ?? 0,
-        variant_attributes: parseVariantAttributesValue(it.variant_attributes) ?? it.variant_attributes,
-        delivery_date: toApiDateString(it.delivery_date),
-        notes: it.notes,
-      })),
+      items: submitItems,
     });
     messageApi.success('更新成功');
     setEditingId(null);
@@ -2291,7 +2342,7 @@ const QuotationsPage: React.FC = () => {
       if (pt === 'tax_inclusive' && up > 0) {
         up = convertUnitPriceByPriceType(up, taxRate, 'tax_exclusive', 'tax_inclusive');
       }
-      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+      const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
       if (items[index]) {
         items[index] = { ...items[index], unit_price: up, tax_rate: taxRate };
         formRef.current?.setFieldsValue({ items });
@@ -2342,10 +2393,10 @@ const QuotationsPage: React.FC = () => {
         }
         return {
           material_id: m.id,
-          material_code: m.mainCode ?? m.code ?? '',
-          material_name: m.name ?? '',
-          material_spec: m.specification ?? '',
-          material_unit: m.baseUnit ?? '',
+          material_code: String(getMaterialField(m as Record<string, unknown>, 'mainCode') ?? getMaterialField(m as Record<string, unknown>, 'code') ?? ''),
+          material_name: String(getMaterialField(m as Record<string, unknown>, 'name') ?? ''),
+          material_spec: String(getMaterialField(m as Record<string, unknown>, 'specification') ?? ''),
+          material_unit: String(getMaterialField(m as Record<string, unknown>, 'baseUnit') ?? ''),
           quote_quantity: 1,
           unit_price: up,
           tax_rate: taxR,
@@ -2363,7 +2414,7 @@ const QuotationsPage: React.FC = () => {
         return code == null || String(code).trim() === '';
       };
       const queue = selected.map(rowFromMaterial);
-      const items = [...(formRef.current?.getFieldValue('items') ?? [])].map((row: any) => ({ ...row }));
+      const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))].map((row: any) => ({ ...row }));
       for (let i = 0; i < items.length && queue.length > 0; i++) {
         if (isEmptyItemRow(items[i])) {
           items[i] = queue.shift()!;
@@ -2421,7 +2472,7 @@ const QuotationsPage: React.FC = () => {
   useSubmitShortcut(() => triggerQuotationFormSubmit(), isFormPage);
 
   const appendEmptyQuotationItem = useCallback(() => {
-    const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+    const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
     items.push({
       material_id: undefined,
       material_code: '',
@@ -2737,7 +2788,7 @@ const QuotationsPage: React.FC = () => {
                                     size="small"
                                     style={{ padding: '0 4px', height: 'auto' }}
                                     onClick={() => {
-                                      const itemsVal = formRef.current?.getFieldValue('items') ?? [];
+                                      const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                                       if (itemsVal.length === 0) return;
                                       const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
                                       if (rate != null && rate !== '') {
@@ -3045,7 +3096,7 @@ const QuotationsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
-                onFinish={isCreatePage ? submitCreate : submitEdit}
+                onFinish={handleFormSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];
                   const text = first?.errors?.filter(Boolean)[0];

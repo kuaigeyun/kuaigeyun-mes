@@ -35,6 +35,8 @@ async def list_customer_pool(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=200),
     keyword: Optional[str] = Query(None),
+    salesman_id: Optional[int] = Query(None, alias="salesmanId", ge=1, description="归属业务员"),
+    pool_status: Optional[str] = Query(None, alias="poolStatus", description="pool/owned"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
     _auth: object = Depends(require_module_access("kuaizhizao", "customer-pool")),
@@ -46,6 +48,8 @@ async def list_customer_pool(
         skip=skip,
         limit=limit,
         keyword=keyword,
+        salesman_id=salesman_id,
+        pool_status=pool_status,
     )
 
 

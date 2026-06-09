@@ -83,6 +83,10 @@ function actionMatchesSearch(
     delete: t('permission.action.delete', { defaultValue: '删除' }),
     import: t('permission.action.import', { defaultValue: '导入' }),
     export: t('permission.action.export', { defaultValue: '导出' }),
+    assign: t('permission.action.assign', { defaultValue: '分配' }),
+    claim: t('permission.action.claim', { defaultValue: '认领' }),
+    release: t('permission.action.release', { defaultValue: '释放' }),
+    recycle: t('permission.action.recycle', { defaultValue: '回收' }),
   };
   const label = actionLabels[raw] || action.label || '';
   if ((action.code || '').toLowerCase().includes(kw)) return true;

@@ -5,22 +5,18 @@
  * 支持用户的 CRUD 操作、导入导出和批量操作。
  */
 
-import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, ReloadOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
-import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { flushDrawerOpen, DRAWER_CONFIG, ListPageTemplate } from '../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getUserList,
   getUserByUuid,
-  getUserDataScopeBindings,
-  createUser,
-  replaceUserDataScopeBindings,
-  updateUser,
   deleteUser,
   importUsers,
   previewUserImport,
@@ -29,8 +25,6 @@ import {
   resetUserPassword,
   batchDeleteUsers,
   User,
-  CreateUserData,
-  UpdateUserData,
 } from '../../../../services/user';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
@@ -38,11 +32,7 @@ import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/depa
 import { getPositionList } from '../../../../services/position';
 import { getRoleList } from '../../../../services/role';
 import { renderRowActionsOverflow } from '../../../../utils/renderRowActionsOverflow';
-import { customerApi, supplierApi, unwrapSupplyPagedList } from '../../../../apps/master-data/services/supply-chain';
-import type { Customer, Supplier } from '../../../../apps/master-data/types/supply-chain';
-
-/** 账户用户名：2-50 字符，支持中文、字母、数字、下划线、连字符 */
-const USERNAME_PATTERN = /^[\u4e00-\u9fa5a-zA-Z0-9_-]+$/;
+import { UserFormModal } from '../components/UserFormModal';
 
 /**
  * 账户管理列表页面组件
@@ -57,29 +47,10 @@ const UserListPage: React.FC = () => {
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [roleMetaByUuid, setRoleMetaByUuid] = useState<Record<string, { role_type?: string; external_partner_type?: string }>>({});
-  const [customerOptions, setCustomerOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [supplierOptions, setSupplierOptions] = useState<Array<{ label: string; value: string }>>([]);
-  const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
-  const [roleUuidsDraft, setRoleUuidsDraft] = useState<string[]>([]);
-  const selectedExternalPartnerTypes = useMemo(() => {
-    const types = new Set<string>();
-    roleUuidsDraft.forEach((uuid) => {
-      const role = roleMetaByUuid[uuid];
-      if (role?.role_type === 'external' && role.external_partner_type) {
-        types.add(role.external_partner_type);
-      }
-    });
-    return types;
-  }, [roleUuidsDraft, roleMetaByUuid]);
-  const formRef = useRef<ProFormInstance>();
   const userDetailReqRef = useRef(0);
 
-  // Modal 相关状态（创建/编辑）
-  const [modalVisible, setModalVisible] = useState(false);
-  const [isEdit, setIsEdit] = useState(false);
-  const [currentUserUuid, setCurrentUserUuid] = useState<string | null>(null);
-  const [formLoading, setFormLoading] = useState(false);
+  const [userFormOpen, setUserFormOpen] = useState(false);
+  const [userEditUuid, setUserEditUuid] = useState<string | null>(null);
   
   // Drawer 相关状态（详情查看）
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -110,22 +81,6 @@ const UserListPage: React.FC = () => {
       }
     }
   }, [messageApi, t]);
-
-  /**
-   * 处理URL参数（从二维码扫描跳转过来时自动打开详情）
-   */
-  useEffect(() => {
-    const userUuid = searchParams.get('uuid');
-    const action = searchParams.get('action');
-    
-    if (userUuid && action === 'detail') {
-      // 延迟调用，避免 React concurrent mode 警告或同步 setState 问题
-      window.setTimeout(() => {
-        handleView({ uuid: userUuid } as User);
-      }, 0);
-      setSearchParams({}, { replace: true });
-    }
-  }, [searchParams, setSearchParams, handleView]);
 
   /**
    * 处理批量生成二维码
@@ -176,12 +131,10 @@ const UserListPage: React.FC = () => {
 
   const loadReferenceOptions = useCallback(async () => {
     try {
-      const [deptResponse, posResponse, roleResponse, supplierResponse, customerResponse] = await Promise.all([
+      const [deptResponse, posResponse, roleResponse] = await Promise.all([
         getDepartmentTree(),
         getPositionList({ page_size: 100 }),
         getRoleList({ page_size: 100 }),
-        supplierApi.list({ skip: 0, limit: 1000, isActive: true }),
-        customerApi.list({ skip: 0, limit: 1000, isActive: true }),
       ]);
 
       const buildDeptOptions = (items: DepartmentTreeItem[], level = 0): Array<{ label: string; value: string }> => {
@@ -208,33 +161,6 @@ const UserListPage: React.FC = () => {
         label: role.name,
         value: role.uuid,
       })));
-      setRoleMetaByUuid(
-        roleResponse.items.reduce((acc, role) => {
-          acc[role.uuid] = {
-            role_type: role.role_type,
-            external_partner_type: role.external_partner_type,
-          };
-          return acc;
-        }, {} as Record<string, { role_type?: string; external_partner_type?: string }>)
-      );
-      const customers = unwrapSupplyPagedList<Customer>(customerResponse);
-      setCustomerOptions(
-        customers
-          .map((x) => ({
-            label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
-            value: x.code,
-          }))
-          .filter((x) => !!x.value)
-      );
-      const suppliers = unwrapSupplyPagedList<Supplier>(supplierResponse);
-      setSupplierOptions(
-        suppliers
-          .map((x) => ({
-            label: `${x.name}${x.code ? ` (${x.code})` : ''}`,
-            value: x.code,
-          }))
-          .filter((x) => !!x.value)
-      );
     } catch (error) {
       if (typeof window !== 'undefined') {
         window.console.error('加载选项数据失败:', error);
@@ -246,58 +172,41 @@ const UserListPage: React.FC = () => {
     loadReferenceOptions();
   }, [loadReferenceOptions]);
 
-  /**
-   * 处理新建用户
-   */
   const handleCreate = () => {
-    setIsEdit(false);
-    setCurrentUserUuid(null);
-    setRoleUuidsDraft([]);
-    setFormInitialValues({
-      is_active: true,
-      is_tenant_admin: false,
-      supplier_scope_codes: [],
-      customer_scope_codes: [],
-    });
-    setModalVisible(true);
+    setUserEditUuid(null);
+    setUserFormOpen(true);
   };
 
+  const handleEdit = useCallback((record: User) => {
+    setUserEditUuid(record.uuid);
+    setUserFormOpen(true);
+  }, []);
+
   /**
-   * 处理编辑用户
+   * 处理URL参数（从二维码扫描跳转过来时自动打开详情；从外部链接跳转时打开编辑）
    */
-  const handleEdit = useCallback(async (record: User) => {
-    try {
-      setIsEdit(true);
-      setCurrentUserUuid(record.uuid);
-      
-      const detail = await getUserByUuid(record.uuid);
-      const userUuid = detail.uuid || record.uuid;
-      const [supplierBindings, customerBindings] = await Promise.all([
-        getUserDataScopeBindings(userUuid, 'supplier'),
-        getUserDataScopeBindings(userUuid, 'customer'),
-      ]);
-      const supplierCodes = supplierBindings.map((x) => x.scope_code).filter(Boolean);
-      const customerCodes = customerBindings.map((x) => x.scope_code).filter(Boolean);
-      const editRoleUuids = detail.roles?.map(r => r.uuid) || [];
-      setRoleUuidsDraft(editRoleUuids);
-      setFormInitialValues({
-        username: detail.username,
-        email: detail.email,
-        full_name: detail.full_name,
-        phone: detail.phone,
-        department_uuid: detail.department_uuid,
-        position_uuid: detail.position_uuid,
-        role_uuids: editRoleUuids,
-        is_active: detail.is_active,
-        is_tenant_admin: detail.is_tenant_admin,
-        supplier_scope_codes: supplierCodes,
-        customer_scope_codes: customerCodes,
-      });
-      setModalVisible(true);
-    } catch (error: any) {
-      messageApi.error(error.message || t('field.user.fetchDetailFailed'));
+  useEffect(() => {
+    const userUuid = searchParams.get('uuid');
+    const action = searchParams.get('action');
+
+    if (!userUuid) return;
+
+    if (action === 'detail') {
+      window.setTimeout(() => {
+        handleView({ uuid: userUuid } as User);
+      }, 0);
+      setSearchParams({}, { replace: true });
+      return;
     }
-  }, [messageApi, t, currentUserUuid, roleUuidsDraft, formInitialValues]);
+
+    if (action === 'edit') {
+      window.setTimeout(() => {
+        setUserEditUuid(userUuid);
+        setUserFormOpen(true);
+      }, 0);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams, handleView]);
 
 
   /**
@@ -361,118 +270,6 @@ const UserListPage: React.FC = () => {
       },
     });
   }, [messageApi, t]);
-
-  /**
-   * 处理提交表单（创建/更新）
-   */
-  const handleSubmit = async (values: any) => {
-    try {
-      setFormLoading(true);
-
-      // 移除确认密码字段，后端不需要这个字段
-      const submitData = { ...values };
-      delete submitData.confirmPassword;
-      const supplierCodes = (Array.isArray(submitData.supplier_scope_codes) ? submitData.supplier_scope_codes : [])
-        .map((v: any) => String(v || '').trim())
-        .filter(Boolean);
-      const customerCodes = (Array.isArray(submitData.customer_scope_codes) ? submitData.customer_scope_codes : [])
-        .map((v: any) => String(v || '').trim())
-        .filter(Boolean);
-      delete submitData.supplier_scope_codes;
-      delete submitData.customer_scope_codes;
-      if (!submitData.password) {
-        delete submitData.password;
-      }
-
-      // 规范化角色字段：编辑模式下必须显式携带 role_uuids，否则后端会跳过角色更新
-      const latestRoleValue = formRef.current?.getFieldValue?.('role_uuids');
-      const draftRoleValue = roleUuidsDraft;
-      const rawRoleValue =
-        (Array.isArray(draftRoleValue) ? draftRoleValue : undefined) ??
-        submitData.role_uuids ??
-        latestRoleValue ??
-        (isEdit ? formInitialValues?.role_uuids : undefined);
-      const normalizedRoleUuids = (Array.isArray(rawRoleValue) ? rawRoleValue : rawRoleValue != null ? [rawRoleValue] : [])
-        .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
-        .filter(Boolean);
-      // 编辑时始终携带 role_uuids；新建时仅在有选择时携带
-      if (isEdit || normalizedRoleUuids.length > 0 || rawRoleValue !== undefined) {
-        submitData.role_uuids = normalizedRoleUuids;
-      }
-
-      if (isEdit && currentUserUuid) {
-        const updated = await updateUser(currentUserUuid, submitData as UpdateUserData);
-        await Promise.all([
-          replaceUserDataScopeBindings(updated.uuid, {
-            dimension: 'supplier',
-            items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
-          }),
-          replaceUserDataScopeBindings(updated.uuid, {
-            dimension: 'customer',
-            items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
-          }),
-        ]);
-        messageApi.success(t('pages.system.updateSuccess'));
-      } else {
-        if (!submitData.password) {
-          messageApi.error(t('field.user.passwordRequired'));
-          return;
-        }
-        const created = await createUser(submitData as CreateUserData);
-        await Promise.all([
-          replaceUserDataScopeBindings(created.uuid, {
-            dimension: 'supplier',
-            items: supplierCodes.map((code: string) => ({ dimension: 'supplier', scope_code: code })),
-          }),
-          replaceUserDataScopeBindings(created.uuid, {
-            dimension: 'customer',
-            items: customerCodes.map((code: string) => ({ dimension: 'customer', scope_code: code })),
-          }),
-        ]);
-        messageApi.success(t('pages.system.createSuccess'));
-      }
-
-      setModalVisible(false);
-      setFormInitialValues(undefined);
-      actionRef.current?.reload();
-    } catch (error: any) {
-      // 解析具体的错误信息，提供更友好的提示
-      const errorMessage = parseErrorMessage(error);
-      messageApi.error(errorMessage);
-    } finally {
-      setFormLoading(false);
-    }
-  };
-
-  /**
-   * 解析错误信息，提供具体的字段级提示
-   */
-  const parseErrorMessage = (error: any): string => {
-    const message = error.message || error.detail || t('pages.system.deleteFailed');
-
-    if (message.includes('用户名') && message.includes('已存在')) {
-      return t('field.user.errorUsernameExists');
-    }
-    if (message.includes('部门不存在') || message.includes('部门')) {
-      return t('field.user.errorDepartmentInvalid');
-    }
-    if (message.includes('职位不存在') || message.includes('职位')) {
-      return t('field.user.errorPositionInvalid');
-    }
-    if (message.includes('角色') && (message.includes('不存在') || message.includes('无效'))) {
-      return t('field.user.errorRoleInvalid');
-    }
-    if (message.includes('手机号') || message.includes('phone')) {
-      return t('field.user.errorPhoneInvalid');
-    }
-    if (message.includes('邮箱') || message.includes('email')) {
-      return t('field.user.errorEmailInvalid');
-    }
-    if (message.includes('权限') || message.includes('permission')) {
-      return t('field.user.errorNoPermission');
-    }
-    return message;
-  };
 
   const showImportResult = (result: Awaited<ReturnType<typeof importUsers>>) => {
     Modal.info({
@@ -945,182 +742,17 @@ const UserListPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 创建/编辑 Modal */}
-      <FormModalTemplate
-        title={isEdit ? t('field.user.editTitle') : t('field.user.createTitle')}
-        open={modalVisible}
+      <UserFormModal
+        open={userFormOpen}
+        editUuid={userEditUuid}
         onClose={() => {
-          setModalVisible(false);
-          setFormInitialValues(undefined);
-          setRoleUuidsDraft([]);
+          setUserFormOpen(false);
+          setUserEditUuid(null);
         }}
-        onFinish={handleSubmit}
-        isEdit={isEdit}
-        initialValues={formInitialValues}
-        loading={formLoading}
-        formRef={formRef}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        grid={true}
-      >
-        <ProFormText
-          name="username"
-          label={t('field.user.username')}
-          rules={[
-            { required: true, message: t('field.user.usernameRequired') },
-            { min: 2, message: t('field.user.usernameMin') },
-            { max: 50, message: t('field.user.usernameMax') },
-            { pattern: USERNAME_PATTERN, message: t('field.user.usernamePattern') },
-          ]}
-          placeholder={t('field.user.usernamePlaceholder')}
-          fieldProps={{
-            autoComplete: 'off'
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="full_name"
-          label={t('field.user.fullName')}
-          rules={[
-            { max: 100, message: t('field.user.fullNameMax') }
-          ]}
-          placeholder={t('field.user.fullNamePlaceholder')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="phone"
-          label={t('field.user.phone')}
-          rules={[
-            { required: true, message: t('field.user.phoneRequired') },
-            { pattern: /^1[3-9]\d{9}$/, message: t('field.user.phonePattern') }
-          ]}
-          placeholder={t('field.user.phonePlaceholder')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="email"
-          label={t('field.user.email')}
-          rules={[
-            { type: 'email', message: t('field.user.emailInvalid') }
-          ]}
-          placeholder={t('field.user.emailPlaceholder')}
-          fieldProps={{ autoComplete: 'email' }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="password"
-          label={t('field.user.password')}
-          rules={isEdit ? [] : [
-            { required: true, message: t('field.user.passwordRequiredPlaceholder') },
-            { min: 8, message: t('field.user.passwordMin') },
-            { max: 128, message: t('field.user.passwordMax') }
-          ]}
-          placeholder={isEdit ? t('field.user.passwordPlaceholderEdit') : t('field.user.passwordPlaceholder')}
-          fieldProps={{
-            type: 'password',
-            autoComplete: 'new-password'
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormText
-          name="confirmPassword"
-          label={t('field.user.confirmPassword')}
-          rules={isEdit ? [] : [
-            { required: true, message: t('field.user.confirmPasswordRequired') },
-            { min: 8, message: t('field.user.passwordMin') },
-            { max: 128, message: t('field.user.passwordMax') },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('password') === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(new Error(t('field.user.passwordMismatch')));
-              },
-            }),
-          ]}
-          placeholder={isEdit ? t('field.user.passwordPlaceholderEdit') : t('field.user.confirmPasswordPlaceholder')}
-          fieldProps={{
-            type: 'password',
-            autoComplete: 'new-password'
-          }}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSelect
-          name="department_uuid"
-          label={t('field.user.department')}
-          placeholder={t('field.user.departmentPlaceholder')}
-          allowClear
-          options={departmentOptions}
-          fieldProps={{ showSearch: true }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSelect
-          name="position_uuid"
-          label={t('field.user.position')}
-          placeholder={t('field.user.positionPlaceholder')}
-          options={positionOptions}
-          fieldProps={{
-            showSearch: true,
-          }}
-          colProps={{ span: 8 }}
-        />
-        <ProFormSelect
-          name="role_uuids"
-          label={t('field.user.roles')}
-          placeholder={t('field.user.rolesPlaceholder')}
-          options={roleOptions}
-          fieldProps={{
-            mode: 'multiple',
-            showSearch: true,
-            onChange: (value: any) => {
-              const next = (Array.isArray(value) ? value : [value])
-                .map((v: any) => (typeof v === 'string' ? v : v?.value || v?.uuid || ''))
-                .filter(Boolean);
-              setRoleUuidsDraft(next);
-            },
-          }}
-          colProps={{ span: 8 }}
-        />
-        {selectedExternalPartnerTypes.has('supplier') && (
-          <ProFormSelect
-            name="supplier_scope_codes"
-            label="外部角色-供应商绑定"
-            placeholder="请选择该账号可访问的供应商（按编码）"
-            options={supplierOptions}
-            fieldProps={{
-              mode: 'multiple',
-              showSearch: true,
-              optionFilterProp: 'label',
-            }}
-            extra="根据所选外部角色自动显示；用于供应商数据隔离"
-            colProps={{ span: 24 }}
-          />
-        )}
-        {selectedExternalPartnerTypes.has('customer') && (
-          <ProFormSelect
-            name="customer_scope_codes"
-            label="外部角色-客户绑定"
-            placeholder="请选择该账号可访问的客户（按编码）"
-            options={customerOptions}
-            fieldProps={{
-              mode: 'multiple',
-              showSearch: true,
-              optionFilterProp: 'label',
-            }}
-            extra="根据所选外部角色自动显示；用于客户数据隔离"
-            colProps={{ span: 24 }}
-          />
-        )}
-        <ProFormSwitch
-          name="is_active"
-          label={t('field.user.isActiveLabel')}
-          colProps={{ span: 12 }}
-        />
-        <ProFormSwitch
-          name="is_tenant_admin"
-          label={t('field.user.isTenantAdminLabel')}
-          colProps={{ span: 12 }}
-        />
-      </FormModalTemplate>
+        onSuccess={() => {
+          actionRef.current?.reload();
+        }}
+      />
 
       {/* 详情 Drawer */}
       <UniDetail

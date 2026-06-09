@@ -17,6 +17,7 @@ from core.models.user_role import UserRole
 from core.models.position import Position
 from core.schemas.position import PositionCreate
 from core.schemas.role import RoleCreate, RoleUpdate
+from infra.models.user import User
 from core.services.authorization.position_service import PositionService
 from tortoise.transactions import in_transaction
 from core.services.authorization.permission_version_service import PermissionVersionService
@@ -270,6 +271,35 @@ class RoleService:
             raise NotFoundError("角色", role_uuid)
         
         return role
+
+    @staticmethod
+    async def list_role_users(tenant_id: int, role_uuid: str) -> dict:
+        """列出拥有指定角色的用户（未软删除）。"""
+        role = await RoleService.get_role_by_uuid(tenant_id, role_uuid)
+        user_ids = await UserRole.filter(role_id=role.id).values_list("user_id", flat=True)
+        if not user_ids:
+            return {"items": [], "total": 0}
+
+        users = (
+            await User.filter(
+                id__in=list(user_ids),
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            .prefetch_related("department")
+            .order_by("full_name", "username")
+        )
+        items = [
+            {
+                "uuid": user.uuid,
+                "username": user.username,
+                "full_name": user.full_name,
+                "department_name": user.department.name if user.department else None,
+                "is_active": user.is_active,
+            }
+            for user in users
+        ]
+        return {"items": items, "total": len(items)}
     
     @staticmethod
     async def update_role(

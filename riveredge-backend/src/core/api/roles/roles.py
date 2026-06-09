@@ -17,6 +17,7 @@ from core.schemas.role import (
     RolePermissionAssign,
     RoleListItem,
     PermissionInfo,
+    RoleUserListResponse,
 )
 from core.services.authorization.role_service import RoleService
 from core.services.authorization.role_permission_matrix_service import RolePermissionMatrixService
@@ -439,6 +440,19 @@ async def get_role_function_grants(
             tenant_id=tenant_id,
             role_uuid=role_uuid,
         )
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.get("/{role_uuid}/users", response_model=RoleUserListResponse)
+async def list_role_users(
+    role_uuid: str,
+    _auth: object = Depends(require_access("system.role", "read")),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """列出拥有该角色的用户（角色权限配置页右侧展示）。"""
+    try:
+        return await RoleService.list_role_users(tenant_id=tenant_id, role_uuid=role_uuid)
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
 

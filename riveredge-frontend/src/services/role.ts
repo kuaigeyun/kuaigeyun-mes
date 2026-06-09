@@ -128,6 +128,23 @@ export async function getRoleByUuid(roleUuid: string): Promise<Role> {
   return apiRequest<Role>(`/core/roles/${roleUuid}`);
 }
 
+export interface RoleUserListItem {
+  uuid: string;
+  username: string;
+  full_name?: string | null;
+  department_name?: string | null;
+  is_active: boolean;
+}
+
+export interface RoleUserListResponse {
+  items: RoleUserListItem[];
+  total: number;
+}
+
+export async function getRoleUsers(roleUuid: string): Promise<RoleUserListResponse> {
+  return apiRequest<RoleUserListResponse>(`/core/roles/${roleUuid}/users`);
+}
+
 /**
  * 创建角色
  * 

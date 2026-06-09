@@ -31,7 +31,10 @@ export type StandardAction =
   | 'display'
   | 'dispatch'
   | 'recall'
-  | 'confirm_adjustment';
+  | 'confirm_adjustment'
+  | 'claim'
+  | 'release'
+  | 'recycle';
 
 /** 模块资源前缀，如 haoligo:molds-documents-trial */
 export function reviewPermissionCodes(resourcePrefix: string): string[] {

@@ -38,6 +38,8 @@ export const customerPoolApi = {
     skip?: number;
     limit?: number;
     keyword?: string;
+    salesmanId?: number;
+    poolStatus?: 'pool' | 'owned';
   }): Promise<CustomerPoolListResult> =>
     apiRequest('/apps/kuaizhizao/customer-pool', { method: 'GET', params }),
 

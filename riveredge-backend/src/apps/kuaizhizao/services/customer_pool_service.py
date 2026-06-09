@@ -233,6 +233,8 @@ class CustomerPoolService:
         skip: int = 0,
         limit: int = 20,
         keyword: Optional[str] = None,
+        salesman_id: Optional[int] = None,
+        pool_status: Optional[str] = None,
     ) -> CustomerPoolListEnvelope:
         query = Customer.filter(tenant_id=tenant_id, deleted_at__isnull=True)
 
@@ -250,6 +252,13 @@ class CustomerPoolService:
         else:
             # 公共客户：公海待领取
             query = query.filter(pool_status="pool")
+
+        normalized_pool_status = (pool_status or "").strip().lower()
+        if normalized_pool_status in ("pool", "owned"):
+            query = query.filter(pool_status=normalized_pool_status)
+
+        if salesman_id is not None:
+            query = query.filter(salesman_id=salesman_id)
 
         kw = (keyword or "").strip()
         if kw:

@@ -166,3 +166,20 @@ class RolePermissionAssign(BaseModel):
     """
     permission_uuids: List[str] = Field(..., description="权限UUID列表（使用UUID而不是ID）")
 
+
+class RoleUserListItem(BaseModel):
+    """角色关联用户列表项（权限配置页展示）。"""
+
+    uuid: str = Field(..., description="用户 UUID")
+    username: str = Field(..., description="登录名")
+    full_name: Optional[str] = Field(None, description="姓名")
+    department_name: Optional[str] = Field(None, description="部门名称")
+    is_active: bool = Field(..., description="是否启用")
+
+
+class RoleUserListResponse(BaseModel):
+    """角色关联用户列表响应。"""
+
+    items: List[RoleUserListItem] = Field(default_factory=list, description="用户列表")
+    total: int = Field(..., description="用户总数")
+

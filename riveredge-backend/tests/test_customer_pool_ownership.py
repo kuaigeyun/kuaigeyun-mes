@@ -199,6 +199,52 @@ class CustomerPoolOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 break
         self.assertIsNotNone(mine_filter)
 
+    async def test_list_customer_pool_filters_salesman_and_pool_status(self):
+        user = User(id=5, tenant_id=1, username="sales5", full_name="销售五")
+        mock_query = MagicMock()
+        mock_query.filter.return_value = mock_query
+        mock_query.count = AsyncMock(return_value=0)
+        mock_query.order_by.return_value.offset.return_value.limit = AsyncMock(return_value=[])
+
+        with patch(
+            "apps.kuaizhizao.services.customer_pool_service.Customer.filter",
+            return_value=mock_query,
+        ):
+            await CustomerPoolService.list_customers(
+                tenant_id=1,
+                current_user=user,
+                scope="all",
+                salesman_id=9,
+                pool_status="owned",
+            )
+
+        salesman_filter = None
+        pool_status_filter = None
+        for call in mock_query.filter.call_args_list:
+            kwargs = call.kwargs
+            if kwargs.get("salesman_id") == 9:
+                salesman_filter = kwargs
+            if kwargs.get("pool_status") == "owned":
+                pool_status_filter = kwargs
+        self.assertIsNotNone(salesman_filter)
+        self.assertIsNotNone(pool_status_filter)
+
+
+class CustomerPoolPermissionContractTests(unittest.TestCase):
+    def test_customer_pool_business_permission_codes(self):
+        from core.config.permission_contract import validate_permission_code
+
+        codes = [
+            "kuaizhizao:customer-pool:read",
+            "kuaizhizao:customer-pool:claim",
+            "kuaizhizao:customer-pool:assign",
+            "kuaizhizao:customer-pool:release",
+            "kuaizhizao:customer-pool:recycle",
+            "kuaizhizao:customer-pool:update",
+        ]
+        for code in codes:
+            self.assertIsNone(validate_permission_code(code), code)
+
 
 if __name__ == "__main__":
     unittest.main()

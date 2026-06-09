@@ -28,8 +28,8 @@ const PAGE_SIZE = 20;
 const DEFAULT_WIDTH = 1120;
 /** 标题行筛选项宽度（与 common 占位文案匹配，避免省略号截断） */
 const FILTER_SEARCH_WIDTH = 236;
-const FILTER_GROUP_WIDTH = 136;
-const FILTER_SOURCE_WIDTH = 116;
+const FILTER_GROUP_WIDTH = 200;
+const FILTER_SOURCE_WIDTH = 148;
 
 export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   open,

@@ -69,6 +69,12 @@ async def create_quotation(
             created_by=current_user.id,
             auto_submit=auto_submit,
         )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))
+    except BusinessLogicError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error("创建报价单失败: %s", e)
         raise HTTPException(

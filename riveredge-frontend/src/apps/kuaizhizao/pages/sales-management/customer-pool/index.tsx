@@ -9,10 +9,12 @@ import {
   UserSwitchOutlined,
   RollbackOutlined,
   SyncOutlined,
-  ProfileOutlined,
+  EditOutlined,
 } from '@ant-design/icons';
-import { useGlobalStore } from '../../../../../stores/globalStore';
-import { hasPermission } from '../../../../../utils/permission';
+import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import dayjs from 'dayjs';
 
 import { UniTable } from '../../../../../components/uni-table';
@@ -20,6 +22,8 @@ import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { renderRowActionsOverflow } from '../../../../../components/uni-action';
 import { getUserOptions } from '../../../../master-data/services/supply-chain';
+import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
+import { CustomerDetailDrawer } from '../../../../master-data/components/CustomerDetailDrawer';
 import { CustomerFollowUpFormModal } from '../../../components/CustomerFollowUpFormModal';
 import { customerPoolApi, type CustomerPoolItem, type CustomerPoolRule } from '../../../services/customer-pool';
 
@@ -28,9 +32,8 @@ const CustomerPoolPage: React.FC = () => {
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
-  const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('pool');
+  const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('all');
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
 
@@ -40,16 +43,25 @@ const CustomerPoolPage: React.FC = () => {
     setScope(next);
     actionRef.current?.reload();
   }, []);
-  const canClaim = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:claim');
-  const canAssign = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:assign');
-  const canRelease = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:release');
-  const canRecycle = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:recycle');
-  const canUpdateRules = hasPermission(currentUser ?? undefined, 'kuaizhizao:customer-pool:update');
+  const {
+    canClaim,
+    canAssign,
+    canRelease,
+    canRecycle,
+    canUpdateRules,
+  } = useCustomerPoolPermissions();
+  const { canCreate: canCreateCustomer, canUpdate: canUpdateCustomer } =
+    useResourcePermissions('master-data:supply-chain:customer');
   const [followUpOpen, setFollowUpOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailUuid, setDetailUuid] = useState<string | null>(null);
   const [followUpCustomerId, setFollowUpCustomerId] = useState<number | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignCustomer, setAssignCustomer] = useState<CustomerPoolItem | null>(null);
   const [assignUsers, setAssignUsers] = useState<Array<{ label: string; value: string | number }>>([]);
+  const [salesmanOptions, setSalesmanOptions] = useState<Array<{ label: string; value: string | number }>>([]);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rulesSaving, setRulesSaving] = useState(false);
   const [rules, setRules] = useState<CustomerPoolRule | null>(null);
@@ -86,6 +98,23 @@ const CustomerPoolPage: React.FC = () => {
   const openFollowUp = (customerId: number) => {
     setFollowUpCustomerId(customerId);
     setFollowUpOpen(true);
+  };
+
+  const openEditCustomer = (uuid: string) => {
+    setEditUuid(uuid);
+    setEditOpen(true);
+  };
+
+  const openCreateCustomer = useCallback(() => {
+    setEditUuid(null);
+    setEditOpen(true);
+  }, []);
+
+  useNewShortcut(canCreateCustomer ? openCreateCustomer : undefined);
+
+  const openDetailCustomer = (uuid: string) => {
+    setDetailUuid(uuid);
+    setDetailOpen(true);
   };
 
   const toQuotation = (customerId: number) => {
@@ -139,22 +168,89 @@ const CustomerPoolPage: React.FC = () => {
     setSearchParams(next, { replace: true });
   }, [handleScopeChange, searchParams, setSearchParams]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const options = await getUserOptions();
+        if (!cancelled) setSalesmanOptions(options || []);
+      } catch {
+        if (!cancelled) setSalesmanOptions([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const salesmanValueEnum = useMemo(
+    () =>
+      Object.fromEntries(
+        salesmanOptions.map((option) => [String(option.value), { text: option.label }]),
+      ),
+    [salesmanOptions],
+  );
+
+  const poolStatusValueEnum = useMemo(
+    () => ({
+      pool: { text: t('app.kuaizhizao.customerPool.scopePublic') },
+      owned: { text: t('app.kuaizhizao.customerPool.scopePrivate') },
+    }),
+    [t],
+  );
+
   const columns: ProColumns<CustomerPoolItem>[] = useMemo(
     () => [
-      { title: '关键词', dataIndex: 'keyword', hideInTable: true, valueType: 'text' },
-      { title: '客户编码', dataIndex: 'code', width: 150 },
-      { title: '客户名称', dataIndex: 'name', width: 220, ellipsis: true },
-      { title: '联系人', dataIndex: 'contact_person', width: 120, hideInSearch: true },
-      { title: '联系电话', dataIndex: 'phone', width: 140, hideInSearch: true },
       {
-        title: '归属业务员',
+        title: '关键词',
+        dataIndex: 'keyword',
+        hideInTable: true,
+        valueType: 'text',
+        fieldProps: {
+          allowClear: true,
+          placeholder: t('app.kuaizhizao.customerFollowUp.keywordPlaceholder'),
+        },
+      },
+      { title: t('field.customer.code'), dataIndex: 'code', width: 150, hideInSearch: true },
+      { title: t('field.customer.name'), dataIndex: 'name', width: 220, ellipsis: true, hideInSearch: true },
+      { title: t('field.customer.contactPerson'), dataIndex: 'contact_person', width: 120, hideInSearch: true },
+      { title: t('field.customer.phone'), dataIndex: 'phone', width: 140, hideInSearch: true },
+      {
+        title: t('field.customer.salesman'),
         dataIndex: 'salesman_name',
         width: 120,
         hideInSearch: true,
         render: (_, row) => row.salesman_name || '—',
       },
       {
-        title: '池状态',
+        title: t('field.customer.salesman'),
+        dataIndex: 'salesmanId',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: salesmanValueEnum,
+        fieldProps: {
+          options: salesmanOptions,
+          showSearch: true,
+          optionFilterProp: 'label',
+          filterOption: (input: string, option?: { label?: React.ReactNode }) =>
+            String(option?.label ?? '')
+              .toLowerCase()
+              .includes(input.toLowerCase()),
+          allowClear: true,
+          placeholder: t('field.customer.salesmanPlaceholder'),
+        },
+      },
+      {
+        title: t('field.customer.poolStatus'),
+        dataIndex: 'poolStatus',
+        hideInTable: true,
+        valueType: 'select',
+        valueEnum: poolStatusValueEnum,
+        hideInSearch: scope !== 'all',
+        fieldProps: { allowClear: true },
+      },
+      {
+        title: t('field.customer.poolStatus'),
         dataIndex: 'pool_status',
         width: 100,
         hideInSearch: true,
@@ -184,24 +280,34 @@ const CustomerPoolPage: React.FC = () => {
         title: '操作',
         dataIndex: 'option',
         fixed: 'right',
-        minWidth: 220,
+        minWidth: 260,
         hideInSearch: true,
         render: (_, row) => {
           const actions: React.ReactNode[] = [];
           if (row.uuid) {
             actions.push(
               <Button
-                key="master"
+                key="detail"
                 type="link"
                 size="small"
-                icon={<ProfileOutlined />}
-                onClick={() =>
-                  navigate(`/apps/master-data/supply-chain/customers?uuid=${encodeURIComponent(row.uuid!)}`)
-                }
+                onClick={() => openDetailCustomer(row.uuid)}
               >
-                主数据详情
+                {t('common.detail')}
               </Button>
             );
+            if (canUpdateCustomer) {
+              actions.push(
+                <Button
+                  key="edit"
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openEditCustomer(row.uuid)}
+                >
+                  {t('field.customField.edit')}
+                </Button>
+              );
+            }
           }
           if (row.pool_status === 'pool') {
             if (canClaim) {
@@ -270,7 +376,7 @@ const CustomerPoolPage: React.FC = () => {
         },
       },
     ],
-    [canAssign, canClaim, canRecycle, canRelease, confirmReleaseCustomer, navigate, t],
+    [canAssign, canClaim, canRecycle, canRelease, canUpdateCustomer, confirmReleaseCustomer, navigate, poolStatusValueEnum, salesmanOptions, salesmanValueEnum, scope, t],
   );
 
   return (
@@ -289,28 +395,47 @@ const CustomerPoolPage: React.FC = () => {
               value={scope}
               onChange={(v) => handleScopeChange(v as 'pool' | 'mine' | 'all')}
               options={[
-                { label: t('app.kuaizhizao.customerPool.scopePublic'), value: 'pool' },
-                { label: t('app.kuaizhizao.customerPool.scopePrivate'), value: 'mine' },
                 { label: t('app.kuaizhizao.customerPool.scopeAll'), value: 'all' },
+                { label: t('app.kuaizhizao.customerPool.scopePrivate'), value: 'mine' },
+                { label: t('app.kuaizhizao.customerPool.scopePublic'), value: 'pool' },
               ]}
             />
           }
-          toolBarRender={() =>
-            canUpdateRules
-              ? [
-                  <Button key="rules" onClick={openRules}>
-                    回收规则
-                  </Button>,
-                ]
-              : []
-          }
+          toolBarRender={() => {
+            const buttons: React.ReactNode[] = [];
+            if (canCreateCustomer) {
+              buttons.push(
+                <Button key="create" type="primary" icon={<PlusOutlined />} onClick={openCreateCustomer}>
+                  {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
+                </Button>,
+              );
+            }
+            if (canUpdateRules) {
+              buttons.push(
+                <Button key="rules" onClick={openRules}>
+                  回收规则
+                </Button>,
+              );
+            }
+            return buttons;
+          }}
           request={async (params, _sort, _filter, searchValues) => {
             try {
+              const salesmanRaw = searchValues?.salesmanId;
+              const salesmanId =
+                salesmanRaw != null && salesmanRaw !== ''
+                  ? Number(salesmanRaw)
+                  : undefined;
+              const poolStatusRaw = searchValues?.poolStatus;
+              const poolStatus =
+                poolStatusRaw === 'pool' || poolStatusRaw === 'owned' ? poolStatusRaw : undefined;
               const res = await customerPoolApi.list({
                 scope: scopeRef.current,
                 skip: ((params.current || 1) - 1) * (params.pageSize || 20),
                 limit: params.pageSize || 20,
                 keyword: typeof searchValues?.keyword === 'string' ? searchValues.keyword.trim() || undefined : undefined,
+                salesmanId: Number.isFinite(salesmanId) && salesmanId! > 0 ? salesmanId : undefined,
+                poolStatus,
               });
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {
@@ -406,6 +531,27 @@ const CustomerPoolPage: React.FC = () => {
         }}
         onSuccess={() => {
           actionRef.current?.reload();
+        }}
+      />
+
+      <CustomerFormModal
+        open={editOpen}
+        editUuid={editUuid}
+        onClose={() => {
+          setEditOpen(false);
+          setEditUuid(null);
+        }}
+        onSuccess={() => {
+          actionRef.current?.reload();
+        }}
+      />
+
+      <CustomerDetailDrawer
+        open={detailOpen}
+        customerUuid={detailUuid}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailUuid(null);
         }}
       />
     </>
