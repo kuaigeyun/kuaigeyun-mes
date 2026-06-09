@@ -68,7 +68,30 @@ Core 系统模块使用 `CORE_MODULE_REFERENCES`（如 `system:user` → 客户/
 
 `:display` 权限**不在**角色功能矩阵展示（隐式授予为主）；`:read` 等管理权限照常配置。
 
-## 禁止旁路
+### `permissions` 数组顺序（唯一真源）
+
+角色矩阵勾选顺序 **仅** 来自 `manifest.json` → `permissions` 数组下标（同一 resource 内相对顺序）。**禁止**在运行时、前端或 API 层对 action 二次排序。
+
+新增或调整权限时，在 manifest **直接按下列顺序书写**（同一 `{app}:{resource}` 连续成组）：
+
+1. **查看**：`read`
+2. **增删改**：`create` → `delete` → `update`
+3. **引用展示**（若声明）：`display`
+4. **导入导出**：`import` → `export`
+5. **流程**：`submit` → `revoke` → `approve` / `audit` / `reject`（矩阵合并为「审核」）
+6. **打印**：`print`
+7. **模块专属**：`assign`、`execute`、`complete`、`claim`、`release` 等（按业务语义排在上述标准动作之后）
+
+顺序参考常量：`permission_action_spec.MANIFEST_ACTION_ORDER`（仅供编写 manifest 时对照）。
+
+批量整理已有 manifest 可使用开发脚本（写回源文件，非运行时兜底）：
+
+```bash
+cd riveredge-backend && python scripts/reorder_manifest_permissions.py
+```
+
+系统核心权限（`CORE_PERMISSION_CODES`）无 manifest，须在 `permission_registry_service.py` 中 **按同一规则手写顺序**（按 resource 分组，组内遵循上表）。
+
 
 - 禁止用宿主 `create/update` 替代目标资源的管理 action
 - 禁止选择器静默吞掉 403 返回空数组

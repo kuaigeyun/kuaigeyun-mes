@@ -57,12 +57,12 @@
   },
   "permissions": [
     "kuaireport:analysis-center:read",
-    "kuaireport:dashboard:export",
     "kuaireport:dashboard:read",
-    "kuaireport:report:export",
+    "kuaireport:dashboard:export",
+    "kuaireport:dashboard:print",
     "kuaireport:report:read",
-    "kuaireport:report:print",
-    "kuaireport:dashboard:print"
+    "kuaireport:report:export",
+    "kuaireport:report:print"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

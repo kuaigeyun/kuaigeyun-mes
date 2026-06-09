@@ -68,6 +68,35 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
 }
 
 
+# 编写 manifest.permissions 时的动作顺序参考（角色矩阵唯一真源为 manifest 数组下标；本常量仅供开发脚本/人工对照，运行时不得用于 sort）
+MANIFEST_ACTION_ORDER: tuple[str, ...] = (
+    "read",
+    "create",
+    "delete",
+    "update",
+    "display",
+    "import",
+    "export",
+    "submit",
+    "revoke",
+    "approve",
+    "audit",
+    "reject",
+    "print",
+    "assign",
+    "execute",
+    "complete",
+    "close",
+    "obsolete",
+    "claim",
+    "recycle",
+    "release",
+    "dispatch",
+    "recall",
+    "confirm_adjustment",
+)
+
+
 def action_display_label(action: str) -> str:
     act = canonical_action(action)
     return ACTION_DISPLAY_LABELS.get(act, act or "未知动作")
