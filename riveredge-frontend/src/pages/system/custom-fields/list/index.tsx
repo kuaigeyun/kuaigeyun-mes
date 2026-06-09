@@ -12,7 +12,6 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { useQuery } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, theme } from 'antd';
@@ -33,7 +32,7 @@ import {
   CustomFieldPageConfig,
 } from '../../../../services/customField';
 import { getApplicationList } from '../../../../services/application';
-import { getNavigationMenuTree } from '../../../../services/menu';
+import { useNavigationMenuTreeQuery } from '../../../../hooks/useNavigationMenuTreeQuery';
 import {
   buildMenuPathNameMap,
   enrichPagesWithMenuNames,
@@ -124,13 +123,7 @@ const CustomFieldListPage: React.FC = () => {
   const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
 
-  const { data: menuTree } = useQuery({
-    queryKey: ['navigationMenuTree'],
-    queryFn: () => getNavigationMenuTree(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: menuTree } = useNavigationMenuTreeQuery();
 
   const menuPathNameMap = useMemo(
     () => buildMenuPathNameMap(menuTree || [], t),

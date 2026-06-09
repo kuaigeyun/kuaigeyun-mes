@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import List, Optional, Dict, Any, Tuple, TypedDict
 from tortoise.exceptions import IntegrityError
+import hashlib
 import json
 import re
 
@@ -28,6 +29,14 @@ class ManifestMenuSortIndex(TypedDict):
 
     by_path: Dict[str, int]
     by_title: Dict[str, int]
+
+
+# 进程级 manifest 指纹缓存。
+# manifest.json 仅随部署（进程重启）变化，故进程内只需计算一次。
+# 该指纹纳入菜单树缓存键：同进程内 manifest 不变 → 键稳定 → 命中可直出；
+# 部署改动 manifest → 新进程重算指纹 → 键变化 → 自动重建一次。
+# 保证 manifest 仍是菜单顺序/结构的唯一真源，而无需每请求重读磁盘并重排。
+_MANIFEST_FINGERPRINT_CACHE: Optional[str] = None
 
 
 class MenuService:
@@ -200,6 +209,36 @@ class MenuService:
         if key_value:
             return f"{tenant_id}:{key_type}:{key_value}"
         return f"{tenant_id}:{key_type}"
+
+    @staticmethod
+    def _get_manifest_fingerprint() -> str:
+        """
+        进程级稳定的 manifest 指纹（菜单顺序/结构唯一真源的版本标识）。
+
+        仅取影响菜单的字段（code / menu_config / sort_order），按 code 稳定排序后
+        哈希。首次调用读盘计算并缓存，后续 O(1)。manifest 仅随部署变化（进程重启会
+        重新计算），因此命中缓存可直接返回成品树，无需每请求重读 manifest 重排。
+        """
+        global _MANIFEST_FINGERPRINT_CACHE
+        if _MANIFEST_FINGERPRINT_CACHE is not None:
+            return _MANIFEST_FINGERPRINT_CACHE
+        try:
+            plugins = ApplicationService._scan_plugin_manifests()
+            payload = [
+                {
+                    "code": m.get("code"),
+                    "menu_config": m.get("menu_config"),
+                    "sort_order": m.get("sort_order"),
+                }
+                for m in sorted(plugins, key=lambda x: str(x.get("code") or ""))
+            ]
+            raw = json.dumps(payload, sort_keys=True, ensure_ascii=False, default=str)
+            fingerprint = hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+        except Exception:
+            # 指纹计算失败时退化为固定值：仍可命中缓存，依赖既有失效机制兜底
+            fingerprint = "nofp"
+        _MANIFEST_FINGERPRINT_CACHE = fingerprint
+        return fingerprint
     
     @staticmethod
     def _build_manifest_menu_sort_index(menu_config: Any) -> ManifestMenuSortIndex:
@@ -584,20 +623,27 @@ class MenuService:
             List[MenuTreeResponse]: 菜单树列表
         """
         # 生成缓存键（基于查询参数）
-        # v6：应用菜单按 manifest path+title 排序；改版本号使旧缓存失效
+        # v7：缓存命中直出（不再每请求重过滤/重排），键纳入 manifest 指纹，
+        #     使部署改动 manifest 后自动失效；改版本号使旧缓存失效
         suffix = f"_{cache_key_suffix}" if cache_key_suffix else ""
+        manifest_fp = MenuService._get_manifest_fingerprint()
         cache_key_value = (
             f"p{parent_uuid or 'root'}_a{application_uuid or 'all'}"
-            f"_i{is_active if is_active is not None else 'all'}_v6{suffix}"
+            f"_i{is_active if is_active is not None else 'all'}_v7{suffix}_m{manifest_fp}"
         )
         cache_key = MenuService._get_cache_key(tenant_id, "tree", cache_key_value)
         
-        # 尝试从缓存获取
+        # 尝试从缓存获取（命中直出）。
+        # 缓存写入的就是已做孤儿过滤 + manifest 排序的成品树（见下方构建逻辑），
+        # 且所有改变菜单可见性/顺序的操作都会失效缓存：
+        #   - 应用 安装/卸载/启用/禁用、专用应用 绑定/解绑 → _clear_menu_cache
+        #   - manifest 同步扫描、菜单 CRUD → _clear_menu_cache
+        #   - manifest 内容变更（部署）→ 缓存键中的 manifest 指纹变化
+        # 因此命中后无需再查已安装应用做孤儿过滤、也无需重读 manifest 重排。
         if use_cache:
             try:
                 cached = await cache_manager.get("menu", cache_key)
                 if cached:
-                    # 从缓存的字典数据重建菜单树
                     def rebuild_tree(items: List[Dict[str, Any]]) -> List[MenuTreeResponse]:
                         """递归重建菜单树"""
                         result = []
@@ -609,44 +655,7 @@ class MenuService:
                                 menu_tree.children = []
                             result.append(menu_tree)
                         return result
-                    cached_tree = rebuild_tree(cached)
-                    # 对缓存命中结果做孤儿菜单过滤，确保仅展示当前已安装应用菜单
-                    try:
-                        visible_apps = await ApplicationService.get_installed_applications(tenant_id=tenant_id)
-                        visible_app_uuids = {str(a["uuid"]) for a in visible_apps}
-
-                        def filter_orphan(nodes: List[MenuTreeResponse]) -> List[MenuTreeResponse]:
-                            kept: List[MenuTreeResponse] = []
-                            for n in nodes:
-                                if n.application_uuid and str(n.application_uuid) not in visible_app_uuids:
-                                    continue
-                                n.children = filter_orphan(n.children or [])
-                                kept.append(n)
-                            return kept
-
-                        cached_tree = filter_orphan(cached_tree)
-                    except Exception:
-                        pass
-                    cached_app_uuids: set[str] = set()
-
-                    def _collect_app_uuids(nodes: List[MenuTreeResponse]) -> None:
-                        for n in nodes:
-                            if n.application_uuid:
-                                cached_app_uuids.add(str(n.application_uuid))
-                            if n.children:
-                                _collect_app_uuids(n.children)
-
-                    _collect_app_uuids(cached_tree)
-                    manifest_sort_indexes = await MenuService._load_manifest_sort_indexes_for_apps(
-                        tenant_id, cached_app_uuids
-                    )
-                    MenuService._sort_menu_tree_children_inplace(
-                        cached_tree, manifest_sort_indexes
-                    )
-                    MenuService._overlay_manifest_sort_order_on_tree(
-                        cached_tree, manifest_sort_indexes
-                    )
-                    return cached_tree
+                    return rebuild_tree(cached)
             except Exception:
                 # 缓存失败不影响主流程
                 pass

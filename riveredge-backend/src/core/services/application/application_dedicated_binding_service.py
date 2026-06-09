@@ -97,6 +97,11 @@ class ApplicationDedicatedBindingService:
 
         await ApplicationService.ensure_application_registered_from_manifest(tenant_id, code)
 
+        # 绑定改变了该租户专用应用的可见性，失效菜单缓存以即时反映（菜单树命中直出依赖此处失效）
+        from core.services.system.menu_service import MenuService
+
+        await MenuService._clear_menu_cache(tenant_id)
+
     @staticmethod
     async def unbind(app_code: str, tenant_id: int) -> None:
         code = (app_code or "").strip()
@@ -112,3 +117,8 @@ class ApplicationDedicatedBindingService:
             )
         finally:
             await conn.close()
+
+        # 解绑后该专用应用对本租户不再可见，失效菜单缓存以移除其菜单（菜单树命中直出依赖此处失效）
+        from core.services.system.menu_service import MenuService
+
+        await MenuService._clear_menu_cache(tenant_id)

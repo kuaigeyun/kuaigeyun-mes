@@ -7,10 +7,9 @@ import { Popover, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { useThemeStore } from '../../stores/themeStore';
-import { getNavigationMenuTree } from '../../services/menu';
+import { useNavigationMenuTreeQuery } from '../../hooks/useNavigationMenuTreeQuery';
 import { QuickEntryIcon } from './QuickEntryIcon';
 import type { QuickEntryItem } from './QuickEntryGrid';
 import { generateQuickEntryGradient } from './quickEntryGradients';
@@ -38,13 +37,7 @@ export const HeaderQuickEntryPopover: React.FC<HeaderQuickEntryPopoverProps> = (
     (s) => s.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined,
   );
 
-  const { data: menuTree } = useQuery({
-    queryKey: ['navigationMenuTree'],
-    queryFn: () => getNavigationMenuTree(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: menuTree } = useNavigationMenuTreeQuery();
 
   const quickEntryItems = useMemo(
     () =>

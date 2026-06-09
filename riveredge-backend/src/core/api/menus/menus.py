@@ -30,6 +30,22 @@ from infra.infrastructure.cache.cache_manager import cache_manager
 router = APIRouter(prefix="/menus", tags=["Core · Menus"])
 
 
+def _menu_cache_enabled() -> bool:
+    """
+    菜单树是否启用后端缓存。
+
+    默认：开发/调试环境关闭、生产开启（与历史行为一致）。
+    可用环境变量 MENU_CACHE_ENABLED（true/false）显式覆盖，便于本地复现生产缓存表现。
+    manifest 变更已通过缓存键中的指纹自动失效，故开发环境开启缓存不会导致菜单顺序漂移。
+    """
+    override = os.getenv("MENU_CACHE_ENABLED")
+    if override is not None and override.strip() != "":
+        return override.strip().lower() in ("1", "true", "yes", "on")
+    is_dev = os.getenv("ENVIRONMENT", "development") == "development"
+    is_debug = os.getenv("DEBUG", "false").lower() == "true"
+    return not (is_dev or is_debug)
+
+
 @router.post("", response_model=MenuResponse, status_code=status.HTTP_201_CREATED)
 async def create_menu(
     data: MenuCreate,
@@ -99,7 +115,7 @@ async def get_menu_tree(
     """
     获取菜单树（菜单管理 / 权限配置用，需 system.menu:read）
     """
-    use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
+    use_cache = _menu_cache_enabled()
 
     return await MenuService.get_menu_tree(
         tenant_id=tenant_id,
@@ -119,7 +135,7 @@ async def get_navigation_menu_tree(
     侧栏 / 工作台导航用菜单树：任意登录用户可读（仅返回 is_active=true）。
     可见性由前端按 RBAC 过滤；勿与菜单管理接口共用 system.menu 权限。
     """
-    use_cache = os.getenv("ENVIRONMENT", "development") != "development" and os.getenv("DEBUG", "false").lower() != "true"
+    use_cache = _menu_cache_enabled()
 
     return await MenuService.get_menu_tree(
         tenant_id=tenant_id,

@@ -29,7 +29,7 @@ import {
   PlayCircleOutlined,
   SendOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid, Skeleton } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -1196,12 +1196,36 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   const {
     sidebarMenuData: filteredMenuData,
     breadcrumbMenuData,
+    isLoading: appMenusLoading,
   } = useUnifiedMenuData({
     getSystemMenuConfig,
     convertMenuTreeToMenuDataItem,
     t,
     collapsed,
   });
+
+  // APP 菜单来自 navigation-tree（异步），系统菜单为同步硬编码即时渲染。
+  // 首次加载（缓存未命中）时在 APP 菜单将出现的位置展示骨架占位，避免「系统菜单先出、
+  // APP 菜单稍后无征兆弹出」的突兀感。命中缓存时 isLoading 为 false，不显示骨架。
+  const showAppMenuSkeleton = useMemo(() => {
+    if (!appMenusLoading) return false;
+    const hasAppMenu = filteredMenuData.some(
+      (item) =>
+        (typeof item.className === 'string' && item.className.includes('app-menu-item')) ||
+        item.path?.startsWith('/apps/'),
+    );
+    return !hasAppMenu;
+  }, [appMenusLoading, filteredMenuData]);
+
+  const appMenuSkeletonItems = useMemo<MenuDataItem[]>(() => {
+    if (!showAppMenuSkeleton) return [];
+    return Array.from({ length: 4 }, (_, i) => ({
+      key: `__app-menu-skeleton-${i}`,
+      name: '',
+      isAppMenuSkeleton: true,
+      className: 'app-menu-skeleton-item',
+    }) as MenuDataItem);
+  }, [showAppMenuSkeleton]);
 
   const systemMenuEntry = useMemo(
     () => filteredMenuData.find((item) => item.path === '/system'),
@@ -5245,7 +5269,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           return <Space size={8} align="center" style={{ flexShrink: 0 }}>{actions}</Space>;
         }}
         menuDataRender={() => {
-          return filteredMenuData.filter((item) => item.path !== '/system');
+          const data = filteredMenuData.filter((item) => item.path !== '/system');
+          if (appMenuSkeletonItems.length) {
+            // APP 菜单插入在系统首项之后（与 useUnifiedMenuData 的 splice(1, ...) 一致）
+            const insertAt = data.length > 0 ? 1 : 0;
+            return [
+              ...data.slice(0, insertAt),
+              ...appMenuSkeletonItems,
+              ...data.slice(insertAt),
+            ];
+          }
+          return data;
         }}
         menuProps={{
           mode: 'inline',
@@ -5342,6 +5376,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           );
         }}
         menuItemRender={(item: any, dom) => {
+          // APP 菜单加载占位：首次拉取 navigation-tree 期间的骨架行
+          if (item.isAppMenuSkeleton) {
+            return (
+              <div
+                className="app-menu-skeleton-item"
+                style={{ width: '100%', padding: '4px 0', pointerEvents: 'none' }}
+              >
+                <Skeleton.Input active size="small" block style={{ height: 16, borderRadius: 4 }} />
+              </div>
+            );
+          }
           // 处理外部链接
           if (item.path && (item.path.startsWith('http://') || item.path.startsWith('https://'))) {
             return (

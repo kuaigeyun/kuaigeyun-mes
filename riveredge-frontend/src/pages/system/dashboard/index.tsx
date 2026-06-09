@@ -56,7 +56,7 @@ import {
   type TodoListResponse,
   type ProductionBroadcastItem,
 } from '../../../services/dashboard';
-import { getNavigationMenuTree } from '../../../services/menu';
+import { useNavigationMenuTreeQuery } from '../../../hooks/useNavigationMenuTreeQuery';
 import {
   extractAppCodeFromPath,
   getAppDisplayName,
@@ -450,16 +450,9 @@ export default function DashboardPage() {
   });
 
   // 获取菜单树（菜单管理）
-  // 与 BasicLayout 的 useUnifiedMenuData 共用 queryKey ['navigationMenuTree']，
-  // 避免工作台与侧边栏重复拉 /menus/tree（在 staleTime 内 react-query 会命中缓存）
-  const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
-    queryKey: ['navigationMenuTree'],
-    queryFn: () => getNavigationMenuTree(),
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  // 与 BasicLayout 的 useUnifiedMenuData 共用同一 queryKey（含 tenant_id + permission_version），
+  // 避免工作台与侧边栏重复拉 navigation-tree（在 staleTime 内 react-query 命中同一缓存）
+  const { data: menuTree, isLoading: menuTreeLoading } = useNavigationMenuTreeQuery();
 
   // 蓝图设置已下线；菜单可见性完全由 is_active + 权限控制。
   const quickEntryMenuTree = useMemo(() => menuTree || [], [menuTree]);

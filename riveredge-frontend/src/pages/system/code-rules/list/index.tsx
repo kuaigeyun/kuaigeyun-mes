@@ -10,7 +10,6 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Alert, Input, theme, Space, Collapse, Spin } from 'antd';
 import { SearchOutlined, DatabaseOutlined } from '@ant-design/icons';
-import { useQuery } from '@tanstack/react-query';
 import {
   createCodeRule,
   updateCodeRule,
@@ -39,7 +38,7 @@ import {
   buildMenuPathNameMap,
   enrichPagesWithMenuNames,
 } from '../../../../utils/featurePageDisplay';
-import { getNavigationMenuTree } from '../../../../services/menu';
+import { useNavigationMenuTreeQuery } from '../../../../hooks/useNavigationMenuTreeQuery';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
 
 // 去除未使用的 Text, Paragraph
@@ -135,13 +134,7 @@ const CodeRuleListPage: React.FC = () => {
   const [enableAllLoading, setEnableAllLoading] = useState(false);
   const [restoreSingleLoading, setRestoreSingleLoading] = useState(false);
 
-  const { data: menuTree } = useQuery({
-    queryKey: ['navigationMenuTree'],
-    queryFn: () => getNavigationMenuTree(),
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: menuTree } = useNavigationMenuTreeQuery();
 
   const menuPathNameMap = useMemo(
     () => buildMenuPathNameMap(menuTree || [], t),

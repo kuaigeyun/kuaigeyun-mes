@@ -15,10 +15,9 @@ import {
   renderQuickEntryMenuIcon,
 } from '../quick-entry/renderQuickEntryMenuIcon';
 import type { QuickEntryItem } from '../quick-entry/QuickEntryGrid';
-import { getNavigationMenuTree } from '../../services/menu';
+import { useNavigationMenuTreeQuery } from '../../hooks/useNavigationMenuTreeQuery';
 import type { UserPreference } from '../../services/userPreference';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
-import { useGlobalStore } from '../../stores';
 import { useThemeStore } from '../../stores/themeStore';
 import { useConfigStore } from '../../stores/configStore';
 import { getPlatformVersion } from '../../services/platformSettings';
@@ -36,7 +35,6 @@ export function useUniDashboardSidebar() {
   const { message } = App.useApp();
   const { token } = useToken();
   const isDark = useThemeStore((s) => s.resolved.isDark);
-  const currentUser = useGlobalStore((s) => s.currentUser);
 
   const [currentTime, setCurrentTime] = useState(() => dayjs());
 
@@ -77,14 +75,7 @@ export function useUniDashboardSidebar() {
     });
   }, [platformVersion?.git_commit, message, t]);
 
-  const { data: menuTree, isLoading: menuTreeLoading } = useQuery({
-    queryKey: ['navigationMenuTree'],
-    queryFn: () => getNavigationMenuTree(),
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: menuTree, isLoading: menuTreeLoading } = useNavigationMenuTreeQuery();
 
   const quickEntryMenuTree = useMemo(() => menuTree || [], [menuTree]);
 

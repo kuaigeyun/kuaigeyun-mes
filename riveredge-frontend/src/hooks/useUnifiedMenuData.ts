@@ -13,18 +13,19 @@
  */
 
 import { useMemo, useCallback, useEffect } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import type { MenuDataItem } from '@ant-design/pro-components';
-import { getNavigationMenuTree, type MenuTree } from '../services/menu';
+import { type MenuTree } from '../services/menu';
 import { refreshCurrentUserInStore } from '../services/auth';
 import { extractAppCodeFromPath, getAppDisplayName } from '../utils/menuTranslation';
 import { useGlobalStore } from '../stores';
 import { useConfigStore } from '../stores/configStore';
 import { filterMenuItemsByPermission, resolveUserForMenuPermission, isAppGroupTitleItem } from '../utils/permission';
 import { isInfraSuperAdminUser, hasPlatformAdministrativeAuthority } from '../utils/auth';
+import { NAVIGATION_MENU_TREE_QUERY_KEY, useNavigationMenuTreeQuery } from './useNavigationMenuTreeQuery';
 
-/** 与 Dashboard / clearSessionQueries 共用，避免侧栏与工作台菜单缓存不一致 */
-export const NAVIGATION_MENU_TREE_QUERY_KEY = 'navigationMenuTree';
+// 向后兼容：历史代码从本模块导入该常量
+export { NAVIGATION_MENU_TREE_QUERY_KEY };
 
 function treeHasAppPath(nodes: MenuTree[]): boolean {
   for (const n of nodes) {
@@ -170,19 +171,7 @@ export function useUnifiedMenuData(
     void refreshCurrentUserInStore().catch(() => {});
   }, [currentUser?.id, currentUser?.is_tenant_admin, currentUser?.is_infra_admin, menuPermissionUser?.permissions?.length]);
 
-  const navigationMenuQueryKey = useMemo(
-    () => [NAVIGATION_MENU_TREE_QUERY_KEY, currentUser?.tenant_id ?? null, currentUser?.permission_version ?? 0] as const,
-    [currentUser?.tenant_id, currentUser?.permission_version],
-  );
-
-  const { data: fullMenuTree, isLoading, refetch } = useQuery({
-    queryKey: navigationMenuQueryKey,
-    queryFn: () => getNavigationMenuTree(),
-    enabled: !!currentUser,
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-  });
+  const { data: fullMenuTree, isLoading, refetch } = useNavigationMenuTreeQuery();
 
   const applicationMenus = useMemo(() => {
     const tree = fullMenuTree ?? [];
