@@ -61,6 +61,7 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     mold_warehouse_snapshot_by_codes,
     resolve_maintenance_line_warehouse_fields,
     resolve_outsource_unit_fields,
+    _origin_warehouse_id_from_line,
 )
 from apps.master_data.models.supplier import Supplier
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -173,6 +174,7 @@ def _line_from_store(raw: dict[str, Any]) -> OutsourceMaintLineOut:
         repair_reason=str(raw.get("repair_reason") or "").strip(),
         repair_cost=rc,
         attachment_file_uuids=_norm_uuid_list(raw.get("attachment_file_uuids")),
+        before_outsource_warehouse_id=_origin_warehouse_id_from_line(raw),
     )
 
 

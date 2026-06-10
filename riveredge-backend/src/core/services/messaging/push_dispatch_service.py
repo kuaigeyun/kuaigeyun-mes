@@ -115,6 +115,7 @@ async def push_internal_message_to_user(
 
     creds = await resolve_jpush_credentials(CLIENT_KEY_HAOLIGO)
     if not creds:
+        logger.warning("极光推送跳过：未配置凭据或 push_enabled=false（client={}）", CLIENT_KEY_HAOLIGO)
         return
     app_key, master_secret = creds
     auth = _auth_header_from_credentials(app_key, master_secret)
@@ -163,7 +164,7 @@ async def push_internal_message_to_user(
                 response.text[:500],
             )
             return
-        logger.debug("极光推送成功 alias={} msg={}", alias, message_log_uuid)
+        logger.info("极光推送成功 alias={} msg={}", alias, message_log_uuid)
     except Exception as exc:
         logger.warning("极光推送异常 alias={}: {}", alias, exc)
 

@@ -419,7 +419,7 @@
             "entries": [
               {
                 "key": "trial",
-                "label": "试模单",
+                "label": "模具试模单",
                 "icon": "flask-outline",
                 "route": "/mold/trial",
                 "permission": "haoligo:molds-documents-trial:read",
@@ -428,7 +428,7 @@
               },
               {
                 "key": "borrow",
-                "label": "领用单",
+                "label": "模具领用单",
                 "icon": "export",
                 "route": "/mold/borrow",
                 "permission": "haoligo:molds-documents-borrow-out:read",
@@ -437,7 +437,7 @@
               },
               {
                 "key": "return",
-                "label": "还入单",
+                "label": "模具还入单",
                 "icon": "import",
                 "route": "/mold/return",
                 "permission": "haoligo:molds-documents-return-in:read",
@@ -446,7 +446,7 @@
               },
               {
                 "key": "upkeep",
-                "label": "保养",
+                "label": "模具保养单",
                 "icon": "wrench-outline",
                 "route": "/mold/upkeep",
                 "permission": "haoligo:molds-documents-upkeep:read",
@@ -455,7 +455,7 @@
               },
               {
                 "key": "upkeep-complete",
-                "label": "保养完成",
+                "label": "模具保养完成单",
                 "icon": "check-circle-outline",
                 "route": "/mold/upkeep-complete",
                 "permission": "haoligo:molds-documents-upkeep-complete:read",
@@ -464,7 +464,7 @@
               },
               {
                 "key": "repair",
-                "label": "维修",
+                "label": "模具维修单",
                 "icon": "hammer",
                 "route": "/mold/repair",
                 "permission": "haoligo:molds-documents-repair:read",
@@ -473,7 +473,7 @@
               },
               {
                 "key": "repair-complete",
-                "label": "完修",
+                "label": "模具维修完成单",
                 "icon": "shield-check-outline",
                 "route": "/mold/repair-complete",
                 "permission": "haoligo:molds-documents-repair-complete:read",
@@ -482,7 +482,7 @@
               },
               {
                 "key": "outsource-maint",
-                "label": "外协维修",
+                "label": "外协维修单",
                 "icon": "truck-delivery-outline",
                 "route": "/mold/outsource-maint",
                 "permission": "haoligo:molds-documents-outsource-maintenance:read",
@@ -490,7 +490,7 @@
               },
               {
                 "key": "outsource-complete",
-                "label": "外协完修",
+                "label": "外协维修完成单",
                 "icon": "file-check-outline",
                 "route": "/mold/outsource-complete",
                 "permission": "haoligo:molds-documents-outsource-complete:read",
@@ -508,7 +508,7 @@
             "entries": [
               {
                 "key": "spot-check",
-                "label": "点检单",
+                "label": "设备点检单",
                 "icon": "clipboard-check-outline",
                 "route": "/equip/spot-check",
                 "permission": "haoligo:equipment-documents-spot-check:read",
@@ -516,7 +516,7 @@
               },
               {
                 "key": "route-patrol",
-                "label": "路线巡检",
+                "label": "路线巡检单",
                 "icon": "map-marker-path",
                 "route": "/equip/route-patrol",
                 "permission": "haoligo:equipment-documents-route-patrol:read",
@@ -524,7 +524,7 @@
               },
               {
                 "key": "upkeep-sheet",
-                "label": "维保单",
+                "label": "设备维保单",
                 "icon": "wrench-outline",
                 "route": "/equip/upkeep-sheet",
                 "permission": "haoligo:equipment-documents-upkeep-sheet:read",
@@ -533,7 +533,7 @@
               },
               {
                 "key": "upkeep-complete",
-                "label": "维保完修",
+                "label": "设备维保完成单",
                 "icon": "check-decagram-outline",
                 "route": "/equip/upkeep-complete",
                 "permission": "haoligo:equipment-documents-upkeep-complete:read",
@@ -545,7 +545,7 @@
               },
               {
                 "key": "output-record",
-                "label": "产出单",
+                "label": "设备产出单",
                 "icon": "chart-line",
                 "route": "/equip/output-record",
                 "permission": "haoligo:equipment-documents-output-record:read",
@@ -568,7 +568,7 @@
             "entries": [
               {
                 "key": "hazard-register",
-                "label": "隐患登记",
+                "label": "问题登记",
                 "icon": "alert-circle-outline",
                 "route": "/patrol/form/register",
                 "permission": "haoligo:patrol-daily-form:read",
@@ -577,7 +577,7 @@
               },
               {
                 "key": "hazard-list",
-                "label": "隐患列表",
+                "label": "隐患治理",
                 "icon": "format-list-bulleted",
                 "route": "/patrol/form",
                 "permission": "haoligo:patrol-hazards:read",
@@ -644,7 +644,7 @@
               },
               {
                 "key": "pending-audit",
-                "label": "外协完修待审",
+                "label": "外协维修完成待审",
                 "icon": "clipboard-check-outline",
                 "route": "/mold/pending-audit",
                 "review_resource": "haoligo:molds-documents-outsource-complete",
@@ -676,7 +676,7 @@
             "entries": [
               {
                 "key": "trial",
-                "label": "试模单",
+                "label": "模具试模单",
                 "icon": "flask-outline",
                 "route": "/mold/trial",
                 "permission": "haoligo:molds-documents-trial:read",
@@ -685,7 +685,7 @@
               },
               {
                 "key": "borrow",
-                "label": "领用单",
+                "label": "模具领用单",
                 "icon": "export",
                 "route": "/mold/borrow",
                 "permission": "haoligo:molds-documents-borrow-out:read",
@@ -694,7 +694,7 @@
               },
               {
                 "key": "return",
-                "label": "还入单",
+                "label": "模具还入单",
                 "icon": "import",
                 "route": "/mold/return",
                 "permission": "haoligo:molds-documents-return-in:read",
@@ -703,7 +703,7 @@
               },
               {
                 "key": "upkeep",
-                "label": "保养",
+                "label": "模具保养单",
                 "icon": "wrench-outline",
                 "route": "/mold/upkeep",
                 "permission": "haoligo:molds-documents-upkeep:read",
@@ -712,7 +712,7 @@
               },
               {
                 "key": "upkeep-complete",
-                "label": "保养完成",
+                "label": "模具保养完成单",
                 "icon": "check-circle-outline",
                 "route": "/mold/upkeep-complete",
                 "permission": "haoligo:molds-documents-upkeep-complete:read",
@@ -721,7 +721,7 @@
               },
               {
                 "key": "repair",
-                "label": "维修",
+                "label": "模具维修单",
                 "icon": "hammer",
                 "route": "/mold/repair",
                 "permission": "haoligo:molds-documents-repair:read",
@@ -730,7 +730,7 @@
               },
               {
                 "key": "repair-complete",
-                "label": "完修",
+                "label": "模具维修完成单",
                 "icon": "shield-check-outline",
                 "route": "/mold/repair-complete",
                 "permission": "haoligo:molds-documents-repair-complete:read",
@@ -739,7 +739,7 @@
               },
               {
                 "key": "outsource-maint",
-                "label": "外协维修",
+                "label": "外协维修单",
                 "icon": "truck-delivery-outline",
                 "route": "/mold/outsource-maint",
                 "permission": "haoligo:molds-documents-outsource-maintenance:read",
@@ -747,7 +747,7 @@
               },
               {
                 "key": "outsource-complete",
-                "label": "外协完修",
+                "label": "外协维修完成单",
                 "icon": "file-check-outline",
                 "route": "/mold/outsource-complete",
                 "permission": "haoligo:molds-documents-outsource-complete:read",
