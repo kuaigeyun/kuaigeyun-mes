@@ -8,13 +8,13 @@ import { FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-temp
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import {
   getClientProductConfig,
+  listPushTestUsers,
   sendClientPushTest,
   updateClientProductConfig,
   type ClientProductConfig,
   type ClientPushTestResult,
 } from '../../../services/clientRelease';
 import { getTenantList, TenantStatus } from '../../../services/tenant';
-import { searchUserDisplayInTenant } from '../../../services/user';
 
 type Props = {
   open: boolean;
@@ -254,24 +254,27 @@ export function ClientProductConfigEditModal({ open, clientKey, onClose, onSaved
               return (
                 <>
                   <SafeProFormSelect
+                    key={`push-test-user-${push_test_tenant_id}`}
                     name="push_test_user_id"
                     label={t('pages.infra.clientReleases.configPushTestUser')}
                     placeholder={t('pages.infra.clientReleases.configPushTestUserPlaceholder')}
                     showSearch
                     debounceTime={300}
                     disabled={!push_test_tenant_id}
+                    params={{ tenantId: push_test_tenant_id }}
                     fieldProps={{
                       filterOption: false,
                       onChange: () => setPushTestResult(null),
                     }}
                     request={async ({ keyWords }) => {
+                      if (!clientKey) return [];
                       const tid = Number(push_test_tenant_id);
                       if (!Number.isFinite(tid) || tid < 1) return [];
-                      const res = await searchUserDisplayInTenant(tid, {
+                      const res = await listPushTestUsers(clientKey, {
+                        tenant_id: tid,
+                        keyword: keyWords?.trim() || undefined,
                         page: 1,
                         page_size: 50,
-                        keyword: keyWords?.trim() || undefined,
-                        is_active: true,
                       });
                       return (res.items ?? []).map((user) => ({
                         label: `${user.label || user.username} (#${user.id})`,

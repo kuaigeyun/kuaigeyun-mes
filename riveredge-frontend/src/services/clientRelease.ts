@@ -148,6 +148,39 @@ export async function sendClientPushTest(
   );
 }
 
+export type PushTestUserListParams = {
+  tenant_id: number;
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+};
+
+export type PushTestUserOption = {
+  id: number;
+  uuid: string;
+  username: string;
+  full_name?: string | null;
+  label: string;
+};
+
+export type PushTestUserListResponse = {
+  items: PushTestUserOption[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+/** 平台超管：推送测试选人（不依赖租户 RBAC） */
+export async function listPushTestUsers(
+  clientKey: string,
+  params: PushTestUserListParams,
+): Promise<PushTestUserListResponse> {
+  return apiRequest<PushTestUserListResponse>(
+    `${ADMIN_BASE}/products/${encodeURIComponent(clientKey)}/push-test-users`,
+    { params },
+  );
+}
+
 export async function listClientReleases(params?: {
   client_key?: string;
   platform?: string;

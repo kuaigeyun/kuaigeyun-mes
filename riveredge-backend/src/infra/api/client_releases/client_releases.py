@@ -204,6 +204,40 @@ async def update_client_product_config(
     return ClientProductConfigOut.model_validate(data)
 
 
+async def _ensure_push_configurable_client(client_key: str) -> dict:
+    product = await product_cfg_svc.get_client_product_config(client_key)
+    if not product.get("push_configurable"):
+        raise HTTPException(status_code=400, detail="该客户端不支持极光推送测试")
+    return product
+
+
+@router.get(
+    "/products/{client_key}/push-test-users",
+    summary="推送测试：列出租户下用户（超管）",
+)
+async def list_push_test_users(
+    client_key: str,
+    tenant_id: Annotated[int, Query(gt=0, description="租户 ID")],
+    keyword: Annotated[str | None, Query(description="姓名或账号关键词")] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+):
+    """平台超管选人：不依赖租户内 system:user:read 权限。"""
+    from core.schemas.user_display import UserDisplayListResponse
+    from core.services.user.user_display_service import UserDisplayService
+
+    await _ensure_push_configurable_client(client_key)
+    result = await UserDisplayService.search(
+        tenant_id=tenant_id,
+        page=page,
+        page_size=page_size,
+        keyword=keyword,
+        is_active=True,
+    )
+    return UserDisplayListResponse(**result)
+
+
 @router.post(
     "/products/{client_key}/push-test",
     response_model=ClientPushTestOut,
@@ -216,9 +250,7 @@ async def send_client_push_test(
 ) -> ClientPushTestOut:
     from core.services.messaging.push_dispatch_service import send_jpush_test_notification
 
-    product = await product_cfg_svc.get_client_product_config(client_key)
-    if not product.get("push_configurable"):
-        raise HTTPException(status_code=400, detail="该客户端不支持极光推送测试")
+    await _ensure_push_configurable_client(client_key)
     result = await send_jpush_test_notification(
         tenant_id=body.tenant_id,
         user_id=body.user_id,
