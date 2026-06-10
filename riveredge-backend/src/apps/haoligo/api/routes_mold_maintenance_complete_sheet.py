@@ -32,8 +32,10 @@ from apps.haoligo.constants.mold_maintenance_complete import (
     MOLD_MAINTENANCE_COMPLETE_REPAIR_RESULT_SET,
 )
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_MAINTENANCE_COMPLETE_SHEET_NO
+from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.services.mold_upkeep_scheme import build_upkeep_line_storage
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from core.api.deps.access import AuthContext, get_auth_context
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -310,6 +312,7 @@ class MoldMaintenanceCompleteSheetOut(BaseModel):
     )
     line_items: List[MoldCompleteLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="首行模具代号")
+    complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -326,6 +329,7 @@ class MoldMaintenanceCompleteSheetCreate(BaseModel):
         description="附件照片·维护保养后",
     )
     line_items: List[MoldCompleteLineIn] = Field(min_length=1, description="与维保单模具一一对应的完修明细")
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 class MoldMaintenanceCompleteSheetUpdate(BaseModel):
@@ -339,6 +343,7 @@ class MoldMaintenanceCompleteSheetUpdate(BaseModel):
         description="附件照片·维护保养后",
     )
     line_items: Optional[List[MoldCompleteLineIn]] = None
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 async def _not_found():
@@ -414,6 +419,7 @@ async def _serialize(row: HaoligoMoldMaintenanceCompleteSheet) -> MoldMaintenanc
         source_header_attachment_file_uuids=src_header,
         line_items=enriched_lines,
         primary_mold_code=_primary_mold(enriched_lines),
+        complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
     )
 
@@ -466,6 +472,8 @@ async def create_maintenance_complete_sheet(
     src = await tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(id=body.source_maintenance_sheet_id).first()
     if not src:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="维保单不存在")
+    if str(getattr(src, "sheet_status", "") or "").strip() != SHEET_STATUS_APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅已审核通过的维保单可确认完修")
     if await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id).filter(
         source_maintenance_sheet_id=src.id,
         deleted_at__isnull=True,
@@ -548,6 +556,7 @@ async def create_maintenance_complete_sheet(
             clear_total_production=sheet_clear_flag,
             header_attachment_file_uuids=[],
             line_items=stored,
+            complete_notify_user_ids=normalize_report_user_ids(body.complete_notify_user_ids),
         )
         for mc in unique_mold_codes_from_stored_line_items(stored):
             await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
@@ -606,6 +615,8 @@ async def update_maintenance_complete_sheet(
         data["source_order_no"] = s
     if "header_attachment_file_uuids" in data:
         data["header_attachment_file_uuids"] = []
+    if "complete_notify_user_ids" in data and data["complete_notify_user_ids"] is not None:
+        data["complete_notify_user_ids"] = normalize_report_user_ids(data["complete_notify_user_ids"])
     if "line_items" in data and data["line_items"] is not None:
         lines = [MoldCompleteLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:

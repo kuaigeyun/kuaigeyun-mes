@@ -13,6 +13,7 @@ import {
   ProFormRadio,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
 import type { UploadProps } from 'antd';
@@ -477,6 +478,20 @@ function warehouseLabelById(rows: MoldWarehouseRow[], id: number | null | undefi
 const TRIAL_IMMEDIATE_REPAIR_WAREHOUSE_EXTRA =
   '保存后将把模具台账「所在仓库」转移至所选外部仓库';
 
+const TrialAdjustmentPointsField: React.FC<{ readonly?: boolean }> = ({ readonly }) => (
+  <Col span={24}>
+    <ProFormTextArea
+      name="adjustment_points"
+      label="需要调整的点"
+      placeholder="请描述模具需维修或调整的具体问题，供外协厂商参考"
+      readonly={readonly}
+      disabled={readonly}
+      rules={[{ required: true, message: '请填写需要调整的点' }]}
+      fieldProps={{ rows: 4, maxLength: 2000, showCount: true }}
+    />
+  </Col>
+);
+
 /** 试模/试产「立即送修」：送修仓库、站内信预览、外部仓快捷新建（与试模不合格一致） */
 const TrialImmediateRepairWarehouseFields: React.FC<{
   supplierNameStr: string;
@@ -761,6 +776,12 @@ const MoldTrialSheetsPage: React.FC = () => {
     () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'recall'),
     [currentUser],
   );
+  const canRecallAndRetrialTrial = useMemo(
+    () =>
+      hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'recall') &&
+      hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'create'),
+    [currentUser],
+  );
   const canConfirmAdjustmentTrial = useMemo(
     () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'confirm_adjustment'),
     [currentUser],
@@ -843,6 +864,7 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [dispatchModalLoading, setDispatchModalLoading] = useState(false);
   const [recallModalOpen, setRecallModalOpen] = useState(false);
   const [recallSubmitting, setRecallSubmitting] = useState(false);
+  const [recallRetrialSubmitting, setRecallRetrialSubmitting] = useState(false);
   const [recallRecord, setRecallRecord] = useState<MoldTrialSheetRow | null>(null);
   const [recallFromLabel, setRecallFromLabel] = useState('—');
   const [recallTargetWhId, setRecallTargetWhId] = useState<number | undefined>();
@@ -1327,6 +1349,28 @@ const MoldTrialSheetsPage: React.FC = () => {
     }
   }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
 
+  const handleRecallAndRetrialConfirm = useCallback(async () => {
+    if (!recallRecord) return;
+    if (recallTargetWhId == null || recallTargetWhId < 1) {
+      messageApi.warning('请选择收回目标仓库');
+      return;
+    }
+    setRecallRetrialSubmitting(true);
+    try {
+      const res = await recallMoldTrialSheetAndRetrial(recallRecord.id, {
+        target_warehouse_id: recallTargetWhId,
+      });
+      messageApi.success(`已收回并生成新试模单「${res.new_sheet.sheet_no || res.new_sheet.id}」`);
+      setRecallModalOpen(false);
+      bumpMoldLedgerTableCache();
+      actionRef.current?.reload();
+    } catch (e) {
+      messageApi.error((e as Error).message || '收回并再试模失败');
+    } finally {
+      setRecallRetrialSubmitting(false);
+    }
+  }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
+
   const handleMarkAdjustmentComplete = useCallback(
     async (record: MoldTrialSheetRow) => {
       setAdjustmentSubmittingId(record.id);
@@ -1724,6 +1768,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             ? detail.submitted_notify_user_ids
             : trialSubmittedNotifyDefaults) ?? [],
         repair_warehouse_id: detail.repair_warehouse_id ?? undefined,
+        adjustment_points: detail.adjustment_points ?? undefined,
       });
       setModalVisible(true);
     } catch (e) {
@@ -1733,31 +1778,6 @@ const MoldTrialSheetsPage: React.FC = () => {
 
   const handleEdit = (record: MoldTrialSheetRow) => void openSheetForm(record, false);
   const handleDetail = (record: MoldTrialSheetRow) => void openSheetForm(record, true);
-
-  const handleRecallAndRetrial = async () => {
-    if (!recallRecord) return;
-    if (recallTargetWhId == null || recallTargetWhId < 1) {
-      messageApi.warning('请选择收回目标仓库');
-      return;
-    }
-    setRecallSubmitting(true);
-    try {
-      const res = await recallMoldTrialSheetAndRetrial(recallRecord.id, {
-        target_warehouse_id: recallTargetWhId,
-      });
-      setRecallModalOpen(false);
-      bumpMoldLedgerTableCache();
-      actionRef.current?.reload();
-      messageApi.success(
-        `原单已标记「已收回」；已生成第 ${res.new_sheet.trial_times ?? ''} 次试模单 ${res.new_sheet.sheet_no || ''}，请填写试模结果后保存`,
-      );
-      await openSheetForm(res.new_sheet, false);
-    } catch (e) {
-      messageApi.error((e as Error).message || '收回并重新试模失败');
-    } finally {
-      setRecallSubmitting(false);
-    }
-  };
 
   const handleDeleteOne = (record: MoldTrialSheetRow) => {
     Modal.confirm({
@@ -1774,6 +1794,11 @@ const MoldTrialSheetsPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const parseAdjustmentPoints = (values: Record<string, unknown>): string | null => {
+    const s = String(values.adjustment_points ?? '').trim();
+    return s || null;
   };
 
   const buildPayload = (
@@ -1814,6 +1839,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           failure_handling: TRIAL_FAILURE_REPAIR,
           pending_notify_user_ids: [],
           repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+          adjustment_points: parseAdjustmentPoints(values),
         };
       }
       return {
@@ -1821,6 +1847,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         failure_handling: TRIAL_FAILURE_PENDING,
         pending_notify_user_ids: parsePendingNotifyUserIds(values.pending_notify_user_ids),
         repair_warehouse_id: null,
+        adjustment_points: parseAdjustmentPoints(values),
       };
     }
 
@@ -1849,6 +1876,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         failure_handling: TRIAL_FAILURE_REPAIR,
         pending_notify_user_ids: [],
         repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+        adjustment_points: parseAdjustmentPoints(values),
       };
     }
     const prodResult = values.production_trial_result;
@@ -1867,6 +1895,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             failure_handling: TRIAL_FAILURE_REPAIR,
             pending_notify_user_ids: [],
             repair_warehouse_id: parseMoldWarehouseIdForForm(values.repair_warehouse_id) ?? undefined,
+            adjustment_points: parseAdjustmentPoints(values),
           };
         }
         return {
@@ -1874,6 +1903,7 @@ const MoldTrialSheetsPage: React.FC = () => {
           failure_handling: TRIAL_FAILURE_PENDING,
           pending_notify_user_ids: parsePendingNotifyUserIds(values.pending_notify_user_ids),
           repair_warehouse_id: null,
+          adjustment_points: parseAdjustmentPoints(values),
         };
       }
       return {
@@ -1915,6 +1945,10 @@ const MoldTrialSheetsPage: React.FC = () => {
         throw new Error('validation');
       }
       if (values.trial_result === '不合格') {
+        if (!parseAdjustmentPoints(values)) {
+          messageApi.warning('试模不合格时请填写需要调整的点');
+          throw new Error('validation');
+        }
         const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
         if (whId == null) {
           messageApi.warning('试模不合格须立即送修，请选择送修仓库');
@@ -1925,10 +1959,14 @@ const MoldTrialSheetsPage: React.FC = () => {
         const prodUserRaw = values.production_trial_user_id;
         const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
         if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
-          messageApi.warning('填写试产结果时请选择试产检验');
+          messageApi.warning('填写试产检验结果时请选择试产检验人员');
           throw new Error('validation');
         }
         if (values.production_trial_result === '不合格') {
+          if (!parseAdjustmentPoints(values)) {
+            messageApi.warning('试产不合格时请填写需要调整的点');
+            throw new Error('validation');
+          }
           const mode = String(values.failure_handling ?? '').trim() || TRIAL_FAILURE_REPAIR;
           if (!mode) {
             messageApi.warning('试产不合格时请选择处理方式');
@@ -1948,14 +1986,18 @@ const MoldTrialSheetsPage: React.FC = () => {
       const prodUserRaw = values.production_trial_user_id;
       const prodUserId = typeof prodUserRaw === 'number' ? prodUserRaw : Number(prodUserRaw);
       if (!Number.isFinite(prodUserId) || prodUserId <= 0) {
-        messageApi.warning('请选择试产检验');
+        messageApi.warning('请选择试产检验人员');
         throw new Error('validation');
       }
       if (!values.production_trial_result) {
-        messageApi.warning('请选择试产结果');
+        messageApi.warning('请选择试产检验结果');
         throw new Error('validation');
       }
       if (values.production_trial_result === '不合格') {
+        if (!parseAdjustmentPoints(values)) {
+          messageApi.warning('试产不合格时请填写需要调整的点');
+          throw new Error('validation');
+        }
         const mode = String(values.failure_handling ?? '').trim() || TRIAL_FAILURE_REPAIR;
         if (mode === TRIAL_FAILURE_REPAIR) {
           const whId = parseMoldWarehouseIdForForm(values.repair_warehouse_id);
@@ -2382,7 +2424,7 @@ const MoldTrialSheetsPage: React.FC = () => {
       ),
     },
     {
-      title: '试产结果',
+      title: '试产检验结果',
       dataIndex: 'production_trial_result',
       key: 'production_trial_result',
       width: 100,
@@ -2512,6 +2554,18 @@ const MoldTrialSheetsPage: React.FC = () => {
               onClick={() => void openRecallModal(record)}
             >
               确认收回
+            </Button>,
+          );
+        }
+        if (canRecallAndRetrialTrial && canConfirmRecallTrialSheet(record)) {
+          actions.push(
+            <Button {...rowActionKind('recall')}
+              key="recall-retrial"
+              type="link"
+              size="small"
+              onClick={() => void openRecallModal(record)}
+            >
+              收回并再试模
             </Button>,
           );
         }
@@ -2696,7 +2750,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                   type="info"
                   showIcon
                   message={`流程阶段：${formWorkflowPhase}`}
-                  description="试模已合格，请完成试产检验（上传试产检验附件、填写试产结果）；试产合格后审核通过将把模具台账状态更新为「待用」。"
+                  description="试模已合格，请完成试产检验（上传试产检验附件、填写试产检验结果）；试产检验合格后审核通过将把模具台账状态更新为「待用」。"
                 />
               </Col>
               {lockedTrialMoldSummaryCols(
@@ -2760,6 +2814,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                       const v = e.target.value;
                       if (v === '合格') {
                         const trialUid = formRef.current?.getFieldValue('trial_user_id');
+                        const prod = formRef.current?.getFieldValue('production_trial_result');
                         formRef.current?.setFieldsValue({
                           failure_handling: undefined,
                           pending_notify_user_ids: [],
@@ -2767,6 +2822,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                           production_trial_result: undefined,
                           production_trial_user_id:
                             formRef.current?.getFieldValue('production_trial_user_id') ?? trialUid,
+                          ...(prod !== '不合格' ? { adjustment_points: undefined } : {}),
                         });
                         return;
                       }
@@ -2776,6 +2832,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                           production_trial_result: undefined,
                           production_trial_user_id: undefined,
                           inspection_attachments: [],
+                          adjustment_points: undefined,
                         });
                         const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
                         applyDefaultRepairWarehouseForSupplier(sn);
@@ -2793,7 +2850,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                         type="info"
                         showIcon
                         message="试产阶段"
-                        description="试模合格后填写试产检验附件与试产结果；可先保存试模信息，试产内容也可后续补填。试产合格并审核通过后模具台账将更新为「待用」。"
+                        description="试模合格后填写试产检验附件与试产检验结果；可先保存试模信息，试产检验内容也可后续补填。试产检验合格并审核通过后模具台账将更新为「待用」。"
                       />
                     </Col>
                   );
@@ -2817,8 +2874,8 @@ const MoldTrialSheetsPage: React.FC = () => {
                       <Col span={12}>
                         <UniUserIdSelect
                           name="production_trial_user_id"
-                          label="试产人员"
-                          placeholder="请选择试产人员"
+                          label="试产检验人员"
+                          placeholder="请选择试产检验人员"
                           readonly={isDetailView}
                           disabled={isDetailView}
                           presetUsers={productionTrialUserPresets}
@@ -2828,7 +2885,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                       <Col span={12}>
                         <ProFormRadio.Group
                           name="production_trial_result"
-                          label="试产结果"
+                          label="试产检验结果"
                           disabled={isDetailView}
                           options={[
                             { label: '合格', value: '合格' },
@@ -2842,6 +2899,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                   failure_handling: undefined,
                                   pending_notify_user_ids: [],
                                   repair_warehouse_id: undefined,
+                                  adjustment_points: undefined,
                                 });
                                 return;
                               }
@@ -2849,6 +2907,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                 formRef.current?.setFieldsValue({
                                   failure_handling: TRIAL_FAILURE_REPAIR,
                                   pending_notify_user_ids: [],
+                                  adjustment_points: undefined,
                                 });
                                 const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
                                 applyDefaultRepairWarehouseForSupplier(sn);
@@ -2859,6 +2918,12 @@ const MoldTrialSheetsPage: React.FC = () => {
                           }}
                         />
                       </Col>
+                      <ProFormDependency name={['production_trial_result']}>
+                        {({ production_trial_result }) => {
+                          if (production_trial_result !== '不合格') return null;
+                          return <TrialAdjustmentPointsField readonly={isDetailView} />;
+                        }}
+                      </ProFormDependency>
                       <ProFormDependency
                         name={[
                           'production_trial_result',
@@ -2935,7 +3000,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                   repairOptions={repairOptions}
                                   notifyUserId={notifyUserId}
                                   unqualifiedLabel="试产不合格"
-                                  notifyPersonLabel="试产检验"
+                                  notifyPersonLabel="试产检验人员"
                                   onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
                                 />
                               ) : null}
@@ -2960,14 +3025,17 @@ const MoldTrialSheetsPage: React.FC = () => {
                         ? Number(trial_user_id)
                         : null;
                   return (
-                    <TrialImmediateRepairWarehouseFields
-                      supplierNameStr={supplierNameStr}
-                      repairOptions={repairOptions}
-                      notifyUserId={notifyUserId}
-                      unqualifiedLabel="试模不合格"
-                      notifyPersonLabel="试模人员"
-                      onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
-                    />
+                    <>
+                      <TrialAdjustmentPointsField readonly={isDetailView} />
+                      <TrialImmediateRepairWarehouseFields
+                        supplierNameStr={supplierNameStr}
+                        repairOptions={repairOptions}
+                        notifyUserId={notifyUserId}
+                        unqualifiedLabel="试模不合格"
+                        notifyPersonLabel="试模人员"
+                        onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
+                      />
+                    </>
                   );
                 }}
               </ProFormDependency>
@@ -2986,8 +3054,8 @@ const MoldTrialSheetsPage: React.FC = () => {
               <Col span={12}>
                 <UniUserIdSelect
                   name="production_trial_user_id"
-                  label="试产人员"
-                  placeholder="请选择试产人员"
+                  label="试产检验人员"
+                  placeholder="请选择试产检验人员"
                   required
                   readonly={isDetailView}
                   disabled={isDetailView}
@@ -2998,8 +3066,8 @@ const MoldTrialSheetsPage: React.FC = () => {
               <Col span={12}>
                 <ProFormRadio.Group
                   name="production_trial_result"
-                  label="试产结果"
-                  rules={[{ required: true, message: '请选择试产结果' }]}
+                  label="试产检验结果"
+                  rules={[{ required: true, message: '请选择试产检验结果' }]}
                   disabled={isDetailView}
                   options={[
                     { label: '合格', value: '合格' },
@@ -3013,6 +3081,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                           failure_handling: undefined,
                           pending_notify_user_ids: [],
                           repair_warehouse_id: undefined,
+                          adjustment_points: undefined,
                         });
                         return;
                       }
@@ -3020,6 +3089,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                         formRef.current?.setFieldsValue({
                           failure_handling: TRIAL_FAILURE_REPAIR,
                           pending_notify_user_ids: [],
+                          adjustment_points: undefined,
                         });
                         const sn = String(formRef.current?.getFieldValue('supplier_name') ?? '').trim();
                         applyDefaultRepairWarehouseForSupplier(sn);
@@ -3030,6 +3100,12 @@ const MoldTrialSheetsPage: React.FC = () => {
                   }}
                 />
               </Col>
+              <ProFormDependency name={['production_trial_result']}>
+                {({ production_trial_result }) => {
+                  if (production_trial_result !== '不合格') return null;
+                  return <TrialAdjustmentPointsField readonly={isDetailView} />;
+                }}
+              </ProFormDependency>
               <ProFormDependency
                 name={['production_trial_result', 'supplier_name', 'failure_handling', 'production_trial_user_id']}
               >
@@ -3093,7 +3169,7 @@ const MoldTrialSheetsPage: React.FC = () => {
                                 : null
                           }
                           unqualifiedLabel="试产不合格"
-                          notifyPersonLabel="试产检验"
+                          notifyPersonLabel="试产检验人员"
                           onQuickCreateWarehouse={openRepairWarehouseQuickCreate}
                         />
                       ) : null}
@@ -3201,25 +3277,34 @@ const MoldTrialSheetsPage: React.FC = () => {
         width={MODAL_CONFIG.SMALL_WIDTH}
         destroyOnHidden
         footer={[
-          <Button {...rowActionKind('revoke')} key="cancel" onClick={() => setRecallModalOpen(false)} disabled={recallSubmitting}>
+          <Button
+            {...rowActionKind('revoke')}
+            key="cancel"
+            onClick={() => setRecallModalOpen(false)}
+            disabled={recallSubmitting || recallRetrialSubmitting}
+          >
             取消
           </Button>,
-          <Button {...rowActionKind('recall')}
+          canRecallAndRetrialTrial ? (
+            <Button
+              {...rowActionKind('recall')}
+              key="recall-retrial"
+              loading={recallRetrialSubmitting}
+              disabled={recallModalLoading || recallTargetOptions.length === 0 || recallSubmitting}
+              onClick={() => void handleRecallAndRetrialConfirm()}
+            >
+              收回并再试模
+            </Button>
+          ) : null,
+          <Button
+            {...rowActionKind('recall')}
             key="recall"
+            type="primary"
             loading={recallSubmitting}
-            disabled={recallModalLoading || recallTargetOptions.length === 0}
+            disabled={recallModalLoading || recallTargetOptions.length === 0 || recallRetrialSubmitting}
             onClick={() => void handleRecallConfirm()}
           >
             确认收回
-          </Button>,
-          <Button {...rowActionKind('recall')}
-            key="recall-retrial"
-            type="primary"
-            loading={recallSubmitting}
-            disabled={recallModalLoading || recallTargetOptions.length === 0}
-            onClick={() => void handleRecallAndRetrial()}
-          >
-            收回并重新试模
           </Button>,
         ]}
       >
@@ -3247,7 +3332,7 @@ const MoldTrialSheetsPage: React.FC = () => {
               </Form.Item>
             </Form>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              外协已确认调整完成后，模具到厂时选择厂内目标仓库并确认收回；本单变为「已收回」并结束。「收回并重新试模」会另生成下一次试模单。
+              外协已确认调整完成后，模具到厂时选择厂内目标仓库并确认收回；本单变为「已收回」并结束。
             </Typography.Text>
           </Space>
         )}

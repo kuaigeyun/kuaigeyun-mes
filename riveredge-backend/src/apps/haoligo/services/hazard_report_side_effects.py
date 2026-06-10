@@ -71,7 +71,14 @@ async def _resolve_issue_type_labels(tenant_id: int, row: HaoligoHazardReport) -
     codes = _hazard_issue_type_codes(row)
     if not codes:
         return "—"
-    labels = [await _resolve_issue_type_label(tenant_id, c) for c in codes]
+    summary = (row.problem_summary or "").strip()
+    labels: list[str] = []
+    for code in codes:
+        label = await _resolve_issue_type_label(tenant_id, code)
+        if code == "其他" and summary:
+            labels.append(f"{label}：{summary}")
+        else:
+            labels.append(label)
     return "、".join(labels)
 
 

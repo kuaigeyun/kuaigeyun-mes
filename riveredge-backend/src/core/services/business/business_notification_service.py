@@ -130,6 +130,8 @@ class BusinessNotificationService:
         rules = _normalize_rules((cfg.get("parameters") or {}).get("notifications"))
         ctx = dict(context or {})
         vars_payload = {k: str(v) for k, v in (variables or {}).items()}
+        vars_payload["trigger_document"] = doc
+        vars_payload["trigger_action"] = action
 
         sent = 0
         for rule in rules:

@@ -797,6 +797,8 @@ export interface EquipmentUpkeepSheetRow {
   upkeep_param_set_name?: string | null;
   reporter_user_id: number;
   created_at: string;
+  /** 是否可发起维保完成：尚无未删除的关联完成单 */
+  can_complete?: boolean;
 }
 
 export type EquipmentUpkeepSheetCreatePayload = {
@@ -879,6 +881,7 @@ export interface EquipmentUpkeepCompleteSheetRow {
   /** 保养完修：是否清空累计产量 */
   clear_total_production?: boolean;
   reporter_user_id: number;
+  complete_notify_user_ids?: number[];
   created_at: string;
 }
 
@@ -898,6 +901,7 @@ export type EquipmentUpkeepCompleteSheetCreatePayload = {
   repair_content?: string | null;
   repair_result?: string | null;
   clear_total_production?: boolean;
+  complete_notify_user_ids?: number[];
 };
 
 export type EquipmentUpkeepCompleteSheetUpdatePayload = {
@@ -910,6 +914,7 @@ export type EquipmentUpkeepCompleteSheetUpdatePayload = {
   repair_content?: string | null;
   repair_result?: string | null;
   clear_total_production?: boolean;
+  complete_notify_user_ids?: number[];
 };
 
 export function listEquipmentUpkeepCompleteSheets(params?: {
@@ -1653,6 +1658,7 @@ export interface MoldTrialSheetRow {
   production_trial_result?: string | null;
   production_trial_user_id?: number | null;
   production_trial_user_name?: string | null;
+  adjustment_points?: string | null;
   sheet_status: string;
   audited_at?: string | null;
   audited_by_user_id?: number | null;
@@ -1675,6 +1681,7 @@ export type MoldTrialSheetCreatePayload = {
   repair_warehouse_id?: number | null;
   production_trial_result?: '合格' | '不合格' | null;
   production_trial_user_id?: number;
+  adjustment_points?: string | null;
 };
 
 export type MoldTrialSheetUpdatePayload = Partial<MoldTrialSheetCreatePayload>;
@@ -1861,6 +1868,7 @@ export interface MoldOutsourceMaintenanceSheetRow {
   service_type: string;
   source_order_no?: string | null;
   header_attachment_file_uuids: string[];
+  submitted_notify_user_ids?: number[];
   line_items: OutsourceMaintLineRow[];
   primary_mold_code?: string | null;
   primary_mold_warehouse_name?: string | null;
@@ -1888,6 +1896,7 @@ export type MoldOutsourceMaintenanceSheetCreatePayload = {
   service_type: '维修' | '保养';
   source_order_no?: string | null;
   header_attachment_file_uuids?: string[];
+  submitted_notify_user_ids?: number[];
   line_items: OutsourceMaintLinePayload[];
 };
 
@@ -1972,12 +1981,15 @@ export interface MoldMaintenanceSheetRow {
   service_type: string;
   source_order_no?: string | null;
   header_attachment_file_uuids: string[];
+  submitted_notify_user_ids?: number[];
   line_items: MoldMaintLineRow[];
   primary_mold_code?: string | null;
   sheet_status: string;
   audited_at?: string | null;
   audited_by_user_id?: number | null;
   created_at?: string | null;
+  /** 是否可发起完修/完成保养：已通过且尚无未删除的关联完修单 */
+  can_complete?: boolean;
 }
 
 export type MoldMaintLinePayload = {
@@ -1995,6 +2007,7 @@ export type MoldMaintenanceSheetCreatePayload = {
   service_type: '维修' | '保养';
   source_order_no?: string | null;
   header_attachment_file_uuids?: string[];
+  submitted_notify_user_ids?: number[];
   line_items: MoldMaintLinePayload[];
 };
 
@@ -2099,6 +2112,7 @@ export interface MoldMaintenanceCompleteSheetRow {
   source_header_attachment_file_uuids?: string[];
   line_items: MoldCompleteLineRow[];
   primary_mold_code?: string | null;
+  complete_notify_user_ids?: number[];
   created_at?: string | null;
 }
 
@@ -2128,6 +2142,7 @@ export type MoldMaintenanceCompleteSheetCreatePayload = {
   department_uuid?: string;
   line_items: MoldCompleteLinePayload[];
   header_attachment_file_uuids?: string[];
+  complete_notify_user_ids?: number[];
 };
 
 export type MoldMaintenanceCompleteSheetUpdatePayload = {
@@ -2138,6 +2153,7 @@ export type MoldMaintenanceCompleteSheetUpdatePayload = {
   service_type?: '维修' | '保养';
   header_attachment_file_uuids?: string[];
   line_items?: MoldCompleteLinePayload[];
+  complete_notify_user_ids?: number[];
 };
 
 export function listMoldMaintenanceCompleteSheets(params?: {
@@ -2210,6 +2226,7 @@ export interface MoldOutsourceMaintenanceCompleteSheetRow {
   sheet_status?: string;
   audited_at?: string | null;
   audited_by_user_id?: number | null;
+  complete_notify_user_ids?: number[];
   created_at?: string | null;
 }
 
@@ -2230,6 +2247,7 @@ export type MoldOutsourceMaintenanceCompleteSheetCreatePayload = {
   department_uuid?: string;
   header_attachment_file_uuids?: string[];
   line_items: MoldOutsourceCompleteLinePayload[];
+  complete_notify_user_ids?: number[];
 };
 
 export type MoldOutsourceMaintenanceCompleteSheetUpdatePayload = {
@@ -2241,6 +2259,7 @@ export type MoldOutsourceMaintenanceCompleteSheetUpdatePayload = {
   outsourced_unit_name?: string;
   header_attachment_file_uuids?: string[];
   line_items?: MoldOutsourceCompleteLinePayload[];
+  complete_notify_user_ids?: number[];
 };
 
 export function listMoldOutsourceMaintenanceCompleteSheets(params?: {

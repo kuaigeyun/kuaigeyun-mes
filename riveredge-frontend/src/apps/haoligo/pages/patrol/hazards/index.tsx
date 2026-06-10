@@ -270,7 +270,11 @@ const PatrolHazardsPage: React.FC = () => {
         grid={false}
       >
         {contextRow && (
-          <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
+          <>
+            <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
+              治理前（登记信息）
+            </Typography.Title>
+            <Descriptions size="small" column={2} bordered style={{ marginBottom: 16 }}>
             <Descriptions.Item label="单号">{contextRow.sheet_no?.trim() || `#${contextRow.id}`}</Descriptions.Item>
             <Descriptions.Item label="关联设备">
               {contextRow.equipment_id
@@ -292,8 +296,6 @@ const PatrolHazardsPage: React.FC = () => {
               {contextRow.problem_summary?.trim() ? contextRow.problem_summary : '—'}
             </Descriptions.Item>
           </Descriptions>
-        )}
-        {contextRow && (
           <div style={{ marginBottom: 16 }}>
             <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
               登记现场照片
@@ -303,7 +305,11 @@ const PatrolHazardsPage: React.FC = () => {
               emptyText="无"
             />
           </div>
+          </>
         )}
+        <Typography.Title level={5} style={{ marginTop: 0, marginBottom: 12 }}>
+          治理记录（05～08）
+        </Typography.Title>
         <RemediationFormBody
           userOptions={userOptions}
           afterUuids={afterUuids}

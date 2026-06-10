@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Res
 from pydantic import BaseModel, Field
 
 from core.services import client_release_service as svc
+from core.services import client_product_config_service as product_cfg_svc
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.api.deps.deps import get_current_infra_superadmin
 from infra.models.infra_superadmin import InfraSuperAdmin
@@ -92,6 +93,28 @@ class LoginClientDownloadsOut(BaseModel):
     android_pda: LoginClientDownloadOut | None = None
 
 
+class ClientProductConfigOut(BaseModel):
+    client_key: str
+    display_name: str
+    platform_target: str
+    push_configurable: bool
+    push_enabled: bool
+    jpush_app_key: str
+    jpush_master_secret_configured: bool
+    effective_push_ready: bool
+    env_fallback_app_key: bool
+    env_fallback_master_secret: bool
+
+
+class ClientProductConfigUpdateIn(BaseModel):
+    push_enabled: bool | None = None
+    jpush_app_key: str | None = None
+    jpush_master_secret: str | None = Field(
+        default=None,
+        description="留空表示不修改；传空字符串可清除数据库中的 Master Secret",
+    )
+
+
 def _origin(request: Request) -> str:
     return svc.resolve_request_public_origin(
         base_url=str(request.base_url).rstrip("/"),
@@ -121,6 +144,51 @@ async def list_client_products(
         )
         for r in rows
     ]
+
+
+@router.get(
+    "/products/configs",
+    response_model=list[ClientProductConfigOut],
+    summary="客户端产品配置列表（超管）",
+)
+async def list_client_product_configs(
+    platform: Annotated[str | None, Query(description="按平台筛选，如 android")] = None,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> list[ClientProductConfigOut]:
+    rows = await product_cfg_svc.list_client_product_configs(platform=platform)
+    return [ClientProductConfigOut.model_validate(r) for r in rows]
+
+
+@router.get(
+    "/products/{client_key}/config",
+    response_model=ClientProductConfigOut,
+    summary="客户端产品配置（超管）",
+)
+async def get_client_product_config(
+    client_key: str,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> ClientProductConfigOut:
+    data = await product_cfg_svc.get_client_product_config(client_key)
+    return ClientProductConfigOut.model_validate(data)
+
+
+@router.put(
+    "/products/{client_key}/config",
+    response_model=ClientProductConfigOut,
+    summary="更新客户端产品配置（超管）",
+)
+async def update_client_product_config(
+    client_key: str,
+    body: ClientProductConfigUpdateIn,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> ClientProductConfigOut:
+    data = await product_cfg_svc.update_client_product_config(
+        client_key,
+        push_enabled=body.push_enabled,
+        jpush_app_key=body.jpush_app_key,
+        jpush_master_secret=body.jpush_master_secret,
+    )
+    return ClientProductConfigOut.model_validate(data)
 
 
 @router.get("", response_model=list[ClientReleaseOut], summary="发布记录列表（超管）")
@@ -175,6 +243,36 @@ async def upload_client_package(
     return ClientReleaseOut.model_validate(svc.serialize_release(row, _origin(request)))
 
 
+class ClientPackageInspectOut(BaseModel):
+    platform: str
+    app_version: str
+    version_code: int
+    package_name: str | None = None
+    runtime_version: str | None = None
+
+
+@router.post("/inspect-package", response_model=ClientPackageInspectOut, summary="解析安装包版本（超管）")
+async def inspect_client_package(
+    platform: Annotated[str, Query(description="android | ios | windows")],
+    file: UploadFile = File(...),
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> ClientPackageInspectOut:
+    from core.services.package_metadata_service import inspect_package_bytes
+
+    content = await file.read()
+    if len(content) > svc.PACKAGE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="安装包超过大小限制")
+    filename = file.filename or "package.bin"
+    meta = inspect_package_bytes(content=content, filename=filename, platform=platform)
+    return ClientPackageInspectOut(
+        platform=meta.platform,
+        app_version=meta.app_version,
+        version_code=meta.version_code,
+        package_name=meta.package_name,
+        runtime_version=meta.app_version,
+    )
+
+
 @router.post("/{release_id}/activate", response_model=ClientReleaseOut, summary="激活发布（超管）")
 async def activate_client_release(
     release_id: int,
@@ -193,6 +291,15 @@ async def get_client_release(
 ) -> ClientReleaseOut:
     row = await svc.get_release(release_id)
     return ClientReleaseOut.model_validate(svc.serialize_release(row, _origin(request)))
+
+
+@router.delete("/{release_id}", summary="删除历史发布（超管）")
+async def delete_client_release(
+    release_id: int,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> dict[str, bool]:
+    await svc.delete_release(release_id)
+    return {"success": True}
 
 
 public_router = APIRouter(prefix="/clients", tags=["Platform · Client Releases (Public)"])

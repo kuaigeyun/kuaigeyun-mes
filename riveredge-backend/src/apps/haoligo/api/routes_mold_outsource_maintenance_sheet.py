@@ -52,7 +52,9 @@ from apps.haoligo.services.outsource_maintenance_sheet_side_effects import (
     send_outsource_maintenance_approved_messages,
     send_outsource_maintenance_pending_messages,
     send_outsource_maintenance_rejected_messages,
+    send_outsource_maintenance_revoked_messages,
 )
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_maintenance_approved,
     format_mold_warehouse_label,
@@ -197,6 +199,7 @@ class MoldOutsourceMaintenanceSheetOut(BaseModel):
     sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
+    submitted_notify_user_ids: List[int] = Field(default_factory=list)
     can_complete: bool = Field(
         False,
         description="是否可发起完修：维修类且尚无未驳回的关联完修单",
@@ -211,6 +214,7 @@ class MoldOutsourceMaintenanceSheetCreate(BaseModel):
     service_type: ServiceTypeLiteral
     source_order_no: Optional[str] = Field(None, max_length=128)
     header_attachment_file_uuids: Optional[List[str]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     line_items: List[OutsourceMaintLineIn] = Field(min_length=1)
 
     @field_validator("outsourced_unit_name", mode="before")
@@ -243,6 +247,7 @@ class MoldOutsourceMaintenanceSheetUpdate(BaseModel):
     service_type: Optional[ServiceTypeLiteral] = None
     source_order_no: Optional[str] = Field(None, max_length=128)
     header_attachment_file_uuids: Optional[List[str]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     line_items: Optional[List[OutsourceMaintLineIn]] = None
 
 
@@ -336,6 +341,7 @@ async def _serialize(
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
+        submitted_notify_user_ids=normalize_report_user_ids(getattr(row, "submitted_notify_user_ids", None)),
         created_at=row.created_at,
         can_complete=_row_can_complete(row, linked_ids=linked),
     )
@@ -462,7 +468,8 @@ async def create_outsource_maintenance_sheet(
             outsourced_unit_name=body.outsourced_unit_name.strip(),
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
-            header_attachment_file_uuids=[],
+            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            submitted_notify_user_ids=normalize_report_user_ids(body.submitted_notify_user_ids),
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
@@ -531,7 +538,9 @@ async def update_outsource_maintenance_sheet(
         if k in data and data[k] is not None:
             data[k] = _strip_opt(str(data[k]))
     if "header_attachment_file_uuids" in data:
-        data["header_attachment_file_uuids"] = []
+        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "submitted_notify_user_ids" in data and data["submitted_notify_user_ids"] is not None:
+        data["submitted_notify_user_ids"] = normalize_report_user_ids(data["submitted_notify_user_ids"])
     if "line_items" in data and data["line_items"] is not None:
         lines = [OutsourceMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:
@@ -628,6 +637,7 @@ async def revoke_outsource_maintenance_sheet_approval(
     await row.save()
     for mc in codes:
         await refresh_mold_status_if_no_open_maintenance_sheet(tenant_id, mc)
+    await send_outsource_maintenance_revoked_messages(tenant_id, row)
     return await _serialize(row, tenant_id=tenant_id)
 
 

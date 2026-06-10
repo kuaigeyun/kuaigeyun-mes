@@ -24504,6 +24504,18 @@
               }
             ],
             "title": "Production Trial User Id"
+          },
+          "adjustment_points": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Points"
           }
         },
         "type": "object",
@@ -24725,6 +24737,17 @@
               }
             ],
             "title": "Production Trial User Name"
+          },
+          "adjustment_points": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Points"
           },
           "sheet_status": {
             "type": "string",
@@ -24952,6 +24975,18 @@
               }
             ],
             "title": "Production Trial User Id"
+          },
+          "adjustment_points": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adjustment Points"
           }
         },
         "type": "object",

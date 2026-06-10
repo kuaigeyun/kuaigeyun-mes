@@ -3,7 +3,9 @@
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useDebounceFn } from 'ahooks';
+import { useNavigate } from 'react-router-dom';
 import {
   ActionType,
   ProColumns,
@@ -18,7 +20,7 @@ import {
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -52,12 +54,25 @@ import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColu
 import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import {
+  inhouseCompleteResourceForServiceType,
   inhouseSheetResourceForServiceType,
   type InhouseMaintenanceServiceType,
 } from '../../../../constants/documentPermissionResources';
+import {
+  canCompleteSourceDocument,
+  canInitiateCompleteCreate,
+} from '../../../../../../utils/documentWorkflowPermission';
+import { buildInhouseCompleteCreateFromMaintenanceUrl } from '../../../../utils/inhouseCompleteNavigation';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 
 export type MoldMaintenanceSheetServiceType = InhouseMaintenanceServiceType;
 
@@ -120,6 +135,14 @@ const defaultLineItem = () => ({
   item_attachments: [] as UploadFile[],
 });
 
+const MAINT_DOC_NOTIFICATION = 'haoligo_mold_maintenance';
+const MAINT_ACTION_SUBMITTED = 'submitted';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
+
 export function MoldMaintenanceSheetPage({
   serviceType,
 }: {
@@ -127,8 +150,14 @@ export function MoldMaintenanceSheetPage({
 }) {
   const pageMeta = PAGE_META[serviceType];
   const sheetResource = inhouseSheetResourceForServiceType(serviceType);
+  const completeResource = inhouseCompleteResourceForServiceType(serviceType);
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const canInitiateComplete =
+    canInitiateCompleteCreate(currentUser, sheetResource, completeResource) ||
+    canCompleteSourceDocument(currentUser, sheetResource);
+  const completeActionLabel = serviceType === '保养' ? '完成保养' : '完修';
   const { canUpdate: canUpdateSheet, canDelete: canDeleteSheet } = useResourcePermissions(sheetResource);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
@@ -157,6 +186,33 @@ export function MoldMaintenanceSheetPage({
   const [moldKw, setMoldKw] = useState('');
   const [moldLoading, setMoldLoading] = useState(false);
   const [detailAttachmentPreview, setDetailAttachmentPreview] = useState<DetailAttachmentPreview | null>(null);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const maintSubmittedNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        MAINT_DOC_NOTIFICATION,
+        MAINT_ACTION_SUBMITTED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const maintSubmittedNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(maintSubmittedNotifyRule),
+    [maintSubmittedNotifyRule],
+  );
+
+  const handleCreateCompleteFromRow = useCallback(
+    (record: MoldMaintenanceSheetRow) => {
+      navigate(buildInhouseCompleteCreateFromMaintenanceUrl(record.id, serviceType));
+    },
+    [navigate, serviceType],
+  );
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
@@ -224,6 +280,7 @@ export function MoldMaintenanceSheetPage({
           service_type: serviceType,
           ...applicantDefaults,
           source_order_no: undefined,
+          submitted_notify_user_ids: [...maintSubmittedNotifyDefaults],
           line_items: [defaultLineItem()],
         });
         startTransition(() => setFormOptionsReady(true));
@@ -233,7 +290,13 @@ export function MoldMaintenanceSheetPage({
         setFormOptionsReady(false);
       }
     })();
-  }, [messageApi, preloadTenantFormOptions, getCreateApplicantDefaults, serviceType]);
+  }, [
+    maintSubmittedNotifyDefaults,
+    messageApi,
+    preloadTenantFormOptions,
+    getCreateApplicantDefaults,
+    serviceType,
+  ]);
 
   const handleMainModalCancel = useCallback(() => {
     setModalVisible(false);
@@ -293,6 +356,8 @@ export function MoldMaintenanceSheetPage({
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
+          submitted_notify_user_ids:
+            d.submitted_notify_user_ids?.length ? d.submitted_notify_user_ids : [...maintSubmittedNotifyDefaults],
           line_items,
         });
         startTransition(() => setFormOptionsReady(true));
@@ -304,7 +369,36 @@ export function MoldMaintenanceSheetPage({
         setDetailAttachmentPreview(null);
       }
     },
-    [messageApi, preloadTenantFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid, serviceType],
+    [
+      maintSubmittedNotifyDefaults,
+      messageApi,
+      preloadTenantFormOptions,
+      presetFromApplicantRow,
+      resolveInitDepartmentUuid,
+      serviceType,
+    ],
+  );
+
+  const searchMaintNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: notifyLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser],
   );
 
   const handleEdit = useCallback(
@@ -368,12 +462,14 @@ export function MoldMaintenanceSheetPage({
         attachment_file_uuids: normUploadUuids(r.item_attachments),
       };
     });
+    const submittedNotifyIds = parseNotifyUserIds(values.submitted_notify_user_ids);
     return {
       applicant_user_id: applicantUserId,
       department_uuid: typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '',
       service_type: serviceType,
       source_order_no: String(values.source_order_no ?? '').trim() || null,
       header_attachment_file_uuids: [],
+      submitted_notify_user_ids: submittedNotifyIds,
       line_items,
     };
   };
@@ -443,6 +539,7 @@ export function MoldMaintenanceSheetPage({
     formRef.current?.setFieldsValue({
       service_type: serviceType,
       ...getCreateApplicantDefaults(),
+      submitted_notify_user_ids: [...maintSubmittedNotifyDefaults],
       line_items: [defaultLineItem()],
     });
     messageApi.success('已重置');
@@ -501,11 +598,12 @@ export function MoldMaintenanceSheetPage({
     {
       title: '操作',
       valueType: 'option',
-      width: 280,
+      width: 320,
       fixed: 'right',
       uniActionRenderOptions: MOLD_SHEET_TABLE_ACTION_OPTIONS,
       render: (_, record) => {
         const approved = isMoldSheetApproved(record.sheet_status);
+        const canComplete = canInitiateComplete && Boolean(record.can_complete);
         const auditHandlers = {
           onApprove: () => approveMoldMaintenanceSheet(record.id),
           onReject: () => rejectMoldMaintenanceSheet(record.id),
@@ -521,6 +619,21 @@ export function MoldMaintenanceSheetPage({
           >
             详情
           </Button>,
+        ];
+        if (canComplete) {
+          actions.push(
+            <Button {...rowActionKind('complete')}
+              key="complete"
+              type="link"
+              size="small"
+              icon={<ToolOutlined />}
+              onClick={() => handleCreateCompleteFromRow(record)}
+            >
+              {completeActionLabel}
+            </Button>,
+          );
+        }
+        actions.push(
           <Button {...rowActionKind('update')}
             key="edit"
             type="link"
@@ -549,7 +662,7 @@ export function MoldMaintenanceSheetPage({
             messageApi,
             reload: () => actionRef.current?.reload(),
           }),
-        ];
+        );
         return actions;
       },
     },
@@ -724,6 +837,18 @@ export function MoldMaintenanceSheetPage({
               <Col span={12}>
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
+              <FormNotifyUsersSelect
+                inline
+                colSpan={12}
+                name="submitted_notify_user_ids"
+                label="提交通知人员"
+                placeholder="请选择提交通知人员（抄送）"
+                readonly={isDetailView}
+                seedUserIds={maintSubmittedNotifyDefaults}
+                searchUsers={(keyword, selectedIds) =>
+                  searchMaintNotifyUsers(keyword, selectedIds)
+                }
+              />
             </Row>
 
             <Divider titlePlacement="left">模具明细</Divider>

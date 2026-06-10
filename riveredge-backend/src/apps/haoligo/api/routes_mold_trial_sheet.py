@@ -52,6 +52,9 @@ from apps.haoligo.services.trial_sheet_side_effects import (
     send_trial_approved_messages,
     set_mold_ledger_status_ready,
     validate_failure_handling_payload,
+    resolve_adjustment_points_for_sheet,
+    resolve_adjustment_points_for_update,
+    normalize_adjustment_points,
 )
 from apps.haoligo.constants.mold_sheet_rule_codes import HAOLIGO_MOLD_TRIAL_SHEET_NO
 from apps.haoligo.models.mold_trial_dataset_binding import HaoligoMoldTrialDatasetBinding
@@ -130,6 +133,7 @@ class MoldTrialSheetOut(BaseModel):
     production_trial_result: Optional[str] = None
     production_trial_user_id: Optional[int] = None
     production_trial_user_name: Optional[str] = None
+    adjustment_points: Optional[str] = None
     sheet_status: str
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
@@ -151,6 +155,7 @@ class MoldTrialSheetCreate(BaseModel):
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
     production_trial_result: Optional[TrialResultLiteral] = None
     production_trial_user_id: Optional[int] = Field(None, ge=1)
+    adjustment_points: Optional[str] = Field(None, max_length=2000)
 
     @field_validator("purchase_order_no", mode="before")
     @classmethod
@@ -159,6 +164,11 @@ class MoldTrialSheetCreate(BaseModel):
             return None
         s = str(v).strip()
         return s or None
+
+    @field_validator("adjustment_points", mode="before")
+    @classmethod
+    def normalize_adjustment_points_field(cls, v: object) -> Optional[str]:
+        return normalize_adjustment_points(v)
 
     @model_validator(mode="after")
     def production_only_when_trial_passed(self) -> "MoldTrialSheetCreate":
@@ -195,6 +205,12 @@ class MoldTrialSheetUpdate(BaseModel):
     repair_warehouse_id: Optional[int] = Field(None, ge=1)
     production_trial_result: Optional[TrialResultLiteral] = None
     production_trial_user_id: Optional[int] = Field(None, ge=1)
+    adjustment_points: Optional[str] = Field(None, max_length=2000)
+
+    @field_validator("adjustment_points", mode="before")
+    @classmethod
+    def normalize_adjustment_points_field(cls, v: object) -> Optional[str]:
+        return normalize_adjustment_points(v)
 
 
 class MoldTrialSupplierNotifyUserOut(BaseModel):
@@ -356,6 +372,7 @@ async def _serialize(row: HaoligoMoldTrialSheet) -> MoldTrialSheetOut:
         production_trial_result=getattr(row, "production_trial_result", None),
         production_trial_user_id=getattr(row, "production_trial_user_id", None),
         production_trial_user_name=getattr(row, "production_trial_user_name", None),
+        adjustment_points=getattr(row, "adjustment_points", None),
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
@@ -548,6 +565,11 @@ async def create_trial_sheet(
         resource=RESOURCE_TRIAL_SHEET,
         supplier_code=supplier_code,
     )
+    adjustment_points = resolve_adjustment_points_for_sheet(
+        trial_result=body.trial_result,
+        production_trial_result=prod_result,
+        adjustment_points=body.adjustment_points,
+    )
     row = await HaoligoMoldTrialSheet.create(
         tenant_id=tenant_id,
         sheet_no=sheet_no,
@@ -570,6 +592,7 @@ async def create_trial_sheet(
         production_trial_result=prod_result,
         production_trial_user_id=prod_uid,
         production_trial_user_name=prod_uname,
+        adjustment_points=adjustment_points,
         sheet_status=SHEET_STATUS_PENDING,
     )
     from apps.haoligo.services.trial_sheet_side_effects import send_trial_submitted_messages
@@ -798,6 +821,7 @@ async def update_trial_sheet(
             data["pending_notify_user_ids"] = []
             data["repair_warehouse_id"] = None
             data["dispatch_origin_warehouse_id"] = None
+            data["adjustment_points"] = None
     else:
         effective_result = str(data.get("trial_result", row.trial_result) or "").strip()
         if not skip_fh_validation and (
@@ -825,6 +849,7 @@ async def update_trial_sheet(
             data["pending_notify_user_ids"] = []
             data["repair_warehouse_id"] = None
             data["dispatch_origin_warehouse_id"] = None
+            data["adjustment_points"] = None
         data.pop("production_trial_result", None)
         data.pop("production_trial_user_id", None)
         if phase == WORKFLOW_PHASE_TRIAL:
@@ -876,6 +901,20 @@ async def update_trial_sheet(
         prod_uid, prod_uname = await _resolve_applicant_only(tenant_id, int(data["production_trial_user_id"]))
         data["production_trial_user_id"] = prod_uid
         data["production_trial_user_name"] = prod_uname
+    eff_trial = str(data.get("trial_result", row.trial_result) or "").strip()
+    if phase == WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION:
+        eff_trial = str(row.trial_result or "").strip()
+    eff_prod_raw = data.get("production_trial_result", getattr(row, "production_trial_result", None))
+    eff_prod = str(eff_prod_raw or "").strip() or None
+    if phase == WORKFLOW_PHASE_TRIAL:
+        eff_prod = None
+    data["adjustment_points"] = resolve_adjustment_points_for_update(
+        trial_result=eff_trial,
+        production_trial_result=eff_prod,
+        body_adjustment_points=data.get("adjustment_points", getattr(row, "adjustment_points", None)),
+        adjustment_points_in_body="adjustment_points" in body_set,
+        existing_adjustment_points=getattr(row, "adjustment_points", None),
+    )
     was_rejected = effective_sheet_status(row) == SHEET_STATUS_REJECTED
     apply_rejected_resubmit_fields(data, row)
     for k, v in data.items():
@@ -939,6 +978,11 @@ async def approve_trial_sheet(
                 row.audited_at = None
                 row.audited_by_user_id = None
                 await row.save()
+                from apps.haoligo.services.trial_sheet_side_effects import (
+                    send_trial_production_pending_messages,
+                )
+
+                await send_trial_production_pending_messages(tenant_id, row)
 
         elif phase == WORKFLOW_PHASE_TRIAL_PASS_PENDING_PRODUCTION:
             pr = (getattr(row, "production_trial_result", None) or "").strip()
@@ -1077,6 +1121,10 @@ async def recall_trial_sheet(
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if row:
+        from apps.haoligo.services.trial_sheet_side_effects import send_trial_recalled_messages
+
+        await send_trial_recalled_messages(tenant_id, row)
     return await _serialize(row)
 
 
@@ -1110,6 +1158,10 @@ async def recall_trial_sheet_and_retrial(
     await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
     await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
     row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
+    if row:
+        from apps.haoligo.services.trial_sheet_side_effects import send_trial_recalled_messages
+
+        await send_trial_recalled_messages(tenant_id, row)
     try:
         new_row = await create_replacement_trial_sheet_after_recall(
             tenant_id,

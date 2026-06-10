@@ -7,9 +7,9 @@ import {
   ProFormUploadDragger,
 } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
-import { App } from 'antd';
+import { App, Alert } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
-import { useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
@@ -20,6 +20,10 @@ import {
   type ClientProduct,
   type ClientRelease,
 } from '../../../services/clientRelease';
+import {
+  parseClientPackageMetadata,
+  type ClientPackageMetadata,
+} from '../../../utils/parseClientPackageMetadata';
 
 type Props = {
   open: boolean;
@@ -48,7 +52,74 @@ export function ClientReleaseUploadModal({
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [loading, setLoading] = useState(false);
+  const [parsingPackage, setParsingPackage] = useState(false);
+  const [detectedMeta, setDetectedMeta] = useState<ClientPackageMetadata | null>(null);
   const isReplacing = Boolean(existingRelease);
+
+  useEffect(() => {
+    if (!open) {
+      setDetectedMeta(null);
+      setParsingPackage(false);
+    }
+  }, [open]);
+
+  const handlePackageFileChange = useCallback(
+    async (info: { fileList: UploadFile[] }) => {
+      const uploadFile = info.fileList[0]?.originFileObj;
+      if (!uploadFile) {
+        setDetectedMeta(null);
+        return;
+      }
+
+      const platform =
+        (formRef.current?.getFieldValue('platform') as string | undefined) ??
+        existingRelease?.platform ??
+        'android';
+
+      setParsingPackage(true);
+      try {
+        const meta = await parseClientPackageMetadata(uploadFile, platform);
+        if (!meta) {
+          setDetectedMeta(null);
+          if (platform === 'android' && uploadFile.name.toLowerCase().endsWith('.apk')) {
+            messageApi.warning(t('pages.infra.clientReleases.packageParseFailed'));
+          }
+          return;
+        }
+
+        setDetectedMeta(meta);
+        if (!isReplacing) {
+          formRef.current?.setFieldsValue({
+            app_version: meta.app_version,
+            version_code: meta.version_code,
+            runtime_version: meta.runtime_version,
+          });
+          messageApi.success(
+            t('pages.infra.clientReleases.packageParsed', {
+              version: meta.app_version,
+              code: meta.version_code,
+            }),
+          );
+        } else if (
+          existingRelease &&
+          (meta.app_version !== existingRelease.app_version ||
+            meta.version_code !== existingRelease.version_code)
+        ) {
+          messageApi.error(
+            t('pages.infra.clientReleases.packageVersionMismatch', {
+              version: meta.app_version,
+              code: meta.version_code,
+              expectedVersion: existingRelease.app_version,
+              expectedCode: existingRelease.version_code,
+            }),
+          );
+        }
+      } finally {
+        setParsingPackage(false);
+      }
+    },
+    [existingRelease, isReplacing, messageApi, t],
+  );
 
   const platformOptions = useMemo(
     () => [
@@ -102,6 +173,16 @@ export function ClientReleaseUploadModal({
     if (!uploadFile) {
       messageApi.warning(t('pages.infra.clientReleases.selectFileRequired'));
       return;
+    }
+
+    if (existingRelease && detectedMeta) {
+      if (
+        detectedMeta.app_version !== existingRelease.app_version ||
+        detectedMeta.version_code !== existingRelease.version_code
+      ) {
+        messageApi.error(t('pages.infra.clientReleases.packageReplaceMismatch'));
+        return;
+      }
     }
 
     setLoading(true);
@@ -164,9 +245,26 @@ export function ClientReleaseUploadModal({
       fieldProps={{
         beforeUpload: () => false,
         style: { width: '100%' },
+        onChange: handlePackageFileChange,
+        disabled: parsingPackage,
       }}
     />
   );
+
+  const detectedMetaAlert =
+    detectedMeta && !isReplacing ? (
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.infra.clientReleases.packageDetectedTitle')}
+        description={t('pages.infra.clientReleases.packageDetectedDesc', {
+          version: detectedMeta.app_version,
+          code: detectedMeta.version_code,
+          package: detectedMeta.package_name ?? '—',
+        })}
+        style={{ marginBottom: 16 }}
+      />
+    ) : null;
 
   return (
     <FormModalTemplate
@@ -180,7 +278,7 @@ export function ClientReleaseUploadModal({
       onClose={onClose}
       onFinish={handleFinish}
       initialValues={initialValues}
-      loading={loading}
+      loading={loading || parsingPackage}
       width={MODAL_CONFIG.STANDARD_WIDTH}
       grid
     >
@@ -209,11 +307,14 @@ export function ClientReleaseUploadModal({
             options={platformOptions}
             colProps={{ span: 12 }}
           />
+          {packageUploadField}
+          {detectedMetaAlert}
           <ProFormText
             name="app_version"
             label={t('pages.infra.clientReleases.columnVersion')}
             rules={[{ required: true, message: t('pages.infra.clientReleases.formVersionRequired') }]}
             placeholder={t('pages.infra.clientReleases.formVersionPlaceholder')}
+            tooltip={t('pages.infra.clientReleases.formVersionAutoTooltip')}
             colProps={{ span: 12 }}
           />
           <ProFormDigit
@@ -233,7 +334,6 @@ export function ClientReleaseUploadModal({
             placeholder={t('pages.infra.clientReleases.formRuntimeVersionPlaceholder')}
             colProps={{ span: 12 }}
           />
-          {packageUploadField}
           <ProFormTextArea
             name="release_notes"
             label={t('pages.infra.clientReleases.columnNotes')}

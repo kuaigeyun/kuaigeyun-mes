@@ -40,6 +40,10 @@ class HaoligoEquipmentUpkeepSheet(HaoligoTenantModel):
     upkeep_param_set_code = fields.CharField(max_length=64, null=True, description="保养方案编码快照")
     upkeep_param_set_name = fields.CharField(max_length=200, null=True, description="保养方案名称快照")
     reporter_user_id = fields.IntField(description="填报人用户 ID")
+    complete_notify_user_ids = fields.JSONField(
+        default=list,
+        description="创建后通知完修执行人抄送用户 ID 列表",
+    )
 
 
 class HaoligoEquipmentUpkeepCompleteSheet(HaoligoTenantModel):
@@ -74,4 +78,8 @@ class HaoligoEquipmentUpkeepCompleteSheet(HaoligoTenantModel):
     repair_content = fields.TextField(null=True, description="维修完修内容")
     repair_result = fields.CharField(max_length=32, null=True, description="维修完修结果")
     clear_total_production = fields.BooleanField(default=False, description="保养完修是否清空累计产量")
+    complete_notify_user_ids = fields.JSONField(
+        default=list,
+        description="完修提交时抄送通知用户 ID 列表",
+    )
     reporter_user_id = fields.IntField(description="填报人用户 ID")

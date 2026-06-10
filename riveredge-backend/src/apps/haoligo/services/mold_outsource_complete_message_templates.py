@@ -8,6 +8,7 @@ from apps.haoligo.constants.message_template_codes import (
     HAOLIGO_MOLD_OUTSOURCE_COMPLETE_APPROVED,
     HAOLIGO_MOLD_OUTSOURCE_COMPLETE_PENDING,
     HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REJECTED,
+    HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REVOKED,
 )
 
 OUTSOURCE_COMPLETE_DETAIL_PATH = "/apps/haoligo/molds/documents/outsource-complete"
@@ -68,6 +69,22 @@ HAOLIGO_MOLD_OUTSOURCE_COMPLETE_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] =
         "variables": {**OUTSOURCE_COMPLETE_COMMON_VARIABLES},
         "is_active": True,
     },
+    {
+        "name": "外协维保完修单撤销审核通知",
+        "code": HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REVOKED,
+        "type": "internal",
+        "description": "外协维保完修单撤销审核时通知申请人及来源维保单相关人员",
+        "subject": "【外协完修单·撤销审核】{sheet_no}",
+        "content": (
+            "您好，\n\n"
+            "外协维保完修单 {sheet_no} 审核已撤销，单据回到待审核状态。\n\n"
+            "外协单位：{outsourced_unit_name}\n"
+            "来源单号：{source_order_no}\n\n"
+            "请登录系统 → {detail_path} 查看明细。\n"
+        ),
+        "variables": {**OUTSOURCE_COMPLETE_COMMON_VARIABLES},
+        "is_active": True,
+    },
 ]
 
 
@@ -80,5 +97,6 @@ async def ensure_haoligo_mold_outsource_complete_message_templates(tenant_id: in
             HAOLIGO_MOLD_OUTSOURCE_COMPLETE_PENDING,
             HAOLIGO_MOLD_OUTSOURCE_COMPLETE_APPROVED,
             HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REJECTED,
+            HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REVOKED,
         },
     )

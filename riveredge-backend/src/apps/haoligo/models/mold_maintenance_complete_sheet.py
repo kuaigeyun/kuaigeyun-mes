@@ -27,3 +27,7 @@ class HaoligoMoldMaintenanceCompleteSheet(HaoligoTenantModel):
         description="附件照片·维护保养后（文件 UUID 列表）",
     )
     line_items = fields.JSONField(description="模具信息行")
+    complete_notify_user_ids = fields.JSONField(
+        default=list,
+        description="完修提交时抄送通知用户 ID 列表",
+    )

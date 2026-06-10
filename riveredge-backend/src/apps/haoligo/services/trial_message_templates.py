@@ -11,6 +11,8 @@ from apps.haoligo.constants.message_template_codes import (
     HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
     HAOLIGO_MOLD_TRIAL_REJECTED,
     HAOLIGO_MOLD_TRIAL_SUBMITTED,
+    HAOLIGO_MOLD_TRIAL_PRODUCTION_PENDING,
+    HAOLIGO_MOLD_TRIAL_RECALLED,
 )
 TRIAL_DETAIL_PATH = "/apps/haoligo/molds/documents/trial"
 
@@ -23,6 +25,7 @@ TRIAL_FAILURE_COMMON_VARIABLES: Dict[str, str] = {
     "trial_user_name": "试模人员",
     "trial_times": "试模次数",
     "failure_handling": "处理方式",
+    "adjustment_points": "需要调整的点",
     "trial_sheet_id": "试模单 ID",
     "detail_path": "系统菜单路径",
 }
@@ -35,7 +38,8 @@ TRIAL_FAILURE_PENDING_TEMPLATE_CONTENT = (
     "模具名称：{mold_name}\n"
     "供应商：{supplier_name}\n"
     "试模人员：{trial_user_name}\n"
-    "第 {trial_times} 次试模\n\n"
+    "第 {trial_times} 次试模\n"
+    "需要调整的点：{adjustment_points}\n\n"
     "说明：已向消息提醒人员发送本通知；外协厂商将在模具转出至外部仓后收到通知。\n\n"
     "请登录系统 → {detail_path} 查看试模单明细。"
 )
@@ -49,7 +53,8 @@ TRIAL_FAILURE_REPAIR_TEMPLATE_CONTENT = (
     "供应商：{supplier_name}\n"
     "试模人员：{trial_user_name}\n"
     "第 {trial_times} 次试模\n"
-    "送修仓库：{repair_warehouse_name}\n\n"
+    "送修仓库：{repair_warehouse_name}\n"
+    "需要调整的点：{adjustment_points}\n\n"
     "请登录系统 → {detail_path} 查看试模单明细。"
 )
 
@@ -134,7 +139,8 @@ HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
             "模具名称：{mold_name}\n"
             "供应商：{supplier_name}\n"
             "试模人员：{trial_user_name}\n"
-            "处理方式：{failure_handling}\n\n"
+            "处理方式：{failure_handling}\n"
+            "需要调整的点：{adjustment_points}\n\n"
             "请登录系统 → {detail_path} 查看试模单明细。"
         ),
         "variables": {**TRIAL_FAILURE_COMMON_VARIABLES},
@@ -153,6 +159,38 @@ HAOLIGO_TRIAL_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
         },
         "is_active": True,
     },
+    {
+        "name": "试模单待填试产提醒",
+        "code": HAOLIGO_MOLD_TRIAL_PRODUCTION_PENDING,
+        "type": "internal",
+        "description": "试模审核通过后进入试产阶段，通知试产检验人员填写试产结果",
+        "subject": "【试模单·待填试产】{sheet_no}",
+        "content": (
+            "您好，\n\n"
+            "试模单 {sheet_no} 试模已审核通过，请填写试产检验结果。\n\n"
+            "模具代号：{mold_code}\n"
+            "试模人员：{trial_user_name}\n\n"
+            "请登录系统 → {detail_path} 处理。"
+        ),
+        "variables": {**TRIAL_FAILURE_COMMON_VARIABLES, "production_trial_user_name": "试产检验人员"},
+        "is_active": True,
+    },
+    {
+        "name": "试模单已收回结案通知",
+        "code": HAOLIGO_MOLD_TRIAL_RECALLED,
+        "type": "internal",
+        "description": "不合格试模单确认收回结案后通知相关人员",
+        "subject": "【试模单·已收回结案】{sheet_no}",
+        "content": (
+            "您好，\n\n"
+            "试模单 {sheet_no} 模具已收回厂内，本单已结案。\n\n"
+            "模具代号：{mold_code}\n"
+            "处理方式：{failure_handling}\n\n"
+            "请登录系统 → {detail_path} 查看明细。"
+        ),
+        "variables": {**TRIAL_FAILURE_COMMON_VARIABLES},
+        "is_active": True,
+    },
 ]
 
 
@@ -168,5 +206,7 @@ async def ensure_haoligo_trial_message_templates(tenant_id: int) -> None:
             HAOLIGO_MOLD_TRIAL_APPROVED,
             HAOLIGO_MOLD_TRIAL_REJECTED,
             HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE,
+            HAOLIGO_MOLD_TRIAL_PRODUCTION_PENDING,
+            HAOLIGO_MOLD_TRIAL_RECALLED,
         },
     )

@@ -16,9 +16,9 @@ import {
 import type { UploadProps } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { App, Button, Col, Form, Input, Modal, Row, Space, Spin, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
@@ -44,10 +44,28 @@ import { PatrolImagePreview } from '../../../patrol/shared/PatrolImagePreview';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import {
+  HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE,
+  HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET,
+} from '../../../../constants/documentPermissionResources';
+import {
+  canCompleteSourceDocument,
+  canInitiateCompleteCreate,
+} from '../../../../../../utils/documentWorkflowPermission';
+import { useGlobalStore } from '../../../../../../stores';
+import { buildEquipmentUpkeepCompleteCreateFromSheetUrl } from '../../../../utils/equipmentUpkeepCompleteNavigation';
 
 const EquipmentUpkeepSheetPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const navigate = useNavigate();
+  const currentUser = useGlobalStore((s) => s.currentUser);
+  const canInitiateComplete =
+    canInitiateCompleteCreate(
+      currentUser,
+      HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET,
+      HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE,
+    ) || canCompleteSourceDocument(currentUser, HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET);
   const [searchParams] = useSearchParams();
   const urlServiceType = useMemo(() => {
     const value = (searchParams.get('service_type') || '').trim();
@@ -80,6 +98,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
 
   const title = t('app.haoligo.menu.equipment.documents.upkeep-sheet');
+
+  const handleCreateCompleteFromRow = useCallback(
+    (record: EquipmentUpkeepSheetRow) => {
+      navigate(buildEquipmentUpkeepCompleteCreateFromSheetUrl(record.id));
+    },
+    [navigate],
+  );
 
   const deptLabelByUuid = useMemo(() => {
     const m = new Map<string, string>();
@@ -238,7 +263,14 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setIsDetailView(false);
       }
     },
-    [messageApi, preloadFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid, syncEquipmentWorkshop, t],
+    [
+      messageApi,
+      preloadFormOptions,
+      presetFromApplicantRow,
+      resolveInitDepartmentUuid,
+      syncEquipmentWorkshop,
+      t,
+    ],
   );
 
   const triggerSubmit = useCallback(() => {
@@ -411,21 +443,34 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     {
       title: t('app.haoligo.equipment.documents.colActions'),
       valueType: 'option',
-      width: 200,
+      width: 280,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => void openSheetForm(record, true)}>
-            {t('app.haoligo.equipment.documents.actionView')}
-          </Button>
-          <Button key="edit" {...rowActionKind('update')} onClick={() => void openSheetForm(record, false)}>
-            {t('app.haoligo.equipment.documents.actionEdit')}
-          </Button>
-          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
-            {t('app.haoligo.equipment.documents.actionDelete')}
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => {
+        const canComplete = canInitiateComplete && Boolean(record.can_complete);
+        return (
+          <Space>
+            <Button key="view" {...rowActionKind('read')} onClick={() => void openSheetForm(record, true)}>
+              {t('app.haoligo.equipment.documents.actionView')}
+            </Button>
+            {canComplete ? (
+              <Button
+                key="complete"
+                {...rowActionKind('complete')}
+                icon={<ToolOutlined />}
+                onClick={() => handleCreateCompleteFromRow(record)}
+              >
+                完成
+              </Button>
+            ) : null}
+            <Button key="edit" {...rowActionKind('update')} onClick={() => void openSheetForm(record, false)}>
+              {t('app.haoligo.equipment.documents.actionEdit')}
+            </Button>
+            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
+              {t('app.haoligo.equipment.documents.actionDelete')}
+            </Button>
+          </Space>
+        );
+      },
     },
   ];
 

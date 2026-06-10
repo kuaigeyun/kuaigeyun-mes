@@ -31,6 +31,9 @@ ACTION_REMEDIATED = "remediated"
 ACTION_TRIAL_FAILURE_PENDING = "trial_failure_pending"
 ACTION_TRIAL_FAILURE_REPAIR = "trial_failure_repair"
 ACTION_TRIAL_ADJUSTMENT_COMPLETE = "trial_adjustment_complete"
+ACTION_REVOKED = "revoked"
+ACTION_TRIAL_PRODUCTION_PENDING = "trial_production_pending"
+ACTION_TRIAL_RECALLED = "trial_recalled"
 
 
 async def _scope_supplier_bound(tenant_id: int, context: Dict[str, Any]) -> List[int]:
@@ -67,6 +70,11 @@ async def _scope_reporter(tenant_id: int, context: Dict[str, Any]) -> List[int]:
     return [i] if i > 0 else []
 
 
+from apps.haoligo.services.haoligo_notification_scopes import (  # noqa: F401 — register extended scopes
+    ensure_haoligo_extended_notification_scope_resolvers,
+)
+
+
 def ensure_haoligo_notification_scope_resolvers() -> None:
     """注册好力 GO 专用收件范围（幂等）。"""
     register_notification_scope_resolver("supplier_bound", _scope_supplier_bound)
@@ -85,10 +93,12 @@ async def dispatch_haoligo_notification(
     variables: Optional[Dict[str, Any]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> int:
+    ctx = dict(context or {})
+    ctx.setdefault("trigger_document", trigger_document)
     return await BusinessNotificationService.dispatch(
         tenant_id,
         trigger_document=trigger_document,
         trigger_action=trigger_action,
         variables=variables,
-        context=context,
+        context=ctx,
     )

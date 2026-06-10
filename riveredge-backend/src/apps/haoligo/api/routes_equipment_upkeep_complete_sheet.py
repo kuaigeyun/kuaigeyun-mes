@@ -17,6 +17,7 @@ from apps.haoligo.api.equipment_maintenance_equipment_status import (
     refresh_equipment_status_after_maintenance_change,
 )
 from apps.haoligo.api.routes_mold_maintenance_sheet import _resolve_applicant_only, _validate_leaf_department
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.constants.equipment_maintenance import (
     EQUIPMENT_MAINTENANCE_REPAIR_RESULTS,
     EQUIPMENT_MAINTENANCE_REPAIR_RESULT_SET,
@@ -242,6 +243,7 @@ class EquipmentUpkeepCompleteSheetOut(BaseModel):
     source_upkeep_param_set_code: Optional[str] = None
     source_upkeep_param_set_name: Optional[str] = None
     reporter_user_id: int
+    complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
 
     @field_validator("header_attachment_file_uuids", "source_header_attachment_file_uuids", mode="before")
@@ -264,6 +266,7 @@ class EquipmentUpkeepCompleteSheetCreate(BaseModel):
     repair_content: Optional[str] = Field(None, description="维修内容")
     repair_result: Optional[str] = Field(None, max_length=32, description="维修结果")
     clear_total_production: Optional[bool] = Field(None, description="保养完修是否清空累计产量")
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
@@ -276,6 +279,7 @@ class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
     repair_content: Optional[str] = None
     repair_result: Optional[str] = None
     clear_total_production: Optional[bool] = None
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkeepCompleteSheetOut:
@@ -336,6 +340,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkee
         source_upkeep_param_set_code=src_ups_code,
         source_upkeep_param_set_name=src_ups_name,
         reporter_user_id=row.reporter_user_id,
+        complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
     )
 
@@ -457,6 +462,7 @@ async def create_upkeep_complete_sheet(
             repair_result=repair_result,
             clear_total_production=clear_flag,
             reporter_user_id=user.id,
+            complete_notify_user_ids=normalize_report_user_ids(body.complete_notify_user_ids),
         )
         if svc == "保养" and clear_flag:
             await apply_upkeep_clear_total_to_equipment(tenant_id, equipment_id, clear=True)
@@ -497,6 +503,8 @@ async def update_upkeep_complete_sheet(
         await _not_found()
     svc = (row.service_type or "保养").strip()
     data = body.model_dump(exclude_unset=True)
+    if "complete_notify_user_ids" in data and data["complete_notify_user_ids"] is not None:
+        data["complete_notify_user_ids"] = normalize_report_user_ids(data["complete_notify_user_ids"])
     if "header_attachment_file_uuids" in data and data["header_attachment_file_uuids"] is not None:
         data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
     upkeep_lines_in = data.pop("upkeep_record_lines", None)

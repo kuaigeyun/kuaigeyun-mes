@@ -3,6 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useDebounceFn } from 'ahooks';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -69,6 +70,21 @@ import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/
 import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
 import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
+
+const OUTSOURCE_MAINT_DOC_NOTIFICATION = 'haoligo_outsource_maintenance';
+const OUTSOURCE_MAINT_ACTION_SUBMITTED = 'submitted';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
 
 const sheetStatusEnum: Record<string, { text: string }> = {
   待审核: { text: '待审核' },
@@ -163,6 +179,26 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   const [moldLoading, setMoldLoading] = useState(false);
   const [outsourcedUnitFallback, setOutsourcedUnitFallback] = useState<{ label: string; value: string } | null>(null);
   const [detailAttachmentPreview, setDetailAttachmentPreview] = useState<DetailAttachmentPreview | null>(null);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const outsSubmittedNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        OUTSOURCE_MAINT_DOC_NOTIFICATION,
+        OUTSOURCE_MAINT_ACTION_SUBMITTED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const outsSubmittedNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(outsSubmittedNotifyRule),
+    [outsSubmittedNotifyRule],
+  );
   useEffect(() => {
     void refreshCurrentUserInStore().catch(() => {});
   }, []);
@@ -279,6 +315,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           outsourced_unit_code: undefined,
           ...applicantDefaults,
           source_order_no: undefined,
+          submitted_notify_user_ids: [...outsSubmittedNotifyDefaults],
           line_items: [defaultLineItem()],
         });
         startTransition(() => setFormOptionsReady(true));
@@ -288,7 +325,12 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [getCreateApplicantDefaults, messageApi, preloadFormOptions]);
+  }, [
+    getCreateApplicantDefaults,
+    messageApi,
+    outsSubmittedNotifyDefaults,
+    preloadFormOptions,
+  ]);
 
   useNewShortcut(handleCreate);
 
@@ -340,6 +382,8 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
           applicant_user_id: d.applicant_user_id ?? undefined,
           department_uuid: initDept,
           source_order_no: d.source_order_no ?? undefined,
+          submitted_notify_user_ids:
+            d.submitted_notify_user_ids?.length ? d.submitted_notify_user_ids : [...outsSubmittedNotifyDefaults],
           line_items,
         });
         startTransition(() => setFormOptionsReady(true));
@@ -351,7 +395,35 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         setFormOptionsReady(false);
       }
     },
-    [messageApi, preloadFormOptions, presetFromApplicantRow, resolveInitDepartmentUuid],
+    [
+      messageApi,
+      outsSubmittedNotifyDefaults,
+      preloadFormOptions,
+      presetFromApplicantRow,
+      resolveInitDepartmentUuid,
+    ],
+  );
+
+  const searchOutsNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: notifyLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser],
   );
 
   const handleEdit = (record: MoldOutsourceMaintenanceSheetRow) => void openSheetForm(record, false);
@@ -413,6 +485,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
         attachment_file_uuids: normUploadUuids(r.item_attachments),
       };
     });
+    const submittedNotifyIds = parseNotifyUserIds(values.submitted_notify_user_ids);
     return {
       outsourced_unit_code: String(values.outsourced_unit_code ?? '').trim() || null,
       outsourced_unit_name: String(values.outsourced_unit_name ?? '').trim(),
@@ -421,6 +494,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       service_type: '维修',
       source_order_no: String(values.source_order_no ?? '').trim() || null,
       header_attachment_file_uuids: [],
+      submitted_notify_user_ids: submittedNotifyIds,
       line_items,
     };
   };
@@ -497,6 +571,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
       outsourced_unit_code: undefined,
       ...getCreateApplicantDefaults(),
       source_order_no: undefined,
+      submitted_notify_user_ids: [...outsSubmittedNotifyDefaults],
       line_items: [defaultLineItem()],
     });
     messageApi.success('已重置');
@@ -834,9 +909,23 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                 />
               </Col>
               <ProFormText name="outsourced_unit_code" hidden />
+            </Row>
+            <Row gutter={16}>
               <Col span={12}>
                 <ProFormText name="source_order_no" label="来源单号" placeholder="可手输来源单号" />
               </Col>
+              <FormNotifyUsersSelect
+                inline
+                colSpan={12}
+                name="submitted_notify_user_ids"
+                label="提交通知人员"
+                placeholder="请选择提交通知人员（抄送）"
+                readonly={isDetailView}
+                seedUserIds={outsSubmittedNotifyDefaults}
+                searchUsers={(keyword, selectedIds) =>
+                  searchOutsNotifyUsers(keyword, selectedIds)
+                }
+              />
             </Row>
 
             <Divider titlePlacement="left">模具明细</Divider>

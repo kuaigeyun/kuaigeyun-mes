@@ -27,10 +27,17 @@ import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../../shared/datetimeHelpers';
 import { IssueRegisterFormBody } from '../../shared/IssueRegisterFormBody';
-import { formatIssueTypeLabels, hazardIssueTypeCodes } from '../../shared/patrolIssueHelpers';
+import {
+  finalizePatrolIssueTypesForSubmit,
+  formatIssueTypeLabels,
+  hazardIssueTypeCodes,
+  splitHazardIssueTypesForForm,
+  type PatrolCustomIssueItem,
+  PATROL_ISSUE_TYPE_DICT_CODE,
+} from '../../shared/patrolIssueHelpers';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../shared/uploadHelpers';
 
-const ISSUE_TYPE_DICT_CODE = 'HAOLIGO_PATROL_ISSUE_TYPE';
+const ISSUE_TYPE_DICT_CODE = PATROL_ISSUE_TYPE_DICT_CODE;
 
 const statusColors: Record<string, string> = {
   已登记: 'processing',
@@ -51,6 +58,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
 
   const [workshops, setWorkshops] = useState<WorkshopRow[]>([]);
   const [issueTypes, setIssueTypes] = useState<DictionaryItem[]>([]);
+  const [issueTypeDictUuid, setIssueTypeDictUuid] = useState<string | null>(null);
   const [dictLoading, setDictLoading] = useState(true);
   const [userOptions, setUserOptions] = useState<{ label: string; value: number }[]>([]);
   const [beforeFiles, setBeforeFiles] = useState<UploadFile[]>([]);
@@ -59,6 +67,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
     setDictLoading(true);
     try {
       const dict = await getDataDictionaryByCode(ISSUE_TYPE_DICT_CODE);
+      setIssueTypeDictUuid(dict.uuid);
       const items = await getDictionaryItemList(dict.uuid, true);
       setIssueTypes(items.sort((a, b) => a.sort_order - b.sort_order));
     } catch {
@@ -89,6 +98,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       reported_at: dayjs(),
       registrant_user_id: cu?.id,
       issue_type_codes: [],
+      custom_issue_items: [],
       report_enabled: false,
       report_notify_user_ids: [],
     });
@@ -105,12 +115,19 @@ const PatrolIssueRegisterPage: React.FC = () => {
       setEditId(detail.id);
       const beforeIds = (detail.before_image_file_ids as string[] | undefined) ?? [];
       setBeforeFiles(await uuidsToSecureUploadFileList(beforeIds));
+      const codes = hazardIssueTypeCodes(detail);
+      const { dictCodes, customIssueItems } = splitHazardIssueTypesForForm(
+        codes,
+        issueTypes,
+        detail.problem_summary,
+      );
       setFormInitialValues({
         workshop_id: detail.workshop_id ?? undefined,
         equipment_id: detail.equipment_id ?? undefined,
         reported_at: detail.reported_at ? dayjs(detail.reported_at) : undefined,
         workshop_area: detail.workshop_area ?? undefined,
-        issue_type_codes: hazardIssueTypeCodes(detail),
+        issue_type_codes: dictCodes,
+        custom_issue_items: customIssueItems,
         registrant_user_id: detail.registrant_user_id ?? undefined,
         report_enabled: detail.report_enabled ?? false,
         report_notify_user_ids: detail.report_notify_user_ids ?? [],
@@ -149,10 +166,37 @@ const PatrolIssueRegisterPage: React.FC = () => {
     const issueTypeCodes = Array.isArray(values.issue_type_codes)
       ? (values.issue_type_codes as string[]).map((c) => String(c).trim()).filter(Boolean)
       : [];
-    if (!issueTypeCodes.length) {
-      messageApi.warning('请至少选择一种问题类型');
+    const customIssueItems = Array.isArray(values.custom_issue_items)
+      ? (values.custom_issue_items as PatrolCustomIssueItem[])
+      : [];
+    if (!issueTypeCodes.length && !customIssueItems.length) {
+      messageApi.warning('请至少选择一种问题类型，或添加其他问题');
       throw new Error('validation');
     }
+    if (!issueTypeDictUuid) {
+      messageApi.error('问题类型字典未加载，请刷新后重试');
+      throw new Error('validation');
+    }
+
+    let finalizedIssueTypes = issueTypeCodes;
+    let issueTypesChanged = false;
+    try {
+      const finalized = await finalizePatrolIssueTypesForSubmit({
+        issueTypeCodes,
+        customIssueItems,
+        issueTypes,
+        issueTypeDictUuid,
+      });
+      finalizedIssueTypes = finalized.issueTypeCodes;
+      issueTypesChanged = finalized.issueTypesChanged;
+    } catch (e) {
+      if (e instanceof Error && e.message === 'ISSUE_TYPE_REQUIRED') {
+        messageApi.warning('请至少选择一种问题类型，或添加其他问题');
+        throw new Error('validation');
+      }
+      throw e;
+    }
+
     setFormLoading(true);
     try {
       const registrantUserId = values.registrant_user_id as number | undefined;
@@ -162,7 +206,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
         equipment_id: (values.equipment_id as number | undefined) ?? null,
         workshop_area: String(values.workshop_area ?? '').trim() || undefined,
         reported_at: formDateTimeToIso(values.reported_at),
-        issue_type_codes: issueTypeCodes,
+        issue_type_codes: finalizedIssueTypes,
         status: '已登记' as const,
         before_image_file_ids: beforeIds.length ? beforeIds : undefined,
         registrant_user_id: registrantUserId,
@@ -175,6 +219,9 @@ const PatrolIssueRegisterPage: React.FC = () => {
       } else {
         await createHazardReport(payload);
         messageApi.success('问题已登记，并同步至「隐患治理」台账，请在该页补充处理记录（05～08）。');
+      }
+      if (issueTypesChanged) {
+        await loadIssueTypes();
       }
       setModalVisible(false);
       actionRef.current?.reload();
@@ -220,7 +267,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       width: 160,
       ellipsis: true,
       hideInSearch: true,
-      render: (_, r) => formatIssueTypeLabels(hazardIssueTypeCodes(r), issueTypes),
+      render: (_, r) => formatIssueTypeLabels(hazardIssueTypeCodes(r), issueTypes, r.problem_summary),
     },
     { title: '登记人', dataIndex: 'registrant_name', width: 100, ellipsis: true, hideInSearch: true },
     {

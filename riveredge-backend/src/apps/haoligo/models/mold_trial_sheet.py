@@ -65,6 +65,10 @@ class HaoligoMoldTrialSheet(HaoligoTenantModel):
         null=True,
         description="试产人员显示名（冗余）",
     )
+    adjustment_points = fields.TextField(
+        null=True,
+        description="试模/试产不合格时需调整的问题点（供外协厂商维修参考）",
+    )
     sheet_status = fields.CharField(
         max_length=32,
         default="待审核",

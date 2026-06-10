@@ -942,12 +942,21 @@ class AuthService:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="用户不存在或未激活"
             )
-        
-        # 生成新的 Token（包含 tenant_id）
+
+        raw_tenant_id = payload.get("tenant_id")
+        if raw_tenant_id is not None:
+            try:
+                tenant_id = int(raw_tenant_id)
+            except (TypeError, ValueError):
+                tenant_id = user.tenant_id
+        else:
+            tenant_id = user.tenant_id
+
+        # 生成新的 Token（保留当前会话 tenant_id）
         access_token = create_token_for_user(
             user_id=user.id,
             username=user.username,
-            tenant_id=user.tenant_id,  # ⭐ 关键：包含组织 ID
+            tenant_id=tenant_id,
             is_infra_admin=user.is_infra_admin,
             is_tenant_admin=user.is_tenant_admin,
         )

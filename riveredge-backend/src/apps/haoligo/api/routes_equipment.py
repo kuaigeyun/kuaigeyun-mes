@@ -129,6 +129,11 @@ class InspectionParamUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200)
     level1_category: Optional[str] = Field(None, description="设备类别一级分类；传 null 或空字符串清除")
     requirement: Optional[str] = Field(None, description="点检要求；传空字符串表示清除")
+    unit: Optional[str] = Field(None, max_length=32)
+    value_type: Optional[str] = Field(None, max_length=32)
+    default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
+    numeric_min: Optional[Decimal] = Field(None, description="数值型取值下限（含）；传 null 清除")
+    numeric_max: Optional[Decimal] = Field(None, description="数值型取值上限（含）；传 null 清除")
 
 
 class InspectionParamBatchLevel1Body(BaseModel):
@@ -138,11 +143,6 @@ class InspectionParamBatchLevel1Body(BaseModel):
 
 class InspectionParamBatchLevel1Out(BaseModel):
     updated: int
-    unit: Optional[str] = Field(None, max_length=32)
-    value_type: Optional[str] = Field(None, max_length=32)
-    default_value: Optional[str] = Field(None, description="默认值；传空字符串表示清除")
-    numeric_min: Optional[Decimal] = Field(None, description="数值型取值下限（含）；传 null 清除")
-    numeric_max: Optional[Decimal] = Field(None, description="数值型取值上限（含）；传 null 清除")
 
 
 def _normalize_inspection_param_default(value_type: str, raw: Optional[str]) -> Optional[str]:

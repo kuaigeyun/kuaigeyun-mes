@@ -8,6 +8,7 @@ from apps.haoligo.constants.message_template_codes import (
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_APPROVED,
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_PENDING,
     HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REJECTED,
+    HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REVOKED,
 )
 
 OUTSOURCE_MAINTENANCE_DETAIL_PATH = "/apps/haoligo/molds/documents/outsource-maintenance"
@@ -68,6 +69,21 @@ HAOLIGO_OUTSOURCE_MAINTENANCE_MESSAGE_TEMPLATE_PRESETS: List[Dict[str, Any]] = [
         "variables": {**OUTSOURCE_MAINTENANCE_COMMON_VARIABLES},
         "is_active": True,
     },
+    {
+        "name": "外协维保单撤销审核通知",
+        "code": HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REVOKED,
+        "type": "internal",
+        "description": "外协维保单撤销审核时通知相关人员",
+        "subject": "【外协维保单·撤销审核】{sheet_no}",
+        "content": (
+            "您好，\n\n"
+            "外协维保单 {sheet_no} 审核已撤销，单据回到待审核状态。\n\n"
+            "外协单位：{outsourced_unit_name}\n\n"
+            "请登录系统 → {detail_path} 查看明细。\n"
+        ),
+        "variables": {**OUTSOURCE_MAINTENANCE_COMMON_VARIABLES},
+        "is_active": True,
+    },
 ]
 
 
@@ -80,5 +96,6 @@ async def ensure_haoligo_outsource_maintenance_message_templates(tenant_id: int)
             HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_PENDING,
             HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_APPROVED,
             HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REJECTED,
+            HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REVOKED,
         },
     )

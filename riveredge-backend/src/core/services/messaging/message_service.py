@@ -110,6 +110,11 @@ class MessageService:
                         subject=subject or "新消息",
                         content=content or "",
                         message_log_uuid=str(message_log.uuid),
+                        variables=(
+                            dict(message_log.variables)
+                            if isinstance(message_log.variables, dict)
+                            else None
+                        ),
                     )
             except (TypeError, ValueError):
                 pass

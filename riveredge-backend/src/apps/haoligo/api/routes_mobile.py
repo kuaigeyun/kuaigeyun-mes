@@ -8,9 +8,14 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from pydantic import BaseModel, Field
 
 from apps.haoligo.api._qs import tenant_alive
+from tortoise.expressions import Q
+
+from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
+from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
 from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
+from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
 from core.config.client_product_registry import CLIENT_KEY_HAOLIGO
 from core.services import client_release_service as release_svc
 from apps.haoligo.services.mobile_workbench import resolve_mobile_workbench
@@ -27,6 +32,9 @@ router = APIRouter(
 class MobileBootstrapOut(BaseModel):
     pending_audit_count: int = Field(description="当前用户外协完修单待审核数量")
     trial_failed_count: int = Field(description="待处理试模/试产不合格单数量（角标参考，不含已确认收回）")
+    maintenance_open_for_complete_count: int = Field(
+        description="厂内维修+保养维保单待完修数量（已通过且尚无关联完修单）"
+    )
 
 
 class MobileWorkbenchEntryOut(BaseModel):
@@ -149,9 +157,25 @@ async def get_mobile_bootstrap(
 
     trial_failed_count = await count_pending_trial_failure_exceptions(tenant_id)
 
+    linked_complete_ids = [
+        int(x)
+        for x in await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
+        .filter(deleted_at__isnull=True, source_maintenance_sheet_id__not_isnull=True)
+        .values_list("source_maintenance_sheet_id", flat=True)
+        if x is not None
+    ]
+    maint_open_qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id).filter(
+        sheet_status=SHEET_STATUS_APPROVED,
+        service_type__in=["维修", "保养"],
+    )
+    if linked_complete_ids:
+        maint_open_qs = maint_open_qs.filter(~Q(id__in=linked_complete_ids))
+    maintenance_open_for_complete_count = await maint_open_qs.count()
+
     return MobileBootstrapOut(
         pending_audit_count=pending_audit_count,
         trial_failed_count=trial_failed_count,
+        maintenance_open_for_complete_count=maintenance_open_for_complete_count,
     )
 
 

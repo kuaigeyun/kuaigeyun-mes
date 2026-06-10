@@ -3,7 +3,7 @@
  */
 
 import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
@@ -72,6 +72,21 @@ import {
   moldSheetAuditStatusTag,
 } from '../../../../utils/moldSheetStatus';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
+
+const OUTSOURCE_COMPLETE_DOC_NOTIFICATION = 'haoligo_mold_outsource_maintenance_complete';
+const OUTSOURCE_COMPLETE_ACTION_SUBMITTED = 'submitted';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -88,6 +103,7 @@ function normUploadUuids(val: unknown): string[] {
 
 /** 外协维修单「维修前 / 维修后」附件预览（表头 + 按模具） */
 type BeforeAttachmentPreview = {
+  header: string[];
   byMold: Record<string, string[]>;
 };
 
@@ -106,7 +122,10 @@ function buildBeforePreviewFromMaintenance(row: MoldOutsourceMaintenanceSheetRow
     const mc = String(it.mold_code ?? '').trim();
     if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
   }
-  return { byMold };
+  return {
+    header: [...(row.header_attachment_file_uuids || [])],
+    byMold,
+  };
 }
 
 const formatMoldWarehouseLabel = (name?: string | null, code?: string | null) => {
@@ -254,6 +273,48 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     presetFromApplicantRow,
     enrichApplicantPresetFromRow,
   } = useApplicantUserIdField(formRef);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const completeNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        OUTSOURCE_COMPLETE_DOC_NOTIFICATION,
+        OUTSOURCE_COMPLETE_ACTION_SUBMITTED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const completeNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(completeNotifyRule),
+    [completeNotifyRule],
+  );
+
+  const searchCompleteNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('complete_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: notifyLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser],
+  );
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formOptionsReady, setFormOptionsReady] = useState(false);
@@ -377,6 +438,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         source_order_no: '',
         outsourced_unit_name: undefined,
         outsourced_unit_code: undefined,
+        complete_notify_user_ids: [...completeNotifyDefaults],
         line_items: [defaultMoldLine()],
       });
       setBeforeAttachmentPreview(null);
@@ -416,7 +478,10 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         await preloadTenantFormOptions(rowPreset ? [rowPreset] : undefined);
         if (rowPreset) applyApplicantPreset(rowPreset);
         setBeforeAttachmentPreview(buildBeforePreviewFromMaintenance(fullRow));
-        setFormInitialValues(buildFormValuesFromMaintenanceSource(fullRow));
+        setFormInitialValues({
+          ...buildFormValuesFromMaintenanceSource(fullRow),
+          complete_notify_user_ids: [...completeNotifyDefaults],
+        });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
         messageApi.error((e as Error).message || '无法创建外协维修完成单');
@@ -502,6 +567,8 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         department_uuid: resolveInitDepartmentUuid(d.applicant_user_id, d.department_uuid),
         outsourced_unit_name: d.outsourced_unit_name,
         outsourced_unit_code: d.outsourced_unit_code ?? undefined,
+        complete_notify_user_ids:
+          d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
         line_items,
       });
       if (d.source_outsource_maintenance_sheet_id != null) {
@@ -510,7 +577,10 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
           const mc = String(it.mold_code ?? '').trim();
           if (mc) byMold[mc] = [...(it.source_attachment_file_uuids ?? [])];
         }
-        setBeforeAttachmentPreview({ byMold });
+        setBeforeAttachmentPreview({
+          header: [...(d.source_header_attachment_file_uuids || [])],
+          byMold,
+        });
       } else {
         setBeforeAttachmentPreview(null);
       }
@@ -597,6 +667,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
       department_uuid,
       line_items,
       header_attachment_file_uuids: [],
+      complete_notify_user_ids: parseNotifyUserIds(values.complete_notify_user_ids),
     };
   };
 
@@ -650,6 +721,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     } else {
       patch.outsourced_unit_code = null;
     }
+    patch.complete_notify_user_ids = parseNotifyUserIds(values.complete_notify_user_ids);
     return patch;
   };
 
@@ -1123,6 +1195,33 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                   />
                 </Col>
               </Row>
+
+              <FormNotifyUsersSelect
+                colSpan={12}
+                name="complete_notify_user_ids"
+                label="完修通知人员"
+                placeholder="请选择完修通知人员（抄送）"
+                readonly={isDetailView}
+                seedUserIds={completeNotifyDefaults}
+                searchUsers={searchCompleteNotifyUsers}
+              />
+
+              {beforeAttachmentPreview?.header?.length ? (
+                <div
+                  style={{
+                    marginBottom: 16,
+                    padding: 12,
+                    background: '#fafafa',
+                    border: '1px solid #f0f0f0',
+                    borderRadius: 8,
+                  }}
+                >
+                  <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
+                    模具图片附件（维修前）
+                  </div>
+                  <ReadonlyAttachmentStrip uuids={beforeAttachmentPreview.header} />
+                </div>
+              ) : null}
 
               <Divider titlePlacement="left">模具明细</Divider>
               <ProFormList

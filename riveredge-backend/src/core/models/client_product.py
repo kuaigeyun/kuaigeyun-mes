@@ -20,5 +20,9 @@ class CoreClientProduct(Model):
     is_active = fields.BooleanField(default=True)
     sort_order = fields.IntField(default=0)
 
+    push_enabled = fields.BooleanField(default=True, description="是否启用极光推送")
+    jpush_app_key = fields.CharField(max_length=128, null=True)
+    jpush_master_secret = fields.CharField(max_length=256, null=True)
+
     class Meta:
         table = "core_client_products"

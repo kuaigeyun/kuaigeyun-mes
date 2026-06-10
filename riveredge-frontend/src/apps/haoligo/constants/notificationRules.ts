@@ -160,6 +160,26 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
 
     {
 
+      value: 'trial_production_pending',
+
+      labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_production_pending',
+
+      fallback: '待填试产',
+
+    },
+
+    {
+
+      value: 'trial_recalled',
+
+      labelKey: 'app.haoligo.settings.notifications.action.mold_trial.trial_recalled',
+
+      fallback: '已收回结案',
+
+    },
+
+    {
+
       value: 'approved',
 
       labelKey: 'app.haoligo.settings.notifications.action.mold_trial.approved',
@@ -175,6 +195,16 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.mold_trial.rejected',
 
       fallback: '审核驳回',
+
+    },
+
+    {
+
+      value: 'revoked',
+
+      labelKey: 'app.haoligo.settings.notifications.action.mold_trial.revoked',
+
+      fallback: '撤销审核',
 
     },
 
@@ -212,6 +242,16 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
 
     },
 
+    {
+
+      value: 'revoked',
+
+      labelKey: 'app.haoligo.settings.notifications.action.outsource_maintenance.revoked',
+
+      fallback: '撤销审核',
+
+    },
+
   ],
 
   haoligo_mold_maintenance: [
@@ -243,6 +283,16 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.mold_maintenance.rejected',
 
       fallback: '审核驳回',
+
+    },
+
+    {
+
+      value: 'revoked',
+
+      labelKey: 'app.haoligo.settings.notifications.action.mold_maintenance.revoked',
+
+      fallback: '撤销审核',
 
     },
 
@@ -291,6 +341,16 @@ export const HAOLIGO_NOTIFICATION_ACTION_OPTIONS: Record<
       labelKey: 'app.haoligo.settings.notifications.action.outsource_complete.rejected',
 
       fallback: '审核驳回',
+
+    },
+
+    {
+
+      value: 'revoked',
+
+      labelKey: 'app.haoligo.settings.notifications.action.outsource_complete.revoked',
+
+      fallback: '撤销审核',
 
     },
 
@@ -403,6 +463,70 @@ export const HAOLIGO_NOTIFICATION_RECIPIENT_SCOPES = [
   },
 
   { value: 'reporter', labelKey: 'app.haoligo.settings.notifications.scope.reporter', fallback: '上报人' },
+
+  {
+
+    value: 'module_reviewers',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.module_reviewers',
+
+    fallback: '审核权限持有人',
+
+  },
+
+  {
+
+    value: 'module_complete_operators',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.module_complete_operators',
+
+    fallback: '完修/执行权限持有人',
+
+  },
+
+  {
+
+    value: 'source_applicant',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.source_applicant',
+
+    fallback: '来源单申请人',
+
+  },
+
+  {
+
+    value: 'source_auditor',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.source_auditor',
+
+    fallback: '来源单审核人',
+
+  },
+
+  {
+
+    value: 'production_trial_operator',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.production_trial_operator',
+
+    fallback: '试产检验人员',
+
+  },
+
+  {
+
+    value: 'recall_operators',
+
+    labelKey: 'app.haoligo.settings.notifications.scope.recall_operators',
+
+    fallback: '收回权限持有人',
+
+  },
+
+  { value: 'creator', labelKey: 'app.haoligo.settings.notifications.scope.creator', fallback: '创建人' },
+
+  { value: 'user_specified', labelKey: 'app.haoligo.settings.notifications.scope.user_specified', fallback: '表单指定抄送' },
 
 ];
 

@@ -14,6 +14,7 @@ from apps.haoligo.services.spot_check_side_effects import normalize_report_user_
 from apps.haoligo.services.haoligo_business_notification import (
     ACTION_APPROVED,
     ACTION_REJECTED,
+    ACTION_REVOKED,
     ACTION_SUBMITTED,
     DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE,
     dispatch_haoligo_notification,
@@ -84,7 +85,8 @@ async def _outsource_complete_submitted_notification_context(
         ctx.setdefault("creator_user_id", uid)
         notify_ids.append(uid)
     merged = _merge_notify_user_ids(normalize_report_user_ids(notify_ids))
-    return with_form_notify_user_ids(ctx, merged)
+    ctx = with_form_notify_user_ids(ctx, merged)
+    return with_form_notify_user_ids(ctx, getattr(row, "complete_notify_user_ids", None))
 
 
 async def send_outsource_complete_submitted_messages(
@@ -126,4 +128,37 @@ async def send_outsource_complete_rejected_messages(
         trigger_action=ACTION_REJECTED,
         variables=_message_variables(row),
         context=_notification_context(row),
+    )
+
+
+async def _outsource_complete_revoked_notification_context(
+    tenant_id: int,
+    row: HaoligoMoldOutsourceMaintenanceCompleteSheet,
+) -> dict:
+    ctx = _notification_context(row)
+    src_id = row.source_outsource_maintenance_sheet_id
+    if src_id:
+        src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(
+            id=int(src_id),
+        ).first()
+        if src:
+            if src.applicant_user_id and int(src.applicant_user_id) > 0:
+                ctx["source_applicant_user_id"] = int(src.applicant_user_id)
+            if src.audited_by_user_id and int(src.audited_by_user_id) > 0:
+                ctx["source_auditor_user_id"] = int(src.audited_by_user_id)
+            ctx = with_form_notify_user_ids(ctx, getattr(src, "submitted_notify_user_ids", None))
+    return ctx
+
+
+async def send_outsource_complete_revoked_messages(
+    tenant_id: int,
+    row: HaoligoMoldOutsourceMaintenanceCompleteSheet,
+) -> None:
+    await ensure_haoligo_mold_outsource_complete_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE,
+        trigger_action=ACTION_REVOKED,
+        variables=_message_variables(row),
+        context=await _outsource_complete_revoked_notification_context(tenant_id, row),
     )

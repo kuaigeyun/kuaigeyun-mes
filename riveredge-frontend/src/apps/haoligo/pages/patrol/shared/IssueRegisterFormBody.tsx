@@ -2,9 +2,9 @@
  * 问题登记表单 01～04（用于新建/编辑问题 Modal）
  */
 
-import React, { useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { Checkbox, Col, Row, Spin, Typography, Upload } from 'antd';
+import React, { useCallback, useState } from 'react';
+import { App, Button, Checkbox, Col, Row, Space, Spin, Tag, Typography, Upload } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd/es/upload/interface';
 import {
   ProForm,
@@ -23,6 +23,11 @@ import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
 import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
 import { PatrolImagePreview } from './PatrolImagePreview';
 import { FormNotifyUsersSelect } from '../../../components/FormNotifyUsersSelect';
+import { PatrolOtherIssueModal } from './PatrolOtherIssueModal';
+import {
+  filterPatrolDictionaryIssueTypes,
+  type PatrolCustomIssueItem,
+} from './patrolIssueHelpers';
 
 const { Text } = Typography;
 
@@ -92,7 +97,9 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
   onBeforeFilesChange,
   readOnly,
 }) => {
-  const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
+  const [otherModalOpen, setOtherModalOpen] = useState(false);
+  const dictionaryIssueTypes = filterPatrolDictionaryIssueTypes(issueTypes);
   const currentUser = useGlobalStore((s) => s.currentUser);
 
   const searchReportNotifyUsers = useCallback(
@@ -125,6 +132,26 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
         }
       },
     }),
+  };
+
+  const appendCustomIssue = (text: string, addToCommon: boolean) => {
+    const current =
+      (formRef.current?.getFieldValue('custom_issue_items') as PatrolCustomIssueItem[] | undefined) ?? [];
+    if (current.some((item) => item.text === text)) {
+      messageApi.warning('该问题已添加');
+      return;
+    }
+    formRef.current?.setFieldsValue({
+      custom_issue_items: [...current, { text, addToCommon }],
+    });
+  };
+
+  const removeCustomIssue = (index: number) => {
+    const current =
+      (formRef.current?.getFieldValue('custom_issue_items') as PatrolCustomIssueItem[] | undefined) ?? [];
+    formRef.current?.setFieldsValue({
+      custom_issue_items: current.filter((_, i) => i !== index),
+    });
   };
 
   return (
@@ -196,10 +223,15 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
                 ? undefined
                 : [
                     {
-                      required: true,
-                      type: 'array',
-                      min: 1,
-                      message: '请至少选择一种问题类型',
+                      validator: async (_, value) => {
+                        const selected = Array.isArray(value) ? value : [];
+                        const custom =
+                          (formRef.current?.getFieldValue('custom_issue_items') as PatrolCustomIssueItem[]) ??
+                          [];
+                        if (!selected.length && !custom.length) {
+                          throw new Error('请至少选择一种问题类型，或添加其他问题');
+                        }
+                      },
                     },
                   ]
             }
@@ -207,14 +239,62 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
             <Checkbox.Group
               disabled={readOnly}
               style={{ display: 'flex', flexDirection: 'column', gap: 8 }}
-              options={issueTypes.map((it) => ({
+              options={dictionaryIssueTypes.map((it) => ({
                 label: <span style={{ padding: '4px 0' }}>{it.label}</span>,
                 value: it.value,
               }))}
             />
           </ProForm.Item>
         )}
+
+        <div style={{ marginTop: 8 }}>
+          <FieldLabel label="其他问题" />
+          <ProForm.Item name="custom_issue_items" initialValue={[]} hidden>
+            <input type="hidden" />
+          </ProForm.Item>
+          <ProFormDependency name={['custom_issue_items']}>
+            {({ custom_issue_items: customItems }) => {
+              const items = (customItems as PatrolCustomIssueItem[] | undefined) ?? [];
+              return (
+                <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                  {items.length ? (
+                    <Space wrap size={[8, 8]}>
+                      {items.map((item, index) => (
+                        <Tag
+                          key={`${item.text}-${index}`}
+                          closable={!readOnly}
+                          onClose={readOnly ? undefined : () => removeCustomIssue(index)}
+                        >
+                          {item.text}
+                          {item.addToCommon ? ' · 常见问题' : ''}
+                        </Tag>
+                      ))}
+                    </Space>
+                  ) : readOnly ? (
+                    <Text type="secondary">—</Text>
+                  ) : null}
+                  {!readOnly ? (
+                    <Button
+                      type="dashed"
+                      icon={<PlusOutlined />}
+                      onClick={() => setOtherModalOpen(true)}
+                      style={{ width: 'fit-content' }}
+                    >
+                      其他问题
+                    </Button>
+                  ) : null}
+                </Space>
+              );
+            }}
+          </ProFormDependency>
+        </div>
       </div>
+
+      <PatrolOtherIssueModal
+        open={otherModalOpen}
+        onClose={() => setOtherModalOpen(false)}
+        onConfirm={appendCustomIssue}
+      />
 
       <div style={{ marginTop: 12, marginBottom: 4 }}>
         <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 8 }}>

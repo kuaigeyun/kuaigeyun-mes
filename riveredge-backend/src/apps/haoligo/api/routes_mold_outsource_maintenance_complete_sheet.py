@@ -35,6 +35,7 @@ from apps.haoligo.models.mold_outsource_maintenance_complete_sheet import (
     HaoligoMoldOutsourceMaintenanceCompleteSheet,
 )
 from apps.haoligo.models.mold_outsource_maintenance_sheet import HaoligoMoldOutsourceMaintenanceSheet
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.api._data_scope import (
     RESOURCE_OUTSOURCE_COMPLETE,
     RESOURCE_OUTSOURCE_MAINTENANCE,
@@ -255,6 +256,7 @@ class MoldOutsourceMaintenanceCompleteSheetOut(BaseModel):
     sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
     audited_at: Optional[Any] = None
     audited_by_user_id: Optional[int] = None
+    complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -282,6 +284,7 @@ class MoldOutsourceMaintenanceCompleteSheetCreate(BaseModel):
         description="附件照片·维修后",
     )
     line_items: List[OutsourceCompleteLineIn] = Field(min_length=1, description="与外协维保单模具一一对应的完修明细")
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 class MoldOutsourceMaintenanceCompleteSheetUpdate(BaseModel):
@@ -293,6 +296,7 @@ class MoldOutsourceMaintenanceCompleteSheetUpdate(BaseModel):
     outsourced_unit_name: Optional[str] = Field(None, max_length=200)
     header_attachment_file_uuids: Optional[List[str]] = None
     line_items: Optional[List[OutsourceCompleteLineIn]] = None
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 async def _not_found():
@@ -459,6 +463,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
         sheet_status=_effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
+        complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
     )
 
@@ -515,6 +520,8 @@ async def create_outsource_maintenance_complete_sheet(
     ).first()
     if not src:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="外协维保单不存在")
+    if str(getattr(src, "sheet_status", "") or "").strip() != SHEET_STATUS_APPROVED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="仅已审核通过的外协维保单可确认完修")
     await assert_outsource_row_visible(
         src, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_MAINTENANCE
     )
@@ -603,6 +610,7 @@ async def create_outsource_maintenance_complete_sheet(
             header_attachment_file_uuids=[],
             line_items=stored,
             sheet_status="待审核",
+            complete_notify_user_ids=normalize_report_user_ids(body.complete_notify_user_ids),
         )
     from apps.haoligo.services.mold_outsource_complete_sheet_side_effects import (
         send_outsource_complete_submitted_messages,
@@ -746,6 +754,8 @@ async def update_outsource_maintenance_complete_sheet(
     )
     _guard_mutation_allowed(row)
     data = body.model_dump(exclude_unset=True)
+    if "complete_notify_user_ids" in data and data["complete_notify_user_ids"] is not None:
+        data["complete_notify_user_ids"] = normalize_report_user_ids(data["complete_notify_user_ids"])
     if "source_order_no" in data and data["source_order_no"] is not None:
         s = str(data["source_order_no"]).strip()
         if not s:
@@ -910,4 +920,9 @@ async def revoke_approval_outsource_maintenance_complete_sheet(
     codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
     for mc in codes:
         await refresh_mold_status_after_maintenance_completed(tenant_id, mc)
+    from apps.haoligo.services.mold_outsource_complete_sheet_side_effects import (
+        send_outsource_complete_revoked_messages,
+    )
+
+    await send_outsource_complete_revoked_messages(tenant_id, row)
     return await _serialize(row)

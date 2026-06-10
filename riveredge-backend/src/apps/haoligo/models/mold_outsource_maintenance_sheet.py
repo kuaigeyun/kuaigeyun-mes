@@ -36,3 +36,11 @@ class HaoligoMoldOutsourceMaintenanceSheet(HaoligoTenantModel):
     )
     audited_at = fields.DatetimeField(null=True, description="审核时间")
     audited_by_user_id = fields.IntField(null=True, description="审核人用户 ID")
+    submitted_notify_user_ids = fields.JSONField(
+        default=list,
+        description="提交待审消息抄送接收人用户 ID 列表",
+    )
+    complete_notify_user_ids = fields.JSONField(
+        default=list,
+        description="审核通过后通知外协完修抄送用户 ID 列表",
+    )

@@ -222,9 +222,9 @@ def get_token_payload(token: str) -> Optional[Dict[str, Any]]:
 
 def get_token_payload_for_refresh(token: str) -> Optional[Dict[str, Any]]:
     """
-    用于刷新接口：校验签名与结构，但允许在 grace 窗口内已过期的访问令牌换发新令牌。
+    用于刷新接口：校验签名与结构；在 JWT_REFRESH_TOKEN_EXPIRE_DAYS 内允许用过期访问令牌换发新令牌。
 
-    超过 JWT_REFRESH_GRACE_SECONDS 的过期令牌仍拒绝，避免长期有效的被盗令牌无限续期。
+    每次刷新会签发新 iat，形成滑动会话；超过最大刷新窗口则拒绝，避免被盗令牌长期续期。
     """
     try:
         payload = jwt.decode(
@@ -238,10 +238,19 @@ def get_token_payload_for_refresh(token: str) -> Optional[Dict[str, Any]]:
     except Exception:
         return None
 
-    exp = payload.get("exp")
-    if exp is not None:
-        now = time.time()
-        if now > float(exp) + JWT_REFRESH_GRACE_SECONDS:
+    if not payload.get("sub"):
+        return None
+
+    now = time.time()
+    iat = payload.get("iat")
+    if iat is not None:
+        refresh_valid_seconds = settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS * 86400
+        if now > float(iat) + refresh_valid_seconds:
             return None
+    else:
+        exp = payload.get("exp")
+        if exp is not None and now > float(exp) + JWT_REFRESH_GRACE_SECONDS:
+            return None
+
     return payload
 

@@ -12,6 +12,25 @@ export type ClientProduct = {
   sort_order: number;
 };
 
+export type ClientProductConfig = {
+  client_key: string;
+  display_name: string;
+  platform_target: string;
+  push_configurable: boolean;
+  push_enabled: boolean;
+  jpush_app_key: string;
+  jpush_master_secret_configured: boolean;
+  effective_push_ready: boolean;
+  env_fallback_app_key: boolean;
+  env_fallback_master_secret: boolean;
+};
+
+export type ClientProductConfigUpdateInput = {
+  push_enabled?: boolean;
+  jpush_app_key?: string;
+  jpush_master_secret?: string;
+};
+
 export type ClientReleasePackage = {
   url: string;
   sha256?: string | null;
@@ -83,6 +102,26 @@ export async function listClientProducts(appCode?: string): Promise<ClientProduc
   });
 }
 
+export async function getClientProductConfig(clientKey: string): Promise<ClientProductConfig> {
+  return apiRequest<ClientProductConfig>(`${ADMIN_BASE}/products/${encodeURIComponent(clientKey)}/config`);
+}
+
+export async function listClientProductConfigs(platform?: string): Promise<ClientProductConfig[]> {
+  return apiRequest<ClientProductConfig[]>(`${ADMIN_BASE}/products/configs`, {
+    params: platform ? { platform } : undefined,
+  });
+}
+
+export async function updateClientProductConfig(
+  clientKey: string,
+  input: ClientProductConfigUpdateInput,
+): Promise<ClientProductConfig> {
+  return apiRequest<ClientProductConfig>(`${ADMIN_BASE}/products/${encodeURIComponent(clientKey)}/config`, {
+    method: 'PUT',
+    data: input,
+  });
+}
+
 export async function listClientReleases(params?: {
   client_key?: string;
   platform?: string;
@@ -92,6 +131,34 @@ export async function listClientReleases(params?: {
 
 export async function activateClientRelease(releaseId: number): Promise<ClientRelease> {
   return apiRequest<ClientRelease>(`${ADMIN_BASE}/${releaseId}/activate`, { method: 'POST' });
+}
+
+export async function deleteClientRelease(releaseId: number): Promise<void> {
+  await apiRequest<{ success: boolean }>(`${ADMIN_BASE}/${releaseId}`, { method: 'DELETE' });
+}
+
+export type ClientPackageInspectResult = {
+  platform: string;
+  app_version: string;
+  version_code: number;
+  package_name?: string | null;
+  runtime_version?: string | null;
+};
+
+export async function inspectClientPackage(
+  platform: string,
+  file: File | Blob,
+  filename?: string,
+): Promise<ClientPackageInspectResult> {
+  const formData = new FormData();
+  const payload = file instanceof File ? file : new File([file], filename ?? 'package.bin');
+  formData.append('file', payload);
+  return apiRequest<ClientPackageInspectResult>(`${ADMIN_BASE}/inspect-package`, {
+    method: 'POST',
+    params: { platform },
+    body: formData,
+    headers: {},
+  });
 }
 
 export async function createClientRelease(input: ClientReleaseCreateInput): Promise<ClientRelease> {

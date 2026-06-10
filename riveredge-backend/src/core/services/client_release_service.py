@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 import socket
 import uuid
 from datetime import datetime, timezone
@@ -140,11 +141,45 @@ def ota_public_base(origin: str, client_key: str, relative_path: str) -> str:
     return f"{origin.rstrip('/')}/static/client-updates/{client_key}/{rel}"
 
 
-def _semver_lt(current: str, latest: str) -> bool:
+def _parse_version(raw: str) -> Version | None:
+    s = (raw or "").strip()
+    if not s:
+        return None
     try:
-        return Version(current) < Version(latest)
+        return Version(s)
     except InvalidVersion:
-        return current != latest
+        return None
+
+
+def _semver_eq(current: str, latest: str) -> bool:
+    left, right = _parse_version(current), _parse_version(latest)
+    if left is not None and right is not None:
+        return left == right
+    return (current or "").strip() == (latest or "").strip()
+
+
+def _semver_lt(current: str, latest: str) -> bool:
+    if _semver_eq(current, latest):
+        return False
+    left, right = _parse_version(current), _parse_version(latest)
+    if left is not None and right is not None:
+        return left < right
+    return (current or "").strip() != (latest or "").strip()
+
+
+def _no_update_payload(
+    *,
+    latest_payload: dict[str, Any],
+    ota_info: dict[str, Any] | None,
+    client_key: str,
+) -> dict[str, Any]:
+    return {
+        "update_type": "none",
+        "force": False,
+        "latest": latest_payload,
+        "ota": ota_info,
+        "client_key": client_key,
+    }
 
 
 def _package_payload(row: CoreClientRelease, origin: str) -> dict[str, Any] | None:
@@ -320,34 +355,19 @@ async def check_release(
             "client_key": client_key,
         }
 
-    if (
-        platform == "android"
-        and pkg
-        and version_code >= active.version_code
-        and _semver_lt(app_version, active.app_version)
-    ):
-        return {
-            "update_type": "package",
-            "force": active.force_update,
-            "latest": {**latest_payload, "package": pkg, "apk": pkg},
-            "ota": ota_info,
-            "client_key": client_key,
-        }
+    # version_code >= active.version_code：Android 以 versionCode 为准，避免 1.0.8 / 1.08 等字符串误判
+    if version_code > active.version_code:
+        return _no_update_payload(latest_payload=latest_payload, ota_info=ota_info, client_key=client_key)
 
     rv = runtime_version or app_version
     active_rv = active.runtime_version or active.app_version
-    if rv != active_rv:
-        if pkg:
-            return {
-                "update_type": "package",
-                "force": active.force_update,
-                "latest": {**latest_payload, "package": pkg, "apk": pkg},
-                "ota": ota_info,
-                "client_key": client_key,
-            }
-        return {"update_type": "none", "force": False, "latest": None, "ota": ota_info, "client_key": client_key}
 
-    if active.bundle_id and active.ota_relative_path and client_bundle != active.bundle_id:
+    if (
+        active.ota_relative_path
+        and client_bundle
+        and active.bundle_id
+        and client_bundle != active.bundle_id
+    ):
         return {
             "update_type": "ota",
             "force": False,
@@ -356,7 +376,16 @@ async def check_release(
             "client_key": client_key,
         }
 
-    return {"update_type": "none", "force": False, "latest": latest_payload, "ota": ota_info, "client_key": client_key}
+    if active.ota_relative_path and not _semver_eq(rv, active_rv) and _semver_lt(rv, active_rv):
+        return {
+            "update_type": "ota",
+            "force": False,
+            "latest": latest_payload,
+            "ota": ota_info,
+            "client_key": client_key,
+        }
+
+    return _no_update_payload(latest_payload=latest_payload, ota_info=ota_info, client_key=client_key)
 
 
 async def create_release(
@@ -425,6 +454,17 @@ async def register_package_file(
     if allowed and ext not in allowed:
         raise ValidationError(f"不支持的文件类型 {ext}，允许: {', '.join(allowed)}")
 
+    from core.services.package_metadata_service import assert_release_matches_package
+
+    if row.platform == "android" and ext == ".apk":
+        assert_release_matches_package(
+            platform=row.platform,
+            app_version=row.app_version,
+            version_code=row.version_code,
+            content=content,
+            filename=safe_name,
+        )
+
     dest = packages_dir(row.client_key) / safe_name
     dest.write_bytes(content)
     sha = hashlib.sha256(content).hexdigest()
@@ -463,6 +503,50 @@ async def get_release(release_id: int) -> CoreClientRelease:
     if not row:
         raise NotFoundError("发布记录不存在")
     return row
+
+
+def _unlink_package_file(client_key: str, filename: str) -> None:
+    path = packages_dir(client_key) / filename
+    if path.is_file():
+        path.unlink()
+
+
+def _remove_ota_tree(client_key: str, relative_path: str) -> None:
+    path = updates_dir(client_key) / relative_path.strip("/")
+    if path.is_dir():
+        shutil.rmtree(path)
+    elif path.is_file():
+        path.unlink()
+
+
+async def delete_release(release_id: int) -> None:
+    """删除历史发布记录，并清理未被其它记录引用的安装包 / OTA 文件。"""
+    row = await CoreClientRelease.get_or_none(id=release_id)
+    if not row:
+        raise NotFoundError("发布记录不存在")
+    if row.is_active:
+        raise ValidationError("无法删除当前生效的发布版本，请先激活其它版本")
+
+    artifact_filename = (row.artifact_filename or "").strip()
+    ota_relative_path = (row.ota_relative_path or "").strip()
+
+    await row.delete()
+
+    if artifact_filename:
+        still_used = await CoreClientRelease.filter(
+            client_key=row.client_key,
+            artifact_filename=artifact_filename,
+        ).exists()
+        if not still_used:
+            _unlink_package_file(row.client_key, artifact_filename)
+
+    if ota_relative_path:
+        still_used = await CoreClientRelease.filter(
+            client_key=row.client_key,
+            ota_relative_path=ota_relative_path,
+        ).exists()
+        if not still_used:
+            _remove_ota_tree(row.client_key, ota_relative_path)
 
 
 def serialize_release(row: CoreClientRelease, origin: str) -> dict[str, Any]:

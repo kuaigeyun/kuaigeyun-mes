@@ -5,8 +5,8 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../components/uni-action';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Tag } from 'antd';
-import { CloudUploadOutlined, DownloadOutlined, EyeOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { App, Button, Popconfirm, Space, Tag } from 'antd';
+import { CloudUploadOutlined, DeleteOutlined, DownloadOutlined, EyeOutlined, SettingOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -15,12 +15,14 @@ import { ListPageTemplate } from '../../../components/layout-templates';
 import { UniTable } from '../../../components/uni-table';
 import {
   activateClientRelease,
+  deleteClientRelease,
   listClientProducts,
   listClientReleases,
   type ClientRelease,
 } from '../../../services/clientRelease';
 import { ClientReleaseUploadModal } from './ClientReleaseUploadModal';
 import { ClientReleaseDetailDrawer } from './ClientReleaseDetailDrawer';
+import { ClientProductConfigDrawer } from './ClientProductConfigDrawer';
 
 const ClientReleasesPage: React.FC = () => {
   const { t } = useTranslation();
@@ -31,7 +33,9 @@ const ClientReleasesPage: React.FC = () => {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [replaceRelease, setReplaceRelease] = useState<ClientRelease | null>(null);
   const [activatingId, setActivatingId] = useState<number | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [detailRelease, setDetailRelease] = useState<ClientRelease | null>(null);
+  const [configOpen, setConfigOpen] = useState(false);
   const tableRowsRef = useRef<ClientRelease[]>([]);
 
   const { data: products } = useQuery({
@@ -82,6 +86,22 @@ const ClientReleasesPage: React.FC = () => {
       messageApi.error(e instanceof Error ? e.message : t('pages.infra.clientReleases.activateFailed'));
     } finally {
       setActivatingId(null);
+    }
+  };
+
+  const handleDelete = async (record: ClientRelease) => {
+    try {
+      setDeletingId(record.id);
+      await deleteClientRelease(record.id);
+      messageApi.success(t('pages.infra.clientReleases.deleteSuccess'));
+      if (detailRelease?.id === record.id) {
+        setDetailRelease(null);
+      }
+      actionRef.current?.reload();
+    } catch (e) {
+      messageApi.error(e instanceof Error ? e.message : t('pages.infra.clientReleases.deleteFailed'));
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -174,7 +194,7 @@ const ClientReleasesPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 260,
+      width: 300,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
@@ -241,6 +261,30 @@ const ClientReleasesPage: React.FC = () => {
               {t('pages.infra.clientReleases.activate')}
             </Button>,
           );
+          actions.push(
+            <Popconfirm
+              {...rowActionKind('delete')}
+              key="delete"
+              title={t('pages.infra.clientReleases.deleteConfirmTitle')}
+              description={t('pages.infra.clientReleases.deleteConfirmDesc', {
+                version: record.app_version,
+                code: record.version_code,
+              })}
+              okText={t('common.delete')}
+              cancelText={t('common.cancel')}
+              onConfirm={() => void handleDelete(record)}
+            >
+              <Button
+                type="link"
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                loading={deletingId === record.id}
+              >
+                {t('common.delete')}
+              </Button>
+            </Popconfirm>,
+          );
         }
 
         return actions.length ? <Space size={0} wrap>{actions}</Space> : '—';
@@ -293,6 +337,11 @@ const ClientReleasesPage: React.FC = () => {
           showImportButton={false}
           showExportButton={false}
           showDeleteButton={false}
+          toolBarActionsAfterCreate={[
+            <Button key="client-config" icon={<SettingOutlined />} onClick={() => setConfigOpen(true)}>
+              {t('pages.infra.clientReleases.clientConfigButton')}
+            </Button>,
+          ]}
           onDetail={(keys) => {
             const row = tableRowsRef.current.find((r) => r.id === keys[0]);
             if (row) handleOpenDetail(row);
@@ -323,6 +372,8 @@ const ClientReleasesPage: React.FC = () => {
         }
         onClose={() => setDetailRelease(null)}
       />
+
+      <ClientProductConfigDrawer open={configOpen} onClose={() => setConfigOpen(false)} />
     </>
   );
 };

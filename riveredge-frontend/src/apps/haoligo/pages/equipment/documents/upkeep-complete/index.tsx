@@ -2,7 +2,9 @@
  * 好力 GO — 设备维保完成单（维修/保养；关联设备维保单；对齐模具维保完修单交互）
  */
 
-import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
@@ -35,6 +37,7 @@ import {
   createEquipmentUpkeepCompleteSheet,
   deleteEquipmentUpkeepCompleteSheet,
   getEquipmentUpkeepCompleteSheet,
+  getEquipmentUpkeepSheet,
   HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
   listEquipmentUpkeepCompleteSheets,
   listEquipmentUpkeepParamSets,
@@ -49,6 +52,22 @@ import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/sh
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { EquipmentUpkeepRecordFields } from '../../../../components/EquipmentUpkeepRecordFields';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
+import { EQUIPMENT_UPKEEP_COMPLETE_SOURCE_PARAM } from '../../../../utils/equipmentUpkeepCompleteNavigation';
+
+const EQUIP_UPKEEP_COMPLETE_DOC_NOTIFICATION = 'haoligo_equipment_upkeep_complete';
+const EQUIP_UPKEEP_COMPLETE_ACTION_CREATED = 'created';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
 
 function formatUpkeepRowLabel(r: EquipmentUpkeepSheetRow): string {
   const no = (r.sheet_no && String(r.sheet_no).trim()) || `维保单#${r.id}`;
@@ -128,6 +147,48 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
     resolveInitDepartmentUuid,
     presetFromApplicantRow,
   } = useApplicantUserIdField(formRef);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const completeNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        EQUIP_UPKEEP_COMPLETE_DOC_NOTIFICATION,
+        EQUIP_UPKEEP_COMPLETE_ACTION_CREATED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const completeNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(completeNotifyRule),
+    [completeNotifyRule],
+  );
+
+  const searchCompleteNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('complete_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: notifyLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser],
+  );
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isDetailView, setIsDetailView] = useState(false);
@@ -284,6 +345,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
         repair_result: undefined,
         clear_total_production: true,
         header_attachments: [],
+        complete_notify_user_ids: [...completeNotifyDefaults],
       });
       setBeforePreview(null);
       startTransition(() => setFormOptionsReady(true));
@@ -293,6 +355,84 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
       setFormOptionsReady(false);
     }
   }, [getCreateApplicantDefaults, loadSourcesForPicker, messageApi, preloadTenantFormOptions, t]);
+
+  const startCreateWithSourceSheet = useCallback(
+    async (row: EquipmentUpkeepSheetRow) => {
+      setIsDetailView(false);
+      setIsEdit(false);
+      setEditId(null);
+      setFormOptionsReady(false);
+      setModalVisible(true);
+      try {
+        const fullRow = row.equipment_id ? row : await getEquipmentUpkeepSheet(row.id);
+        await loadSourcesForPicker();
+        setSourceRows((prev) => {
+          if (prev.some((x) => x.id === fullRow.id)) return prev;
+          return [fullRow, ...prev];
+        });
+        const st = String(fullRow.service_type ?? '').trim() === '维修' ? '维修' : '保养';
+        const preset = presetFromApplicantRow(fullRow);
+        await preloadTenantFormOptions(preset ? [preset] : undefined);
+        setFormServiceType(st);
+        setBeforePreview({
+          header: [...(fullRow.header_attachment_file_uuids || [])],
+          description: fullRow.description || '',
+        });
+        setSourceUpkeepParamSetId(fullRow.upkeep_param_set_id ?? null);
+        const eqLabel =
+          fullRow.equipment_asset_code || fullRow.equipment_name
+            ? `${fullRow.equipment_asset_code || ''} ${fullRow.equipment_name || ''}`.trim()
+            : fullRow.equipment_id != null
+              ? `ID ${fullRow.equipment_id}`
+              : '';
+        setSourceOrderDisplay(
+          (fullRow.sheet_no && String(fullRow.sheet_no).trim()) || `维保单#${fullRow.id}`,
+        );
+        setEquipmentDisplay(eqLabel);
+        setFormInitialValues({
+          service_type: st,
+          source_upkeep_sheet_id: fullRow.id,
+          equipment_id: fullRow.equipment_id,
+          applicant_user_id: fullRow.applicant_user_id ?? undefined,
+          department_uuid: (fullRow.department_uuid || '').trim() || undefined,
+          upkeep_param_set_id: fullRow.upkeep_param_set_id ?? undefined,
+          upkeep_record_lines: [],
+          completion_content: '',
+          repair_content: '',
+          repair_result: undefined,
+          clear_total_production: st === '保养',
+          header_attachments: [],
+          complete_notify_user_ids: [...completeNotifyDefaults],
+        });
+        startTransition(() => setFormOptionsReady(true));
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法创建设备维保完成单');
+        setModalVisible(false);
+        setFormOptionsReady(false);
+      }
+    },
+    [completeNotifyDefaults, loadSourcesForPicker, messageApi, preloadTenantFormOptions, presetFromApplicantRow],
+  );
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkConsumedRef = useRef(false);
+
+  useEffect(() => {
+    const raw = searchParams.get(EQUIPMENT_UPKEEP_COMPLETE_SOURCE_PARAM);
+    if (!raw || deepLinkConsumedRef.current) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    deepLinkConsumedRef.current = true;
+    setSearchParams({}, { replace: true });
+    void (async () => {
+      try {
+        const row = await getEquipmentUpkeepSheet(id);
+        await startCreateWithSourceSheet(row);
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法根据设备维保单打开维保完成单');
+      }
+    })();
+  }, [messageApi, searchParams, setSearchParams, startCreateWithSourceSheet]);
 
   const openSheetForm = useCallback(
     async (record: EquipmentUpkeepCompleteSheetRow, detailOnly: boolean) => {
@@ -337,6 +477,8 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           repair_result: d.repair_result ?? undefined,
           clear_total_production: st === '保养' ? d.clear_total_production !== false : false,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
+          complete_notify_user_ids:
+            d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
         });
         startTransition(() => setFormOptionsReady(true));
       } catch (e) {
@@ -437,6 +579,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
           clear_total_production: st === '保养' ? clearTotal : undefined,
+          complete_notify_user_ids: parseNotifyUserIds(values.complete_notify_user_ids),
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
       } else {
@@ -456,6 +599,7 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
           repair_result: st === '维修' ? repairResult : null,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
           clear_total_production: st === '保养' ? clearTotal : undefined,
+          complete_notify_user_ids: parseNotifyUserIds(values.complete_notify_user_ids),
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
       }
@@ -767,6 +911,16 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
                   />
                 </Col>
               </Row>
+
+              <FormNotifyUsersSelect
+                colSpan={12}
+                name="complete_notify_user_ids"
+                label="完修通知人员"
+                placeholder="请选择完修通知人员（抄送）"
+                readonly={isDetailView}
+                seedUserIds={completeNotifyDefaults}
+                searchUsers={searchCompleteNotifyUsers}
+              />
 
               {(beforePreview || isEdit) && formServiceType ? (
                 <>

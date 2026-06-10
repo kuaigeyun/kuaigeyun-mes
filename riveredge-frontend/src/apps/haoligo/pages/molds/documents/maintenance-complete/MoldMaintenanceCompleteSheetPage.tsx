@@ -2,7 +2,9 @@
  * 好力 GO — 模具维保完成单（基础信息 + 模具信息；对齐移动端稿）
  */
 
-import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { rowActionKind } from '../../../../../../components/uni-action';
 import {
   ActionType,
@@ -60,6 +62,22 @@ import {
 } from '../../../../constants/documentPermissionResources';
 import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
 import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
+import { INHOUSE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/inhouseCompleteNavigation';
+
+const MAINT_COMPLETE_DOC_NOTIFICATION = 'haoligo_mold_maintenance_complete';
+const MAINT_COMPLETE_ACTION_CREATED = 'created';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
 
 function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
@@ -74,8 +92,9 @@ function normUploadUuids(val: unknown): string[] {
   return out;
 }
 
-/** 来源单模具行「保养前 / 维修前」附件预览 */
+/** 来源单表头 + 模具行「保养前 / 维修前」附件预览 */
 type BeforeAttachmentPreview = {
+  header: string[];
   byMold: Record<string, string[]>;
 };
 
@@ -226,6 +245,48 @@ export function MoldMaintenanceCompleteSheetPage({
     presetFromApplicantRow,
     resetApplicantToCurrentUser,
   } = useApplicantUserIdField(formRef);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const completeNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        MAINT_COMPLETE_DOC_NOTIFICATION,
+        MAINT_COMPLETE_ACTION_CREATED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const completeNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(completeNotifyRule),
+    [completeNotifyRule],
+  );
+
+  const searchCompleteNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('complete_notify_user_ids') as number[] | undefined) || []);
+      const opts = await searchUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: selIds,
+        labelById: notifyLabelRef.current,
+        currentUser,
+      });
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [currentUser],
+  );
 
   const [modalVisible, setModalVisible] = useState(false);
   const [formOptionsReady, setFormOptionsReady] = useState(false);
@@ -296,7 +357,10 @@ export function MoldMaintenanceCompleteSheetPage({
       }
       const preset = presetFromApplicantRow(row);
       await preloadTenantFormOptions(preset ? [preset] : undefined);
-      setBeforeAttachmentPreview({ byMold });
+      setBeforeAttachmentPreview({
+        header: [...(row.header_attachment_file_uuids || [])],
+        byMold,
+      });
       formRef.current?.setFieldsValue({
         source_maintenance_sheet_id: n,
         source_order_no: srcNo,
@@ -398,6 +462,7 @@ export function MoldMaintenanceCompleteSheetPage({
         ...applicantDefaults,
         source_maintenance_sheet_id: undefined,
         source_order_no: '',
+        complete_notify_user_ids: [...completeNotifyDefaults],
         line_items: [defaultMoldLine()],
       });
       setBeforeAttachmentPreview(null);
@@ -408,6 +473,98 @@ export function MoldMaintenanceCompleteSheetPage({
       setFormOptionsReady(false);
     }
   };
+
+  const startCreateWithSourceSheet = useCallback(
+    async (row: MoldMaintenanceSheetRow) => {
+      setIsDetailView(false);
+      setIsEdit(false);
+      setEditId(null);
+      setFormOptionsReady(false);
+      setModalVisible(true);
+      try {
+        const fullRow = row.line_items?.length ? row : await getMoldMaintenanceSheet(row.id);
+        if (String(fullRow.service_type ?? '').trim() !== serviceType) {
+          messageApi.warning(`该单据为${fullRow.service_type || '—'}类型，请从对应菜单打开`);
+          setModalVisible(false);
+          return;
+        }
+        await Promise.all([loadMaintenanceSheetsForSource(true), loadUpkeepSetOptions()]);
+        setMaintRows((prev) => {
+          if (prev.some((x) => x.id === fullRow.id)) return prev;
+          return [fullRow, ...prev];
+        });
+        const byMold: Record<string, string[]> = {};
+        for (const it of fullRow.line_items || []) {
+          const mc = String(it.mold_code ?? '').trim();
+          if (mc) byMold[mc] = [...(it.attachment_file_uuids || [])];
+        }
+        const preset = presetFromApplicantRow(fullRow);
+        await preloadTenantFormOptions(preset ? [preset] : undefined);
+        const srcNo =
+          (fullRow.source_order_no && String(fullRow.source_order_no).trim()) ||
+          (fullRow.sheet_no && String(fullRow.sheet_no).trim()) ||
+          `维保单#${fullRow.id}`;
+        setBeforeAttachmentPreview({
+          header: [...(fullRow.header_attachment_file_uuids || [])],
+          byMold,
+        });
+        setFormInitialValues({
+          service_type: serviceType,
+          applicant_user_id: fullRow.applicant_user_id ?? undefined,
+          department_uuid: (fullRow.department_uuid || '').trim() || undefined,
+          source_maintenance_sheet_id: fullRow.id,
+          source_order_no: srcNo,
+          complete_notify_user_ids: [...completeNotifyDefaults],
+          line_items: (fullRow.line_items || []).map((it) => ({
+            mold_code: String(it.mold_code ?? '').trim(),
+            mold_name: it.mold_name != null ? String(it.mold_name) : '',
+            repair_reason: it.repair_reason != null ? String(it.repair_reason) : '',
+            clear_total_production: true,
+            upkeep_content: '',
+            upkeep_param_set_id: undefined,
+            upkeep_record_lines: [],
+            repair_content: '',
+            repair_result: undefined,
+            item_attachments: [],
+          })),
+        });
+        startTransition(() => setFormOptionsReady(true));
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法创建维保完成单');
+        setModalVisible(false);
+        setFormOptionsReady(false);
+      }
+    },
+    [
+      completeNotifyDefaults,
+      loadMaintenanceSheetsForSource,
+      loadUpkeepSetOptions,
+      messageApi,
+      presetFromApplicantRow,
+      preloadTenantFormOptions,
+      serviceType,
+    ],
+  );
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkConsumedRef = useRef(false);
+
+  useEffect(() => {
+    const raw = searchParams.get(INHOUSE_COMPLETE_SOURCE_MAINTENANCE_PARAM);
+    if (!raw || deepLinkConsumedRef.current) return;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0) return;
+    deepLinkConsumedRef.current = true;
+    setSearchParams({}, { replace: true });
+    void (async () => {
+      try {
+        const row = await getMoldMaintenanceSheet(id);
+        await startCreateWithSourceSheet(row);
+      } catch (e) {
+        messageApi.error((e as Error).message || '无法根据维保单打开维保完成单');
+      }
+    })();
+  }, [messageApi, searchParams, setSearchParams, startCreateWithSourceSheet]);
 
   useNewShortcut(handleCreate);
 
@@ -474,6 +631,8 @@ export function MoldMaintenanceCompleteSheetPage({
         service_type: d.service_type,
         applicant_user_id: d.applicant_user_id ?? undefined,
         department_uuid: initDept,
+        complete_notify_user_ids:
+          d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...completeNotifyDefaults],
         line_items,
       });
       if (d.source_maintenance_sheet_id != null) {
@@ -482,7 +641,10 @@ export function MoldMaintenanceCompleteSheetPage({
           const mc = String(it.mold_code ?? '').trim();
           if (mc) byMold[mc] = [...(it.source_attachment_file_uuids ?? [])];
         }
-        setBeforeAttachmentPreview({ byMold });
+        setBeforeAttachmentPreview({
+          header: [...(d.source_header_attachment_file_uuids || [])],
+          byMold,
+        });
       } else {
         setBeforeAttachmentPreview(null);
       }
@@ -597,6 +759,7 @@ export function MoldMaintenanceCompleteSheetPage({
     }
     const deptU = typeof values.department_uuid === 'string' ? values.department_uuid.trim() : '';
     if (deptU) patch.department_uuid = deptU;
+    patch.complete_notify_user_ids = parseNotifyUserIds(values.complete_notify_user_ids);
     return patch;
   };
 
@@ -661,6 +824,7 @@ export function MoldMaintenanceCompleteSheetPage({
       department_uuid,
       line_items,
       header_attachment_file_uuids: [],
+      complete_notify_user_ids: parseNotifyUserIds(values.complete_notify_user_ids),
     };
   };
 
@@ -1106,6 +1270,33 @@ export function MoldMaintenanceCompleteSheetPage({
                 />
               </Col>
             </Row>
+
+            <FormNotifyUsersSelect
+              colSpan={12}
+              name="complete_notify_user_ids"
+              label="完修通知人员"
+              placeholder="请选择完修通知人员（抄送）"
+              readonly={isDetailView}
+              seedUserIds={completeNotifyDefaults}
+              searchUsers={searchCompleteNotifyUsers}
+            />
+
+            {beforeAttachmentPreview?.header?.length ? (
+              <div
+                style={{
+                  marginBottom: 16,
+                  padding: 12,
+                  background: '#fafafa',
+                  border: '1px solid #f0f0f0',
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ marginBottom: 6, fontSize: 12, color: 'rgba(0,0,0,0.65)' }}>
+                  {serviceType === '保养' ? '模具图片附件（保养前）' : '模具图片附件（维修前）'}
+                </div>
+                <ReadonlyAttachmentStrip uuids={beforeAttachmentPreview.header} />
+              </div>
+            ) : null}
 
             <Divider titlePlacement="left">模具明细</Divider>
             <ProFormList

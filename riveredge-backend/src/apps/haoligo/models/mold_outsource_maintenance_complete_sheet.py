@@ -40,6 +40,10 @@ class HaoligoMoldOutsourceMaintenanceCompleteSheet(HaoligoTenantModel):
         description="附件照片·维修后（文件 UUID 列表）",
     )
     line_items = fields.JSONField(description="模具信息行（含维修费用、行附件）")
+    complete_notify_user_ids = fields.JSONField(
+        default=list,
+        description="完修提交时抄送通知用户 ID 列表",
+    )
     sheet_status = fields.CharField(
         max_length=16,
         default="待审核",

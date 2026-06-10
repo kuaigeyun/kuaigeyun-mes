@@ -26,6 +26,7 @@ from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
 from apps.haoligo.models.equipment_upkeep_param import HaoligoEquipmentUpkeepParamSet
 from apps.haoligo.services.equipment_upkeep_scheme import equipment_ledger_upkeep_param_set_id
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -90,6 +91,10 @@ class EquipmentUpkeepSheetOut(BaseModel):
     upkeep_param_set_name: Optional[str] = None
     reporter_user_id: int
     created_at: datetime
+    can_complete: bool = Field(
+        False,
+        description="是否可发起维保完成：尚无未删除的关联完成单",
+    )
 
 
 class EquipmentUpkeepSheetCreate(BaseModel):
@@ -149,7 +154,20 @@ async def _resolve_upkeep_set_snapshot(
     return int(eff), (parent.code or "").strip(), (parent.name or "").strip()
 
 
-async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOut:
+async def _linked_upkeep_ids_with_complete(tenant_id: int) -> set[int]:
+    linked_ids = (
+        await tenant_alive(HaoligoEquipmentUpkeepCompleteSheet, tenant_id)
+        .filter(deleted_at__isnull=True, source_upkeep_sheet_id__not_isnull=True)
+        .values_list("source_upkeep_sheet_id", flat=True)
+    )
+    return {int(x) for x in linked_ids if x is not None}
+
+
+async def _serialize(
+    row: HaoligoEquipmentUpkeepSheet,
+    *,
+    linked_complete_ids: set[int] | None = None,
+) -> EquipmentUpkeepSheetOut:
     await row.fetch_related("equipment")
     eq = row.equipment
     ac = getattr(eq, "asset_code", None) if eq else None
@@ -173,6 +191,7 @@ async def _serialize(row: HaoligoEquipmentUpkeepSheet) -> EquipmentUpkeepSheetOu
         upkeep_param_set_name=row.upkeep_param_set_name,
         reporter_user_id=row.reporter_user_id,
         created_at=row.created_at,
+        can_complete=int(row.id) not in (linked_complete_ids or set()),
     )
 
 
@@ -189,14 +208,10 @@ async def list_upkeep_sheets(
         description="为 true 时仅返回尚未关联未删除维保完成单的维保单（用于完成单选源）",
     ),
 ):
+    linked_complete_ids = await _linked_upkeep_ids_with_complete(tenant_id)
     qs = tenant_alive(HaoligoEquipmentUpkeepSheet, tenant_id).prefetch_related("equipment")
     if open_for_complete:
-        linked_ids = (
-            await tenant_alive(HaoligoEquipmentUpkeepCompleteSheet, tenant_id)
-            .filter(deleted_at__isnull=True, source_upkeep_sheet_id__not_isnull=True)
-            .values_list("source_upkeep_sheet_id", flat=True)
-        )
-        lid = [int(x) for x in linked_ids if x is not None]
+        lid = list(linked_complete_ids)
         if lid:
             qs = qs.filter(~Q(id__in=lid))
     if service_type and str(service_type).strip():
@@ -219,7 +234,7 @@ async def list_upkeep_sheets(
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
-        "items": [await _serialize(r) for r in rows],
+        "items": [await _serialize(r, linked_complete_ids=linked_complete_ids) for r in rows],
         "total": total,
         "skip": skip,
         "limit": limit,

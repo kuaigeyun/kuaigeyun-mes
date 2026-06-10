@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Form } from 'antd';
+import { Col, Form, Row } from 'antd';
 import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { useTranslation } from 'react-i18next';
@@ -23,6 +23,10 @@ export type FormNotifyUsersSelectProps = {
   readonly?: boolean;
   /** 配置中心「开单默认人员」；表单未填时写入并用于回显选项 */
   seedUserIds?: number[];
+  /** 栅格占位（12 = 半行）；不传则占满当前容器 */
+  colSpan?: number;
+  /** 为 true 且设置了 colSpan 时只渲染 Col，须放在外层 Row 内 */
+  inline?: boolean;
   searchUsers: NotifyUsersSearchFn;
 };
 
@@ -54,6 +58,8 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   placeholder,
   readonly,
   seedUserIds,
+  colSpan,
+  inline,
   searchUsers,
 }) => {
   const { t } = useTranslation();
@@ -126,7 +132,7 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
 
   const effectiveReadonly = isReadonlyMode || !canPick;
 
-  return (
+  const field = (
     <ProFormSelect
       name={name}
       label={resolvedLabel}
@@ -150,4 +156,17 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
       }}
     />
   );
+
+  if (colSpan != null) {
+    if (inline) {
+      return <Col span={colSpan}>{field}</Col>;
+    }
+    return (
+      <Row gutter={16}>
+        <Col span={colSpan}>{field}</Col>
+      </Row>
+    );
+  }
+
+  return field;
 };

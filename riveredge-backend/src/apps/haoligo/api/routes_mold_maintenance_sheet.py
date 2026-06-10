@@ -41,6 +41,7 @@ from apps.haoligo.constants.mold_sheet_rule_codes import (
     HAOLIGO_MOLD_MAINTENANCE_REPAIR_SHEET_NO,
     HAOLIGO_MOLD_MAINTENANCE_UPKEEP_SHEET_NO,
 )
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.models.mold import HaoligoMold
 from apps.haoligo.models.mold_maintenance_complete_sheet import HaoligoMoldMaintenanceCompleteSheet
 from apps.haoligo.models.mold_maintenance_sheet import HaoligoMoldMaintenanceSheet
@@ -256,7 +257,30 @@ class MoldMaintenanceSheetOut(BaseModel):
     sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
+    submitted_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
+    can_complete: bool = Field(
+        False,
+        description="是否可发起完修/完成保养：已通过且尚无未删除的关联完修单",
+    )
+
+
+async def _linked_maintenance_ids_with_complete(tenant_id: int) -> set[int]:
+    linked_ids = (
+        await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
+        .filter(
+            deleted_at__isnull=True,
+            source_maintenance_sheet_id__not_isnull=True,
+        )
+        .values_list("source_maintenance_sheet_id", flat=True)
+    )
+    return {int(x) for x in linked_ids if x is not None}
+
+
+def _row_can_complete(row: HaoligoMoldMaintenanceSheet, *, linked_ids: set[int]) -> bool:
+    if effective_sheet_status(row) != SHEET_STATUS_APPROVED:
+        return False
+    return int(row.id) not in linked_ids
 
 
 class MoldMaintenanceSheetCreate(BaseModel):
@@ -265,6 +289,7 @@ class MoldMaintenanceSheetCreate(BaseModel):
     service_type: ServiceTypeLiteral
     source_order_no: Optional[str] = Field(None, max_length=128)
     header_attachment_file_uuids: Optional[List[str]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     line_items: List[MoldMaintLineIn] = Field(min_length=1)
 
     @field_validator("department_uuid", mode="before")
@@ -285,6 +310,7 @@ class MoldMaintenanceSheetUpdate(BaseModel):
     service_type: Optional[ServiceTypeLiteral] = None
     source_order_no: Optional[str] = Field(None, max_length=128)
     header_attachment_file_uuids: Optional[List[str]] = None
+    submitted_notify_user_ids: Optional[List[int]] = None
     line_items: Optional[List[MoldMaintLineIn]] = None
 
 
@@ -299,13 +325,18 @@ def _primary_mold(lines: List[MoldMaintLineOut]) -> Optional[str]:
     return c or None
 
 
-def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
+def _serialize(
+    row: HaoligoMoldMaintenanceSheet,
+    *,
+    linked_complete_ids: set[int] | None = None,
+) -> MoldMaintenanceSheetOut:
     raw_lines = row.line_items or []
     lines: List[MoldMaintLineOut] = []
     if isinstance(raw_lines, list):
         for item in raw_lines:
             if isinstance(item, dict):
                 lines.append(_line_from_store(item))
+    linked = linked_complete_ids or set()
     return MoldMaintenanceSheetOut(
         id=row.id,
         uuid=row.uuid,
@@ -322,7 +353,9 @@ def _serialize(row: HaoligoMoldMaintenanceSheet) -> MoldMaintenanceSheetOut:
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
+        submitted_notify_user_ids=normalize_report_user_ids(getattr(row, "submitted_notify_user_ids", None)),
         created_at=row.created_at,
+        can_complete=_row_can_complete(row, linked_ids=linked),
     )
 
 
@@ -340,6 +373,7 @@ async def list_maintenance_sheets(
     ),
     service_type: Optional[str] = Query(None, description="维修 / 保养"),
 ):
+    linked_complete_ids = await _linked_maintenance_ids_with_complete(tenant_id)
     qs = tenant_alive(HaoligoMoldMaintenanceSheet, tenant_id)
     st = (sheet_status or "").strip()
     if st and st in SHEET_AUDIT_STATUS_SET:
@@ -349,12 +383,7 @@ async def list_maintenance_sheets(
         qs = qs.filter(service_type=svc)
     if open_for_complete:
         qs = qs.filter(sheet_status=SHEET_STATUS_APPROVED)
-        linked_ids = (
-            await tenant_alive(HaoligoMoldMaintenanceCompleteSheet, tenant_id)
-            .filter(deleted_at__isnull=True, source_maintenance_sheet_id__not_isnull=True)
-            .values_list("source_maintenance_sheet_id", flat=True)
-        )
-        lid = [int(x) for x in linked_ids if x is not None]
+        lid = list(linked_complete_ids)
         if lid:
             qs = qs.filter(~Q(id__in=lid))
     if keyword and keyword.strip():
@@ -369,7 +398,7 @@ async def list_maintenance_sheets(
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     return {
-        "items": [_serialize(r) for r in rows],
+        "items": [_serialize(r, linked_complete_ids=linked_complete_ids) for r in rows],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -414,7 +443,8 @@ async def create_maintenance_sheet(
             department_name=dept_name,
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
-            header_attachment_file_uuids=[],
+            header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
+            submitted_notify_user_ids=normalize_report_user_ids(body.submitted_notify_user_ids),
             line_items=stored,
             sheet_status=SHEET_STATUS_PENDING,
         )
@@ -481,7 +511,9 @@ async def update_maintenance_sheet(
     if "source_order_no" in data and data["source_order_no"] is not None:
         data["source_order_no"] = _strip_opt(str(data["source_order_no"]))
     if "header_attachment_file_uuids" in data:
-        data["header_attachment_file_uuids"] = []
+        data["header_attachment_file_uuids"] = _norm_uuid_list(data["header_attachment_file_uuids"])
+    if "submitted_notify_user_ids" in data and data["submitted_notify_user_ids"] is not None:
+        data["submitted_notify_user_ids"] = normalize_report_user_ids(data["submitted_notify_user_ids"])
     if "line_items" in data and data["line_items"] is not None:
         lines = [MoldMaintLineIn.model_validate(x) for x in data["line_items"]]
         if not lines:
@@ -597,6 +629,11 @@ async def revoke_maintenance_sheet_approval(
     await row.save()
     for mc in codes:
         await refresh_mold_status_if_no_open_maintenance_sheet(tenant_id, mc)
+    from apps.haoligo.services.mold_maintenance_sheet_side_effects import (
+        send_mold_maintenance_revoked_messages,
+    )
+
+    await send_mold_maintenance_revoked_messages(tenant_id, row)
     return _serialize(row)
 
 

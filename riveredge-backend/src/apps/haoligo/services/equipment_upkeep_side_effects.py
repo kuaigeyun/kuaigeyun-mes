@@ -39,7 +39,9 @@ async def send_equipment_upkeep_sheet_created_messages(
         "equipment_label": eq_label,
         "equipment_upkeep_sheet_id": str(row.id),
     }
-    ctx: dict = {}
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
+    ctx: dict = {"service_type": (row.service_type or "").strip()}
     if row.applicant_user_id and int(row.applicant_user_id) > 0:
         ctx["creator_user_id"] = int(row.applicant_user_id)
     await dispatch_haoligo_notification(
@@ -68,9 +70,13 @@ async def send_equipment_upkeep_complete_created_messages(
         "equipment_label": eq_label,
         "equipment_upkeep_complete_sheet_id": str(row.id),
     }
+    from apps.haoligo.services.notification_context import with_form_notify_user_ids
+
     ctx: dict = {}
-    if row.applicant_user_id and int(row.applicant_user_id) > 0:
-        ctx["creator_user_id"] = int(row.applicant_user_id)
+    if src_sheet and src_sheet.applicant_user_id and int(src_sheet.applicant_user_id) > 0:
+        ctx["source_applicant_user_id"] = int(src_sheet.applicant_user_id)
+        ctx["creator_user_id"] = int(src_sheet.applicant_user_id)
+    ctx = with_form_notify_user_ids(ctx, getattr(row, "complete_notify_user_ids", None))
     await dispatch_haoligo_notification(
         tenant_id,
         trigger_document=DOC_EQUIPMENT_UPKEEP_COMPLETE,

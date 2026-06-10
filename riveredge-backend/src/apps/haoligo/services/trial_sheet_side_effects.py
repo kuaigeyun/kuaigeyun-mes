@@ -53,6 +53,79 @@ from core.models.user_data_scope_binding import UserDataScopeBinding
 from infra.models.user import User
 
 
+ADJUSTMENT_POINTS_MAX_LEN = 2000
+
+
+def normalize_adjustment_points(raw: object | None) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
+
+
+def sheet_has_unqualified_result(
+    *,
+    trial_result: str,
+    production_trial_result: str | None,
+) -> bool:
+    if (trial_result or "").strip() == "不合格":
+        return True
+    return (production_trial_result or "").strip() == "不合格"
+
+
+def resolve_adjustment_points_for_sheet(
+    *,
+    trial_result: str,
+    production_trial_result: str | None,
+    adjustment_points: str | None,
+) -> str | None:
+    if not sheet_has_unqualified_result(
+        trial_result=trial_result,
+        production_trial_result=production_trial_result,
+    ):
+        return None
+    pts = normalize_adjustment_points(adjustment_points)
+    if not pts:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="不合格时请填写需要调整的点",
+        )
+    if len(pts) > ADJUSTMENT_POINTS_MAX_LEN:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"需要调整的点不超过{ADJUSTMENT_POINTS_MAX_LEN}字",
+        )
+    return pts
+
+
+def resolve_adjustment_points_for_update(
+    *,
+    trial_result: str,
+    production_trial_result: str | None,
+    body_adjustment_points: str | None,
+    adjustment_points_in_body: bool,
+    existing_adjustment_points: str | None,
+) -> str | None:
+    if not sheet_has_unqualified_result(
+        trial_result=trial_result,
+        production_trial_result=production_trial_result,
+    ):
+        return None
+    if adjustment_points_in_body:
+        return resolve_adjustment_points_for_sheet(
+            trial_result=trial_result,
+            production_trial_result=production_trial_result,
+            adjustment_points=body_adjustment_points,
+        )
+    existing = normalize_adjustment_points(existing_adjustment_points)
+    if existing:
+        return existing
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="不合格时请填写需要调整的点",
+    )
+
+
 def normalize_failure_handling(raw: Optional[str]) -> Optional[str]:
     """保存/创建时仅允许表单选项（待处理、立即送修）。"""
     s = (raw or "").strip()
@@ -427,6 +500,7 @@ async def _trial_failure_message_variables(
         "trial_result": trial_result or "—",
         "failure_handling": mode,
         "repair_warehouse_name": repair_warehouse_name,
+        "adjustment_points": normalize_adjustment_points(getattr(row, "adjustment_points", None)) or "—",
         "trial_sheet_id": str(row.id),
         "detail_path": TRIAL_DETAIL_PATH,
     }
@@ -527,6 +601,48 @@ async def send_trial_rejected_messages(tenant_id: int, row: HaoligoMoldTrialShee
         trigger_action=ACTION_REJECTED,
         variables=await _trial_failure_message_variables(row),
         context=_trial_notification_context(row),
+    )
+
+
+def _trial_production_pending_notification_context(row: HaoligoMoldTrialSheet) -> dict:
+    ctx = _trial_submitted_notification_context(row)
+    prod_uid = getattr(row, "production_trial_user_id", None)
+    if prod_uid is not None and int(prod_uid) > 0:
+        ctx["production_trial_user_id"] = int(prod_uid)
+    return ctx
+
+
+async def send_trial_production_pending_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_TRIAL_PRODUCTION_PENDING,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_TRIAL_PRODUCTION_PENDING,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_production_pending_notification_context(row),
+    )
+
+
+async def send_trial_recalled_messages(tenant_id: int, row: HaoligoMoldTrialSheet) -> None:
+    from apps.haoligo.services.haoligo_business_notification import (
+        ACTION_TRIAL_RECALLED,
+        DOC_MOLD_TRIAL,
+        dispatch_haoligo_notification,
+    )
+
+    await ensure_haoligo_trial_message_templates(tenant_id)
+    await dispatch_haoligo_notification(
+        tenant_id,
+        trigger_document=DOC_MOLD_TRIAL,
+        trigger_action=ACTION_TRIAL_RECALLED,
+        variables=await _trial_failure_message_variables(row),
+        context=_trial_submitted_notification_context(row),
     )
 
 
