@@ -10,6 +10,7 @@ import {
   type UserDisplayItem,
 } from '../../services/user';
 import { useGlobalStore } from '../../stores';
+import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import {
   canPickUsersForDisplay,
   canReadUserDirectory,
@@ -87,14 +88,16 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
 }) => {
   const { message } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPick = canPickUsersForDisplay(currentUser);
+  const canInteract = !isReadonlyMode && !disabled && canPick;
   const useFullList = canReadUserDirectory(currentUser);
 
   const [data, setData] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchUsers = async (searchText: string = '') => {
-    if (!canPick) {
+    if (!canInteract) {
       setData([]);
       return;
     }
@@ -123,7 +126,9 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
       }
     } catch (error) {
       console.error('Failed to fetch users:', error);
-      message.error('加载人员列表失败，请稍后重试');
+      if (!isReadonlyMode) {
+        message.error('加载人员列表失败，请稍后重试');
+      }
     } finally {
       setLoading(false);
     }
@@ -135,9 +140,10 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   );
 
   useEffect(() => {
+    if (!canInteract) return;
     void fetchUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOnly, departmentUuid, positionUuid, canPick, useFullList]);
+  }, [activeOnly, departmentUuid, positionUuid, canInteract, useFullList]);
 
   const handleChange = (val: any, _option: any) => {
     if (!onChange) return;
@@ -165,7 +171,7 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
     }));
   }, [data]);
 
-  const effectiveReadonly = readonly || !canPick;
+  const effectiveReadonly = isReadonlyMode || disabled || !canPick;
 
   return (
     <ProFormSelect
@@ -179,10 +185,10 @@ export const UniUserSelect: React.FC<UniUserSelectProps> = ({
       options={options}
       fieldProps={{
         mode,
-        showSearch: canPick,
+        showSearch: canInteract,
         loading,
         filterOption: false,
-        onSearch: canPick ? debounceFetch : undefined,
+        onSearch: canInteract ? debounceFetch : undefined,
         onChange: handleChange,
         optionRender: (ori) => {
           const u = data.find((item) => item.uuid === ori.value);

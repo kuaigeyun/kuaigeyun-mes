@@ -195,6 +195,8 @@ TORTOISE_ORM = {
                 "core.models.invitation_code",
                 "core.models.language",
                 "core.models.application",
+                "core.models.client_product",
+                "core.models.client_release",
                 "core.models.menu",
                 "core.models.tenant_backend_home",
                 "core.models.integration_config",

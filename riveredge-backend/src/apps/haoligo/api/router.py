@@ -49,14 +49,24 @@ class HaoligoMeta(BaseModel):
     app_key: str = Field(description="URL 路径使用的应用键", examples=["haoligo"])
     display_name: str = Field(description="对用户展示的产品名称", examples=["好力GO"])
     api_prefix: str = Field(description="当前挂载的 API 前缀", examples=["/api/v1/apps/haoligo"])
+    min_supported_version_code: int | None = Field(
+        default=None,
+        description="当前 active 发布要求的最低 Android versionCode（无发布时为 null）",
+    )
 
 
 @router.get("/meta", response_model=HaoligoMeta, summary="好力GO 元信息")
 async def get_haoligo_meta() -> HaoligoMeta:
+    from core.config.client_product_registry import CLIENT_KEY_HAOLIGO
+    from core.services.client_release_service import get_active_release
+
+    active = await get_active_release(CLIENT_KEY_HAOLIGO, "android")
+    min_vc = active.min_version_code if active else None
     return HaoligoMeta(
         app_key="haoligo",
         display_name="好力GO",
         api_prefix="/api/v1/apps/haoligo",
+        min_supported_version_code=min_vc,
     )
 
 

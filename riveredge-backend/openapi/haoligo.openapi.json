@@ -7767,6 +7767,98 @@
         }
       }
     },
+    "/api/v1/apps/haoligo/molds/return-sheets/outstanding-borrows": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 还入单"
+        ],
+        "summary": "待还入领用单列表（已领用、尚未配对还入单）",
+        "operationId": "list_outstanding_borrows_for_return_api_v1_apps_haoligo_molds_return_sheets_outstanding_borrows_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "skip",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Skip"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps/haoligo/molds/return-sheets/borrow-lookup": {
       "get": {
         "tags": [
@@ -7813,6 +7905,23 @@
                 }
               ],
               "title": "Mold Code"
+            }
+          },
+          {
+            "name": "borrow_sheet_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Borrow Sheet Id"
             }
           },
           {
@@ -8239,6 +8348,24 @@
             "description": "按试模结果筛选：合格/不合格"
           },
           {
+            "name": "failure_pending",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "为 true 时仅返回试模/试产不合格且尚未确认收回的待处理单",
+              "title": "Failure Pending"
+            },
+            "description": "为 true 时仅返回试模/试产不合格且尚未确认收回的待处理单"
+          },
+          {
             "name": "keyword",
             "in": "query",
             "required": false,
@@ -8452,6 +8579,208 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MoldTrialSupplierNotifyPreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/molds/trial-sheets/operator-search": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 试模单"
+        ],
+        "summary": "试模单表单人员搜索（试模/试产人员下拉）",
+        "operationId": "search_trial_sheet_operators_api_v1_apps_haoligo_molds_trial_sheets_operator_search_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "页码",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "页码"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "description": "每页数量",
+              "default": 50,
+              "title": "Page Size"
+            },
+            "description": "每页数量"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "姓名或账号关键词",
+              "title": "Keyword"
+            },
+            "description": "姓名或账号关键词"
+          },
+          {
+            "name": "department_uuid",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "部门 UUID 筛选",
+              "title": "Department Uuid"
+            },
+            "description": "部门 UUID 筛选"
+          },
+          {
+            "name": "is_active",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "是否仅启用用户",
+              "default": true,
+              "title": "Is Active"
+            },
+            "description": "是否仅启用用户"
+          },
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDisplayListResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/molds/trial-sheets/operator-resolve": {
+      "post": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 试模单"
+        ],
+        "summary": "试模单表单人员回显解析",
+        "operationId": "resolve_trial_sheet_operators_api_v1_apps_haoligo_molds_trial_sheets_operator_resolve_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "X-Tenant-ID",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tenant-Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserDisplayResolveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserDisplayResolveResponse"
                 }
               }
             }
@@ -14280,6 +14609,186 @@
         }
       }
     },
+    "/api/v1/apps/haoligo/mobile/release/check": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 移动端"
+        ],
+        "summary": "移动端版本检查（公开）",
+        "operationId": "check_mobile_release_api_v1_apps_haoligo_mobile_release_check_get",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "android | ios",
+              "default": "android",
+              "title": "Platform"
+            },
+            "description": "android | ios"
+          },
+          {
+            "name": "app_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "客户端 semver",
+              "default": "0.0.0",
+              "title": "App Version"
+            },
+            "description": "客户端 semver"
+          },
+          {
+            "name": "version_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Android versionCode",
+              "default": 0,
+              "title": "Version Code"
+            },
+            "description": "Android versionCode"
+          },
+          {
+            "name": "runtime_version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "expo runtimeVersion",
+              "default": "0.0.0",
+              "title": "Runtime Version"
+            },
+            "description": "expo runtimeVersion"
+          },
+          {
+            "name": "bundle_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "当前 OTA bundle_id",
+              "title": "Bundle Id"
+            },
+            "description": "当前 OTA bundle_id"
+          },
+          {
+            "name": "device_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "设备稳定标识，用于灰度",
+              "title": "Device Id"
+            },
+            "description": "设备稳定标识，用于灰度"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MobileReleaseCheckOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/haoligo/mobile/updates/manifest": {
+      "get": {
+        "tags": [
+          "App · HaoliGO",
+          "App · HaoliGO · 移动端"
+        ],
+        "summary": "expo-updates 自建 manifest（公开）",
+        "description": "返回 expo-updates 可消费的 JSON manifest；assets 指向 /static/mobile-updates/。",
+        "operationId": "get_mobile_updates_manifest_api_v1_apps_haoligo_mobile_updates_manifest_get",
+        "parameters": [
+          {
+            "name": "platform",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "android",
+              "title": "Platform"
+            }
+          },
+          {
+            "name": "runtime-version",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Runtime-Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Get Mobile Updates Manifest Api V1 Apps Haoligo Mobile Updates Manifest Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apps/haoligo/mobile/bootstrap": {
       "get": {
         "tags": [
@@ -18011,6 +18520,18 @@
             "examples": [
               "/api/v1/apps/haoligo"
             ]
+          },
+          "min_supported_version_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Supported Version Code",
+            "description": "当前 active 发布要求的最低 Android versionCode（无发布时为 null）"
           }
         },
         "type": "object",
@@ -19498,7 +20019,7 @@
           "trial_failed_count": {
             "type": "integer",
             "title": "Trial Failed Count",
-            "description": "租户内试模不合格单数量（角标参考）"
+            "description": "待处理试模/试产不合格单数量（角标参考，不含已确认收回）"
           }
         },
         "type": "object",
@@ -19507,6 +20028,142 @@
           "trial_failed_count"
         ],
         "title": "MobileBootstrapOut"
+      },
+      "MobileReleaseApkOut": {
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "url"
+        ],
+        "title": "MobileReleaseApkOut"
+      },
+      "MobileReleaseCheckOut": {
+        "properties": {
+          "update_type": {
+            "type": "string",
+            "title": "Update Type",
+            "description": "none | ota | apk"
+          },
+          "force": {
+            "type": "boolean",
+            "title": "Force",
+            "default": false
+          },
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MobileReleaseLatestOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ota": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MobileReleaseOtaOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "update_type"
+        ],
+        "title": "MobileReleaseCheckOut"
+      },
+      "MobileReleaseLatestOut": {
+        "properties": {
+          "app_version": {
+            "type": "string",
+            "title": "App Version"
+          },
+          "version_code": {
+            "type": "integer",
+            "title": "Version Code"
+          },
+          "runtime_version": {
+            "type": "string",
+            "title": "Runtime Version"
+          },
+          "release_notes": {
+            "type": "string",
+            "title": "Release Notes",
+            "default": ""
+          },
+          "bundle_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bundle Id"
+          },
+          "apk": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MobileReleaseApkOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "app_version",
+          "version_code",
+          "runtime_version"
+        ],
+        "title": "MobileReleaseLatestOut"
+      },
+      "MobileReleaseOtaOut": {
+        "properties": {
+          "updates_url": {
+            "type": "string",
+            "title": "Updates Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "updates_url"
+        ],
+        "title": "MobileReleaseOtaOut"
       },
       "MobileWorkbenchEntryOut": {
         "properties": {
@@ -20198,6 +20855,14 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "return_status": {
+            "type": "string",
+            "enum": [
+              "已领用",
+              "已还入"
+            ],
+            "title": "Return Status"
           }
         },
         "type": "object",
@@ -20207,7 +20872,8 @@
           "department_name",
           "mold_code",
           "mold_name",
-          "created_at"
+          "created_at",
+          "return_status"
         ],
         "title": "MoldBorrowSheetOut"
       },
@@ -27677,6 +28343,126 @@
           "data"
         ],
         "title": "TrendSeries"
+      },
+      "UserDisplayItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "uuid": {
+            "type": "string",
+            "title": "Uuid"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "full_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Name"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "下拉与只读展示用文案"
+          },
+          "department_uuid": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Uuid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "uuid",
+          "username",
+          "label"
+        ],
+        "title": "UserDisplayItem"
+      },
+      "UserDisplayListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserDisplayItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "UserDisplayListResponse"
+      },
+      "UserDisplayResolveRequest": {
+        "properties": {
+          "user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "User Ids"
+          },
+          "user_uuids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "title": "User Uuids"
+          }
+        },
+        "type": "object",
+        "title": "UserDisplayResolveRequest"
+      },
+      "UserDisplayResolveResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserDisplayItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "UserDisplayResolveResponse"
       },
       "ValidationError": {
         "properties": {

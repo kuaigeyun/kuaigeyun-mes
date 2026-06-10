@@ -99,6 +99,20 @@ class MessageService:
             message_log.status = "success"
             message_log.sent_at = timezone.now()
             await message_log.save()
+            try:
+                user_id = int(str(request.recipient).strip())
+                if user_id > 0:
+                    from core.services.messaging.push_dispatch_service import schedule_internal_message_push
+
+                    schedule_internal_message_push(
+                        tenant_id=tenant_id,
+                        user_id=user_id,
+                        subject=subject or "新消息",
+                        content=content or "",
+                        message_log_uuid=str(message_log.uuid),
+                    )
+            except (TypeError, ValueError):
+                pass
             return SendMessageResponse(
                 success=True,
                 message_log_uuid=message_log.uuid,

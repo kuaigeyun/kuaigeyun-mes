@@ -898,11 +898,10 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                         placeholder="请选择模具代号"
                         rules={[{ required: true, message: '请填写模具代号' }]}
                         fieldProps={{
-                          addonAfter: (
+                          addonAfter: isDetailView ? undefined : (
                             <Button
                               type="link"
                               size="small"
-                              disabled={isDetailView}
                               onClick={() => {
                                 setMoldPickRow(index);
                                 setMoldKw('');

@@ -1147,16 +1147,20 @@ const MoldTrialSheetsPage: React.FC = () => {
         const n = raw != null ? Number(raw) : NaN;
         if (Number.isFinite(n) && n > 0 && !presetIds.includes(n)) presetIds.push(n);
       }
-      const res = await searchMoldTrialOperators({
-        page: 1,
-        page_size: 50,
-        keyword: keyword?.trim() || undefined,
-        is_active: true,
-      });
-      const opts = (res.items || []).map((u) => ({
-        label: u.label || formatUserDisplayLabel(u),
-        value: u.id,
-      }));
+      const kw = keyword?.trim() || '';
+      let opts: { label: string; value: number }[] = [];
+      if (kw || presetIds.length === 0) {
+        const res = await searchMoldTrialOperators({
+          page: 1,
+          page_size: 50,
+          keyword: kw || undefined,
+          is_active: true,
+        });
+        opts = (res.items || []).map((u) => ({
+          label: u.label || formatUserDisplayLabel(u),
+          value: u.id,
+        }));
+      }
       const seen = new Set(opts.map((o) => o.value));
       for (const id of presetIds) {
         if (seen.has(id)) continue;

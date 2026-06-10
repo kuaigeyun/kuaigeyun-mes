@@ -318,7 +318,7 @@ export const DetailDrawerTemplate = <T extends Record<string, any> = Record<stri
       zIndex={zIndex}
       afterOpenChange={afterOpenChange}
     >
-      {banner}
+      {banner ? <div style={{ marginBottom: token.marginMD }}>{banner}</div> : null}
       <div
         style={{
           position: 'relative',

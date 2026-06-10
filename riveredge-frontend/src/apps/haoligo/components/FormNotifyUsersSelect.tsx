@@ -8,6 +8,7 @@ import { ProFormSelect } from '@ant-design/pro-components';
 import { useDebounceFn } from 'ahooks';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../stores';
+import { useProFormReadonlyMode } from '../../../utils/proFormReadonly';
 import { canPickUsersForDisplay } from '../../../utils/userDisplay';
 
 export type NotifyUsersSearchFn = (
@@ -57,7 +58,9 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
 }) => {
   const { t } = useTranslation();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPick = canPickUsersForDisplay(currentUser);
+  const canInteract = !isReadonlyMode && canPick;
   const resolvedLabel = label ?? t('app.haoligo.equipment.documents.formReportNotifyUsers');
   const resolvedPh = placeholder ?? t('app.haoligo.equipment.documents.formReportNotifyUsersPh');
 
@@ -113,10 +116,15 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   }, [form, name, seedUserIds]);
 
   useEffect(() => {
+    if (isReadonlyMode) {
+      if (resolvedSelectedIds.length > 0) void fetchOptions();
+      return;
+    }
+    if (!canInteract) return;
     void fetchOptions();
-  }, [fetchOptions, resolvedSelectedIds]);
+  }, [fetchOptions, resolvedSelectedIds, isReadonlyMode, canInteract]);
 
-  const effectiveReadonly = readonly || !canPick;
+  const effectiveReadonly = isReadonlyMode || !canPick;
 
   return (
     <ProFormSelect
@@ -127,15 +135,15 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
       request={async (params) => fetchOptions(resolveSelectSearchKeyword(params))}
       fieldProps={{
         mode: 'multiple',
-        showSearch: canPick,
+        showSearch: canInteract,
         filterOption: false,
         disabled: effectiveReadonly,
         loading,
         placeholder: canPick ? resolvedPh : '无人员选择权限',
         notFoundContent: canPick ? undefined : '无人员选择权限（需 system:user:read 或 system:user:display）',
-        onSearch: canPick ? debouncedFetch : undefined,
+        onSearch: canInteract ? debouncedFetch : undefined,
         onDropdownVisibleChange: (open) => {
-          if (open && canPick) {
+          if (open && canInteract) {
             void fetchOptions();
           }
         },

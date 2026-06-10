@@ -248,6 +248,14 @@ class InfraSettings(BaseSettings):
     
     # 文件管理配置（第三阶段）
     FILE_UPLOAD_DIR: str = Field(default="./uploads", description="文件上传目录")
+    HAOLIGO_MOBILE_RELEASE_DIR: str = Field(
+        default="",
+        description="已废弃，请使用 CLIENT_RELEASE_DIR",
+    )
+    CLIENT_RELEASE_DIR: str = Field(
+        default="",
+        description="客户端安装包/OTA 存储根目录；空则使用 FILE_UPLOAD_DIR",
+    )
     DATA_BACKUP_DIR: str = Field(
         default="",
         description="数据备份 zip 目录；留空则使用 {WORKDIR 或后端根目录}/backups",
@@ -259,6 +267,12 @@ class InfraSettings(BaseSettings):
     ENABLE_SCRIPT_EXECUTION: bool = Field(default=False, description="是否允许执行自定义脚本（Python/Shell），建议在生产环境禁用")
     # 基础URL配置：显式设置 BASE_URL 时使用该值；不设置则使用相对路径，便于局域网/反向代理部署
     base_url_override: str = Field(default="", alias="BASE_URL", description="文件/图片链接基础URL，不设置则使用相对路径")
+
+    # 极光推送（好力 GO 等移动端锁屏通知）
+    JPUSH_APP_KEY: str = Field(default="", description="极光 AppKey（客户端）")
+    JPUSH_MASTER_SECRET: str = Field(default="", description="极光 Master Secret（仅服务端）")
+    PUSH_ENABLED: bool = Field(default=True, description="是否启用极光推送（需配置 AppKey 与 Master Secret）")
+
     @property
     def BASE_URL(self) -> str:
         """

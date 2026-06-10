@@ -1803,9 +1803,13 @@ gen_caddyfile() {
         addr=":${PROXY_PORT}"
     fi
 
+    local client_release_root="${CLIENT_RELEASE_ROOT:-$PROJECT_ROOT/riveredge-backend/uploads/clients}"
+    client_release_root="${client_release_root//\\//}"
+
     sed -e "s|{{ADDR}}|${addr}|g" \
         -e "s|{{BACKEND_ADDR}}|${backend_addr}|g" \
         -e "s|{{FRONTEND_ROOT}}|${frontend_root}|g" \
+        -e "s|{{CLIENT_RELEASE_ROOT}}|${client_release_root}|g" \
         "$CADDY_TEMPLATE" > "$CADDYFILE.tmp"
 
     if ! grep -qE '^[A-Za-z0-9.:_/-][^{]*\{' "$CADDYFILE.tmp"; then

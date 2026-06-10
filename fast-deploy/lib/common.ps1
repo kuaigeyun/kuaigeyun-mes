@@ -918,7 +918,13 @@ function New-Caddyfile {
         else { $addr = "http://$($script:CADDY_DOMAIN):$($script:PROXY_PORT)" }
     } else { $addr = ":$($script:PROXY_PORT)" }
 
-    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot)
+    $clientReleaseRoot = if ($script:CLIENT_RELEASE_ROOT) {
+        $script:CLIENT_RELEASE_ROOT -replace '\\','/'
+    } else {
+        (Join-Path $script:BackendDir 'uploads/clients') -replace '\\','/'
+    }
+
+    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot)
 
     $tmp = "$script:Caddyfile.tmp"
     Set-Content -Path $tmp -Value $content -Encoding UTF8

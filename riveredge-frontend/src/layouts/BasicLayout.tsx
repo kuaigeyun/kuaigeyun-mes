@@ -75,7 +75,7 @@ import TopBarSearch from '../components/TopBarSearch';
 import AiAssistant from '../components/ai-assistant';
 import UniTabs from '../components/uni-tabs';
 import TechStackModal from '../components/tech-stack-modal';
-import { MobileQRCode } from '../components/mobile-preview';
+import { HeaderClientDownloadButton } from '../components/header-client-download';
 import ThemeEditor from '../components/theme-editor';
 import IterationFloatButton from '../components/iteration-float-button';
 import { RouteTransition } from '../components/route-transition';
@@ -711,6 +711,7 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
+      { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
       { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },
@@ -5005,6 +5006,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
             );
           }
 
+          // 租户可下载客户端（扫码安装）- 置于消息铃铛前
+          actions.push(<HeaderClientDownloadButton key="client-download" />);
+
           // 消息提醒（带数量徽标）- 平板/手机也显示
           actions.push(
             <Dropdown
@@ -5190,9 +5194,6 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
 
           if (!isMobileOrTablet) {
-          // 手机端扫码按钮 (临时不展示)
-          // actions.push(<MobileQRCode key="mobile-qr" />);
-
           // 语言切换下拉菜单
           actions.push(
             <Dropdown

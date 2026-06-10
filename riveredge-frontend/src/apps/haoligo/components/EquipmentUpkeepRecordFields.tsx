@@ -47,7 +47,8 @@ function UpkeepRecordLineField({
         label={line.param_name}
         placeholder={options.length ? '请选择（可多选）' : '请先在保养项中配置多选候选项'}
         options={options}
-        disabled={readOnly || options.length === 0}
+        readonly={readOnly}
+        disabled={!readOnly && options.length === 0}
         rules={requiredRule}
         convert={(v) => parseMultiselectMeasuredValue(typeof v === 'string' ? v : null)}
         transform={(v) => {
@@ -70,7 +71,8 @@ function UpkeepRecordLineField({
       label={line.param_name}
       placeholder="请填写保养记录"
       rules={requiredRule}
-      fieldProps={{ rows: 2, maxLength: 2000, showCount: true, readOnly }}
+      readonly={readOnly}
+      fieldProps={{ rows: 2, maxLength: 2000, showCount: !readOnly }}
     />
   );
 }
@@ -235,7 +237,8 @@ function EquipmentUpkeepRecordFieldsInner({
           options={upkeepSetOptions}
           allowClear={!readOnly}
           showSearch
-          disabled={readOnly}
+          readonly={readOnly}
+          disabled={!readOnly}
           fieldProps={{ optionFilterProp: 'label' }}
           extra={
             ledgerSuggestedSetId != null &&
@@ -304,7 +307,8 @@ function EquipmentUpkeepRecordFieldsInner({
             label="保养完成说明"
             placeholder="未选择保养方案时，请填写本次保养完成说明"
             rules={[{ required: true, message: '请选择保养方案或填写保养完成说明' }]}
-            fieldProps={{ rows: 3, maxLength: 4000, showCount: true, readOnly }}
+            readonly={readOnly}
+            fieldProps={{ rows: 3, maxLength: 4000, showCount: !readOnly }}
           />
         </Col>
       ) : null}

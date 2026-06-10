@@ -1,5 +1,5 @@
 # RiverEdge Caddy 配置模板（由 fast-deploy 脚本渲染）
-# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}}
+# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{CLIENT_RELEASE_ROOT}}
 # 实际生成文件：fast-deploy/caddy/Caddyfile
 
 # 禁用 admin API 避免与系统 Caddy 端口 2019 冲突
@@ -20,6 +20,22 @@
                 keepalive 30s
             }
         }
+    }
+    handle /static/client-packages/* {
+        root * {{CLIENT_RELEASE_ROOT}}
+        file_server
+    }
+    handle /static/client-updates/* {
+        root * {{CLIENT_RELEASE_ROOT}}
+        file_server
+    }
+    handle /static/mobile-apk/* {
+        root * {{CLIENT_RELEASE_ROOT}}/mobile/apk
+        file_server
+    }
+    handle /static/mobile-updates/* {
+        root * {{CLIENT_RELEASE_ROOT}}/mobile/updates
+        file_server
     }
     handle /static/* {
         reverse_proxy {{BACKEND_ADDR}} {

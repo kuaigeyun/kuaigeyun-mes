@@ -10,8 +10,9 @@
 import React, { useState, useEffect, useMemo, useCallback, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Input, Form, App, Button, Space } from 'antd';
-import { ProForm } from '@ant-design/pro-components';
+import { ProForm, ProFormSelect } from '@ant-design/pro-components';
 import { UniDropdown, QuickCreateAnchorPopover } from '../uni-dropdown';
+import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import {
   getDataDictionaryByCode,
   getDictionaryItemList,
@@ -67,6 +68,8 @@ export interface DictionarySelectProps {
   required?: boolean;
   /** 是否禁用 */
   disabled?: boolean;
+  /** 只读展示（详情页；未传时跟随 ProForm readonly） */
+  readonly?: boolean;
   /** 加载状态 */
   loading?: boolean;
   /** 初始值 */
@@ -118,6 +121,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   placeholder,
   required = false,
   disabled = false,
+  readonly = false,
   loading: externalLoading = false,
   initialValue,
   colProps,
@@ -136,6 +140,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const isReadonlyMode = useProFormReadonlyMode(readonly);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [loading, setLoading] = useState(false);
   const [createPopoverOpen, setCreatePopoverOpen] = useState(false);
@@ -259,6 +264,27 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   }, [required, label, rules]);
 
   const effectiveColProps = colProps ?? { span: 12 };
+
+  if (isReadonlyMode && noStyle) {
+    const strVal = value != null && value !== '' ? String(value) : '';
+    const displayLabel = options.find((o) => o.value === strVal)?.label ?? strVal;
+    return <span>{displayLabel || '-'}</span>;
+  }
+
+  if (isReadonlyMode) {
+    return (
+      <ProFormSelect
+        name={name}
+        label={label}
+        rules={mergedRules}
+        initialValue={initialValue}
+        colProps={effectiveColProps}
+        className="dictionary-select-form-item"
+        readonly
+        options={options}
+      />
+    );
+  }
 
   const baseFieldProps = {
     style: { width: '100%', ...style } as React.CSSProperties,

@@ -465,7 +465,7 @@ const MoldReturnInPage: React.FC = () => {
                   tooltip="与领用单一致：填写制令单号或模具代号后点右侧「带出」，从领用单匹配并填入其余字段；选模具也会自动带出"
                   fieldProps={{
                     allowClear: true,
-                    addonAfter: (
+                    addonAfter: isDetailView ? undefined : (
                       <Button
                         type="link"
                         size="small"
@@ -506,7 +506,7 @@ const MoldReturnInPage: React.FC = () => {
                   tooltip="点「选择」选模具后将自动按模具匹配领用单并带出；也可手输模具代号后点制令单号旁「带出」。成品代号/名称与计划数量为只读（由「带出」或选模具写入）"
                   rules={[{ required: true, message: '请输入模具代号' }]}
                   fieldProps={{
-                    addonAfter: (
+                    addonAfter: isDetailView ? undefined : (
                       <Button
                         type="link"
                         size="small"

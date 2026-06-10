@@ -599,12 +599,13 @@ async def _ensure_trial_form_operator_picker(
     auth: AuthContext = Depends(get_auth_context),
     tenant_id: int = Depends(get_current_tenant),
 ) -> None:
-    """试模/试产人员下拉：具备试模单 create 或 update 即可搜索，不依赖 system:user:read。"""
+    """试模/试产人员：create/update 可搜索选人；read 可 display 级回显（详情只读），不依赖 system:user:read。"""
     await ensure_permission_codes(
         auth,
         tenant_id,
         request,
         [
+            build_permission_code("haoligo", "molds-documents-trial", "read"),
             build_permission_code("haoligo", "molds-documents-trial", "create"),
             build_permission_code("haoligo", "molds-documents-trial", "update"),
         ],

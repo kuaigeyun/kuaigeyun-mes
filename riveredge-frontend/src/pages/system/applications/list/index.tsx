@@ -13,6 +13,7 @@ import { App, Button, Card, Descriptions, Dropdown, Modal, Popconfirm, Space, Sw
 import { ThemedSegmented } from '../../../../components/themed-segmented';
 const { Title, Paragraph, Text } = Typography;
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, TwoColumnLayout } from '../../../../components/layout-templates';
+import { ApplicationClientReleasesPanel } from './ApplicationClientReleasesPanel';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import { UniTable } from '../../../../components/uni-table';
 import { UniWiki, WikiItem, WikiTreeData } from '../../../../components';
@@ -2493,6 +2494,9 @@ const ApplicationListPage: React.FC = () => {
         basic={detailData ? (
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
           ) : null}
+        lines={detailData?.code ? <ApplicationClientReleasesPanel appCode={detailData.code} /> : null}
+        linesTitle="客户端"
+        linesVisible={Boolean(detailData?.code)}
       />
 
       {/* 应用设置 Modal - 使用 FormModalTemplate */}

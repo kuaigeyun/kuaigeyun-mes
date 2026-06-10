@@ -50,7 +50,8 @@ function UpkeepRecordLineField({
         label={line.param_name}
         placeholder={options.length ? '请选择（可多选）' : '请先在保养项中配置多选候选项'}
         options={options}
-        disabled={readOnly || options.length === 0}
+        readonly={readOnly}
+        disabled={!readOnly && options.length === 0}
         rules={requiredRule}
         convert={(v) => parseMultiselectMeasuredValue(typeof v === 'string' ? v : null)}
         transform={(v) => {
@@ -73,7 +74,8 @@ function UpkeepRecordLineField({
       label={line.param_name}
       placeholder="请填写保养记录"
       rules={requiredRule}
-      fieldProps={{ rows: 2, maxLength: 2000, showCount: true, readOnly }}
+      readonly={readOnly}
+      fieldProps={{ rows: 2, maxLength: 2000, showCount: !readOnly }}
     />
   );
 }
@@ -227,16 +229,18 @@ function MoldUpkeepRecordFieldsInner({
             name="upkeep_param_set_id"
             label="保养方案"
             placeholder="请先填写模具代号"
-            options={upkeepSetOptions}
-            disabled
+          options={upkeepSetOptions}
+          readonly={readOnly}
+          disabled={!readOnly}
           />
         </Col>
         <Col span={24}>
           <ProFormTextArea
             name="upkeep_content"
             label="保养内容"
-            placeholder="请先填写模具代号"
-            fieldProps={{ rows: 3, readOnly }}
+          placeholder="请先填写模具代号"
+          readonly={readOnly}
+          fieldProps={{ rows: 3 }}
           />
         </Col>
       </>
@@ -253,7 +257,8 @@ function MoldUpkeepRecordFieldsInner({
           options={upkeepSetOptions}
           allowClear={!readOnly}
           showSearch
-          disabled={readOnly}
+          readonly={readOnly}
+          disabled={!readOnly}
           fieldProps={{ optionFilterProp: 'label' }}
           extra={
             ledgerSuggestedSetId != null &&
@@ -326,7 +331,8 @@ function MoldUpkeepRecordFieldsInner({
             label="保养内容"
             placeholder="未选择保养方案时，请填写本次保养内容"
             rules={[{ required: true, message: '请选择保养方案或填写保养内容' }]}
-            fieldProps={{ rows: 3, maxLength: 4000, showCount: true, readOnly }}
+            readonly={readOnly}
+            fieldProps={{ rows: 3, maxLength: 4000, showCount: !readOnly }}
           />
         </Col>
       ) : null}

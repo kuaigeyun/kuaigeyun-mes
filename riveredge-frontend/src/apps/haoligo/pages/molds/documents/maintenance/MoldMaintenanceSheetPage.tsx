@@ -731,7 +731,7 @@ export function MoldMaintenanceSheetPage({
               name="line_items"
               min={1}
               copyIconProps={false}
-              creatorButtonProps={{ creatorButtonText: '添加模具' }}
+              creatorButtonProps={isDetailView ? false : { creatorButtonText: '添加模具' }}
               itemRender={({ listDom, action }) => (
                 <div style={{ position: 'relative', marginBottom: 16 }}>
                   {listDom}
@@ -751,7 +751,7 @@ export function MoldMaintenanceSheetPage({
                 </div>
               )}
               actionRender={(field, action, _defaultActionDom, count) => {
-                if (count <= 1) return [];
+                if (isDetailView || count <= 1) return [];
                 return [
                   <Tooltip {...rowActionKind('delete')} key="remove" title="删除">
                     <Button
@@ -785,7 +785,7 @@ export function MoldMaintenanceSheetPage({
                         placeholder="请选择模具代号"
                         rules={[{ required: true, message: '请填写模具代号' }]}
                         fieldProps={{
-                          addonAfter: (
+                          addonAfter: isDetailView ? undefined : (
                             <Button
                               type="link"
                               size="small"

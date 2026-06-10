@@ -63,9 +63,6 @@ import {
   testApplicationConnectionConfig,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
-import { relativeTime;
-
-const {  } = Typography;
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },

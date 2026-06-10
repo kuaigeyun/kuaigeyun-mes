@@ -9,6 +9,11 @@
   "route_path": "/apps/haoligo",
   "sort_order": 220,
   "is_dedicated": true,
+  "mobile_client": {
+    "client_key": "haoligo",
+    "platform": "android",
+    "check_path": "/mobile/release/check"
+  },
   "market_category": "dedicated",
   "permission_code": "haoligo:workspace:read",
   "menu_config": {

@@ -110,6 +110,8 @@ class DynamicDatabaseConfigService:
             "core.models.site_setting",
             "core.models.invitation_code",
             "core.models.language",
+            "core.models.client_product",
+            "core.models.client_release",
             "core.models.integration_config",
             "core.models.file",
             "core.models.api",

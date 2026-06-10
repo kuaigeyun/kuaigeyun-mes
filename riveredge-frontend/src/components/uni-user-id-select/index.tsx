@@ -10,6 +10,7 @@ import {
   type UserDisplayItem,
 } from '../../services/user';
 import { useGlobalStore } from '../../stores';
+import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
 import {
   canPickUsersForDisplay,
   canReadUserDirectory,
@@ -68,8 +69,10 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
 }) => {
   const { message } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
+  const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPickDirectory = canPickUsersForDisplay(currentUser);
-  const canPick = Boolean(searchUsers) || canPickDirectory;
+  const canInteract = !isReadonlyMode && !disabled && (Boolean(searchUsers) || canPickDirectory);
+  const canResolveLabels = Boolean(searchUsers) || canPickDirectory;
   const useFullList = canReadUserDirectory(currentUser);
 
   const [options, setOptions] = useState<{ label: string; value: number }[]>([]);
@@ -125,7 +128,7 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
 
   const resolveUserIdsToLabels = useCallback(
     async (ids: number[]) => {
-      if (!canPick) {
+      if (!canResolveLabels) {
         mergePresets();
         return;
       }
@@ -154,11 +157,11 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
         mergePresets();
       }
     },
-    [canPick, ingestDisplayItems, mergePresets, searchUsers, syncOptionsFromLabelMap],
+    [canResolveLabels, ingestDisplayItems, mergePresets, searchUsers, syncOptionsFromLabelMap],
   );
 
   const fetchUsers = async (searchText: string = '') => {
-    if (!canPick) {
+    if (!canInteract) {
       mergePresets();
       return;
     }
@@ -219,7 +222,9 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
         ingestDisplayItems(response.items || []);
       }
     } catch {
-      message.error('加载人员列表失败，请稍后重试');
+      if (!isReadonlyMode) {
+        message.error('加载人员列表失败，请稍后重试');
+      }
       mergePresets();
     } finally {
       setLoading(false);
@@ -237,13 +242,13 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
       const ids = [...presetIds];
       if (Number.isFinite(wid)) ids.push(wid);
       if (!cancelled) await resolveUserIdsToLabels(ids);
-      if (!cancelled) void fetchUsers();
+      if (!cancelled && canInteract) void fetchUsers();
     })();
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeOnly, departmentUuid, canPick, useFullList, searchUsers]);
+  }, [activeOnly, departmentUuid, canInteract, canResolveLabels, useFullList, searchUsers, isReadonlyMode]);
 
   useEffect(() => {
     mergePresets(presetUsers);
@@ -255,7 +260,7 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
     void resolveUserIdsToLabels([wid]);
   }, [watchedId, resolveUserIdsToLabels]);
 
-  const effectiveReadonly = readonly || !canPick;
+  const effectiveReadonly = isReadonlyMode || disabled || !canInteract;
 
   const handleChange = (val: number | undefined) => {
     if (val == null) {
@@ -288,10 +293,10 @@ export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
       rules={required ? [{ required: true, message: `请选择${label}` }] : undefined}
       options={mergedOptions}
       fieldProps={{
-        showSearch: canPick,
+        showSearch: canInteract,
         loading,
         filterOption: false,
-        onSearch: canPick ? debounceFetch : undefined,
+        onSearch: canInteract ? debounceFetch : undefined,
         onChange: handleChange,
       }}
       {...restProps}

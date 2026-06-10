@@ -76,7 +76,7 @@ import {
 } from '../../services/master-data-links';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
 import { UniUserSelect } from '../../../../components/uni-user-select';
-import { getUserList } from '../../../../services/user';
+import { resolveUserDisplay } from '../../../../services/user';
 import './detail.less';
 
 const GATE_STATUS_COLOR: Record<string, string> = {
@@ -164,20 +164,16 @@ const RdProjectDetailPage: React.FC = () => {
     let reviewerUuid: string | undefined;
     if (gate.reviewer_id != null || gate.reviewer_name) {
       try {
-        const res = await getUserList({
-          page: 1,
-          page_size: 50,
-          keyword: gate.reviewer_name || undefined,
-        });
-        const user =
-          res.items?.find((u) => u.id === gate.reviewer_id) ??
-          res.items?.find((u) => (u.full_name || u.username) === gate.reviewer_name);
-        reviewerUuid = user?.uuid;
-        if (user) {
-          selectedReviewerRef.current = {
-            id: user.id,
-            name: user.full_name || user.username || '',
-          };
+        if (gate.reviewer_id != null) {
+          const resolved = await resolveUserDisplay({ user_ids: [gate.reviewer_id] });
+          const user = resolved[0];
+          reviewerUuid = user?.uuid;
+          if (user) {
+            selectedReviewerRef.current = {
+              id: user.id,
+              name: user.label || user.full_name || user.username || '',
+            };
+          }
         }
       } catch {
         // 保留 gate 快照，下拉仍可重新选择

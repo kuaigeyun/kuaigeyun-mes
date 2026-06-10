@@ -48,7 +48,8 @@ import { updateIntegrationConfig } from '../../../../services/integrationConfig'
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { extractProTableSort, mergeListKeyword, mapIntegrationConfigListSortField } from '../../../../utils/tableQueryKey';
-import { relativeTime;
+
+dayjs.extend(relativeTime);
 
 const { Text, Paragraph } = Typography;
 const { useToken } = theme;

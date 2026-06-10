@@ -32,6 +32,7 @@ import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
+import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { MoldUpkeepRecordFields } from '../../../../components/MoldUpkeepRecordFields';
 import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachmentStrip';
 import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
@@ -1177,24 +1178,29 @@ export function MoldMaintenanceCompleteSheetPage({
                       />
                     </Col>
                     <Col xs={24} sm={8}>
-                      <ProFormDependency name={['service_type']} ignoreFormListField>
-                        {({ service_type }) => {
-                          const isUpkeep = service_type === '保养';
-                          return (
-                            <ProFormText
-                              name="repair_reason"
-                              label={isUpkeep ? '保养原因' : '维修原因'}
-                              placeholder={isUpkeep ? '保养原因' : '维修原因'}
-                              fieldProps={{ readOnly: !isEdit || isDetailView }}
-                            />
-                          );
-                        }}
-                      </ProFormDependency>
+                      <DictionarySelect
+                        key={
+                          serviceType === '保养'
+                            ? 'HAOLIGO_MOLD_MAINTENANCE_REASON'
+                            : 'HAOLIGO_MOLD_REPAIR_REASON'
+                        }
+                        dictionaryCode={
+                          serviceType === '保养'
+                            ? 'HAOLIGO_MOLD_MAINTENANCE_REASON'
+                            : 'HAOLIGO_MOLD_REPAIR_REASON'
+                        }
+                        name="repair_reason"
+                        setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
+                        label={serviceType === '保养' ? '保养原因' : '维修原因'}
+                        placeholder={serviceType === '保养' ? '保养原因' : '维修原因'}
+                        formRef={formRef}
+                        simpleQuickCreate
+                        colProps={{ span: 24 }}
+                        readonly={!isEdit || isDetailView}
+                      />
                     </Col>
                   </Row>
-                  <ProFormDependency name={['service_type']} ignoreFormListField>
-                    {({ service_type }) =>
-                      service_type === '保养' ? (
+                  {serviceType === '保养' ? (
                         <>
                           <Row gutter={16} style={{ marginTop: 4 }}>
                             <MoldUpkeepRecordFields
@@ -1237,25 +1243,24 @@ export function MoldMaintenanceCompleteSheetPage({
                                 label="维修结果"
                                 placeholder="请选择维修结果"
                                 rules={[{ required: true, message: '请选择维修结果' }]}
-                                options={HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS.map((v) => ({ label: v, value: v }))}
+                                options={HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS.map((v) => ({
+                                  label: v,
+                                  value: v,
+                                }))}
                               />
                             </Col>
                           </Row>
                         </>
-                      )
-                    }
-                  </ProFormDependency>
+                      )}
                   <ProFormDependency name={['mold_code']}>
-                    {({ mold_code }) => (
-                      <ProFormDependency name={['service_type']} ignoreFormListField>
-                        {({ service_type }) => {
-                          const isUpkeep = service_type === '保养';
-                          const phaseBefore = isUpkeep ? '保养前' : '维修前';
-                          const phaseAfter = isUpkeep ? '保养后' : '维修后';
-                          const mc = String(mold_code ?? '').trim();
-                          const prevUuids =
-                            beforeAttachmentPreview && mc ? beforeAttachmentPreview.byMold[mc] ?? [] : [];
-                          return (
+                    {({ mold_code }) => {
+                      const isUpkeep = serviceType === '保养';
+                      const phaseBefore = isUpkeep ? '保养前' : '维修前';
+                      const phaseAfter = isUpkeep ? '保养后' : '维修后';
+                      const mc = String(mold_code ?? '').trim();
+                      const prevUuids =
+                        beforeAttachmentPreview && mc ? beforeAttachmentPreview.byMold[mc] ?? [] : [];
+                      return (
                             <Row gutter={16} style={{ marginTop: 4 }}>
                               <Col span={24}>
                                 <div
@@ -1287,9 +1292,7 @@ export function MoldMaintenanceCompleteSheetPage({
                               </Col>
                             </Row>
                           );
-                        }}
-                      </ProFormDependency>
-                    )}
+                    }}
                   </ProFormDependency>
                 </div>
               )}

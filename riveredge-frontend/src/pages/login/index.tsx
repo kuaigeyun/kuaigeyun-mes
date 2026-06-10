@@ -20,7 +20,7 @@ import {
   AppstoreOutlined,
 } from '@ant-design/icons';
 import { useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 const LottiePlayer = lazy(() => import('lottie-react').then((m) => ({ default: m.default })));
 import {
   registerPersonal,
@@ -47,6 +47,7 @@ import { Spin } from 'antd';
 const LazyRegisterDrawer = lazy(() => import('./RegisterDrawer'));
 import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
+import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
 import {
   DEFAULT_SITE_LOGO_URL,
@@ -201,6 +202,13 @@ export default function LoginPage() {
   const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
   const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
   const showClientDownloads = loginClientWinEnabled || loginClientAndroidEnabled;
+
+  const { data: loginClientDownloads } = useQuery({
+    queryKey: ['loginClientDownloads'],
+    queryFn: getLoginClientDownloads,
+    enabled: showClientDownloads,
+    staleTime: 60_000,
+  });
 
   // LOGO URL状态（支持UUID和URL两种格式）
   // 初始值：尝试从 localStorage 读取缓存的设置，避免闪烁
@@ -495,6 +503,18 @@ export default function LoginPage() {
   const showClientDownloadPlaceholder = useCallback(() => {
     message.info(t('pages.login.clientDownloadPlaceholder'));
   }, [message, t]);
+
+  const handleClientDownload = useCallback(
+    (slot: 'windows' | 'android_pda') => {
+      const item = slot === 'windows' ? loginClientDownloads?.windows : loginClientDownloads?.android_pda;
+      if (item?.url) {
+        window.open(item.url, '_blank', 'noopener,noreferrer');
+        return;
+      }
+      showClientDownloadPlaceholder();
+    },
+    [loginClientDownloads, showClientDownloadPlaceholder],
+  );
 
   // 个人注册表单状态
   const [tenantCheckResult, setTenantCheckResult] = useState<TenantCheckResponse | null>(null);
@@ -2025,7 +2045,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="login-client-download-tile"
-                onClick={showClientDownloadPlaceholder}
+                onClick={() => handleClientDownload('windows')}
                 style={{ ['--client-tile-accent' as string]: themeColor }}
               >
                 <WindowsFilled className="login-client-download-tile-brand login-client-download-tile-brand--win" aria-hidden />
@@ -2040,7 +2060,7 @@ export default function LoginPage() {
               <button
                 type="button"
                 className="login-client-download-tile"
-                onClick={showClientDownloadPlaceholder}
+                onClick={() => handleClientDownload('android_pda')}
                 style={{ ['--client-tile-accent' as string]: themeColor }}
               >
                 <AndroidFilled className="login-client-download-tile-brand login-client-download-tile-brand--android" aria-hidden />

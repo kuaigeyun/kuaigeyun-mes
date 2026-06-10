@@ -46,7 +46,9 @@ import {
   mapMenuTreeWithTranslatedLabels,
   translateAppMenuItemName,
 } from '../../../utils/menuTranslation';
-import { { icon }: { icon?: string } => {
+
+// 动态图标组件
+const IconItem = ({ icon }: { icon?: string }) => {
   if (!icon) return null;
   const AntdIcons = Icons as unknown as Record<string, React.ComponentType>;
   const Icon = AntdIcons[icon];

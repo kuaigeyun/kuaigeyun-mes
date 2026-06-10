@@ -42,6 +42,9 @@ from infra.api.templates.templates import router as industry_template_router
 from infra.api.platform_settings.platform_settings import router as platform_settings_router
 from infra.api.license_center.license_center import router as license_center_router
 from infra.api.platform_settings.public import router as platform_settings_public_router
+from infra.api.client_releases.client_releases import public_router as client_releases_public_router
+from infra.api.client_releases.client_releases import router as client_releases_router
+from infra.api.client_releases.client_releases import tenant_router as client_releases_tenant_router
 from infra.api.platform_settings.version import router as platform_version_router
 from infra.api.business_config.business_config import router as business_config_router
 from infra.api.application_dedicated.application_dedicated import router as application_dedicated_router
@@ -420,6 +423,44 @@ else:
         _REDOC_STATIC_DIR / "redoc.standalone.js",
     )
 
+# 客户端安装包 / OTA 静态资源（Caddy 生产直出；本地兜底）
+try:
+    from core.services.client_release_service import client_release_root
+
+    _client_root = client_release_root()
+    if _client_root.is_dir():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount(
+            "/static/client-packages",
+            StaticFiles(directory=str(_client_root)),
+            name="client_packages",
+        )
+        app.mount(
+            "/static/client-updates",
+            StaticFiles(directory=str(_client_root)),
+            name="client_updates",
+        )
+    _legacy_mobile = Path(infra_settings.FILE_UPLOAD_DIR) / "mobile"
+    if (_legacy_mobile / "apk").is_dir():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount(
+            "/static/mobile-apk",
+            StaticFiles(directory=str(_legacy_mobile / "apk")),
+            name="legacy_mobile_apk",
+        )
+    if (_legacy_mobile / "updates").is_dir():
+        from starlette.staticfiles import StaticFiles
+
+        app.mount(
+            "/static/mobile-updates",
+            StaticFiles(directory=str(_legacy_mobile / "updates")),
+            name="legacy_mobile_updates",
+        )
+except Exception as _client_static_err:
+    logger.warning("客户端静态目录挂载跳过: {}", _client_static_err)
+
 
 @app.get("/api/debug/batches")
 async def debug_batches():
@@ -747,8 +788,9 @@ app.include_router(saved_searches_router, prefix="/api/v1")
 app.include_router(init_wizard_router, prefix="/api/v1/infra")
 app.include_router(industry_template_router, prefix="/api/v1/infra")
 app.include_router(platform_settings_router, prefix="/api/v1/infra")
-app.include_router(license_center_router, prefix="/api/v1/infra")
-app.include_router(business_config_router, prefix="/api/v1/infra")
+app.include_router(client_releases_public_router, prefix="/api/v1/infra")
+app.include_router(client_releases_router, prefix="/api/v1/infra")
+app.include_router(client_releases_tenant_router, prefix="/api/v1/core")
 app.include_router(application_dedicated_router, prefix="/api/v1/infra")
 
 # 系统级功能路由 (System Level APIs) - 对应 core/ 文件夹

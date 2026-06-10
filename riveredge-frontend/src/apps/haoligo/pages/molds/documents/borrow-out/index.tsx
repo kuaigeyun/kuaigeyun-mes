@@ -748,7 +748,7 @@ const MoldBorrowOutPage: React.FC = () => {
                     placeholder="请输入制令单号"
                     fieldProps={{
                       allowClear: true,
-                      addonAfter: (
+                      addonAfter: isDetailView ? undefined : (
                         <Button
                           type="link"
                           size="small"
@@ -803,7 +803,7 @@ const MoldBorrowOutPage: React.FC = () => {
                   placeholder="请输入内容"
                   rules={[{ required: true, message: '请输入模具代号' }]}
                   fieldProps={{
-                    addonAfter: (
+                    addonAfter: isDetailView ? undefined : (
                       <Button
                         type="link"
                         size="small"

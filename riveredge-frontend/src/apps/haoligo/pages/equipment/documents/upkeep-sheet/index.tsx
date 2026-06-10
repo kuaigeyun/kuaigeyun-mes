@@ -554,7 +554,6 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     name="equipment_id"
                     label={t('app.haoligo.equipment.documents.formEquipment')}
                     rules={[{ required: true }]}
-                    disabled={isDetailView}
                     showSearch
                     fieldProps={{
                       filterOption: false,
@@ -653,7 +652,6 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                           ]}
                           formRef={formRef}
                           simpleQuickCreate
-                          disabled={isDetailView}
                           colProps={{ span: 12 }}
                         />
                       );

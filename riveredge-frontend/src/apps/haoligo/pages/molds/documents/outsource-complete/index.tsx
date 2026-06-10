@@ -30,6 +30,7 @@ import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
+import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ReadonlyAttachmentStrip } from '../../../../components/ReadonlyAttachmentStrip';
 import { uuidsToSecureUploadFileList } from '../../../../utils/secureUploadFileList';
 import { UniUserIdSelect } from '../../../../../../components/uni-user-id-select';
@@ -1194,11 +1195,16 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                         />
                       </Col>
                       <Col xs={24} sm={8}>
-                        <ProFormText
+                        <DictionarySelect
+                          dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
                           name="repair_reason"
+                          setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                           label="维修原因"
                           placeholder="维修原因"
-                          fieldProps={{ readOnly: true }}
+                          formRef={formRef}
+                          simpleQuickCreate
+                          colProps={{ span: 24 }}
+                          readonly
                         />
                       </Col>
                       <Col xs={24} sm={8}>

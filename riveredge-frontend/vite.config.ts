@@ -102,6 +102,16 @@ export default defineConfig({
           });
         },
       } as ProxyOptions,
+      '/static/client-packages': {
+        target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
+        changeOrigin: true,
+        secure: false,
+      } as ProxyOptions,
+      '/static/client-updates': {
+        target: process.env.VITE_API_TARGET || `http://${process.env.VITE_BACKEND_HOST || '127.0.0.1'}:${process.env.VITE_BACKEND_PORT || '8200'}`,
+        changeOrigin: true,
+        secure: false,
+      } as ProxyOptions,
       // 积木报表代理，使其感觉上是“融合”在同一个域名下
       '/jeecg-boot': {
         target: 'http://localhost:8200', // 假设积木报表服务运行在 8080
