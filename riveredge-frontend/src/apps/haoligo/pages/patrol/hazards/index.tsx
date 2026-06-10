@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { rowActionKind } from '../../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Space, Tag, Typography } from 'antd';
 import { EyeOutlined, ToolOutlined } from '@ant-design/icons';
@@ -203,7 +203,12 @@ const PatrolHazardsPage: React.FC = () => {
             详情
           </Button>
           {record.status !== '已治理' && (
-            <Button key="remediate" {...rowActionKind('update')} onClick={() => void openRemediate(record, false)}>
+            <Button
+              key="remediate"
+              {...rowActionKind('update')}
+              {...rowActionLabelKeep()}
+              onClick={() => void openRemediate(record, false)}
+            >
               治理
             </Button>
           )}
