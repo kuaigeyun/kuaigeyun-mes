@@ -31,6 +31,19 @@ export type ClientProductConfigUpdateInput = {
   jpush_master_secret?: string;
 };
 
+export type ClientPushTestInput = {
+  tenant_id: number;
+  user_id: number;
+};
+
+export type ClientPushTestResult = {
+  alias: string;
+  success: boolean;
+  http_status: number;
+  jpush_message: string;
+  hint?: string | null;
+};
+
 export type ClientReleasePackage = {
   url: string;
   sha256?: string | null;
@@ -120,6 +133,19 @@ export async function updateClientProductConfig(
     method: 'PUT',
     data: input,
   });
+}
+
+export async function sendClientPushTest(
+  clientKey: string,
+  input: ClientPushTestInput,
+): Promise<ClientPushTestResult> {
+  return apiRequest<ClientPushTestResult>(
+    `${ADMIN_BASE}/products/${encodeURIComponent(clientKey)}/push-test`,
+    {
+      method: 'POST',
+      data: input,
+    },
+  );
 }
 
 export async function listClientReleases(params?: {

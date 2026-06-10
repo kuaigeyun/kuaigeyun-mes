@@ -435,6 +435,17 @@ export async function searchUserDisplay(
   return apiRequest<UserDisplayListResponse>('/core/users/display-search', { params });
 }
 
+/** 平台超管：在指定租户上下文中搜索人员（如极光推送测试） */
+export async function searchUserDisplayInTenant(
+  tenantId: number,
+  params?: UserDisplayListParams,
+): Promise<UserDisplayListResponse> {
+  return apiRequest<UserDisplayListResponse>('/core/users/display-search', {
+    params,
+    headers: { 'X-Tenant-ID': String(tenantId) },
+  });
+}
+
 /**
  * 按 ID/UUID 批量解析人员展示名
  */

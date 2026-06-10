@@ -101,6 +101,107 @@ def _build_push_extras(
     return extras
 
 
+def _interpret_jpush_test_result(*, http_status: int, body: str, alias: str) -> str | None:
+    text = (body or "").strip()
+    if http_status == 200:
+        return "极光已受理推送；若手机仍无通知，请检查通知权限并保持 App 登录约 10 秒。"
+    if "1011" in text:
+        return (
+            f"极光找不到 alias={alias} 对应设备（手机尚未绑定）。"
+            "请安装含 JPush 的正式 APK、登录、允许通知，并保持 App 前台约 10 秒后重试。"
+        )
+    if http_status == 401:
+        return "AppKey 或 Master Secret 无效，请核对平台客户端配置与极光控制台。"
+    return "极光 API 返回异常，请查看 jpush_message 详情。"
+
+
+async def send_jpush_test_notification(
+    *,
+    tenant_id: int,
+    user_id: int,
+    client_key: str = CLIENT_KEY_HAOLIGO,
+    title: str = "推送测试",
+    body: str = "这是一条来自 RiverEdge 的测试推送",
+) -> dict[str, Any]:
+    """向指定用户 alias 发送测试通知，返回极光原始响应便于排查。"""
+    from core.services.client_product_config_service import resolve_jpush_credentials
+
+    if not infra_settings.PUSH_ENABLED:
+        return {
+            "alias": build_jpush_alias(tenant_id=tenant_id, user_id=user_id),
+            "success": False,
+            "http_status": 0,
+            "jpush_message": "PUSH_ENABLED=false",
+            "hint": "请在服务端 .env 设置 PUSH_ENABLED=true",
+        }
+
+    creds = await resolve_jpush_credentials(client_key)
+    alias = build_jpush_alias(tenant_id=tenant_id, user_id=user_id)
+    if not creds:
+        return {
+            "alias": alias,
+            "success": False,
+            "http_status": 0,
+            "jpush_message": "missing credentials",
+            "hint": "推送凭据未就绪：请配置 AppKey 与 Master Secret，并确认 push_enabled=true",
+        }
+
+    app_key, master_secret = creds
+    auth = _auth_header_from_credentials(app_key, master_secret)
+    payload: dict[str, Any] = {
+        "platform": "android",
+        "audience": {"alias": [alias]},
+        "notification": {
+            "alert": body,
+            "android": {
+                "alert": body,
+                "title": title,
+                "extras": {
+                    "tenant_id": str(tenant_id),
+                    "route_kind": "message",
+                },
+            },
+        },
+        "options": {"apns_production": False},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                _JPUSH_PUSH_URL,
+                json=payload,
+                headers={"Authorization": auth, "Content-Type": "application/json"},
+            )
+        body_text = response.text[:1000]
+        success = response.status_code == 200
+        hint = _interpret_jpush_test_result(http_status=response.status_code, body=body_text, alias=alias)
+        if success:
+            logger.info("极光测试推送成功 alias={}", alias)
+        else:
+            logger.warning(
+                "极光测试推送失败 alias={} status={} body={}",
+                alias,
+                response.status_code,
+                body_text[:500],
+            )
+        return {
+            "alias": alias,
+            "success": success,
+            "http_status": response.status_code,
+            "jpush_message": body_text,
+            "hint": hint,
+        }
+    except Exception as exc:
+        logger.warning("极光测试推送异常 alias={}: {}", alias, exc)
+        return {
+            "alias": alias,
+            "success": False,
+            "http_status": 0,
+            "jpush_message": str(exc),
+            "hint": "请求极光 API 失败，请检查服务器出网与 DNS",
+        }
+
+
 async def push_internal_message_to_user(
     *,
     tenant_id: int,

@@ -115,6 +115,19 @@ class ClientProductConfigUpdateIn(BaseModel):
     )
 
 
+class ClientPushTestIn(BaseModel):
+    tenant_id: int = Field(gt=0, description="租户 ID")
+    user_id: int = Field(gt=0, description="用户 ID（与手机登录账号一致）")
+
+
+class ClientPushTestOut(BaseModel):
+    alias: str
+    success: bool
+    http_status: int
+    jpush_message: str
+    hint: str | None = None
+
+
 def _origin(request: Request) -> str:
     return svc.resolve_request_public_origin(
         base_url=str(request.base_url).rstrip("/"),
@@ -189,6 +202,29 @@ async def update_client_product_config(
         jpush_master_secret=body.jpush_master_secret,
     )
     return ClientProductConfigOut.model_validate(data)
+
+
+@router.post(
+    "/products/{client_key}/push-test",
+    response_model=ClientPushTestOut,
+    summary="发送极光测试推送（超管）",
+)
+async def send_client_push_test(
+    client_key: str,
+    body: ClientPushTestIn,
+    _admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+) -> ClientPushTestOut:
+    from core.services.messaging.push_dispatch_service import send_jpush_test_notification
+
+    product = await product_cfg_svc.get_client_product_config(client_key)
+    if not product.get("push_configurable"):
+        raise HTTPException(status_code=400, detail="该客户端不支持极光推送测试")
+    result = await send_jpush_test_notification(
+        tenant_id=body.tenant_id,
+        user_id=body.user_id,
+        client_key=client_key,
+    )
+    return ClientPushTestOut.model_validate(result)
 
 
 @router.get("", response_model=list[ClientReleaseOut], summary="发布记录列表（超管）")
