@@ -1,5 +1,5 @@
 # RiverEdge Caddy 配置模板（由 fast-deploy 脚本渲染）
-# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{CLIENT_RELEASE_ROOT}}
+# 占位符：{{ADDR}} {{BACKEND_ADDR}} {{FRONTEND_ROOT}} {{CLIENT_RELEASE_ROOT}} {{FILE_UPLOAD_ROOT}}
 # 实际生成文件：fast-deploy/caddy/Caddyfile
 
 # 禁用 admin API 避免与系统 Caddy 端口 2019 冲突
@@ -21,20 +21,21 @@
             }
         }
     }
-    handle /static/client-packages/* {
+    # handle_path 自动剥离 URL 前缀，与后端 StaticFiles 挂载路径一致（clients/{key}/packages/...）
+    handle_path /static/client-packages/* {
         root * {{CLIENT_RELEASE_ROOT}}
         file_server
     }
-    handle /static/client-updates/* {
+    handle_path /static/client-updates/* {
         root * {{CLIENT_RELEASE_ROOT}}
         file_server
     }
-    handle /static/mobile-apk/* {
-        root * {{CLIENT_RELEASE_ROOT}}/mobile/apk
+    handle_path /static/mobile-apk/* {
+        root * {{FILE_UPLOAD_ROOT}}/mobile/apk
         file_server
     }
-    handle /static/mobile-updates/* {
-        root * {{CLIENT_RELEASE_ROOT}}/mobile/updates
+    handle_path /static/mobile-updates/* {
+        root * {{FILE_UPLOAD_ROOT}}/mobile/updates
         file_server
     }
     handle /static/* {

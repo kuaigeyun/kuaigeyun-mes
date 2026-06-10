@@ -923,8 +923,15 @@ function New-Caddyfile {
     } else {
         (Join-Path $script:BackendDir 'uploads/clients') -replace '\\','/'
     }
+    $fileUploadRoot = if ($script:FILE_UPLOAD_ROOT) {
+        $script:FILE_UPLOAD_ROOT -replace '\\','/'
+    } elseif ($clientReleaseRoot -match '/clients$') {
+        ($clientReleaseRoot -replace '/clients$','')
+    } else {
+        (Join-Path $script:BackendDir 'uploads') -replace '\\','/'
+    }
 
-    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot)
+    $content = (Get-Content $script:CaddyTemplate -Raw).Replace('{{ADDR}}', $addr).Replace('{{BACKEND_ADDR}}', $backendAddr).Replace('{{FRONTEND_ROOT}}', $frontendRoot).Replace('{{CLIENT_RELEASE_ROOT}}', $clientReleaseRoot).Replace('{{FILE_UPLOAD_ROOT}}', $fileUploadRoot)
 
     $tmp = "$script:Caddyfile.tmp"
     Set-Content -Path $tmp -Value $content -Encoding UTF8
