@@ -53,7 +53,26 @@ import {
 } from '../../../../services/haoligo';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { OUTSOURCE_COMPLETE_SOURCE_MAINTENANCE_PARAM } from '../../../../utils/outsourceCompleteNavigation';
-import {val: unknown: string[] {
+import { rowActionKind } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
+import {
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE,
+  HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE_COMPLETE,
+} from '../../../../constants/documentPermissionResources';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
+import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
+import {
+  canAuditMoldSheet,
+  isMoldSheetApproved,
+  moldSheetAuditStatusTag,
+} from '../../../../utils/moldSheetStatus';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+
+function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
   const out: string[] = [];
   for (const item of val) {

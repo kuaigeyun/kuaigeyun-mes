@@ -13,10 +13,10 @@ import {
   ProFormText,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Modal, Tag } from 'antd';
+import { App, Button, Modal, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { rowActionKind } from '../../../../../components/uni-action';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -174,23 +174,18 @@ const EquipmentUpkeepParamsPage: React.FC = () => {
       {
         title: t('common.actions'),
         valueType: 'option',
-        width: 140,
+        fixed: 'right',
         render: (_, record) => [
-          <a
+          <Button
             key="view"
+            {...rowActionKind('read')}
             onClick={() => {
               setDetailRecord(record);
               setDetailOpen(true);
             }}
-          >
-            {t('common.view')}
-          </a>,
-          <a key="edit" onClick={() => handleEdit(record)}>
-            {t('common.edit')}
-          </a>,
-          <a key="del" style={{ color: 'var(--ant-color-error)' }} onClick={() => handleDeleteOne(record)}>
-            {t('common.delete')}
-          </a>,
+          />,
+          <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)} />,
+          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)} />,
         ],
       },
     ],

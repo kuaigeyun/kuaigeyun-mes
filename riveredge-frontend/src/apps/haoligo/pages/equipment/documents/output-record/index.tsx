@@ -437,13 +437,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
           <Button {...rowActionKind('update')} key="e" onClick={() => openEdit(row.id, false)}>
             {t('app.haoligo.equipment.documents.actionEdit')}
           </Button>,
-          <Button {...rowActionKind('read')}
-            key="d"
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => {
+          <Button {...rowActionKind('delete')} key="delete" onClick={() => {
               Modal.confirm({
                 title: t('app.haoligo.equipment.documents.deleteConfirm'),
                 onOk: async () => {
@@ -453,9 +447,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 },
               });
             }}
-          >
-            {t('app.haoligo.equipment.documents.actionDelete')}
-          </Button>,
+          />,
         ],
       },
     ],

@@ -43,7 +43,7 @@ import {
   theme,
 } from 'antd';
 import dayjs from 'dayjs';
-import { DeleteOutlined, EditOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { QuestionCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   HAOLIGO_MOLD_LEDGER_TANSTACK_QUERY,
@@ -1086,21 +1086,12 @@ const MoldLedgerPage: React.FC = () => {
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button{...rowActionKind('delete')} key="delete" onClick={() => void handleOpenMoldDetail(record)}>
-            详情
-          </Button>
-          <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)}>
-            编辑
-          </Button>
-          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
-            删除
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => [
+        <Button key="detail" {...rowActionKind('read')} onClick={() => void handleOpenMoldDetail(record)} />,
+        <Button key="edit" {...rowActionKind('update')} onClick={() => void handleEdit(record)} />,
+        <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)} />,
+      ],
     },
   ];
 

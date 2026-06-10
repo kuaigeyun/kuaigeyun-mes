@@ -102,7 +102,35 @@ import {
   type MoldTrialSheetRow,
 } from '../../../../services/haoligo';
 import { buildMoldSheetAuditActionElements, MoldSheetAuditActions } from '../../../../components/MoldSheetAuditActions';
-import {: Promise<Map<string, number>> {
+import { rowActionKind } from '../../../../../../components/uni-action';
+import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+import { hasModulePermission } from '../../../../../../utils/permissionContract';
+import { userIsExternalPartner } from '../../../../../../utils/externalPartner';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
+import { executeDatasetQuery, getDatasetList } from '../../../../../../services/dataset';
+
+const HAOLIGO_TRIAL_RESOURCE = 'haoligo:molds-documents-trial';
+
+const sheetStatusEnum: Record<string, { text: string }> = {
+  待审核: { text: '待审核' },
+  已通过: { text: '已通过' },
+  已驳回: { text: '已驳回' },
+};
+
+const trialResultEnum: Record<string, { text: string }> = {
+  合格: { text: '合格' },
+  不合格: { text: '不合格' },
+};
+
+type PoPickerTrialFilter = 'all' | 'pending' | 'trialed';
+
+/** 分页统计各采购订单号在本系统的试模单条数（采购单选择器展示试模次数） */
+async function fetchTrialCountByPurchaseOrderNoForPoPicker(): Promise<Map<string, number>> {
   const limit = 200;
   let skip = 0;
   const map = new Map<string, number>();

@@ -21,7 +21,7 @@ import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
+import { DeleteOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
 import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
@@ -901,45 +901,34 @@ export function MoldMaintenanceCompleteSheetPage({
     {
       title: '操作',
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)}>
-            详情
-          </Button>
-          {canPrintComplete ? (
-            <Button{...rowActionKind('update')} key="edit"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
-              onClick={() => {
-                setPrintRowId(record.id);
-                setPrintOpen(true);
-              }}
-            >
-              打印报告
-            </Button>
-          ) : null}
-          <Button key="edit" {...rowActionKind('update')}
-            size="small"
-            icon={<EditOutlined />}
-            disabled={!canUpdateComplete}
-            onClick={() => void handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Button key="delete" {...rowActionKind('delete')}
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={!canDeleteComplete}
-            onClick={() => handleDeleteOne(record)}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => void handleDetail(record)} />,
+        ...(canPrintComplete
+          ? [
+              <Button
+                key="print"
+                {...rowActionKind('print')}
+                onClick={() => {
+                  setPrintRowId(record.id);
+                  setPrintOpen(true);
+                }}
+              />,
+            ]
+          : []),
+        <Button
+          key="edit"
+          {...rowActionKind('update')}
+          disabled={!canUpdateComplete}
+          onClick={() => void handleEdit(record)}
+        />,
+        <Button
+          key="delete"
+          {...rowActionKind('delete')}
+          disabled={!canDeleteComplete}
+          onClick={() => handleDeleteOne(record)}
+        />,
+      ],
     },
   ];
 

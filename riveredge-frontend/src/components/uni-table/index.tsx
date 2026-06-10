@@ -571,10 +571,9 @@ export function invalidateUniTableListCache(
   for (const id of columnPersistenceIds) {
     const trimmed = id.trim()
     if (!trimmed) continue
-    queryClient.removeQueries({
-      queryKey: ['uniTable', trimmed],
-      exact: false,
-    })
+    const queryKey = ['uniTable', trimmed] as const
+    void queryClient.cancelQueries({ queryKey, exact: false })
+    queryClient.removeQueries({ queryKey, exact: false })
   }
 }
 
@@ -1271,15 +1270,14 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const tableBodyPaneRef = useRef<HTMLDivElement>(null)
 
   /**
-   * ProTable 实际挂载的 action ref。
-   * 若页面传入 `actionRef`（external），则 ProTable 只挂在本 ref，再通过 layout effect
-   * 把「带 TanStack 清缓存的 reload」组合进外部 ref；**绝不**改写 ProTable 内部 userAction
-   * 上的方法（其每帧会换新对象，原地劫持会与 useImperativeHandle 打架，曾导致工具栏异常）。
+   * ProTable 实际挂载的 action ref（始终独立持有，避免与页面 ref 互相覆盖）。
+   * 页面 / hook / 内部 ref 通过 layout effect 同步「带 TanStack 强刷新的 reload」。
    */
   const nativeTableActionRef = useRef<ActionType>()
-  const actionRefForProTable = (
-    externalActionRef ? nativeTableActionRef : externalActionRef || hookActionRef || internalActionRef
-  ) as React.MutableRefObject<ActionType | undefined>
+  const actionRefForProTable = nativeTableActionRef as React.MutableRefObject<ActionType | undefined>
+  const outwardActionRef = (externalActionRef ||
+    hookActionRef ||
+    internalActionRef) as React.MutableRefObject<ActionType | undefined>
   const formRef = (externalFormRef || hookFormRef || internalFormRef) as React.MutableRefObject<
     ProFormInstance | undefined
   >
@@ -1320,21 +1318,31 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   const dropUniTableTanstackCache = useCallback(() => {
     const liveTq = tanstackQueryRef.current
     if (liveTq?.queryKeyPrefix && liveTq.queryKeyPrefix.length > 0) {
-      queryClient.removeQueries({
-        queryKey: ['uniTable', ...liveTq.queryKeyPrefix],
-        exact: false,
-      })
+      const queryKey = ['uniTable', ...liveTq.queryKeyPrefix] as const
+      void queryClient.cancelQueries({ queryKey, exact: false })
+      queryClient.removeQueries({ queryKey, exact: false })
     }
   }, [queryClient])
 
+  /** mutation / 工具栏 refresh 后的下一次 request 必须绕过 TanStack fresh 短路 */
+  const forceFreshNextRequestRef = useRef(false)
+  /** 丢弃过期 in-flight 响应时，避免 ProTable 被旧 request 返回值覆盖 */
+  const lastCommittedRequestResultRef = useRef<{
+    data?: T[]
+    success?: boolean
+    total?: number
+  } | null>(null)
+
   const reloadWithTanstackCacheBust = useCallback((...args: any[]) => {
+    forceFreshNextRequestRef.current = true
     dropUniTableTanstackCache()
-    return (actionRefForProTable.current?.reload as any)?.(...args)
+    return (nativeTableActionRef.current?.reload as any)?.(...args)
   }, [dropUniTableTanstackCache])
 
   const reloadAndRestWithTanstackCacheBust = useCallback((...args: any[]) => {
+    forceFreshNextRequestRef.current = true
     dropUniTableTanstackCache()
-    return (actionRefForProTable.current?.reloadAndRest as any)?.(...args)
+    return (nativeTableActionRef.current?.reloadAndRest as any)?.(...args)
   }, [dropUniTableTanstackCache])
 
   /**
@@ -1816,23 +1824,20 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   }, [])
 
   /**
-   * 页面传入 `actionRef` 时：每帧把 ProTable 原生句柄同步到外部 ref，并对 reload / reloadAndRest
-   * 包一层 TanStack 清缓存（不修改 ProTable 内部对象，避免与 useImperativeHandle 冲突导致工具栏失效）。
+   * 同步 ProTable 原生 action 到页面 ref，并对 reload / reloadAndRest 包一层 TanStack 强刷新。
    */
   React.useLayoutEffect(() => {
-    if (!externalActionRef) return
-    const inner = actionRefForProTable.current
-    const ext = externalActionRef as React.MutableRefObject<ActionType | undefined>
+    const inner = nativeTableActionRef.current
     if (!inner) {
-      ext.current = undefined as any
+      outwardActionRef.current = undefined as any
       return
     }
-    ext.current = {
+    outwardActionRef.current = {
       ...inner,
       reload: (...args: any[]) => reloadWithTanstackCacheBust(...args),
       reloadAndRest: (...args: any[]) => reloadAndRestWithTanstackCacheBust(...args),
     }
-  }, [externalActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust])
+  }, [outwardActionRef, reloadWithTanstackCacheBust, reloadAndRestWithTanstackCacheBust])
 
   /**
    * 表格数据请求（核心性能路径）
@@ -1899,6 +1904,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
       const runRequest = () => requestRef.current(params, sort, filter, searchFormValues)
       let result: Awaited<ReturnType<typeof runRequest>>
+      const forceFresh = forceFreshNextRequestRef.current
+      if (forceFresh) {
+        forceFreshNextRequestRef.current = false
+      }
 
       if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
         const pageSize = reqPageSize
@@ -1925,7 +1934,12 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           gcTime: gcTimeMs,
         } as const
 
-        if (tq.staleWhileRevalidate) {
+        if (forceFresh) {
+          result = await queryClient.fetchQuery({
+            ...fetchOpts,
+            staleTime: 0,
+          })
+        } else if (tq.staleWhileRevalidate) {
           const cached = queryClient.getQueryData(fullQueryKey) as
             | Awaited<ReturnType<typeof runRequest>>
             | undefined
@@ -1934,15 +1948,17 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           const cacheStale =
             !cached || state?.isInvalidated === true || Date.now() - updatedAt > staleTimeMs
           if (cached != null && cacheStale) {
-            // 后台 revalidate；TanStack `structuralSharing` 会在内容相同时复用旧引用，
-            // 因此严格用 `===` 判断「真的变化了」再触发 reload，避免无谓渲染。
-            // 这里必须走 ProTable 原生 reload（不经 TanStack removeQueries），否则会抹掉刚写入的缓存并重复请求。
             void queryClient
-              .fetchQuery(fetchOpts)
+              .fetchQuery({ ...fetchOpts, staleTime: 0 })
               .then((fresh) => {
-                if (fresh !== cached && requestSeqRef.current === seq) {
-                  actionRefForProTable.current?.reload?.()
+                if (requestSeqRef.current !== seq) return
+                if (fresh === cached) return
+                lastCommittedRequestResultRef.current = fresh
+                if (fresh.data) {
+                  setTableData(fresh.data)
+                  onTableDataChangeRef.current?.(fresh.data as T[])
                 }
+                nativeTableActionRef.current?.reload?.()
               })
               .catch(() => {
                 /* 失败由全局错误处理；旧数据继续展示 */
@@ -2028,14 +2044,27 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
         }
       }
 
-      // 竞态：旧请求的结果到达时丢弃；只让最新请求写状态
-      if (requestSeqRef.current !== seq) return result
+      // 竞态：旧请求的结果到达时丢弃，避免 mutation 后的 reload 被 in-flight 旧响应覆盖
+      if (requestSeqRef.current !== seq) {
+        return (
+          lastCommittedRequestResultRef.current ?? {
+            data: [],
+            success: true,
+            total: 0,
+          }
+        )
+      }
 
-      // 仅在数据引用变化时 setState（结合 TanStack 结构共享，避免无变更渲染）
+      // 仅在数据引用变化时 setState（forceFresh 或 TanStack 结构共享豁免）
       if (result.data) {
-        setTableData((prev) => (prev === result.data ? prev : result.data))
+        setTableData((prev) => {
+          if (forceFresh) return result.data
+          return prev === result.data ? prev : result.data
+        })
         onTableDataChangeRef.current?.(result.data as T[])
       }
+
+      lastCommittedRequestResultRef.current = result
 
       return result
     } finally {

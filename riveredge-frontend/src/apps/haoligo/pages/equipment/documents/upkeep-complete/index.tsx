@@ -19,7 +19,6 @@ import type { UploadProps } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { ColumnsType } from 'antd/es/table';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tabs, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import HaoligoDocumentPrintModal from '../../../../components/HaoligoDocumentPrintModal';
 import { HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_COMPLETE, HAOLIGO_RESOURCE_EQUIPMENT_UPKEEP_SHEET } from '../../../../constants/documentPermissionResources';
 import { canPrintHaoligoDocument } from '../../../../utils/documentPrintPermission';
@@ -584,34 +583,24 @@ const EquipmentUpkeepCompletePage: React.FC = () => {
     {
       title: t('app.haoligo.equipment.documents.colActions'),
       valueType: 'option',
-      width: 200,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')} onClick={() => void openSheetForm(record, true)}>
-            {t('app.haoligo.equipment.documents.actionView')}
-          </Button>
-          {canPrintUpkeepComplete ? (
-            <Button{...rowActionKind('update')} key="edit"
-              type="link"
-              size="small"
-              icon={<PrinterOutlined />}
-              onClick={() => {
-                setPrintRowId(record.id);
-                setPrintOpen(true);
-              }}
-            >
-              {t('app.haoligo.print.printButton')}
-            </Button>
-          ) : null}
-          <Button key="edit" {...rowActionKind('update')} onClick={() => void openSheetForm(record, false)}>
-            {t('app.haoligo.equipment.documents.actionEdit')}
-          </Button>
-          <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)}>
-            {t('app.haoligo.equipment.documents.actionDelete')}
-          </Button>
-        </Space>
-      ),
+      render: (_, record) => [
+        <Button key="view" {...rowActionKind('read')} onClick={() => void openSheetForm(record, true)} />,
+        ...(canPrintUpkeepComplete
+          ? [
+              <Button
+                key="print"
+                {...rowActionKind('print')}
+                onClick={() => {
+                  setPrintRowId(record.id);
+                  setPrintOpen(true);
+                }}
+              />,
+            ]
+          : []),
+        <Button key="edit" {...rowActionKind('update')} onClick={() => void openSheetForm(record, false)} />,
+        <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDeleteOne(record)} />,
+      ],
     },
   ];
 

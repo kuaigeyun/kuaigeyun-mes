@@ -44,7 +44,59 @@ import {
   type MoldRow,
 } from '../../../../services/haoligo';
 import { buildMoldSheetAuditActionElements } from '../../../../components/MoldSheetAuditActions';
-import {val: unknown: string[] {
+import { rowActionKind } from '../../../../../../components/uni-action';
+import { useGlobalStore } from '../../../../../../stores/globalStore';
+import { canAuditMoldSheet } from '../../../../utils/moldSheetStatus';
+import { MoldSheetDetailAuditFooter } from '../../../../components/MoldSheetDetailAuditFooter';
+import { moldDocumentCreatedAtColumn } from '../../../../utils/documentTableColumns';
+import { isMoldSheetApproved, moldSheetAuditStatusTag } from '../../../../utils/moldSheetStatus';
+import { MOLD_SHEET_TABLE_ACTION_OPTIONS } from '../../../../constants/moldSheetAudit';
+import {
+  inhouseSheetResourceForServiceType,
+  type InhouseMaintenanceServiceType,
+} from '../../../../constants/documentPermissionResources';
+import { fetchMoldsForPicker } from '../../../../utils/moldPicker';
+import { withMoldPictureCardUploadClass } from '../../../../utils/moldPictureCardUpload';
+import { useResourcePermissions } from '../../../../../../hooks/useResourcePermissions';
+
+export type MoldMaintenanceSheetServiceType = InhouseMaintenanceServiceType;
+
+const PAGE_META: Record<
+  MoldMaintenanceSheetServiceType,
+  {
+    headerTitle: string;
+    sheetNoTitle: string;
+    createModalTitle: string;
+    editModalTitle: string;
+    detailModalTitle: string;
+    persistenceId: string;
+  }
+> = {
+  保养: {
+    headerTitle: '模具保养单',
+    sheetNoTitle: '保养单单号',
+    createModalTitle: '新增保养单',
+    editModalTitle: '编辑保养单',
+    detailModalTitle: '保养单详情',
+    persistenceId: 'apps.haoligo.pages.molds.documents.upkeep',
+  },
+  维修: {
+    headerTitle: '模具维修单',
+    sheetNoTitle: '维修单单号',
+    createModalTitle: '新增维修单',
+    editModalTitle: '编辑维修单',
+    detailModalTitle: '维修单详情',
+    persistenceId: 'apps.haoligo.pages.molds.documents.repair',
+  },
+};
+
+const sheetStatusEnum: Record<string, { text: string }> = {
+  待审核: { text: '待审核' },
+  已通过: { text: '已通过' },
+  已驳回: { text: '已驳回' },
+};
+
+function normUploadUuids(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
   const out: string[] = [];
   for (const item of val) {
