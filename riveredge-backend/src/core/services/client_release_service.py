@@ -336,14 +336,14 @@ async def check_release(
     if version_code < active.min_version_code:
         return {
             "update_type": "package",
-            "force": True,
+            "force": active.force_update,
             "latest": {**latest_payload, "package": pkg, "apk": pkg},
             "ota": ota_info,
             "client_key": client_key,
         }
 
     if version_code < active.version_code:
-        force = active.force_update or active.requires_native
+        force = active.force_update
         update_type = "package" if active.requires_native or pkg else "ota"
         if update_type == "package" and not pkg:
             return {"update_type": "none", "force": False, "latest": None, "ota": ota_info, "client_key": client_key}

@@ -208,7 +208,7 @@ export function ClientReleaseUploadModal({
             update_type: 'package',
             requires_native: true,
             force_update: Boolean(values.force_update),
-            min_version_code: Math.max(Number(values.version_code ?? 0) - 1, 0),
+            min_version_code: 0,
             release_notes: String(values.release_notes ?? ''),
             rollout_percent: Number(values.rollout_percent ?? 100),
           },
