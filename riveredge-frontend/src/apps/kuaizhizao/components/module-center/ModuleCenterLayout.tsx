@@ -23,7 +23,7 @@ export function ModuleCenterLayout({
   showSidebar = true,
 }: ModuleCenterLayoutProps) {
   return (
-    <UniDashboard showSidebar={showSidebar} style={{ padding: '0 0 16px', overflow: 'visible' }}>
+    <UniDashboard showSidebar={showSidebar}>
       <Spin spinning={!!loading}>
         <Row gutter={[MODULE_CENTER_GUTTER, MODULE_CENTER_GUTTER]}>
           <Col span={24}>{kpiRow}</Col>

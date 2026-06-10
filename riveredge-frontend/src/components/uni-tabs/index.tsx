@@ -34,6 +34,21 @@ function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
 }
 
+/** 工作台 / 模块看板：外层 UniTabs 不滚动，由 DashboardTemplate / UniDashboard 内部承担 */
+function isDashboardLikePage(pathname: string): boolean {
+  const p = pathname.replace(/\/$/, '') || '/';
+  if (p === '/system/dashboard/workplace' || p === '/system/dashboard/analysis') {
+    return true;
+  }
+  if (!p.startsWith('/apps/')) return false;
+  if (p.endsWith('/workspace')) return true;
+  if (p.endsWith('/dashboard')) return true;
+  if (p.endsWith('/inspection-center')) return true;
+  if (p.endsWith('/management-dashboard')) return true;
+  if (p.endsWith('/analysis-center')) return true;
+  return false;
+}
+
 /**
  * 标签项接口
  */
@@ -1039,10 +1054,14 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return key.includes('production-execution/terminal') || key.includes('/kiosk');
   }, [activeKey]);
 
-  /** 是否为工作台/分析页（使用 location.pathname 确保首帧即正确，避免 activeKey 延迟导致的 32px→16px 布局闪烁） */
-  const isDashboardOrAnalysisPage = location.pathname === '/system/dashboard/analysis';
+  /** 工作台/模块看板：外层 UniTabs 不滚动，由内部 DashboardTemplate / UniDashboard 承担 */
+  const isDashboardScrollPage = isDashboardLikePage(location.pathname);
 
-  const isBusinessBoardAnalysisPage = location.pathname === '/system/dashboard/analysis';
+  /** 仅运营分析看板自管四边 inset，其余工作台仍用 UniTabs 统一 16px 边距 */
+  const isFlushDashboardOuter =
+    location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
+
+  const isBusinessBoardAnalysisPage = location.pathname.replace(/\/$/, '') === '/system/dashboard/analysis';
 
 
 
@@ -2022,7 +2041,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           </div>
         </div>
         <div
-          className={`uni-tabs-content${isDashboardOrAnalysisPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
+          className={`uni-tabs-content${isDashboardScrollPage ? ' uni-tabs-content-dashboard' : ''}${isBusinessBoardAnalysisPage ? ' uni-tabs-content-business-board' : ''}`}
           key={`content-refresh-${refreshKey}`}
         >
           {isHMIPage ? (
@@ -2039,7 +2058,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
             </div>
           ) : (
             <div
-              className={`uni-tabs-content-page-outer${isDashboardOrAnalysisPage ? ' uni-tabs-content-page-outer--flush' : ''}`}
+              className={`uni-tabs-content-page-outer${isFlushDashboardOuter ? ' uni-tabs-content-page-outer--flush' : ''}`}
             >
               <div className="uni-tabs-content-page-inner">
                 <RouteTransition>{children}</RouteTransition>

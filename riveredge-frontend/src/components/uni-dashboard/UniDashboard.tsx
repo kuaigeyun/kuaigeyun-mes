@@ -51,7 +51,7 @@ export function UniDashboard({
             minWidth: 0,
           }}
         >
-          {children}
+          <div className="dashboard-main-scroll-inner">{children}</div>
         </Col>
         {showSidebar ? (
           <Col
