@@ -1,18 +1,18 @@
-#  快格云制造
+# <img src="docs/screenshots/logo/kuaige.png" alt="Logo" height="36" align="absmiddle" /> 快格云制造
 
-React
-TypeScript
-Vite
-Ant Design
-FastAPI
-Python
-PostgreSQL
-Pydantic
-UV
-Tortoise ORM
-Taskiq
+![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=flat-square&logo=typescript)
+![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite)
+![Ant Design](https://img.shields.io/badge/Ant%20Design-6-0170FE?style=flat-square&logo=antdesign)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat-square&logo=fastapi)
+![Python](https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15-336791?style=flat-square&logo=postgresql)
+![Pydantic](https://img.shields.io/badge/Pydantic-2-E92063?style=flat-square&logo=pydantic)
+![UV](https://img.shields.io/badge/UV-1.x-FFD43B?style=flat-square)
+![Tortoise ORM](https://img.shields.io/badge/Tortoise%20ORM-0.21-2E7D32?style=flat-square)
+![Taskiq](https://img.shields.io/badge/Taskiq-PostgreSQL-6366F1?style=flat-square)
 
-**移动端**：Expo React Native Ant Design RN Expo Router
+**移动端**：![Expo](https://img.shields.io/badge/Expo-54-000020?style=flat-square&logo=expo) ![React Native](https://img.shields.io/badge/React%20Native-0.81-61DAFB?style=flat-square&logo=react) ![Ant Design RN](https://img.shields.io/badge/Ant%20Design%20RN-5-0170FE?style=flat-square&logo=antdesign) ![Expo Router](https://img.shields.io/badge/Expo%20Router-6-000020?style=flat-square)
 
 为离散制造企业打造的轻量级 MES：以统一需求模型贯通“销售-计划-执行-仓储”，帮助企业在可控成本下快速上线并持续扩展。
 
@@ -51,7 +51,7 @@ Taskiq
 
 ## 微信沟通反馈群
 
-
+<img src="docs/screenshots/wechat/wechat.png" alt="微信沟通反馈群" width="280" />
 
 ## 致谢
 
