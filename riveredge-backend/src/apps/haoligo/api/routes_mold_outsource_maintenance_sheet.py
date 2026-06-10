@@ -60,6 +60,7 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     format_mold_warehouse_label,
     mold_warehouse_snapshot_by_codes,
     resolve_maintenance_line_warehouse_fields,
+    resolve_outsource_unit_fields,
 )
 from apps.master_data.models.supplier import Supplier
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
@@ -442,11 +443,17 @@ async def create_outsource_maintenance_sheet(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
 ):
+    try:
+        unit_name, unit_code = await resolve_outsource_unit_fields(
+            tenant_id, body.outsourced_unit_name, body.outsourced_unit_code
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     await assert_outsource_partner_code_writable(
         tenant_id=tenant_id,
         user=user,
         resource=RESOURCE_OUTSOURCE_MAINTENANCE,
-        partner_code=body.outsourced_unit_code,
+        partner_code=unit_code,
     )
     stored = [_line_to_store(x) for x in body.line_items]
     await assert_maintenance_line_molds_are_standby(tenant_id, stored)
@@ -464,8 +471,8 @@ async def create_outsource_maintenance_sheet(
             applicant_name=app_name,
             department_uuid=dept_uuid,
             department_name=dept_name,
-            outsourced_unit_code=_strip_opt(body.outsourced_unit_code),
-            outsourced_unit_name=body.outsourced_unit_name.strip(),
+            outsourced_unit_code=_strip_opt(unit_code),
+            outsourced_unit_name=unit_name,
             service_type=body.service_type,
             source_order_no=_strip_opt(body.source_order_no),
             header_attachment_file_uuids=_norm_uuid_list(body.header_attachment_file_uuids),
@@ -521,18 +528,20 @@ async def update_outsource_maintenance_sheet(
         if not s:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="申请部门不能为空")
         data["department_name"] = s
-    if "outsourced_unit_name" in data and data["outsourced_unit_name"] is not None:
-        s = str(data["outsourced_unit_name"]).strip()
-        if not s:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="外协单位不能为空")
-        data["outsourced_unit_name"] = s
-    if "outsourced_unit_code" in data or "outsourced_unit_name" in data:
-        code_for_scope = data.get("outsourced_unit_code", row.outsourced_unit_code)
+    if "outsourced_unit_name" in data or "outsourced_unit_code" in data:
+        new_name = data.get("outsourced_unit_name", row.outsourced_unit_name)
+        new_code = data.get("outsourced_unit_code", row.outsourced_unit_code)
+        try:
+            unit_name, unit_code = await resolve_outsource_unit_fields(tenant_id, new_name, new_code)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        data["outsourced_unit_name"] = unit_name
+        data["outsourced_unit_code"] = unit_code
         await assert_outsource_partner_code_writable(
             tenant_id=tenant_id,
             user=user,
             resource=RESOURCE_OUTSOURCE_MAINTENANCE,
-            partner_code=code_for_scope,
+            partner_code=unit_code,
         )
     for k in ("outsourced_unit_code", "source_order_no"):
         if k in data and data[k] is not None:

@@ -107,6 +107,30 @@ async def warehouse_snapshot_by_id(tenant_id: int, warehouse_id: int) -> Optiona
     }
 
 
+async def resolve_outsource_unit_fields(
+    tenant_id: int,
+    outsourced_unit_name: Optional[str],
+    outsourced_unit_code: Optional[str] = None,
+) -> tuple[str, Optional[str]]:
+    """规范化外协单位名称，并从主数据补全 supplier code（创建/更新入库前调用）。"""
+    name = (outsourced_unit_name or "").strip()
+    if not name:
+        raise ValueError("外协单位不能为空")
+    code = (outsourced_unit_code or "").strip() or None
+    sup = await resolve_supplier_by_name(tenant_id, name)
+    if sup is None and code:
+        sup = await MasterSupplier.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            code=code,
+        ).first()
+    if sup:
+        resolved_name = (sup.name or "").strip() or name
+        resolved_code = (sup.code or "").strip() or code
+        return resolved_name, resolved_code or None
+    return name, code
+
+
 async def external_warehouse_snapshot_for_unit(
     tenant_id: int,
     *,

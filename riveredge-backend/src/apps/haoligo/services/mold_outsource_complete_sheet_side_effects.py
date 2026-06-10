@@ -54,6 +54,10 @@ def _notification_context(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> 
         "outsourced_unit_name": (row.outsourced_unit_name or "").strip(),
         "supplier_name": (row.outsourced_unit_name or "").strip(),
     }
+    code = (row.outsourced_unit_code or "").strip()
+    if code:
+        ctx["outsourced_unit_code"] = code
+        ctx["supplier_code"] = code
     if row.applicant_user_id and int(row.applicant_user_id) > 0:
         ctx["creator_user_id"] = int(row.applicant_user_id)
     return ctx

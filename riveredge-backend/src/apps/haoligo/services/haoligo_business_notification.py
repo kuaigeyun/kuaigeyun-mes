@@ -38,14 +38,30 @@ ACTION_TRIAL_RECALLED = "trial_recalled"
 
 async def _scope_supplier_bound(tenant_id: int, context: Dict[str, Any]) -> List[int]:
     from apps.haoligo.services.trial_sheet_side_effects import list_supplier_bound_user_ids
+    from apps.master_data.models.supplier import Supplier as MasterSupplier
 
     name = (
         (context.get("supplier_name") or "")
         or (context.get("outsourced_unit_name") or "")
     ).strip()
-    if not name:
+    if name:
+        ids = await list_supplier_bound_user_ids(tenant_id, name)
+        if ids:
+            return ids
+    code = (
+        (context.get("supplier_code") or "")
+        or (context.get("outsourced_unit_code") or "")
+    ).strip()
+    if not code:
         return []
-    return await list_supplier_bound_user_ids(tenant_id, name)
+    sup = await MasterSupplier.filter(
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+        code=code,
+    ).first()
+    if not sup:
+        return []
+    return await list_supplier_bound_user_ids(tenant_id, (sup.name or "").strip() or name)
 
 
 async def _scope_trial_operator(tenant_id: int, context: Dict[str, Any]) -> List[int]:

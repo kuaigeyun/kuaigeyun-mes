@@ -31,11 +31,20 @@ def maintenance_sheet_revoked_context(row: Any) -> dict:
     return ctx
 
 
+def _with_outsource_partner_codes(ctx: dict, row: Any) -> dict:
+    code = (getattr(row, "outsourced_unit_code", None) or "").strip()
+    if code:
+        ctx["outsourced_unit_code"] = code
+        ctx["supplier_code"] = code
+    return ctx
+
+
 def outsource_sheet_submitted_context(row: Any) -> dict:
     ctx: dict = {
         "outsourced_unit_name": (getattr(row, "outsourced_unit_name", None) or "").strip(),
         "supplier_name": (getattr(row, "outsourced_unit_name", None) or "").strip(),
     }
+    _with_outsource_partner_codes(ctx, row)
     uid = getattr(row, "applicant_user_id", None)
     if uid and int(uid) > 0:
         ctx["creator_user_id"] = int(uid)
