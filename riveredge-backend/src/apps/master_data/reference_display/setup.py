@@ -474,8 +474,9 @@ class _DepartmentDisplayProvider:
         total = await query.count()
         offset = (page - 1) * page_size
         rows = await query.order_by("code").offset(offset).limit(page_size).all()
+        items = [await self._map_row(r) for r in rows]
         return {
-            "items": [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows],
+            "items": items,
             "total": total,
             "page": page,
             "page_size": page_size,
@@ -501,7 +502,27 @@ class _DepartmentDisplayProvider:
         else:
             cond &= Q(uuid__in=uuids)
         rows = await Department.filter(cond).all()
-        return [_row(id=r.id, uuid=r.uuid, code=r.code, name=r.name) for r in rows]
+        return [await self._map_row(r) for r in rows]
+
+    async def _parent_uuid_for(self, tenant_id: int, parent_id: int | None) -> str | None:
+        if not parent_id:
+            return None
+        parent = await Department.filter(tenant_id=tenant_id, id=parent_id, deleted_at__isnull=True).first()
+        if not parent:
+            return None
+        return (parent.uuid or "").strip() or None
+
+    async def _map_row(self, row: Department) -> dict[str, Any]:
+        parent_uuid = await self._parent_uuid_for(int(row.tenant_id), getattr(row, "parent_id", None))
+        base = _row(
+            id=int(row.id),
+            uuid=row.uuid,
+            code=row.code,
+            name=row.name,
+        )
+        if parent_uuid:
+            base["parent_uuid"] = parent_uuid
+        return base
 
 
 class _PositionDisplayProvider:

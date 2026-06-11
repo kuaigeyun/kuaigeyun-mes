@@ -992,51 +992,168 @@
         "label"
       ],
       "data_scope_key": "haoligo:master-data-factory-workshops"
+    },
+    "molds-upkeep-param-sets": {
+      "permission_prefix": "haoligo:molds-upkeep-param-sets",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:molds-upkeep-param-sets"
+    },
+    "molds-upkeep-params": {
+      "permission_prefix": "haoligo:molds-upkeep-params",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:molds-upkeep-params"
+    },
+    "equipment-upkeep-param-sets": {
+      "permission_prefix": "haoligo:equipment-upkeep-param-sets",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:equipment-upkeep-param-sets"
+    },
+    "equipment-upkeep-params": {
+      "permission_prefix": "haoligo:equipment-upkeep-params",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:equipment-upkeep-params"
+    },
+    "equipment-inspection-param-sets": {
+      "permission_prefix": "haoligo:equipment-inspection-param-sets",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:equipment-inspection-param-sets"
+    },
+    "equipment-inspection-params": {
+      "permission_prefix": "haoligo:equipment-inspection-params",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "haoligo:equipment-inspection-params"
     }
   },
   "module_references": {
     "molds-documents-trial": [
       "haoligo:molds-ledger",
       "master-data:supply-chain:supplier",
-      "master-data:factory:workshop",
-      "system:user"
+      "haoligo:master-data-factory-workshops",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
     ],
-    "molds-documents-borrow": [
+    "molds-documents-borrow-out": [
+      "haoligo:molds-ledger",
+      "haoligo:molds-warehouse",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
+    "molds-documents-return-in": [
       "haoligo:molds-ledger",
       "haoligo:molds-warehouse",
       "system:user",
       "system:department"
     ],
-    "molds-documents-return": [
+    "molds-documents-upkeep": [
       "haoligo:molds-ledger",
-      "haoligo:molds-warehouse",
-      "system:user"
+      "system:user",
+      "system:department",
+      "system:data-dictionary",
+      "haoligo:molds-upkeep-param-sets",
+      "haoligo:molds-upkeep-params"
     ],
-    "molds-documents-maintenance": [
+    "molds-documents-upkeep-complete": [
       "haoligo:molds-ledger",
-      "system:user"
+      "system:user",
+      "system:department",
+      "system:data-dictionary",
+      "haoligo:molds-upkeep-param-sets",
+      "haoligo:molds-upkeep-params"
+    ],
+    "molds-documents-repair": [
+      "haoligo:molds-ledger",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
+    "molds-documents-repair-complete": [
+      "haoligo:molds-ledger",
+      "system:user",
+      "system:department",
+      "system:data-dictionary",
+      "haoligo:molds-upkeep-param-sets",
+      "haoligo:molds-upkeep-params"
     ],
     "molds-documents-outsource-maintenance": [
       "haoligo:molds-ledger",
       "master-data:supply-chain:supplier",
-      "system:user"
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
+    ],
+    "molds-documents-outsource-complete": [
+      "haoligo:molds-ledger",
+      "system:user",
+      "system:department",
+      "system:data-dictionary",
+      "haoligo:molds-upkeep-param-sets",
+      "haoligo:molds-upkeep-params"
     ],
     "equipment-documents-spot-check": [
       "haoligo:equipment-ledger",
       "haoligo:equipment-categories",
-      "system:user"
+      "haoligo:equipment-inspection-param-sets",
+      "haoligo:equipment-inspection-params",
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
     ],
     "equipment-documents-route-patrol": [
       "haoligo:equipment-ledger",
-      "system:user"
+      "system:user",
+      "system:data-dictionary"
     ],
     "equipment-documents-upkeep-sheet": [
       "haoligo:equipment-ledger",
-      "system:user"
+      "system:user",
+      "system:department",
+      "system:data-dictionary",
+      "haoligo:equipment-upkeep-param-sets",
+      "haoligo:equipment-upkeep-params"
     ],
     "equipment-documents-upkeep-complete": [
       "haoligo:equipment-ledger",
-      "system:user"
+      "system:user",
+      "system:department",
+      "system:data-dictionary"
     ],
     "equipment-documents-output-record": [
       "haoligo:equipment-ledger",

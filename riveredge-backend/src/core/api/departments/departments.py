@@ -25,6 +25,7 @@ from core.api.deps.system_module_access import (
     require_department_delete,
     require_department_import,
     require_department_read,
+    require_department_read_or_display,
     require_department_update,
 )
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -150,7 +151,7 @@ async def get_department_tree(
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_department_read),
+    _auth: object = Depends(require_department_read_or_display),
 ):
     """
     获取部门树形结构

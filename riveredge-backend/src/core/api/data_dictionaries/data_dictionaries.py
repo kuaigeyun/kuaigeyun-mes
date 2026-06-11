@@ -20,12 +20,12 @@ from core.schemas.dictionary_item import (
 )
 from core.services.data.data_dictionary_service import DataDictionaryService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.data_dictionary_reference_access import require_data_dictionary_reference_access
 from core.api.deps.system_module_access import (
     require_data_dictionary_create,
     require_data_dictionary_delete,
     require_data_dictionary_read,
     require_data_dictionary_update,
-    require_data_dictionary_code_read,
 )
 from core.services.system.installed_feature_scope import get_installed_application_codes
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -175,7 +175,7 @@ async def get_dictionary(
 async def get_dictionary_by_code(
     code: str,
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_data_dictionary_code_read),
+    _auth: object = Depends(require_data_dictionary_reference_access),
 ):
     """
     根据代码获取数据字典
@@ -344,7 +344,7 @@ async def list_items(
     dictionary_uuid: str,
     is_active: Optional[bool] = Query(None, description="是否启用（可选）"),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_data_dictionary_read),
+    _auth: object = Depends(require_data_dictionary_reference_access),
 ):
     """
     获取字典项列表

@@ -10,10 +10,17 @@ from tortoise.models import Model
 from apps.haoligo.models.equipment import (
     HaoligoEquipment,
     HaoligoEquipmentCategory,
+    HaoligoInspectionParam,
+    HaoligoInspectionParamSet,
     HaoligoManufacturer,
     HaoligoWorkshop,
 )
+from apps.haoligo.models.equipment_upkeep_param import (
+    HaoligoEquipmentUpkeepParam,
+    HaoligoEquipmentUpkeepParamSet,
+)
 from apps.haoligo.models.mold import HaoligoMold
+from apps.haoligo.models.mold_upkeep import HaoligoMoldUpkeepParam, HaoligoMoldUpkeepParamSet
 from apps.haoligo.models.mold_warehouse import HaoligoMoldWarehouse
 from core.services.reference.reference_display_provider_registry import register_reference_display_provider
 from infra.models.user import User
@@ -132,6 +139,30 @@ _HAOLIGO_PROVIDERS = [
     _SimpleModelDisplayProvider(
         resource_key="haoligo:master-data-factory-workshops",
         model=HaoligoWorkshop,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:molds-upkeep-param-sets",
+        model=HaoligoMoldUpkeepParamSet,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:molds-upkeep-params",
+        model=HaoligoMoldUpkeepParam,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:equipment-upkeep-param-sets",
+        model=HaoligoEquipmentUpkeepParamSet,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:equipment-upkeep-params",
+        model=HaoligoEquipmentUpkeepParam,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:equipment-inspection-param-sets",
+        model=HaoligoInspectionParamSet,
+    ),
+    _SimpleModelDisplayProvider(
+        resource_key="haoligo:equipment-inspection-params",
+        model=HaoligoInspectionParam,
     ),
 ]
 
