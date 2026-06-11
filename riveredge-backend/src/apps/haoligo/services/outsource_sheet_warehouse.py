@@ -617,11 +617,36 @@ async def apply_warehouses_on_outsource_maintenance_approved(
         await row.save(update_fields=["line_items", "updated_at"])
 
 
+def _normalize_return_warehouse_overrides(
+    overrides: Optional[dict[str, int]],
+) -> dict[str, int]:
+    """规范化「审核时手动指定归还仓库」映射：mold_code → warehouse_id（>0）。"""
+    out: dict[str, int] = {}
+    for mc, wid in (overrides or {}).items():
+        code = str(mc or "").strip()
+        if not code:
+            continue
+        try:
+            n = int(wid)
+        except (TypeError, ValueError):
+            continue
+        if n > 0:
+            out[code] = n
+    return out
+
+
 async def apply_warehouses_on_outsource_complete_approved(
     tenant_id: int,
     row: HaoligoMoldOutsourceMaintenanceCompleteSheet,
+    *,
+    return_warehouse_overrides: Optional[dict[str, int]] = None,
 ) -> None:
-    """外协维保完修单审核通过：模具从外协仓转回外协维保单记录的厂内仓库。"""
+    """外协维保完修单审核通过：模具从外协仓转回外协维保单记录的厂内仓库。
+
+    当来源/历史均无法推断发出前厂内仓库时，允许审核人按 ``return_warehouse_overrides``
+    （mold_code → 内部仓库 ID）手动指定归还仓库；指定仓库须存在且为内部模具仓库。
+    """
+    overrides = _normalize_return_warehouse_overrides(return_warehouse_overrides)
     by_mold: dict[str, int] = {}
     src: Optional[HaoligoMoldOutsourceMaintenanceSheet] = None
     src_line_by_mold: dict[str, dict[str, Any]] = {}
@@ -664,12 +689,19 @@ async def apply_warehouses_on_outsource_complete_approved(
                 mold_code=mc,
                 src=src,
             )
+        override_used = False
+        if not target_id:
+            ov = overrides.get(mc)
+            if ov:
+                target_id = ov
+                override_used = True
         if not target_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
                     f"模具「{mc}」缺少外协发出前的厂内仓库记录，无法完修入库"
-                    "（请确认关联外协维保单已审核通过，且发出前模具位于厂内仓库）"
+                    "（请确认关联外协维保单已审核通过，且发出前模具位于厂内仓库；"
+                    "或在审核时手动指定归还的厂内仓库）"
                 ),
             )
         wh = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=target_id).first()
@@ -699,6 +731,8 @@ async def apply_warehouses_on_outsource_complete_approved(
             warehouse_code=(wh.warehouse_code or "").strip() or None,
             warehouse_name=(wh.warehouse_name or "").strip() or None,
         )
+        if override_used:
+            item[BEFORE_OUTSOURCE_WAREHOUSE_KEY] = int(target_id)
         if item != raw:
             items[i] = item
             lines_changed = True

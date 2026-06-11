@@ -297,6 +297,30 @@ class MoldOutsourceMaintenanceCompleteSheetCreate(BaseModel):
     complete_notify_user_ids: Optional[List[int]] = None
 
 
+class OutsourceCompleteReturnWarehouseOverride(BaseModel):
+    """审核时手动指定某模具的归还厂内仓库（仅当无法自动推断发出前仓库时使用）。"""
+
+    mold_code: str = Field(max_length=64)
+    warehouse_id: int = Field(ge=1, description="归还的内部模具仓库 ID")
+
+    @field_validator("mold_code", mode="before")
+    @classmethod
+    def _strip_code(cls, v):
+        s = str(v or "").strip()
+        if not s:
+            raise ValueError("模具代号不能为空")
+        return s
+
+
+class OutsourceCompleteApproveIn(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    return_warehouse_overrides: Optional[List[OutsourceCompleteReturnWarehouseOverride]] = Field(
+        None,
+        description="审核时手动指定的归还厂内仓库（mold_code → warehouse_id），仅在自动推断失败时生效",
+    )
+
+
 class MoldOutsourceMaintenanceCompleteSheetUpdate(BaseModel):
     source_outsource_maintenance_sheet_id: Optional[int] = Field(None, ge=1)
     source_order_no: Optional[str] = Field(None, max_length=128)
@@ -873,6 +897,7 @@ async def approve_outsource_maintenance_complete_sheet(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     user: Annotated[User, Depends(get_current_user)],
+    body: Optional[OutsourceCompleteApproveIn] = None,
 ):
     preview = await tenant_alive(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id).filter(id=row_id).first()
     if not preview:
@@ -880,6 +905,9 @@ async def approve_outsource_maintenance_complete_sheet(
     await assert_outsource_row_visible(
         preview, tenant_id=tenant_id, user=user, resource=RESOURCE_OUTSOURCE_COMPLETE
     )
+    overrides: dict[str, int] = {}
+    for ov in (body.return_warehouse_overrides if body else None) or []:
+        overrides[ov.mold_code] = ov.warehouse_id
     codes: list[str] = []
     async with in_transaction():
         row = await load_sheet_row_for_audit(HaoligoMoldOutsourceMaintenanceCompleteSheet, tenant_id, row_id)
@@ -888,7 +916,9 @@ async def approve_outsource_maintenance_complete_sheet(
         row.audited_at = timezone.now()
         row.audited_by_user_id = user.id
         await row.save()
-        await apply_warehouses_on_outsource_complete_approved(tenant_id, row)
+        await apply_warehouses_on_outsource_complete_approved(
+            tenant_id, row, return_warehouse_overrides=overrides or None
+        )
         await apply_upkeep_clear_from_outsource_complete_sheet_on_approve(tenant_id, row)
         codes = unique_mold_codes_from_stored_line_items(row.line_items or [])
         for mc in codes:
