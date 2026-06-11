@@ -405,7 +405,7 @@ async def download_file(
         
         # 缩略图：仅图片且指定 size 时，返回缩放后的图片
         # PNG 透明图保留透明通道输出 PNG，避免白底；其他输出 JPEG
-        file_type = file.file_type or "application/octet-stream"
+        file_type = FileService.resolve_download_media_type(file, file_content)
         # 缩略图：仅图片且指定 size 时，通过磁盘缓存或实时生成返回缩放后的图片
         if size and file_type.startswith("image/"):
             try:

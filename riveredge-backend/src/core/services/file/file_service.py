@@ -112,6 +112,34 @@ class FileService:
         }
         
         return mime_types.get(file_extension.lower(), "application/octet-stream")
+
+    @staticmethod
+    def _sniff_image_extension(file_content: bytes) -> Optional[str]:
+        if len(file_content) >= 3 and file_content[:3] == b"\xff\xd8\xff":
+            return "jpeg"
+        if len(file_content) >= 8 and file_content[:8] == b"\x89PNG\r\n\x1a\n":
+            return "png"
+        if len(file_content) >= 6 and file_content[:6] in (b"GIF87a", b"GIF89a"):
+            return "gif"
+        if len(file_content) >= 12 and file_content[:4] == b"RIFF" and file_content[8:12] == b"WEBP":
+            return "webp"
+        return None
+
+    @staticmethod
+    def resolve_download_media_type(file: File, file_content: bytes) -> str:
+        """下载/预览响应 MIME：修正无扩展名上传被记为 octet-stream 的图片。"""
+        file_type = (file.file_type or "").strip()
+        if file_type.startswith("image/"):
+            return file_type
+        ext = (file.file_extension or FileService._get_file_extension(file.original_name or "")).lower()
+        if ext in ("jpg", "jpeg", "png", "gif", "webp", "bmp"):
+            mime = FileService._get_mime_type(ext)
+            if mime.startswith("image/"):
+                return mime
+        sniffed = FileService._sniff_image_extension(file_content)
+        if sniffed:
+            return FileService._get_mime_type(sniffed)
+        return file_type or "application/octet-stream"
     
     @staticmethod
     async def create_file(
@@ -449,6 +477,16 @@ class FileService:
         
         # 检查文件后缀安全性
         file_extension = FileService._get_file_extension(original_name).lower()
+
+        if not file_extension:
+            sniffed = FileService._sniff_image_extension(file_content)
+            if sniffed:
+                file_extension = sniffed
+                base = (original_name or "").strip()
+                if not base or base.lower() in {"unknown", "blob", "file"}:
+                    original_name = f"photo.{sniffed if sniffed != 'jpeg' else 'jpg'}"
+                elif "." not in base:
+                    original_name = f"{base}.{sniffed if sniffed != 'jpeg' else 'jpg'}"
         
         if file_extension in FileService.FORBIDDEN_EXTENSIONS:
             raise ValidationError(f"由于安全原因，禁止上传 {file_extension} 格式的文件")
