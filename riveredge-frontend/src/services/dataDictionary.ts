@@ -7,6 +7,16 @@
 
 import { apiRequest } from './api';
 
+export type DictionaryLoadOptions = {
+  /** 宿主单据 resource（{app}:{module}），无 data-dictionary read/display 时通过 module_references 隐式引用 */
+  hostResource?: string;
+};
+
+function dictionaryHostParams(hostResource?: string): Record<string, string> | undefined {
+  const host = hostResource?.trim();
+  return host ? { host_resource: host } : undefined;
+}
+
 /**
  * 数据字典信息接口
  */
@@ -141,8 +151,13 @@ export async function getDataDictionaryByUuid(dictionaryUuid: string): Promise<D
  * @param code - 字典代码
  * @returns 数据字典信息
  */
-export async function getDataDictionaryByCode(code: string): Promise<DataDictionary> {
-  return apiRequest<DataDictionary>(`/core/data-dictionaries/code/${code}`);
+export async function getDataDictionaryByCode(
+  code: string,
+  options?: DictionaryLoadOptions,
+): Promise<DataDictionary> {
+  return apiRequest<DataDictionary>(`/core/data-dictionaries/code/${encodeURIComponent(code)}`, {
+    params: dictionaryHostParams(options?.hostResource),
+  });
 }
 
 /**
@@ -199,11 +214,16 @@ export async function deleteDataDictionary(dictionaryUuid: string): Promise<void
  * @param is_active - 是否启用（可选）
  * @returns 字典项列表
  */
-export async function getDictionaryItemList(dictionaryUuid: string, is_active?: boolean): Promise<DictionaryItem[]> {
-  const params: any = {};
+export async function getDictionaryItemList(
+  dictionaryUuid: string,
+  is_active?: boolean,
+  options?: DictionaryLoadOptions,
+): Promise<DictionaryItem[]> {
+  const params: Record<string, string | boolean> = {};
   if (is_active !== undefined) {
     params.is_active = is_active;
   }
+  Object.assign(params, dictionaryHostParams(options?.hostResource) ?? {});
   return apiRequest<DictionaryItem[]>(`/core/data-dictionaries/${dictionaryUuid}/items`, {
     params,
   });

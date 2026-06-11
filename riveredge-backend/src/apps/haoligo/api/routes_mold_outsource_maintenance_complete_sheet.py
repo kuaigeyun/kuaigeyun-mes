@@ -44,6 +44,7 @@ from apps.haoligo.api._data_scope import (
 )
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_complete_approved,
+    backfill_before_outsource_on_source_lines,
     format_mold_warehouse_label,
     mold_warehouse_snapshot_by_codes,
     resolve_complete_line_warehouse_fields,
@@ -440,6 +441,7 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
             source_raw=src_line_raw_by_mold.get(mc),
             complete_raw=raw,
             mold_code=mc,
+            src=src_row,
         )
         return_fields: dict[str, Any] = {
             "return_before_outsource_warehouse_id": return_wh_id,
@@ -598,6 +600,11 @@ async def create_outsource_maintenance_complete_sheet(
         stored.append(_line_dict_for_sheet(ln))
     if not stored:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="外协维保单无有效模具明细")
+    await backfill_before_outsource_on_source_lines(
+        tenant_id,
+        src,
+        complete_line_items=stored,
+    )
     src_no = (
         str(src.source_order_no or "").strip()
         or str(src.sheet_no or "").strip()

@@ -109,6 +109,11 @@ export interface DictionarySelectProps {
   simpleQuickCreate?: boolean;
   /** 快速创建 Popover 的 zIndex（嵌在抬升的 Modal 内时需高于父级，如报价单弹窗） */
   quickCreatePopoverZIndex?: number;
+  /**
+   * 宿主单据 resource（{app}:{module}）。
+   * 无 system:data-dictionary read/display 时，通过 manifest module_references 隐式加载字典项。
+   */
+  hostResource?: string;
 }
 
 /**
@@ -137,6 +142,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   valueEqualsLabel = true,
   simpleQuickCreate = false,
   quickCreatePopoverZIndex,
+  hostResource,
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -155,9 +161,10 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   const loadDictionaryItems = async () => {
     try {
       setLoading(true);
-      const dictionary = await getDataDictionaryByCode(dictionaryCode);
+      const loadOpts = hostResource ? { hostResource } : undefined;
+      const dictionary = await getDataDictionaryByCode(dictionaryCode, loadOpts);
       setDictionaryUuid(dictionary.uuid);
-      const items = await getDictionaryItemList(dictionary.uuid, true);
+      const items = await getDictionaryItemList(dictionary.uuid, true, loadOpts);
       const optionsList = items
         .sort((a, b) => a.sort_order - b.sort_order)
         .map(item => ({
@@ -175,7 +182,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
   useEffect(() => {
     loadDictionaryItems();
-  }, [dictionaryCode]);
+  }, [dictionaryCode, hostResource]);
 
   /**
    * 处理创建新项

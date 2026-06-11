@@ -946,6 +946,7 @@ export function MoldMaintenanceSheetPage({
                             <DictionarySelect
                               key={dictCode}
                               dictionaryCode={dictCode}
+                              hostResource={sheetResource}
                               name="repair_reason"
                               setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                               label={reasonLabel}

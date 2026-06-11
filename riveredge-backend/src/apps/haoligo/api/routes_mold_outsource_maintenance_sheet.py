@@ -57,6 +57,7 @@ from apps.haoligo.services.outsource_maintenance_sheet_side_effects import (
 from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
 from apps.haoligo.services.outsource_sheet_warehouse import (
     apply_warehouses_on_outsource_maintenance_approved,
+    enrich_source_lines_with_dispatch_snapshots,
     format_mold_warehouse_label,
     mold_warehouse_snapshot_by_codes,
     resolve_maintenance_line_warehouse_fields,
@@ -458,6 +459,7 @@ async def create_outsource_maintenance_sheet(
         partner_code=unit_code,
     )
     stored = [_line_to_store(x) for x in body.line_items]
+    stored = await enrich_source_lines_with_dispatch_snapshots(tenant_id, stored)
     await assert_maintenance_line_molds_are_standby(tenant_id, stored)
     app_uid, app_name = await _resolve_applicant_only(tenant_id, body.applicant_user_id)
     dept_uuid, dept_name = await _validate_leaf_department(tenant_id, body.department_uuid)
@@ -557,6 +559,7 @@ async def update_outsource_maintenance_sheet(
         if not lines:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="至少保留一条模具明细")
         stored = [_line_to_store(x) for x in lines]
+        stored = await enrich_source_lines_with_dispatch_snapshots(tenant_id, stored)
         prev_codes = set(unique_mold_codes_from_stored_line_items(row.line_items or []))
         await assert_maintenance_line_molds_are_standby(tenant_id, stored, allow_mold_codes=prev_codes)
         data["line_items"] = stored

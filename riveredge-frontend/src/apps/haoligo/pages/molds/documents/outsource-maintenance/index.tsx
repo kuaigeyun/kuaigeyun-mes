@@ -1023,6 +1023,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
                     <Col span={12}>
                       <DictionarySelect
                         dictionaryCode="HAOLIGO_MOLD_REPAIR_REASON"
+                        hostResource={HAOLIGO_RESOURCE_OUTSOURCE_MAINTENANCE}
                         name="repair_reason"
                         setFieldValueNamePath={['line_items', meta.name, 'repair_reason']}
                         label="维修原因"
