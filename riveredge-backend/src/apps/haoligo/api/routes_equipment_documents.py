@@ -1371,6 +1371,7 @@ class OutputRecordOut(BaseModel):
     completed_at: Optional[datetime] = None
     operator_name: Optional[str] = None
     team_leader_name: Optional[str] = None
+    remark: Optional[str] = None
     reporter_user_id: int
     dataset_snapshot: Optional[dict] = None
     created_at: datetime
@@ -1390,6 +1391,7 @@ class OutputRecordCreate(BaseModel):
     completed_at: Optional[datetime] = None
     operator_name: Optional[str] = Field(None, max_length=100)
     team_leader_name: Optional[str] = Field(None, max_length=100)
+    remark: Optional[str] = None
     dataset_snapshot: Optional[dict] = None
 
     @field_validator("work_order_no")
@@ -1414,6 +1416,7 @@ class OutputRecordUpdate(BaseModel):
     completed_at: Optional[datetime] = None
     operator_name: Optional[str] = Field(None, max_length=100)
     team_leader_name: Optional[str] = Field(None, max_length=100)
+    remark: Optional[str] = None
     dataset_snapshot: Optional[dict] = None
 
 
@@ -1439,6 +1442,7 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
         completed_at=row.completed_at,
         operator_name=row.operator_name,
         team_leader_name=row.team_leader_name,
+        remark=row.remark,
         reporter_user_id=row.reporter_user_id,
         dataset_snapshot=row.dataset_snapshot,
         created_at=row.created_at,
@@ -1480,6 +1484,7 @@ async def list_output_records(
             | Q(product_name__icontains=k)
             | Q(finished_product_code__icontains=k)
             | Q(finished_product_name__icontains=k)
+            | Q(remark__icontains=k)
             | Q(equipment__asset_code__icontains=k)
             | Q(equipment__name__icontains=k)
         )
@@ -1524,6 +1529,7 @@ async def create_output_record(
             completed_at=body.completed_at,
             operator_name=(body.operator_name or "").strip() or None,
             team_leader_name=(body.team_leader_name or "").strip() or None,
+            remark=(body.remark or "").strip() or None,
             reporter_user_id=user.id,
             dataset_snapshot=body.dataset_snapshot,
         )
@@ -1571,6 +1577,7 @@ async def update_output_record(
         "finished_product_name",
         "operator_name",
         "team_leader_name",
+        "remark",
     ):
         if k in data and data[k] is not None:
             v = str(data[k]).strip()

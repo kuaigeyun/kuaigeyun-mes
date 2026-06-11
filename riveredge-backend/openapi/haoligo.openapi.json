@@ -9622,80 +9622,6 @@
         }
       }
     },
-    "/api/v1/apps/haoligo/molds/trial-sheets/{row_id}/recall-and-retrial": {
-      "post": {
-        "tags": [
-          "App · HaoliGO",
-          "App · HaoliGO · 试模单"
-        ],
-        "summary": "确认收回试模单并自动生成下一试模单",
-        "operationId": "recall_trial_sheet_and_retrial_api_v1_apps_haoligo_molds_trial_sheets__row_id__recall_and_retrial_post",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "row_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Row Id"
-            }
-          },
-          {
-            "name": "X-Tenant-ID",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "X-Tenant-Id"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MoldTrialRecallIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MoldTrialRecallRetrialOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/v1/apps/haoligo/molds/trial-sheets/{row_id}/revoke-approval": {
       "post": {
         "tags": [
@@ -11135,6 +11061,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OutsourceCompleteApproveIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -17225,6 +17168,20 @@
             ],
             "title": "Clear Total Production",
             "description": "保养完修是否清空累计产量"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -17485,6 +17442,13 @@
             "type": "integer",
             "title": "Reporter User Id"
           },
+          "complete_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Complete Notify User Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -17610,6 +17574,20 @@
               }
             ],
             "title": "Clear Total Production"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -18375,6 +18353,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "can_complete": {
+            "type": "boolean",
+            "title": "Can Complete",
+            "description": "是否可发起维保完成：尚无未删除的关联完成单",
+            "default": false
           }
         },
         "type": "object",
@@ -19238,66 +19222,6 @@
           "updated": {
             "type": "integer",
             "title": "Updated"
-          },
-          "unit": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 32
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Unit"
-          },
-          "value_type": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 32
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Value Type"
-          },
-          "default_value": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Default Value",
-            "description": "默认值；传空字符串表示清除"
-          },
-          "numeric_min": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Numeric Min",
-            "description": "数值型取值下限（含）；传 null 清除"
-          },
-          "numeric_max": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Numeric Max",
-            "description": "数值型取值上限（含）；传 null 清除"
           }
         },
         "type": "object",
@@ -19823,6 +19747,72 @@
             ],
             "title": "Requirement",
             "description": "点检要求；传空字符串表示清除"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "value_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Type"
+          },
+          "default_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Value",
+            "description": "默认值；传空字符串表示清除"
+          },
+          "numeric_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numeric Min",
+            "description": "数值型取值下限（含）；传 null 清除"
+          },
+          "numeric_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Numeric Max",
+            "description": "数值型取值上限（含）；传 null 清除"
           }
         },
         "type": "object",
@@ -20020,12 +20010,18 @@
             "type": "integer",
             "title": "Trial Failed Count",
             "description": "待处理试模/试产不合格单数量（角标参考，不含已确认收回）"
+          },
+          "maintenance_open_for_complete_count": {
+            "type": "integer",
+            "title": "Maintenance Open For Complete Count",
+            "description": "厂内维修+保养维保单待完修数量（已通过且尚无关联完修单）"
           }
         },
         "type": "object",
         "required": [
           "pending_audit_count",
-          "trial_failed_count"
+          "trial_failed_count",
+          "maintenance_open_for_complete_count"
         ],
         "title": "MobileBootstrapOut"
       },
@@ -21740,6 +21736,20 @@
             "minItems": 1,
             "title": "Line Items",
             "description": "与维保单模具一一对应的完修明细"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -21873,6 +21883,13 @@
             "title": "Primary Mold Code",
             "description": "首行模具代号"
           },
+          "complete_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Complete Notify User Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -21983,6 +22000,20 @@
               }
             ],
             "title": "Line Items"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -22259,6 +22290,20 @@
             ],
             "title": "Header Attachment File Uuids"
           },
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
+          },
           "line_items": {
             "items": {
               "$ref": "#/components/schemas/MoldMaintLineIn"
@@ -22383,6 +22428,18 @@
             "title": "Primary Mold Code",
             "description": "列表摘要：首行模具代号"
           },
+          "primary_mold_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Mold Name",
+            "description": "列表摘要：首行模具名称"
+          },
           "sheet_status": {
             "type": "string",
             "title": "Sheet Status",
@@ -22411,10 +22468,23 @@
             ],
             "title": "Audited By User Id"
           },
+          "submitted_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Submitted Notify User Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "can_complete": {
+            "type": "boolean",
+            "title": "Can Complete",
+            "description": "是否可发起完修/完成保养：已通过且尚无未删除的关联完修单",
+            "default": false
           }
         },
         "type": "object",
@@ -22504,6 +22574,20 @@
               }
             ],
             "title": "Header Attachment File Uuids"
+          },
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
           },
           "line_items": {
             "anyOf": [
@@ -22893,6 +22977,20 @@
             "minItems": 1,
             "title": "Line Items",
             "description": "与外协维保单模具一一对应的完修明细"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -23077,6 +23175,13 @@
             ],
             "title": "Audited By User Id"
           },
+          "complete_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Complete Notify User Ids"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -23197,6 +23302,20 @@
               }
             ],
             "title": "Line Items"
+          },
+          "complete_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Complete Notify User Ids"
           }
         },
         "type": "object",
@@ -23265,6 +23384,20 @@
               }
             ],
             "title": "Header Attachment File Uuids"
+          },
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
           },
           "line_items": {
             "items": {
@@ -23406,6 +23539,18 @@
             "title": "Primary Mold Code",
             "description": "列表摘要：首行模具代号"
           },
+          "primary_mold_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Mold Name",
+            "description": "列表摘要：首行模具名称"
+          },
           "primary_mold_warehouse_name": {
             "anyOf": [
               {
@@ -23450,6 +23595,13 @@
               }
             ],
             "title": "Audited By User Id"
+          },
+          "submitted_notify_user_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Submitted Notify User Ids"
           },
           "can_complete": {
             "type": "boolean",
@@ -23570,6 +23722,20 @@
               }
             ],
             "title": "Header Attachment File Uuids"
+          },
+          "submitted_notify_user_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted Notify User Ids"
           },
           "line_items": {
             "anyOf": [
@@ -24312,22 +24478,6 @@
         },
         "type": "object",
         "title": "MoldTrialRecallIn"
-      },
-      "MoldTrialRecallRetrialOut": {
-        "properties": {
-          "recalled": {
-            "$ref": "#/components/schemas/MoldTrialSheetOut"
-          },
-          "new_sheet": {
-            "$ref": "#/components/schemas/MoldTrialSheetOut"
-          }
-        },
-        "type": "object",
-        "required": [
-          "recalled",
-          "new_sheet"
-        ],
-        "title": "MoldTrialRecallRetrialOut"
       },
       "MoldTrialSheetCreate": {
         "properties": {
@@ -26144,6 +26294,17 @@
             ],
             "title": "Team Leader Name"
           },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
           "dataset_snapshot": {
             "anyOf": [
               {
@@ -26317,6 +26478,17 @@
               }
             ],
             "title": "Team Leader Name"
+          },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
           },
           "reporter_user_id": {
             "type": "integer",
@@ -26501,6 +26673,17 @@
             ],
             "title": "Team Leader Name"
           },
+          "remark": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remark"
+          },
           "dataset_snapshot": {
             "anyOf": [
               {
@@ -26515,6 +26698,27 @@
         },
         "type": "object",
         "title": "OutputRecordUpdate"
+      },
+      "OutsourceCompleteApproveIn": {
+        "properties": {
+          "return_warehouse_overrides": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/OutsourceCompleteReturnWarehouseOverride"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Warehouse Overrides",
+            "description": "审核时手动指定的归还厂内仓库（mold_code → warehouse_id），仅在自动推断失败时生效"
+          }
+        },
+        "type": "object",
+        "title": "OutsourceCompleteApproveIn"
       },
       "OutsourceCompleteLineIn": {
         "properties": {
@@ -26762,6 +26966,28 @@
           "mold_code"
         ],
         "title": "OutsourceCompleteLineOut"
+      },
+      "OutsourceCompleteReturnWarehouseOverride": {
+        "properties": {
+          "mold_code": {
+            "type": "string",
+            "maxLength": 64,
+            "title": "Mold Code"
+          },
+          "warehouse_id": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Warehouse Id",
+            "description": "归还的内部模具仓库 ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mold_code",
+          "warehouse_id"
+        ],
+        "title": "OutsourceCompleteReturnWarehouseOverride",
+        "description": "审核时手动指定某模具的归还厂内仓库（仅当无法自动推断发出前仓库时使用）。"
       },
       "OutsourceMaintLineIn": {
         "properties": {

@@ -13,6 +13,7 @@ import {
   ProFormInstance,
   ProFormSelect,
   ProFormText,
+  ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Alert, AutoComplete, Button, Col, Form, Modal, Row, Select, Space, Spin } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
@@ -336,6 +337,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
           completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
           operator_name: row.operator_name,
           team_leader_name: row.team_leader_name,
+          remark: row.remark,
         });
       }, 0);
     } catch (e) {
@@ -424,6 +426,14 @@ const OutputRecordDocumentsPage: React.FC = () => {
         width: 100,
         hideInSearch: true,
       },
+      {
+        title: t('app.haoligo.equipment.documents.colRemark'),
+        dataIndex: 'remark',
+        width: 160,
+        ellipsis: true,
+        hideInSearch: true,
+        render: (_, r) => (r.remark?.trim() ? r.remark : '—'),
+      },
       moldDocumentCreatedAtColumn<EquipmentOutputRecordRow>(),
       {
         title: t('app.haoligo.equipment.documents.colActions'),
@@ -480,6 +490,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
         completed_at: v.completed_at ? dayjs(v.completed_at as string).toISOString() : undefined,
         operator_name: (v.operator_name as string) || undefined,
         team_leader_name: (v.team_leader_name as string) || undefined,
+        remark: String(v.remark ?? '').trim() || undefined,
         dataset_snapshot: datasetSnapshot || undefined,
       };
       if (editId == null) {
@@ -825,6 +836,15 @@ const OutputRecordDocumentsPage: React.FC = () => {
                   placeholder: t('app.haoligo.equipment.documents.formTeamLeaderPh'),
                   filterOption: false,
                 }}
+              />
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={24}>
+              <ProFormTextArea
+                name="remark"
+                label={t('app.haoligo.equipment.documents.colRemark')}
+                fieldProps={{ rows: 3, style: { width: '100%' } }}
               />
             </Col>
           </Row>

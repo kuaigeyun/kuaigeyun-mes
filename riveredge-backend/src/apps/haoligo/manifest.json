@@ -801,7 +801,8 @@
       "startup_at",
       "completed_at",
       "operator_name",
-      "team_leader_name"
+      "team_leader_name",
+      "remark"
     ],
     "equipment.upkeep_complete.create": [
       "source_upkeep_sheet_id",

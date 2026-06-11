@@ -195,6 +195,7 @@ class HaoligoEquipmentOutputRecord(HaoligoTenantModel):
     completed_at = fields.DatetimeField(null=True, description="完成时间")
     operator_name = fields.CharField(max_length=100, null=True, description="作业人员")
     team_leader_name = fields.CharField(max_length=100, null=True, description="组长")
+    remark = fields.TextField(null=True, description="备注")
     reporter_user_id = fields.IntField(description="填报人用户 ID")
     dataset_snapshot = fields.JSONField(null=True, description="数据集带出原始行快照")
 

@@ -968,6 +968,7 @@ export interface EquipmentOutputRecordRow {
   completed_at?: string | null;
   operator_name?: string | null;
   team_leader_name?: string | null;
+  remark?: string | null;
   reporter_user_id: number;
   dataset_snapshot?: Record<string, unknown> | null;
   created_at: string;
@@ -987,6 +988,7 @@ export type EquipmentOutputRecordCreatePayload = {
   completed_at?: string | null;
   operator_name?: string | null;
   team_leader_name?: string | null;
+  remark?: string | null;
   dataset_snapshot?: Record<string, unknown> | null;
 };
 
