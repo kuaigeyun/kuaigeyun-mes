@@ -72,6 +72,7 @@ async def _outsource_complete_submitted_notification_context(
     """
     ctx = _notification_context(row)
     notify_ids: List[int] = []
+    source_complete_notify_ids: List[int] = []
     src_id = row.source_outsource_maintenance_sheet_id
     if src_id:
         src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(
@@ -84,13 +85,20 @@ async def _outsource_complete_submitted_notification_context(
                 notify_ids.append(applicant)
             if src.audited_by_user_id and int(src.audited_by_user_id) > 0:
                 notify_ids.append(int(src.audited_by_user_id))
+            # 来源外协维保单「完修通知人员」应在外协完修提交时一并收到通知。
+            source_complete_notify_ids = normalize_report_user_ids(
+                getattr(src, "complete_notify_user_ids", None)
+            )
     if row.applicant_user_id and int(row.applicant_user_id) > 0:
         uid = int(row.applicant_user_id)
         ctx.setdefault("creator_user_id", uid)
         notify_ids.append(uid)
-    merged = _merge_notify_user_ids(normalize_report_user_ids(notify_ids))
-    ctx = with_form_notify_user_ids(ctx, merged)
-    return with_form_notify_user_ids(ctx, getattr(row, "complete_notify_user_ids", None))
+    merged = _merge_notify_user_ids(
+        normalize_report_user_ids(notify_ids),
+        source_complete_notify_ids,
+        normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
+    )
+    return with_form_notify_user_ids(ctx, merged)
 
 
 async def send_outsource_complete_submitted_messages(

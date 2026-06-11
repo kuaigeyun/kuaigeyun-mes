@@ -195,6 +195,7 @@ class MoldOutsourceMaintenanceSheetOut(BaseModel):
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[OutsourceMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
+    primary_mold_name: Optional[str] = Field(None, description="列表摘要：首行模具名称")
     primary_mold_warehouse_name: Optional[str] = Field(
         None,
         description="列表摘要：首行模具所在仓库",
@@ -264,6 +265,13 @@ def _primary_mold(lines: List[OutsourceMaintLineOut]) -> Optional[str]:
         return None
     c = (lines[0].mold_code or "").strip()
     return c or None
+
+
+def _primary_mold_name(lines: List[OutsourceMaintLineOut]) -> Optional[str]:
+    if not lines:
+        return None
+    n = (lines[0].mold_name or "").strip()
+    return n or None
 
 
 async def _linked_maintenance_ids_with_active_complete(tenant_id: int) -> set[int]:
@@ -341,6 +349,7 @@ async def _serialize(
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
+        primary_mold_name=_primary_mold_name(lines),
         primary_mold_warehouse_name=primary_wh,
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
