@@ -122,8 +122,9 @@ async def send_jpush_test_notification(
     client_key: str = CLIENT_KEY_HAOLIGO,
     title: str = "推送测试",
     body: str = "这是一条来自 RiverEdge 的测试推送",
+    registration_id: str | None = None,
 ) -> dict[str, Any]:
-    """向指定用户 alias 发送测试通知，返回极光原始响应便于排查。"""
+    """向指定用户 alias 或 RegistrationID 发送测试通知，返回极光原始响应便于排查。"""
     from core.services.client_product_config_service import resolve_jpush_credentials
 
     if not infra_settings.PUSH_ENABLED:
@@ -148,9 +149,18 @@ async def send_jpush_test_notification(
 
     app_key, master_secret = creds
     auth = _auth_header_from_credentials(app_key, master_secret)
+    rid = (registration_id or "").strip()
+    audience: dict[str, Any]
+    target_label: str
+    if rid:
+        audience = {"registration_id": [rid]}
+        target_label = f"registration_id={rid}"
+    else:
+        audience = {"alias": [alias]}
+        target_label = f"alias={alias}"
     payload: dict[str, Any] = {
         "platform": "android",
-        "audience": {"alias": [alias]},
+        "audience": audience,
         "notification": {
             "alert": body,
             "android": {
@@ -175,12 +185,17 @@ async def send_jpush_test_notification(
         body_text = response.text[:1000]
         success = response.status_code == 200
         hint = _interpret_jpush_test_result(http_status=response.status_code, body=body_text, alias=alias)
+        if rid and success:
+            hint = (
+                f"极光已受理对 {target_label} 的推送；若手机仍无通知，"
+                "请保持 App 在前台并确认已允许通知权限。"
+            )
         if success:
-            logger.info("极光测试推送成功 alias={}", alias)
+            logger.info("极光测试推送成功 {}", target_label)
         else:
             logger.warning(
-                "极光测试推送失败 alias={} status={} body={}",
-                alias,
+                "极光测试推送失败 {} status={} body={}",
+                target_label,
                 response.status_code,
                 body_text[:500],
             )
@@ -190,6 +205,7 @@ async def send_jpush_test_notification(
             "http_status": response.status_code,
             "jpush_message": body_text,
             "hint": hint,
+            "target": target_label,
         }
     except Exception as exc:
         logger.warning("极光测试推送异常 alias={}: {}", alias, exc)

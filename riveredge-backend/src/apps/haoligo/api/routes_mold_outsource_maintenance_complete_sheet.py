@@ -48,6 +48,8 @@ from apps.haoligo.services.outsource_sheet_warehouse import (
     mold_warehouse_snapshot_by_codes,
     resolve_complete_line_warehouse_fields,
     resolve_outsource_unit_fields,
+    resolve_return_warehouse_id_for_complete_line,
+    warehouse_snapshot_by_id,
 )
 from apps.haoligo.api._mold_sheet_audit import (
     assert_pending_for_audit as assert_pending_for_sheet_audit,
@@ -172,6 +174,12 @@ class OutsourceCompleteLineOut(BaseModel):
     mold_warehouse_id: Optional[int] = Field(None, description="模具台账所在仓库 ID")
     mold_warehouse_code: Optional[str] = Field(None, description="所在仓库编码")
     mold_warehouse_name: Optional[str] = Field(None, description="所在仓库名称")
+    return_before_outsource_warehouse_id: Optional[int] = Field(
+        None,
+        description="完修归还厂内仓库 ID（来自关联外协维保单 before_outsource_warehouse_id）",
+    )
+    return_before_outsource_warehouse_code: Optional[str] = Field(None, description="完修归还厂内仓库编码")
+    return_before_outsource_warehouse_name: Optional[str] = Field(None, description="完修归还厂内仓库名称")
 
 
 def _line_dict_for_sheet(line: OutsourceCompleteLineIn) -> dict[str, Any]:
@@ -427,10 +435,27 @@ async def _serialize(row: HaoligoMoldOutsourceMaintenanceCompleteSheet) -> MoldO
             src_line_raw_by_mold.get(mc),
             is_approved=is_approved,
         )
+        return_wh_id = await resolve_return_warehouse_id_for_complete_line(
+            tid_int,
+            source_raw=src_line_raw_by_mold.get(mc),
+            complete_raw=raw,
+            mold_code=mc,
+        )
+        return_fields: dict[str, Any] = {
+            "return_before_outsource_warehouse_id": return_wh_id,
+            "return_before_outsource_warehouse_code": None,
+            "return_before_outsource_warehouse_name": None,
+        }
+        if return_wh_id:
+            return_snap = await warehouse_snapshot_by_id(tid_int, return_wh_id)
+            if return_snap:
+                return_fields["return_before_outsource_warehouse_code"] = return_snap.get("mold_warehouse_code")
+                return_fields["return_before_outsource_warehouse_name"] = return_snap.get("mold_warehouse_name")
         enriched_lines.append(
             ln.model_copy(
                 update={
                     **wh_fields,
+                    **return_fields,
                     "source_attachment_file_uuids": src_by_mold.get(mc, []),
                 }
             )

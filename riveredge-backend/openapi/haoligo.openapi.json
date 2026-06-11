@@ -26719,6 +26719,42 @@
             ],
             "title": "Mold Warehouse Name",
             "description": "所在仓库名称"
+          },
+          "return_before_outsource_warehouse_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Before Outsource Warehouse Id",
+            "description": "完修归还厂内仓库 ID（来自关联外协维保单 before_outsource_warehouse_id）"
+          },
+          "return_before_outsource_warehouse_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Before Outsource Warehouse Code",
+            "description": "完修归还厂内仓库编码"
+          },
+          "return_before_outsource_warehouse_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Return Before Outsource Warehouse Name",
+            "description": "完修归还厂内仓库名称"
           }
         },
         "type": "object",

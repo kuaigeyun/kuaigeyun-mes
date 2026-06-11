@@ -256,6 +256,80 @@ def origin_warehouse_by_mold_from_source_lines(source_line_items: list[Any]) -> 
     return out
 
 
+async def _infer_before_outsource_warehouse_id(
+    tenant_id: int,
+    *,
+    mold_code: str,
+) -> Optional[int]:
+    """历史外协维保单未写入 before_outsource 时：若模具仍在厂内仓，用当前台账仓库补推断。"""
+    mc = mold_code.strip()
+    if not mc:
+        return None
+    mold = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code=mc).first()
+    if not mold or not mold.mold_warehouse_id:
+        return None
+    wh = await tenant_alive(HaoligoMoldWarehouse, tenant_id).filter(id=int(mold.mold_warehouse_id)).first()
+    if not wh:
+        return None
+    if (wh.warehouse_type or "").strip() != MOLD_WAREHOUSE_TYPE_INTERNAL:
+        return None
+    return int(mold.mold_warehouse_id)
+
+
+async def resolve_return_warehouse_id_for_complete_line(
+    tenant_id: int,
+    *,
+    source_raw: Optional[dict[str, Any]],
+    complete_raw: Optional[dict[str, Any]],
+    mold_code: str,
+) -> Optional[int]:
+    """解析完修归还厂内仓库 ID（来源行 / 完修行 / 模具台账推断，只读不落库）。"""
+    for raw in (source_raw, complete_raw):
+        if raw:
+            oid = _origin_warehouse_id_from_line(raw)
+            if oid:
+                return oid
+    return await _infer_before_outsource_warehouse_id(tenant_id, mold_code=mold_code)
+
+
+async def backfill_before_outsource_on_source_lines(
+    tenant_id: int,
+    src: HaoligoMoldOutsourceMaintenanceSheet,
+    *,
+    complete_line_items: list[Any] | None = None,
+) -> dict[str, int]:
+    """补全来源外协维保单行上的 before_outsource_warehouse_id，返回 mold_code→仓库 ID。"""
+    by_mold = origin_warehouse_by_mold_from_source_lines(list(src.line_items or []))
+    for item in complete_line_items or []:
+        if not isinstance(item, dict):
+            continue
+        mc = str(item.get("mold_code") or "").strip()
+        oid = _origin_warehouse_id_from_line(item)
+        if mc and oid and mc not in by_mold:
+            by_mold[mc] = oid
+
+    items = list(src.line_items or [])
+    changed = False
+    for i, raw in enumerate(items):
+        if not isinstance(raw, dict):
+            continue
+        mc = str(raw.get("mold_code") or "").strip()
+        if not mc or mc in by_mold:
+            continue
+        inferred = await _infer_before_outsource_warehouse_id(tenant_id, mold_code=mc)
+        if not inferred:
+            continue
+        item = dict(raw)
+        item[BEFORE_OUTSOURCE_WAREHOUSE_KEY] = inferred
+        items[i] = item
+        by_mold[mc] = inferred
+        changed = True
+    if changed:
+        src.line_items = items
+        await src.save(update_fields=["line_items", "updated_at"])
+    return by_mold
+
+
 async def mold_warehouse_snapshot_by_codes(
     tenant_id: int,
     mold_codes: list[str],
@@ -346,7 +420,19 @@ async def apply_warehouses_on_outsource_complete_approved(
     if sid:
         src = await tenant_alive(HaoligoMoldOutsourceMaintenanceSheet, tenant_id).filter(id=sid).first()
         if src:
-            by_mold = origin_warehouse_by_mold_from_source_lines(list(src.line_items or []))
+            from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_APPROVED
+
+            src_status = str(getattr(src, "sheet_status", "") or "").strip()
+            if src_status != SHEET_STATUS_APPROVED:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="关联外协维保单尚未审核通过，请先审核外协维保单后再通过外协维保完修单",
+                )
+            by_mold = await backfill_before_outsource_on_source_lines(
+                tenant_id,
+                src,
+                complete_line_items=list(row.line_items or []),
+            )
     items = list(row.line_items or [])
     lines_changed = False
     for i, raw in enumerate(items):

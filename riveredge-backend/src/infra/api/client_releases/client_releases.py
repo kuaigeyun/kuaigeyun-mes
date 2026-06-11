@@ -118,6 +118,10 @@ class ClientProductConfigUpdateIn(BaseModel):
 class ClientPushTestIn(BaseModel):
     tenant_id: int = Field(gt=0, description="租户 ID")
     user_id: int = Field(gt=0, description="用户 ID（与手机登录账号一致）")
+    registration_id: str | None = Field(
+        default=None,
+        description="可选：直接向 RegistrationID 推送，用于绕过 alias 排查 SDK 是否可达",
+    )
 
 
 class ClientPushTestOut(BaseModel):
@@ -255,6 +259,7 @@ async def send_client_push_test(
         tenant_id=body.tenant_id,
         user_id=body.user_id,
         client_key=client_key,
+        registration_id=body.registration_id,
     )
     return ClientPushTestOut.model_validate(result)
 
