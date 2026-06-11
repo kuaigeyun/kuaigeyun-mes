@@ -254,6 +254,7 @@ class MoldMaintenanceSheetOut(BaseModel):
     header_attachment_file_uuids: List[str] = Field(default_factory=list)
     line_items: List[MoldMaintLineOut] = Field(default_factory=list)
     primary_mold_code: Optional[str] = Field(None, description="列表摘要：首行模具代号")
+    primary_mold_name: Optional[str] = Field(None, description="列表摘要：首行模具名称")
     sheet_status: str = Field(description="审核状态：待审核/已通过/已驳回")
     audited_at: Optional[datetime] = None
     audited_by_user_id: Optional[int] = None
@@ -325,6 +326,13 @@ def _primary_mold(lines: List[MoldMaintLineOut]) -> Optional[str]:
     return c or None
 
 
+def _primary_mold_name(lines: List[MoldMaintLineOut]) -> Optional[str]:
+    if not lines:
+        return None
+    n = (lines[0].mold_name or "").strip()
+    return n or None
+
+
 def _serialize(
     row: HaoligoMoldMaintenanceSheet,
     *,
@@ -350,6 +358,7 @@ def _serialize(
         header_attachment_file_uuids=list(row.header_attachment_file_uuids or []),
         line_items=lines,
         primary_mold_code=_primary_mold(lines),
+        primary_mold_name=_primary_mold_name(lines),
         sheet_status=effective_sheet_status(row),
         audited_at=getattr(row, "audited_at", None),
         audited_by_user_id=getattr(row, "audited_by_user_id", None),
@@ -357,6 +366,57 @@ def _serialize(
         created_at=row.created_at,
         can_complete=_row_can_complete(row, linked_ids=linked),
     )
+
+
+async def _mold_names_by_codes(tenant_id: int, codes: set[str]) -> dict[str, str]:
+    clean = sorted({str(c).strip() for c in codes if c and str(c).strip()})
+    if not clean:
+        return {}
+    molds = await tenant_alive(HaoligoMold, tenant_id).filter(mold_code__in=clean).all()
+    out: dict[str, str] = {}
+    for mold in molds:
+        code = (mold.mold_code or "").strip()
+        name = (mold.name or "").strip()
+        if code and name:
+            out[code] = name
+    return out
+
+
+def _codes_missing_primary_mold_name(items: List[MoldMaintenanceSheetOut]) -> set[str]:
+    codes: set[str] = set()
+    for item in items:
+        if (item.primary_mold_name or "").strip():
+            continue
+        code = (item.primary_mold_code or "").strip()
+        if code:
+            codes.add(code)
+    return codes
+
+
+def _enrich_primary_mold_name(
+    item: MoldMaintenanceSheetOut,
+    name_by_code: dict[str, str],
+) -> MoldMaintenanceSheetOut:
+    if (item.primary_mold_name or "").strip():
+        return item
+    code = (item.primary_mold_code or "").strip()
+    name = name_by_code.get(code)
+    if not name:
+        return item
+    return item.model_copy(update={"primary_mold_name": name})
+
+
+async def _enrich_primary_mold_names_for_list(
+    tenant_id: int,
+    items: List[MoldMaintenanceSheetOut],
+) -> List[MoldMaintenanceSheetOut]:
+    codes = _codes_missing_primary_mold_name(items)
+    if not codes:
+        return items
+    name_by_code = await _mold_names_by_codes(tenant_id, codes)
+    if not name_by_code:
+        return items
+    return [_enrich_primary_mold_name(item, name_by_code) for item in items]
 
 
 @router.get("", summary="维保单分页列表")
@@ -397,8 +457,10 @@ async def list_maintenance_sheets(
         )
     total = await qs.count()
     rows = await qs.order_by("-id").offset(skip).limit(limit)
+    items = [_serialize(r, linked_complete_ids=linked_complete_ids) for r in rows]
+    items = await _enrich_primary_mold_names_for_list(tenant_id, items)
     return {
-        "items": [_serialize(r, linked_complete_ids=linked_complete_ids) for r in rows],
+        "items": items,
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -472,7 +534,9 @@ async def get_maintenance_sheet(
         request=request,
         service_type=row.service_type,
     )
-    return _serialize(row)
+    out = _serialize(row)
+    enriched = await _enrich_primary_mold_names_for_list(tenant_id, [out])
+    return enriched[0]
 
 
 @router.patch("/{row_id}", response_model=MoldMaintenanceSheetOut, summary="更新维保单")

@@ -22,6 +22,7 @@ import type { UploadProps } from 'antd';
 import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import { UniTableStackedPrimaryCell } from '../../../../../../components/uni-table/stackedPrimaryColumn';
 import { DictionarySelect } from '../../../../../../components/dictionary-select';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { useNewShortcut } from '../../../../../../hooks/useNewShortcut';
@@ -141,6 +142,12 @@ const MAINT_ACTION_SUBMITTED = 'submitted';
 function parseNotifyUserIds(raw: unknown): number[] {
   if (!Array.isArray(raw)) return [];
   return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
+
+function resolvePrimaryMoldName(row: MoldMaintenanceSheetRow): string {
+  const fromHeader = (row.primary_mold_name || '').trim();
+  if (fromHeader) return fromHeader;
+  return (row.line_items?.[0]?.mold_name || '').trim();
 }
 
 export function MoldMaintenanceSheetPage({
@@ -577,7 +584,21 @@ export function MoldMaintenanceSheetPage({
     { title: '申请部门', dataIndex: 'department_name', width: 180, ellipsis: true },
     { title: '申请人', dataIndex: 'applicant_name', width: 120, ellipsis: true, hideInSearch: true },
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
-    { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '首件模具',
+      dataIndex: 'primary_mold_code',
+      minWidth: 168,
+      width: 168,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={resolvePrimaryMoldName(r) || '—'}
+          secondary={(r.primary_mold_code || '').trim() || '—'}
+        />
+      ),
+    },
     {
       title: '明细条数',
       key: 'line_count',

@@ -89,7 +89,6 @@ import {
   dispatchMoldTrialSheet,
   markMoldTrialSheetAdjustmentComplete,
   recallMoldTrialSheet,
-  recallMoldTrialSheetAndRetrial,
   revokeMoldTrialSheetApproval,
   updateMold,
   resolveMoldTrialOperators,
@@ -776,12 +775,6 @@ const MoldTrialSheetsPage: React.FC = () => {
     () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'recall'),
     [currentUser],
   );
-  const canRecallAndRetrialTrial = useMemo(
-    () =>
-      hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'recall') &&
-      hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'create'),
-    [currentUser],
-  );
   const canConfirmAdjustmentTrial = useMemo(
     () => hasModulePermission(currentUser, HAOLIGO_TRIAL_RESOURCE, 'confirm_adjustment'),
     [currentUser],
@@ -864,7 +857,6 @@ const MoldTrialSheetsPage: React.FC = () => {
   const [dispatchModalLoading, setDispatchModalLoading] = useState(false);
   const [recallModalOpen, setRecallModalOpen] = useState(false);
   const [recallSubmitting, setRecallSubmitting] = useState(false);
-  const [recallRetrialSubmitting, setRecallRetrialSubmitting] = useState(false);
   const [recallRecord, setRecallRecord] = useState<MoldTrialSheetRow | null>(null);
   const [recallFromLabel, setRecallFromLabel] = useState('—');
   const [recallTargetWhId, setRecallTargetWhId] = useState<number | undefined>();
@@ -1346,28 +1338,6 @@ const MoldTrialSheetsPage: React.FC = () => {
       messageApi.error((e as Error).message || '收回失败');
     } finally {
       setRecallSubmitting(false);
-    }
-  }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
-
-  const handleRecallAndRetrialConfirm = useCallback(async () => {
-    if (!recallRecord) return;
-    if (recallTargetWhId == null || recallTargetWhId < 1) {
-      messageApi.warning('请选择收回目标仓库');
-      return;
-    }
-    setRecallRetrialSubmitting(true);
-    try {
-      const res = await recallMoldTrialSheetAndRetrial(recallRecord.id, {
-        target_warehouse_id: recallTargetWhId,
-      });
-      messageApi.success(`已收回并生成新试模单「${res.new_sheet.sheet_no || res.new_sheet.id}」`);
-      setRecallModalOpen(false);
-      bumpMoldLedgerTableCache();
-      actionRef.current?.reload();
-    } catch (e) {
-      messageApi.error((e as Error).message || '收回并再试模失败');
-    } finally {
-      setRecallRetrialSubmitting(false);
     }
   }, [recallRecord, recallTargetWhId, messageApi, bumpMoldLedgerTableCache]);
 
@@ -2557,18 +2527,6 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>,
           );
         }
-        if (canRecallAndRetrialTrial && canConfirmRecallTrialSheet(record)) {
-          actions.push(
-            <Button {...rowActionKind('recall')}
-              key="recall-retrial"
-              type="link"
-              size="small"
-              onClick={() => void openRecallModal(record)}
-            >
-              收回并再试模
-            </Button>,
-          );
-        }
         return actions;
       },
     },
@@ -3281,27 +3239,16 @@ const MoldTrialSheetsPage: React.FC = () => {
             {...rowActionKind('revoke')}
             key="cancel"
             onClick={() => setRecallModalOpen(false)}
-            disabled={recallSubmitting || recallRetrialSubmitting}
+            disabled={recallSubmitting}
           >
             取消
           </Button>,
-          canRecallAndRetrialTrial ? (
-            <Button
-              {...rowActionKind('recall')}
-              key="recall-retrial"
-              loading={recallRetrialSubmitting}
-              disabled={recallModalLoading || recallTargetOptions.length === 0 || recallSubmitting}
-              onClick={() => void handleRecallAndRetrialConfirm()}
-            >
-              收回并再试模
-            </Button>
-          ) : null,
           <Button
             {...rowActionKind('recall')}
             key="recall"
             type="primary"
             loading={recallSubmitting}
-            disabled={recallModalLoading || recallTargetOptions.length === 0 || recallRetrialSubmitting}
+            disabled={recallModalLoading || recallTargetOptions.length === 0}
             onClick={() => void handleRecallConfirm()}
           >
             确认收回

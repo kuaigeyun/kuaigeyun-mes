@@ -32,8 +32,6 @@ def resolve_kuaizhizao_module_action(
         return "print"
     if module_code == "work-order" and "/operations/" in p and "/dispatch" in p:
         return "assign"
-    if "/recall-and-retrial" in p:
-        return "recall"
     if "/revoke-approval" in p:
         return "audit"
     if "/mark-adjustment-complete" in p:

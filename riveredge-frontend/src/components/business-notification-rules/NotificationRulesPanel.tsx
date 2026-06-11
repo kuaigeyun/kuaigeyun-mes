@@ -644,6 +644,7 @@ export const NotificationRulesPanel: React.FC<NotificationRulesPanelProps> = ({ 
                   {
                     title: t('pages.system.configCenter.notification.column.actions'),
                     width: 220,
+                    fixed: 'right' as const,
                     render: (_: unknown, row: { id: string }) => {
                       const actions: React.ReactNode[] = [
                         <Button {...rowActionKind('read')} key="detail" onClick={() => handleViewNotificationRule(row as never)}>

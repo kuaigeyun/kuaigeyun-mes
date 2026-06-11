@@ -1812,13 +1812,6 @@ export function recallMoldTrialSheet(
   return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/recall`, { method: 'POST', data: body ?? {} });
 }
 
-export function recallMoldTrialSheetAndRetrial(
-  rowId: number,
-  body: { target_warehouse_id: number },
-): Promise<{ recalled: MoldTrialSheetRow; new_sheet: MoldTrialSheetRow }> {
-  return apiRequest(`${PREFIX}/molds/trial-sheets/${rowId}/recall-and-retrial`, { method: 'POST', data: body });
-}
-
 /** 试模单 ↔ 数据集关联（按采购订单号执行查询并映射列） */
 export interface MoldTrialDatasetBindingPayload {
   dataset_uuid?: string | null;
@@ -1871,6 +1864,7 @@ export interface MoldOutsourceMaintenanceSheetRow {
   submitted_notify_user_ids?: number[];
   line_items: OutsourceMaintLineRow[];
   primary_mold_code?: string | null;
+  primary_mold_name?: string | null;
   primary_mold_warehouse_name?: string | null;
   sheet_status: string;
   audited_at?: string | null;
@@ -1984,6 +1978,7 @@ export interface MoldMaintenanceSheetRow {
   submitted_notify_user_ids?: number[];
   line_items: MoldMaintLineRow[];
   primary_mold_code?: string | null;
+  primary_mold_name?: string | null;
   sheet_status: string;
   audited_at?: string | null;
   audited_by_user_id?: number | null;

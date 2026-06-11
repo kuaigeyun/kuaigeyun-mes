@@ -15,8 +15,6 @@ from core.config.permission_contract import build_permission_code
 def resolve_haoligo_module_action(method: str, path: str) -> str:
     """HaoliGO 子路径 action；与 manifest STANDARD_ACTIONS 一一对应，禁止 approve/reject 合并为 audit。"""
     p = (path or "").lower()
-    if "/recall-and-retrial" in p:
-        return "recall"
     if "/revoke-approval" in p:
         return "audit"
     if "/mark-adjustment-complete" in p:

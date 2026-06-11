@@ -36,7 +36,6 @@ from apps.haoligo.constants.mold_trial_workflow_phase import (
 from apps.haoligo.services.trial_sheet_side_effects import (
     apply_production_trial_failure_after_save,
     assert_mold_trial_process_can_start_new_sheet,
-    create_replacement_trial_sheet_after_recall,
     dispatch_trial_pending_sheet,
     is_trial_failure_flow_in_progress,
     mark_trial_adjustment_complete,
@@ -251,11 +250,6 @@ class MoldTrialRecallIn(BaseModel):
         ge=1,
         description="收回目标仓库；不传则使用发出前记录的仓库",
     )
-
-
-class MoldTrialRecallRetrialOut(BaseModel):
-    recalled: MoldTrialSheetOut
-    new_sheet: MoldTrialSheetOut
 
 
 class MoldTrialViewerContextOut(BaseModel):
@@ -1126,61 +1120,6 @@ async def recall_trial_sheet(
 
         await send_trial_recalled_messages(tenant_id, row)
     return await _serialize(row)
-
-
-@router.post(
-    "/{row_id}/recall-and-retrial",
-    response_model=MoldTrialRecallRetrialOut,
-    summary="确认收回试模单并自动生成下一试模单",
-)
-async def recall_trial_sheet_and_retrial(
-    row_id: int,
-    body: MoldTrialRecallIn,
-    request: Request,
-    tenant_id: Annotated[int, Depends(get_current_tenant)],
-    user: Annotated[User, Depends(get_current_user)],
-    auth: Annotated[AuthContext, Depends(get_auth_context)],
-):
-    await ensure_permission_codes(
-        auth,
-        tenant_id,
-        request,
-        [
-            build_permission_code("haoligo", "molds-documents-trial", "recall"),
-            build_permission_code("haoligo", "molds-documents-trial", "create"),
-        ],
-        require_all=True,
-        check_abac=False,
-    )
-    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
-    if not row:
-        await _not_found()
-    await assert_trial_row_visible(row, tenant_id=tenant_id, user=user, resource=RESOURCE_TRIAL_SHEET)
-    await recall_trial_failure_sheet(tenant_id, row, target_warehouse_id=body.target_warehouse_id)
-    row = await tenant_alive(HaoligoMoldTrialSheet, tenant_id).filter(id=row_id).first()
-    if row:
-        from apps.haoligo.services.trial_sheet_side_effects import send_trial_recalled_messages
-
-        await send_trial_recalled_messages(tenant_id, row)
-    try:
-        new_row = await create_replacement_trial_sheet_after_recall(
-            tenant_id,
-            source_row=row,
-            operator_user_id=user.id,
-            resolve_applicant=_resolve_applicant_only,
-            resolve_next_trial_times=_resolve_next_trial_times,
-            generate_sheet_no=generate_mold_sheet_no,
-            sheet_no_rule_code=HAOLIGO_MOLD_TRIAL_SHEET_NO,
-        )
-    except ValidationError as e:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
-    from apps.haoligo.services.trial_sheet_side_effects import send_trial_submitted_messages
-
-    await send_trial_submitted_messages(tenant_id, new_row)
-    return MoldTrialRecallRetrialOut(
-        recalled=await _serialize(row),
-        new_sheet=await _serialize(new_row),
-    )
 
 
 @router.post(

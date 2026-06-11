@@ -46,6 +46,10 @@ import dayjs from 'dayjs';
 import { QuestionCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../components/uni-table/stackedPrimaryColumn';
+import {
   HAOLIGO_MOLD_LEDGER_TANSTACK_QUERY,
   useHaoligoMoldLedgerTableLiveRefresh,
 } from '../../../utils/moldLedgerTableCache';
@@ -974,18 +978,23 @@ const MoldLedgerPage: React.FC = () => {
 
   const columns: ProColumns<MoldRow>[] = [
     {
-      title: '模具代号',
+      title: '模具',
       dataIndex: 'mold_code',
-      width: 120,
-      ellipsis: true,
+      key: 'mold_code',
       fixed: 'left',
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fieldProps: { placeholder: '请输入模具代号' },
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={(r.name || '').trim() || '—'}
+          secondary={(r.mold_code || '').trim() || '—'}
+        />
+      ),
     },
     {
       title: '模具名称',
       dataIndex: 'name',
-      width: 180,
-      ellipsis: true,
+      hideInTable: true,
       fieldProps: { placeholder: '请输入模具名称' },
     },
     {
@@ -1266,7 +1275,7 @@ const MoldLedgerPage: React.FC = () => {
               return { data: [], success: false, total: 0 };
             }
           }}
-          scroll={{ x: 1580 }}
+          scroll={{ x: 1480 }}
         />
       </ListPageTemplate>
 

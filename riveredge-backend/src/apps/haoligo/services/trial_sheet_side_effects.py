@@ -964,62 +964,6 @@ async def recall_trial_failure_sheet(
     await row.save(update_fields=["failure_handling", "repair_warehouse_id", "workflow_phase", "updated_at"])
 
 
-async def create_replacement_trial_sheet_after_recall(
-    tenant_id: int,
-    *,
-    source_row: HaoligoMoldTrialSheet,
-    operator_user_id: int,
-    resolve_applicant,
-    resolve_next_trial_times,
-    generate_sheet_no,
-    sheet_no_rule_code: str,
-) -> HaoligoMoldTrialSheet:
-    """收回后生成下一试模单（待审核，试模结果待填）。"""
-    from apps.haoligo.constants.mold_sheet_audit import SHEET_STATUS_PENDING
-
-    sheet_no = await generate_sheet_no(tenant_id, sheet_no_rule_code)
-    mold_code = (source_row.mold_code or "").strip() or None
-    trial_times = await resolve_next_trial_times(
-        tenant_id,
-        mold_code=mold_code,
-        purchase_order_no=source_row.purchase_order_no,
-    )
-    trial_uid = source_row.trial_user_id if source_row.trial_user_id else operator_user_id
-    trial_uid, trial_uname = await resolve_applicant(tenant_id, int(trial_uid))
-    await assert_mold_trial_process_can_start_new_sheet(
-        tenant_id,
-        mold_code=mold_code,
-        purchase_order_no=source_row.purchase_order_no,
-    )
-    return await HaoligoMoldTrialSheet.create(
-        tenant_id=tenant_id,
-        sheet_no=sheet_no,
-        purchase_order_no=source_row.purchase_order_no,
-        supplier_name=source_row.supplier_name,
-        supplier_code=getattr(source_row, "supplier_code", None),
-        mold_code=mold_code,
-        mold_name=(source_row.mold_name or "").strip() or None,
-        trial_times=trial_times,
-        trial_user_id=trial_uid,
-        trial_user_name=trial_uname,
-        failure_handling=None,
-        pending_notify_user_ids=[],
-        submitted_notify_user_ids=list(
-            getattr(source_row, "submitted_notify_user_ids", None) or []
-        ),
-        repair_warehouse_id=None,
-        dispatch_origin_warehouse_id=None,
-        result_attachment_file_uuids=[],
-        inspection_attachment_file_uuids=[],
-        trial_result="合格",
-        workflow_phase=WORKFLOW_PHASE_TRIAL,
-        production_trial_result=None,
-        production_trial_user_id=None,
-        production_trial_user_name=None,
-        sheet_status=SHEET_STATUS_PENDING,
-    )
-
-
 async def apply_production_trial_failure_after_save(
     tenant_id: int,
     row: HaoligoMoldTrialSheet,

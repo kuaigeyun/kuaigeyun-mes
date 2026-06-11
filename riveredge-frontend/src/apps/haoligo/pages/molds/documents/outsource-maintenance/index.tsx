@@ -20,9 +20,13 @@ import {
 } from '@ant-design/pro-components';
 import type { UploadFile } from 'antd/es/upload/interface';
 import type { UploadProps } from 'antd';
-import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Upload } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
+import { App, Alert, Button, Col, Divider, Form, Input, Modal, Row, Space, Spin, Table, Tooltip, Typography, Upload, theme } from 'antd';
+import { CopyOutlined, DeleteOutlined, EditOutlined, EyeOutlined, ToolOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../../components/uni-table';
+import {
+  UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+  UniTableStackedPrimaryCell,
+} from '../../../../../../components/uni-table/stackedPrimaryColumn';
 import { useQueryClient } from '@tanstack/react-query';
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { rowActionKind } from '../../../../../../components/uni-action';
@@ -80,6 +84,61 @@ import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 
 const OUTSOURCE_MAINT_DOC_NOTIFICATION = 'haoligo_outsource_maintenance';
 const OUTSOURCE_MAINT_ACTION_SUBMITTED = 'submitted';
+
+const OUTSOURCE_MAINT_DOC_COPY_ICON_STYLE: React.CSSProperties = { color: '#d48806', fontSize: 11 };
+
+/** 列表堆叠：外协维修单单号 / 外协单位 */
+function OutsourceMaintDocStackedCell({ row }: { row: MoldOutsourceMaintenanceSheetRow }) {
+  const { token } = theme.useToken();
+  const sheetNo = (row.sheet_no || '').trim() || '—';
+  const unitName = (row.outsourced_unit_name || '').trim() || '—';
+  const subLineStyle: React.CSSProperties = {
+    fontSize: token.fontSizeSM,
+    lineHeight: 1.2,
+    maxWidth: '100%',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    display: 'block',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, minWidth: 0 }}>
+      <Space size={2} align="center" style={{ maxWidth: '100%', minWidth: 0 }}>
+        <Typography.Text
+          strong
+          ellipsis
+          title={sheetNo}
+          style={{ fontSize: token.fontSize, margin: 0, maxWidth: '100%' }}
+        >
+          {sheetNo}
+        </Typography.Text>
+        {sheetNo !== '—' ? (
+          <Typography.Text
+            copyable={{
+              text: sheetNo,
+              icon: [
+                <CopyOutlined key="copy" style={OUTSOURCE_MAINT_DOC_COPY_ICON_STYLE} />,
+                <CopyOutlined key="copied" style={{ ...OUTSOURCE_MAINT_DOC_COPY_ICON_STYLE, color: '#52c41a' }} />,
+              ],
+              tooltips: ['复制', '已复制'],
+            }}
+            style={{ margin: 0 }}
+          />
+        ) : null}
+      </Space>
+      <Typography.Text type="secondary" style={{ ...subLineStyle, marginTop: 1 }} title={unitName}>
+        {unitName}
+      </Typography.Text>
+    </div>
+  );
+}
+
+function resolvePrimaryMoldName(row: MoldOutsourceMaintenanceSheetRow): string {
+  const fromHeader = (row.primary_mold_name || '').trim();
+  if (fromHeader) return fromHeader;
+  return (row.line_items?.[0]?.mold_name || '').trim();
+}
 
 function parseNotifyUserIds(raw: unknown): number[] {
   if (!Array.isArray(raw)) return [];
@@ -604,16 +663,34 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     {
       title: '外协维修单单号',
       dataIndex: 'sheet_no',
-      width: 158,
-      ellipsis: true,
-      copyable: true,
+      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+      hideInSearch: true,
+      render: (_, r) => <OutsourceMaintDocStackedCell row={r} />,
+    },
+    {
+      title: '外协单位',
+      dataIndex: 'outsourced_unit_name',
+      hideInTable: true,
       hideInSearch: true,
     },
-    { title: '外协单位', dataIndex: 'outsourced_unit_name', width: 160, ellipsis: true },
     { title: '申请部门', dataIndex: 'department_name', width: 160, ellipsis: true },
     { title: '申请人', dataIndex: 'applicant_name', width: 100, ellipsis: true, hideInSearch: true },
     { title: '来源单号', dataIndex: 'source_order_no', width: 140, ellipsis: true, copyable: true },
-    { title: '首件模具', dataIndex: 'primary_mold_code', width: 120, ellipsis: true, hideInSearch: true },
+    {
+      title: '首件模具',
+      dataIndex: 'primary_mold_code',
+      minWidth: 168,
+      width: 168,
+      resizable: false,
+      ellipsis: false,
+      hideInSearch: true,
+      render: (_, r) => (
+        <UniTableStackedPrimaryCell
+          primary={resolvePrimaryMoldName(r) || '—'}
+          secondary={(r.primary_mold_code || '').trim() || '—'}
+        />
+      ),
+    },
     {
       title: '所在仓库',
       dataIndex: 'primary_mold_warehouse_name',
