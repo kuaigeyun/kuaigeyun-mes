@@ -845,7 +845,10 @@ async def preview_push_sales_order_to_work_order(
 @router.post("/{sales_order_id}/push-to-work-order", response_model=Dict[str, Any], summary="Direct push sales order to work order")
 async def push_sales_order_to_work_order(
     sales_order_id: int = Path(..., description="销售订单ID"),
-    body: Optional[Dict[str, Any]] = Body(default=None, description="可选：push_mode=draft|confirm"),
+    body: Optional[Dict[str, Any]] = Body(
+        default=None,
+        description="可选：push_mode=draft|confirm，work_order_granularity=grouped|per_unit，selected_item_ids=[1,2]，selected_quantities={\"1\": 2}，selected_work_centers={\"1\": 3}",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -856,10 +859,38 @@ async def push_sales_order_to_work_order(
     """
     try:
         payload = body or {}
+        selected_item_ids = payload.get("selected_item_ids")
+        if not isinstance(selected_item_ids, list):
+            selected_item_ids = None
+        selected_quantities_raw = payload.get("selected_quantities")
+        selected_quantities = None
+        if isinstance(selected_quantities_raw, dict):
+            selected_quantities = {}
+            for k, v in selected_quantities_raw.items():
+                try:
+                    selected_quantities[int(k)] = float(v)
+                except Exception:
+                    continue
+        selected_work_centers_raw = payload.get("selected_work_centers")
+        selected_work_centers = None
+        if isinstance(selected_work_centers_raw, dict):
+            selected_work_centers = {}
+            for k, v in selected_work_centers_raw.items():
+                try:
+                    item_id = int(k)
+                    center_id = int(v)
+                    if center_id > 0:
+                        selected_work_centers[item_id] = center_id
+                except Exception:
+                    continue
         result = await sales_order_service.push_sales_order_to_work_order(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             created_by=current_user.id,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=selected_quantities,
+            selected_work_centers=selected_work_centers,
+            work_order_granularity=payload.get("work_order_granularity"),
             push_mode=payload.get("push_mode"),
         )
         return result
@@ -955,9 +986,37 @@ async def confirm_sales_order(
         raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "确认销售订单失败", "/sales-orders/{sales_order_id}/confirm", tenant_id)
 
 
+@router.get("/{sales_order_id}/push-to-shipment-notice/preview", response_model=Dict[str, Any], summary="Push to shipment notice preview")
+async def preview_push_sales_order_to_shipment_notice(
+    sales_order_id: int = Path(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    从销售订单下推到发货通知单预览
+    """
+    try:
+        result = await sales_order_service.preview_push_sales_order_to_shipment_notice(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+        )
+        return result
+    except NotFoundError as e:
+        raise _http_exception_with_trace(http_status.HTTP_404_NOT_FOUND, str(e), "/sales-orders/{sales_order_id}/push-to-shipment-notice/preview", tenant_id)
+    except (BusinessLogicError, ValidationError) as e:
+        raise _http_exception_with_trace(http_status.HTTP_400_BAD_REQUEST, str(e), "/sales-orders/{sales_order_id}/push-to-shipment-notice/preview", tenant_id)
+    except Exception as e:
+        logger.error(f"下推发货通知单预览失败: {e}")
+        raise _http_exception_with_trace(http_status.HTTP_500_INTERNAL_SERVER_ERROR, "下推发货通知单预览失败", "/sales-orders/{sales_order_id}/push-to-shipment-notice/preview", tenant_id)
+
+
 @router.post("/{sales_order_id}/push-to-shipment-notice", response_model=Dict[str, Any], summary="Push to shipment notice")
 async def push_sales_order_to_shipment_notice(
     sales_order_id: int = Path(..., description="销售订单ID"),
+    body: Optional[Dict[str, Any]] = Body(
+        default=None,
+        description="可选：selected_item_ids=[1,2]，selected_quantities={\"1\": 2}",
+    ),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -965,10 +1024,25 @@ async def push_sales_order_to_shipment_notice(
     从销售订单下推到发货通知单
     """
     try:
+        payload = body or {}
+        selected_item_ids = payload.get("selected_item_ids")
+        if not isinstance(selected_item_ids, list):
+            selected_item_ids = None
+        selected_quantities_raw = payload.get("selected_quantities")
+        selected_quantities = None
+        if isinstance(selected_quantities_raw, dict):
+            selected_quantities = {}
+            for k, v in selected_quantities_raw.items():
+                try:
+                    selected_quantities[int(k)] = float(v)
+                except Exception:
+                    continue
         result = await sales_order_service.push_sales_order_to_shipment_notice(
             tenant_id=tenant_id,
             sales_order_id=sales_order_id,
             created_by=current_user.id,
+            selected_item_ids=selected_item_ids,
+            selected_quantities=selected_quantities,
         )
         return result
     except NotFoundError as e:

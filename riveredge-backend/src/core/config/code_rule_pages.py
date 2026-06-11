@@ -49,6 +49,7 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-warehouse-inbound": "LL",       # 领料
     "kuaizhizao-warehouse-production-return": "TL",       # 生产退料
     "kuaizhizao-warehouse-other-inbound": "QTRK",         # 其他入库
+    "kuaizhizao-warehouse-customer-material-registration": "CMR",  # 代工来料（客供料入库）
     "kuaizhizao-warehouse-other-outbound": "QTCK",        # 其他出库
     "kuaizhizao-warehouse-material-borrow": "JL",        # 借料单
     "kuaizhizao-warehouse-material-return": "HL",        # 还料单
@@ -630,6 +631,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "OTHER_INBOUND_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-customer-material-registration",
+        "page_name": "代工来料",
+        "page_path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
+        "code_field": "registration_code",
+        "code_field_label": "代工来料单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "CUSTOMER_MATERIAL_REGISTRATION_CODE",
         "allow_manual_edit": True,
     },
     {

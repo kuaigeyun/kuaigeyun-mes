@@ -167,7 +167,31 @@ class WorkOrderReadinessService:
                 await wo.save(update_fields=["readiness_rate", "readiness_component_ids", "readiness_rate_updated_at"])
                 continue
 
-            rate, component_ids = _rate_from_requirements(requirements, inventory_map)
+            wo_inventory = inventory_map
+            if wo.sales_order_id:
+                from apps.kuaizhizao.models.sales_order import SalesOrder
+                from apps.kuaizhizao.utils.inventory_helper import batch_get_material_inventory
+
+                so = await SalesOrder.get_or_none(
+                    tenant_id=tenant_id, id=wo.sales_order_id, deleted_at__isnull=True
+                )
+                if so:
+                    comp_ids = [int(r.component_id) for r in requirements]
+                    company_inv = await batch_get_material_inventory(
+                        tenant_id, comp_ids, ownership_type="company_owned"
+                    )
+                    customer_inv = await batch_get_material_inventory(
+                        tenant_id,
+                        comp_ids,
+                        ownership_type="customer_provided",
+                        customer_id=so.customer_id,
+                    )
+                    wo_inventory = {
+                        mid: (company_inv.get(mid, Decimal("0")) + customer_inv.get(mid, Decimal("0")))
+                        for mid in comp_ids
+                    }
+
+            rate, component_ids = _rate_from_requirements(requirements, wo_inventory)
             wo.readiness_rate = Decimal(str(rate)) if rate is not None else None
             wo.readiness_component_ids = component_ids
             wo.readiness_rate_updated_at = now

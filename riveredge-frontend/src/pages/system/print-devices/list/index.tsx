@@ -34,6 +34,7 @@ import { getPrintTemplateList } from '../../../../services/printTemplate';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
+import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 dayjs.extend(relativeTime);
 

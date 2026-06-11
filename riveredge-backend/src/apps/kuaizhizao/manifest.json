@@ -1690,6 +1690,11 @@
     ],
     "customer-pool": [
       "master-data:supply-chain:customer"
+    ],
+    "warehouse-management-customer-material-registration": [
+      "master-data:supply-chain:customer",
+      "master-data:warehouse:warehouse",
+      "master-data:material"
     ]
   },
   "permissions": [
@@ -2662,6 +2667,7 @@
     "kuaizhizao:warehouse-management-customer-material-registration:audit",
     "kuaizhizao:warehouse-management-customer-material-registration:reject",
     "kuaizhizao:warehouse-management-customer-material-registration:print",
+    "kuaizhizao:warehouse-management-customer-material-registration:execute",
     "kuaizhizao:warehouse-management-disassembly-orders:read",
     "kuaizhizao:warehouse-management-disassembly-orders:create",
     "kuaizhizao:warehouse-management-disassembly-orders:delete",
@@ -3029,6 +3035,18 @@
       "module_icon": "tool",
       "auto_generate": true,
       "rule_code": "OTHER_INBOUND_CODE",
+      "allow_manual_edit": true
+    },
+    {
+      "page_code": "kuaizhizao-warehouse-customer-material-registration",
+      "page_name": "代工来料",
+      "page_path": "/apps/kuaizhizao/warehouse-management/customer-material-registration",
+      "code_field": "registration_code",
+      "code_field_label": "代工来料单编码",
+      "module": "快制造",
+      "module_icon": "tool",
+      "auto_generate": true,
+      "rule_code": "CUSTOMER_MATERIAL_REGISTRATION_CODE",
       "allow_manual_edit": true
     },
     {

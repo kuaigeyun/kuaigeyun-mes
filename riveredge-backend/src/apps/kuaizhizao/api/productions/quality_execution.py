@@ -441,6 +441,24 @@ async def create_inspection_from_purchase_receipt(
     )
 
 
+@router.post(
+    "/incoming-inspections/from-customer-material/{registration_id}",
+    response_model=List[IncomingInspectionResponse],
+    summary="Create incoming inspection from customer material inbound",
+)
+async def create_inspection_from_customer_material(
+    registration_id: int = Path(..., description="代工来料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[IncomingInspectionResponse]:
+    """从代工来料单创建来料检验单"""
+    return await IncomingInspectionService().create_inspection_from_customer_material_registration(
+        tenant_id=tenant_id,
+        registration_id=registration_id,
+        created_by=current_user.id,
+    )
+
+
 @router.post("/incoming-inspections/import", summary="Batch import incoming inspections")
 async def import_incoming_inspections(
     request: Dict[str, Any],

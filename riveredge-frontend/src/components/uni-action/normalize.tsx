@@ -134,13 +134,15 @@ function resolveCatalogButtonLabel(
 ): string | null {
   if (!React.isValidElement(node)) return null
   const props = (node.props || {}) as Record<string, unknown>
+  const rawChildrenText = readNodeText(props.children)
+  const normalizedExistingText = normalizeActionLabelText(rawChildrenText)
   const labelKeep = props[ROW_ACTION_LABEL_KEEP_ATTR] === true
   const profile = readActionVisualProfile(node)
   if (profile && !labelKeep) {
     return rowActionVisualProfileLabel(profile)
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
-  if (!shouldInjectRowActionCatalogLabel(explicit, labelKeep)) {
+  if (!shouldInjectRowActionCatalogLabel(explicit, labelKeep, normalizedExistingText)) {
     return null
   }
   return rowActionLabel(explicit!)

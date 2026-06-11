@@ -169,6 +169,8 @@ async def get_material_inventory_info(
     in_transit_quantity: Optional[float] = None,
     *,
     with_breakdown: bool = False,
+    ownership_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     获取物料的库存信息（用于需求计算可供应量）
@@ -206,6 +208,10 @@ async def get_material_inventory_info(
             deleted_at__isnull=True,
             quantity__gt=0,
         ).filter(~Q(status__in=["out_stock", "scrapped", "expired"]))
+        if ownership_type:
+            batch_query = batch_query.filter(ownership_type=ownership_type)
+        if customer_id is not None:
+            batch_query = batch_query.filter(customer_id=customer_id)
         today = date.today()
         batch_query = batch_query.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
@@ -407,6 +413,8 @@ async def batch_get_material_inventory(
     material_ids: list[int],
     warehouse_id: Optional[int] = None,
     warehouse_ids: Optional[List[int]] = None,
+    ownership_type: Optional[str] = None,
+    customer_id: Optional[int] = None,
 ) -> Dict[int, Decimal]:
     """
     批量获取物料的可用库存数量（性能优化版，减少数据库往返）
@@ -429,14 +437,19 @@ async def batch_get_material_inventory(
         from apps.master_data.models.material_batch import MaterialBatch
 
         today = date.today()
-        batch_items = await MaterialBatch.filter(
+        batch_q = MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id__in=material_ids,
             deleted_at__isnull=True,
             quantity__gt=0,
         ).filter(~Q(status__in=["out_stock", "scrapped", "expired"])).filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        ).all()
+        )
+        if ownership_type:
+            batch_q = batch_q.filter(ownership_type=ownership_type)
+        if customer_id is not None:
+            batch_q = batch_q.filter(customer_id=customer_id)
+        batch_items = await batch_q.all()
 
         for item in batch_items:
             mid = item.material_id

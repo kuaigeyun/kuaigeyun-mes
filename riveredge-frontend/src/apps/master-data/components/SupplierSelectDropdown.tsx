@@ -79,7 +79,7 @@ export const SupplierSelectDropdown: React.FC<SupplierSelectDropdownProps> = ({
       const res = await searchReferenceDisplay({
         resource: 'master-data:supply-chain:supplier',
         hostResource,
-        pageSize: 500,
+        pageSize: 200,
       });
       const list = res.items.map(
         (item) =>

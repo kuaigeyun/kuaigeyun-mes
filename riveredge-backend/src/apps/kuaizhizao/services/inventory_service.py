@@ -42,11 +42,25 @@ class InventoryService:
         return bool(wh.get("batch_management", False)), bool(wh.get("serial_management", False))
 
     @staticmethod
+    def _ownership_filter(
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+    ) -> dict:
+        ot = ownership_type or "company_owned"
+        cid = customer_id if customer_id is not None else 0
+        return {"ownership_type": ot, "customer_id": cid}
+
+    @staticmethod
     async def _material_batch_increase_or_restore(
         tenant_id: int,
         material_id: int,
         batch_no: str,
         quantity: Decimal,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        customer_name: Optional[str] = None,
+        source_doc_id: Optional[int] = None,
+        source_doc_code: Optional[str] = None,
     ) -> None:
         """
         主仓批次数量增加。包含软删行：若 (tenant, material, batch_no) 已存在但 deleted_at 有值，
@@ -55,16 +69,24 @@ class InventoryService:
         from apps.master_data.models.material_batch import MaterialBatch
 
         bn = batch_no or "DEFAULT"
+        own = InventoryService._ownership_filter(ownership_type, customer_id)
         batch = await MaterialBatch.filter(
             tenant_id=tenant_id,
             material_id=material_id,
             batch_no=bn,
+            **own,
         ).select_for_update().first()
         if batch:
             if batch.deleted_at is not None:
                 batch.deleted_at = None
             batch.quantity = (batch.quantity or Decimal(0)) + quantity
             batch.status = "in_stock"
+            if customer_name:
+                batch.customer_name = customer_name
+            if source_doc_id:
+                batch.source_doc_id = source_doc_id
+            if source_doc_code:
+                batch.source_doc_code = source_doc_code
             await batch.save()
             return
         try:
@@ -74,14 +96,36 @@ class InventoryService:
                 batch_no=bn,
                 quantity=quantity,
                 status="in_stock",
+                ownership_type=own["ownership_type"],
+                customer_id=own["customer_id"],
+                customer_name=customer_name,
+                source_doc_id=source_doc_id,
+                source_doc_code=source_doc_code,
             )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,
                 material_id=material_id,
                 batch_no=bn,
+                **own,
             ).select_for_update().first()
             if not batch:
+                from infra.exceptions.exceptions import BusinessLogicError
+
+                legacy = await MaterialBatch.filter(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    batch_no=bn,
+                    deleted_at__isnull=True,
+                ).first()
+                if legacy and (
+                    legacy.ownership_type != own["ownership_type"]
+                    or int(legacy.customer_id or 0) != int(own["customer_id"])
+                ):
+                    raise BusinessLogicError(
+                        f"批号 {bn} 已存在其他归属的库存记录，客供入库请填写不同批号；"
+                        f"若需客供/自购批次隔离，请执行数据库迁移 371"
+                    )
                 raise
             if batch.deleted_at is not None:
                 batch.deleted_at = None
@@ -147,6 +191,9 @@ class InventoryService:
         source_doc_code: Optional[str] = None,
         work_order_id: Optional[int] = None,
         work_order_code: Optional[str] = None,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
+        customer_name: Optional[str] = None,
     ) -> bool:
         """
         增加库存（不开启独立事务）。
@@ -192,6 +239,11 @@ class InventoryService:
                     material_id=material_id,
                     batch_no=batch_no or "DEFAULT",
                     quantity=quantity,
+                    ownership_type=ownership_type,
+                    customer_id=customer_id,
+                    customer_name=customer_name,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
                 )
                 
                 # 记录序列号
@@ -308,6 +360,8 @@ class InventoryService:
         source_doc_id: Optional[int] = None,
         source_doc_code: Optional[str] = None,
         enforce_fifo: bool = False,
+        ownership_type: Optional[str] = None,
+        customer_id: Optional[int] = None,
     ) -> bool:
         """
         扣减库存（不开启独立事务）。见 `_increase_stock_no_atomic` 说明。
@@ -346,6 +400,7 @@ class InventoryService:
                             f"物料 {material.name}（{material_code}）启用了批号管理，出库必须指定批号"
                         )
 
+                own = InventoryService._ownership_filter(ownership_type, customer_id)
                 if batch_no:
                     batch = await MaterialBatch.filter(
                         tenant_id=tenant_id,
@@ -353,6 +408,7 @@ class InventoryService:
                         batch_no=batch_no,
                         deleted_at__isnull=True,
                         status="in_stock",
+                        **own,
                     ).select_for_update().first()
                     if not batch or (batch.quantity or 0) < quantity:
                         raise ValueError(
@@ -414,6 +470,7 @@ class InventoryService:
                             deleted_at__isnull=True,
                             status="in_stock",
                             quantity__gt=0,
+                            **own,
                         )
                         .select_for_update()
                         .order_by(order_key)

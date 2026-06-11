@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from tortoise.expressions import Q
+from tortoise.expressions import F, Q
 
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.drawing import EngineeringDrawing
@@ -169,7 +169,9 @@ class _MaterialDisplayProvider:
         is_active: bool | None,
         extra: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        query = Material.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_master=True)
+        query = Material.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        # 与物料列表 mastersOnly 一致：仅主物料/非属性 SKU 行
+        query = query.filter(Q(variant_managed=False) | Q(code=F("main_code")))
         if is_active is not None:
             query = query.filter(is_active=is_active)
         if extra:

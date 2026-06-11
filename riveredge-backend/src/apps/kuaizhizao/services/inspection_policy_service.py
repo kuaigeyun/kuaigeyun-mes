@@ -73,6 +73,9 @@ async def get_quality_effective_config(tenant_id: int) -> QualityEffectiveConfig
         },
         "gate": {
             "require_iqc_before_receipt_confirm": bool(q.get("require_incoming_inspection_for_receipt", False)),
+            "require_iqc_before_customer_material_confirm": bool(
+                q.get("require_incoming_inspection_for_customer_material", False)
+            ),
             "require_fqc_before_finished_goods_receipt": bool(
                 q.get("require_fqc_before_finished_goods_receipt", False)
             ),
@@ -86,7 +89,8 @@ def validate_quality_business_parameters(quality_params: Dict[str, Any]) -> None
     incoming = bool(quality_params.get("incoming_inspection", True))
     iqc_auto = bool(quality_params.get("auto_create_iqc_on_purchase_receipt", False))
     iqc_gate = bool(quality_params.get("require_incoming_inspection_for_receipt", False))
-    if not incoming and (iqc_auto or iqc_gate):
+    cm_iqc_gate = bool(quality_params.get("require_incoming_inspection_for_customer_material", False))
+    if not incoming and (iqc_auto or iqc_gate or cm_iqc_gate):
         raise ValidationError("未启用来料检验时，不能开启来料自动建单或收货门禁")
     process = bool(quality_params.get("process_inspection", True))
     if not process and bool(quality_params.get("auto_create_ipqc_on_reporting", True)):
@@ -432,6 +436,60 @@ async def assert_iqc_for_purchase_receipt_lines(
         if not passed_by_material.get(mid):
             raise BusinessLogicError(
                 "已启用「收货前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
+            )
+
+
+async def assert_iqc_for_customer_material_registration_lines(
+    tenant_id: int,
+    registration_id: int,
+    lines: List[Any],
+) -> None:
+    """代工来料确认入库：门禁开启时，仅对 iqc≠none 的行要求合格 IQC。"""
+    from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    cfg = await get_quality_effective_config(tenant_id)
+    if not cfg["gate"]["require_iqc_before_customer_material_confirm"]:
+        return
+
+    needs_qc_mids: List[int] = []
+    for item in lines:
+        mid = getattr(item, "material_id", None)
+        if not mid:
+            continue
+        qty = getattr(item, "quantity", None) or 0
+        try:
+            if float(qty) <= 0:
+                continue
+        except (TypeError, ValueError):
+            continue
+        eff, _, _ = await resolve_inspection_policy(tenant_id, "iqc", material_id=int(mid))
+        if eff != "none":
+            needs_qc_mids.append(int(mid))
+
+    if not needs_qc_mids:
+        return
+
+    inspections = await IncomingInspection.filter(
+        tenant_id=tenant_id,
+        customer_material_registration_id=registration_id,
+        deleted_at__isnull=True,
+    ).all()
+    if not inspections:
+        raise BusinessLogicError(
+            "已启用「代工来料入库前必须来料检验」，请先创建并完成来料检验，检验合格后再确认入库"
+        )
+
+    passed_by_material: Dict[int, bool] = {}
+    for i in inspections:
+        if i.quality_status == "合格" and i.review_status in ("已审核", "通过", "APPROVED"):
+            if i.material_id:
+                passed_by_material[int(i.material_id)] = True
+
+    for mid in needs_qc_mids:
+        if not passed_by_material.get(mid):
+            raise BusinessLogicError(
+                "已启用「代工来料入库前必须来料检验」，相关物料的来料检验须审核通过且质量状态为合格后才能确认入库"
             )
 
 

@@ -71,6 +71,12 @@ export interface SalesOrder {
   delivery_progress?: number | null;
   /** 开票进度 0-100（列表接口返回） */
   invoice_progress?: number | null;
+  /** 已下推工单数量（列表接口返回） */
+  pushed_work_order_quantity?: number;
+  /** 剩余可下推数量（列表接口返回） */
+  remaining_push_quantity?: number;
+  /** 工单下推占比 0-100（列表接口返回） */
+  work_order_push_progress?: number;
   /** 是否存在可发货产品（库存满足且仍有欠交） */
   has_shippable_products?: boolean;
   /** 当前可发货数量合计 */
@@ -351,10 +357,23 @@ export async function rejectSalesOrder(id: number, rejectionReason: string): Pro
 export interface PushPreviewResponse {
   target_type: string;
   summary: string;
-  items: { material_code: string; material_name: string; quantity: number; delivery_date?: string; suggested_action?: string }[];
+  items: {
+    item_id?: number;
+    material_code: string;
+    material_name: string;
+    quantity: number;
+    pushed_quantity?: number;
+    max_push_quantity?: number;
+    delivery_date?: string;
+    suggested_action?: string;
+    source_type?: string;
+    blocking_issues?: string[];
+  }[];
   tip?: string;
   plan_name_preview?: string;
   demand_exists?: boolean;
+  has_blocking_issues?: boolean;
+  push_mode_default?: 'draft' | 'confirm';
 }
 
 /**
@@ -396,9 +415,24 @@ export interface PushToShipmentNoticeResponse {
   sales_delivery_code?: string;
 }
 
-export async function pushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushToShipmentNoticeResponse> {
+export interface PushToShipmentNoticeRequest {
+  selected_item_ids?: number[];
+  selected_quantities?: Record<number, number>;
+}
+
+export async function previewPushSalesOrderToShipmentNotice(salesOrderId: number): Promise<PushPreviewResponse> {
+  return apiRequest<PushPreviewResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-shipment-notice/preview`, {
+    method: 'GET',
+  });
+}
+
+export async function pushSalesOrderToShipmentNotice(
+  salesOrderId: number,
+  data?: PushToShipmentNoticeRequest,
+): Promise<PushToShipmentNoticeResponse> {
   return apiRequest<PushToShipmentNoticeResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-shipment-notice`, {
     method: 'POST',
+    data,
   });
 }
 
@@ -522,9 +556,21 @@ export interface PushToWorkOrderResponse {
   target_documents?: { type: string; id: number; code: string }[];
 }
 
-export async function pushSalesOrderToWorkOrder(salesOrderId: number): Promise<PushToWorkOrderResponse> {
+export interface PushToWorkOrderRequest {
+  push_mode?: 'draft' | 'confirm';
+  work_order_granularity?: 'grouped' | 'per_unit';
+  selected_item_ids?: number[];
+  selected_quantities?: Record<number, number>;
+  selected_work_centers?: Record<number, number>;
+}
+
+export async function pushSalesOrderToWorkOrder(
+  salesOrderId: number,
+  data?: PushToWorkOrderRequest,
+): Promise<PushToWorkOrderResponse> {
   return apiRequest<PushToWorkOrderResponse>(`/apps/kuaizhizao/sales-orders/${salesOrderId}/push-to-work-order`, {
     method: 'POST',
+    data,
   });
 }
 

@@ -18,10 +18,12 @@ from loguru import logger
 
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.master_data.models.material import Material, BOM
+from apps.master_data.models.factory import WorkCenter
 from apps.master_data.models.customer import Customer
 from apps.master_data.models.process import ProcessRoute
 from apps.kuaizhizao.schemas.quote import QuoteBreakdownResponse, QuoteItemResponse
 from apps.kuaizhizao.models.sales_order_item import SalesOrderItem
+from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.demand import Demand
 from apps.kuaizhizao.models.demand_item import DemandItem
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
@@ -179,6 +181,52 @@ class SalesOrderService:
         for oid, dids in order_for.items():
             out[oid] = sum((qty_by_did.get(d, Decimal("0")) for d in dids), start=Decimal("0"))
         return out
+
+    async def _pushed_work_order_qty_by_material(
+        self,
+        tenant_id: int,
+        sales_order_id: int,
+        material_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """按产品物料统计销售订单已下推工单数量（排除已取消工单）。"""
+        mids = [int(m) for m in material_ids if m is not None]
+        if not mids:
+            return {}
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            product_id__in=mids,
+            deleted_at__isnull=True,
+        ).exclude(
+            status__in=["cancelled", "CANCELLED", "已取消"]
+        ).values_list("product_id", "quantity")
+        pushed: Dict[int, Decimal] = {}
+        for product_id, qty in rows:
+            mid = int(product_id)
+            pushed[mid] = pushed.get(mid, Decimal("0")) + Decimal(str(qty or 0))
+        return pushed
+
+    async def _pushed_work_order_qty_by_sales_order(
+        self,
+        tenant_id: int,
+        sales_order_ids: List[int],
+    ) -> Dict[int, Decimal]:
+        """按销售订单统计已下推工单数量（排除已取消工单）。"""
+        ids = [int(v) for v in sales_order_ids if v is not None]
+        if not ids:
+            return {}
+        rows = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            sales_order_id__in=ids,
+            deleted_at__isnull=True,
+        ).exclude(
+            status__in=["cancelled", "CANCELLED", "已取消"]
+        ).values_list("sales_order_id", "quantity")
+        pushed: Dict[int, Decimal] = {}
+        for so_id, qty in rows:
+            oid = int(so_id)
+            pushed[oid] = pushed.get(oid, Decimal("0")) + Decimal(str(qty or 0))
+        return pushed
 
     _EXCLUDED_SALES_INVOICE_STATUSES = ("已作废", "已红冲")
 
@@ -475,6 +523,9 @@ class SalesOrderService:
         material_fallback: Optional[Dict[int, Dict[str, Any]]] = None,
         milestones: Optional[List[Dict[str, Any]]] = None,
         shippable_hint: Optional[Dict[str, Any]] = None,
+        pushed_work_order_quantity: Optional[Decimal] = None,
+        remaining_push_quantity: Optional[Decimal] = None,
+        work_order_push_progress: Optional[float] = None,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
@@ -545,6 +596,12 @@ class SalesOrderService:
             base["delivery_progress"] = round(delivery_progress, 1)
         if invoice_progress is not None:
             base["invoice_progress"] = round(invoice_progress, 1)
+        if pushed_work_order_quantity is not None:
+            base["pushed_work_order_quantity"] = pushed_work_order_quantity
+        if remaining_push_quantity is not None:
+            base["remaining_push_quantity"] = remaining_push_quantity
+        if work_order_push_progress is not None:
+            base["work_order_push_progress"] = round(float(work_order_push_progress), 1)
         hint = shippable_hint or {}
         base["has_shippable_products"] = bool(hint.get("has_shippable_products"))
         base["shippable_quantity"] = float(hint.get("shippable_quantity") or 0.0)
@@ -1344,7 +1401,6 @@ class SalesOrderService:
             tenant_id, orders, order_to_deliveries
         )
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
-
         matched: List[SalesOrder] = []
         for order in orders:
             items = items_by_order.get(order.id) or []
@@ -1543,6 +1599,10 @@ class SalesOrderService:
         )
 
         shipped_by_order = await self._shipped_qty_by_sales_order(tenant_id, order_ids)
+        pushed_work_order_qty_by_order = await self._pushed_work_order_qty_by_sales_order(
+            tenant_id=tenant_id,
+            sales_order_ids=order_ids,
+        )
 
         eligible_ship_check_ids: List[int] = []
         delivery_progress_by_order: Dict[int, float] = {}
@@ -1567,6 +1627,16 @@ class SalesOrderService:
             invoice_progress_val = finance.get("invoice_progress", 0.0)
             invoice_amount_progress_val = finance.get("invoice_amount_progress", 0.0)
             collection_progress_val = finance.get("collection_progress", 0.0)
+            total_qty = Decimal(str(order.total_quantity or 0))
+            pushed_qty = pushed_work_order_qty_by_order.get(order.id, Decimal("0"))
+            remaining_qty = total_qty - pushed_qty
+            if remaining_qty < 0:
+                remaining_qty = Decimal("0")
+            if total_qty > 0:
+                push_ratio = float((pushed_qty / total_qty) * Decimal("100"))
+                push_ratio = max(0.0, min(100.0, push_ratio))
+            else:
+                push_ratio = 0.0
 
             sales_orders.append(
                 self._order_to_response(
@@ -1577,6 +1647,9 @@ class SalesOrderService:
                     invoice_progress=invoice_progress_val,
                     invoice_amount_progress=invoice_amount_progress_val,
                     collection_progress=collection_progress_val,
+                    pushed_work_order_quantity=pushed_qty,
+                    remaining_push_quantity=remaining_qty,
+                    work_order_push_progress=push_ratio,
                     material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                     material_fallback=material_fallback_all.get(order.id) if include_items else None,
                     shippable_hint=shippable_map.get(order.id),
@@ -2402,6 +2475,9 @@ class SalesOrderService:
         sales_order_id: int,
         created_by: int,
         selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, float]] = None,
+        selected_work_centers: Optional[Dict[int, int]] = None,
+        work_order_granularity: Optional[str] = None,
         push_mode: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
@@ -2428,11 +2504,74 @@ class SalesOrderService:
             items = [it for it in items if int(getattr(it, "id", 0)) in selected]
             if not items:
                 raise BusinessLogicError("所选明细为空，无法直推工单")
+        material_ids = [int(getattr(it, "material_id", 0) or 0) for it in items]
+        pushed_by_material = await self._pushed_work_order_qty_by_material(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            material_ids=material_ids,
+        )
+        order_total_by_material: Dict[int, Decimal] = {}
+        for it in items:
+            mid = int(getattr(it, "material_id", 0) or 0)
+            if mid <= 0:
+                continue
+            order_total_by_material[mid] = order_total_by_material.get(mid, Decimal("0")) + Decimal(
+                str(it.order_quantity or 0)
+            )
+        remaining_by_material: Dict[int, Decimal] = {}
+        for mid, total_qty in order_total_by_material.items():
+            remaining = total_qty - pushed_by_material.get(mid, Decimal("0"))
+            remaining_by_material[mid] = remaining if remaining > 0 else Decimal("0")
+        remaining_cursor = dict(remaining_by_material)
+        max_by_item: Dict[int, Decimal] = {}
+        for it in items:
+            item_id = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            order_qty = Decimal(str(it.order_quantity or 0))
+            remain = remaining_cursor.get(mid, Decimal("0"))
+            allowed = min(order_qty, remain) if remain > 0 else Decimal("0")
+            max_by_item[item_id] = allowed if allowed > 0 else Decimal("0")
+            if mid > 0 and allowed > 0:
+                remaining_cursor[mid] = remain - allowed
+        qty_override: Dict[int, Decimal] = {}
+        if selected_quantities:
+            for k, v in selected_quantities.items():
+                try:
+                    item_id = int(k)
+                    qty_override[item_id] = Decimal(str(v or 0))
+                except Exception:
+                    continue
+        work_center_by_item: Dict[int, int] = {}
+        if selected_work_centers:
+            for k, v in selected_work_centers.items():
+                try:
+                    item_id = int(k)
+                    center_id = int(v or 0)
+                    if center_id > 0:
+                        work_center_by_item[item_id] = center_id
+                except Exception:
+                    continue
+        work_center_name_by_id: Dict[int, str] = {}
+        if work_center_by_item:
+            center_ids = sorted(set(work_center_by_item.values()))
+            centers = await WorkCenter.filter(
+                tenant_id=tenant_id,
+                id__in=center_ids,
+                deleted_at__isnull=True,
+                is_active=True,
+            ).all()
+            work_center_name_by_id = {int(c.id): str(c.name or "") for c in centers}
+            missing = [cid for cid in center_ids if cid not in work_center_name_by_id]
+            if missing:
+                raise BusinessLogicError(f"所选产线不存在或未启用: {missing[0]}")
 
         raw_push_mode = (push_mode or "").strip().lower()
         if raw_push_mode not in ("draft", "confirm"):
             raw_push_mode = await self.business_config_service.get_push_default_mode(tenant_id)
         push_as_confirm = raw_push_mode == "confirm"
+        raw_granularity = (work_order_granularity or "").strip().lower()
+        if raw_granularity not in ("grouped", "per_unit"):
+            raw_granularity = "grouped"
 
         from datetime import datetime
         from apps.kuaizhizao.services.work_order_service import WorkOrderService
@@ -2448,33 +2587,68 @@ class SalesOrderService:
         )
 
         # 汇总待生成工单的物料：material_id -> {qty, material_code, material_name, delivery_date}
-        wo_pool: Dict[int, Dict[str, Any]] = {}
+        wo_pool: Dict[tuple[int, Optional[int]], Dict[str, Any]] = {}
 
-        def _add_to_pool(material_id: int, material_code: str, material_name: str, qty: float, delivery_date):
+        def _add_to_pool(
+            material_id: int,
+            material_code: str,
+            material_name: str,
+            qty: float,
+            delivery_date,
+            work_center_id: Optional[int] = None,
+            work_center_name: Optional[str] = None,
+        ):
             if qty <= 0:
                 return
-            if material_id not in wo_pool:
-                wo_pool[material_id] = {
+            key = (int(material_id), int(work_center_id) if work_center_id else None)
+            if key not in wo_pool:
+                wo_pool[key] = {
                     "material_id": material_id,
                     "material_code": material_code,
                     "material_name": material_name,
                     "quantity": Decimal("0"),
                     "earliest_delivery": delivery_date,
+                    "work_center_id": int(work_center_id) if work_center_id else None,
+                    "work_center_name": work_center_name or None,
                 }
-            wo_pool[material_id]["quantity"] += Decimal(str(qty))
+            wo_pool[key]["quantity"] += Decimal(str(qty))
             if delivery_date and (
-                wo_pool[material_id]["earliest_delivery"] is None
-                or delivery_date < wo_pool[material_id]["earliest_delivery"]
+                wo_pool[key]["earliest_delivery"] is None
+                or delivery_date < wo_pool[key]["earliest_delivery"]
             ):
-                wo_pool[material_id]["earliest_delivery"] = delivery_date
+                wo_pool[key]["earliest_delivery"] = delivery_date
 
         work_order_service = WorkOrderService()
         relation_service = DocumentRelationNewService()
+        selected_by_material: Dict[int, Decimal] = {}
 
         for it in items:
-            qty = float(it.order_quantity or 0)
-            if qty <= 0:
+            item_id = int(getattr(it, "id", 0) or 0)
+            material_id = int(getattr(it, "material_id", 0) or 0)
+            selected_work_center_id = work_center_by_item.get(item_id)
+            selected_work_center_name = (
+                work_center_name_by_id.get(selected_work_center_id)
+                if selected_work_center_id
+                else None
+            )
+            order_qty = Decimal(str(it.order_quantity or 0))
+            max_qty = max_by_item.get(item_id, Decimal("0"))
+            use_qty = qty_override.get(item_id, max_qty)
+            if use_qty <= 0:
                 continue
+            if use_qty > order_qty:
+                raise BusinessLogicError(
+                    f"物料 {it.material_code or it.material_name or item_id} 本次下推数量 {use_qty} "
+                    f"不能超过订单数量 {order_qty}"
+                )
+            if use_qty > max_qty:
+                raise BusinessLogicError(
+                    f"物料 {it.material_code or it.material_name or item_id} 本次下推数量 {use_qty} "
+                    f"超过可下推剩余数量 {max_qty}（已下推 {pushed_by_material.get(material_id, Decimal('0'))}）"
+                )
+            if material_id > 0:
+                selected_by_material[material_id] = selected_by_material.get(material_id, Decimal("0")) + use_qty
+            qty = float(use_qty)
             delivery_date = it.delivery_date
 
             bom = await get_bom_by_material_id(
@@ -2485,7 +2659,15 @@ class SalesOrderService:
             )
             if bom and bom.bom_code:
                 # 有BOM：展开，成品+半成品（Make/Outsource/Configure）生成工单
-                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                _add_to_pool(
+                    it.material_id,
+                    it.material_code,
+                    it.material_name,
+                    qty,
+                    delivery_date,
+                    selected_work_center_id,
+                    selected_work_center_name,
+                )
                 variant_attrs = getattr(it, "variant_attributes", None)
                 cfg_selections = getattr(it, "configurable_selections", None)
                 if cfg_selections and isinstance(cfg_selections, dict):
@@ -2509,23 +2691,43 @@ class SalesOrderService:
                             req["material_name"],
                             float(req["required_quantity"]),
                             delivery_date,
+                            selected_work_center_id,
+                            selected_work_center_name,
                         )
             else:
                 # 无BOM：仅成品工单
-                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+                _add_to_pool(
+                    it.material_id,
+                    it.material_code,
+                    it.material_name,
+                    qty,
+                    delivery_date,
+                    selected_work_center_id,
+                    selected_work_center_name,
+                )
+
+        for mid, sel_qty in selected_by_material.items():
+            remain = remaining_by_material.get(mid, Decimal("0"))
+            if sel_qty > remain:
+                raise BusinessLogicError(
+                    f"产品ID {mid} 本次合计下推数量 {sel_qty} 超过可下推剩余数量 {remain}"
+                )
 
         work_orders = []
-        for info in wo_pool.values():
-            qty = float(info["quantity"])
-            if qty <= 0:
-                continue
+
+        async def _create_one_work_order(info: Dict[str, Any], qty_dec: Decimal):
             wo_data = WorkOrderCreate(
                 code_rule="WORK_ORDER_CODE",
                 product_id=info["material_id"],
                 product_code=info["material_code"],
                 product_name=info["material_name"],
-                quantity=Decimal(str(qty)),
+                quantity=qty_dec,
                 production_mode="MTO",
+                sales_order_id=order.id,
+                sales_order_code=order.order_code,
+                sales_order_name=order.order_code,
+                work_center_id=info.get("work_center_id"),
+                work_center_name=info.get("work_center_name"),
                 planned_start_date=(
                     datetime.combine(info["earliest_delivery"], datetime.min.time())
                     if info.get("earliest_delivery") else None
@@ -2540,6 +2742,7 @@ class SalesOrderService:
                 tenant_id=tenant_id,
                 work_order_data=wo_data,
                 created_by=created_by,
+                allow_draft=not push_as_confirm,
             )
             if push_as_confirm:
                 wo = await work_order_service.release_work_order(
@@ -2551,7 +2754,6 @@ class SalesOrderService:
             wo_id = wo.id if hasattr(wo, "id") else wo.get("id")
             wo_code = wo.code if hasattr(wo, "code") else wo.get("code")
             wo_name = wo.name if hasattr(wo, "name") else wo.get("name")
-
             relation_data = DocumentRelationCreate(
                 source_type="sales_order",
                 source_id=sales_order_id,
@@ -2574,13 +2776,30 @@ class SalesOrderService:
             )
             work_orders.append(wo)
 
+        for info in wo_pool.values():
+            total_qty_dec = Decimal(str(info["quantity"] or 0))
+            if total_qty_dec <= 0:
+                continue
+            if raw_granularity == "per_unit":
+                if total_qty_dec != total_qty_dec.to_integral_value():
+                    raise BusinessLogicError(
+                        f"物料 {info['material_code'] or info['material_name']} 下推数量为 {total_qty_dec}，"
+                        "“单台一个工单”仅支持整数数量"
+                    )
+                unit_count = int(total_qty_dec)
+                for _ in range(unit_count):
+                    await _create_one_work_order(info, Decimal("1"))
+            else:
+                await _create_one_work_order(info, total_qty_dec)
+
         if not work_orders:
-            raise BusinessLogicError("销售订单无有效明细数量，无法生成工单")
+            raise BusinessLogicError("所选明细的本次下推数量均为 0，无法生成工单")
 
         return {
             "success": True,
             "message": f"直推成功，共生成 {len(work_orders)} 个工单（含半成品，采购件自行采购）",
             "push_mode": raw_push_mode,
+            "work_order_granularity": raw_granularity,
             "target_documents": [
                 {"type": "work_order", "id": w.id if hasattr(w, "id") else w.get("id"), "code": w.code if hasattr(w, "code") else w.get("code")}
                 for w in work_orders
@@ -2590,7 +2809,7 @@ class SalesOrderService:
     async def preview_push_sales_order_to_work_order(
         self, tenant_id: int, sales_order_id: int
     ) -> Dict[str, Any]:
-        """下推工单预览：返回将生成的工单列表，不实际创建"""
+        """下推工单预览：返回可选择的销售订单明细，不实际创建。"""
         order = await SalesOrder.get_or_none(
             tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
         )
@@ -2606,92 +2825,75 @@ class SalesOrderService:
         if not items:
             raise BusinessLogicError("销售订单无明细，无法直推工单")
 
-        from apps.kuaizhizao.utils.bom_helper import get_bom_by_material_id
         from apps.kuaizhizao.utils.material_source_helper import (
-            expand_bom_with_source_control,
-            SOURCE_TYPE_MAKE,
-            SOURCE_TYPE_OUTSOURCE,
-            SOURCE_TYPE_CONFIGURE,
+            get_material_source_type,
+            validate_material_source_config,
         )
 
-        wo_pool: Dict[int, Dict[str, Any]] = {}
-
-        def _add_to_pool(material_id: int, material_code: str, material_name: str, qty: float, delivery_date):
-            if qty <= 0:
-                return
-            if material_id not in wo_pool:
-                wo_pool[material_id] = {
-                    "material_id": material_id,
-                    "material_code": material_code,
-                    "material_name": material_name,
-                    "quantity": Decimal("0"),
-                    "earliest_delivery": delivery_date,
-                }
-            wo_pool[material_id]["quantity"] += Decimal(str(qty))
-            if delivery_date and (
-                wo_pool[material_id]["earliest_delivery"] is None
-                or delivery_date < wo_pool[material_id]["earliest_delivery"]
-            ):
-                wo_pool[material_id]["earliest_delivery"] = delivery_date
-
+        preview_items: List[Dict[str, Any]] = []
+        has_blocking_issues = False
+        material_ids = [int(getattr(it, "material_id", 0) or 0) for it in items]
+        pushed_by_material = await self._pushed_work_order_qty_by_material(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            material_ids=material_ids,
+        )
+        order_total_by_material: Dict[int, Decimal] = {}
         for it in items:
-            qty = float(it.order_quantity or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            if mid <= 0:
+                continue
+            order_total_by_material[mid] = order_total_by_material.get(mid, Decimal("0")) + Decimal(
+                str(it.order_quantity or 0)
+            )
+        remaining_cursor: Dict[int, Decimal] = {}
+        for mid, total_qty in order_total_by_material.items():
+            remaining = total_qty - pushed_by_material.get(mid, Decimal("0"))
+            remaining_cursor[mid] = remaining if remaining > 0 else Decimal("0")
+        for it in items:
+            qty = Decimal(str(it.order_quantity or 0))
             if qty <= 0:
                 continue
-            delivery_date = it.delivery_date
-
-            bom = await get_bom_by_material_id(
+            item_id = int(getattr(it, "id", 0) or 0)
+            mid = int(getattr(it, "material_id", 0) or 0)
+            remain = remaining_cursor.get(mid, Decimal("0"))
+            max_qty = min(qty, remain) if remain > 0 else Decimal("0")
+            if mid > 0 and max_qty > 0:
+                remaining_cursor[mid] = remain - max_qty
+            source_type = await get_material_source_type(tenant_id, it.material_id)
+            _, source_errors = await validate_material_source_config(
                 tenant_id=tenant_id,
                 material_id=it.material_id,
-                only_approved=True,
-                use_default=True,
+                source_type=source_type or "Make",
             )
-            if bom and bom.bom_code:
-                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
-                variant_attrs = getattr(it, "variant_attributes", None)
-                cfg_selections = getattr(it, "configurable_selections", None)
-                if cfg_selections and isinstance(cfg_selections, dict):
-                    cfg_selections = {k: int(v) if v is not None else v for k, v in cfg_selections.items()}
-                requirements = await expand_bom_with_source_control(
-                    tenant_id=tenant_id,
-                    material_id=it.material_id,
-                    required_quantity=qty,
-                    only_approved=True,
-                    use_default_bom=True,
-                    variant_attributes=variant_attrs,
-                    configurable_selections=cfg_selections,
-                    flatten_intermediate_subassemblies=True,
-                )
-                for req in requirements:
-                    st = req.get("source_type")
-                    if st in (SOURCE_TYPE_MAKE, SOURCE_TYPE_OUTSOURCE, SOURCE_TYPE_CONFIGURE):
-                        _add_to_pool(
-                            req["material_id"],
-                            req["material_code"],
-                            req["material_name"],
-                            float(req["required_quantity"]),
-                            delivery_date,
-                        )
-            else:
-                _add_to_pool(it.material_id, it.material_code, it.material_name, qty, delivery_date)
+            errors = [str(e) for e in (source_errors or []) if str(e).strip()]
+            if errors:
+                has_blocking_issues = True
+            preview_items.append(
+                {
+                    "item_id": item_id,
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "quantity": float(qty),
+                    "pushed_quantity": float(pushed_by_material.get(mid, Decimal("0"))),
+                    "max_push_quantity": float(max_qty),
+                    "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                    "suggested_action": "生产",
+                    "source_type": source_type or "Make",
+                    "blocking_issues": errors,
+                }
+            )
 
-        wo_items = []
-        for info in wo_pool.values():
-            qty = float(info["quantity"])
-            if qty <= 0:
-                continue
-            wo_items.append({
-                "material_code": info["material_code"],
-                "material_name": info["material_name"],
-                "quantity": float(qty),
-                "delivery_date": str(info["earliest_delivery"]) if info.get("earliest_delivery") else None,
-            })
+        if not preview_items:
+            raise BusinessLogicError("销售订单无有效明细数量，无法下推工单")
 
         return {
             "target_type": "work_order",
-            "summary": f"将生成 {len(wo_items)} 个工单",
-            "items": wo_items,
-            "tip": "含半成品，采购件由您自行采购",
+            "summary": f"请选择本次要下推的产品与数量（共 {len(preview_items)} 条可选明细）",
+            "items": preview_items,
+            "has_blocking_issues": has_blocking_issues,
+            "push_mode_default": await self.business_config_service.get_push_default_mode(tenant_id),
+            "tip": "确认后将按所选数量下推工单；系统会按 BOM 展开成品/半成品工单。若缺少主数据可先草稿下推，后续补齐再下达。",
         }
 
     async def create_sales_order_reminder(
@@ -3089,6 +3291,7 @@ class SalesOrderService:
         sales_order_id: int,
         created_by: int,
         selected_item_ids: Optional[List[int]] = None,
+        selected_quantities: Optional[Dict[int, float]] = None,
     ) -> Dict[str, Any]:
         """下推销售订单到发货通知单"""
         order = await SalesOrder.get_or_none(
@@ -3110,6 +3313,13 @@ class SalesOrderService:
             items = [it for it in items if int(getattr(it, "id", 0)) in selected]
             if not items:
                 raise BusinessLogicError("所选明细为空，无法下推发货通知单")
+        qty_override: Dict[int, Decimal] = {}
+        if selected_quantities:
+            for k, v in selected_quantities.items():
+                try:
+                    qty_override[int(k)] = Decimal(str(v or 0))
+                except Exception:
+                    continue
 
         from apps.kuaizhizao.services.shipment_notice_service import ShipmentNoticeService
         today = datetime.now().strftime("%Y%m%d")
@@ -3138,11 +3348,23 @@ class SalesOrderService:
             total_amt = Decimal("0")
             for it in items:
                 # P1-S-009: 发货通知下推应取欠发量，避免把总量重复通知给仓库
-                qty = (it.remaining_quantity if it.remaining_quantity is not None else ((it.order_quantity or Decimal("0")) - (it.delivered_quantity or Decimal("0"))))
+                remaining_qty = (
+                    it.remaining_quantity
+                    if it.remaining_quantity is not None
+                    else ((it.order_quantity or Decimal("0")) - (it.delivered_quantity or Decimal("0")))
+                )
+                remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
+                item_id = int(getattr(it, "id", 0) or 0)
+                qty = qty_override.get(item_id, remaining_qty)
                 qty = max(Decimal("0"), Decimal(str(qty)))
                 if qty <= Decimal("0"):
                     continue
-                amt = it.total_amount or (qty * (it.unit_price or Decimal("0")))
+                if qty > remaining_qty:
+                    raise BusinessLogicError(
+                        f"物料 {it.material_code or it.material_name or item_id} 下推数量 {qty} "
+                        f"不能超过欠发数量 {remaining_qty}"
+                    )
+                amt = qty * (it.unit_price or Decimal("0"))
                 await ShipmentNoticeItem.create(
                     tenant_id=tenant_id,
                     notice_id=notice.id,
@@ -3188,6 +3410,61 @@ class SalesOrderService:
             "status": notified.status,
             "sales_delivery_id": getattr(notified, "sales_delivery_id", None),
             "sales_delivery_code": getattr(notified, "sales_delivery_code", None),
+        }
+
+    async def preview_push_sales_order_to_shipment_notice(
+        self, tenant_id: int, sales_order_id: int
+    ) -> Dict[str, Any]:
+        """下推发货通知单预览：返回可选择的订单明细及可下推数量。"""
+        order = await SalesOrder.get_or_none(
+            tenant_id=tenant_id, id=sales_order_id, deleted_at__isnull=True
+        )
+        if not order:
+            raise NotFoundError(f"销售订单不存在: {sales_order_id}")
+        if not self._is_audited(order.status):
+            raise ValidationError(f"只能下推已审核的销售订单，当前状态: {order.status}")
+        self._assert_order_executable(order)
+
+        items = await SalesOrderItem.filter(
+            tenant_id=tenant_id, sales_order_id=sales_order_id
+        ).order_by("id")
+        if not items:
+            raise BusinessLogicError("销售订单无明细，无法下推发货通知单")
+
+        preview_items: List[Dict[str, Any]] = []
+        for it in items:
+            order_qty = Decimal(str(it.order_quantity or 0))
+            delivered_qty = Decimal(str(it.delivered_quantity or 0))
+            remaining_qty = (
+                it.remaining_quantity
+                if it.remaining_quantity is not None
+                else (order_qty - delivered_qty)
+            )
+            remaining_qty = max(Decimal("0"), Decimal(str(remaining_qty)))
+            preview_items.append(
+                {
+                    "item_id": int(it.id),
+                    "material_code": it.material_code,
+                    "material_name": it.material_name,
+                    "quantity": float(order_qty),
+                    "delivered_quantity": float(delivered_qty),
+                    "max_push_quantity": float(remaining_qty),
+                    "delivery_date": str(it.delivery_date) if it.delivery_date else None,
+                    "suggested_action": "发货",
+                }
+            )
+
+        if not preview_items:
+            raise BusinessLogicError("销售订单无有效明细，无法下推发货通知单")
+
+        pushable_count = sum(
+            1 for row in preview_items if Decimal(str(row.get("max_push_quantity", 0))) > 0
+        )
+        return {
+            "target_type": "shipment_notice",
+            "summary": f"请选择本次要通知发货的产品与数量（共 {pushable_count} 条可发货明细）",
+            "items": preview_items,
+            "tip": "系统将按所选数量生成发货通知单，并自动通知仓库生成销售出库。",
         }
 
     async def push_sales_order_to_invoice(

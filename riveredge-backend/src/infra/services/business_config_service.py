@@ -275,6 +275,7 @@ PARAMETER_KEYS = {
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
+    "parameters.quality.require_incoming_inspection_for_customer_material",
     "parameters.quality.require_fqc_before_finished_goods_receipt",
     "parameters.quality.process_inspection",
     "parameters.quality.finished_inspection",
@@ -334,6 +335,7 @@ IMPLEMENTED_PARAMETER_KEYS = {
     "parameters.purchase.price_fluctuation_limit_percent",
     "parameters.quality.incoming_inspection",
     "parameters.quality.require_incoming_inspection_for_receipt",
+    "parameters.quality.require_incoming_inspection_for_customer_material",
     "parameters.quality.require_fqc_before_finished_goods_receipt",
     "parameters.quality.process_inspection",
     "parameters.quality.finished_inspection",
@@ -451,6 +453,7 @@ DEFAULT_PARAMETERS: Dict[str, Dict[str, Any]] = {
     "quality": {
         "incoming_inspection": True,
         "require_incoming_inspection_for_receipt": False,
+        "require_incoming_inspection_for_customer_material": False,
         "require_fqc_before_finished_goods_receipt": False,
         "process_inspection": True,
         "finished_inspection": True,

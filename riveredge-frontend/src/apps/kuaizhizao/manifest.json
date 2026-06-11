@@ -2428,6 +2428,7 @@
     "kuaizhizao:warehouse-management-customer-material-registration:audit",
     "kuaizhizao:warehouse-management-customer-material-registration:reject",
     "kuaizhizao:warehouse-management-customer-material-registration:print",
+    "kuaizhizao:warehouse-management-customer-material-registration:execute",
     "kuaizhizao:warehouse-management-disassembly-orders:read",
     "kuaizhizao:warehouse-management-disassembly-orders:create",
     "kuaizhizao:warehouse-management-disassembly-orders:delete",

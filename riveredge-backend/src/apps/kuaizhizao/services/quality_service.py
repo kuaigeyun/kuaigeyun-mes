@@ -751,6 +751,127 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
 
             return inspections
 
+    async def create_inspection_from_customer_material_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        created_by: int,
+    ) -> List[IncomingInspectionResponse]:
+        """从代工来料单创建来料检验单"""
+        await _require_iqc_stage_enabled(tenant_id)
+        incoming_enabled, _ = await _get_quality_policy_flags(tenant_id)
+        if not incoming_enabled:
+            raise BusinessLogicError("当前组织未开启来料检验，禁止从代工来料单下推来料检验")
+
+        from apps.kuaizhizao.models.customer_material_registration import (
+            CustomerMaterialRegistration,
+            CustomerMaterialRegistrationItem,
+        )
+        from apps.kuaizhizao.services.customer_material_registration_service import (
+            CustomerMaterialRegistrationService,
+        )
+        from apps.master_data.models.material import Material
+
+        async with in_transaction():
+            registration = await CustomerMaterialRegistration.get_or_none(
+                tenant_id=tenant_id, id=registration_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status not in ("pending", "processed"):
+                raise BusinessLogicError("仅待入库或已入库状态的代工来料单可创建来料检验单")
+
+            svc = CustomerMaterialRegistrationService()
+            lines = await svc._effective_items(registration)
+            if not lines:
+                raise BusinessLogicError("代工来料单没有明细项")
+
+            mids = [it.material_id for it in lines if it.material_id]
+            mat_rows = await Material.filter(
+                tenant_id=tenant_id, id__in=mids, deleted_at__isnull=True
+            ).all()
+            mat_by_id = {m.id: m for m in mat_rows}
+
+            inspections = []
+            for item in lines:
+                existing = await IncomingInspection.filter(
+                    tenant_id=tenant_id,
+                    customer_material_registration_id=registration_id,
+                    material_id=item.material_id,
+                    deleted_at__isnull=True,
+                ).first()
+                if existing:
+                    continue
+
+                mat = mat_by_id.get(item.material_id)
+                eff, _, _ = await resolve_inspection_policy(
+                    tenant_id, "iqc", material_id=item.material_id
+                )
+                if eff == "none":
+                    continue
+
+                template = await _resolve_inspection_template_fields(
+                    tenant_id, item.material_id, "iqc"
+                )
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(
+                    tenant_id, "INCOMING_INSPECTION_CODE", prefix=f"IQ{today}"
+                )
+                inspection = await IncomingInspection.create(
+                    tenant_id=tenant_id,
+                    inspection_code=code,
+                    source_type="customer_material_inbound",
+                    customer_material_registration_id=registration_id,
+                    customer_material_registration_code=registration.registration_code,
+                    customer_id=registration.customer_id,
+                    customer_name=registration.customer_name,
+                    material_id=item.material_id,
+                    material_code=item.material_code,
+                    material_name=item.material_name,
+                    material_spec=getattr(mat, "specification", None) if mat else None,
+                    material_unit=getattr(mat, "base_unit", None) or "件" if mat else "件",
+                    inspection_quantity=item.quantity,
+                    qualified_quantity=0,
+                    unqualified_quantity=0,
+                    inspection_result="待检验",
+                    quality_status="待判定",
+                    status="待检验",
+                    created_by=created_by,
+                    **template,
+                )
+                inspections.append(IncomingInspectionResponse.model_validate(inspection))
+
+                try:
+                    from apps.kuaizhizao.services.document_relation_new_service import DocumentRelationNewService
+                    from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate
+
+                    rel_svc = DocumentRelationNewService()
+                    await rel_svc.create_relation(
+                        tenant_id=tenant_id,
+                        relation_data=DocumentRelationCreate(
+                            source_type="customer_material_inbound",
+                            source_id=registration_id,
+                            source_code=registration.registration_code,
+                            source_name=None,
+                            target_type="incoming_inspection",
+                            target_id=inspection.id,
+                            target_code=inspection.inspection_code,
+                            target_name=None,
+                            relation_type="source",
+                            relation_mode="push",
+                            relation_desc="从代工来料单创建来料检验单",
+                        ),
+                        created_by=created_by,
+                    )
+                except Exception as rel_e:
+                    logger.warning("创建代工来料→来料检验 单据关联失败: %s", rel_e)
+
+            if not inspections:
+                raise BusinessLogicError(
+                    "未生成任何来料检验单：各明细可能已有检验单，或物料质检模式为无质检"
+                )
+            return inspections
+
     async def import_from_data(
         self,
         tenant_id: int,

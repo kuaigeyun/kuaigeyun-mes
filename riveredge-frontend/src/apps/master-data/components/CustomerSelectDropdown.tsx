@@ -85,7 +85,7 @@ export const CustomerSelectDropdown: React.FC<CustomerSelectDropdownProps> = ({
       const res = await searchReferenceDisplay({
         resource: 'master-data:supply-chain:customer',
         hostResource,
-        pageSize: 1000,
+        pageSize: 200,
       });
       const list = res.items.map(
         (item) =>

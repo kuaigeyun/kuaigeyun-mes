@@ -47,7 +47,7 @@ class MaterialBatch(BaseModel):
             ("status",),
             ("expiry_date",),
         ]
-        unique_together = [("tenant_id", "material_id", "batch_no")]
+        unique_together = [("tenant_id", "material_id", "batch_no", "ownership_type", "customer_id")]
     
     # 主键
     id = fields.IntField(pk=True, description="批号ID（主键，自增ID，内部使用）")
@@ -64,6 +64,16 @@ class MaterialBatch(BaseModel):
     production_date = fields.DateField(null=True, description="生产日期（可选）")
     expiry_date = fields.DateField(null=True, description="有效期（可选，用于有保质期的物料）")
     supplier_batch_no = fields.CharField(max_length=100, null=True, description="供应商批号（可选）")
+
+    ownership_type = fields.CharField(
+        max_length=20,
+        default="company_owned",
+        description="库存归属（company_owned=自购, customer_provided=客供）",
+    )
+    customer_id = fields.IntField(default=0, description="客供库存归属客户ID（自购为0）")
+    customer_name = fields.CharField(max_length=200, null=True, description="客供库存归属客户名称")
+    source_doc_id = fields.IntField(null=True, description="来源单据ID（如代工来料单）")
+    source_doc_code = fields.CharField(max_length=50, null=True, description="来源单据编码")
     
     # 批号数量（当前库存数量）
     quantity = fields.DecimalField(max_digits=18, decimal_places=4, default=0, description="批号数量（当前库存数量）")

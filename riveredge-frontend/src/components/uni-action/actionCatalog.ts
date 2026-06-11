@@ -138,7 +138,9 @@ export function rowActionSortRank(
 export function shouldInjectRowActionCatalogLabel(
   kind: RowActionPermissionKind | null | undefined,
   labelKeep: boolean,
+  existingLabel?: string | null,
 ): boolean {
   if (labelKeep || !kind || kind === 'skip') return false
+  if ((existingLabel || '').trim()) return false
   return kind in ROW_ACTION_LABEL_FALLBACK
 }

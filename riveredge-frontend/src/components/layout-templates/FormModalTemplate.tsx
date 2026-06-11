@@ -37,6 +37,8 @@ export interface FormModalTemplateProps {
   className?: string;
   modalRender?: (modal: React.ReactNode) => React.ReactNode;
   extraFooter?: ReactNode;
+  /** 新建模式主按钮文案，默认使用 i18n submitCreate */
+  submitText?: string;
   readOnly?: boolean;
   /** Modal 打开/关闭动画结束后的回调（open 为当前是否打开） */
   afterOpenChange?: (open: boolean) => void;
@@ -75,6 +77,7 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
   className,
   modalRender,
   extraFooter,
+  submitText,
   afterOpenChange,
   zIndex,
   readOnly = false,
@@ -131,12 +134,12 @@ export const FormModalTemplate: React.FC<FormModalTemplateProps> = ({
         ) : (
           <Space wrap>
             <Button onClick={handleClose}>{t('common.cancel')}</Button>
+            {extraFooter}
             <Button type="primary" loading={loading} onClick={triggerFormSubmit}>
               {(isEdit
                 ? t('components.layoutTemplates.formModal.submitUpdate')
-                : t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
+                : submitText ?? t('components.layoutTemplates.formModal.submitCreate')) + SUBMIT_SHORTCUT_HINT}
             </Button>
-            {extraFooter}
           </Space>
         )
       }

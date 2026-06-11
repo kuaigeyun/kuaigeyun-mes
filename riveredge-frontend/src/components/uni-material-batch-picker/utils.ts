@@ -78,7 +78,7 @@ export function mapMaterialGroupTree(nodes: unknown[]): MaterialGroupTreeNode[] 
     const childrenRaw = n.children as unknown[] | undefined;
     const node: MaterialGroupTreeNode = {
       value: id,
-      key: `g-${id}-${idx}`,
+      key: String(id),
       title: [code, name].filter(Boolean).join(' ') || String(id),
       children: childrenRaw?.length ? mapMaterialGroupTree(childrenRaw) : undefined,
     };

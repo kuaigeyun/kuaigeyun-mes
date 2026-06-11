@@ -1,13 +1,13 @@
 /**
- * 客户来料登记生命周期：待处理→已处理 / 已取消
+ * 代工来料生命周期：待入库→已入库 / 已取消
  */
 
 import { createLifecycleResolver } from './createLifecycleResolver';
 
 export const getCustomerMaterialRegistrationLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending', label: '待处理' },
-    { key: 'processed', label: '已处理' },
+    { key: 'pending', label: '待入库' },
+    { key: 'processed', label: '已入库' },
     { key: 'cancelled', label: '已取消' },
   ],
   statusToKey: {
@@ -16,7 +16,7 @@ export const getCustomerMaterialRegistrationLifecycle = createLifecycleResolver(
     cancelled: 'cancelled',
   },
   nextStepSuggestions: {
-    pending: ['入库处理'],
+    pending: ['确认入库'],
     processed: [],
     cancelled: [],
   },

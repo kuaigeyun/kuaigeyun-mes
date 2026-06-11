@@ -53,6 +53,7 @@ import { receiptNoticeApi } from '../../../services/receipt-notice';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -60,7 +61,7 @@ interface InboundOrder {
   tenant_id?: number;
   receipt_code?: string;
   return_code?: string;
-  receipt_type?: 'purchase' | 'finished_goods' | 'semi_finished_goods' | 'production_return';
+  receipt_type?: 'purchase' | 'finished_goods' | 'semi_finished_goods' | 'production_return' | 'customer_material';
   status?: string;
   receipt_date?: string;
   return_time?: string;
@@ -289,6 +290,9 @@ function isInboundStockPosted(record: InboundOrder): boolean {
   const sl = s.toLowerCase();
   if (record.receipt_type === 'production_return') {
     return s === '已退料';
+  }
+  if (record.receipt_type === 'customer_material') {
+    return s === 'processed' || s === '已入库';
   }
   return (
     s === '已入库' ||
@@ -742,6 +746,8 @@ const InboundPage: React.FC = () => {
         detailData = await warehouseApi.semiFinishedGoodsReceipt.get(record.id!.toString());
       } else if (record.receipt_type === 'production_return') {
         detailData = await warehouseApi.productionReturn.get(record.id!.toString());
+      } else if (record.receipt_type === 'customer_material') {
+        detailData = await customerMaterialRegistrationApi.get(record.id!.toString());
       }
       if (detailData) {
         await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
@@ -1178,6 +1184,19 @@ const InboundPage: React.FC = () => {
    * 处理确认入库/退料
    */
   const handleConfirm = async (record: InboundOrder) => {
+    if (record.receipt_type === 'customer_material') {
+      Modal.confirm({
+        title: '确认代工来料入库',
+        content: `确定确认入库单据「${record.receipt_code}」吗？`,
+        onOk: async () => {
+          await customerMaterialRegistrationApi.process(String(record.id));
+          messageApi.success('代工来料已确认入库');
+          invalidateMenuBadgeCounts();
+          await actionRef.current?.reload?.();
+        },
+      });
+      return;
+    }
     await openConfirmPreview(record);
   };
 
@@ -1200,6 +1219,8 @@ const InboundPage: React.FC = () => {
             await warehouseApi.semiFinishedGoodsReceipt.withdraw(String(record.id));
           } else if (record.receipt_type === 'purchase') {
             await warehouseApi.purchaseReceipt.withdraw(String(record.id));
+          } else if (record.receipt_type === 'customer_material') {
+            await customerMaterialRegistrationApi.withdraw(String(record.id));
           } else {
             await warehouseApi.productionReturn.withdraw(String(record.id));
           }
@@ -1284,6 +1305,9 @@ const InboundPage: React.FC = () => {
    * 表格列定义
    */
   const getInboundStackedPrimary = (record: InboundOrder): string => {
+    if (record.receipt_type === 'customer_material' && (record as any).customer_name) {
+      return String((record as any).customer_name);
+    }
     if (record.receipt_type === 'purchase' && record.supplier_name) {
       return String(record.supplier_name);
     }
@@ -1321,6 +1345,7 @@ const InboundPage: React.FC = () => {
         finished_goods: { text: '成品入库', status: 'success' },
         semi_finished_goods: { text: '半成品入库', status: 'default' },
         production_return: { text: '生产退料', status: 'warning' },
+        customer_material: { text: '代工来料', status: 'default' },
       },
     },
     {
@@ -1409,7 +1434,8 @@ const InboundPage: React.FC = () => {
           (stLower === 'draft' ||
             st === '草稿' ||
             st === '待入库' ||
-            st === '待退料');
+            st === '待退料' ||
+            (record.receipt_type === 'customer_material' && st === 'pending'));
         const nodes: React.ReactNode[] = [
           <Button {...rowActionKind('read')}
             key="detail"
@@ -1543,11 +1569,12 @@ const InboundPage: React.FC = () => {
             const listParams = { skip, limit, ...params, keyword: (params as any).keyword };
 
             // 并行获取采购入库单、成品/半成品入库单、生产退料单
-            const [purchaseRes, finishedRes, semiRes, returnRes] = await Promise.all([
+            const [purchaseRes, finishedRes, semiRes, returnRes, customerMaterialRes] = await Promise.all([
               warehouseApi.purchaseReceipt.list(listParams),
               warehouseApi.finishedGoodsReceipt.list(listParams),
               warehouseApi.semiFinishedGoodsReceipt.list(listParams),
               warehouseApi.productionReturn.list(listParams),
+              customerMaterialRegistrationApi.list(listParams),
             ]);
 
             // 后端可能直接返回数组，或 { data/items: [] } 格式
@@ -1569,15 +1596,25 @@ const InboundPage: React.FC = () => {
               receipt_type: 'production_return' as const,
               receipt_code: item.return_code,
             }));
+            const customerMaterialData = toList(customerMaterialRes).map((item: any) => ({
+              ...item,
+              receipt_type: 'customer_material' as const,
+              receipt_code: item.registration_code,
+              total_quantity: item.total_quantity ?? item.quantity,
+              status: item.status === 'pending' ? '待入库' : item.status === 'processed' ? '已入库' : item.status,
+              receipt_date: item.registration_date,
+              received_by: item.processed_by_name || item.registered_by_name,
+            }));
 
-            const combinedData = [...purchaseData, ...finishedData, ...semiData, ...returnData];
+            const combinedData = [...purchaseData, ...finishedData, ...semiData, ...returnData, ...customerMaterialData];
             combinedData.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
 
             const total =
               (typeof purchaseRes?.total === 'number' ? purchaseRes.total : purchaseData.length) +
               (typeof finishedRes?.total === 'number' ? finishedRes.total : finishedData.length) +
               (typeof semiRes?.total === 'number' ? semiRes.total : semiData.length) +
-              (typeof returnRes?.total === 'number' ? returnRes.total : returnData.length);
+              (typeof returnRes?.total === 'number' ? returnRes.total : returnData.length) +
+              (typeof customerMaterialRes?.total === 'number' ? customerMaterialRes.total : customerMaterialData.length);
 
             return {
               data: combinedData,

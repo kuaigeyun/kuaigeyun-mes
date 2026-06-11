@@ -31,7 +31,11 @@ from .batching_order import BatchingOrder, BatchingOrderItem
 from .disassembly_order import DisassemblyOrder, DisassemblyOrderItem
 from .inventory_alert import InventoryAlertRule, InventoryAlert
 from .packing_binding import PackingBinding
-from .customer_material_registration import CustomerMaterialRegistration, BarcodeMappingRule
+from .customer_material_registration import (
+    CustomerMaterialRegistration,
+    CustomerMaterialRegistrationItem,
+    BarcodeMappingRule,
+)
 from .document_node_timing import DocumentNodeTiming
 from .material_shortage_exception import MaterialShortageException
 from .delivery_delay_exception import DeliveryDelayException

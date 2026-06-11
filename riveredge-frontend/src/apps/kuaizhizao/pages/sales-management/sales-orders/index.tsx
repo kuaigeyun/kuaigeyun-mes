@@ -12,7 +12,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspens
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -78,9 +78,11 @@ import {
   updateSalesOrder,
   submitSalesOrder,
   approveSalesOrder,
+  rejectSalesOrder,
   unapproveSalesOrder,
   previewPushSalesOrderToComputation,
   previewPushSalesOrderToWorkOrder,
+  previewPushSalesOrderToShipmentNotice,
   pushSalesOrderToComputation,
   pushSalesOrderToWorkOrder,
   pushSalesOrderToShipmentNotice,
@@ -115,6 +117,7 @@ const canPushDownSalesOrder = (r: SalesOrder) =>
 import { materialApi } from '../../../../master-data/services/material';
 import type { Material } from '../../../../master-data/types/material';
 import { customerApi } from '../../../../master-data/services/supply-chain';
+import { workCenterApi, factoryListItems } from '../../../../master-data/services/factory';
 import type { Customer } from '../../../../master-data/types/supply-chain';
 import {
   getMaterialDefaultTaxRate,
@@ -169,6 +172,9 @@ type SalesOrderItemRow = SalesOrderItem & {
   total_quantity?: number;
   total_amount?: number;
   delivery_progress?: number;
+  pushed_work_order_quantity?: number;
+  remaining_push_quantity?: number;
+  work_order_push_progress?: number;
   status?: string;
   review_status?: string;
   pushed_to_computation?: boolean;
@@ -536,6 +542,14 @@ const SalesOrdersPage: React.FC = () => {
   }, []);
 
   const auditEnabled = useAuditRequired('sales_order', false);
+  const auditEnabledRef = useRef(auditEnabled);
+  useEffect(() => {
+    if (auditEnabledRef.current === auditEnabled) return;
+    auditEnabledRef.current = auditEnabled;
+    invalidateOrdersCache();
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [auditEnabled]);
   const lifecycleValueEnum = useMemo(
     () => buildSalesOrderLifecycleValueEnum(t, auditEnabled),
     [t, auditEnabled],
@@ -1303,11 +1317,18 @@ const SalesOrdersPage: React.FC = () => {
   const [pushPreviewLoading, setPushPreviewLoading] = useState(false);
   const [pushPreviewData, setPushPreviewData] = useState<PushPreviewResponse | null>(null);
   const [pushPreviewAction, setPushPreviewAction] = useState<{
-    doPush: () => Promise<any>;
+    doPush: (payload?: any) => Promise<any>;
     onSuccess: () => void;
     orderId: number;
   } | null>(null);
   const [pushPreviewConfirming, setPushPreviewConfirming] = useState(false);
+  const [workOrderSelectedItemIds, setWorkOrderSelectedItemIds] = useState<number[]>([]);
+  const [workOrderPushQuantities, setWorkOrderPushQuantities] = useState<Record<number, number>>({});
+  const [workOrderSelectedWorkCenters, setWorkOrderSelectedWorkCenters] = useState<Record<number, number>>({});
+  const [workCenterOptions, setWorkCenterOptions] = useState<Array<{ label: string; value: number }>>([]);
+  const [workCenterOptionsLoading, setWorkCenterOptionsLoading] = useState(false);
+  const [workOrderPushMode, setWorkOrderPushMode] = useState<'draft' | 'confirm'>('draft');
+  const [workOrderGranularity, setWorkOrderGranularity] = useState<'grouped' | 'per_unit'>('grouped');
   const [pushToReturnVisible, setPushToReturnVisible] = useState(false);
   const [pushToReturnOrder, setPushToReturnOrder] = useState<SalesOrder | null>(null);
   const [pushToReturnQuantities, setPushToReturnQuantities] = useState<Record<number, number>>({});
@@ -1320,23 +1341,71 @@ const SalesOrdersPage: React.FC = () => {
    */
   const showPushPreviewModal = (
     fetchPreview: () => Promise<PushPreviewResponse>,
-    doPush: () => Promise<any>,
+    doPush: (payload?: any) => Promise<any>,
     onSuccess: () => void,
     orderId: number,
   ) => {
     setPushPreviewOpen(true);
     setPushPreviewLoading(true);
     setPushPreviewData(null);
+    setWorkOrderSelectedItemIds([]);
+    setWorkOrderPushQuantities({});
+    setWorkOrderSelectedWorkCenters({});
+    setWorkOrderPushMode('draft');
+    setWorkOrderGranularity('grouped');
     setPushPreviewAction({ doPush, onSuccess, orderId });
+    const ensureWorkCentersLoaded = async () => {
+      if (workCenterOptions.length > 0) return;
+      try {
+        setWorkCenterOptionsLoading(true);
+        const listRes = await workCenterApi.list({ is_active: true, limit: 1000 });
+        const rows = factoryListItems(listRes as any);
+        setWorkCenterOptions(
+          rows
+            .filter((r: any) => Number(r?.id) > 0)
+            .map((r: any) => ({
+              value: Number(r.id),
+              label: String(r.name || r.code || r.id),
+            })),
+        );
+      } catch (error: any) {
+        messageApi.warning(error?.message || '加载产线列表失败');
+      } finally {
+        setWorkCenterOptionsLoading(false);
+      }
+    };
     fetchPreview()
       .then((res) => {
         setPushPreviewData(res);
+        if (res?.target_type === 'work_order' || res?.target_type === 'shipment_notice') {
+          if (res?.target_type === 'work_order') {
+            void ensureWorkCentersLoaded();
+          }
+          const rows = Array.isArray(res.items) ? res.items : [];
+          const ids: number[] = [];
+          const qtyMap: Record<number, number> = {};
+          rows.forEach((row) => {
+            const itemId = Number((row as any).item_id);
+            if (!Number.isFinite(itemId) || itemId <= 0) return;
+            const defaultQty = Number((row as any).max_push_quantity ?? row.quantity ?? 0);
+            if (Number.isFinite(defaultQty) && defaultQty > 0) {
+              ids.push(itemId);
+            }
+            qtyMap[itemId] = Number.isFinite(defaultQty) && defaultQty > 0 ? defaultQty : 0;
+          });
+          setWorkOrderSelectedItemIds(ids);
+          setWorkOrderPushQuantities(qtyMap);
+          const defaultMode = res.push_mode_default === 'confirm' ? 'confirm' : 'draft';
+          setWorkOrderPushMode(defaultMode);
+        }
         setPushPreviewLoading(false);
       })
       .catch((err) => {
         messageApi.error(salesOrderCatchMessage(err, t('app.kuaizhizao.salesOrder.loadPreviewFailed')));
         setPushPreviewOpen(false);
         setPushPreviewLoading(false);
+        setWorkOrderSelectedWorkCenters({});
+        setWorkOrderGranularity('grouped');
       });
   };
 
@@ -1345,12 +1414,93 @@ const SalesOrdersPage: React.FC = () => {
     if (!pushPreviewAction || !pushPreviewData) return;
     setPushPreviewConfirming(true);
     try {
-      await pushPreviewAction.doPush();
+      if (pushPreviewData.target_type === 'work_order') {
+        const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
+        const rowById = new Map<number, any>();
+        rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => rowById.has(id));
+        if (!selectedIds.length) {
+          const hasPushable = rows.some((row: any) => Number(row?.max_push_quantity ?? 0) > 0);
+          messageApi.warning(hasPushable ? '请至少选择一条产品明细' : '该销售订单可下推数量已全部用完');
+          return;
+        }
+        const selectedQuantities: Record<number, number> = {};
+        const selectedWorkCenters: Record<number, number> = {};
+        const selectedBlockingIssues: string[] = [];
+        for (const id of selectedIds) {
+          const row = rowById.get(id);
+          const qty = Number(workOrderPushQuantities[id] ?? 0);
+          const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) {
+            messageApi.warning(`请填写有效下推数量：${row?.material_code || id}`);
+            return;
+          }
+          if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+            messageApi.warning(`下推数量不能超过可下推剩余量：${row?.material_code || id}`);
+            return;
+          }
+          if (Array.isArray(row?.blocking_issues) && row.blocking_issues.length > 0) {
+            selectedBlockingIssues.push(...row.blocking_issues.map((m: string) => String(m)));
+          }
+          const centerId = Number(workOrderSelectedWorkCenters[id] ?? 0);
+          if (Number.isFinite(centerId) && centerId > 0) {
+            selectedWorkCenters[id] = centerId;
+          }
+          selectedQuantities[id] = qty;
+        }
+        if (workOrderPushMode === 'confirm' && selectedBlockingIssues.length > 0) {
+          messageApi.warning('存在主数据缺项，当前为“正式下推”不可继续，请先补齐或改为“草稿下推”。');
+          return;
+        }
+        await pushPreviewAction.doPush({
+          push_mode: workOrderPushMode,
+          work_order_granularity: workOrderGranularity,
+          selected_item_ids: selectedIds,
+          selected_quantities: selectedQuantities,
+          selected_work_centers: selectedWorkCenters,
+        });
+      } else if (pushPreviewData.target_type === 'shipment_notice') {
+        const rows = (pushPreviewData.items || []).filter((row: any) => Number(row?.item_id) > 0);
+        const rowById = new Map<number, any>();
+        rows.forEach((row: any) => rowById.set(Number(row.item_id), row));
+        const selectedIds = workOrderSelectedItemIds.filter((id) => rowById.has(id));
+        if (!selectedIds.length) {
+          const hasPushable = rows.some((row: any) => Number(row?.max_push_quantity ?? 0) > 0);
+          messageApi.warning(hasPushable ? '请至少选择一条产品明细' : '该销售订单可通知发货数量已全部用完');
+          return;
+        }
+        const selectedQuantities: Record<number, number> = {};
+        for (const id of selectedIds) {
+          const row = rowById.get(id);
+          const qty = Number(workOrderPushQuantities[id] ?? 0);
+          const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+          if (!Number.isFinite(qty) || qty <= 0) {
+            messageApi.warning(`请填写有效下推数量：${row?.material_code || id}`);
+            return;
+          }
+          if (Number.isFinite(maxQty) && maxQty > 0 && qty > maxQty) {
+            messageApi.warning(`下推数量不能超过可发货数量：${row?.material_code || id}`);
+            return;
+          }
+          selectedQuantities[id] = qty;
+        }
+        await pushPreviewAction.doPush({
+          selected_item_ids: selectedIds,
+          selected_quantities: selectedQuantities,
+        });
+      } else {
+        await pushPreviewAction.doPush();
+      }
       messageApi.success(t('app.kuaizhizao.salesOrder.pushSuccess'));
       pushPreviewAction.onSuccess();
       setPushPreviewOpen(false);
       setPushPreviewData(null);
       setPushPreviewAction(null);
+      setWorkOrderSelectedItemIds([]);
+      setWorkOrderPushQuantities({});
+      setWorkOrderSelectedWorkCenters({});
+      setWorkOrderPushMode('draft');
+      setWorkOrderGranularity('grouped');
     } catch (error: any) {
       messageApi.error(salesOrderCatchMessage(error, '下推失败'));
     } finally {
@@ -1385,20 +1535,12 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.warning('发货通知节点未启用，无法下推');
       return;
     }
-    modalApi.confirm({
-      title: t('app.kuaizhizao.salesOrder.pushToShipmentTitle'),
-      content: t('app.kuaizhizao.salesOrder.pushToShipmentConfirm'),
-      zIndex: elevatedModalZIndex,
-      onOk: async () => {
-        try {
-          const res = await pushSalesOrderToShipmentNotice(id);
-          messageApi.success(res?.message || t('app.kuaizhizao.salesOrder.shipmentNoticeCreated'));
-          refreshDrawerOrder(id);
-        } catch (error: any) {
-          messageApi.error(salesOrderCatchMessage(error, t('app.kuaizhizao.salesOrder.pushFailed')));
-        }
-      },
-    });
+    showPushPreviewModal(
+      () => previewPushSalesOrderToShipmentNotice(id),
+      (payload?: any) => pushSalesOrderToShipmentNotice(id, payload),
+      () => refreshDrawerOrder(id),
+      id,
+    );
   };
 
   /** 处理下推到销售发票 */
@@ -2156,6 +2298,24 @@ const SalesOrdersPage: React.FC = () => {
     { title: t('app.kuaizhizao.salesOrder.totalQuantity'), dataIndex: 'total_quantity', width: 100, align: 'right' as const, sorter: true },
     { title: t('app.kuaizhizao.salesOrder.totalAmountLabel'), dataIndex: 'total_amount', width: 120, align: 'right' as const, sorter: true, render: (_: unknown, r: SalesOrder) => <AmountDisplay resource={SO} fieldName="total_amount" value={r.total_amount} /> },
     {
+      title: '下推占比',
+      dataIndex: 'work_order_push_progress',
+      width: 80,
+      hideInSearch: true,
+      render: (_: unknown, record: SalesOrder) => {
+        const totalQty = Number(record.total_quantity ?? 0);
+        const pushedQty = Number(record.pushed_work_order_quantity ?? 0);
+        const remainingQty = Number(record.remaining_push_quantity ?? Math.max(totalQty - pushedQty, 0));
+        const ratio = Number(record.work_order_push_progress ?? (totalQty > 0 ? (pushedQty / totalQty) * 100 : 0));
+        const percent = Math.max(0, Math.min(100, ratio));
+        return (
+          <Tooltip title={`${Math.round(percent)}%（已下推 ${pushedQty} / 总量 ${totalQty}，剩余 ${remainingQty}）`}>
+            <Progress percent={Math.round(percent)} size="small" showInfo={false} style={{ margin: 0 }} />
+          </Tooltip>
+        );
+      },
+    },
+    {
       title: t('app.kuaizhizao.salesOrder.deliveryProgress'),
       dataIndex: 'delivery_progress',
       width: 80,
@@ -2242,7 +2402,7 @@ const SalesOrdersPage: React.FC = () => {
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={[SalesOrderStatus.DRAFT]}
-            pendingStatuses={[ReviewStatus.PENDING, '待审核']}
+            pendingStatuses={[SalesOrderStatus.PENDING_REVIEW, ReviewStatus.PENDING, '待审核']}
             approvedStatuses={[...APPROVED_STATUS_VALUES]}
             rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
             autoApproveWhenSubmit={!auditEnabled}
@@ -2250,7 +2410,7 @@ const SalesOrdersPage: React.FC = () => {
             resourcePrefix="kuaizhizao:sales-order"
             theme="link"
             size="small"
-            actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, revoke: unapproveSalesOrder }}
+            actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, reject: rejectSalesOrder, revoke: unapproveSalesOrder }}
             onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
@@ -3346,6 +3506,9 @@ const SalesOrdersPage: React.FC = () => {
                     total_quantity: order.total_quantity,
                     total_amount: order.total_amount,
                     delivery_progress: order.delivery_progress,
+                    pushed_work_order_quantity: order.pushed_work_order_quantity,
+                    remaining_push_quantity: order.remaining_push_quantity,
+                    work_order_push_progress: order.work_order_push_progress,
                     status: order.status,
                     review_status: order.review_status,
                     pushed_to_computation: order.pushed_to_computation,
@@ -3372,6 +3535,9 @@ const SalesOrdersPage: React.FC = () => {
                       total_quantity: order.total_quantity,
                       total_amount: order.total_amount,
                       delivery_progress: order.delivery_progress,
+                      pushed_work_order_quantity: order.pushed_work_order_quantity,
+                      remaining_push_quantity: order.remaining_push_quantity,
+                      work_order_push_progress: order.work_order_push_progress,
                       status: order.status,
                       review_status: order.review_status,
                       pushed_to_computation: order.pushed_to_computation,
@@ -3681,7 +3847,7 @@ const SalesOrdersPage: React.FC = () => {
                   statusField="status"
                   reviewStatusField="review_status"
                   draftStatuses={[SalesOrderStatus.DRAFT]}
-                  pendingStatuses={[ReviewStatus.PENDING, '待审核']}
+                  pendingStatuses={[SalesOrderStatus.PENDING_REVIEW, ReviewStatus.PENDING, '待审核']}
                   approvedStatuses={[...APPROVED_STATUS_VALUES]}
                   rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
                   autoApproveWhenSubmit={!auditEnabled}
@@ -3691,6 +3857,7 @@ const SalesOrdersPage: React.FC = () => {
                   actions={{
                     submit: async (id) => submitSalesOrder(id),
                     approve: approveSalesOrder,
+                    reject: rejectSalesOrder,
                     revoke: unapproveSalesOrder,
                   }}
                   onSuccess={() => {
@@ -4042,10 +4209,15 @@ const SalesOrdersPage: React.FC = () => {
           setPushPreviewOpen(false);
           setPushPreviewData(null);
           setPushPreviewAction(null);
+          setWorkOrderSelectedItemIds([]);
+          setWorkOrderPushQuantities({});
+          setWorkOrderSelectedWorkCenters({});
+          setWorkOrderPushMode('draft');
+          setWorkOrderGranularity('grouped');
         }}
         okText={t('app.kuaizhizao.salesOrder.confirmPush')}
         cancelText={t('common.cancel')}
-        width={560}
+        width={900}
         confirmLoading={pushPreviewConfirming}
         onOk={handlePushPreviewConfirm}
         okButtonProps={{ disabled: pushPreviewLoading || !pushPreviewData }}
@@ -4058,12 +4230,224 @@ const SalesOrdersPage: React.FC = () => {
         ) : pushPreviewData ? (
           <div>
             <p style={{ marginBottom: 12, fontWeight: 500 }}>{pushPreviewData.summary}</p>
+            {pushPreviewData.target_type === 'work_order' && (
+              <div style={{ marginBottom: 10 }}>
+                <Space>
+                  <span>下推模式：</span>
+                  <Segmented
+                    size="middle"
+                    value={workOrderPushMode}
+                    onChange={(val) => setWorkOrderPushMode(val as 'draft' | 'confirm')}
+                    options={[
+                      { label: '草稿下推', value: 'draft' },
+                      { label: '正式下推', value: 'confirm' },
+                    ]}
+                  />
+                  <span>工单类型：</span>
+                  <Segmented
+                    size="middle"
+                    value={workOrderGranularity}
+                    onChange={(val) => setWorkOrderGranularity(val as 'grouped' | 'per_unit')}
+                    options={[
+                      { label: '普通工单', value: 'grouped' },
+                      { label: '平级组工单', value: 'per_unit' },
+                    ]}
+                  />
+                </Space>
+              </div>
+            )}
             {pushPreviewData.plan_name_preview && (
               <p style={{ marginBottom: 8, color: 'var(--ant-color-text-secondary)' }}>
                 {t('app.kuaizhizao.salesOrder.planName')}：{pushPreviewData.plan_name_preview}
               </p>
             )}
-            {pushPreviewData.items?.length > 0 && (
+            {pushPreviewData.target_type === 'work_order' && pushPreviewData.has_blocking_issues ? (
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginBottom: 8 }}
+                message="检测到部分物料缺少主数据配置（如工艺路线/BOM）。可先草稿下推，补齐后再下达。"
+              />
+            ) : null}
+            {pushPreviewData.target_type === 'work_order' && pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                columns={[
+                  {
+                    title: '选择',
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 140, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
+                  { title: '已下推', dataIndex: 'pushed_quantity', key: 'pushed_quantity', width: 90, align: 'right' as const },
+                  { title: '可下推', dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  {
+                    title: '生产产线',
+                    dataIndex: 'work_center_id',
+                    key: 'work_center_id',
+                    width: 170,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      return (
+                        <Select
+                          allowClear
+                          showSearch
+                          optionFilterProp="label"
+                          placeholder="请选择产线"
+                          style={{ width: '100%' }}
+                          value={workOrderSelectedWorkCenters[itemId]}
+                          options={workCenterOptions}
+                          loading={workCenterOptionsLoading}
+                          onChange={(val) => {
+                            setWorkOrderSelectedWorkCenters((prev) => {
+                              const next = { ...prev };
+                              const n = Number(val ?? 0);
+                              if (Number.isFinite(n) && n > 0) {
+                                next[itemId] = n;
+                              } else {
+                                delete next[itemId];
+                              }
+                              return next;
+                            });
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: '本次下推数量',
+                    dataIndex: 'push_quantity',
+                    key: 'push_quantity',
+                    width: 130,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={workOrderPushQuantities[itemId]}
+                          onChange={(val) => {
+                            const next = Number(val ?? 0);
+                            setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  {
+                    title: '缺失项',
+                    dataIndex: 'blocking_issues',
+                    key: 'blocking_issues',
+                    width: 220,
+                    render: (_: unknown, row: any) => {
+                      const issues = Array.isArray(row?.blocking_issues) ? row.blocking_issues : [];
+                      if (!issues.length) return <span style={{ color: 'var(--ant-color-success)' }}>-</span>;
+                      return (
+                        <Tooltip title={issues.join('\n')}>
+                          <span style={{ color: 'var(--ant-color-warning)' }}>
+                            {issues[0]}
+                            {issues.length > 1 ? ` 等${issues.length}项` : ''}
+                          </span>
+                        </Tooltip>
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : pushPreviewData.target_type === 'shipment_notice' && pushPreviewData.items?.length > 0 ? (
+              <Table
+                size="small"
+                dataSource={pushPreviewData.items}
+                columns={[
+                  {
+                    title: '选择',
+                    dataIndex: 'item_id',
+                    key: 'select',
+                    width: 64,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      if (!Number.isFinite(itemId) || itemId <= 0) return null;
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      const disabled = !Number.isFinite(maxQty) || maxQty <= 0;
+                      return (
+                        <Switch
+                          size="small"
+                          disabled={disabled}
+                          checked={workOrderSelectedItemIds.includes(itemId)}
+                          onChange={(checked) => {
+                            setWorkOrderSelectedItemIds((prev) =>
+                              checked ? Array.from(new Set([...prev, itemId])) : prev.filter((id) => id !== itemId),
+                            );
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', key: 'material_code', width: 130, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', key: 'material_name', width: 160, ellipsis: true },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'quantity', key: 'quantity', width: 90, align: 'right' as const },
+                  { title: '已发货', dataIndex: 'delivered_quantity', key: 'delivered_quantity', width: 90, align: 'right' as const },
+                  { title: '可发货', dataIndex: 'max_push_quantity', key: 'max_push_quantity', width: 90, align: 'right' as const },
+                  {
+                    title: '本次发货数量',
+                    dataIndex: 'push_quantity',
+                    key: 'push_quantity',
+                    width: 130,
+                    render: (_: unknown, row: any) => {
+                      const itemId = Number(row?.item_id);
+                      const maxQty = Number(row?.max_push_quantity ?? row?.quantity ?? 0);
+                      return (
+                        <InputNumber
+                          min={0}
+                          max={Number.isFinite(maxQty) && maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={workOrderPushQuantities[itemId]}
+                          onChange={(val) => {
+                            const next = Number(val ?? 0);
+                            setWorkOrderPushQuantities((prev) => ({ ...prev, [itemId]: next }));
+                          }}
+                        />
+                      );
+                    },
+                  },
+                  { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', key: 'delivery_date', width: 110 },
+                ]}
+                rowKey={(r: any, i) => `${r.item_id || r.material_code}-${i}`}
+                pagination={false}
+                style={{ marginBottom: 8 }}
+              />
+            ) : pushPreviewData.items?.length > 0 ? (
               <Table
                 size="small"
                 dataSource={pushPreviewData.items}
@@ -4080,7 +4464,7 @@ const SalesOrdersPage: React.FC = () => {
                 pagination={false}
                 style={{ marginBottom: 8 }}
               />
-            )}
+            ) : null}
             {pushPreviewData.tip && (
               <p style={{ marginTop: 8, color: 'var(--ant-color-text-secondary)', fontSize: 12 }}>
                 {pushPreviewData.tip}

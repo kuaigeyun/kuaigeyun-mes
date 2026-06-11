@@ -42,8 +42,9 @@ async function fetchMaterialForUnitSelectCache(materialId: number | string): Pro
   if (idStr.includes('-') && idStr.length > 20) {
     resp = await materialApi.get(idStr);
   } else {
-    const list = await materialApi.list({ limit: 10, keyword: idStr });
-    resp = list.find((m) => String(m.id) === idStr) || null;
+    const listRes = await materialApi.list({ limit: 10, keyword: idStr });
+    const items = Array.isArray(listRes?.items) ? listRes.items : [];
+    resp = items.find((m) => String(m.id) === idStr) || null;
 
     if (!resp) {
       try {

@@ -13,6 +13,7 @@ import { SaveOutlined, ReloadOutlined, SettingOutlined, AuditOutlined, ControlOu
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { NotificationRulesPanel } from '../../../components/business-notification-rules/NotificationRulesPanel';
+import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../stores/listPageRefreshStore';
 import {
   getBusinessConfig,
   getBusinessConfigSchema,
@@ -63,6 +64,7 @@ export function isQualityParamDisabled(paramKey: string, values: Record<string, 
   if (
     paramKey === 'quality.require_incoming_inspection_for_receipt'
     || paramKey === 'quality.auto_create_iqc_on_purchase_receipt'
+    || paramKey === 'quality.require_incoming_inspection_for_customer_material'
   ) {
     return !(incoming && iqcStage);
   }
@@ -158,6 +160,7 @@ const ConfigCenterPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const queryClient = useQueryClient();
+  const bumpListRefresh = useListPageRefreshStore((s) => s.bump);
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const validTabs = useMemo(() => ['parameters', 'audit', 'automation', 'notification'], []);
@@ -345,6 +348,10 @@ const ConfigCenterPage: React.FC = () => {
     try {
       await setAuditSwitchActive(code, checked);
       await refetchApprovalProcessList();
+      await queryClient.invalidateQueries({ queryKey: ['businessConfigAuditRequiredMap'] });
+      if (code === 'sales_order') {
+        bumpListRefresh(LIST_PAGE_REFRESH_KEYS.salesOrders);
+      }
       messageApi.success(t('pages.system.configCenter.auditSwitch.updateSuccess'));
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.configCenter.auditSwitch.updateFailed'));

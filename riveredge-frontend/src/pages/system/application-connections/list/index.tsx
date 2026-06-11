@@ -63,6 +63,10 @@ import {
   testApplicationConnectionConfig,
   ApplicationConnection,
 } from '../../../../services/applicationConnection';
+import {
+  buildFactoryImportTemplate,
+  resolveFactoryImportHeaderIndexMap,
+} from '../../../../utils/spreadsheetImportTemplate';
 
 const TYPE_COLORS: Record<string, { color: string; icon: React.ReactNode }> = {
   feishu: { color: 'blue', icon: <MessageOutlined /> },

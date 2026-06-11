@@ -71,6 +71,8 @@ export const qualityApi = {
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${id}/approve`, { method: 'POST', data }),
     createFromPurchaseReceipt: async (purchaseReceiptId: string) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/from-purchase-receipt/${purchaseReceiptId}`, { method: 'POST' }),
+    createFromCustomerMaterial: async (registrationId: string) =>
+      apiRequest(`/apps/kuaizhizao/incoming-inspections/from-customer-material/${registrationId}`, { method: 'POST' }),
     createDefect: async (inspectionId: string, data: any) =>
       apiRequest(`/apps/kuaizhizao/incoming-inspections/${inspectionId}/create-defect`, { method: 'POST', data }),
     import: async (data: any[][]) =>

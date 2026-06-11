@@ -1,14 +1,10 @@
 """
-客户来料登记业务服务模块
-
-提供客户来料登记和条码映射规则相关的业务逻辑处理，包括条码解析、条码映射、来料登记等。
-
-Author: Luigi Lu
-Date: 2025-01-04
+代工来料（客户来料登记）业务服务
 """
 
 import uuid
 import re
+import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
@@ -16,15 +12,23 @@ from decimal import Decimal
 from tortoise.queryset import Q
 from tortoise.transactions import in_transaction
 
-from apps.kuaizhizao.models.customer_material_registration import BarcodeMappingRule, CustomerMaterialRegistration
+from apps.kuaizhizao.models.customer_material_registration import (
+    BarcodeMappingRule,
+    CustomerMaterialRegistration,
+    CustomerMaterialRegistrationItem,
+)
 from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleCreate,
     BarcodeMappingRuleUpdate,
     BarcodeMappingRuleResponse,
     BarcodeMappingRuleListResponse,
     CustomerMaterialRegistrationCreate,
+    CustomerMaterialRegistrationUpdate,
     CustomerMaterialRegistrationResponse,
     CustomerMaterialRegistrationListResponse,
+    CustomerMaterialRegistrationItemCreate,
+    CustomerMaterialRegistrationItemResponse,
+    CustomerMaterialStartProductionResponse,
     ParseBarcodeRequest,
     ParseBarcodeResponse,
 )
@@ -32,14 +36,10 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 
+logger = logging.getLogger(__name__)
+
 
 class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
-    """
-    条码映射规则服务类
-
-    处理条码映射规则相关的所有业务逻辑。
-    """
-
     def __init__(self):
         super().__init__(BarcodeMappingRule)
 
@@ -47,34 +47,15 @@ class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
         self,
         tenant_id: int,
         rule_data: BarcodeMappingRuleCreate,
-        created_by: int
+        created_by: int,
     ) -> BarcodeMappingRuleResponse:
-        """
-        创建条码映射规则
-
-        Args:
-            tenant_id: 组织ID
-            rule_data: 映射规则创建数据
-            created_by: 创建人ID
-
-        Returns:
-            BarcodeMappingRuleResponse: 创建的映射规则信息
-
-        Raises:
-            ValidationError: 数据验证失败
-        """
         async with in_transaction():
-            # 生成映射规则编码
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="BARCODE_MAPPING_RULE_CODE",
-                prefix="BMR"
+                prefix="BMR",
             )
-
-            # 获取创建人信息
             user_info = await self.get_user_info(created_by)
-
-            # 创建映射规则
             mapping_rule = await BarcodeMappingRule.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -96,7 +77,6 @@ class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
             )
-
             return BarcodeMappingRuleResponse.model_validate(mapping_rule)
 
     async def list_mapping_rules(
@@ -107,117 +87,102 @@ class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
         customer_id: Optional[int] = None,
         is_enabled: Optional[bool] = None,
     ) -> List[BarcodeMappingRuleListResponse]:
-        """
-        获取条码映射规则列表
-
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            customer_id: 客户ID（可选）
-            is_enabled: 是否启用（可选）
-
-        Returns:
-            List[BarcodeMappingRuleListResponse]: 映射规则列表
-        """
-        query = BarcodeMappingRule.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-
+        query = BarcodeMappingRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id:
             query = query.filter(customer_id=customer_id)
         if is_enabled is not None:
             query = query.filter(is_enabled=is_enabled)
-
-        rules = await query.order_by('-priority', '-created_at').offset(skip).limit(limit)
-
+        rules = await query.order_by("-priority", "-created_at").offset(skip).limit(limit)
         return [BarcodeMappingRuleListResponse.model_validate(rule) for rule in rules]
 
 
 class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistration]):
-    """
-    客户来料登记服务类
-
-    处理客户来料登记相关的所有业务逻辑。
-    """
-
     def __init__(self):
         super().__init__(CustomerMaterialRegistration)
         self.mapping_rule_service = BarcodeMappingRuleService()
 
+    async def _load_items(self, tenant_id: int, registration_id: int) -> List[CustomerMaterialRegistrationItem]:
+        return await CustomerMaterialRegistrationItem.filter(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            deleted_at__isnull=True,
+        ).all()
+
+    async def _effective_items(
+        self, registration: CustomerMaterialRegistration
+    ) -> List[CustomerMaterialRegistrationItem]:
+        items = await self._load_items(registration.tenant_id, registration.id)
+        if items:
+            return items
+        if registration.mapped_material_id and registration.quantity:
+            pseudo = CustomerMaterialRegistrationItem(
+                id=0,
+                tenant_id=registration.tenant_id,
+                uuid=str(uuid.uuid4()),
+                registration_id=registration.id,
+                material_id=registration.mapped_material_id,
+                material_code=registration.mapped_material_code or "",
+                material_name=registration.mapped_material_name or "",
+                quantity=registration.quantity,
+                barcode=registration.barcode,
+                barcode_type=registration.barcode_type,
+                mapping_rule_id=registration.mapping_rule_id,
+                batch_number=registration.batch_number,
+                status=registration.status,
+            )
+            return [pseudo]
+        return []
+
+    def _to_response(
+        self,
+        registration: CustomerMaterialRegistration,
+        items: Optional[List[CustomerMaterialRegistrationItem]] = None,
+    ) -> CustomerMaterialRegistrationResponse:
+        data = CustomerMaterialRegistrationResponse.model_validate(registration)
+        if items is not None:
+            data.items = [
+                CustomerMaterialRegistrationItemResponse.model_validate(it) for it in items
+            ]
+        return data
+
     async def parse_barcode(
         self,
         tenant_id: int,
-        parse_request: ParseBarcodeRequest
+        parse_request: ParseBarcodeRequest,
     ) -> ParseBarcodeResponse:
-        """
-        解析客户来料条码
-
-        Args:
-            tenant_id: 组织ID
-            parse_request: 解析条码请求
-
-        Returns:
-            ParseBarcodeResponse: 解析结果
-
-        Raises:
-            ValidationError: 条码格式错误
-        """
         barcode = parse_request.barcode.strip()
         if not barcode:
             raise ValidationError("条码不能为空")
 
-        # 获取所有启用的映射规则（按优先级排序）
         query = BarcodeMappingRule.filter(
-            tenant_id=tenant_id,
-            is_enabled=True,
-            deleted_at__isnull=True
+            tenant_id=tenant_id, is_enabled=True, deleted_at__isnull=True
         )
-
-        # 如果提供了客户ID，优先匹配该客户的规则
         if parse_request.customer_id:
             query = query.filter(
                 Q(customer_id=parse_request.customer_id) | Q(customer_id__isnull=True)
             )
+        rules = await query.order_by("-priority", "-created_at")
 
-        rules = await query.order_by('-priority', '-created_at')
-
-        # 尝试匹配映射规则
         matched_rule = None
-        parsed_data = {}
+        parsed_data: Dict[str, Any] = {}
         mapped_material_id = None
         mapped_material_code = None
         mapped_material_name = None
 
         for rule in rules:
             try:
-                # 使用正则表达式匹配条码模式
                 if re.match(rule.barcode_pattern, barcode):
                     matched_rule = rule
                     mapped_material_id = rule.material_id
                     mapped_material_code = rule.material_code
                     mapped_material_name = rule.material_name
-
-                    # 如果有解析规则，应用解析规则
-                    if rule.parsing_rule:
-                        # TODO: 根据解析规则从条码中提取信息
-                        # 这里简化处理，假设解析规则定义了如何从条码中提取物料编码、数量等信息
-                        parsed_data = {
-                            "barcode": barcode,
-                            "material_code": rule.material_code,
-                            "material_name": rule.material_name,
-                        }
-                    else:
-                        parsed_data = {
-                            "barcode": barcode,
-                            "material_code": rule.material_code,
-                            "material_name": rule.material_name,
-                        }
-
+                    parsed_data = {
+                        "barcode": barcode,
+                        "material_code": rule.material_code,
+                        "material_name": rule.material_name,
+                    }
                     break
             except re.error:
-                # 正则表达式错误，跳过该规则
                 continue
 
         return ParseBarcodeResponse(
@@ -231,28 +196,41 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             mapping_rule_name=matched_rule.name if matched_rule else None,
         )
 
+    async def _create_items(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        items_data: List[CustomerMaterialRegistrationItemCreate],
+    ) -> List[CustomerMaterialRegistrationItem]:
+        created: List[CustomerMaterialRegistrationItem] = []
+        for row in items_data:
+            item = await CustomerMaterialRegistrationItem.create(
+                tenant_id=tenant_id,
+                uuid=str(uuid.uuid4()),
+                registration_id=registration_id,
+                material_id=row.material_id,
+                material_code=row.material_code,
+                material_name=row.material_name,
+                material_spec=row.material_spec,
+                material_unit=row.material_unit,
+                quantity=row.quantity,
+                barcode=row.barcode,
+                barcode_type=row.barcode_type,
+                mapping_rule_id=row.mapping_rule_id,
+                batch_number=row.batch_number,
+                status="pending",
+                remarks=row.remarks,
+            )
+            created.append(item)
+        return created
+
     async def create_registration(
         self,
         tenant_id: int,
         registration_data: CustomerMaterialRegistrationCreate,
-        registered_by: int
+        registered_by: int,
     ) -> CustomerMaterialRegistrationResponse:
-        """
-        创建客户来料登记
-
-        Args:
-            tenant_id: 组织ID
-            registration_data: 登记创建数据
-            registered_by: 登记人ID
-
-        Returns:
-            CustomerMaterialRegistrationResponse: 创建的登记记录信息
-
-        Raises:
-            ValidationError: 数据验证失败
-        """
         async with in_transaction():
-            # 解析条码（如果提供了条码）
             mapped_material_id = None
             mapped_material_code = None
             mapped_material_name = None
@@ -267,52 +245,140 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                             barcode=registration_data.barcode,
                             barcode_type=registration_data.barcode_type,
                             customer_id=registration_data.customer_id,
-                        )
+                        ),
                     )
                     mapped_material_id = parse_result.mapped_material_id
                     mapped_material_code = parse_result.mapped_material_code
                     mapped_material_name = parse_result.mapped_material_name
                     mapping_rule_id = parse_result.mapping_rule_id
                     parsed_data = parse_result.parsed_data
-                except Exception as e:
-                    # 解析失败，但不阻止登记
+                except Exception:
                     pass
 
-            # 生成登记编码
+            if registration_data.material_id:
+                from apps.master_data.models.material import Material
+
+                mat = await Material.get_or_none(
+                    tenant_id=tenant_id,
+                    id=registration_data.material_id,
+                    deleted_at__isnull=True,
+                )
+                if not mat:
+                    raise ValidationError(f"物料不存在: {registration_data.material_id}")
+                mapped_material_id = mat.id
+                mapped_material_code = (
+                    registration_data.material_code
+                    or getattr(mat, "main_code", None)
+                    or getattr(mat, "code", "")
+                )
+                mapped_material_name = registration_data.material_name or mat.name
+
+            from core.services.default.default_values_service import DefaultValuesService
+
+            await DefaultValuesService.ensure_code_rule_for_page(
+                tenant_id, "kuaizhizao-warehouse-customer-material-registration"
+            )
             code = await self.generate_code(
                 tenant_id=tenant_id,
                 code_type="CUSTOMER_MATERIAL_REGISTRATION_CODE",
-                prefix="CMR"
+                prefix="CMR",
             )
-
-            # 获取登记人信息
             user_info = await self.get_user_info(registered_by)
 
-            # 创建登记记录
+            total_qty = Decimal("0")
+            if registration_data.items:
+                total_qty = sum((row.quantity for row in registration_data.items), Decimal("0"))
+            elif registration_data.quantity:
+                total_qty = registration_data.quantity
+
             registration = await CustomerMaterialRegistration.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
                 registration_code=code,
                 customer_id=registration_data.customer_id,
                 customer_name=registration_data.customer_name,
-                barcode=registration_data.barcode,
+                barcode=registration_data.barcode or "",
                 barcode_type=registration_data.barcode_type,
                 parsed_data=parsed_data,
                 mapped_material_id=mapped_material_id,
                 mapped_material_code=mapped_material_code,
                 mapped_material_name=mapped_material_name,
                 mapping_rule_id=mapping_rule_id,
-                quantity=registration_data.quantity,
+                quantity=registration_data.quantity or total_qty,
+                total_quantity=total_qty,
                 registration_date=registration_data.registration_date or datetime.now(),
                 registered_by=registered_by,
                 registered_by_name=user_info["name"],
                 warehouse_id=registration_data.warehouse_id,
                 warehouse_name=registration_data.warehouse_name,
+                sales_order_id=registration_data.sales_order_id,
+                sales_order_code=registration_data.sales_order_code,
+                work_order_id=registration_data.work_order_id,
+                work_order_code=registration_data.work_order_code,
+                batch_number=registration_data.batch_number,
                 status="pending",
                 remarks=registration_data.remarks,
             )
 
-            return CustomerMaterialRegistrationResponse.model_validate(registration)
+            if not registration_data.items and not mapped_material_id:
+                raise ValidationError("请指定来料物料（选择已有物料或快速新建）")
+
+            items: List[CustomerMaterialRegistrationItem] = []
+            if registration_data.items:
+                items = await self._create_items(tenant_id, registration.id, registration_data.items)
+            elif mapped_material_id and registration_data.quantity:
+                items = await self._create_items(
+                    tenant_id,
+                    registration.id,
+                    [
+                        CustomerMaterialRegistrationItemCreate(
+                            material_id=mapped_material_id,
+                            material_code=mapped_material_code or "",
+                            material_name=mapped_material_name or "",
+                            quantity=registration_data.quantity,
+                            barcode=registration_data.barcode,
+                            barcode_type=registration_data.barcode_type,
+                            mapping_rule_id=mapping_rule_id,
+                            batch_number=registration_data.batch_number,
+                        )
+                    ],
+                )
+
+            return self._to_response(registration, items)
+
+    async def update_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        update_data: CustomerMaterialRegistrationUpdate,
+        updated_by: int,
+    ) -> CustomerMaterialRegistrationResponse:
+        async with in_transaction():
+            registration = await CustomerMaterialRegistration.get_or_none(
+                id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status != "pending":
+                raise BusinessLogicError("仅待入库状态的代工来料单可编辑")
+
+            fields = update_data.model_dump(exclude_unset=True, exclude={"items"})
+            if fields:
+                for k, v in fields.items():
+                    setattr(registration, k, v)
+                await registration.save()
+
+            if update_data.items is not None:
+                await CustomerMaterialRegistrationItem.filter(
+                    tenant_id=tenant_id, registration_id=registration_id
+                ).update(deleted_at=datetime.now())
+                items = await self._create_items(tenant_id, registration_id, update_data.items)
+                registration.total_quantity = sum((it.quantity for it in items), Decimal("0"))
+                await registration.save()
+            else:
+                items = await self._load_items(tenant_id, registration_id)
+
+            return self._to_response(registration, items)
 
     async def list_registrations(
         self,
@@ -324,26 +390,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         registration_date_start: Optional[datetime] = None,
         registration_date_end: Optional[datetime] = None,
     ) -> List[CustomerMaterialRegistrationListResponse]:
-        """
-        获取客户来料登记列表
-
-        Args:
-            tenant_id: 组织ID
-            skip: 跳过数量
-            limit: 限制数量
-            customer_id: 客户ID（可选）
-            status: 状态（可选）
-            registration_date_start: 登记开始日期（可选）
-            registration_date_end: 登记结束日期（可选）
-
-        Returns:
-            List[CustomerMaterialRegistrationListResponse]: 登记记录列表
-        """
-        query = CustomerMaterialRegistration.filter(
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
-        )
-
+        query = CustomerMaterialRegistration.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if customer_id:
             query = query.filter(customer_id=customer_id)
         if status:
@@ -353,122 +400,360 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
         if registration_date_end:
             query = query.filter(registration_date__lte=registration_date_end)
 
-        registrations = await query.order_by('-registration_date').offset(skip).limit(limit)
-
+        registrations = await query.order_by("-registration_date").offset(skip).limit(limit)
         return [CustomerMaterialRegistrationListResponse.model_validate(reg) for reg in registrations]
 
     async def get_registration_by_id(
         self,
         tenant_id: int,
-        registration_id: int
+        registration_id: int,
     ) -> CustomerMaterialRegistrationResponse:
-        """
-        根据ID获取客户来料登记详情
-
-        Args:
-            tenant_id: 组织ID
-            registration_id: 登记记录ID
-
-        Returns:
-            CustomerMaterialRegistrationResponse: 登记记录详情
-
-        Raises:
-            NotFoundError: 登记记录不存在
-        """
         registration = await CustomerMaterialRegistration.get_or_none(
-            id=registration_id,
-            tenant_id=tenant_id,
-            deleted_at__isnull=True
+            id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
         )
-
         if not registration:
-            raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+            raise NotFoundError(f"代工来料单不存在: {registration_id}")
+        items = await self._load_items(tenant_id, registration_id)
+        return self._to_response(registration, items)
 
-        return CustomerMaterialRegistrationResponse.model_validate(registration)
+    async def _post_inventory_for_registration(
+        self,
+        registration: CustomerMaterialRegistration,
+        items: List[CustomerMaterialRegistrationItem],
+        operator_id: int,
+    ) -> None:
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+        from apps.master_data.models.material import Material
+        from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+
+        if not registration.warehouse_id:
+            raise BusinessLogicError("确认入库前必须指定入库仓库")
+
+        for item in items:
+            qty = Decimal(str(item.quantity or 0))
+            if qty <= 0:
+                continue
+            material = await Material.get_or_none(
+                tenant_id=registration.tenant_id,
+                id=item.material_id,
+                deleted_at__isnull=True,
+            )
+            if not material:
+                raise BusinessLogicError(f"物料不存在: {item.material_id}")
+
+            batch_no = item.batch_number
+            if material.batch_managed and not batch_no:
+                batch_no = await ensure_batch_no_for_item(
+                    registration.tenant_id, material, item
+                )
+                if batch_no:
+                    item.batch_number = batch_no
+                    if item.id:
+                        await item.save()
+
+            await InventoryService._increase_stock_no_atomic(
+                tenant_id=registration.tenant_id,
+                material_id=item.material_id,
+                quantity=qty,
+                warehouse_id=registration.warehouse_id,
+                batch_no=batch_no or None,
+                source_type="customer_material_inbound",
+                source_doc_id=registration.id,
+                source_doc_code=registration.registration_code,
+                work_order_id=registration.work_order_id,
+                work_order_code=registration.work_order_code,
+                ownership_type="customer_provided",
+                customer_id=registration.customer_id,
+                customer_name=registration.customer_name,
+            )
 
     async def process_registration(
         self,
         tenant_id: int,
         registration_id: int,
-        processed_by: int
+        processed_by: int,
     ) -> CustomerMaterialRegistrationResponse:
-        """
-        处理客户来料登记（入库）
-
-        Args:
-            tenant_id: 组织ID
-            registration_id: 登记记录ID
-            processed_by: 处理人ID
-
-        Returns:
-            CustomerMaterialRegistrationResponse: 处理后的登记记录信息
-
-        Raises:
-            NotFoundError: 登记记录不存在
-            BusinessLogicError: 登记记录状态不允许处理
-        """
         async with in_transaction():
-            # 获取登记记录
             registration = await CustomerMaterialRegistration.get_or_none(
-                id=registration_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
+                id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status != "pending":
+                raise BusinessLogicError(f"代工来料单状态不允许确认入库: {registration.status}")
+
+            items = await self._effective_items(registration)
+            if not items:
+                raise BusinessLogicError("代工来料单无有效明细，无法确认入库")
+
+            from apps.kuaizhizao.services.inspection_policy_service import (
+                assert_iqc_for_customer_material_registration_lines,
             )
 
-            if not registration:
-                raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+            await assert_iqc_for_customer_material_registration_lines(
+                tenant_id, registration_id, items
+            )
 
-            if registration.status != "pending":
-                raise BusinessLogicError(f"登记记录状态不允许处理: {registration.status}")
+            await self._post_inventory_for_registration(registration, items, processed_by)
 
-            # 更新状态
+            user_info = await self.get_user_name(processed_by)
+            now = datetime.now()
             registration.status = "processed"
-            registration.processed_at = datetime.now()
-
+            registration.processed_at = now
+            registration.processed_by = processed_by
+            registration.processed_by_name = user_info
             await registration.save()
 
-            # TODO: 调用库存服务更新库存（待库存服务实现后补充）
+            for item in items:
+                if item.id:
+                    item.status = "processed"
+                    await item.save()
 
-            return CustomerMaterialRegistrationResponse.model_validate(registration)
+            items = await self._load_items(tenant_id, registration_id)
+            return self._to_response(registration, items)
+
+    async def withdraw_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        withdrawn_by: int,
+    ) -> CustomerMaterialRegistrationResponse:
+        async with in_transaction():
+            registration = await CustomerMaterialRegistration.get_or_none(
+                id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status != "processed":
+                raise BusinessLogicError("仅已入库状态的代工来料单可撤回")
+
+            items = await self._effective_items(registration)
+            from apps.kuaizhizao.services.inventory_service import InventoryService
+
+            for item in items:
+                qty = Decimal(str(item.quantity or 0))
+                if qty <= 0:
+                    continue
+                await InventoryService._decrease_stock_no_atomic(
+                    tenant_id=tenant_id,
+                    material_id=item.material_id,
+                    quantity=qty,
+                    warehouse_id=registration.warehouse_id,
+                    batch_no=item.batch_number or None,
+                    source_type="customer_material_inbound_revoke",
+                    source_doc_id=registration.id,
+                    source_doc_code=registration.registration_code,
+                    ownership_type="customer_provided",
+                    customer_id=registration.customer_id,
+                )
+
+            registration.status = "pending"
+            registration.processed_at = None
+            registration.processed_by = None
+            registration.processed_by_name = None
+            await registration.save()
+
+            db_items = await self._load_items(tenant_id, registration_id)
+            for item in db_items:
+                item.status = "pending"
+                await item.save()
+
+            return self._to_response(registration, db_items)
 
     async def cancel_registration(
         self,
         tenant_id: int,
         registration_id: int,
-        cancelled_by: int
+        cancelled_by: int,
     ) -> CustomerMaterialRegistrationResponse:
-        """
-        取消客户来料登记
-
-        Args:
-            tenant_id: 组织ID
-            registration_id: 登记记录ID
-            cancelled_by: 取消人ID
-
-        Returns:
-            CustomerMaterialRegistrationResponse: 取消后的登记记录信息
-
-        Raises:
-            NotFoundError: 登记记录不存在
-            BusinessLogicError: 登记记录状态不允许取消
-        """
         async with in_transaction():
-            # 获取登记记录
             registration = await CustomerMaterialRegistration.get_or_none(
-                id=registration_id,
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
+                id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status != "pending":
+                raise BusinessLogicError(f"代工来料单状态不允许取消: {registration.status}")
+
+            registration.status = "cancelled"
+            await registration.save()
+            items = await self._load_items(tenant_id, registration_id)
+            return self._to_response(registration, items)
+
+    async def create_and_start_production(
+        self,
+        tenant_id: int,
+        registration_data: CustomerMaterialRegistrationCreate,
+        operator_id: int,
+    ) -> CustomerMaterialStartProductionResponse:
+        """
+        客供料入库并直接发料开工：创建代工来料单 → 确认入库 → 按明细创建工单 → 生成并确认配料单 → 下达工单。
+        单条自制/配置件明细创建普通工单；多条创建平级组工单。
+        """
+        from apps.kuaizhizao.schemas.work_order import WorkOrderCreate
+        from apps.kuaizhizao.schemas.batching_order import PullFromWorkOrderRequest, BatchingOrderConfirmRequest
+        from apps.kuaizhizao.services.work_order_service import WorkOrderService
+        from apps.kuaizhizao.services.work_order_group_service import WorkOrderGroupService
+        from apps.kuaizhizao.services.batching_order_service import BatchingOrderService
+        from apps.kuaizhizao.utils.material_source_helper import (
+            get_material_source_type,
+            SOURCE_TYPE_MAKE,
+            SOURCE_TYPE_CONFIGURE,
+        )
+
+        warnings: List[str] = []
+        created = await self.create_registration(
+            tenant_id=tenant_id,
+            registration_data=registration_data,
+            registered_by=operator_id,
+        )
+        if not created.id:
+            raise BusinessLogicError("代工来料单创建失败")
+
+        processed = await self.process_registration(
+            tenant_id=tenant_id,
+            registration_id=created.id,
+            processed_by=operator_id,
+        )
+        items = processed.items or []
+        if not items:
+            raise BusinessLogicError("代工来料单无有效明细，无法开工")
+
+        wo_lines: List[Dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            source_type = await get_material_source_type(tenant_id, item.material_id)
+            if source_type not in (SOURCE_TYPE_MAKE, SOURCE_TYPE_CONFIGURE):
+                warnings.append(
+                    f"第 {idx + 1} 行物料 {item.material_code or item.material_id} "
+                    f"来源为 {source_type or '未配置'}，已跳过工单创建"
+                )
+                continue
+            if source_type == SOURCE_TYPE_CONFIGURE:
+                warnings.append(
+                    f"第 {idx + 1} 行配置件 {item.material_code or item.material_id} "
+                    f"暂不支持一键开工，请手工创建工单并指定属性"
+                )
+                continue
+            qty = Decimal(str(item.quantity or 0))
+            if qty <= 0:
+                continue
+            wo_lines.append(
+                {
+                    "product_id": int(item.material_id),
+                    "quantity": qty,
+                    "material_code": item.material_code,
+                    "material_name": item.material_name,
+                }
             )
 
-            if not registration:
-                raise NotFoundError(f"客户来料登记记录不存在: {registration_id}")
+        if not wo_lines:
+            raise ValidationError(
+                "明细中无可用自制件物料，无法创建生产工单。"
+                + (f" 提示：{'；'.join(warnings)}" if warnings else "")
+            )
 
-            if registration.status != "pending":
-                raise BusinessLogicError(f"登记记录状态不允许取消: {registration.status}")
+        production_mode = "MTO" if registration_data.sales_order_id else "MTS"
+        wo_svc = WorkOrderService()
+        group_svc = WorkOrderGroupService()
+        work_order_ids: List[int] = []
+        work_order_codes: List[str] = []
+        group_id: Optional[int] = None
+        group_code: Optional[str] = None
 
-            # 更新状态
-            registration.status = "cancelled"
+        if len(wo_lines) == 1:
+            line = wo_lines[0]
+            wo = await wo_svc.create_work_order(
+                tenant_id=tenant_id,
+                work_order_data=WorkOrderCreate(
+                    code_rule="WORK_ORDER_CODE",
+                    product_id=line["product_id"],
+                    quantity=line["quantity"],
+                    production_mode=production_mode,
+                    sales_order_id=registration_data.sales_order_id,
+                    priority="normal",
+                ),
+                created_by=operator_id,
+            )
+            if wo.id is None:
+                raise BusinessLogicError("生产工单创建失败")
+            work_order_ids = [int(wo.id)]
+            work_order_codes = [wo.code or ""]
+        else:
+            group_result = await group_svc.create_peer_group_work_orders(
+                tenant_id=tenant_id,
+                items=[
+                    {
+                        "product_id": line["product_id"],
+                        "quantity": line["quantity"],
+                        "priority": "normal",
+                    }
+                    for line in wo_lines
+                ],
+                group_name=f"客供开工-{processed.registration_code}",
+                production_mode=production_mode,
+                sales_order_id=registration_data.sales_order_id,
+                created_by=operator_id,
+            )
+            work_order_ids = [int(i) for i in group_result.get("work_order_ids") or []]
+            work_order_codes = list(group_result.get("work_order_codes") or [])
+            group_id = group_result.get("work_order_group_id")
+            group_code = group_result.get("group_code")
 
+        registration = await CustomerMaterialRegistration.get_or_none(
+            id=created.id, tenant_id=tenant_id, deleted_at__isnull=True
+        )
+        if registration and work_order_ids:
+            registration.work_order_id = work_order_ids[0]
+            registration.work_order_code = work_order_codes[0] if work_order_codes else None
             await registration.save()
+            processed = await self.get_registration_by_id(tenant_id, created.id)
 
-            return CustomerMaterialRegistrationResponse.model_validate(registration)
+        batching_svc = BatchingOrderService()
+        batching_ids: List[int] = []
+        batching_codes: List[str] = []
+
+        for wo_id, wo_code in zip(work_order_ids, work_order_codes):
+            try:
+                batching = await batching_svc.pull_from_work_order(
+                    tenant_id=tenant_id,
+                    request_data=PullFromWorkOrderRequest(
+                        work_order_id=wo_id,
+                        warehouse_id=registration_data.warehouse_id,
+                        warehouse_name=registration_data.warehouse_name,
+                        remarks=f"客供开工自动配料（{processed.registration_code}）",
+                        allow_existing_draft=True,
+                    ),
+                    created_by=operator_id,
+                )
+                if batching.id:
+                    await batching_svc.confirm_batching_order(
+                        tenant_id=tenant_id,
+                        order_id=int(batching.id),
+                        executed_by=operator_id,
+                        confirm_data=BatchingOrderConfirmRequest(),
+                    )
+                    batching_ids.append(int(batching.id))
+                    batching_codes.append(batching.code or "")
+            except (ValidationError, BusinessLogicError) as exc:
+                warnings.append(f"工单 {wo_code} 配料：{exc}")
+
+            try:
+                await wo_svc.release_work_order(
+                    tenant_id=tenant_id,
+                    work_order_id=wo_id,
+                    released_by=operator_id,
+                    check_shortage=False,
+                )
+            except (ValidationError, BusinessLogicError) as exc:
+                warnings.append(f"工单 {wo_code} 下达：{exc}")
+
+        return CustomerMaterialStartProductionResponse(
+            registration=processed,
+            work_order_ids=work_order_ids,
+            work_order_codes=work_order_codes,
+            work_order_group_id=group_id,
+            work_order_group_code=group_code,
+            batching_order_ids=batching_ids,
+            batching_order_codes=batching_codes,
+            warnings=warnings,
+        )

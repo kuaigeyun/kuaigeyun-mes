@@ -19,6 +19,7 @@ from apps.kuaizhizao.api._kuaizhizao_route_access import require_kuaizhizao_modu
 from core.api.deps.access import require_permission_codes
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
+from tortoise.exceptions import IntegrityError
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 
 from apps.kuaizhizao.services.warehouse_service import (
@@ -144,8 +145,10 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleResponse,
     BarcodeMappingRuleListResponse,
     CustomerMaterialRegistrationCreate,
+    CustomerMaterialRegistrationUpdate,
     CustomerMaterialRegistrationResponse,
     CustomerMaterialRegistrationListResponse,
+    CustomerMaterialStartProductionResponse,
     ParseBarcodeRequest,
     ParseBarcodeResponse,
 )
@@ -2605,6 +2608,46 @@ async def create_customer_material_registration(
     )
 
 
+@router.post(
+    "/inventory/customer-material-registration/create-and-start-production",
+    response_model=CustomerMaterialStartProductionResponse,
+    summary="Customer material inbound and start production",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:execute",
+            )
+        )
+    ],
+)
+async def create_and_start_production_from_customer_material(
+    registration_data: CustomerMaterialRegistrationCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialStartProductionResponse:
+    """客供料入库并直接发料开工：入库 → 生产工单（单张或平级组）→ 配料单 → 下达工单。"""
+    try:
+        return await customer_material_registration_service.create_and_start_production(
+            tenant_id=tenant_id,
+            registration_data=registration_data,
+            operator_id=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404,
+            str(e),
+            "/inventory/customer-material-registration/create-and-start-production",
+            tenant_id,
+        )
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(
+            400,
+            str(e),
+            "/inventory/customer-material-registration/create-and-start-production",
+            tenant_id,
+        )
+
+
 @router.get("/inventory/customer-material-registration", response_model=List[CustomerMaterialRegistrationListResponse], summary="List customer material registrations")
 async def list_customer_material_registrations(
     skip: int = Query(0, description="跳过数量"),
@@ -2739,8 +2782,55 @@ async def process_customer_material_registration(
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}/process", tenant_id)
-    except BusinessLogicError as e:
+    except (ValidationError, BusinessLogicError) as e:
         raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}/process", tenant_id)
+    except IntegrityError as e:
+        raise _http_exception_with_trace(
+            409,
+            f"库存批次写入冲突：{e}。若客供入库失败，请填写不同批号或执行数据库迁移 371",
+            "/inventory/customer-material-registration/{registration_id}/process",
+            tenant_id,
+        )
+
+
+@router.put("/inventory/customer-material-registration/{registration_id}", response_model=CustomerMaterialRegistrationResponse, summary="Update customer material inbound")
+async def update_customer_material_registration(
+    registration_id: int,
+    update_data: CustomerMaterialRegistrationUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """更新代工来料单（仅待入库状态）"""
+    try:
+        return await customer_material_registration_service.update_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            update_data=update_data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.post("/inventory/customer-material-registration/{registration_id}/withdraw", response_model=CustomerMaterialRegistrationResponse, summary="Withdraw customer material inbound")
+async def withdraw_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationResponse:
+    """撤回代工来料确认入库"""
+    try:
+        return await customer_material_registration_service.withdraw_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}/withdraw", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}/withdraw", tenant_id)
 
 
 @router.post("/inventory/customer-material-registration/{registration_id}/cancel", response_model=CustomerMaterialRegistrationResponse, summary="Cancel customer material registration")

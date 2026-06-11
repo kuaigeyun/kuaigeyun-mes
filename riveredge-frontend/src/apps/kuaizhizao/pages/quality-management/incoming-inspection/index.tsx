@@ -58,6 +58,7 @@ import { getIncomingInspectionLifecycle } from '../../../utils/incomingInspectio
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '../../../../../services/api';
 import { qualityApi } from '../../../services/production';
+import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
@@ -235,6 +236,11 @@ const IncomingInspectionPage: React.FC = () => {
   const [purchaseReceiptOptions, setPurchaseReceiptOptions] = useState<InspectionDropdownOption[]>([]);
   const [purchaseReceiptOptionsLoading, setPurchaseReceiptOptionsLoading] = useState(false);
 
+  const [createFromCustomerMaterialModalVisible, setCreateFromCustomerMaterialModalVisible] = useState(false);
+  const createFromCustomerMaterialFormRef = useRef<any>(null);
+  const [customerMaterialOptions, setCustomerMaterialOptions] = useState<InspectionDropdownOption[]>([]);
+  const [customerMaterialOptionsLoading, setCustomerMaterialOptionsLoading] = useState(false);
+
   // 批量导入状态
   // 创建不合格品记录Modal状态
   const [createDefectModalVisible, setCreateDefectModalVisible] = useState(false);
@@ -371,6 +377,43 @@ const IncomingInspectionPage: React.FC = () => {
       messageApi.success('成功创建来料检验单');
       setCreateFromReceiptModalVisible(false);
       createFromReceiptFormRef.current?.resetFields();
+      invalidateStats();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '创建来料检验单失败');
+    }
+  };
+
+  const fetchCustomerMaterialsForIqc = async () => {
+    const rows = await customerMaterialRegistrationApi.list({ skip: 0, limit: 200, status: 'pending' });
+    const list = Array.isArray(rows) ? rows : [];
+    return list.map((r: any) => ({
+      label: `${r.registration_code || r.id} · ${r.customer_name || ''}`,
+      value: r.id,
+    }));
+  };
+
+  const handleCreateFromCustomerMaterial = async () => {
+    setCreateFromCustomerMaterialModalVisible(true);
+    createFromCustomerMaterialFormRef.current?.resetFields();
+    setCustomerMaterialOptionsLoading(true);
+    try {
+      setCustomerMaterialOptions(await fetchCustomerMaterialsForIqc());
+    } catch {
+      messageApi.error('加载代工来料单失败');
+    } finally {
+      setCustomerMaterialOptionsLoading(false);
+    }
+  };
+
+  const handleCreateFromCustomerMaterialSubmit = async (values: any) => {
+    try {
+      await qualityApi.incomingInspection.createFromCustomerMaterial(
+        values.registration_id.toString()
+      );
+      messageApi.success('成功从代工来料单创建来料检验单');
+      setCreateFromCustomerMaterialModalVisible(false);
+      createFromCustomerMaterialFormRef.current?.resetFields();
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
@@ -789,6 +832,11 @@ const IncomingInspectionPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="从采购入库单创建"
         onCreate={handleCreateFromReceipt}
+        toolBarRender={() => [
+          <Button key="from-cm" onClick={handleCreateFromCustomerMaterial}>
+            从代工来料单创建
+          </Button>,
+        ]}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
         onRow={(record) => ({
@@ -1047,6 +1095,31 @@ const IncomingInspectionPage: React.FC = () => {
           ) : null
         }
       />
+
+      <FormModalTemplate
+        title="从代工来料单创建来料检验单"
+        open={createFromCustomerMaterialModalVisible}
+        onClose={() => {
+          setCreateFromCustomerMaterialModalVisible(false);
+          createFromCustomerMaterialFormRef.current?.resetFields();
+        }}
+        onFinish={handleCreateFromCustomerMaterialSubmit}
+        width={MODAL_CONFIG.SMALL_WIDTH}
+        formRef={createFromCustomerMaterialFormRef}
+      >
+        <ProFormItem
+          name="registration_id"
+          label="选择代工来料单"
+          rules={[{ required: true, message: '请选择代工来料单' }]}
+        >
+          <UniDropdown
+            placeholder="请选择代工来料单"
+            showSearch
+            loading={customerMaterialOptionsLoading}
+            options={customerMaterialOptions}
+          />
+        </ProFormItem>
+      </FormModalTemplate>
 
       {/* 从采购入库单创建Modal */}
       <FormModalTemplate

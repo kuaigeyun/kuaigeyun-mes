@@ -44,6 +44,7 @@ const ADMIN_BYPASS_OPEN: ResourcePermissionGates = {
   canImport: true,
   canExport: true,
   canPrint: true,
+  canAction: () => true,
 };
 
 export type ResourcePermissionOptions = {

@@ -261,7 +261,7 @@ class CodeGenerationService:
         # 获取编码规则
         rule = await CodeRuleService.get_rule_by_code(tenant_id, rule_code)
         if not rule:
-            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用 MATERIAL_CODE")
+            raise ValidationError(f"编码规则 {rule_code} 不存在或未启用，请在「编码规则」中启用该规则")
 
         _rc = (rule_code or "").upper()
         if ("MATERIAL" in _rc or _rc == "MATERIAL_CODE") and context:

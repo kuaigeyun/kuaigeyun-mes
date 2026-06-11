@@ -20,13 +20,27 @@ class IncomingInspection(BaseModel):
     tenant_id = fields.IntField(description="租户ID")
     inspection_code = fields.CharField(max_length=50, unique=True, description="检验单编码")
 
-    # 关联采购入库单
-    purchase_receipt_id = fields.IntField(description="采购入库单ID")
-    purchase_receipt_code = fields.CharField(max_length=50, description="采购入库单编码")
+    source_type = fields.CharField(
+        max_length=30,
+        default="purchase_receipt",
+        description="来源类型（purchase_receipt/customer_material_inbound）",
+    )
 
-    # 供应商信息
-    supplier_id = fields.IntField(description="供应商ID")
-    supplier_name = fields.CharField(max_length=200, description="供应商名称")
+    # 关联采购入库单
+    purchase_receipt_id = fields.IntField(null=True, description="采购入库单ID")
+    purchase_receipt_code = fields.CharField(max_length=50, null=True, description="采购入库单编码")
+
+    # 关联代工来料单
+    customer_material_registration_id = fields.IntField(null=True, description="代工来料单ID")
+    customer_material_registration_code = fields.CharField(max_length=50, null=True, description="代工来料单编码")
+
+    # 供应商信息（采购来料）
+    supplier_id = fields.IntField(null=True, description="供应商ID")
+    supplier_name = fields.CharField(max_length=200, null=True, description="供应商名称")
+
+    # 客户信息（代工来料）
+    customer_id = fields.IntField(null=True, description="客户ID")
+    customer_name = fields.CharField(max_length=200, null=True, description="客户名称")
 
     # 物料信息
     material_id = fields.IntField(description="物料ID")

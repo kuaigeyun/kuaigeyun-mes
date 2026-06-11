@@ -175,9 +175,19 @@ class CustomerMaterialRegistration(BaseModel):
     warehouse_id = fields.IntField(null=True, description="入库仓库ID（可选）")
     warehouse_name = fields.CharField(max_length=200, null=True, description="入库仓库名称（可选）")
 
+    # 关联销售订单/工单（代工备料）
+    sales_order_id = fields.IntField(null=True, description="销售订单ID")
+    sales_order_code = fields.CharField(max_length=50, null=True, description="销售订单编码")
+    work_order_id = fields.IntField(null=True, description="工单ID")
+    work_order_code = fields.CharField(max_length=50, null=True, description="工单编码")
+    batch_number = fields.CharField(max_length=100, null=True, description="批号（单行登记兼容）")
+    total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="来料总数量")
+
     # 状态
     status = fields.CharField(max_length=20, default="pending", description="状态（pending/processed/cancelled）")
     processed_at = fields.DatetimeField(null=True, description="处理时间")
+    processed_by = fields.IntField(null=True, description="确认入库人ID")
+    processed_by_name = fields.CharField(max_length=100, null=True, description="确认入库人姓名")
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
@@ -188,4 +198,38 @@ class CustomerMaterialRegistration(BaseModel):
     def __str__(self):
         """字符串表示"""
         return f"{self.registration_code} - {self.customer_name}"
+
+
+class CustomerMaterialRegistrationItem(BaseModel):
+    """
+    代工来料明细行
+    """
+
+    class Meta:
+        table = "apps_kuaizhizao_customer_material_registration_items"
+        table_description = "快格轻制造 - 代工来料明细"
+        indexes = [
+            ("tenant_id",),
+            ("registration_id",),
+            ("material_id",),
+        ]
+
+    id = fields.IntField(pk=True, description="明细ID")
+    registration_id = fields.IntField(description="代工来料单ID")
+    material_id = fields.IntField(description="物料ID")
+    material_code = fields.CharField(max_length=50, description="物料编码")
+    material_name = fields.CharField(max_length=200, description="物料名称")
+    material_spec = fields.CharField(max_length=200, null=True, description="物料规格")
+    material_unit = fields.CharField(max_length=20, null=True, description="物料单位")
+    quantity = fields.DecimalField(max_digits=12, decimal_places=2, description="来料数量")
+    barcode = fields.CharField(max_length=500, null=True, description="客户条码")
+    barcode_type = fields.CharField(max_length=10, default="1d", description="条码类型")
+    mapping_rule_id = fields.IntField(null=True, description="条码映射规则ID")
+    batch_number = fields.CharField(max_length=100, null=True, description="批号")
+    status = fields.CharField(max_length=20, default="pending", description="状态")
+    remarks = fields.TextField(null=True, description="备注")
+    deleted_at = fields.DatetimeField(null=True, description="删除时间")
+
+    def __str__(self):
+        return f"{self.material_code} x {self.quantity}"
 
