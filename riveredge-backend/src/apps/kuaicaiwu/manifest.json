@@ -153,6 +153,11 @@
       }
     ]
   },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
+  },
   "permissions": [
     "kuaicaiwu:entry:read",
     "kuaicaiwu:bank-account:read",

@@ -3606,6 +3606,7 @@ const MaterialsManagementPage: React.FC = () => {
                   undefined,
                 specification: currentMaterial.specification,
                 baseUnit: currentMaterial.baseUnit ?? (currentMaterial as any).base_unit,
+                units: currentMaterial.units ?? (currentMaterial as any).units ?? undefined,
                 batchManaged:
                   currentMaterial.batchManaged ?? (currentMaterial as any).batch_managed,
                 defaultBatchRuleId:

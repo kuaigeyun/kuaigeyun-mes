@@ -18,7 +18,7 @@ class DataPermissionPolicy(BaseModel):
     resource = fields.CharField(max_length=100, description="资源编码（app:resource）")
     scope_type = fields.CharField(
         max_length=30,
-        default=DataScopeType.SELF,
+        default=DataScopeType.ALL,
         description="数据范围：scope_all/scope_department/scope_self/scope_custom",
     )
     scope_payload = fields.JSONField(null=True, description="自定义范围载荷（如部门/用户ID列表）")

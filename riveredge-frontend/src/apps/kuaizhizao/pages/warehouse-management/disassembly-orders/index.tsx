@@ -1,193 +1,32 @@
-/**
- * 拆卸单管理页面
- *
- * 提供拆卸单的管理功能，支持创建拆卸单、添加明细、执行拆卸等。
- * 拆卸：成品按 BOM 拆卸为原材料/半成品，消耗成品库存、增加组件库存。
- *
- * 后端接口就绪后，将自动对接完整 CRUD 能力。
- */
-
-import React, { useRef } from 'react';
-import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined } from '@ant-design/icons';
-import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate } from '../../../../../components/layout-templates';
+import React from 'react';
 import { disassemblyOrderApi } from '../../../services/disassembly-order';
 import { getDisassemblyOrderLifecycle } from '../../../utils/disassemblyOrderLifecycle';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import dayjs from 'dayjs';
-
-interface DisassemblyOrder {
-  id?: number;
-  code?: string;
-  warehouse_id?: number;
-  warehouse_name?: string;
-  disassembly_date?: string;
-  status?: string;
-  product_material_id?: number;
-  product_material_code?: string;
-  product_material_name?: string;
-  total_quantity?: number;
-  total_items?: number;
-  remarks?: string;
-  created_at?: string;
-  updated_at?: string;
-}
+import { AssemblyDisassemblyOrdersPage } from '../shared/assemblyDisassemblyOrdersPage';
 
 const DisassemblyOrdersPage: React.FC = () => {
-  const { message: messageApi } = App.useApp();
-  const actionRef = useRef<ActionType>(null);
-
-  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const columns: ProColumns<DisassemblyOrder>[] = [
-    {
-      title: '拆卸单号',
-      dataIndex: 'code',
-      width: 150,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '仓库',
-      dataIndex: 'warehouse_name',
-      width: 120,
-      ellipsis: true,
-    },
-    {
-      title: '拆卸日期',
-      dataIndex: 'disassembly_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '成品物料',
-      dataIndex: 'product_material_name',
-      width: 140,
-      ellipsis: true,
-    },
-    {
-      title: '拆卸数量',
-      dataIndex: 'total_quantity',
-      width: 110,
-      align: 'right',
-    },
-    {
-      title: '组件数',
-      dataIndex: 'total_items',
-      width: 90,
-      align: 'right',
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getDisassemblyOrderLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
-      title: '操作',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => {
-              // 详情：后端就绪后调用 disassemblyOrderApi.get
-            }}
-          >
-            详情
-          </Button>
-        </Space>
-      ),
-    },
-  ];
-
   return (
-    <ListPageTemplate>
-      <UniTable<DisassemblyOrder>
-        headerTitle="拆卸单"
-        columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.disassembly-orders"
-        actionRef={actionRef}
-        rowKey="id"
-        columns={columns}
-        showAdvancedSearch={true}
-        enableRowSelection={true}
-        showDeleteButton={true}
-        onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 条拆卸单吗？`,
-            onOk: async () => {
-              try {
-                for (const key of keys) {
-                  await disassemblyOrderApi.delete(String(key));
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                invalidateMenuBadgeCounts();
-
-                actionRef.current?.reload();
-              } catch (error: any) {
-                messageApi.error(error?.message || '删除失败');
-              }
-            },
-          });
-        }}
-        showCreateButton={true}
-        createButtonText="新建拆卸单"
-        onCreate={() => {
-          // 新建：后端就绪后打开创建弹窗
-        }}
-        request={async (params) => {
-          const result = await disassemblyOrderApi.list({
-            skip: (params.current! - 1) * params.pageSize!,
-            limit: params.pageSize,
-            ...(params as any),
-            keyword: (params as any).keyword,
-          });
-          return {
-            data: result.items || result.data || [],
-            success: true,
-            total: result.total || 0,
-          };
-        }}
-        locale={{
-          emptyText: '暂无拆卸单数据。后端接口就绪后将支持完整功能。',
-        }}
-        scroll={{ x: 1600 }}
-      />
-    </ListPageTemplate>
+    <AssemblyDisassemblyOrdersPage
+      api={disassemblyOrderApi}
+      config={{
+        headerTitle: '拆卸单',
+        persistenceId: 'apps.kuaizhizao.pages.warehouse-management.disassembly-orders',
+        createButtonText: '新建拆卸单',
+        createModalTitle: '新建拆卸单',
+        detailTitlePrefix: '拆卸单详情',
+        dateField: 'disassembly_date',
+        dateLabel: '拆卸日期',
+        actionNoun: '拆卸单',
+        executeActionLabel: '执行拆卸',
+        createSuccessText: '拆卸单创建成功',
+        addItemSuccessText: '拆卸明细添加成功',
+        executeSuccessText: '拆卸执行成功',
+        deleteSuccessNoun: '拆卸单',
+        quantityLabel: '拆卸数量',
+        listEmptyText: '暂无拆卸单数据。',
+        itemDoneStatus: 'produced',
+        getLifecycle: getDisassemblyOrderLifecycle,
+      }}
+    />
   );
 };
 

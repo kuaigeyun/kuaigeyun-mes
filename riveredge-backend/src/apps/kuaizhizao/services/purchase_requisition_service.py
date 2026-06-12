@@ -143,6 +143,20 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             tenant_id=tenant_id, requisition_id=requisition_id
         ).all()
 
+        material_ids = sorted(
+            {
+                int(i.material_id)
+                for i in items
+                if getattr(i, "material_id", None) is not None
+            }
+        )
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id: Dict[int, Material] = {m.id: m for m in material_rows}
+
 
 
         async def _build_item_resps(items_list, clear_orphan: bool = False):
@@ -150,6 +164,26 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
             cleared = False
             for i in items_list:
                 d = {k: getattr(i, k) for k in i._meta.fields_map if hasattr(i, k)}
+                material = material_by_id.get(int(i.material_id)) if getattr(i, "material_id", None) is not None else None
+                repaired_fields: Dict[str, Any] = {}
+                if material:
+                    if not str(d.get("material_code") or "").strip():
+                        candidate_code = (
+                            getattr(material, "main_code", None)
+                            or getattr(material, "code", None)
+                            or ""
+                        )
+                        if candidate_code:
+                            repaired_fields["material_code"] = str(candidate_code)
+                    if not str(d.get("material_name") or "").strip() and getattr(material, "name", None):
+                        repaired_fields["material_name"] = str(material.name)
+                    if not str(d.get("material_spec") or "").strip() and getattr(material, "specification", None):
+                        repaired_fields["material_spec"] = str(material.specification)
+                    if not str(d.get("unit") or "").strip() and getattr(material, "base_unit", None):
+                        repaired_fields["unit"] = str(material.base_unit)
+                if repaired_fields:
+                    d.update(repaired_fields)
+                    await i.update_from_dict(repaired_fields).save()
                 d["converted_quantity_draft"] = Decimal(0)
                 d["converted_quantity_confirmed"] = Decimal(0)
                 if i.purchase_order_id and i.purchase_order_item_id:

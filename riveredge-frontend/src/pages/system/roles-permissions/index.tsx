@@ -513,12 +513,12 @@ const RolesPermissionsPage: React.FC = () => {
   const [dataPolicies, setDataPolicies] = useState<DataPermissionPolicy[]>([]);
   const [fieldPolicies, setFieldPolicies] = useState<FieldPermissionPolicy[]>([]);
   const [selectedDataResources, setSelectedDataResources] = useState<string[]>([]);
-  const [dataBatchScope, setDataBatchScope] = useState<DataPermissionPolicy['scope_type']>('scope_self');
+  const [dataBatchScope, setDataBatchScope] = useState<DataPermissionPolicy['scope_type']>('scope_all');
   const [dataFilterMode, setDataFilterMode] = useState<DataPermissionFilterMode>('all');
   const [dataFilterTarget, setDataFilterTarget] = useState<string>('');
   const [dataSearchKeyword, setDataSearchKeyword] = useState('');
   const [selectedFieldIndexes, setSelectedFieldIndexes] = useState<number[]>([]);
-  const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('masked');
+  const [fieldBatchMaskLevel, setFieldBatchMaskLevel] = useState<FieldPermissionPolicy['mask_level']>('full');
   const [fieldFilterMode, setFieldFilterMode] = useState<DataPermissionFilterMode>('all');
   const [fieldFilterTarget, setFieldFilterTarget] = useState<string>('');
   const [fieldSearchKeyword, setFieldSearchKeyword] = useState('');
@@ -1309,6 +1309,7 @@ const RolesPermissionsPage: React.FC = () => {
           const fieldName = (x.field_name || '').trim();
           if (!resource || !fieldName) return;
           if (!grantedDataResourceKeys.has(normalizeResourceKey(resource))) return;
+          if (x.mask_level === 'full') return;
           const key = `${normalizeResourceKey(resource)}::${fieldName}`;
           dedupMap.set(key, {
             resource: normalizeResourceKey(resource),
@@ -1913,7 +1914,7 @@ const RolesPermissionsPage: React.FC = () => {
                       <Space orientation="vertical" style={{ width: '100%' }} size={8}>
                         {visibleDataResourceOptions.map((opt) => {
                           const policy = dataPolicyByResource.get(normalizeResourceKey(opt.value));
-                          const scopeType = policy?.scope_type ?? 'scope_self';
+                          const scopeType = policy?.scope_type ?? 'scope_all';
                           const configured = Boolean(policy);
                           return (
                             <Flex key={opt.value} gap={8} align="center" style={{ width: '100%' }}>
@@ -1937,7 +1938,7 @@ const RolesPermissionsPage: React.FC = () => {
                                 {opt.label}
                                 {!configured && (
                                   <span style={{ marginLeft: 6, fontSize: 12, color: token.colorTextQuaternary }}>
-                                    ({t('pages.system.roles.dataNotConfigured', { defaultValue: '未配置' })})
+                                    ({t('pages.system.roles.dataNotConfigured', { defaultValue: '默认：全部' })})
                                   </span>
                                 )}
                               </span>

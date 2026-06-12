@@ -196,11 +196,29 @@ class PermissionPolicyService:
         role_resources = await cls._collect_role_granted_function_resources(
             tenant_id, role_uuid
         )
-        return [
+        explicit = [
             DataPermissionPolicyResponse.model_validate(r)
             for r in rows
             if cls._normalize_resource(r.resource) in role_resources
         ]
+        explicit_map = {cls._normalize_resource(r.resource): r for r in explicit}
+        synthesized: list[DataPermissionPolicyResponse] = []
+        now = now_utc()
+        for resource in sorted(role_resources):
+            if resource in explicit_map:
+                continue
+            synthesized.append(
+                DataPermissionPolicyResponse(
+                    uuid=f"builtin:{role_uuid}:{resource}",
+                    role_uuid=role_uuid,
+                    resource=resource,
+                    scope_type=DataScopeType.ALL,
+                    scope_payload=None,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+        return explicit + synthesized
 
     @classmethod
     async def save_data_policies(
@@ -236,11 +254,13 @@ class PermissionPolicyService:
                         'scope_custom 须在 scope_payload 中指定 resolver，'
                         '例如 {"resolver": "outsourced_unit"} 或 {"resolver": "partner", "dimension": "supplier"}'
                     )
-            desired[resource] = DataPermissionPolicyUpsert(
-                resource=resource,
-                scope_type=scope,
-                scope_payload=payload,
-            )
+            # 默认数据权限为“全部”：scope_all 不落库，仅在显式收敛时保存策略。
+            if scope != DataScopeType.ALL:
+                desired[resource] = DataPermissionPolicyUpsert(
+                    resource=resource,
+                    scope_type=scope,
+                    scope_payload=payload,
+                )
 
         async with in_transaction():
             existing = await DataPermissionPolicy.filter(
@@ -425,7 +445,7 @@ class PermissionPolicyService:
                         resource=normalized_resource,
                         field_name=canonical_field,
                         field_label=cls.field_name_display_label(field_name),
-                        mask_level=FieldMaskLevel.MASKED,
+                        mask_level=FieldMaskLevel.FULL,
                         created_at=now,
                         updated_at=now,
                     )
@@ -544,25 +564,12 @@ class PermissionPolicyService:
                 raise ValidationError(
                     f"字段权限资源/字段不在真源注册表: {item.resource} / {item.field_name}"
                 )
-            explicit[key] = FieldPermissionPolicyUpsert(
-                resource=key[0],
-                field_name=key[1],
-                mask_level=level,
-            )
-
-        # 内置默认：对功能权限已授权资源补齐内置字段策略（与 list_field_policies 同一资源范围）
-        normalized_resources = sorted(
-            await cls._role_field_policy_resource_keys(tenant_id, role_uuid)
-        )
-        for resource in normalized_resources:
-            for field_name in sorted(cls._masked_fields_for_resource(resource)):
-                key = cls._field_policy_key(resource, field_name, alias_map)
-                if not key or key in explicit:
-                    continue
+            # 默认字段权限为“明文”：full 不落库，仅在显式收敛(masked/hidden)时保存策略。
+            if level != FieldMaskLevel.FULL:
                 explicit[key] = FieldPermissionPolicyUpsert(
                     resource=key[0],
                     field_name=key[1],
-                    mask_level=FieldMaskLevel.MASKED,
+                    mask_level=level,
                 )
 
         desired_keys = set(explicit.keys())

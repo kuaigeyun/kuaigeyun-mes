@@ -92,6 +92,11 @@
       }
     ]
   },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
+  },
   "permissions": [
     "kuaireport:dashboard:read",
     "kuaireport:dashboard:export",

@@ -47,7 +47,6 @@ from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from infra.services.business_config_service import BusinessConfigService
 from infra.models.user import User
-from core.services.authorization.user_permission_service import UserPermissionService
 
 
 async def _resolve_work_order_operation_for_reporting(
@@ -315,18 +314,6 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 worker_id_int = int(getattr(reporting_data, "worker_id"))
             except Exception:
                 raise ValidationError("报工操作工ID无效")
-
-            # 代报工：生产人员(worker)可与记录人员(当前登录用户)不同，需具备 kuaizhizao:reporting:proxy
-            if worker_id_int != int(reported_by):
-                can_proxy = await UserPermissionService.has_permission(
-                    int(reported_by),
-                    tenant_id,
-                    "kuaizhizao:reporting:proxy",
-                )
-                if not can_proxy:
-                    raise BusinessLogicError(
-                        "无「代报工」权限时，生产人员须与当前登录用户一致；如需代他人报工，请由管理员授予代报工权限。"
-                    )
 
             recorder = await User.get_or_none(id=int(reported_by))
             recorder_name = ""
@@ -1730,12 +1717,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
 
             # 获取修正人信息
             user_info = await self.get_user_info(corrected_by)
-            
-            # 权限控制：只有组织管理员可以修正报工数据
-            from infra.models.user import User
-            correcting_user = await User.get_or_none(id=corrected_by)
-            if not correcting_user or not correcting_user.is_tenant_admin:
-                raise BusinessLogicError("只有组织管理员可以修正报工数据")
+            corrected_by_name = (
+                str(user_info.get("name") or user_info.get("username") or corrected_by)
+                if isinstance(user_info, dict)
+                else str(corrected_by)
+            )
+
+            # 权限由统一权限控制源负责（路由/权限中台），服务层不做组织管理员等手写特判
 
             # 检查是否可以修正（可以根据业务需求调整规则）
             # 例如：只有待审核或已驳回的记录可以修正，或者所有记录都可以修正但需要审核
@@ -1745,7 +1733,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
                 pass
 
             # 构建修正备注（记录修正历史）
-            correction_note = f"\n[数据修正] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} 由 {user_info['name']} 修正，原因：{correction_reason}"
+            correction_note = (
+                f"\n[数据修正] {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} "
+                f"由 {corrected_by_name} 修正，原因：{correction_reason}"
+            )
             if reporting_record.remarks:
                 updated_remarks = reporting_record.remarks + correction_note
             else:
@@ -1797,7 +1788,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             if "updated_by" in fields_map:
                 update_data["updated_by"] = corrected_by
             if "updated_by_name" in fields_map:
-                update_data["updated_by_name"] = user_info["name"]
+                update_data["updated_by_name"] = corrected_by_name
 
             await ReportingRecord.filter(
                 tenant_id=tenant_id,
@@ -1831,7 +1822,7 @@ class ReportingService(AppBaseService[ReportingRecord]):
             # 记录详细的修正历史（在remarks字段中记录，后续可以创建单独的修正历史表）
             # 修正历史已记录在remarks字段中（见上面的correction_note）
 
-            logger.info(f"报工记录 {record_id} 修正成功，修正人: {user_info['name']}, 原因: {correction_reason}")
+            logger.info(f"报工记录 {record_id} 修正成功，修正人: {corrected_by_name}, 原因: {correction_reason}")
             return ReportingRecordResponse.model_validate(updated_record)
     async def _trigger_quality_inspection_from_reporting(
         self,

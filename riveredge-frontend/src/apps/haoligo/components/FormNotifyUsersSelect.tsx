@@ -145,8 +145,8 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
         filterOption: false,
         disabled: effectiveReadonly,
         loading,
-        placeholder: canInteract ? resolvedPh : '无人员选择权限',
-        notFoundContent: canInteract ? undefined : '无人员选择权限（需 system:user:read 或 system:user:display）',
+        placeholder: canInteract ? resolvedPh : '当前不可选择人员',
+        notFoundContent: canInteract ? undefined : '当前不可选择人员',
         onSearch: canInteract ? debouncedFetch : undefined,
         onDropdownVisibleChange: (open) => {
           if (open && canInteract) {

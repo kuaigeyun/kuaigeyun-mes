@@ -683,7 +683,7 @@ const DemandManagementPage: React.FC = () => {
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
         material_unit: m.baseUnit ?? '',
-        required_quantity: 0,
+        required_quantity: 1,
         delivery_date: dayjs(),
       }));
       createPlanFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
@@ -906,7 +906,7 @@ const DemandManagementPage: React.FC = () => {
                     material_code: '',
                     material_name: '',
                     material_unit: '',
-                    required_quantity: 0,
+                    required_quantity: 1,
                     delivery_date: dayjs(),
                   });
                   createPlanFormRef.current?.setFieldsValue({ items });
@@ -1000,7 +1000,7 @@ const DemandManagementPage: React.FC = () => {
             material_code: '',
             material_name: '',
             material_unit: '',
-            required_quantity: 0,
+            required_quantity: 1,
             delivery_date: dayjs(),
           }}
           tableProps={{

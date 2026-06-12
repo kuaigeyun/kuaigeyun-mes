@@ -2980,6 +2980,27 @@ async def update_assembly_order_item(
         raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
 
 
+@router.delete("/assembly-orders/{order_id}/items/{item_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete assembly line")
+async def delete_assembly_order_item(
+    order_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除组装明细（软删除，仅草稿单且待处理明细可删）"""
+    try:
+        await assembly_order_service.delete_assembly_order_item(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            item_id=item_id,
+            deleted_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/assembly-orders/{order_id}/items/{item_id}", tenant_id)
+
+
 @router.delete("/assembly-orders/{order_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete assembly order")
 async def delete_assembly_order(
     order_id: int,
@@ -3129,6 +3150,27 @@ async def update_disassembly_order_item(
             item_id=item_id,
             item_data=item,
             updated_by=current_user.id
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)
+
+
+@router.delete("/disassembly-orders/{order_id}/items/{item_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete disassembly line")
+async def delete_disassembly_order_item(
+    order_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """删除拆卸明细（软删除，仅草稿单且待处理明细可删）"""
+    try:
+        await disassembly_order_service.delete_disassembly_order_item(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            item_id=item_id,
+            deleted_by=current_user.id,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/disassembly-orders/{order_id}/items/{item_id}", tenant_id)

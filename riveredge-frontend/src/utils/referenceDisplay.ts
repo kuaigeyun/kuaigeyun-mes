@@ -2,9 +2,9 @@
  * 引用资源展示（下拉搜索 / 回显），与资源 read 权限解耦。
  */
 
-import { apiRequest } from '../services/api';
+import { requestDisplayResolve, requestDisplaySearch, ReferenceDisplayAccessError } from '../services/displayContract';
 import type { CurrentUser } from '../types/api';
-import { hasAnyPermission, hasPermission } from './permission';
+import { hasPermission } from './permission';
 
 export interface ReferenceDisplayItem {
   id?: number | null;
@@ -22,30 +22,19 @@ export interface ReferenceDisplayListResponse {
   page_size: number;
 }
 
-export class ReferenceDisplayAccessError extends Error {
-  readonly status: number;
-  readonly required?: string[];
-
-  constructor(message: string, status = 403, required?: string[]) {
-    super(message);
-    this.name = 'ReferenceDisplayAccessError';
-    this.status = status;
-    this.required = required;
-  }
-}
+export { ReferenceDisplayAccessError };
 
 function displayPermissionCodes(resourceKey: string): [string, string] {
   const key = resourceKey.trim().toLowerCase();
   return [`${key}:read`, `${key}:display`];
 }
 
-/** 是否具备显式 read/display（不含宿主隐式授予，隐式由后端判定） */
+/** 统一策略：前端不做 display 显式权限直判，交由后端统一裁决。 */
 export function canPickReferenceDisplayExplicit(
   user: CurrentUser | undefined,
-  resourceKey: string,
+  _resourceKey: string,
 ): boolean {
-  const [read, display] = displayPermissionCodes(resourceKey);
-  return hasAnyPermission(user, [read, display]);
+  return Boolean(user);
 }
 
 export function formatReferenceDisplayLabel(item: ReferenceDisplayItem): string {
@@ -69,22 +58,19 @@ export async function searchReferenceDisplay(args: {
   groupId?: number;
   sourceType?: string;
 }): Promise<ReferenceDisplayListResponse> {
-  try {
-    return await apiRequest<ReferenceDisplayListResponse>('/core/reference/display-search', {
-      params: {
-        resource: args.resource,
-        keyword: args.keyword,
-        page: args.page ?? 1,
-        page_size: args.pageSize ?? 50,
-        is_active: args.isActive ?? true,
-        host_resource: args.hostResource,
-        group_id: args.groupId,
-        source_type: args.sourceType,
-      },
-    });
-  } catch (err: unknown) {
-    throw mapReferenceDisplayError(err);
-  }
+  return requestDisplaySearch<ReferenceDisplayListResponse>(
+    '/core/reference/display-search',
+    {
+      resource: args.resource,
+      keyword: args.keyword,
+      page: args.page ?? 1,
+      page_size: args.pageSize ?? 50,
+      is_active: args.isActive ?? true,
+      host_resource: args.hostResource,
+      group_id: args.groupId,
+      source_type: args.sourceType,
+    },
+  );
 }
 
 export async function resolveReferenceDisplay(args: {
@@ -93,37 +79,16 @@ export async function resolveReferenceDisplay(args: {
   recordUuids?: string[];
   hostResource?: string;
 }): Promise<ReferenceDisplayItem[]> {
-  try {
-    const res = await apiRequest<{ items: ReferenceDisplayItem[] }>('/core/reference/display-resolve', {
-      method: 'POST',
-      data: {
-        resource: args.resource,
-        record_ids: args.recordIds ?? [],
-        record_uuids: args.recordUuids ?? [],
-        host_resource: args.hostResource,
-      },
-    });
-    return res.items ?? [];
-  } catch (err: unknown) {
-    throw mapReferenceDisplayError(err);
-  }
-}
-
-function mapReferenceDisplayError(err: unknown): ReferenceDisplayAccessError {
-  if (err && typeof err === 'object') {
-    const e = err as { status?: number; message?: string; data?: { details?: { required?: string[] } } };
-    if (e.status === 403) {
-      return new ReferenceDisplayAccessError(
-        e.message || '无权引用该资源，请联系管理员配置宿主单据或引用资源权限',
-        403,
-        e.data?.details?.required,
-      );
-    }
-  }
-  return new ReferenceDisplayAccessError(
-    err instanceof Error ? err.message : '引用资源加载失败',
-    500,
+  const res = await requestDisplayResolve<{ items: ReferenceDisplayItem[] }>(
+    '/core/reference/display-resolve',
+    {
+      resource: args.resource,
+      record_ids: args.recordIds ?? [],
+      record_uuids: args.recordUuids ?? [],
+      host_resource: args.hostResource,
+    },
   );
+  return res.items ?? [];
 }
 
 /** 将引用展示项转为 id 下拉选项 */

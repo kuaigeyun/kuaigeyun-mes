@@ -10,7 +10,7 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Col, DatePicker, Descriptions, Dropdown, Form as AntForm, Input, InputNumber, Modal, Row, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Col, DatePicker, Descriptions, Dropdown, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, PrinterOutlined, ShoppingOutlined, MoreOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -29,6 +29,7 @@ import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 
 interface MaterialBorrow {
   id?: number;
@@ -97,7 +98,20 @@ const MaterialBorrowsPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
-  const defaultBorrowItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', borrow_quantity: 1 };
+  const {
+    selectedWarehouseId,
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
+  const defaultBorrowItem = {
+    material_id: undefined,
+    material_code: '',
+    material_name: '',
+    material_unit: '',
+    location_code: undefined,
+    borrow_quantity: 1,
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -348,6 +362,7 @@ const MaterialBorrowsPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
+    resetSelectedWarehouseId();
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
@@ -374,12 +389,14 @@ const MaterialBorrowsPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
+          location_code: it.location_code || undefined,
           borrow_quantity: Number(it.borrow_quantity) || 0,
           warehouse_id: values.warehouse_id,
           warehouse_name: warehouseName,
         })),
       });
       messageApi.success('创建成功');
+      resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -503,6 +520,7 @@ const MaterialBorrowsPage: React.FC = () => {
                   { title: '物料编号', dataIndex: 'material_code', width: 120 },
                   { title: '物料名称', dataIndex: 'material_name', width: 150 },
                   { title: '单位', dataIndex: 'material_unit', width: 60 },
+                  { title: '库位', dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
                   { title: '借出数量', dataIndex: 'borrow_quantity', width: 100, align: 'right' },
                   { title: '已归还数量', dataIndex: 'returned_quantity', width: 100, align: 'right' },
                   { title: '状态', dataIndex: 'status', width: 80 },
@@ -518,7 +536,10 @@ const MaterialBorrowsPage: React.FC = () => {
       <FormModalTemplate
         title="新建借料单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => {
+          resetSelectedWarehouseId();
+          setCreateModalVisible(false);
+        }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
@@ -541,7 +562,10 @@ const MaterialBorrowsPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(val, wh) => {
+                updateSelectedWarehouseId(val);
+                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
+              }}
             />
           </Col>
         </Row>
@@ -617,6 +641,25 @@ const MaterialBorrowsPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
                         <Input placeholder="单位" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '库位',
+                    dataIndex: 'location_code',
+                    width: 180,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
+                        <Select
+                          options={locationOptions}
+                          placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                          style={{ width: '100%' }}
+                          size="small"
+                          showSearch
+                          optionFilterProp="label"
+                          allowClear
+                          disabled={!selectedWarehouseId}
+                        />
                       </AntForm.Item>
                     ),
                   },

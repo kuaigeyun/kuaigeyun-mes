@@ -67,8 +67,8 @@ function displayItemToUser(item: UserDisplayItem): User {
  * 统一的人员/角色选择组件
  *
  * @description
- * 有 system:user:read 时走 getUserList；仅有 system:user:display 时走 display-search。
- * 无选人权限时为只读（由业务侧 preset 或单据快照字段展示）。
+ * 有 system:user:read 时走 getUserList；否则走 display-search。
+ * 前端不再做 display 显式权限阻断，是否可选由后端统一裁决。
  */
 export const UniUserSelect: React.FC<UniUserSelectProps> = ({
   name,

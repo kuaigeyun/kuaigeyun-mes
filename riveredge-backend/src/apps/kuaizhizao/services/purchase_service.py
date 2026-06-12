@@ -917,7 +917,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             raise BusinessLogicError("采购单没有明细，无法生成入库单")
         
         # 检查是否有未入库的明细
-        has_outstanding = any(item.outstanding_quantity > 0 for item in order_items)
+        has_outstanding = any(float(item.outstanding_quantity or 0) > 0 for item in order_items)
         if not has_outstanding:
             raise BusinessLogicError("采购单已全部入库，无法再次生成入库单")
         
@@ -1288,17 +1288,24 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             qty = _resolve_notice_qty(item)
             if qty <= 0:
                 continue
-            if qty > float(item.outstanding_quantity):
-                raise ValidationError(f"物料 {item.material_code} 的通知数量 {qty} 超过未入库数量 {item.outstanding_quantity}")
+            outstanding_qty = float(item.outstanding_quantity or 0)
+            if qty > outstanding_qty:
+                raise ValidationError(f"物料 {item.material_code} 的通知数量 {qty} 超过未入库数量 {outstanding_qty}")
+            if not item.material_id:
+                raise ValidationError("采购订单存在缺失物料ID的明细，无法下推收货通知")
+            try:
+                unit_price = float(item.unit_price or 0)
+            except (TypeError, ValueError):
+                raise ValidationError(f"物料 {item.material_code or item.material_name or item.id} 的单价无效，无法下推收货通知")
             items.append(ReceiptNoticeItemCreate(
                 material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
+                material_code=str(item.material_code or ""),
+                material_name=str(item.material_name or ""),
                 material_spec=item.material_spec or "",
-                material_unit=item.unit,
+                material_unit=str(item.unit or "件"),
                 notice_quantity=qty,
-                unit_price=float(item.unit_price),
-                total_amount=qty * float(item.unit_price),
+                unit_price=unit_price,
+                total_amount=qty * unit_price,
                 purchase_order_item_id=item.id,
             ))
 

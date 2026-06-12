@@ -11,7 +11,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Typography, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, DeleteOutlined, ShoppingOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
@@ -31,6 +31,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -70,6 +71,7 @@ interface OtherOutboundItem {
   material_name?: string;
   material_spec?: string;
   material_unit?: string;
+  location_code?: string;
   outbound_quantity?: number;
   unit_price?: number;
   total_amount?: number;
@@ -91,9 +93,23 @@ const OtherOutboundPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  const {
+    selectedWarehouseId,
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
 
-  const defaultOutboundItem = { material_id: undefined, material_code: '', material_name: '', material_unit: '', outbound_quantity: 1, unit_price: 0 };
+  const defaultOutboundItem = {
+    material_id: undefined,
+    material_code: '',
+    material_name: '',
+    material_unit: '',
+    location_code: undefined,
+    outbound_quantity: 1,
+    unit_price: 0,
+  };
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
 
   useEffect(() => {
@@ -257,6 +273,7 @@ const OtherOutboundPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
+    resetSelectedWarehouseId();
     setCreateModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
@@ -282,11 +299,13 @@ const OtherOutboundPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
+          location_code: it.location_code || undefined,
           outbound_quantity: Number(it.outbound_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
         })),
       });
       messageApi.success('创建成功');
+      resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -420,7 +439,10 @@ const OtherOutboundPage: React.FC = () => {
       <FormModalTemplate
         title="新建其他出库单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => {
+          resetSelectedWarehouseId();
+          setCreateModalVisible(false);
+        }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
@@ -444,7 +466,10 @@ const OtherOutboundPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(val, wh) => {
+                updateSelectedWarehouseId(val);
+                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
+              }}
             />
           </Col>
         </Row>
@@ -541,6 +566,25 @@ const OtherOutboundPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'outbound_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
                         <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '库位',
+                    dataIndex: 'location_code',
+                    width: 180,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
+                        <Select
+                          options={locationOptions}
+                          placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                          style={{ width: '100%' }}
+                          size="small"
+                          showSearch
+                          optionFilterProp="label"
+                          allowClear
+                          disabled={!selectedWarehouseId}
+                        />
                       </AntForm.Item>
                     ),
                   },

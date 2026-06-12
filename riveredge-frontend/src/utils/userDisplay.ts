@@ -10,18 +10,20 @@ import {
   type UserDisplayItem,
 } from '../services/user';
 import type { CurrentUser } from '../types/api';
-import { hasAnyPermission, hasPermission } from './permission';
+import { hasPermission } from './permission';
 
 export const PERM_USER_READ = 'system:user:read';
-export const PERM_USER_DISPLAY = 'system:user:display';
 
 export function canReadUserDirectory(user: CurrentUser | undefined): boolean {
   return hasPermission(user, PERM_USER_READ);
 }
 
-/** 业务表单人员下拉：read 或 display 均可 */
+/**
+ * 统一策略：前端不再对 display 做显式权限直判。
+ * 只要已登录即可发起请求，是否允许由后端 reference_display 统一裁决。
+ */
 export function canPickUsersForDisplay(user: CurrentUser | undefined): boolean {
-  return hasAnyPermission(user, [PERM_USER_READ, PERM_USER_DISPLAY]);
+  return Boolean(user);
 }
 
 export function formatUserDisplayLabel(item: {
@@ -65,7 +67,7 @@ function mergeSelectedIdOptions(
   return next;
 }
 
-/** ProFormSelect request：按用户 id 搜索（自动选择 read / display API） */
+/** ProFormSelect request：按用户 id 搜索（目录读权限优先，否则走展示 API） */
 export async function searchUserIdOptions(args: {
   keyword?: string;
   pageSize?: number;

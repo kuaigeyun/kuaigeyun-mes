@@ -45,6 +45,12 @@ import {
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
@@ -422,6 +428,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
+  const purchaseOrderCreateDraftRestoredRef = useRef(false);
   const { message: messageApi } = App.useApp();
   const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
@@ -474,6 +481,24 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const tableSearchFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const purchaseOrderCreateDraftKey = useMemo(
+    () =>
+      isCreatePage
+        ? buildDocumentCreateDraftKey('kuaizhizao:purchase-order', location.pathname, location.search)
+        : null,
+    [isCreatePage, location.pathname, location.search],
+  );
+  const clearPurchaseOrderCreateDraft = useCallback(() => {
+    if (!purchaseOrderCreateDraftKey) return;
+    clearDocumentFormDraft(purchaseOrderCreateDraftKey);
+    purchaseOrderCreateDraftRestoredRef.current = false;
+  }, [purchaseOrderCreateDraftKey]);
+  const leavePurchaseOrderFormPage = useCallback(() => {
+    if (isCreatePage) {
+      clearPurchaseOrderCreateDraft();
+    }
+    navigate(PURCHASE_ORDER_LIST_PATH);
+  }, [isCreatePage, clearPurchaseOrderCreateDraft, navigate]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [importModalVisible, setImportModalVisible] = useState(false);
 
@@ -1517,11 +1542,22 @@ const PurchaseOrdersPage: React.FC = () => {
   }
 
   function initPurchaseOrderCreateForm() {
+    const cachedDraft =
+      purchaseOrderCreateDraftKey != null
+        ? getDocumentFormDraft<Record<string, unknown>>(purchaseOrderCreateDraftKey)
+        : null;
     setIsEdit(false);
     setCurrentOrder(null);
     formRef.current?.resetFields();
     window.setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+        if (!purchaseOrderCreateDraftRestoredRef.current) {
+          purchaseOrderCreateDraftRestoredRef.current = true;
+          messageApi.info('已恢复暂存内容');
+        }
+      }
     }, 0);
   }
 
@@ -1685,7 +1721,8 @@ const PurchaseOrdersPage: React.FC = () => {
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
-      const validItems = (values.items ?? []).filter(
+      const normalizedItems = normalizeFormListItems<any>(values.items);
+      const validItems = normalizedItems.filter(
         (it: any) => it.material_id && (Number(it.ordered_quantity) || 0) > 0
       );
       if (!validItems.length) {
@@ -1749,7 +1786,7 @@ const PurchaseOrdersPage: React.FC = () => {
       data.net_amount = totalAmount + data.tax_amount;
 
       // 计算费用总额
-      const feeDetails = values.fee_details ?? [];
+      const feeDetails = normalizeFormListItems<any>(values.fee_details);
       const totalFeeAmount = feeDetails.reduce((sum: number, fee: any) => {
         return sum + (Number(fee.amount) || 0);
       }, 0);
@@ -1784,6 +1821,9 @@ const PurchaseOrdersPage: React.FC = () => {
           messageApi.warning(`保存成功，但提交失败：${submitErr?.message || '未知错误'}。您可在列表中点击「提交审核」重试。`);
         }
         submitAfterSaveRef.current = false;
+      }
+      if (isCreatePage) {
+        clearPurchaseOrderCreateDraft();
       }
 
       if (isFormPage) {
@@ -2118,9 +2158,13 @@ const PurchaseOrdersPage: React.FC = () => {
         </Row>
 
         {/* 已生效/执行中订单须通过变更单修改，不再支持直改填写变更原因 */}
+        <AntForm.Item name="price_type" hidden initialValue="tax_exclusive">
+          <Input />
+        </AntForm.Item>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue: getFormValue }: any) => {
-            const priceType = getFormValue('price_type') ?? 'tax_exclusive';
+            const rawPriceType = getFormValue('price_type');
+            const priceType = rawPriceType === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
             const showTaxColumns = priceType === 'tax_inclusive';
             return (
               <UniTableDetail
@@ -2129,16 +2173,16 @@ const PurchaseOrdersPage: React.FC = () => {
                 required
                 requiredMessage="请至少添加一条采购明细"
                 leftExtra={(
-                  <ProForm.Item
-                    name="price_type"
-                    initialValue="tax_exclusive"
-                    noStyle
-                    valuePropName="checked"
-                    getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                    getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-                  >
-                    <Switch checkedChildren="含税" unCheckedChildren="不含税" />
-                  </ProForm.Item>
+                  <Switch
+                    checked={priceType === 'tax_inclusive'}
+                    checkedChildren="含税"
+                    unCheckedChildren="不含税"
+                    onChange={(checked) => {
+                      formRef.current?.setFieldsValue({
+                        price_type: checked ? 'tax_inclusive' : 'tax_exclusive',
+                      });
+                    }}
+                  />
                 )}
                 headerExtra={(
                   <Space size={8}>
@@ -2503,7 +2547,7 @@ const PurchaseOrdersPage: React.FC = () => {
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 aria-label={t('common.back')}
-                onClick={() => navigate(PURCHASE_ORDER_LIST_PATH)}
+                onClick={leavePurchaseOrderFormPage}
               />
               <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
                 {isCreatePage
@@ -2512,7 +2556,7 @@ const PurchaseOrdersPage: React.FC = () => {
               </Typography.Title>
             </Space>
             <Space wrap>
-              <Button onClick={() => navigate(PURCHASE_ORDER_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={leavePurchaseOrderFormPage}>{t('common.cancel')}</Button>
               <Button onClick={triggerPurchaseOrderFormSubmit}>
                 {isCreatePage ? t('app.kuaizhizao.purchaseOrder.saveDraft', '保存') : t('common.save')}
               </Button>
@@ -2552,6 +2596,11 @@ const PurchaseOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={(_, allValues) => {
+                  if (isCreatePage && purchaseOrderCreateDraftKey) {
+                    setDocumentFormDraft(purchaseOrderCreateDraftKey, allValues as Record<string, unknown>);
+                  }
+                }}
                 onFinish={handleFormSubmit}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

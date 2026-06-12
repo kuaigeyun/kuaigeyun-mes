@@ -17,6 +17,11 @@
     "permission": "kuaiai:entry:read",
     "children": []
   },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
+  },
   "permissions": [
     "kuaiai:entry:read",
     "kuaiai:workspace:print"

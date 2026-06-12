@@ -20,9 +20,9 @@ export type DataPolicySaveItem = Pick<
 
 /**
  * 组装数据权限保存载荷：
- * - 保留已有策略（功能权限范围内）
+ * - 保留已有显式策略（功能权限范围内，scope_all 视为默认值不落库）
  * - 已勾选行应用 batchScope
- * - 未勾选但 batchScope 非「本人」时，对当前列表可见资源应用 batchScope（无需再点「全选」）
+ * - 未勾选但 batchScope 为「本部门/自定义」时，对当前可见资源应用 batchScope（无需再点「全选」）
  */
 export function buildDataPolicySavePayload(params: {
   dataPolicies: DataPermissionPolicy[];
@@ -37,6 +37,7 @@ export function buildDataPolicySavePayload(params: {
   for (const p of dataPolicies) {
     const nk = normalizeResourceKey(p.resource);
     if (!nk || !grantedKeys.has(nk)) continue;
+    if (p.scope_type === 'scope_all') continue;
     map.set(nk, {
       resource: nk,
       scope_type: p.scope_type,
@@ -47,7 +48,7 @@ export function buildDataPolicySavePayload(params: {
   const scopeTargets =
     selectedResources.length > 0
       ? selectedResources
-      : batchScope !== 'scope_self'
+      : batchScope === 'scope_department' || batchScope === 'scope_custom'
         ? visibleResources
         : [];
 

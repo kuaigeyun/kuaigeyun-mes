@@ -9,6 +9,7 @@
 import { getToken } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { apiRequest } from './api';
+import { requestDisplayResolve, requestDisplaySearch } from './displayContract';
 
 /**
  * 用户信息接口
@@ -412,6 +413,7 @@ export interface UserDisplayListParams {
   department_uuid?: string;
   position_uuid?: string;
   is_active?: boolean;
+  host_resource?: string;
 }
 
 export interface UserDisplayListResponse {
@@ -424,15 +426,20 @@ export interface UserDisplayListResponse {
 export interface UserDisplayResolvePayload {
   user_ids?: number[];
   user_uuids?: string[];
+  host_resource?: string;
 }
 
 /**
- * 人员展示搜索（需 system:user:display 或 system:user:read）
+ * 人员展示搜索（是否允许由后端统一鉴权裁决）
  */
 export async function searchUserDisplay(
   params?: UserDisplayListParams,
 ): Promise<UserDisplayListResponse> {
-  return apiRequest<UserDisplayListResponse>('/core/users/display-search', { params });
+  return requestDisplaySearch<UserDisplayListResponse>(
+    '/core/users/display-search',
+    params || {},
+    '人员展示加载失败',
+  );
 }
 
 /** 平台超管：在指定租户上下文中搜索人员（如极光推送测试） */
@@ -440,10 +447,12 @@ export async function searchUserDisplayInTenant(
   tenantId: number,
   params?: UserDisplayListParams,
 ): Promise<UserDisplayListResponse> {
-  return apiRequest<UserDisplayListResponse>('/core/users/display-search', {
-    params,
-    headers: { 'X-Tenant-ID': String(tenantId) },
-  });
+  return requestDisplaySearch<UserDisplayListResponse>(
+    '/core/users/display-search',
+    params || {},
+    '人员展示加载失败',
+    { headers: { 'X-Tenant-ID': String(tenantId) }, autoHostResource: false },
+  );
 }
 
 /**
@@ -452,10 +461,11 @@ export async function searchUserDisplayInTenant(
 export async function resolveUserDisplay(
   payload: UserDisplayResolvePayload,
 ): Promise<UserDisplayItem[]> {
-  const res = await apiRequest<{ items: UserDisplayItem[] }>('/core/users/display-resolve', {
-    method: 'POST',
-    data: payload,
-  });
+  const res = await requestDisplayResolve<{ items: UserDisplayItem[] }>(
+    '/core/users/display-resolve',
+    payload || {},
+    '人员展示解析失败',
+  );
   return res.items || [];
 }
 

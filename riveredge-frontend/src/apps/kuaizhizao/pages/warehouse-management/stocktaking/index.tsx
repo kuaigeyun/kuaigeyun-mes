@@ -131,10 +131,13 @@ const StocktakingPage: React.FC = () => {
    */
   const handleCreateSubmit = async (values: any) => {
     try {
+      const stocktakingDate = dayjs(values.stocktaking_date);
       await stocktakingApi.create({
         warehouse_id: values.warehouse_id,
         warehouse_name: values._warehouse_name || '', // _warehouse_name 可以由 UniWarehouseSelect 暴露或我们在 onChange 截获
-        stocktaking_date: values.stocktaking_date?.toISOString() || new Date().toISOString(),
+        stocktaking_date: stocktakingDate.isValid()
+          ? stocktakingDate.toISOString()
+          : new Date().toISOString(),
         stocktaking_type: values.stocktaking_type || 'full',
         remarks: values.remarks,
       });

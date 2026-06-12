@@ -158,12 +158,13 @@ const InventoryTransferPage: React.FC = () => {
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
+      const transferDate = dayjs(values.transfer_date);
       const payload = {
         from_warehouse_id: values.from_warehouse_id,
         from_warehouse_name: values._from_warehouse_name || '',
         to_warehouse_id: values.to_warehouse_id,
         to_warehouse_name: values._to_warehouse_name || '',
-        transfer_date: values.transfer_date?.toISOString() || new Date().toISOString(),
+        transfer_date: transferDate.isValid() ? transferDate.toISOString() : new Date().toISOString(),
         transfer_reason: values.transfer_reason,
         remarks: values.remarks,
         allow_same_warehouse: mode === 'bin_relocation',

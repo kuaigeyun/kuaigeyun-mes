@@ -151,6 +151,12 @@ import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from 
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 
 /** API 异常 detail 可能是字符串或 { message, trace_id }，不能直接交给 message.error 渲染 */
 function salesOrderCatchMessage(error: unknown, fallback: string): string {
@@ -446,6 +452,7 @@ const SalesOrdersPage: React.FC = () => {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
+  const salesOrderCreateDraftRestoredRef = useRef(false);
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
@@ -453,6 +460,24 @@ const SalesOrdersPage: React.FC = () => {
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const salesOrderCreateDraftKey = useMemo(
+    () =>
+      isCreatePage
+        ? buildDocumentCreateDraftKey('kuaizhizao:sales-order', location.pathname, location.search)
+        : null,
+    [isCreatePage, location.pathname, location.search],
+  );
+  const clearSalesOrderCreateDraft = useCallback(() => {
+    if (!salesOrderCreateDraftKey) return;
+    clearDocumentFormDraft(salesOrderCreateDraftKey);
+    salesOrderCreateDraftRestoredRef.current = false;
+  }, [salesOrderCreateDraftKey]);
+  const leaveSalesOrderFormPage = useCallback(() => {
+    if (isCreatePage) {
+      clearSalesOrderCreateDraft();
+    }
+    navigate(SALES_ORDER_LIST_PATH);
+  }, [isCreatePage, clearSalesOrderCreateDraft, navigate]);
 
   /** 视图切换缓存：始终请求 include_items=true，切换视图时从缓存转换，避免重复请求 */
   const lastOrdersCacheRef = useRef<{ orders: SalesOrder[]; total: number; paramsKey: string } | null>(null);
@@ -700,6 +725,10 @@ const SalesOrdersPage: React.FC = () => {
   const defaultOrderItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '', required_quantity: 1, delivery_date: dayjs(), unit_price: 0, tax_rate: 0, variant_attributes: '', notes: '' };
 
   async function initSalesOrderCreateForm(options?: { customerId?: number }) {
+    const cachedDraft =
+      salesOrderCreateDraftKey != null
+        ? getDocumentFormDraft<Record<string, unknown>>(salesOrderCreateDraftKey)
+        : null;
     setFormEditOrder(null);
     formRef.current?.resetFields();
     setTimeout(() => {
@@ -708,6 +737,13 @@ const SalesOrdersPage: React.FC = () => {
         items: [defaultOrderItem],
         order_date: dayjs(),
       });
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+        if (!salesOrderCreateDraftRestoredRef.current) {
+          salesOrderCreateDraftRestoredRef.current = true;
+          messageApi.info('已恢复暂存内容');
+        }
+      }
       lastPriceTypeRef.current = 'tax_exclusive';
       const prefillCustomerId = options?.customerId;
       if (prefillCustomerId != null) {
@@ -755,6 +791,9 @@ const SalesOrdersPage: React.FC = () => {
     } else {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
+    }
+    if (cachedDraft) {
+      formRef.current?.setFieldsValue(cachedDraft);
     }
   }
 
@@ -1281,6 +1320,9 @@ const SalesOrdersPage: React.FC = () => {
 
       setPreviewCode(null);
       setEffectiveRuleCode(null);
+      if (isCreatePage) {
+        clearSalesOrderCreateDraft();
+      }
       invalidateOrdersCache();
       invalidateMenuBadge();
       invalidateStatistics();
@@ -1656,13 +1698,9 @@ const SalesOrdersPage: React.FC = () => {
   };
 
   /** 直推工单（含预览） */
-  const handlePushToWorkOrder = async (id: number, order?: SalesOrder | null) => {
+  const handlePushToWorkOrder = async (id: number, _order?: SalesOrder | null) => {
     if (!salesNodeEnabled.work_order) {
       messageApi.warning('工单节点未启用，无法下推');
-      return;
-    }
-    if (order?.pushed_to_computation) {
-      messageApi.warning(t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked'));
       return;
     }
     showPushPreviewModal(
@@ -2175,8 +2213,6 @@ const SalesOrdersPage: React.FC = () => {
         ? '仅已审核/已确认且未关闭的销售订单可下推'
         : !salesNodeEnabled.work_order
         ? '工单节点未启用，无法下推'
-        : record.pushed_to_computation
-        ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked')
         : undefined;
     const invoiceDisabledReason =
       !pushEnabledBase
@@ -3413,7 +3449,7 @@ const SalesOrdersPage: React.FC = () => {
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 aria-label={t('common.back')}
-                onClick={() => navigate(SALES_ORDER_LIST_PATH)}
+                onClick={leaveSalesOrderFormPage}
               />
               <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
                 {isCreatePage
@@ -3422,7 +3458,7 @@ const SalesOrdersPage: React.FC = () => {
               </Typography.Title>
             </Space>
             <Space wrap>
-              <Button onClick={() => navigate(SALES_ORDER_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={leaveSalesOrderFormPage}>{t('common.cancel')}</Button>
               <Button onClick={() => void handleSaveDraft()}>
                 {isCreatePage ? t('app.kuaizhizao.salesOrder.saveDraft') : t('common.save')}
               </Button>
@@ -3450,6 +3486,11 @@ const SalesOrdersPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={(_, allValues) => {
+                  if (isCreatePage && salesOrderCreateDraftKey) {
+                    setDocumentFormDraft(salesOrderCreateDraftKey, allValues as Record<string, unknown>);
+                  }
+                }}
                 onFinish={async () => {
                   setModalSubmitting(true);
                   try {
@@ -3976,8 +4017,6 @@ const SalesOrdersPage: React.FC = () => {
                         (() => {
                           const workOrderDisabledReason = !salesNodeEnabled.work_order
                             ? '工单节点未启用，无法下推'
-                            : (currentSalesOrder as SalesOrder)?.pushed_to_computation
-                            ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked')
                             : undefined;
                           return {
                             key: 'workorder',

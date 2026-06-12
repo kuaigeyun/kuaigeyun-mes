@@ -34,6 +34,12 @@ import {
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle'
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut'
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut'
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache'
 import { UniTable } from '../../../../../components/uni-table'
 import {
   UniTableStackedPrimaryCell,
@@ -130,6 +136,7 @@ export default function SalesForecastsPage() {
   const isEditPage = editRouteId != null && Number.isFinite(editRouteId) && editRouteId > 0;
   const isFormPage = isCreatePage || isEditPage;
   const formPageInitializedRef = useRef(false);
+  const salesForecastCreateDraftRestoredRef = useRef(false);
   const formRef = useRef<ProFormInstance>();
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
@@ -175,6 +182,20 @@ export default function SalesForecastsPage() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const [trackingRefreshKey, setTrackingRefreshKey] = useState(0)
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const salesForecastCreateDraftKey = isCreatePage
+    ? buildDocumentCreateDraftKey('kuaizhizao:sales-forecast', location.pathname, location.search)
+    : null;
+  const clearSalesForecastCreateDraft = useCallback(() => {
+    if (!salesForecastCreateDraftKey) return;
+    clearDocumentFormDraft(salesForecastCreateDraftKey);
+    salesForecastCreateDraftRestoredRef.current = false;
+  }, [salesForecastCreateDraftKey]);
+  const leaveSalesForecastFormPage = useCallback(() => {
+    if (isCreatePage) {
+      clearSalesForecastCreateDraft();
+    }
+    navigate(SALES_FORECAST_LIST_PATH);
+  }, [isCreatePage, clearSalesForecastCreateDraft, navigate]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false)
   const [importModalVisible, setImportModalVisible] = useState(false)
   const [matrixModalVisible, setMatrixModalVisible] = useState(false)
@@ -304,6 +325,10 @@ export default function SalesForecastsPage() {
 
 
     async function initSalesForecastCreateForm() {
+    const cachedDraft =
+      salesForecastCreateDraftKey != null
+        ? getDocumentFormDraft<Record<string, unknown>>(salesForecastCreateDraftKey)
+        : null;
     setIsEdit(false);
     setCurrentId(null);
     setPreviewCode(null);
@@ -315,6 +340,13 @@ export default function SalesForecastsPage() {
         items: [defaultForecastItem],
         forecast_type: 'MTS',
       });
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+        if (!salesForecastCreateDraftRestoredRef.current) {
+          salesForecastCreateDraftRestoredRef.current = true;
+          messageApi.info('已恢复暂存内容');
+        }
+      }
     }, 100);
 
     let ruleCode = getPageRuleCode('kuaizhizao-sales-forecast');
@@ -343,6 +375,9 @@ export default function SalesForecastsPage() {
       setPreviewCode(null);
       setEffectiveRuleCode(null);
       setEffectiveAutoGen(false);
+    }
+    if (cachedDraft) {
+      formRef.current?.setFieldsValue(cachedDraft);
     }
   }
 
@@ -742,6 +777,9 @@ export default function SalesForecastsPage() {
       setPreviewCode(null)
       setEffectiveRuleCode(null)
       setEffectiveAutoGen(null)
+      if (isCreatePage) {
+        clearSalesForecastCreateDraft();
+      }
       invalidateForecastCache();
       invalidateStatistics();
       invalidateMenuBadge();
@@ -1550,7 +1588,7 @@ export default function SalesForecastsPage() {
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 aria-label={t('common.back')}
-                onClick={() => navigate(SALES_FORECAST_LIST_PATH)}
+                onClick={leaveSalesForecastFormPage}
               />
               <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
                 {isCreatePage
@@ -1559,7 +1597,7 @@ export default function SalesForecastsPage() {
               </Typography.Title>
             </Space>
             <Space wrap>
-              <Button onClick={() => navigate(SALES_FORECAST_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={leaveSalesForecastFormPage}>{t('common.cancel')}</Button>
               {isCreatePage ? (
                 <>
                   <Button onClick={() => void handleSaveDraft()}>{t('app.kuaizhizao.salesOrder.saveDraft')}</Button>
@@ -1585,6 +1623,11 @@ export default function SalesForecastsPage() {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={(_, allValues) => {
+                  if (isCreatePage && salesForecastCreateDraftKey) {
+                    setDocumentFormDraft(salesForecastCreateDraftKey, allValues as Record<string, unknown>);
+                  }
+                }}
                 onFinish={(values) => handleSaveInternal(values, false)}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

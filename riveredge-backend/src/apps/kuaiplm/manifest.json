@@ -133,6 +133,11 @@
       }
     ]
   },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
+  },
   "permissions": [
     "kuaiplm:entry:read",
     "kuaiplm:dashboard:read",

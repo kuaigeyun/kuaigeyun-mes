@@ -99,7 +99,6 @@ async function fetchPartnerOptions(dimension: 'supplier' | 'customer'): Promise<
       : 'master-data:supply-chain:customer';
   const display = await searchReferenceDisplay({
     resource,
-    hostResource: 'system:user',
     pageSize: 200,
   });
   return display.items

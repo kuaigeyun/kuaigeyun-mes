@@ -15,6 +15,12 @@ import { useTranslation } from 'react-i18next';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
+import {
+  buildDocumentCreateDraftKey,
+  clearDocumentFormDraft,
+  getDocumentFormDraft,
+  setDocumentFormDraft,
+} from '../../../../../utils/documentFormDraftCache';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 
@@ -407,6 +413,7 @@ const SalesContractsPage: React.FC = () => {
   const isFormPage = isCreatePage || isEditPage;
 
   const formPageInitializedRef = useRef(false);
+  const salesContractCreateDraftRestoredRef = useRef(false);
 
   const { message: messageApi } = App.useApp();
 
@@ -490,6 +497,24 @@ const SalesContractsPage: React.FC = () => {
   const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const salesContractCreateDraftKey = useMemo(
+    () =>
+      isCreatePage
+        ? buildDocumentCreateDraftKey('kuaizhizao:sales-contract', location.pathname, location.search)
+        : null,
+    [isCreatePage, location.pathname, location.search],
+  );
+  const clearSalesContractCreateDraft = useCallback(() => {
+    if (!salesContractCreateDraftKey) return;
+    clearDocumentFormDraft(salesContractCreateDraftKey);
+    salesContractCreateDraftRestoredRef.current = false;
+  }, [salesContractCreateDraftKey]);
+  const leaveSalesContractFormPage = useCallback(() => {
+    if (isCreatePage) {
+      clearSalesContractCreateDraft();
+    }
+    navigate(SALES_CONTRACT_LIST_PATH);
+  }, [isCreatePage, clearSalesContractCreateDraft, navigate]);
   const [printModalVisible, setPrintModalVisible] = useState(false);
   const [printSubmitting, setPrintSubmitting] = useState(false);
   const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
@@ -932,6 +957,10 @@ const SalesContractsPage: React.FC = () => {
 
 
   async function initSalesContractCreateForm() {
+    const cachedDraft =
+      salesContractCreateDraftKey != null
+        ? getDocumentFormDraft<Record<string, unknown>>(salesContractCreateDraftKey)
+        : null;
     setEditingId(null);
     formRef.current?.resetFields();
     setTimeout(() => {
@@ -948,6 +977,13 @@ const SalesContractsPage: React.FC = () => {
       setTermTemplateTerms([]);
       setTermPlaceholderValues({});
       setTermsPreview([]);
+      if (cachedDraft) {
+        formRef.current?.setFieldsValue(cachedDraft);
+        if (!salesContractCreateDraftRestoredRef.current) {
+          salesContractCreateDraftRestoredRef.current = true;
+          messageApi.info('已恢复暂存内容');
+        }
+      }
     }, 100);
   }
 
@@ -1067,6 +1103,9 @@ const SalesContractsPage: React.FC = () => {
     }
 
     if (isFormPage) {
+      if (isCreatePage) {
+        clearSalesContractCreateDraft();
+      }
       navigate(SALES_CONTRACT_LIST_PATH);
     } else {
       setEditingId(null);
@@ -2660,7 +2699,7 @@ const SalesContractsPage: React.FC = () => {
                 type="text"
                 icon={<ArrowLeftOutlined />}
                 aria-label={t('common.back')}
-                onClick={() => navigate(SALES_CONTRACT_LIST_PATH)}
+                onClick={leaveSalesContractFormPage}
               />
               <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
                 {isCreatePage
@@ -2669,7 +2708,7 @@ const SalesContractsPage: React.FC = () => {
               </Typography.Title>
             </Space>
             <Space wrap>
-              <Button onClick={() => navigate(SALES_CONTRACT_LIST_PATH)}>{t('common.cancel')}</Button>
+              <Button onClick={leaveSalesContractFormPage}>{t('common.cancel')}</Button>
               <Button onClick={() => void handleSaveDraft()}>
                 {isCreatePage
                   ? t('app.kuaizhizao.salesContract.saveDraft', '保存为草稿')
@@ -2692,6 +2731,11 @@ const SalesContractsPage: React.FC = () => {
                 layout="vertical"
                 submitter={false}
                 scrollToFirstError
+                onValuesChange={(_, allValues) => {
+                  if (isCreatePage && salesContractCreateDraftKey) {
+                    setDocumentFormDraft(salesContractCreateDraftKey, allValues as Record<string, unknown>);
+                  }
+                }}
                 onFinish={(values) => handleFormSubmit(values, { asDraft: false })}
                 onFinishFailed={({ errorFields }) => {
                   const first = errorFields?.[0];

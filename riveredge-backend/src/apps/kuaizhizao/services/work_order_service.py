@@ -2070,6 +2070,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     raise BusinessLogicError(
                         f"工单存在缺料，无法下达。缺料物料：{shortage_materials}"
                         + (f"等{total_shortage_count}种物料" if total_shortage_count > 3 else "")
+                        + f"。当前受参数 parameters.work_order.material_shortage_block_level={block_level} 控制"
                     )
 
             # 更新状态
@@ -3247,6 +3248,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                             if total_shortage_count > 3
                             else ""
                         )
+                        + f"。当前受参数 parameters.work_order.material_shortage_block_level={block_level} 控制"
                     )
 
             # 检查工单状态

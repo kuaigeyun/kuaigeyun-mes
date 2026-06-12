@@ -336,6 +336,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       setModalVisible(true);
       window.setTimeout(() => {
         formRef.current?.setFieldsValue({
+          code: detail.code,
           supplier_id: detail.supplier_id,
           outsource_quantity: detail.outsource_quantity,
           unit_price: detail.unit_price,
@@ -688,7 +689,7 @@ export const OutsourceOrdersTable: React.FC = () => {
             pageCode="kuaizhizao-production-outsource-order"
             name="code"
             label="工序委外单编号"
-            required={true}
+            required={!isEdit}
             autoGenerateOnCreate={!isEdit}
             context={{}}
             disabled={isEdit}

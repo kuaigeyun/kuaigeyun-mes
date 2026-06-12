@@ -1695,6 +1695,9 @@
       "master-data:supply-chain:customer",
       "master-data:warehouse:warehouse",
       "master-data:material"
+    ],
+    "__all_modules__": [
+      "*"
     ]
   },
   "permissions": [
@@ -2156,6 +2159,7 @@
     "kuaizhizao:production-execution-reporting:create",
     "kuaizhizao:production-execution-reporting:delete",
     "kuaizhizao:production-execution-reporting:update",
+    "kuaizhizao:production-execution-reporting:assign",
     "kuaizhizao:production-execution-reporting:import",
     "kuaizhizao:production-execution-reporting:export",
     "kuaizhizao:production-execution-reporting:submit",

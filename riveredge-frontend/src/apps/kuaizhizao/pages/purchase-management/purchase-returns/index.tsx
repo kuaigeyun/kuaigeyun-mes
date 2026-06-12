@@ -38,6 +38,7 @@ import {
   Form as AntForm,
   InputNumber,
   Input,
+  Select,
   Spin,
   theme,
 } from 'antd';
@@ -73,6 +74,7 @@ import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/Wa
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
@@ -206,6 +208,12 @@ const PurchaseReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
+  const {
+    selectedWarehouseId,
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
   const [returnReasonOptions, setReturnReasonOptions] = useState(FALLBACK_RETURN_REASON);
   const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
   const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
@@ -304,6 +312,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null);
     setEditingDetail(null);
+    resetSelectedWarehouseId();
     setPendingFormValues({
       return_time: dayjs(),
       items: [],
@@ -320,6 +329,7 @@ const PurchaseReturnsPage: React.FC = () => {
       const detail = (await warehouseApi.purchaseReturn.get(record.id!.toString())) as PurchaseReturnDetail;
       setEditingId(record.id!);
       setEditingDetail(detail);
+      updateSelectedWarehouseId(detail.warehouse_id ?? null);
       setPendingFormValues({
         supplier_id: detail.supplier_id,
         supplier_name: detail.supplier_name,
@@ -337,6 +347,7 @@ const PurchaseReturnsPage: React.FC = () => {
           return_quantity: it.return_quantity,
           unit_price: it.unit_price,
           batch_number: it.batch_number,
+          location_code: it.location_code,
           notes: it.notes,
           purchase_receipt_item_id: (it as any).purchase_receipt_item_id,
           material_spec: (it as any).material_spec,
@@ -438,6 +449,7 @@ const PurchaseReturnsPage: React.FC = () => {
       setEditingId(null);
       setEditingDetail(null);
       setPendingFormValues(null);
+      resetSelectedWarehouseId();
       invalidatePurchaseReturnStatistics();
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
@@ -470,6 +482,7 @@ const PurchaseReturnsPage: React.FC = () => {
       return_quantity: Number(row['退货数量'] || 1),
       unit_price: Number(row['单价'] || 0),
       batch_number: row['批次号'],
+      location_code: row['库位'],
       notes: row['备注'],
     }));
     formRef.current?.setFieldsValue({
@@ -831,6 +844,7 @@ const PurchaseReturnsPage: React.FC = () => {
           setEditingId(null);
           setEditingDetail(null);
           setPendingFormValues(null);
+          resetSelectedWarehouseId();
         }}
         afterOpenChange={(open) => {
           if (open) {
@@ -841,6 +855,7 @@ const PurchaseReturnsPage: React.FC = () => {
           }
           formRef.current?.resetFields?.();
           setPendingFormValues(null);
+          resetSelectedWarehouseId();
         }}
         onFinish={onFinish}
         formRef={formRef}
@@ -878,7 +893,10 @@ const PurchaseReturnsPage: React.FC = () => {
               label="退入仓库"
               placeholder="请选择仓库"
               required
-              onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(value, wh) => {
+                formRef.current?.setFieldsValue({ warehouse_name: (wh as any)?.name ?? '' });
+                updateSelectedWarehouseId(value);
+              }}
               rules={[{ required: true, message: '请选择仓库' }]}
             />
             <ProFormText name="warehouse_name" hidden />
@@ -982,6 +1000,35 @@ const PurchaseReturnsPage: React.FC = () => {
               ),
             },
             {
+              title: '批号',
+              dataIndex: 'batch_number',
+              width: 150,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'batch_number']} noStyle>
+                  <Input size="small" placeholder="请输入批号" />
+                </AntForm.Item>
+              ),
+            },
+            {
+              title: '库位',
+              dataIndex: 'location_code',
+              width: 180,
+              render: (_: unknown, __: unknown, index: number) => (
+                <AntForm.Item name={[index, 'location_code']} noStyle>
+                  <Select
+                    options={locationOptions}
+                    placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                    style={{ width: '100%' }}
+                    size="small"
+                    showSearch
+                    optionFilterProp="label"
+                    allowClear
+                    disabled={!selectedWarehouseId}
+                  />
+                </AntForm.Item>
+              ),
+            },
+            {
               title: '退货数量',
               dataIndex: 'return_quantity',
               width: 120,
@@ -1027,8 +1074,8 @@ const PurchaseReturnsPage: React.FC = () => {
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleImport}
           title="导入采购退货明细"
-          headers={['物料编号', '退货数量', '单价', '批次号', '备注']}
-          exampleRow={['MAT001', '10', '99.5', 'B20260117001', '备注说明']}
+          headers={['物料编号', '退货数量', '单价', '批次号', '库位', '备注']}
+          exampleRow={['MAT001', '10', '99.5', 'B20260117001', 'A01-01-01', '备注说明']}
         />
       </Suspense>
 

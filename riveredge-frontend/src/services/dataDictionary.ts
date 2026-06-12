@@ -6,14 +6,15 @@
  */
 
 import { apiRequest } from './api';
+import { resolveDisplayHostResource } from './displayContract';
 
 export type DictionaryLoadOptions = {
   /** 宿主单据 resource（{app}:{module}），无 data-dictionary read/display 时通过 module_references 隐式引用 */
   hostResource?: string;
 };
 
-function dictionaryHostParams(hostResource?: string): Record<string, string> | undefined {
-  const host = hostResource?.trim();
+async function dictionaryHostParams(hostResource?: string): Promise<Record<string, string> | undefined> {
+  const host = await resolveDisplayHostResource(hostResource);
   return host ? { host_resource: host } : undefined;
 }
 
@@ -155,8 +156,9 @@ export async function getDataDictionaryByCode(
   code: string,
   options?: DictionaryLoadOptions,
 ): Promise<DataDictionary> {
+  const hostParams = await dictionaryHostParams(options?.hostResource);
   return apiRequest<DataDictionary>(`/core/data-dictionaries/code/${encodeURIComponent(code)}`, {
-    params: dictionaryHostParams(options?.hostResource),
+    params: hostParams,
   });
 }
 
@@ -223,7 +225,7 @@ export async function getDictionaryItemList(
   if (is_active !== undefined) {
     params.is_active = is_active;
   }
-  Object.assign(params, dictionaryHostParams(options?.hostResource) ?? {});
+  Object.assign(params, (await dictionaryHostParams(options?.hostResource)) ?? {});
   return apiRequest<DictionaryItem[]>(`/core/data-dictionaries/${dictionaryUuid}/items`, {
     params,
   });

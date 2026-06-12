@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
 import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
+import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
@@ -74,6 +75,7 @@ interface OtherInboundItem {
   material_name?: string;
   material_spec?: string;
   material_unit?: string;
+  location_code?: string;
   inbound_quantity?: number;
   unit_price?: number;
   total_amount?: number;
@@ -95,6 +97,7 @@ const defaultInboundItem = {
   default_batch_rule_id: undefined,
   serial_rule_id: undefined,
   default_serial_rule_id: undefined,
+  location_code: undefined,
   batch_number: undefined,
   serial_numbers: undefined,
 };
@@ -119,6 +122,12 @@ const OtherInboundPage: React.FC = () => {
   const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
+  const {
+    selectedWarehouseId,
+    locationOptions,
+    updateSelectedWarehouseId,
+    resetSelectedWarehouseId,
+  } = useWarehouseLocationOptions();
 
   useEffect(() => {
     const load = async () => {
@@ -308,6 +317,7 @@ const OtherInboundPage: React.FC = () => {
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
+    resetSelectedWarehouseId();
     setCreateModalVisible(true);
     setTimeout(() => {
       formRef.current?.resetFields();
@@ -336,6 +346,7 @@ const OtherInboundPage: React.FC = () => {
           material_code: it.material_code || '',
           material_name: it.material_name || '',
           material_unit: it.material_unit || '',
+          location_code: it.location_code || undefined,
           inbound_quantity: Number(it.inbound_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
           batch_number: it.batch_number || undefined,
@@ -343,6 +354,7 @@ const OtherInboundPage: React.FC = () => {
         })),
       });
       messageApi.success('创建成功');
+      resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -548,7 +560,10 @@ const OtherInboundPage: React.FC = () => {
       <FormModalTemplate
         title="新建其他入库单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => {
+          resetSelectedWarehouseId();
+          setCreateModalVisible(false);
+        }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
@@ -572,7 +587,10 @@ const OtherInboundPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+              onChange={(val, wh) => {
+                updateSelectedWarehouseId(val);
+                formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' });
+              }}
             />
           </Col>
         </Row>
@@ -670,6 +688,25 @@ const OtherInboundPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'inbound_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
                         <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '库位',
+                    dataIndex: 'location_code',
+                    width: 180,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
+                        <Select
+                          options={locationOptions}
+                          placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                          style={{ width: '100%' }}
+                          size="small"
+                          showSearch
+                          optionFilterProp="label"
+                          allowClear
+                          disabled={!selectedWarehouseId}
+                        />
                       </AntForm.Item>
                     ),
                   },

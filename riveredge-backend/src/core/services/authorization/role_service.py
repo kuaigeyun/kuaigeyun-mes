@@ -11,8 +11,6 @@ from loguru import logger
 from core.models.role import Role
 from core.utils.timezone_utils import now_utc
 from core.models.permission import Permission
-from core.models.data_permission_policy import DataPermissionPolicy, DataScopeType
-from core.models.field_permission_policy import FieldPermissionPolicy, FieldMaskLevel
 from core.models.user_role import UserRole
 from core.models.position import Position
 from core.schemas.position import PositionCreate
@@ -22,7 +20,6 @@ from core.services.authorization.position_service import PositionService
 from tortoise.transactions import in_transaction
 from core.services.authorization.permission_version_service import PermissionVersionService
 from core.services.authorization.permission_registry_service import PermissionRegistryService
-from core.services.authorization.permission_policy_service import PermissionPolicyService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -815,27 +812,6 @@ class RoleService:
         {"name": "普通员工", "code": "EMPLOYEE", "description": "职能通用权限，仅包含基础查询"},
     ]
 
-    PRESET_ROLE_DEFAULT_DATA_SCOPE: dict[str, str] = {
-        "SALES_MANAGER": DataScopeType.DEPARTMENT,
-        "SALES_PERSON": DataScopeType.SELF,
-        "SALES_OPERATOR": DataScopeType.SELF,
-        "PURCHASE_MANAGER": DataScopeType.DEPARTMENT,
-        "PURCHASE_PERSON": DataScopeType.SELF,
-        "PURCHASE_OPERATOR": DataScopeType.SELF,
-        "PRODUCTION_MANAGER": DataScopeType.DEPARTMENT,
-        "PRODUCTION_TEAM_LEADER": DataScopeType.DEPARTMENT,
-        "PRODUCTION_CLERK": DataScopeType.SELF,
-        "PRODUCTION_STAFF": DataScopeType.SELF,
-        "WAREHOUSE_MANAGER": DataScopeType.DEPARTMENT,
-        "WAREHOUSE_OPERATOR": DataScopeType.SELF,
-        "FINANCE_MANAGER": DataScopeType.DEPARTMENT,
-        "FINANCE_OPERATOR": DataScopeType.SELF,
-        "QUALITY_MANAGER": DataScopeType.DEPARTMENT,
-        "QUALITY_OPERATOR": DataScopeType.SELF,
-        "ADMIN_OFFICE": DataScopeType.DEPARTMENT,
-        "EMPLOYEE": DataScopeType.SELF,
-    }
-
     GUEST_ROLE_CODE = "GUEST"
 
     @staticmethod
@@ -895,58 +871,7 @@ class RoleService:
             ignore_conflicts=True,
         )
 
-        # 三层权限最佳实践：预设角色初始化时自动补齐默认数据/字段策略（仅初始化，不覆盖手工配置）。
-        resources = sorted(
-            {
-                r
-                for r in (RoleService._resource_from_permission_code(p.code) for p in selected_permissions)
-                if r
-            }
-        )
-        if not resources:
-            return
-
-        existing_data = await DataPermissionPolicy.filter(
-            tenant_id=tenant_id,
-            role_uuid=role.uuid,
-            deleted_at__isnull=True,
-        ).count()
-        if existing_data == 0:
-            scope = RoleService.PRESET_ROLE_DEFAULT_DATA_SCOPE.get(role.code, DataScopeType.SELF)
-            await DataPermissionPolicy.bulk_create(
-                [
-                    DataPermissionPolicy(
-                        tenant_id=tenant_id,
-                        role_uuid=role.uuid,
-                        resource=res,
-                        scope_type=scope,
-                        scope_payload=None,
-                    )
-                    for res in resources
-                ],
-                ignore_conflicts=True,
-            )
-
-        existing_field = await FieldPermissionPolicy.filter(
-            tenant_id=tenant_id,
-            role_uuid=role.uuid,
-            deleted_at__isnull=True,
-        ).count()
-        if existing_field == 0:
-            field_items = []
-            for res in resources:
-                for field_name in sorted(PermissionPolicyService._masked_fields_for_resource(res)):
-                    field_items.append(
-                        FieldPermissionPolicy(
-                            tenant_id=tenant_id,
-                            role_uuid=role.uuid,
-                            resource=res,
-                            field_name=field_name,
-                            mask_level=FieldMaskLevel.MASKED,
-                        )
-                    )
-            if field_items:
-                await FieldPermissionPolicy.bulk_create(field_items, ignore_conflicts=True)
+        # 默认数据/字段权限均为开放（全部/明文），仅在显式收敛时落库策略。
 
     @staticmethod
     async def _merge_role_relations(source_role_id: int, target_role_id: int) -> None:

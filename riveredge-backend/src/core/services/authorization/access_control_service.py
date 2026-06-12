@@ -213,17 +213,44 @@ class AccessControlService:
             return AccessDecision(True, "explicit_read_or_display", explicit)
 
         implicit_hosts = registry.implicit_display_by_target.get(key, set())
+        host = ""
         if host_resource:
             host = host_resource.strip().lower()
+            host_app = host.split(":", 1)[0] if ":" in host else host
             host_codes = {
                 AccessControlService.build_permission_code(host, action)
                 for action in ("read", "create", "update")
             }
-            implicit_hosts = implicit_hosts & host_codes
+            wildcard_codes = {f"{host_app}:*:{action}" for action in ("read", "create", "update")}
+            implicit_hosts = {code for code in implicit_hosts if code in host_codes or code in wildcard_codes}
 
         matched = implicit_hosts & user_perms
         if matched:
             return AccessDecision(True, "implicit_host_grant", sorted(matched))
+
+        if host:
+            host_app = host.split(":", 1)[0] if ":" in host else host
+            for action in ("read", "create", "update"):
+                wildcard_code = f"{host_app}:*:{action}"
+                exact_code = AccessControlService.build_permission_code(host, action)
+                if wildcard_code in implicit_hosts and exact_code in user_perms:
+                    return AccessDecision(True, "implicit_host_wildcard_grant", [exact_code])
+        else:
+            # 无 host_resource 时，若引用策略声明了 app 级通配（app:*:action），
+            # 则允许同 app 下任一模块的 read/create/update 权限触发 display。
+            wildcard_pairs: set[tuple[str, str]] = set()
+            for code in implicit_hosts:
+                parts = str(code).split(":")
+                if len(parts) == 3 and parts[1] == "*" and parts[2] in ("read", "create", "update"):
+                    wildcard_pairs.add((parts[0], parts[2]))
+            if wildcard_pairs:
+                for perm in user_perms:
+                    p = str(perm).split(":")
+                    if len(p) >= 3:
+                        app = p[0]
+                        action = p[-1]
+                        if (app, action) in wildcard_pairs:
+                            return AccessDecision(True, "implicit_app_wildcard_grant", [perm])
 
         required = explicit + sorted(implicit_hosts)[:5]
         return AccessDecision(False, "reference_display_denied", required)

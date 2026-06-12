@@ -232,6 +232,41 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             await self._update_order_statistics(tenant_id, item.assembly_order_id)
             return AssemblyOrderItemResponse.model_validate(item)
 
+    async def delete_assembly_order_item(
+        self,
+        tenant_id: int,
+        order_id: int,
+        item_id: int,
+        deleted_by: int,
+    ) -> bool:
+        """删除组装明细（软删除，仅草稿单且待处理明细可删）"""
+        _ = deleted_by
+        async with in_transaction():
+            item = await AssemblyOrderItem.get_or_none(
+                id=item_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not item or int(item.assembly_order_id) != int(order_id):
+                raise NotFoundError(f"组装明细不存在: {item_id}")
+
+            order = await AssemblyOrder.get_or_none(
+                id=order_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not order:
+                raise NotFoundError(f"组装单不存在: {order_id}")
+            if order.status != "draft":
+                raise ValidationError(f"组装单状态为{order.status}，不能删除明细")
+            if item.status != "pending":
+                raise ValidationError(f"组装明细状态为{item.status}，不能删除")
+
+            item.deleted_at = datetime.now()
+            await item.save(update_fields=["deleted_at"])
+            await self._update_order_statistics(tenant_id, order_id)
+            return True
+
     async def execute_assembly_order(
         self,
         tenant_id: int,

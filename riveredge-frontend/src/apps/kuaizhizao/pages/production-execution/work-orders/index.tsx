@@ -211,6 +211,114 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate'
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format'
 
+const toApiDateTimeString = (value: any): string | undefined => {
+  if (!value) return undefined
+  if (typeof value?.format === 'function') {
+    try {
+      return value.format('YYYY-MM-DD HH:mm:ss')
+    } catch {
+      // fallback to dayjs parse below
+    }
+  }
+  if (value instanceof Date) {
+    const parsed = dayjs(value)
+    return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined
+  }
+  const parsed = dayjs(value)
+  return parsed.isValid() ? parsed.format('YYYY-MM-DD HH:mm:ss') : undefined
+}
+
+const getFirstNonEmptyString = (...candidates: Array<unknown>): string | undefined => {
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string') {
+      const trimmed = candidate.trim()
+      if (trimmed) return trimmed
+    }
+  }
+  return undefined
+}
+
+const extractUploadedAttachmentMeta = (response: any): { uuid?: string; name?: string; url?: string } => {
+  if (!response) return {}
+  const payload = Array.isArray(response)
+    ? response[0]
+    : Array.isArray(response?.data)
+      ? response.data[0]
+      : response?.data || response
+  const uuid = getFirstNonEmptyString(
+    payload?.uuid,
+    payload?.uid,
+    payload?.file_uuid,
+    payload?.fileUuid,
+  )
+  const name = getFirstNonEmptyString(
+    payload?.original_name,
+    payload?.originalName,
+    payload?.name,
+    payload?.file_name,
+    payload?.filename,
+  )
+  const url = getFirstNonEmptyString(payload?.url, payload?.download_url, payload?.downloadUrl)
+  return { uuid, name, url }
+}
+
+const mapWorkOrderAttachmentsToUploadList = (attachments: any[] | null | undefined) => {
+  return (attachments || []).map((file: any, index: number) => {
+    if (typeof file === 'string') {
+      const uid = file
+      return {
+        uid,
+        name: `附件${index + 1}`,
+        status: 'done' as const,
+        url: getFileDownloadUrl(uid),
+      }
+    }
+    const uid = getFirstNonEmptyString(file?.uid, file?.uuid, file?.file_uuid, file?.fileUuid) || `attachment-${index}`
+    const name =
+      getFirstNonEmptyString(
+        file?.name,
+        file?.original_name,
+        file?.originalName,
+        file?.file_name,
+        file?.filename,
+      ) || `附件${index + 1}`
+    const url =
+      getFirstNonEmptyString(file?.url, file?.download_url, file?.downloadUrl) ||
+      (getFirstNonEmptyString(file?.uid, file?.uuid, file?.file_uuid, file?.fileUuid)
+        ? getFileDownloadUrl(getFirstNonEmptyString(file?.uid, file?.uuid, file?.file_uuid, file?.fileUuid)!)
+        : undefined)
+    return {
+      uid,
+      name,
+      status: 'done' as const,
+      url,
+    }
+  })
+}
+
+const normalizeWorkOrderAttachmentsForSave = (attachments: any[] | null | undefined) => {
+  return (attachments || [])
+    .map((file: any, index: number) => {
+      const uploaded = extractUploadedAttachmentMeta(file?.response)
+      const uid = uploaded.uuid || getFirstNonEmptyString(file?.uid, file?.uuid, file?.file_uuid, file?.fileUuid)
+      const name =
+        uploaded.name ||
+        getFirstNonEmptyString(file?.name, file?.original_name, file?.originalName, file?.file_name, file?.filename)
+      const url =
+        uploaded.url ||
+        getFirstNonEmptyString(file?.url, file?.download_url, file?.downloadUrl) ||
+        (uid ? getFileDownloadUrl(uid) : undefined)
+      if (!uid && !name && !url) return null
+      return {
+        uid: uid || `attachment-${index}`,
+        name: name || `附件${index + 1}`,
+        status: 'done',
+        url,
+      }
+    })
+    .filter(Boolean)
+}
+
 interface WorkOrder {
   id?: number
   tenant_id?: number
@@ -248,6 +356,15 @@ interface WorkOrder {
   over_report_value?: number
   manually_completed?: boolean
   remarks?: string
+  attachments?: Array<{
+    uid?: string
+    name?: string
+    url?: string
+    original_name?: string
+    originalName?: string
+    file_uuid?: string
+    fileUuid?: string
+  }>
   created_at?: string
   updated_at?: string
   /** 制造模式定义在物料档案；工单以 product_id 关联「本单制造的产品物料」，接口从该物料 source_config 带出（fabrication / assembly） */
@@ -1284,6 +1401,7 @@ const WorkOrdersPage: React.FC = () => {
 
   const [productSourceDocList, setProductSourceDocList] = useState<any[]>([])
   const [productSourceDocLoading, setProductSourceDocLoading] = useState(false)
+  const [productSourceKeyword, setProductSourceKeyword] = useState('')
   // 加载产品来源文档列表（销售订单/销售预测/需求）- 直接拉平为明细行
   useEffect(() => {
     if (!productSourceModalVisible || !productSourceModalType) {
@@ -1293,8 +1411,9 @@ const WorkOrdersPage: React.FC = () => {
     const load = async () => {
       setProductSourceDocLoading(true)
       try {
+        const keyword = productSourceKeyword.trim()
         if (productSourceModalType === 'sales_order') {
-          const res: any = await listSalesOrders({ limit: 50 })
+          const res: any = await listSalesOrders({ limit: 50, ...(keyword ? { keyword } : {}) })
           const orders = Array.isArray(res) ? res : (res?.data ?? [])
           const ordersWithItems = await Promise.all(
             orders.map((o: any) => getSalesOrder(o.id, true))
@@ -1313,7 +1432,7 @@ const WorkOrdersPage: React.FC = () => {
           })
           setProductSourceDocList(flat)
         } else if (productSourceModalType === 'sales_forecast') {
-          const res: any = await listSalesForecasts({ limit: 50 })
+          const res: any = await listSalesForecasts({ limit: 50, ...(keyword ? { keyword } : {}) })
           const forecasts = res?.data ?? []
           const flat: any[] = []
           for (const f of forecasts) {
@@ -1345,7 +1464,24 @@ const WorkOrdersPage: React.FC = () => {
               })
             })
           })
-          setProductSourceDocList(flat)
+          if (!keyword) {
+            setProductSourceDocList(flat)
+          } else {
+            const lowered = keyword.toLowerCase()
+            setProductSourceDocList(
+              flat.filter((row: any) =>
+                [
+                  row?._demand_code,
+                  row?._demand_name,
+                  row?.material_code,
+                  row?.material_name,
+                  row?.material_spec,
+                ]
+                  .filter(Boolean)
+                  .some((v) => String(v).toLowerCase().includes(lowered))
+              )
+            )
+          }
         }
       } catch (e) {
         console.error('加载文档列表失败:', e)
@@ -1355,7 +1491,7 @@ const WorkOrdersPage: React.FC = () => {
       }
     }
     load()
-  }, [productSourceModalVisible, productSourceModalType])
+  }, [productSourceModalVisible, productSourceModalType, productSourceKeyword])
 
   // Modal 相关状态（创建/编辑工单）
   const [modalVisible, setModalVisible] = useState(false)
@@ -2120,7 +2256,7 @@ const WorkOrdersPage: React.FC = () => {
           over_report_mode: (detail as any).over_report_mode ?? (detail as any).overReportMode ?? 'none',
           over_report_value: Number((detail as any).over_report_value ?? (detail as any).overReportValue ?? 0) || 0,
           remarks: detail.remarks,
-          attachments: (detail as any).attachments || [],
+          attachments: mapWorkOrderAttachmentsToUploadList((detail as any).attachments),
         })
       }, 100)
     } catch (error) {
@@ -3322,18 +3458,7 @@ const WorkOrdersPage: React.FC = () => {
       }
 
       // 处理附件
-      const formAttachments = values.attachments || [];
-      values.attachments = formAttachments.map((f: any) => {
-        if (f.response) {
-          if (Array.isArray(f.response) && f.response.length > 0) {
-            return { uid: f.response[0].uuid, name: f.response[0].original_name, status: 'done', url: getFileDownloadUrl(f.response[0].uuid) };
-          }
-          if (f.response.uuid) {
-            return { uid: f.response.uuid, name: f.response.original_name, status: 'done', url: getFileDownloadUrl(f.response.uuid) };
-          }
-        }
-        return { uid: f.uid, name: f.name, status: 'done', url: f.url };
-      });
+      values.attachments = normalizeWorkOrderAttachmentsForSave(values.attachments)
 
       // 物料来源验证（核心功能，新增）
       if (values.product_id && selectedMaterialSourceInfo) {
@@ -3604,6 +3729,28 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'remarks',
       span: 2,
       render: text => text || '-',
+    },
+    {
+      title: '附件',
+      dataIndex: 'attachments',
+      span: 2,
+      render: (_, record) => {
+        const files = mapWorkOrderAttachmentsToUploadList(record.attachments)
+        if (!files.length) return '-'
+        return (
+          <Space wrap size={[8, 4]}>
+            {files.map((file, index) =>
+              file.url ? (
+                <Typography.Link key={`${file.uid || file.name || 'attachment'}-${index}`} href={file.url} target="_blank">
+                  {file.name || `附件${index + 1}`}
+                </Typography.Link>
+              ) : (
+                <span key={`${file.uid || file.name || 'attachment'}-${index}`}>{file.name || `附件${index + 1}`}</span>
+              )
+            )}
+          </Space>
+        )
+      },
     },
   ]
 
@@ -3888,12 +4035,8 @@ const WorkOrdersPage: React.FC = () => {
         work_center_id:
           values.work_center_id || currentWorkOrderForRework.work_center_id || undefined,
         start_work_order_operation_id: values.start_work_order_operation_id || undefined,
-        planned_start_date: values.planned_start_date
-          ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
-        planned_end_date: values.planned_end_date
-          ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
+        planned_start_date: toApiDateTimeString(values.planned_start_date),
+        planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks || undefined,
       }
       await reworkOrderApi.createFromWorkOrder(currentWorkOrderForRework.id.toString(), submitData)
@@ -4006,12 +4149,8 @@ const WorkOrdersPage: React.FC = () => {
         supplier_id: values.supplier_id,
         outsource_quantity: values.outsource_quantity,
         unit_price: values.unit_price,
-        planned_start_date: values.planned_start_date
-          ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
-        planned_end_date: values.planned_end_date
-          ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
-          : undefined,
+        planned_start_date: toApiDateTimeString(values.planned_start_date),
+        planned_end_date: toApiDateTimeString(values.planned_end_date),
         remarks: values.remarks,
       }
 
@@ -6836,10 +6975,28 @@ const WorkOrdersPage: React.FC = () => {
         onCancel={() => {
           setProductSourceModalVisible(false)
           setProductSourceModalType(null)
+          setProductSourceKeyword('')
         }}
         footer={null}
         width={MODAL_CONFIG.LARGE_WIDTH}
       >
+        <Input.Search
+          allowClear
+          enterButton="搜索"
+          style={{ marginBottom: 12 }}
+          value={productSourceKeyword}
+          onChange={(e) => setProductSourceKeyword(e.target.value)}
+          onSearch={(value) => setProductSourceKeyword(value)}
+          placeholder={
+            productSourceModalType === 'sales_order'
+              ? '搜索订单号/客户/产品/型号'
+              : productSourceModalType === 'sales_forecast'
+                ? '搜索预测编号/预测名称/产品/型号'
+                : productSourceModalType === 'demand'
+                  ? '搜索需求编号/需求名称/产品/型号'
+                  : '请输入关键词搜索'
+          }
+        />
         <Table
           loading={productSourceDocLoading}
           dataSource={productSourceDocList}

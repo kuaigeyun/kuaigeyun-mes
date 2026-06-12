@@ -50,8 +50,8 @@ export interface UniUserIdSelectProps {
  * 统一的人员选择（值为用户数字 ID，供业务单据 applicant_user_id 等字段）。
  *
  * - 有 system:user:read → 走原 getUserList
- * - 仅有 system:user:display → display-search / display-resolve
- * - 无选人权限 → 只读展示 preset / 快照 label
+ * - 其他情况 → display-search / display-resolve
+ * - 前端不做 display 显式权限阻断，后端统一裁决
  */
 export const UniUserIdSelect: React.FC<UniUserIdSelectProps> = ({
   name,

@@ -74,6 +74,9 @@ const SalesInvoicesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const navigate = useNavigate();
   const [createModalVisible, setCreateModalVisible] = useState(false);
+  const [editVisible, setEditVisible] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<SalesInvoice | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
   const [pullVisible, setPullVisible] = useState(false);
   const [pullLoading, setPullLoading] = useState(false);
   const [pullSubmitting, setPullSubmitting] = useState(false);
@@ -307,6 +310,34 @@ const SalesInvoicesPage: React.FC = () => {
     });
   };
 
+  const openEditModal = (record: SalesInvoice) => {
+    setEditingRecord(record);
+    setEditVisible(true);
+  };
+
+  const handleEditSubmit = async (values: { invoice_number?: string }) => {
+    if (!editingRecord) return false;
+    setEditSubmitting(true);
+    try {
+      await apiRequest(`/apps/kuaicaiwu/sales-invoices/${editingRecord.id}`, {
+        method: 'PUT',
+        data: {
+          invoice_number: String(values.invoice_number ?? '').trim(),
+        },
+      });
+      messageApi.success('发票号码已保存');
+      setEditVisible(false);
+      setEditingRecord(null);
+      actionRef.current?.reload();
+      return true;
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || '保存失败');
+      return false;
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
   const columns: ProColumns<SalesInvoice>[] = [
     {
       title: '发票号码',
@@ -314,14 +345,11 @@ const SalesInvoicesPage: React.FC = () => {
       width: 160,
       fixed: 'left',
       render: (_, r) => {
-        const shown = r.invoice_number?.trim() || '—';
-        const canLink = !!r.invoice_number?.trim();
-        return canLink ? (
+        const shown = r.invoice_number?.trim() || displaySalesInvoiceListCode(r);
+        return (
           <Typography.Text copyable={{ text: shown }} ellipsis={{ tooltip: shown }}>
             <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/sales-invoices/${r.id}`)}>{shown}</a>
           </Typography.Text>
-        ) : (
-          <Typography.Text type="secondary">—</Typography.Text>
         );
       },
     },
@@ -440,6 +468,11 @@ const SalesInvoicesPage: React.FC = () => {
       fixed: 'right',
       width: 200,
       render: (_, record) => [
+            !['已审核', '已作废', '已红冲'].includes(String(record.status || '').trim()) ? (
+              <Button {...rowActionKind('edit')} key="edit" onClick={() => openEditModal(record)}>
+                填写号码
+              </Button>
+            ) : null,
             <Button {...rowActionKind('read')}
               key="det"
               type="link"
@@ -666,6 +699,28 @@ const SalesInvoicesPage: React.FC = () => {
           fieldProps={{ precision: 2, style: { width: '100%' } }}
         />
         <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 3 }} />
+      </ModalForm>
+
+      <ModalForm
+        title={`填写发票号码${editingRecord?.invoice_code ? `（${displaySalesInvoiceListCode(editingRecord)}）` : ''}`}
+        open={editVisible}
+        onOpenChange={(open) => {
+          if (editSubmitting) return;
+          setEditVisible(open);
+          if (!open) setEditingRecord(null);
+        }}
+        onFinish={handleEditSubmit}
+        width={480}
+        modalProps={{ destroyOnHidden: true }}
+        submitter={{ submitButtonProps: { loading: editSubmitting } }}
+        initialValues={{ invoice_number: editingRecord?.invoice_number || '' }}
+      >
+        <ProFormText
+          name="invoice_number"
+          label="发票号码"
+          rules={[{ required: true, message: '请输入发票号码' }]}
+          placeholder="请输入票面发票号码"
+        />
       </ModalForm>
 
       <ModalForm

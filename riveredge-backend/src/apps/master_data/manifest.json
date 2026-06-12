@@ -412,6 +412,11 @@
       "data_scope_key": null
     }
   },
+  "module_references": {
+    "__all_modules__": [
+      "*"
+    ]
+  },
   "permissions": [
     "master-data:factory:plant:read",
     "master-data:factory:plant:create",

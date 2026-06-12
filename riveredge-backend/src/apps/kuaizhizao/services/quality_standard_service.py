@@ -24,7 +24,6 @@ from apps.kuaizhizao.schemas.quality import (
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from core.services.business.code_rule_service import CodeRuleService
 
 
 class QualityStandardService(AppBaseService[QualityStandard]):
@@ -57,14 +56,11 @@ class QualityStandardService(AppBaseService[QualityStandard]):
         async with in_transaction():
             # 如果没有提供标准编码，自动生成
             if not standard_data.standard_code:
-                code_rule_service = CodeRuleService()
-                standard_code = await code_rule_service.generate_code(
+                standard_code = await self.generate_code(
                     tenant_id=tenant_id,
-                    code_rule_code="quality_standard",
-                    context={
-                        "standard_type": standard_data.standard_type,
-                        "material_code": standard_data.material_code or "",
-                    }
+                    code_type="QUALITY_STANDARD_CODE",
+                    standard_type=standard_data.standard_type,
+                    material_code=standard_data.material_code or "",
                 )
             else:
                 standard_code = standard_data.standard_code

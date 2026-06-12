@@ -27,6 +27,9 @@ export const assemblyOrderApi = {
   updateItem: async (orderId: string, itemId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/assembly-orders/${orderId}/items/${itemId}`, { method: 'PUT', data });
   },
+  deleteItem: async (orderId: string, itemId: string) => {
+    return apiRequest(`/apps/kuaizhizao/assembly-orders/${orderId}/items/${itemId}`, { method: 'DELETE' });
+  },
   execute: async (orderId: string) => {
     return apiRequest(`/apps/kuaizhizao/assembly-orders/${orderId}/execute`, { method: 'POST' });
   },

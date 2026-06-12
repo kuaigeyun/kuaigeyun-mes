@@ -14,6 +14,7 @@ interface InventoryItem {
   material_id: number;
   material_code: string;
   material_name: string;
+  material_unit?: string | null;
   quantity: number;
   status: string;
   warehouse_name: string | null;
@@ -61,7 +62,15 @@ const InventoryPage: React.FC = () => {
   const exportRows = (rows: InventoryItem[]) => {
     const headers = ['物料编号', '物料名称', '库存数量', '状态', '仓库'];
     const lines = rows.map((r) =>
-      [r.material_code, r.material_name, r.quantity, r.status, r.warehouse_name || '-'].map(escapeCsv).join(',')
+      [
+        r.material_code,
+        r.material_name,
+        `${r.quantity}${r.material_unit ? ` ${r.material_unit}` : ''}`,
+        r.status,
+        r.warehouse_name || '-',
+      ]
+        .map(escapeCsv)
+        .join(',')
     );
     const csv = [headers.join(','), ...lines].join('\n');
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
@@ -96,7 +105,16 @@ const InventoryPage: React.FC = () => {
       dataIndex: 'quantity',
       width: 120,
       valueType: 'digit',
-      render: (_, record) => <span style={{ color: Number(record.quantity || 0) <= 0 ? '#ff4d4f' : undefined }}>{record.quantity}</span>,
+      render: (_, record) => {
+        const qty = Number(record.quantity || 0);
+        const unit = String(record.material_unit || '').trim();
+        return (
+          <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
+            {qty}
+            {unit ? ` ${unit}` : ''}
+          </span>
+        );
+      },
     },
     {
       title: '状态',

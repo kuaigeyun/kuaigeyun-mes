@@ -764,8 +764,13 @@ const InboundPage: React.FC = () => {
         setDetailDrawerVisible(true);
         setInboundTrackingRefreshKey((k) => k + 1);
       }
-    } catch {
-      messageApi.error('获取入库单详情失败');
+    } catch (error: any) {
+      const msg =
+        error?.response?.data?.detail ??
+        error?.response?.data?.message ??
+        error?.message ??
+        '获取入库单详情失败';
+      messageApi.error(typeof msg === 'string' ? msg : '获取入库单详情失败');
     }
   };
 

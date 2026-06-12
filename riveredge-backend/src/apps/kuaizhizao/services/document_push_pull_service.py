@@ -633,6 +633,7 @@ class DocumentPushPullService:
         from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
         from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionCreate, PurchaseRequisitionItemCreate
         from apps.kuaizhizao.utils.material_source_helper import SOURCE_TYPE_BUY
+        from apps.master_data.models.material import Material
 
         computation = await DemandComputation.get_or_none(tenant_id=tenant_id, id=computation_id)
         if not computation:
@@ -655,6 +656,14 @@ class DocumentPushPullService:
         if not buy_items:
             raise BusinessLogicError("需求计算中无采购件，无法下推采购申请")
 
+        material_ids = sorted({int(i.material_id) for i in buy_items if i.material_id is not None})
+        material_rows = (
+            await Material.filter(tenant_id=tenant_id, id__in=material_ids).all()
+            if material_ids
+            else []
+        )
+        material_by_id = {m.id: m for m in material_rows}
+
         req_items = []
         for item in buy_items:
             supplier_id = None
@@ -662,12 +671,31 @@ class DocumentPushPullService:
                 src_config = item.material_source_config.get("source_config", {})
                 supplier_id = src_config.get("default_supplier_id")
 
+            material = material_by_id.get(int(item.material_id)) if item.material_id is not None else None
+            material_code = str(item.material_code or "").strip()
+            material_name = str(item.material_name or "").strip()
+            material_spec = str(item.material_spec or "").strip()
+            material_unit = str(item.material_unit or "").strip()
+            if material:
+                if not material_code:
+                    material_code = str(
+                        getattr(material, "main_code", None)
+                        or getattr(material, "code", None)
+                        or ""
+                    ).strip()
+                if not material_name:
+                    material_name = str(getattr(material, "name", "") or "").strip()
+                if not material_spec:
+                    material_spec = str(getattr(material, "specification", "") or "").strip()
+                if not material_unit:
+                    material_unit = str(getattr(material, "base_unit", "") or "").strip()
+
             req_items.append(PurchaseRequisitionItemCreate(
                 material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
-                material_spec=item.material_spec,
-                unit=item.material_unit or "件",
+                material_code=material_code or f"M{item.material_id}",
+                material_name=material_name or material_code or f"物料{item.material_id}",
+                material_spec=material_spec or None,
+                unit=material_unit or "件",
                 quantity=item.suggested_purchase_order_quantity,
                 suggested_unit_price=0,
                 required_date=item.procurement_completion_date,

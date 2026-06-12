@@ -309,7 +309,6 @@ async def _assert_purchase_receipt_visible(
     current_user: User,
     receipt_id: int,
 ) -> None:
-    from apps.kuaizhizao.models.purchase_order import PurchaseOrder
     from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 
     receipt = await PurchaseReceipt.get_or_none(
@@ -319,21 +318,13 @@ async def _assert_purchase_receipt_visible(
     )
     if not receipt:
         return
-    purchase_order_id = getattr(receipt, "purchase_order_id", None)
-    if not purchase_order_id:
-        return
-    purchase_order = await PurchaseOrder.get_or_none(
-        tenant_id=tenant_id,
-        id=purchase_order_id,
-        deleted_at__isnull=True,
-    )
-    if not purchase_order:
-        return
+    # 引用单据（采购订单）仅用于追溯，不应阻塞采购入库单本身的查看/确认。
+    # 否则“采购订单下推入库”后会出现可见入库单无法进入详情/确认的阻塞问题。
     await DataScopeService.assert_row_visible(
-        purchase_order,
+        receipt,
         tenant_id=tenant_id,
         user=current_user,
-        resource="kuaizhizao:purchase-order",
+        resource="kuaizhizao:purchase-receipt",
     )
 
 

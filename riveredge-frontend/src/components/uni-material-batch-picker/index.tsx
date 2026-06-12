@@ -35,6 +35,20 @@ const FILTER_SEARCH_WIDTH = 236;
 const FILTER_GROUP_WIDTH = 200;
 const FILTER_SOURCE_WIDTH = 148;
 
+function resolveMaterialImageFileUuid(raw: unknown): string | null {
+  if (typeof raw === 'string') {
+    const val = raw.trim();
+    return /^[0-9a-fA-F-]{32,36}$/.test(val) ? val : null;
+  }
+  if (!raw || typeof raw !== 'object') return null;
+  const obj = raw as { uuid?: unknown; uid?: unknown };
+  const uuid = typeof obj.uuid === 'string' ? obj.uuid.trim() : '';
+  if (/^[0-9a-fA-F-]{32,36}$/.test(uuid)) return uuid;
+  const uid = typeof obj.uid === 'string' ? obj.uid.trim() : '';
+  if (/^[0-9a-fA-F-]{32,36}$/.test(uid)) return uid;
+  return null;
+}
+
 export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
   open,
   onCancel,
@@ -214,12 +228,7 @@ export const UniMaterialBatchPicker: React.FC<UniMaterialBatchPickerProps> = ({
           const images = (record as { images?: Array<{ uid?: string; uuid?: string } | string> }).images || [];
           if (images.length > 0) {
             const firstImage = images[0];
-            const fileUuid =
-              typeof firstImage === 'object' && firstImage != null
-                ? (firstImage.uid ?? firstImage.uuid ?? null)
-                : typeof firstImage === 'string'
-                  ? firstImage
-                  : null;
+            const fileUuid = resolveMaterialImageFileUuid(firstImage);
             if (fileUuid) {
               return (
                 <SecureImage fileUuid={fileUuid} width={40} height={40} lazyLoad thumbSize={64} />

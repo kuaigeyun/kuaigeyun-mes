@@ -293,7 +293,7 @@ const ReportingPage: React.FC = () => {
 
   const currentUser = useGlobalStore((s) => s.currentUser);
   const canProxyReporting = useMemo(
-    () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:reporting', 'proxy'),
+    () => hasModulePermission(currentUser ?? undefined, 'kuaizhizao:production-execution-reporting', 'assign'),
     [currentUser],
   );
   const createModalProxyWorkerRef = useRef<Pick<User, 'id' | 'full_name' | 'username'> | null>(null);
@@ -628,7 +628,12 @@ const ReportingPage: React.FC = () => {
       }
     } catch (error: any) {
       if (error.message !== '修正原因不能为空') {
-        messageApi.error(error.message || '修正报工数据失败');
+        const detail = error?.response?.data?.detail;
+        const msg =
+          (typeof detail === 'string' ? detail : detail?.message) ||
+          error?.message ||
+          '修正报工数据失败';
+        messageApi.error(msg);
       }
       throw error;
     }

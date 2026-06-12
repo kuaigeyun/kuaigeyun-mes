@@ -16,6 +16,8 @@ from core.config.core_reference_resources import (
 from core.services.application.application_service import ApplicationService
 
 HOST_DISPLAY_ACTIONS = ("read", "create", "update")
+HOST_WILDCARD_KEYS = {"*", "__all__", "__all_modules__"}
+TARGET_WILDCARD_KEYS = {"*", "__all_targets__", "__all_reference_resources__"}
 
 
 @dataclass(frozen=True)
@@ -155,8 +157,9 @@ class ReferenceRegistryService:
             if not hm or not isinstance(targets, list):
                 continue
             host_codes: set[str] = set()
+            is_wildcard = hm in HOST_WILDCARD_KEYS
             for action in HOST_DISPLAY_ACTIONS:
-                host_codes.add(f"{app_code}:{hm}:{action}")
+                host_codes.add(f"{app_code}:{'*' if is_wildcard else hm}:{action}")
             for raw_target in targets:
                 target_key = str(raw_target).strip().lower()
                 if not target_key:
@@ -165,11 +168,23 @@ class ReferenceRegistryService:
 
     @staticmethod
     def _finalize_implicit_map(registry: ReferenceRegistry) -> None:
+        wildcard_host_codes: set[str] = set()
+        for wildcard_key in TARGET_WILDCARD_KEYS:
+            wildcard_host_codes.update(registry.host_permissions_by_target.get(wildcard_key, set()))
+
         for target_key, host_codes in registry.host_permissions_by_target.items():
+            if target_key in TARGET_WILDCARD_KEYS:
+                continue
             defn = registry.resources.get(target_key)
             if defn is None or defn.sensitive:
                 continue
             registry.implicit_display_by_target[target_key] = set(host_codes)
+
+        if wildcard_host_codes:
+            for resource_key, defn in registry.resources.items():
+                if defn.sensitive:
+                    continue
+                registry.implicit_display_by_target.setdefault(resource_key, set()).update(wildcard_host_codes)
 
     @classmethod
     def collect_display_permission_codes(cls, *, enabled_apps: set[str] | None = None) -> list[tuple[str, str | None]]:
@@ -188,6 +203,8 @@ class ReferenceRegistryService:
         registry = cls.build(enabled_apps=enabled_apps)
         errors: list[str] = []
         for target_key in registry.host_permissions_by_target:
+            if target_key in TARGET_WILDCARD_KEYS:
+                continue
             defn = registry.resources.get(target_key)
             if defn is None:
                 errors.append(f"module_references 目标未注册为 reference_resources: {target_key}")

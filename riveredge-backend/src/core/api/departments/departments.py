@@ -20,12 +20,12 @@ from core.schemas.department import (
 )
 from core.services.organization.department_service import DepartmentService
 from core.api.deps.deps import get_current_tenant
+from core.api.deps.reference_display_access import require_reference_display_access
 from core.api.deps.system_module_access import (
     require_department_create,
     require_department_delete,
     require_department_import,
     require_department_read,
-    require_department_read_or_display,
     require_department_update,
 )
 from infra.api.deps.deps import get_current_user as soil_get_current_user
@@ -74,6 +74,10 @@ def _serialize_department_dataset_binding(row: Optional[DepartmentDatasetBinding
 
 
 router = APIRouter(prefix="/departments", tags=["Core · Departments"])
+require_department_reference_display_access = require_reference_display_access(
+    "system:department",
+    "缺少部门读或引用展示权限",
+)
 
 
 @router.post("", response_model=DepartmentResponse, status_code=status.HTTP_201_CREATED)
@@ -151,7 +155,7 @@ async def get_department_tree(
     is_active: Optional[bool] = Query(None, description="是否启用筛选"),
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-    _auth: object = Depends(require_department_read_or_display),
+    _auth: object = Depends(require_department_reference_display_access),
 ):
     """
     获取部门树形结构

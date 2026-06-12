@@ -26,6 +26,7 @@ from core.services.user.user_display_service import UserDisplayService
 from core.services.user.user_service import UserService
 from core.api.deps.deps import get_current_user, get_current_tenant
 from core.api.deps.access import require_access
+from core.api.deps.reference_display_access import require_reference_display_access
 from core.api.deps.service_helpers import get_user_service_with_fallback
 from core.services.interfaces.service_interface import UserServiceInterface
 from infra.schemas.auth import WebAuthnRegisterFinalizeRequest
@@ -176,10 +177,9 @@ async def batch_delete_users(
     )
 
 
-_require_user_picker_access = require_access(
+_require_user_picker_access = require_reference_display_access(
     "system:user",
-    "display",
-    required_permissions=["system:user:read", "system:user:display"],
+    "缺少用户读或引用展示权限",
 )
 
 

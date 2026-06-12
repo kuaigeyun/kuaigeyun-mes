@@ -8,13 +8,14 @@ from datetime import datetime, time
 from typing import List, Optional
 from decimal import Decimal
 import uuid
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body, Request
 
 from infra.infrastructure.http import get_http_client
 from fastapi.responses import JSONResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import AuthContext, ensure_permission_codes, get_auth_context
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
 from infra.services.business_config_service import BusinessConfigService
@@ -235,6 +236,8 @@ async def get_reporting_overview_statistics(
 @router.post("/reporting", response_model=ReportingRecordResponse, summary="Create reporting record")
 async def create_reporting_record(
     reporting: ReportingRecordCreate,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingRecordResponse:
@@ -244,6 +247,13 @@ async def create_reporting_record(
     - **reporting**: 报工数据
     """
     try:
+        if int(reporting.worker_id) != int(current_user.id):
+            await ensure_permission_codes(
+                auth,
+                tenant_id,
+                request,
+                ["kuaizhizao:production-execution-reporting:assign"],
+            )
         return await reporting_service.create_reporting_record(
             tenant_id=tenant_id,
             reporting_data=reporting,
@@ -261,6 +271,8 @@ async def create_reporting_record(
 @router.post("/reporting/quick", response_model=ReportingRecordResponse, summary="Quick reporting (scan / terminal)")
 async def create_quick_reporting_record(
     reporting: ReportingRecordCreate,
+    request: Request,
+    auth: AuthContext = Depends(get_auth_context),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ReportingRecordResponse:
@@ -268,6 +280,13 @@ async def create_quick_reporting_record(
     快捷报工入口（用于扫码报工、工位机报工）
     """
     try:
+        if int(reporting.worker_id) != int(current_user.id):
+            await ensure_permission_codes(
+                auth,
+                tenant_id,
+                request,
+                ["kuaizhizao:production-execution-reporting:assign"],
+            )
         return await reporting_service.create_reporting_record(
             tenant_id=tenant_id,
             reporting_data=reporting,

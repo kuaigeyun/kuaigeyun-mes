@@ -56,7 +56,6 @@ CORE_MODULE_REFERENCES: dict[str, list[str]] = {
     ],
 }
 
-
 def normalize_reference_resource_spec(raw: Any, *, app_code: str, local_key: str) -> ReferenceResourceSpec | None:
     if not isinstance(raw, dict):
         return None

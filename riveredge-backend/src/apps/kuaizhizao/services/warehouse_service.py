@@ -8,7 +8,7 @@ Date: 2025-12-30
 """
 
 from typing import List, Optional, Dict, Any, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from decimal import Decimal
 import json
 import time
@@ -136,6 +136,60 @@ def _parse_serial_numbers(serial_numbers: Any) -> List[str]:
             # 兼容逗号分隔输入
             return [seg.strip() for seg in text.split(",") if seg.strip()]
     return []
+
+
+def _normalize_optional_datetime(value: Any) -> Optional[datetime]:
+    """兼容 DateField/字符串/datetime，统一为可序列化 datetime。"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return datetime.fromisoformat(text.replace("Z", "+00:00"))
+        except Exception:
+            return None
+    return None
+
+
+def _build_purchase_receipt_item_response(item: Any) -> PurchaseReceiptItemResponse:
+    """统一采购入库明细响应，兼容历史 serial_numbers/date 存储格式。"""
+    payload = {
+        "id": int(getattr(item, "id")),
+        "tenant_id": int(getattr(item, "tenant_id")),
+        "receipt_id": int(getattr(item, "receipt_id")),
+        "purchase_order_item_id": int(getattr(item, "purchase_order_item_id", 0) or 0),
+        "material_id": int(getattr(item, "material_id")),
+        "material_code": str(getattr(item, "material_code", "") or ""),
+        "material_name": str(getattr(item, "material_name", "") or ""),
+        "material_spec": getattr(item, "material_spec", None),
+        "material_unit": str(getattr(item, "material_unit", "") or ""),
+        "receipt_quantity": float(getattr(item, "receipt_quantity", 0) or 0),
+        "unit_price": float(getattr(item, "unit_price", 0) or 0),
+        "total_amount": float(getattr(item, "total_amount", 0) or 0),
+        "qualified_quantity": float(getattr(item, "qualified_quantity", 0) or 0),
+        "unqualified_quantity": float(getattr(item, "unqualified_quantity", 0) or 0),
+        "quality_status": str(getattr(item, "quality_status", "合格") or "合格"),
+        "warehouse_id": getattr(item, "warehouse_id", None),
+        "warehouse_name": getattr(item, "warehouse_name", None),
+        "location_id": getattr(item, "location_id", None),
+        "location_code": getattr(item, "location_code", None),
+        "batch_number": getattr(item, "batch_number", None),
+        "serial_numbers": _parse_serial_numbers(getattr(item, "serial_numbers", None)) or None,
+        "expiry_date": _normalize_optional_datetime(getattr(item, "expiry_date", None)),
+        "manufacturing_date": _normalize_optional_datetime(getattr(item, "manufacturing_date", None)),
+        "status": str(getattr(item, "status", "待入库") or "待入库"),
+        "receipt_time": _normalize_optional_datetime(getattr(item, "receipt_time", None)),
+        "notes": getattr(item, "notes", None),
+        "created_at": getattr(item, "created_at"),
+        "updated_at": getattr(item, "updated_at"),
+    }
+    return PurchaseReceiptItemResponse.model_validate(payload)
 
 
 def _resolve_unit_conversion_factor(material_units: Any, unit_name: Optional[str]) -> Decimal:
@@ -327,6 +381,65 @@ def _validate_location_if_required(
         return
     if location_id is None and not (location_code and str(location_code).strip()):
         raise ValidationError(f"{scene}失败：物料 {material_label} 启用库位管理后必须提供库位")
+
+
+async def _hydrate_item_material_snapshot(tenant_id: int, items: List[Any]) -> None:
+    """
+    按 material_id 回填明细上的物料快照字段（编码/名称/单位）。
+
+    - 仅回填空值，不覆盖已有值；
+    - 优先从主数据读取（含已停用/已删除物料，保证历史单据可展示）；
+    - 主数据缺失时给出最小可读占位，避免详情出现整列空白。
+    """
+    if not items:
+        return
+
+    candidate_ids = {
+        int(getattr(item, "material_id"))
+        for item in items
+        if getattr(item, "material_id", None)
+        and (
+            not str(getattr(item, "material_code", "") or "").strip()
+            or not str(getattr(item, "material_name", "") or "").strip()
+            or not str(getattr(item, "material_unit", "") or "").strip()
+        )
+    }
+    if not candidate_ids:
+        return
+
+    from apps.master_data.models.material import Material
+
+    materials = await Material.filter(
+        tenant_id=tenant_id,
+        id__in=list(candidate_ids),
+    ).all()
+    material_map = {int(m.id): m for m in materials}
+
+    for item in items:
+        material_id = getattr(item, "material_id", None)
+        if not material_id:
+            continue
+        material = material_map.get(int(material_id))
+
+        changed = False
+        if not str(getattr(item, "material_code", "") or "").strip():
+            fallback_code = (
+                getattr(material, "main_code", None)
+                or getattr(material, "code", None)
+                or f"MAT-{material_id}"
+            )
+            item.material_code = str(fallback_code or "")
+            changed = True
+        if not str(getattr(item, "material_name", "") or "").strip():
+            fallback_name = getattr(material, "name", None) or f"物料#{material_id}"
+            item.material_name = str(fallback_name or "")
+            changed = True
+        if not str(getattr(item, "material_unit", "") or "").strip():
+            item.material_unit = str(getattr(material, "base_unit", None) or "pcs")
+            changed = True
+
+        if changed:
+            await item.save(update_fields=["material_code", "material_name", "material_unit"])
 
 
 async def _validate_purchase_line_warehouse_location_match(
@@ -2628,10 +2741,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         if not sales_order:
             raise NotFoundError(f"销售订单不存在: {sales_order_id}")
         
-        # 检查订单状态（只有已审核或已确认的订单才能上拉生成出库单，兼容中英文状态）
-        audited_ok = ("已审核", "已确认", "AUDITED", "CONFIRMED")
-        if sales_order.status not in audited_ok:
-            raise BusinessLogicError("只有已审核或已确认的销售订单才能上拉生成销售出库单")
+        # 检查订单状态：
+        # 销售订单允许在「已审核/已确认/进行中」持续分批下推销售出库（与前端门禁一致）。
+        pushable_statuses = ("已审核", "已确认", "进行中", "AUDITED", "CONFIRMED", "IN_PROGRESS")
+        if sales_order.status not in pushable_statuses:
+            raise BusinessLogicError("只有已审核、已确认或进行中状态的销售订单才能上拉生成销售出库单")
         
         # 获取订单明细
         order_items = await SalesOrderItem.filter(
@@ -2641,6 +2755,34 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         
         if not order_items:
             raise BusinessLogicError("销售订单没有明细，无法生成销售出库单")
+
+        # 统计该销售订单已生成但尚未完结的销售出库占用量，避免重复下推导致超量。
+        existing_deliveries = await SalesDelivery.filter(
+            tenant_id=tenant_id,
+            sales_order_id=sales_order_id,
+            deleted_at__isnull=True,
+        ).exclude(status__in=["已取消", "cancelled", "CANCELLED"]).values("id", "delivery_code", "status")
+        closed_statuses = {"已出库", "已完成", "completed", "COMPLETED", "done", "DONE"}
+        occupying_deliveries = [
+            d for d in existing_deliveries if str(d.get("status") or "").strip() not in closed_statuses
+        ]
+        occupying_delivery_ids = [int(d["id"]) for d in occupying_deliveries if d.get("id") is not None]
+        occupied_qty_by_material: Dict[int, Decimal] = {}
+        if occupying_delivery_ids:
+            occupying_items = await SalesDeliveryItem.filter(
+                tenant_id=tenant_id,
+                delivery_id__in=occupying_delivery_ids,
+            ).values("material_id", "delivery_quantity")
+            for row in occupying_items:
+                mid = int(row.get("material_id") or 0)
+                if mid <= 0:
+                    continue
+                qty = Decimal(str(row.get("delivery_quantity") or 0))
+                occupied_qty_by_material[mid] = occupied_qty_by_material.get(mid, Decimal("0")) + qty
+
+        existing_delivery_hint = "、".join(
+            [str(d.get("delivery_code") or f"#{d.get('id')}") for d in occupying_deliveries[:3]]
+        )
         
         # 如果没有指定仓库，需要从订单或其他地方获取默认仓库
         if not warehouse_id:
@@ -2661,19 +2803,28 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         total_amount = Decimal("0")
         
         for item in order_items:
+            base_remaining = Decimal(str(item.remaining_quantity or item.order_quantity or 0))
+            occupied_qty = occupied_qty_by_material.get(int(item.material_id or 0), Decimal("0"))
+            max_push_qty = base_remaining - occupied_qty
+            if max_push_qty <= 0:
+                continue
+
             # 计算出库数量
             if delivery_quantities and item.id in delivery_quantities:
                 delivery_qty = Decimal(str(delivery_quantities[item.id]))
             else:
-                # 使用剩余数量
-                delivery_qty = item.remaining_quantity or item.order_quantity
+                # 默认只下推当前可用数量（剩余数量 - 已被待出库单占用）
+                delivery_qty = max_push_qty
             
             if delivery_qty <= 0:
                 continue  # 跳过数量为0或负数的情况
             
             # 检查是否超出剩余数量
-            if delivery_qty > (item.remaining_quantity or item.order_quantity):
-                raise BusinessLogicError(f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过剩余数量 {item.remaining_quantity}")
+            if delivery_qty > max_push_qty:
+                occupied_tip = f"（已被待出库单占用 {occupied_qty}）" if occupied_qty > 0 else ""
+                raise BusinessLogicError(
+                    f"物料 {item.material_code} 的出库数量 {delivery_qty} 超过可下推数量 {max_push_qty}{occupied_tip}"
+                )
             
             # 计算金额
             item_total_amount = delivery_qty * item.unit_price
@@ -2697,6 +2848,10 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
             total_amount += item_total_amount
         
         if not delivery_items:
+            if existing_delivery_hint:
+                raise BusinessLogicError(
+                    f"该销售订单已存在销售出库单（{existing_delivery_hint}），当前无可下推数量，请先处理已有出库单"
+                )
             raise BusinessLogicError("没有可出库的物料")
         
         # 创建销售出库单
@@ -3791,7 +3946,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
         resp = PurchaseReceiptWithItemsResponse.model_validate(receipt)
         milestones = await get_document_milestones(receipt.tenant_id, "purchase_receipt", receipt.id)
         resp.lifecycle = get_purchase_receipt_lifecycle(receipt, milestones=milestones)
-        resp.items = [PurchaseReceiptItemResponse.model_validate(i) for i in items]
+        resp.items = [_build_purchase_receipt_item_response(i) for i in items]
         if _st_rows and _st_rows[0].get("status") is not None:
             resp = resp.model_copy(update={"status": _st_rows[0]["status"]})
         # #region agent log
@@ -5666,7 +5821,9 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
                     )
             except Exception as inv_e:
                 logger.error("采购退货确认-更新库存失败: %s", inv_e)
-                raise
+                if isinstance(inv_e, BusinessLogicError):
+                    raise
+                raise BusinessLogicError(str(inv_e) or "采购退货确认失败：库存扣减异常")
 
             try:
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
@@ -5978,36 +6135,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
 
         items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
         if items:
-            # 历史数据修复：若明细未落 material_code/material_name/material_unit，则按 material_id 回填展示值
-            missing_material_ids = {
-                int(getattr(item, "material_id"))
-                for item in items
-                if getattr(item, "material_id", None)
-                and (
-                    not str(getattr(item, "material_code", "") or "").strip()
-                    or not str(getattr(item, "material_name", "") or "").strip()
-                    or not str(getattr(item, "material_unit", "") or "").strip()
-                )
-            }
-            if missing_material_ids:
-                from apps.master_data.models.material import Material
-
-                materials = await Material.filter(
-                    tenant_id=tenant_id,
-                    id__in=list(missing_material_ids),
-                    deleted_at__isnull=True,
-                ).all()
-                material_map = {m.id: m for m in materials}
-                for item in items:
-                    material = material_map.get(getattr(item, "material_id", None))
-                    if not material:
-                        continue
-                    if not str(getattr(item, "material_code", "") or "").strip():
-                        item.material_code = (getattr(material, "main_code", None) or getattr(material, "code", None) or "")
-                    if not str(getattr(item, "material_name", "") or "").strip():
-                        item.material_name = getattr(material, "name", "") or ""
-                    if not str(getattr(item, "material_unit", "") or "").strip():
-                        item.material_unit = getattr(material, "base_unit", "") or ""
+            await _hydrate_item_material_snapshot(tenant_id, items)
 
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle, get_document_milestones
 
@@ -6411,6 +6539,8 @@ class OtherOutboundService(AppBaseService[OtherOutbound]):
             raise NotFoundError(f"其他出库单不存在: {outbound_id}")
 
         items = await OtherOutboundItem.filter(tenant_id=tenant_id, outbound_id=outbound_id).all()
+        if items:
+            await _hydrate_item_material_snapshot(tenant_id, items)
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_outbound_lifecycle
 
         response = OtherOutboundWithItemsResponse.model_validate(outbound)
