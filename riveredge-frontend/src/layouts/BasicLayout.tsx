@@ -4927,7 +4927,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 <HeaderQuickEntryPopover isLightModeLightBg={isLightModeLightBg} />
               </span>
             )}
-            <div ref={breadcrumbRef} style={{ flex: 1, minWidth: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+            <div ref={breadcrumbRef} style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
               <Breadcrumb
                 style={{
                   display: breadcrumbVisible ? 'flex' : 'none',

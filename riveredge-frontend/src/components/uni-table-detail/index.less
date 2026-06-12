@@ -50,13 +50,16 @@
       background-color: var(--ant-color-bg-container, #ffffff) !important;
     }
 
+    /* antd v6 固定右列类名为 fix-end；同时保留旧版 fix-right 以兼容 */
     .ant-table-thead > tr > th.uni-detail-fixed-op-header,
+    .ant-table-thead > tr > th.ant-table-cell-fix-end,
     .ant-table-thead > tr > th.ant-table-cell-fix-right,
     .ant-table-thead > tr > th.ant-table-cell-fix-right-first {
       background: var(--ant-color-bg-container, #ffffff) !important;
       z-index: calc(var(--ant-z-index-table-fixed, 2) + 1);
     }
 
+    .ant-table-tbody > tr > td.ant-table-cell-fix-end,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right,
     .ant-table-tbody > tr > td.ant-table-cell-fix-right-first {
       background: var(--ant-color-bg-container, #ffffff) !important;
@@ -82,8 +85,11 @@
 
     .uni-table-detail-scroll {
       width: 100%;
-      overflow-x: auto;
-      overflow-y: hidden;
+      /*
+       * 不在此层滚动：横向滚动统一交给 antd 内层 .ant-table-content（scroll.x）。
+       * 否则外层与内层双重滚动容器会让固定右列吸附错位、右缘透出底层内容。
+       */
+      overflow: hidden;
       scrollbar-gutter: auto;
     }
 
@@ -128,6 +134,18 @@
       font-weight: var(--ant-font-weight-strong, 500);
     }
 
+    /*
+     * rc-table 在 scroll.x 时会向 tbody 顶部插入一行隐藏测量行（height:0）。
+     * 上面的 td padding/border !important 会把它撑成可见灰条，
+     * 表现为「表头与首行之间的间隙」。这里把测量行彻底归零。
+     */
+    .ant-table-tbody > tr.ant-table-measure-row > td {
+      padding: 0 !important;
+      border: none !important;
+      height: 0 !important;
+      line-height: 0 !important;
+    }
+
     .ant-table-tbody > tr:last-child > td {
       border-bottom: none !important;
     }
@@ -161,6 +179,36 @@
   .ant-input-group-addon {
     padding-inline: 6px;
     min-width: 0;
+  }
+
+  /*
+   * ===== 数字/金额输入框宽度自适应 =====
+   * 列宽固定时长数字会被输入框截断（尤其右侧小数位看不到，容易看错）。
+   * 用 field-sizing 让输入框随内容增长；min-width:100% 保证不小于单元格，
+   * 不支持 field-sizing 的浏览器会优雅退化为原有「占满单元格」行为（不劣化）。
+   */
+  .ant-table-tbody {
+    .ant-input-number {
+      width: auto !important;
+      min-width: 100%;
+      max-width: 320px;
+    }
+
+    .ant-input-number-input {
+      field-sizing: content;
+    }
+
+    /* 带 addon(%) 的税率框：维持占满单元格，不参与自适应增宽 */
+    .ant-input-number-group-wrapper {
+      width: 100% !important;
+      min-width: 0;
+    }
+
+    .ant-input-number-group-wrapper .ant-input-number {
+      width: 100% !important;
+      min-width: 0;
+      max-width: none;
+    }
   }
 
   /* ===== 隐藏行级校验错误提示（以表单整体提示为准） ===== */

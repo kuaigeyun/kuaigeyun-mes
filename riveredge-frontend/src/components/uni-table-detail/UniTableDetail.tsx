@@ -90,12 +90,10 @@ const AdaptiveScrollDetailTable: React.FC<
     if (!el) return;
 
     const measure = () => {
-      const table = el.querySelector('table');
-      if (!table) {
-        setScrollX(undefined);
-        return;
-      }
-      setScrollX(table.scrollWidth > el.clientWidth + 1 ? totalWidth : undefined);
+      // 用「各列定义宽度之和」与容器可视宽度比较，而非渲染后表格的 scrollWidth。
+      // 否则未设 scroll.x 时表格会自动压缩列去适配容器，scrollWidth 恒等于 clientWidth，
+      // 导致滚动条永不出现、列被一直压窄到数字显示不全。
+      setScrollX(totalWidth > el.clientWidth + 1 ? totalWidth : undefined);
     };
 
     measure();
@@ -287,7 +285,6 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
               />
               <div className="uni-table-detail-body">
                 <AdaptiveScrollDetailTable
-                  className="uni-detail-table"
                   totalWidth={totalWidth}
                   rowCount={fields.length}
                   dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
@@ -297,6 +294,9 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                   bordered={false}
                   rowKey="key"
                   {...tableProps}
+                  // uni-detail-table 必须始终存在（固定列不透明背景 CSS 依赖它）；
+                  // 与调用方自定义 className 合并，避免被 tableProps 覆盖丢失。
+                  className={['uni-detail-table', tableProps?.className].filter(Boolean).join(' ')}
                   style={{ width: '100%', margin: 0, ...tableProps?.style }}
                   summary={summary}
                   footer={
