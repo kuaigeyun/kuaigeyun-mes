@@ -156,6 +156,7 @@ import {
 import type { Workshop } from '../../../../master-data/types/factory'
 import { warehouseApi } from '../../../services/warehouse-execution'
 import { materialApi } from '../../../../master-data/services/material'
+import { OperationPickPanel } from '../../../../master-data/components/OperationSequenceEditor'
 import { useNavigate, useLocation } from 'react-router-dom'
 import dayjs from 'dayjs'
 import CodeField from '../../../../../components/code-field'
@@ -1260,6 +1261,21 @@ const WorkOrdersPage: React.FC = () => {
   const [operationList, setOperationList] = useState<any[]>([])
   // 工艺路线列表状态
   const [processRouteList, setProcessRouteList] = useState<any[]>([])
+  /** 工艺路线去重：保留首条，避免下拉出现重复项 */
+  const uniqueProcessRouteList = useMemo(() => {
+    const seen = new Set<string>()
+    return processRouteList.filter((route: any) => {
+      const key =
+        route?.id != null
+          ? `id:${route.id}`
+          : route?.uuid
+            ? `uuid:${route.uuid}`
+            : `name:${String(route?.code ?? '')}|${String(route?.name ?? '')}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  }, [processRouteList])
   
   const [workerList, setWorkerList] = useState<any[]>([])
   const [teamList, setTeamList] = useState<any[]>([])
@@ -1273,7 +1289,9 @@ const WorkOrdersPage: React.FC = () => {
   const [resourceOptions, setResourceOptions] = useState<any[]>([])
   // 选中的工序列表（用于创建工单时）
   const [selectedOperations, setSelectedOperations] = useState<any[]>([])
-  const [createAddOperationId, setCreateAddOperationId] = useState<number | undefined>()
+  const [createProcessRouteId, setCreateProcessRouteId] = useState<number | undefined>()
+  const [createAddOperationsModalVisible, setCreateAddOperationsModalVisible] = useState(false)
+  const [createAddOperationUuids, setCreateAddOperationUuids] = useState<string[]>([])
   // 当前选中产品的物料来源信息
   const [selectedMaterialSourceInfo, setSelectedMaterialSourceInfo] = useState<{
     sourceType?: string
@@ -1288,6 +1306,7 @@ const WorkOrdersPage: React.FC = () => {
       const pp = await productProcessApi.get(materialUuid)
       const routeId = pp.processRouteId
       if (!routeId) {
+        setCreateProcessRouteId(undefined)
         formRef.current?.setFieldsValue({
           process_route_id: undefined,
           allow_operation_jump: false,
@@ -1297,6 +1316,7 @@ const WorkOrdersPage: React.FC = () => {
         return
       }
 
+      setCreateProcessRouteId(Number(routeId))
       formRef.current?.setFieldsValue({
         process_route_id: routeId,
         allow_operation_jump: pp.allowOperationJump ?? false,
@@ -1338,45 +1358,62 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.info('已指派工艺路线，暂无工序行；请手工添加工序或到产品工艺页维护')
     } catch (e: any) {
       console.warn('加载产品工艺失败:', e)
+      setCreateProcessRouteId(undefined)
       formRef.current?.setFieldsValue({ process_route_id: undefined, operations: undefined })
       setSelectedOperations([])
     }
   }, [operationList, messageApi])
 
-  const handleAppendCreateOperation = useCallback(() => {
-    if (createAddOperationId == null) {
+  const availableCreateOperations = useMemo(() => {
+    const existingIds = new Set(
+      selectedOperations
+        .map((o: any) => Number(o?.operation_id))
+        .filter((id: number) => Number.isFinite(id) && id > 0),
+    )
+    return operationList.filter((op: any) => !existingIds.has(Number(op?.id)))
+  }, [operationList, selectedOperations])
+
+  const handleAppendCreateOperations = useCallback(() => {
+    if (!createAddOperationUuids.length) {
       messageApi.warning('请先选择要添加的工序')
       return
     }
-    const operationDetail = operationList.find((op: any) => op.id === createAddOperationId)
-    if (!operationDetail) {
-      messageApi.error('工序不存在')
+
+    const operationByUuid = new Map(
+      operationList.map((op: any) => [String(op?.uuid), op]),
+    )
+    const appendRows = createAddOperationUuids
+      .map((uuid) => operationByUuid.get(String(uuid)))
+      .filter((op): op is any => !!op)
+      .filter(
+        (op: any) =>
+          !selectedOperations.some((exist: any) => Number(exist?.operation_id) === Number(op?.id)),
+      )
+      .map((op: any, index: number) => ({
+        operation_id: op.id,
+        operation_code: op.code,
+        operation_name: op.name,
+        sequence: selectedOperations.length + index + 1,
+        is_node_operation: false,
+        reporting_type: op.reportingType ?? (op as any).reporting_type ?? 'quantity',
+        over_report_mode: 'none',
+        over_report_value: 0,
+      }))
+
+    if (!appendRows.length) {
+      messageApi.warning('所选工序已在清单中')
       return
     }
-    if (selectedOperations.some((o: any) => o.operation_id === createAddOperationId)) {
-      messageApi.warning('该工序已在清单中')
-      return
-    }
-    const nextSeq = selectedOperations.length + 1
-    const row = {
-      operation_id: operationDetail.id,
-      operation_code: operationDetail.code,
-      operation_name: operationDetail.name,
-      sequence: nextSeq,
-      is_node_operation: false,
-      reporting_type:
-        operationDetail.reportingType ?? (operationDetail as any).reporting_type ?? 'quantity',
-      over_report_mode: 'none',
-      over_report_value: 0,
-    }
-    const newOps = [...selectedOperations, row]
+
+    const newOps = [...selectedOperations, ...appendRows]
     setSelectedOperations(newOps)
     formRef.current?.setFieldsValue({
       operations: newOps.map((o: any) => o.operation_id),
     })
-    setCreateAddOperationId(undefined)
-    messageApi.success('已添加工序')
-  }, [createAddOperationId, operationList, selectedOperations, messageApi])
+    setCreateAddOperationsModalVisible(false)
+    setCreateAddOperationUuids([])
+    messageApi.success(`已添加 ${appendRows.length} 个工序`)
+  }, [createAddOperationUuids, messageApi, operationList, selectedOperations])
   // 只显示自制件
   const [onlyShowMake, setOnlyShowMake] = useState(false)
   // 从文档加载的产品列表（销售订单/销售预测/需求）
@@ -5438,193 +5475,175 @@ const WorkOrdersPage: React.FC = () => {
         const canSplit = isDraft || isReleased || hasSplitRemaining
         const canFreeze = !isTerminal && !isCompleted
 
-        const rowKey = record.id ?? 'row'
-        const parts: React.ReactNode[] = [
-          <Button {...rowActionKind('read')}
-            key="detail"
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>,
-        ]
-        parts.push(
-          <Button {...rowActionKind('update')}
-            key="edit"
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-        )
-        if (isDraft) {
-          parts.push(
-            <Button {...rowActionKind('release')}
-              key="release"
-              type="link"
-              size="small"
-              icon={<SendOutlined />}
-              onClick={() => handleRelease(record)}
-            >
-              下达
-            </Button>
-          )
+        const handleDeleteClick = () => {
+          if (!canDelete) return
+          Modal.confirm({
+            title: '确定要删除吗？',
+            content: '删除后无法恢复',
+            onOk: async () => {
+              try {
+                await workOrderApi.delete(record.id!.toString())
+                messageApi.success('删除成功')
+                invalidateStatistics()
+                actionRef.current?.reload()
+              } catch (error: any) {
+                messageApi.error(error.message || '删除失败')
+              }
+            },
+          })
         }
-        parts.push(
-          <Button {...rowActionKind('print')}
-            key="print"
-            type="link"
-            size="small"
-            icon={<PrinterOutlined />}
-            onClick={() => handlePrint(record)}
-          >
-            打印
-          </Button>
-        )
+
+        const makeItem = (
+          key: string,
+          label: React.ReactNode,
+          onClick: () => void,
+          options?: { icon?: React.ReactNode; danger?: boolean; disabled?: boolean },
+        ) => ({
+          key,
+          icon: options?.icon,
+          label,
+          danger: options?.danger,
+          disabled: options?.disabled,
+          onClick: ({ domEvent }: { domEvent?: { stopPropagation?: () => void } }) => {
+            domEvent?.stopPropagation?.()
+            if (options?.disabled) return
+            onClick()
+          },
+        })
+
+        const viewEditItems = [
+          makeItem('print', '打印', () => handlePrint(record), { icon: <PrinterOutlined /> }),
+        ]
+
+        const derivedItems: any[] = []
         if (!isTerminal) {
-          parts.push(
-            <Button {...rowActionKind('update')}
-              key="rework"
-              type="link"
-              size="small"
-              icon={<RetweetOutlined />}
-              onClick={() => handleCreateRework(record)}
-            >
-              创建返工单
-            </Button>
+          derivedItems.push(
+            makeItem('rework', '创建返工单', () => handleCreateRework(record), { icon: <RetweetOutlined /> }),
           )
           if (isCompleted) {
-            parts.push(
-              <Button {...rowActionKind('dispatch')}
-                key="notifyInbound"
-                type="link"
-                size="small"
-                icon={<InboxOutlined />}
-                disabled={false}
-                style={{ pointerEvents: 'auto' }}
-                onClick={(e) => {
-                  e?.stopPropagation?.()
+            derivedItems.push(
+              makeItem(
+                'notifyInbound',
+                '通知入库',
+                () => {
                   void handleNotifyInbound(record)
-                }}
-              >
-                通知入库
-              </Button>
+                },
+                { icon: <InboxOutlined /> },
+              ),
             )
           } else {
-            parts.push(
-              <Button {...rowActionKind('dispatch')}
-                key="outsource"
-                type="link"
-                size="small"
-                icon={<TeamOutlined />}
-                onClick={() => handleCreateOutsource(record)}
-              >
-                创建工序委外
-              </Button>
+            derivedItems.push(
+              makeItem('outsource', '创建工序委外', () => handleCreateOutsource(record), {
+                icon: <TeamOutlined />,
+              }),
             )
           }
         }
         if (canSplit) {
-          parts.push(
-            <Button {...rowActionKind('update')}
-              key="split"
-              type="link"
-              size="small"
-              icon={<SplitCellsOutlined />}
-              onClick={() => handleSplit(record)}
-            >
-              {hasSplitRemaining ? '拆分剩余' : '拆分工单'}
-            </Button>
+          derivedItems.push(
+            makeItem('split', hasSplitRemaining ? '拆分剩余' : '拆分工单', () => handleSplit(record), {
+              icon: <SplitCellsOutlined />,
+            }),
           )
         }
-        if (record.is_frozen) {
-          parts.push(
-            <Button {...rowActionKind('update')}
-              key="unfreeze"
-              type="link"
-              size="small"
-              icon={<UnlockOutlined />}
-              onClick={() => handleUnfreeze(record)}
-            >
-              解冻工单
-            </Button>
-          )
-        } else if (canFreeze) {
-          parts.push(
-            <Button {...rowActionKind('update')}
-              key="freeze"
-              type="link"
-              size="small"
-              danger
-              icon={<LockOutlined />}
-              onClick={() => handleFreeze(record)}
-            >
-              冻结工单
-            </Button>
+
+        const statusControlItems: any[] = []
+        if (canComplete) {
+          statusControlItems.push(
+            makeItem('complete', '指定结束', () => handleComplete(record), { icon: <StopOutlined /> }),
           )
         }
         if (canRevoke) {
-          parts.push(
-            <Button {...rowActionKind('revoke')}
-              key="revoke"
-              type="link"
-              size="small"
-              danger
-              icon={<CloseCircleOutlined />}
-              onClick={() => handleRevoke(record)}
-            >
-              撤回
-            </Button>
+          statusControlItems.push(
+            makeItem('revoke', '撤回', () => handleRevoke(record), {
+              icon: <CloseCircleOutlined />,
+              danger: true,
+            }),
           )
         }
-        if (canComplete) {
-          parts.push(
-            <Button {...rowActionKind('complete')}
-              key="complete"
-              type="link"
-              size="small"
-              icon={<StopOutlined />}
-              onClick={() => handleComplete(record)}
-            >
-              指定结束
-            </Button>
+        if (record.is_frozen) {
+          statusControlItems.push(
+            makeItem('unfreeze', '解冻工单', () => handleUnfreeze(record), { icon: <UnlockOutlined /> }),
+          )
+        } else if (canFreeze) {
+          statusControlItems.push(
+            makeItem('freeze', '冻结工单', () => handleFreeze(record), {
+              icon: <LockOutlined />,
+              danger: true,
+            }),
           )
         }
-        parts.push(
-          <Button {...rowActionKind('delete')}
-            key="delete"
-            type="link"
-            size="small"
-            danger
-            disabled={!canDelete}
-            icon={<DeleteOutlined />}
-            onClick={() => {
-              if (!canDelete) return
-              Modal.confirm({
-                title: '确定要删除吗？',
-                content: '删除后无法恢复',
-                onOk: async () => {
-                  try {
-                    await workOrderApi.delete(record.id!.toString())
-                    messageApi.success('删除成功')
-                    invalidateStatistics()
-                    actionRef.current?.reload()
-                  } catch (error: any) {
-                    messageApi.error(error.message || '删除失败')
-                  }
-                },
-              })
-            }}
-          >
-            删除
-          </Button>
-        )
 
-        return parts;
+        const dangerItems = [
+          makeItem('delete', '删除', handleDeleteClick, {
+            icon: <DeleteOutlined />,
+            danger: true,
+            disabled: !canDelete,
+          }),
+        ]
+
+        const moreItems: any[] = []
+        if (viewEditItems.length) {
+          moreItems.push({ type: 'group', label: '查看与编辑', children: viewEditItems })
+        }
+        if (derivedItems.length) {
+          moreItems.push({ type: 'group', label: '派生操作', children: derivedItems })
+        }
+        if (statusControlItems.length) {
+          moreItems.push({ type: 'group', label: '状态控制', children: statusControlItems })
+        }
+        if (dangerItems.length) {
+          moreItems.push({ type: 'group', label: '危险操作', children: dangerItems })
+        }
+
+        return (
+          <Space size={0} wrap>
+            <Button
+              {...rowActionKind('read')}
+              key="detail"
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleDetail(record)}
+            >
+              详情
+            </Button>
+            <Button
+              {...rowActionKind('update')}
+              key="edit"
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEdit(record)}
+            >
+              编辑
+            </Button>
+            {isDraft ? (
+              <Button
+                {...rowActionKind('release')}
+                key="release"
+                type="link"
+                size="small"
+                icon={<SendOutlined />}
+                onClick={() => handleRelease(record)}
+              >
+                下达
+              </Button>
+            ) : null}
+            {moreItems.length > 0 ? (
+              <Dropdown
+                {...rowActionKind('skip')}
+                key="more"
+                trigger={['click']}
+                menu={{ items: moreItems }}
+              >
+                <Button {...rowActionKind('skip')} type="link" size="small" icon={<DownOutlined />}>
+                  更多
+                </Button>
+              </Dropdown>
+            ) : null}
+          </Space>
+        )
       },
     },
   ]
@@ -6457,6 +6476,9 @@ const WorkOrdersPage: React.FC = () => {
           setSelectedMaterialSourceInfo(null)
           setProductSourceData(null)
           setSelectedOperations([])
+          setCreateProcessRouteId(undefined)
+          setCreateAddOperationsModalVisible(false)
+          setCreateAddOperationUuids([])
           formRef.current?.resetFields()
         }}
         onFinish={handleSubmit}
@@ -6551,7 +6573,7 @@ const WorkOrdersPage: React.FC = () => {
         {!isEdit && createWorkOrderMode === 'peer_group' && (
           <Col span={24}>
             <Suspense fallback={<Spin />}>
-              <LazyWorkOrderPeerGroupCreateDetail processRouteList={processRouteList} />
+              <LazyWorkOrderPeerGroupCreateDetail processRouteList={uniqueProcessRouteList} />
             </Suspense>
           </Col>
         )}
@@ -6753,7 +6775,7 @@ const WorkOrdersPage: React.FC = () => {
           <Form.Item name="process_route_id" label="工艺路线" style={{ marginBottom: 16 }}>
             <UniDropdown
               placeholder="选择后自动加载工序"
-              options={processRouteList.map(route => ({
+              options={uniqueProcessRouteList.map(route => ({
                 label: `${route.code} - ${route.name}`,
                 value: route.id,
               }))}
@@ -6782,11 +6804,13 @@ const WorkOrdersPage: React.FC = () => {
               onChange={async (value) => {
                 if (value) {
                   try {
-                    const route = processRouteList.find(r => r.id === value)
+                    const route = uniqueProcessRouteList.find(r => r.id === value)
                     if (!route || !route.uuid) {
+                      setCreateProcessRouteId(undefined)
                       messageApi.warning('未找到工艺路线信息')
                       return
                     }
+                    setCreateProcessRouteId(Number(value))
                     const routeDetail = await processRouteApi.get(route.uuid)
                     const routeJump =
                       (routeDetail as any)?.allow_operation_jump ??
@@ -6815,10 +6839,12 @@ const WorkOrdersPage: React.FC = () => {
                   } catch (error: any) {
                     console.error('获取工艺路线工序失败:', error)
                     messageApi.error(error.message || '获取工艺路线工序失败')
+                    setCreateProcessRouteId(undefined)
                     setSelectedOperations([])
                     formRef.current?.setFieldsValue({ operations: undefined })
                   }
                 } else {
+                  setCreateProcessRouteId(undefined)
                   setSelectedOperations([])
                   formRef.current?.setFieldsValue({
                     operations: undefined,
@@ -6831,7 +6857,7 @@ const WorkOrdersPage: React.FC = () => {
         </Col>
         <Form.Item name="operations" hidden />
         <Form.Item
-          label="工艺路线工序清单"
+          label="工序清单"
           colon
           style={{
             gridColumn: '1 / -1',
@@ -6842,26 +6868,6 @@ const WorkOrdersPage: React.FC = () => {
             paddingRight: 8,
           }}
         >
-          {!isEdit && (
-            <Space style={{ marginBottom: 12 }} wrap>
-              <Select
-                showSearch
-                allowClear
-                placeholder="选择工序添加到清单"
-                style={{ minWidth: 280 }}
-                value={createAddOperationId}
-                onChange={(v) => setCreateAddOperationId(v as number | undefined)}
-                optionFilterProp="label"
-                options={operationList.map((op: any) => ({
-                  label: `${op.code} - ${op.name}`,
-                  value: op.id,
-                }))}
-              />
-              <Button type="dashed" icon={<PlusOutlined />} onClick={handleAppendCreateOperation}>
-                添加工序
-              </Button>
-            </Space>
-          )}
           <div style={{ width: '100%', minWidth: 0, overflow: 'hidden', boxSizing: 'border-box' }}>
             <Suspense
               fallback={
@@ -6881,6 +6887,25 @@ const WorkOrdersPage: React.FC = () => {
               />
             </Suspense>
           </div>
+          {!isEdit && createProcessRouteId != null && (
+            <Button
+              type="dashed"
+              block
+              icon={<PlusOutlined />}
+              onClick={() => {
+                setCreateAddOperationUuids([])
+                setCreateAddOperationsModalVisible(true)
+              }}
+              style={{
+                marginTop: 12,
+                borderStyle: 'dashed',
+                borderColor: 'var(--ant-color-primary)',
+                color: 'var(--ant-color-primary)',
+              }}
+            >
+              添加工序
+            </Button>
+          )}
         </Form.Item>
 
         <ProFormSwitch
@@ -6959,6 +6984,31 @@ const WorkOrdersPage: React.FC = () => {
           </>
         )}
       </FormModalTemplate>
+
+      <Modal
+        title="添加工序"
+        open={createAddOperationsModalVisible}
+        width={520}
+        destroyOnHidden
+        onOk={handleAppendCreateOperations}
+        onCancel={() => {
+          setCreateAddOperationsModalVisible(false)
+          setCreateAddOperationUuids([])
+        }}
+        okText="确认"
+        cancelText="取消"
+        okButtonProps={{ disabled: !createAddOperationUuids.length }}
+      >
+        <OperationPickPanel
+          key={createAddOperationsModalVisible ? 'work-order-op-picker-open' : 'work-order-op-picker-closed'}
+          mode="multiple"
+          operations={availableCreateOperations as any}
+          loading={false}
+          multipleValue={createAddOperationUuids}
+          onMultipleChange={setCreateAddOperationUuids}
+          searchPlaceholder="搜索工序编号/名称"
+        />
+      </Modal>
 
       {/* 选择产品来源文档 Modal（销售订单/销售预测/需求）- 产品明细 */}
       <Modal

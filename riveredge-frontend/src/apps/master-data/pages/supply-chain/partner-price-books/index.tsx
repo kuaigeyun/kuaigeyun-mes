@@ -22,7 +22,7 @@ import {
   Row,
   Col,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -373,14 +373,40 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       {
         title: t('common.actions', '操作'),
         valueType: 'option',
-        width: 140,
+        width: 220,
         fixed: 'right',
         render: (_, record) => [
-          <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
+          <Button
+            {...rowActionKind('read')}
+            key="detail"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              openDetail(record);
+            }}
+          >
+            {t('common.detail', '详情')}
+          </Button>,
+          <Button
+            {...rowActionKind('update')}
+            key="edit"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleEdit(record);
+            }}
+          >
             {t('common.edit')}
           </Button>,
           <Popconfirm {...rowActionKind('delete')} key="delete" title={t('common.confirmDelete')} onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={(e) => e.stopPropagation()}
+            >
               {t('common.delete')}
             </Button>
           </Popconfirm>,

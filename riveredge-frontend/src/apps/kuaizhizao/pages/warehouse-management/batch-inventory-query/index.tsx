@@ -145,7 +145,8 @@ const BatchInventoryQuery: React.FC = () => {
             warehouse_id: search.warehouse_id,
             batch_number: search.batch_no,
             include_expired: includeExpired,
-            include_zero_stock: includeZeroStock,
+            // 与即时库存查询一致：对齐“显示/隐藏0库存”文案语义
+            include_zero_stock: !includeZeroStock,
             aging_bucket: agingBucket === 'all' ? undefined : agingBucket,
             status_filter: statusFilter === 'all' ? undefined : statusFilter,
             keyword: (search as any).keyword ?? params.keyword,

@@ -53,7 +53,7 @@ type OperationPickPanelProps = {
   searchPlaceholder: string;
 };
 
-const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
+export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
   operations,
   loading,
   mode,

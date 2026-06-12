@@ -16,8 +16,10 @@ import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import type { Material } from '../../../../master-data/types/material';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniDropdown } from '../../../../../components/uni-dropdown';
 import CodeField from '../../../../../components/code-field';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
@@ -30,6 +32,7 @@ import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
+import { getDepartmentTree } from '../../../../../services/department';
 
 interface MaterialBorrow {
   id?: number;
@@ -98,6 +101,7 @@ const MaterialBorrowsPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const {
     selectedWarehouseId,
     locationOptions,
@@ -123,6 +127,37 @@ const MaterialBorrowsPage: React.FC = () => {
       }
     };
     load();
+  }, []);
+
+  useEffect(() => {
+    const flatten = (items: any[] | undefined): Array<{ label: string; value: string }> => {
+      if (!Array.isArray(items)) return [];
+      const out: Array<{ label: string; value: string }> = [];
+      const walk = (nodes: any[], prefix = '') => {
+        nodes.forEach((node) => {
+          const name = String(node?.name ?? '').trim();
+          const uuid = String(node?.uuid ?? '').trim();
+          if (name && uuid) {
+            out.push({ label: prefix ? `${prefix} / ${name}` : name, value: uuid });
+          }
+          if (Array.isArray(node?.children) && node.children.length > 0) {
+            walk(node.children, prefix ? `${prefix} / ${name}` : name);
+          }
+        });
+      };
+      walk(items);
+      return out;
+    };
+    const loadDepartments = async () => {
+      try {
+        const res = await getDepartmentTree({ is_active: true });
+        setDepartmentOptions(flatten(res?.items));
+      } catch (e) {
+        console.error('加载部门失败', e);
+        setDepartmentOptions([]);
+      }
+    };
+    void loadDepartments();
   }, []);
 
   const columns: ProColumns<MaterialBorrow>[] = [
@@ -380,6 +415,7 @@ const MaterialBorrowsPage: React.FC = () => {
         borrow_code: values.borrow_code,
         warehouse_id: values.warehouse_id,
         warehouse_name: warehouseName,
+        borrower_id: values.borrower_id != null ? Number(values.borrower_id) : undefined,
         borrower_name: values.borrower_name,
         department: values.department,
         expected_return_date: values.expected_return_date ? dayjs(values.expected_return_date).format('YYYY-MM-DD') : undefined,
@@ -570,16 +606,44 @@ const MaterialBorrowsPage: React.FC = () => {
           </Col>
         </Row>
         <AntForm.Item name="warehouse_name" hidden />
+        <AntForm.Item name="borrower_id" hidden />
+        <AntForm.Item name="department_uuid" hidden />
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="borrower_name" label="借料人">
-              <Input placeholder="借料人姓名" />
-            </ProFormItem>
+            <UniUserSelect
+              name="borrower_uuid"
+              label="借料人"
+              placeholder="请选择借料人"
+              onChange={(_value: any, user: any) => {
+                const picked = Array.isArray(user) ? user[0] : user;
+                formRef.current?.setFieldsValue({
+                  borrower_id: picked?.id,
+                  borrower_name: picked?.full_name || picked?.username || undefined,
+                });
+              }}
+            />
+            <AntForm.Item name="borrower_name" hidden>
+              <Input />
+            </AntForm.Item>
           </Col>
           <Col span={12}>
-            <ProFormItem name="department" label="部门">
-              <Input placeholder="部门" />
+            <ProFormItem name="department_uuid" label="部门">
+              <UniDropdown
+                placeholder="请选择部门"
+                options={departmentOptions}
+                showSearch
+                optionFilterProp="label"
+                onChange={(value) => {
+                  const selected = departmentOptions.find((d) => d.value === value);
+                  const label = selected?.label;
+                  const deptName = label ? String(label).split(' / ').pop() || label : undefined;
+                  formRef.current?.setFieldsValue({ department: deptName });
+                }}
+              />
             </ProFormItem>
+            <AntForm.Item name="department" hidden>
+              <Input />
+            </AntForm.Item>
           </Col>
         </Row>
         <Row gutter={16}>

@@ -54,6 +54,7 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { materialApi, materialBatchApi } from '../../../../master-data/services/material';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
+import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../../../../utils/format';
 
 // 统一的入库单接口（结合采购入库、成品入库、生产退料）
 interface InboundOrder {
@@ -145,6 +146,14 @@ function renderInboundDetailUnitCell(row: InboundOrderItem): React.ReactNode {
     );
   }
   return formatInboundMaterialUnit(row.material_unit ?? row.unit);
+}
+
+function formatInboundDateDisplay(record: InboundOrder): string {
+  const dateValue = record.receipt_date;
+  if (dateValue) return formatDateBySiteSetting(dateValue);
+  const timeValue = record.return_time;
+  if (timeValue) return formatDateTimeBySiteSetting(timeValue);
+  return '-';
 }
 
 /**
@@ -1395,7 +1404,7 @@ const InboundPage: React.FC = () => {
       title: '日期',
       dataIndex: ['receipt_date', 'return_time'],
       width: 160,
-      render: (_, record) => record.receipt_date || record.return_time || '-',
+      render: (_, record) => formatInboundDateDisplay(record),
     },
     {
       title: '更新时间',
@@ -1403,7 +1412,7 @@ const InboundPage: React.FC = () => {
       width: 168,
       hideInSearch: true,
       defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      render: (_, r) => formatDateTimeBySiteSetting(r.updated_at),
     },
     {
       title: '生命周期',
@@ -2134,7 +2143,7 @@ const InboundPage: React.FC = () => {
               { title: '供应商', dataIndex: 'supplier_name', width: 180, ellipsis: true },
               { title: '目标仓库', dataIndex: 'warehouse_name', width: 150, ellipsis: true, render: (v) => v || '-' },
               { title: '通知状态', dataIndex: 'status', width: 120, align: 'center' },
-              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => formatDateTimeBySiteSetting(v) },
               {
                 title: '转单状态',
                 key: 'convert_status',
@@ -2448,7 +2457,7 @@ const InboundPage: React.FC = () => {
                     {
                       key: 'date',
                       label: '日期',
-                      children: currentOrder.receipt_date || currentOrder.return_time || '-',
+                      children: formatInboundDateDisplay(currentOrder),
                     },
                     {
                       key: 'op',

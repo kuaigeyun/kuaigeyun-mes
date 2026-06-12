@@ -136,7 +136,8 @@ const InventoryPage: React.FC = () => {
     const baseQuery = {
       material_id: search.material_id,
       warehouse_id: search.warehouse_id,
-      include_zero_stock: includeZeroStock,
+      // 后端该筛选口径与前端开关语义历史上相反，这里统一反转后与“显示/隐藏0库存”文案保持一致
+      include_zero_stock: !includeZeroStock,
       status_filter: statusFilter === 'all' ? undefined : statusFilter,
       keyword: (search as any).keyword ?? params.keyword,
     };
