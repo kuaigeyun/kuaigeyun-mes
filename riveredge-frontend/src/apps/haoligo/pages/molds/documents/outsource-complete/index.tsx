@@ -42,6 +42,7 @@ import {
   getMoldOutsourceMaintenanceCompleteSheet,
   getMoldOutsourceMaintenanceSheet,
   HAOLIGO_MAINTENANCE_COMPLETE_REPAIR_RESULTS,
+  listHaoligoNotifyUserOptions,
   listMoldOutsourceMaintenanceCompleteSheets,
   listMoldOutsourceMaintenanceSheets,
   rejectMoldOutsourceMaintenanceCompleteSheet,
@@ -78,7 +79,6 @@ import {
   getFormNotifyUserDefaultsFromRule,
 } from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
-import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 
 const OUTSOURCE_COMPLETE_DOC_NOTIFICATION = 'haoligo_mold_outsource_maintenance_complete';
 const OUTSOURCE_COMPLETE_ACTION_SUBMITTED = 'submitted';
@@ -272,6 +272,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
     resolveInitDepartmentUuid,
     presetFromApplicantRow,
     enrichApplicantPresetFromRow,
+    searchApplicantUsers,
   } = useApplicantUserIdField(formRef);
   const notifyLabelRef = useRef(new Map<number, string>());
 
@@ -301,19 +302,18 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
         fromArg.length > 0
           ? fromArg
           : ((formRef.current?.getFieldValue('complete_notify_user_ids') as number[] | undefined) || []);
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: notifyLabelRef.current,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         notifyLabelRef.current.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser],
+    [],
   );
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -1177,6 +1177,7 @@ const MoldOutsourceMaintenanceCompletePage: React.FC = () => {
                     required
                     presetUsers={applicantPresetUsers}
                     onUserPicked={onApplicantPicked}
+                    searchUsers={searchApplicantUsers}
                   />
                 </Col>
                 <Col span={12}>

@@ -19,8 +19,6 @@ import { App, Button, Card, Col, Empty, Flex, Input, Modal, Row, Space, Spin, Sw
 import { DeleteOutlined, EditOutlined, EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
-import { useGlobalStore } from '../../../../../../stores';
-import { resolveUserIdLabels, searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { UniTable } from '../../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../../components/layout-templates';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
@@ -28,6 +26,7 @@ import {
   createEquipmentRoutePatrol,
   deleteEquipmentRoutePatrol,
   getEquipmentRoutePatrol,
+  listHaoligoNotifyUserOptions,
   listEquipmentRoutePatrols,
   listPatrolRoutes,
   listWorkshops,
@@ -131,24 +130,21 @@ const RoutePatrolDocumentsPage: React.FC = () => {
     })();
   }, []);
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
-
   const searchReportNotifyUsers = useCallback(
     async (keyword?: string) => {
       const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: reportUserLabelRef.current,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         reportUserLabelRef.current.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser],
+    [],
   );
 
   const parseReportNotifyUserIds = (v: Record<string, unknown>): number[] => {
@@ -230,8 +226,8 @@ const RoutePatrolDocumentsPage: React.FC = () => {
       setTimeout(async () => {
         const notifyIds = row.report_notify_user_ids || [];
         if (notifyIds.length) {
-          const labels = await resolveUserIdLabels(notifyIds, currentUser);
-          labels.forEach((label, id) => reportUserLabelRef.current.set(id, label));
+          const users = await listHaoligoNotifyUserOptions({ selected_user_ids: notifyIds, limit: 80 });
+          for (const u of users) reportUserLabelRef.current.set(u.id, u.label);
         }
         formRef.current?.setFieldsValue({
           patrol_route_id: row.patrol_route_id,

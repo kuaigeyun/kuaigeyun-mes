@@ -133,6 +133,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
   const [batchingItems, setBatchingItems] = useState<any[]>([]);
   const [completeSubmitting, setCompleteSubmitting] = useState(false);
   const [completeForm] = Form.useForm();
+  const [pendingCompleteFormValues, setPendingCompleteFormValues] = useState<Record<string, unknown> | null>(null);
   const [batchOptionsByMaterialId, setBatchOptionsByMaterialId] = useState<Record<number, BatchPickOption[]>>({});
   const [batchOptionsLoading, setBatchOptionsLoading] = useState(false);
 
@@ -199,7 +200,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         initial[`pick_${it.id}`] = true;
         initial[`qty_${it.id}`] = remaining > 0 ? remaining : required;
       }
-      completeForm.setFieldsValue(initial);
+      setPendingCompleteFormValues(initial);
       setCompleteOpen(true);
       reload();
     } catch (e: any) {
@@ -715,6 +716,17 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         onCancel={() => {
           setCompleteOpen(false);
           setCompletingRecord(null);
+          setPendingCompleteFormValues(null);
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingCompleteFormValues) {
+              completeForm.setFieldsValue(pendingCompleteFormValues);
+            }
+            return;
+          }
+          completeForm.resetFields();
+          setPendingCompleteFormValues(null);
         }}
         onOk={submitComplete}
       >

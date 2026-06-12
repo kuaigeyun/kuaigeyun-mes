@@ -56,6 +56,13 @@ function normalizeDatasetParameterMap(raw: Record<string, unknown>): Record<stri
   return out;
 }
 
+function roundToTwoDecimals(raw: unknown): number | undefined {
+  if (raw == null || raw === '') return undefined;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return undefined;
+  return Math.round(n * 100) / 100;
+}
+
 const OutputRecordDocumentsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
@@ -331,7 +338,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
           work_order_no: row.work_order_no,
           finished_product_code: row.finished_product_code ?? undefined,
           finished_product_name: row.finished_product_name ?? undefined,
-          planned_qty: row.planned_qty != null ? Number(row.planned_qty) : undefined,
+          planned_qty: roundToTwoDecimals(row.planned_qty),
           completed_qty: Number(row.completed_qty ?? 0),
           startup_at: row.startup_at ? dayjs(row.startup_at) : undefined,
           completed_at: row.completed_at ? dayjs(row.completed_at) : undefined,
@@ -363,7 +370,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         finished_product_code: res.finished_product_code ?? undefined,
         finished_product_name: res.finished_product_name ?? undefined,
-        planned_qty: res.planned_qty != null ? Number(res.planned_qty) : undefined,
+        planned_qty: roundToTwoDecimals(res.planned_qty),
       });
       setDatasetSnapshot(res.dataset_row || null);
       messageApi.success(t('app.haoligo.equipment.documents.outputPrefillOk'));
@@ -484,7 +491,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
           : dayjs().toISOString(),
         finished_product_code: String(v.finished_product_code ?? '').trim() || undefined,
         finished_product_name: String(v.finished_product_name ?? '').trim() || undefined,
-        planned_qty: v.planned_qty != null && v.planned_qty !== '' ? Number(v.planned_qty) : undefined,
+        planned_qty: roundToTwoDecimals(v.planned_qty),
         completed_qty: v.completed_qty != null && v.completed_qty !== '' ? Number(v.completed_qty) : 0,
         startup_at: v.startup_at ? dayjs(v.startup_at as string).toISOString() : undefined,
         completed_at: v.completed_at ? dayjs(v.completed_at as string).toISOString() : undefined,
@@ -773,7 +780,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
                 fieldProps={{
                   readOnly: true,
                   min: 0,
-                  precision: 4,
+                  precision: 2,
                   style: { width: '100%', backgroundColor: detailMode ? undefined : '#fafafa' },
                 }}
               />

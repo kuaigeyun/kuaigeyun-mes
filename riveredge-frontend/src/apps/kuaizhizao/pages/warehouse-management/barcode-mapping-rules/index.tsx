@@ -51,6 +51,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentId, setCurrentId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
+  const [pendingFormValues, setPendingFormValues] = useState<Record<string, any> | null>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -62,8 +63,8 @@ const BarcodeMappingRulesPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentId(null);
+    setPendingFormValues(null);
     setModalVisible(true);
-    formRef.current?.resetFields();
   };
 
   /**
@@ -77,7 +78,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
       // 加载数据到表单
       try {
         const detailData = await warehouseApi.barcodeMappingRule.get(record.id.toString());
-        formRef.current?.setFieldsValue({
+        setPendingFormValues({
           name: detailData.name,
           customer_id: detailData.customer_id,
           barcode_pattern: detailData.barcode_pattern,
@@ -259,6 +260,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         messageApi.success('创建成功');
       }
       setModalVisible(false);
+      setPendingFormValues(null);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -336,7 +338,18 @@ const BarcodeMappingRulesPage: React.FC = () => {
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
+          setPendingFormValues(null);
           formRef.current?.resetFields();
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingFormValues) {
+              formRef.current?.setFieldsValue(pendingFormValues);
+            }
+            return;
+          }
+          formRef.current?.resetFields?.();
+          setPendingFormValues(null);
         }}
         onFinish={handleFormFinish}
         isEdit={isEdit}

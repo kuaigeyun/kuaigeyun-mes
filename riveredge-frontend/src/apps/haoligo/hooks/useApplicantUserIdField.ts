@@ -7,7 +7,11 @@ import {
   collectLeafDepartmentOptions,
   resolveDefaultLeafDeptUuid,
 } from '../utils/departmentFormHelpers';
-import { formatUserDisplayLabel, resolveUserIdLabels } from '../../../utils/userDisplay';
+import { formatUserDisplayLabel } from '../../../utils/userDisplay';
+import {
+  resolveHaoligoUserIdLabels,
+  searchHaoligoUserIdOptions,
+} from '../utils/haoligoUserPicker';
 
 export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance | null>) {
   const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
@@ -159,10 +163,7 @@ export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance
       if (row.applicant_user_id == null) return undefined;
       const snapshot = (row.applicant_name || '').trim();
       if (snapshot) return presetFromApplicantRow(row);
-      const labels = await resolveUserIdLabels(
-        [row.applicant_user_id],
-        useGlobalStore.getState().currentUser,
-      );
+      const labels = await resolveHaoligoUserIdLabels([row.applicant_user_id]);
       const resolved = labels.get(row.applicant_user_id);
       return {
         id: row.applicant_user_id,
@@ -171,6 +172,16 @@ export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance
       };
     },
     [presetFromApplicantRow],
+  );
+
+  const searchApplicantUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) =>
+      searchHaoligoUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds,
+      }),
+    [],
   );
 
   return {
@@ -188,5 +199,6 @@ export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance
     presetFromApplicantRow,
     enrichApplicantPresetFromRow,
     syncDefaultDepartmentForApplicant,
+    searchApplicantUsers,
   };
 }

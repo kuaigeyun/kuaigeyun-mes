@@ -282,6 +282,25 @@ class EquipmentUpkeepCompleteSheetUpdate(BaseModel):
     complete_notify_user_ids: Optional[List[int]] = None
 
 
+class EquipmentUpkeepCompleteNotifyUserOptionOut(BaseModel):
+    id: int
+    label: str
+    username: Optional[str] = None
+    full_name: Optional[str] = None
+
+
+def _format_notify_user_label(*, user_id: int, username: Optional[str], full_name: Optional[str]) -> str:
+    name = (full_name or "").strip()
+    login = (username or "").strip()
+    if name and login:
+        return f"{name} ({login})"
+    if name:
+        return name
+    if login:
+        return login
+    return f"用户#{user_id}"
+
+
 async def _serialize(row: HaoligoEquipmentUpkeepCompleteSheet) -> EquipmentUpkeepCompleteSheetOut:
     src_header: List[str] = []
     src_desc: Optional[str] = None
@@ -383,6 +402,66 @@ async def list_upkeep_complete_sheets(
     rows = await qs.order_by("-id").offset(skip).limit(limit)
     items = [await _serialize(r) for r in rows]
     return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+
+@router.get(
+    "/notify-user-options",
+    response_model=List[EquipmentUpkeepCompleteNotifyUserOptionOut],
+    summary="设备维保完成单通知人员候选",
+)
+async def list_upkeep_complete_notify_user_options(
+    tenant_id: Annotated[int, Depends(get_current_tenant)],
+    _: Annotated[User, Depends(get_current_user)],
+    keyword: Optional[str] = Query(None, description="姓名/账号关键词"),
+    limit: int = Query(100, ge=1, le=200),
+    selected_user_ids: Optional[List[int]] = Query(
+        None,
+        description="当前已选用户ID（用于补全回显）",
+    ),
+):
+    base_q = Q(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True)
+    kw = (keyword or "").strip()
+    if kw:
+        base_q &= Q(username__icontains=kw) | Q(full_name__icontains=kw)
+
+    rows = await User.filter(base_q).order_by("full_name", "username", "id").limit(limit).all()
+
+    selected_ids = [
+        int(uid)
+        for uid in (selected_user_ids or [])
+        if isinstance(uid, int) and uid > 0
+    ]
+    selected_rows: list[User] = []
+    if selected_ids:
+        selected_rows = await User.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            id__in=selected_ids,
+        ).all()
+
+    by_id: dict[int, User] = {}
+    for row in selected_rows:
+        by_id[row.id] = row
+    for row in rows:
+        by_id[row.id] = row
+
+    ordered_ids = [
+        uid for uid in selected_ids if uid in by_id
+    ] + [uid for uid in [r.id for r in rows] if uid not in selected_ids]
+
+    return [
+        EquipmentUpkeepCompleteNotifyUserOptionOut(
+            id=uid,
+            label=_format_notify_user_label(
+                user_id=uid,
+                username=getattr(by_id[uid], "username", None),
+                full_name=getattr(by_id[uid], "full_name", None),
+            ),
+            username=getattr(by_id[uid], "username", None),
+            full_name=getattr(by_id[uid], "full_name", None),
+        )
+        for uid in ordered_ids
+    ]
 
 
 @router.post("", response_model=EquipmentUpkeepCompleteSheetOut, summary="创建设备维保完成单")

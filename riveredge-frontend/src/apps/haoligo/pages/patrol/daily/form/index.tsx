@@ -23,7 +23,7 @@ import {
   type WorkshopRow,
 } from '../../../../services/haoligo';
 import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../../services/dataDictionary';
-import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
+import { searchHaoligoUserIdOptions } from '../../../../utils/haoligoUserPicker';
 import { useGlobalStore } from '../../../../../../stores/globalStore';
 import { formDateTimeToIso } from '../../shared/datetimeHelpers';
 import { IssueRegisterFormBody } from '../../shared/IssueRegisterFormBody';
@@ -83,7 +83,7 @@ const PatrolIssueRegisterPage: React.FC = () => {
       .then(setWorkshops)
       .catch(() => setWorkshops([]));
     const cu = useGlobalStore.getState().currentUser;
-    void searchUserIdOptions({ pageSize: 200, selectedIds: cu?.id ? [cu.id] : [], currentUser: cu })
+    void searchHaoligoUserIdOptions({ pageSize: 200, selectedIds: cu?.id ? [cu.id] : [] })
       .then(setUserOptions)
       .catch(() => setUserOptions([]));
   }, [loadIssueTypes]);

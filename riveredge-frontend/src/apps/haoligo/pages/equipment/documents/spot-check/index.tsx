@@ -46,6 +46,7 @@ import {
   createEquipmentSpotCheck,
   deleteEquipmentSpotCheck,
   getEquipment,
+  listHaoligoNotifyUserOptions,
   getEquipmentSpotCheck,
   listEquipmentSpotChecks,
   listEquipments,
@@ -58,7 +59,6 @@ import {
 } from '../../../../services/haoligo';
 import { uploadFile, type FileUploadResponse } from '../../../../../../services/file';
 import { useGlobalStore } from '../../../../../../stores';
-import { resolveUserIdLabels, searchUserIdOptions } from '../../../../../../utils/userDisplay';
 import { MoldAttachmentImagePreview } from '../../../../components/MoldAttachmentImagePreview';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { SecurePictureCardUpload } from '../../../../components/SecurePictureCardUpload';
@@ -164,19 +164,18 @@ const SpotCheckDocumentsPage: React.FC = () => {
   const searchReportNotifyUsers = useCallback(
     async (keyword?: string) => {
       const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: reportUserLabelRef.current,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         reportUserLabelRef.current.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser],
+    [],
   );
 
   const parseReportNotifyUserIds = (v: Record<string, unknown>): number[] => {
@@ -333,8 +332,8 @@ const SpotCheckDocumentsPage: React.FC = () => {
       });
       setModalOpen(true);
       if (notifyIds.length) {
-        void resolveUserIdLabels(notifyIds, currentUser).then((labels) => {
-          labels.forEach((label, id) => reportUserLabelRef.current.set(id, label));
+        void listHaoligoNotifyUserOptions({ selected_user_ids: notifyIds, limit: 80 }).then((users) => {
+          for (const u of users) reportUserLabelRef.current.set(u.id, u.label);
         });
       }
     } catch (e) {

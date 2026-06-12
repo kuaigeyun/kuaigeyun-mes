@@ -34,6 +34,7 @@ from apps.haoligo.api.routes_mold_outsource_maintenance_sheet import (
 from apps.haoligo.api.routes_mold_outsource_maintenance_complete_sheet import (
     router as mold_outsource_maintenance_complete_sheet_router,
 )
+from apps.haoligo.api.routes_notify_users import router as notify_users_router
 from apps.haoligo.api.routes_mold_reports import router as mold_reports_router
 from apps.haoligo.api.routes_patrol import router as patrol_router
 from apps.haoligo.api.routes_patrol_reports import router as patrol_reports_router
@@ -89,6 +90,7 @@ router.include_router(mold_reports_router)
 router.include_router(mold_warehouse_router)
 router.include_router(mold_upkeep_router)
 router.include_router(mold_router)
+router.include_router(notify_users_router)
 router.include_router(mobile_router)
 router.include_router(patrol_router)
 router.include_router(patrol_reports_router)

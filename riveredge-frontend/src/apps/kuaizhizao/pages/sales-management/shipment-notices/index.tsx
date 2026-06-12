@@ -144,7 +144,9 @@ const ShipmentNoticesPage: React.FC = () => {
   const [selectedPullSalesOrderId, setSelectedPullSalesOrderId] = useState<number | null>(null);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const formRef = useRef<any>(null);
+  const createFormRef = useRef<any>(null);
+  const editFormRef = useRef<any>(null);
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
   const [salesOrderList, setSalesOrderList] = useState<any[]>([]);
@@ -170,7 +172,7 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const appendShipmentNoticeItemsFromMaterials = useCallback(
     (selected: Material[]) => {
-      const current = formRef.current?.getFieldValue('items') ?? [];
+      const current = createFormRef.current?.getFieldValue('items') ?? [];
       const newRows = selected.map((m) => ({
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
@@ -182,9 +184,9 @@ const ShipmentNoticesPage: React.FC = () => {
       }));
       // 如果当前只有一行且未选择物料，则替换该行
       if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
-        formRef.current?.setFieldsValue({ items: newRows });
+        createFormRef.current?.setFieldsValue({ items: newRows });
       } else {
-        formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+        createFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       }
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
@@ -291,7 +293,7 @@ const ShipmentNoticesPage: React.FC = () => {
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
       }));
-      formRef.current?.setFieldsValue({
+      setPendingEditFormValues({
         sales_order_id: detail.sales_order_id,
         sales_order_code: detail.sales_order_code,
         customer_id: detail.customer_id,
@@ -393,7 +395,7 @@ const ShipmentNoticesPage: React.FC = () => {
     setEditingId(null);
     setCreateModalVisible(true);
     setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultNoticeItem] });
+      createFormRef.current?.setFieldsValue({ items: [defaultNoticeItem] });
     }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-shipment-notice');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-shipment-notice');
@@ -411,7 +413,7 @@ const ShipmentNoticesPage: React.FC = () => {
           const preview = res.code;
           setPreviewCode(preview ?? null);
           setTimeout(() => {
-            formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultNoticeItem] });
+            createFormRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultNoticeItem] });
           }, 100);
         })
         .catch((e) => {
@@ -530,7 +532,7 @@ const ShipmentNoticesPage: React.FC = () => {
     const custId = order.customer_id ?? order.customerId;
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === custId);
     const custName = cust?.name || cust?.customer_name || order.customer_name || order.customerName || '';
-    formRef.current?.setFieldsValue({
+    createFormRef.current?.setFieldsValue({
       sales_order_code: code,
       customer_id: custId,
       customer_name: custName,
@@ -539,16 +541,21 @@ const ShipmentNoticesPage: React.FC = () => {
       shipping_address: order.shipping_address || cust?.address,
     });
     if (order.items && order.items.length > 0) {
-      const items = order.items.map((it: any, index: number) => ({
-        material_id: it.material_id ?? it.materialId,
-        material_code: it.material_code || it.materialCode || '',
-        material_name: it.material_name || it.materialName || '',
-        material_spec: it.material_spec || '',
-        material_unit: it.material_unit || it.materialUnit || '件',
-        notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
-        unit_price: Number((it.unit_price ?? it.unitPrice) || (order.items && order.items[index]?.unit_price)) || 0,
-      }));
-      formRef.current?.setFieldsValue({ items });
+      const items = order.items
+        .map((it: any, index: number) => ({
+          material_id: it.material_id ?? it.materialId,
+          material_code: it.material_code || it.materialCode || '',
+          material_name: it.material_name || it.materialName || '',
+          material_spec: it.material_spec || '',
+          material_unit: it.material_unit || it.materialUnit || '件',
+          notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
+          unit_price: Number((it.unit_price ?? it.unitPrice) || (order.items && order.items[index]?.unit_price)) || 0,
+        }))
+        .filter((it: any) => Number(it.material_id) > 0 && Number(it.notice_quantity) > 0);
+      createFormRef.current?.setFieldsValue({ items: items.length ? items : [defaultNoticeItem] });
+      if (!items.length) {
+        messageApi.warning(`该${pullFromSalesOrderAction.sourceLabel}无可用物料明细，请手动补充通知明细`);
+      }
     }
   };
 
@@ -677,9 +684,9 @@ const ShipmentNoticesPage: React.FC = () => {
       return;
     }
 
-    const currentItems = formRef.current?.getFieldValue('items') || [];
+    const currentItems = createFormRef.current?.getFieldValue('items') || [];
     const filteredCurrent = currentItems.filter((it: any) => it.material_id || it.material_code);
-    formRef.current?.setFieldsValue({
+    createFormRef.current?.setFieldsValue({
       items: [...filteredCurrent, ...items],
     });
     messageApi.success(`成功导入 ${items.length} 条数据`);
@@ -733,7 +740,7 @@ const ShipmentNoticesPage: React.FC = () => {
               options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
               onChange={(v) => {
                 const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) formRef.current?.setFieldsValue({
+                if (cust) createFormRef.current?.setFieldsValue({
                   customer_name: cust.name || cust.customer_name,
                   customer_contact: cust.contactPerson ?? (cust as any)?.contact,
                   customer_phone: cust.phone,
@@ -758,7 +765,7 @@ const ShipmentNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="出库仓库"
             placeholder="请选择出库仓库"
-            onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(_, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
       </Row>
@@ -787,9 +794,9 @@ const ShipmentNoticesPage: React.FC = () => {
               type="dashed"
               icon={<PlusOutlined />}
               onClick={() => {
-                const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
                 items.push({ ...defaultNoticeItem });
-                formRef.current?.setFieldsValue({ items });
+                createFormRef.current?.setFieldsValue({ items });
               }}
             >
               添加明细
@@ -915,7 +922,7 @@ const ShipmentNoticesPage: React.FC = () => {
               options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
               onChange={(v) => {
                 const cust = customerList.find((x: any) => (x.id ?? x.customer_id) === v);
-                if (cust) formRef.current?.setFieldsValue({
+                if (cust) editFormRef.current?.setFieldsValue({
                   customer_name: cust.name || cust.customer_name,
                   customer_contact: cust.contactPerson ?? (cust as any)?.contact,
                   customer_phone: cust.phone,
@@ -937,7 +944,7 @@ const ShipmentNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="出库仓库"
             placeholder="请选择出库仓库"
-            onChange={(_, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(_, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
         <Col span={8}>
@@ -1269,7 +1276,7 @@ const ShipmentNoticesPage: React.FC = () => {
         title="新建发货通知单"
         open={createModalVisible}
         onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
-        formRef={formRef}
+        formRef={createFormRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
@@ -1282,7 +1289,17 @@ const ShipmentNoticesPage: React.FC = () => {
         title="编辑发货通知单"
         open={editModalVisible}
         onClose={() => setEditModalVisible(false)}
-        formRef={formRef}
+        afterOpenChange={(open) => {
+          if (open && pendingEditFormValues) {
+            editFormRef.current?.setFieldsValue(pendingEditFormValues);
+            return;
+          }
+          if (!open) {
+            setPendingEditFormValues(null);
+            editFormRef.current?.resetFields?.();
+          }
+        }}
+        formRef={editFormRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}

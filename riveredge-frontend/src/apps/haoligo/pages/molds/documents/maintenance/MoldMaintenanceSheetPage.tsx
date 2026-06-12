@@ -38,6 +38,7 @@ import {
   createMoldMaintenanceSheet,
   deleteMoldMaintenanceSheet,
   getMoldMaintenanceSheet,
+  listHaoligoNotifyUserOptions,
   listMoldMaintenanceSheets,
   rejectMoldMaintenanceSheet,
   revokeMoldMaintenanceSheetApproval,
@@ -73,7 +74,6 @@ import {
   getFormNotifyUserDefaultsFromRule,
 } from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
 import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
-import { searchUserIdOptions } from '../../../../../../utils/userDisplay';
 
 export type MoldMaintenanceSheetServiceType = InhouseMaintenanceServiceType;
 
@@ -176,6 +176,7 @@ export function MoldMaintenanceSheetPage({
     getCreateApplicantDefaults,
     resolveInitDepartmentUuid,
     presetFromApplicantRow,
+    searchApplicantUsers,
   } = useApplicantUserIdField(formRef);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -393,19 +394,18 @@ export function MoldMaintenanceSheetPage({
         fromArg.length > 0
           ? fromArg
           : ((formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined) || []);
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: notifyLabelRef.current,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         notifyLabelRef.current.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser],
+    [],
   );
 
   const handleEdit = useCallback(
@@ -837,6 +837,7 @@ export function MoldMaintenanceSheetPage({
                     required
                     presetUsers={applicantPresetUsers}
                     onUserPicked={onApplicantPicked}
+                    searchUsers={searchApplicantUsers}
                   />
                 </Col>
                 <Col span={12}>

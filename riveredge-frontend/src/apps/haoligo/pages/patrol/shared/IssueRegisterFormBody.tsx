@@ -15,11 +15,9 @@ import {
   ProFormSwitch,
   ProFormText,
 } from '@ant-design/pro-components';
-import { useGlobalStore } from '../../../../../stores';
-import { searchUserIdOptions } from '../../../../../utils/userDisplay';
 import { uploadFile, type FileUploadResponse } from '../../../../../services/file';
 import type { DictionaryItem } from '../../../../../services/dataDictionary';
-import { listEquipments, type WorkshopRow } from '../../../services/haoligo';
+import { listEquipments, listHaoligoNotifyUserOptions, type WorkshopRow } from '../../../services/haoligo';
 import { withMoldPictureCardUploadClass } from '../../../utils/moldPictureCardUpload';
 import { PatrolImagePreview } from './PatrolImagePreview';
 import { FormNotifyUsersSelect } from '../../../components/FormNotifyUsersSelect';
@@ -100,19 +98,18 @@ export const IssueRegisterFormBody: React.FC<IssueRegisterFormBodyProps> = ({
   const { message: messageApi } = App.useApp();
   const [otherModalOpen, setOtherModalOpen] = useState(false);
   const dictionaryIssueTypes = filterPatrolDictionaryIssueTypes(issueTypes);
-  const currentUser = useGlobalStore((s) => s.currentUser);
 
   const searchReportNotifyUsers = useCallback(
     async (keyword?: string) => {
       const selIds = (formRef.current?.getFieldValue('report_notify_user_ids') as number[] | undefined) || [];
-      return searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      return users.map((u) => ({ label: u.label, value: u.id }));
     },
-    [formRef, currentUser],
+    [formRef],
   );
 
   const uploadProps: UploadProps = {

@@ -24,11 +24,12 @@ async def require_data_dictionary_reference_access(
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    user_perms = await UserPermissionService.get_user_permissions(
+    has_read_or_display = await UserPermissionService.has_any_permission(
         user_id=int(current_user.id),
         tenant_id=tenant_id,
+        permission_codes=[_DATA_DICT_READ, _DATA_DICT_DISPLAY],
     )
-    if _DATA_DICT_READ in user_perms or _DATA_DICT_DISPLAY in user_perms:
+    if has_read_or_display:
         return
 
     host = (host_resource or "").strip()

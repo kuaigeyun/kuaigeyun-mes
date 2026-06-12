@@ -68,6 +68,22 @@ class UserPermissionService:
     @staticmethod
     def _normalize_permission_code(code: str) -> str:
         return (code or "").strip().lower()
+
+    @classmethod
+    async def _get_all_tenant_permission_codes(cls, tenant_id: int) -> Set[str]:
+        all_permissions = await Permission.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        ).all()
+        return {
+            normalized
+            for normalized in (
+                cls._normalize_permission_code(permission.code or "")
+                for permission in all_permissions
+                if permission.code
+            )
+            if normalized
+        }
     
     @staticmethod
     async def get_user_permissions(
@@ -91,6 +107,20 @@ class UserPermissionService:
         cached = await cache_manager.get("permissions", cache_key)
         if isinstance(cached, list):
             return set(cached)
+
+        # 根因修复：组织管理员/平台管理员必须在权限集合层面获得全量权限，避免任意上层页面或依赖误拦。
+        user = await User.get_or_none(id=user_id)
+        if user and await UserPermissionService.is_admin_bypass(user, tenant_id):
+            all_permission_codes = await UserPermissionService._get_all_tenant_permission_codes(
+                tenant_id
+            )
+            await cache_manager.set(
+                "permissions",
+                cache_key,
+                sorted(all_permission_codes),
+                ttl=1800,
+            )
+            return all_permission_codes
 
         # 获取用户的所有角色（通过UserRole关联表）
         user_roles_query = UserRole.filter(user_id=user_id)
@@ -128,19 +158,9 @@ class UserPermissionService:
             for ur in user_roles
         )
         if has_admin_role:
-            all_permissions = await Permission.filter(
-                tenant_id=tenant_id,
-                deleted_at__isnull=True
-            ).all()
-            permission_codes |= {
-                n
-                for n in (
-                    UserPermissionService._normalize_permission_code(p.code or "")
-                    for p in all_permissions
-                    if p.code
-                )
-                if n
-            }
+            permission_codes |= await UserPermissionService._get_all_tenant_permission_codes(
+                tenant_id
+            )
 
         await cache_manager.set("permissions", cache_key, sorted(permission_codes), ttl=1800)
         return permission_codes

@@ -134,11 +134,13 @@ const InventoryTransferPage: React.FC = () => {
   const handleCreate = () => {
     setCreateModalVisible(true);
     setCreateTransferMode('transfer');
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      transfer_date: dayjs(),
-      transfer_mode: 'transfer',
-    });
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        transfer_date: dayjs(),
+        transfer_mode: 'transfer',
+      });
+    }, 0);
   };
 
   /**

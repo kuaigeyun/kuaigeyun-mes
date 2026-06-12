@@ -105,6 +105,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [detail, setDetail] = useState<PurchaseInquiry | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<PurchaseInquiryItem[]>([]);
   const [editVendors, setEditVendors] = useState<PurchaseInquiryVendor[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -112,6 +113,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const [createForm] = Form.useForm();
   const [quoteOpen, setQuoteOpen] = useState(false);
   const [quoteForm] = Form.useForm();
+  const [pendingQuoteFormValues, setPendingQuoteFormValues] = useState<Record<string, unknown> | null>(null);
   const [quoteSupplierId, setQuoteSupplierId] = useState<number | null>(null);
   const [compareOpen, setCompareOpen] = useState(false);
   const [compareRows, setCompareRows] = useState<ComparisonRow[]>([]);
@@ -150,7 +152,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     setEditingId(full.id!);
     setEditItems(full.items ?? []);
     setEditVendors(full.vendors ?? []);
-    editForm.setFieldsValue({
+    setPendingEditFormValues({
       inquiry_name: full.inquiry_name,
       inquiry_date: full.inquiry_date ? dayjs(full.inquiry_date) : undefined,
       quote_deadline: full.quote_deadline ? dayjs(full.quote_deadline) : undefined,
@@ -186,6 +188,7 @@ const PurchaseInquiriesPage: React.FC = () => {
     });
     message.success('保存成功');
     setEditOpen(false);
+    setPendingEditFormValues(null);
     actionRef.current?.reload();
   };
 
@@ -220,7 +223,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       initial[`price_${item.id}`] = line?.unit_price ?? 0;
       initial[`date_${item.id}`] = line?.delivery_date ? dayjs(line.delivery_date) : item.required_date ? dayjs(item.required_date) : undefined;
     });
-    quoteForm.setFieldsValue(initial);
+    setPendingQuoteFormValues(initial);
     setQuoteOpen(true);
   };
 
@@ -620,6 +623,16 @@ const PurchaseInquiriesPage: React.FC = () => {
         title="编辑询价单"
         open={editOpen}
         onClose={() => setEditOpen(false)}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingEditFormValues) {
+              editForm.setFieldsValue(pendingEditFormValues);
+            }
+            return;
+          }
+          editForm.resetFields();
+          setPendingEditFormValues(null);
+        }}
         onFinish={handleSaveEdit}
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
@@ -987,8 +1000,21 @@ const PurchaseInquiriesPage: React.FC = () => {
         title={`录入供应商报价${quoteSupplierId && detail?.vendors ? ` - ${detail.vendors.find((v) => v.supplier_id === quoteSupplierId)?.supplier_name ?? ''}` : ''}`}
         open={quoteOpen}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        onCancel={() => setQuoteOpen(false)}
+        onCancel={() => {
+          setQuoteOpen(false);
+          setPendingQuoteFormValues(null);
+        }}
         onOk={() => void saveQuote()}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingQuoteFormValues) {
+              quoteForm.setFieldsValue(pendingQuoteFormValues);
+            }
+            return;
+          }
+          quoteForm.resetFields();
+          setPendingQuoteFormValues(null);
+        }}
         destroyOnHidden
       >
         <Form form={quoteForm} layout="vertical">

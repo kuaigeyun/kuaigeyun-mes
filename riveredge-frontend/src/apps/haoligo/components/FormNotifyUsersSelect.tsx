@@ -66,7 +66,7 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
   const currentUser = useGlobalStore((s) => s.currentUser);
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const canPick = canPickUsersForDisplay(currentUser);
-  const canInteract = !isReadonlyMode && canPick;
+  const canInteract = !isReadonlyMode && (Boolean(searchUsers) || canPick);
   const resolvedLabel = label ?? t('app.haoligo.equipment.documents.formReportNotifyUsers');
   const resolvedPh = placeholder ?? t('app.haoligo.equipment.documents.formReportNotifyUsersPh');
 
@@ -130,7 +130,7 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
     void fetchOptions();
   }, [fetchOptions, resolvedSelectedIds, isReadonlyMode, canInteract]);
 
-  const effectiveReadonly = isReadonlyMode || !canPick;
+  const effectiveReadonly = isReadonlyMode || !canInteract;
 
   const field = (
     <ProFormSelect
@@ -145,8 +145,8 @@ export const FormNotifyUsersSelect: React.FC<FormNotifyUsersSelectProps> = ({
         filterOption: false,
         disabled: effectiveReadonly,
         loading,
-        placeholder: canPick ? resolvedPh : '无人员选择权限',
-        notFoundContent: canPick ? undefined : '无人员选择权限（需 system:user:read 或 system:user:display）',
+        placeholder: canInteract ? resolvedPh : '无人员选择权限',
+        notFoundContent: canInteract ? undefined : '无人员选择权限（需 system:user:read 或 system:user:display）',
         onSearch: canInteract ? debouncedFetch : undefined,
         onDropdownVisibleChange: (open) => {
           if (open && canInteract) {

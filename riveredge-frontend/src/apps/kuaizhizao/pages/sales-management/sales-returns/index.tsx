@@ -159,6 +159,7 @@ const SalesReturnsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingDetail, setEditingDetail] = useState<SalesReturnDetail | null>(null);
+  const [pendingFormValues, setPendingFormValues] = useState<Record<string, any> | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
@@ -339,6 +340,10 @@ const SalesReturnsPage: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null);
     setEditingDetail(null);
+    setPendingFormValues({
+      return_time: dayjs(),
+      items: [{ return_quantity: 1, unit_price: 0 }],
+    });
     setModalVisible(true);
   };
 
@@ -351,9 +356,8 @@ const SalesReturnsPage: React.FC = () => {
       const detail = (await warehouseApi.salesReturn.get(record.id!.toString())) as SalesReturnDetail;
       setEditingId(record.id!);
       setEditingDetail(detail);
-      setModalVisible(true);
       const rt = detail.return_time ? dayjs(detail.return_time) : dayjs();
-      formRef.current?.setFieldsValue({
+      setPendingFormValues({
         customer_id: detail.customer_id,
         customer_name: detail.customer_name,
         warehouse_id: detail.warehouse_id,
@@ -376,6 +380,7 @@ const SalesReturnsPage: React.FC = () => {
           material_unit: (it as any).material_unit ?? '件',
         })),
       });
+      setModalVisible(true);
     } catch {
       messageApi.error('加载退货单失败');
     }
@@ -484,6 +489,7 @@ const SalesReturnsPage: React.FC = () => {
       setModalVisible(false);
       setEditingId(null);
       setEditingDetail(null);
+      setPendingFormValues(null);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -645,6 +651,17 @@ const SalesReturnsPage: React.FC = () => {
           setModalVisible(false);
           setEditingId(null);
           setEditingDetail(null);
+          setPendingFormValues(null);
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingFormValues) {
+              formRef.current?.setFieldsValue(pendingFormValues);
+            }
+            return;
+          }
+          formRef.current?.resetFields?.();
+          setPendingFormValues(null);
         }}
         onFinish={onFinish}
         formRef={formRef}

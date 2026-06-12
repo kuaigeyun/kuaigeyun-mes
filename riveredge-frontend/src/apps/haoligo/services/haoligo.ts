@@ -949,6 +949,36 @@ export function deleteEquipmentUpkeepCompleteSheet(rowId: number): Promise<void>
   return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets/${rowId}`, { method: 'DELETE' });
 }
 
+export interface HaoligoNotifyUserOption {
+  id: number;
+  label: string;
+  username?: string | null;
+  full_name?: string | null;
+}
+
+export function listHaoligoNotifyUserOptions(params?: {
+  keyword?: string;
+  limit?: number;
+  selected_user_ids?: number[];
+}): Promise<HaoligoNotifyUserOption[]> {
+  return apiRequest(`${PREFIX}/notify-users/options`, { params });
+}
+
+export interface EquipmentUpkeepCompleteNotifyUserOption {
+  id: number;
+  label: string;
+  username?: string | null;
+  full_name?: string | null;
+}
+
+export function listEquipmentUpkeepCompleteNotifyUserOptions(params?: {
+  keyword?: string;
+  limit?: number;
+  selected_user_ids?: number[];
+}): Promise<EquipmentUpkeepCompleteNotifyUserOption[]> {
+  return apiRequest(`${PREFIX}/equipment/upkeep-complete-sheets/notify-user-options`, { params });
+}
+
 export interface EquipmentOutputRecordRow {
   id: number;
   uuid: string;

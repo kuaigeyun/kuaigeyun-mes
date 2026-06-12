@@ -202,6 +202,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editingDetail, setEditingDetail] = useState<PurchaseReturnDetail | null>(null);
+  const [pendingFormValues, setPendingFormValues] = useState<Record<string, any> | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
@@ -303,13 +304,11 @@ const PurchaseReturnsPage: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null);
     setEditingDetail(null);
+    setPendingFormValues({
+      return_time: dayjs(),
+      items: [],
+    });
     setModalVisible(true);
-    setTimeout(() => {
-      formRef.current?.setFieldsValue({
-        return_time: dayjs(),
-        items: [],
-      });
-    }, 0);
   };
 
   const handleEdit = async (record: PurchaseReturn) => {
@@ -321,8 +320,7 @@ const PurchaseReturnsPage: React.FC = () => {
       const detail = (await warehouseApi.purchaseReturn.get(record.id!.toString())) as PurchaseReturnDetail;
       setEditingId(record.id!);
       setEditingDetail(detail);
-      setModalVisible(true);
-      formRef.current?.setFieldsValue({
+      setPendingFormValues({
         supplier_id: detail.supplier_id,
         supplier_name: detail.supplier_name,
         warehouse_id: detail.warehouse_id,
@@ -345,6 +343,7 @@ const PurchaseReturnsPage: React.FC = () => {
           material_unit: (it as any).material_unit ?? '件',
         })),
       });
+      setModalVisible(true);
     } catch {
       messageApi.error('加载退货单失败');
     }
@@ -438,6 +437,7 @@ const PurchaseReturnsPage: React.FC = () => {
       setModalVisible(false);
       setEditingId(null);
       setEditingDetail(null);
+      setPendingFormValues(null);
       invalidatePurchaseReturnStatistics();
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
@@ -830,6 +830,17 @@ const PurchaseReturnsPage: React.FC = () => {
           setModalVisible(false);
           setEditingId(null);
           setEditingDetail(null);
+          setPendingFormValues(null);
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingFormValues) {
+              formRef.current?.setFieldsValue(pendingFormValues);
+            }
+            return;
+          }
+          formRef.current?.resetFields?.();
+          setPendingFormValues(null);
         }}
         onFinish={onFinish}
         formRef={formRef}

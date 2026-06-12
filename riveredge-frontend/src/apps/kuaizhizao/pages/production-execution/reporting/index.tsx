@@ -97,6 +97,26 @@ interface ReportingRecord {
   [key: string]: any; // 支持索引访问
 }
 
+function normalizeReportingStatus(status?: string): string {
+  return String(status ?? '').trim().toLowerCase();
+}
+
+const REPORTING_PENDING_STATUSES = ['pending', 'pending_approval', 'pending_review', '待审核'];
+const REPORTING_APPROVED_STATUSES = ['approved', 'audited', 'confirmed', '已审核', '审核通过'];
+const REPORTING_REJECTED_STATUSES = ['rejected', '已驳回'];
+
+function isReportingPending(status?: string): boolean {
+  return REPORTING_PENDING_STATUSES.includes(normalizeReportingStatus(status));
+}
+
+function isReportingApproved(status?: string): boolean {
+  return REPORTING_APPROVED_STATUSES.includes(normalizeReportingStatus(status));
+}
+
+function isReportingRejected(status?: string): boolean {
+  return REPORTING_REJECTED_STATUSES.includes(normalizeReportingStatus(status));
+}
+
 const REPORTING_DETAIL_BINDINGS_MIN_WIDTH = 1100;
 
 function getReportingWorkOrderName(record: ReportingRecord): string {
@@ -633,6 +653,9 @@ const ReportingPage: React.FC = () => {
 
   const renderReportingRowActionNodes = (record: ReportingRecord): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
+    const isPending = isReportingPending(record.status);
+    const isApproved = isReportingApproved(record.status);
+    const isRejected = isReportingRejected(record.status);
     nodes.push(
       <Button {...rowActionKind('read')}
         key="detail"
@@ -646,7 +669,7 @@ const ReportingPage: React.FC = () => {
         详情
       </Button>
     );
-    if (record.status === 'pending') {
+    if (isPending) {
       nodes.push(
         <span {...rowActionKind('skip')} key="wf" onClick={(e) => e.stopPropagation()}>
           <UniWorkflowActions {...rowActionKind('skip')}
@@ -654,9 +677,9 @@ const ReportingPage: React.FC = () => {
             entityName="报工记录"
             statusField="status"
             draftStatuses={[]}
-            pendingStatuses={['pending']}
-            approvedStatuses={['approved']}
-            rejectedStatuses={['rejected']}
+            pendingStatuses={REPORTING_PENDING_STATUSES}
+            approvedStatuses={REPORTING_APPROVED_STATUSES}
+            rejectedStatuses={REPORTING_REJECTED_STATUSES}
             actions={{
               approve: (id) => reportingApi.approve(id.toString(), {}),
               reject: (id, reason) =>
@@ -729,7 +752,7 @@ const ReportingPage: React.FC = () => {
         </Button>
       );
     }
-    if (record.status === 'approved') {
+    if (isApproved) {
       nodes.push(
         <Button {...rowActionKind('revoke')}
           key="revoke"
@@ -812,7 +835,7 @@ const ReportingPage: React.FC = () => {
         </Button>
       );
     }
-    if (record.status === 'rejected') {
+    if (isRejected) {
       nodes.push(
         <Button {...rowActionKind('delete')}
           key="del2"

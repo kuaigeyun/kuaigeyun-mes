@@ -82,6 +82,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     resolveInitDepartmentUuid,
     presetFromApplicantRow,
     departmentTreeRef,
+    searchApplicantUsers,
   } = useApplicantUserIdField(formRef);
   const workshopMapRef = useRef<Map<number, { code: string; name: string }>>(new Map());
   const [upkeepSetOptions, setUpkeepSetOptions] = useState<{ value: number; label: string }[]>([]);
@@ -577,6 +578,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     required
                     presetUsers={applicantPresetUsers}
                     onUserPicked={onApplicantPicked}
+                    searchUsers={searchApplicantUsers}
                   />
                 </Col>
                 <Col span={12}>

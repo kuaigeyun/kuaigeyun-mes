@@ -80,7 +80,9 @@ const InventoryAlertPage: React.FC = () => {
   const [ruleModalVisible, setRuleModalVisible] = useState(false);
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+  const [pendingRuleFormValues, setPendingRuleFormValues] = useState<Record<string, any> | null>(null);
   const handleFormRef = useRef<any>(null);
+  const [pendingHandleFormValues, setPendingHandleFormValues] = useState<Record<string, any> | null>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -117,8 +119,7 @@ const InventoryAlertPage: React.FC = () => {
   const handleCreateRule = () => {
     setCurrentRuleId(null);
     setRuleModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
+    setPendingRuleFormValues({
       is_enabled: true,
       threshold_type: 'quantity',
     });
@@ -132,8 +133,7 @@ const InventoryAlertPage: React.FC = () => {
       setCurrentRuleId(record.id!);
       setRuleModalVisible(true);
       const detail = await inventoryAlertApi.getRule(record.id!.toString());
-      formRef.current?.resetFields();
-      formRef.current?.setFieldsValue({
+      setPendingRuleFormValues({
         name: detail.name,
         alert_type: detail.alert_type,
         material_id: detail.material_id,
@@ -189,6 +189,7 @@ const InventoryAlertPage: React.FC = () => {
       }
       setRuleModalVisible(false);
       setCurrentRuleId(null);
+      setPendingRuleFormValues(null);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -233,8 +234,7 @@ const InventoryAlertPage: React.FC = () => {
   const handleAlert = async (record: InventoryAlert) => {
     setCurrentAlertId(record.id!);
     setHandleModalVisible(true);
-    handleFormRef.current?.resetFields();
-    handleFormRef.current?.setFieldsValue({
+    setPendingHandleFormValues({
       status: 'processing',
     });
   };
@@ -256,6 +256,7 @@ const InventoryAlertPage: React.FC = () => {
       messageApi.success('预警处理成功');
       setHandleModalVisible(false);
       setCurrentAlertId(null);
+      setPendingHandleFormValues(null);
       handleFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -631,7 +632,18 @@ const InventoryAlertPage: React.FC = () => {
         onClose={() => {
           setRuleModalVisible(false);
           setCurrentRuleId(null);
+          setPendingRuleFormValues(null);
           formRef.current?.resetFields();
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingRuleFormValues) {
+              formRef.current?.setFieldsValue(pendingRuleFormValues);
+            }
+            return;
+          }
+          formRef.current?.resetFields?.();
+          setPendingRuleFormValues(null);
         }}
         onFinish={handleRuleSubmit}
         formRef={formRef}
@@ -716,7 +728,18 @@ const InventoryAlertPage: React.FC = () => {
         onClose={() => {
           setHandleModalVisible(false);
           setCurrentAlertId(null);
+          setPendingHandleFormValues(null);
           handleFormRef.current?.resetFields();
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingHandleFormValues) {
+              handleFormRef.current?.setFieldsValue(pendingHandleFormValues);
+            }
+            return;
+          }
+          handleFormRef.current?.resetFields?.();
+          setPendingHandleFormValues(null);
         }}
         onFinish={handleAlertSubmit}
         formRef={handleFormRef}

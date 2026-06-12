@@ -64,7 +64,7 @@ import {
 import { invalidateHaoligoMoldLedgerTableCache } from '../../../../utils/moldLedgerTableCache';
 import { UniUserIdSelect, type UniUserIdSelectPreset, type UniUserIdSearchFn } from '../../../../../../components/uni-user-id-select';
 import { useGlobalStore } from '../../../../../../stores';
-import { formatUserDisplayLabel, searchUserIdOptions } from '../../../../../../utils/userDisplay';
+import { formatUserDisplayLabel } from '../../../../../../utils/userDisplay';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { uploadFile } from '../../../../../../services/file';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
@@ -81,6 +81,7 @@ import {
   getNextMoldTrialTimes,
   previewTrialRepairNotifyUsers,
   previewTrialSupplierNotifyUsers,
+  listHaoligoNotifyUserOptions,
   listMoldTrialSheets,
   listMoldWarehouses,
   listMolds,
@@ -1114,19 +1115,18 @@ const MoldTrialSheetsPage: React.FC = () => {
         fromArg.length > 0
           ? fromArg
           : ((formRef.current?.getFieldValue('pending_notify_user_ids') as number[] | undefined) || []);
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: pendingNotifyLabelRef,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         pendingNotifyLabelRef.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser, pendingNotifyLabelRef],
+    [pendingNotifyLabelRef],
   );
 
   const searchSubmittedNotifyUsers = useCallback(
@@ -1137,19 +1137,18 @@ const MoldTrialSheetsPage: React.FC = () => {
           ? fromArg
           : ((formRef.current?.getFieldValue('submitted_notify_user_ids') as number[] | undefined) ||
             []);
-      const opts = await searchUserIdOptions({
+      const users = await listHaoligoNotifyUserOptions({
         keyword,
-        pageSize: 50,
-        selectedIds: selIds,
-        labelById: pendingNotifyLabelRef,
-        currentUser,
+        limit: 80,
+        selected_user_ids: selIds,
       });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
       for (const o of opts) {
         pendingNotifyLabelRef.set(o.value, o.label);
       }
       return opts;
     },
-    [currentUser, pendingNotifyLabelRef],
+    [pendingNotifyLabelRef],
   );
 
   const searchTrialOperatorUsers = useCallback<UniUserIdSearchFn>(
@@ -1216,12 +1215,11 @@ const MoldTrialSheetsPage: React.FC = () => {
         const row = await findMoldByCode(mc);
         const ids = parsePendingNotifyUserIds(row?.trial_pending_notify_user_ids);
         if (!ids.length) return;
-        const opts = await searchUserIdOptions({
-          pageSize: 50,
-          selectedIds: ids,
-          labelById: pendingNotifyLabelRef,
-          currentUser,
+        const users = await listHaoligoNotifyUserOptions({
+          limit: 80,
+          selected_user_ids: ids,
         });
+        const opts = users.map((u) => ({ label: u.label, value: u.id }));
         for (const o of opts) {
           pendingNotifyLabelRef.set(o.value, o.label);
         }
@@ -1230,7 +1228,7 @@ const MoldTrialSheetsPage: React.FC = () => {
         /* 记忆查询失败不阻断填单 */
       }
     },
-    [currentUser, isDetailView, isEdit, pendingNotifyLabelRef],
+    [isDetailView, isEdit, pendingNotifyLabelRef],
   );
 
   const reloadWarehouses = useCallback(async (): Promise<MoldWarehouseRow[]> => {

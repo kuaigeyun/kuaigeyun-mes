@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Annotated, Any, Dict, List, Optional
 from uuid import UUID
 
@@ -110,6 +110,12 @@ def _cell_decimal(row: dict, key: Optional[str]) -> Optional[Decimal]:
         return Decimal(str(v).replace(",", "").strip())
     except (InvalidOperation, ValueError, TypeError):
         return None
+
+
+def _round_decimal_2(value: Optional[Decimal]) -> Optional[Decimal]:
+    if value is None:
+        return None
+    return value.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # --- output dataset binding ---
@@ -265,7 +271,7 @@ async def preview_equipment_output_by_work_order(
         work_order_no=body.work_order_no,
         finished_product_code=fcode[:128] if fcode else None,
         finished_product_name=fname[:200] if fname else None,
-        planned_qty=pq,
+        planned_qty=_round_decimal_2(pq),
         dataset_row=raw,
     )
 

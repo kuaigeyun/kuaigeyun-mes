@@ -194,6 +194,7 @@ const OutboundPage: React.FC = () => {
   const [salesConfirmRecord, setSalesConfirmRecord] = useState<OutboundOrder | null>(null);
   const [salesConfirmDetail, setSalesConfirmDetail] = useState<any>(null);
   const [salesConfirmSubmitting, setSalesConfirmSubmitting] = useState(false);
+  const [pendingSalesConfirmFormValues, setPendingSalesConfirmFormValues] = useState<Record<string, unknown> | null>(null);
   const [salesBatchOptionsByMaterialId, setSalesBatchOptionsByMaterialId] = useState<
     Record<number, SalesBatchPickOption[]>
   >({});
@@ -468,7 +469,7 @@ const OutboundPage: React.FC = () => {
       active.forEach((it: any) => {
         if (it.id != null) init[`batch_${it.id}`] = it.batch_number ? String(it.batch_number) : '';
       });
-      salesConfirmForm.setFieldsValue(init);
+      setPendingSalesConfirmFormValues(init);
       setSalesConfirmOpen(true);
     } catch {
       messageApi.error('获取出库单详情失败');
@@ -1117,6 +1118,17 @@ const OutboundPage: React.FC = () => {
           setSalesConfirmOpen(false);
           setSalesConfirmRecord(null);
           setSalesConfirmDetail(null);
+          setPendingSalesConfirmFormValues(null);
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingSalesConfirmFormValues) {
+              salesConfirmForm.setFieldsValue(pendingSalesConfirmFormValues);
+            }
+            return;
+          }
+          salesConfirmForm.resetFields();
+          setPendingSalesConfirmFormValues(null);
         }}
         onOk={submitSalesDeliveryConfirm}
       >

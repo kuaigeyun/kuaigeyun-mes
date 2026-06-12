@@ -207,7 +207,9 @@ const ReceiptNoticesPage: React.FC = () => {
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const formRef = useRef<any>(null);
+  const createFormRef = useRef<any>(null);
+  const editFormRef = useRef<any>(null);
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [purchaseOrderList, setPurchaseOrderList] = useState<any[]>([]);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
@@ -227,7 +229,7 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const appendReceiptNoticeItemsFromMaterials = useCallback(
     (selected: Material[]) => {
-      const current = formRef.current?.getFieldValue('items') ?? [];
+      const current = createFormRef.current?.getFieldValue('items') ?? [];
       const newRows = selected.map((m) => ({
         material_id: m.id,
         material_code: m.mainCode ?? m.code ?? '',
@@ -236,7 +238,7 @@ const ReceiptNoticesPage: React.FC = () => {
         notice_quantity: 1,
         unit_price: 0,
       }));
-      formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
+      createFormRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
     [messageApi, t]
@@ -443,7 +445,7 @@ const ReceiptNoticesPage: React.FC = () => {
         notice_quantity: Number(it.notice_quantity) || 0,
         unit_price: Number(it.unit_price) || 0,
       }));
-      formRef.current?.setFieldsValue({
+      setPendingEditFormValues({
         purchase_order_id: detail.purchase_order_id,
         purchase_order_code: detail.purchase_order_code,
         supplier_id: detail.supplier_id,
@@ -564,7 +566,7 @@ const ReceiptNoticesPage: React.FC = () => {
     setEditingId(null);
     setCreateModalVisible(true);
     window.setTimeout(() => {
-      formRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
+      createFormRef.current?.setFieldsValue({ items: [defaultReceiptItem] });
     }, 100);
     let ruleCode = getPageRuleCode('kuaizhizao-receipt-notice');
     let autoGenerate = isAutoGenerateEnabled('kuaizhizao-receipt-notice');
@@ -582,7 +584,7 @@ const ReceiptNoticesPage: React.FC = () => {
           const preview = res.code;
           setPreviewCode(preview ?? null);
           window.setTimeout(() => {
-            formRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
+            createFormRef.current?.setFieldsValue({ notice_code: preview ?? '', items: [defaultReceiptItem] });
           }, 100);
         })
         .catch((e) => {
@@ -697,7 +699,7 @@ const ReceiptNoticesPage: React.FC = () => {
       // use list data
     }
     const code = order.order_code || order.purchase_order_code || order.code;
-    formRef.current?.setFieldsValue({
+    createFormRef.current?.setFieldsValue({
       purchase_order_code: code,
       supplier_id: order.supplier_id,
       supplier_name: order.supplier_name,
@@ -713,7 +715,7 @@ const ReceiptNoticesPage: React.FC = () => {
         notice_quantity: Number(it.ordered_quantity ?? it.quantity) || 0,
         unit_price: Number(it.unit_price ?? it.unitPrice) || 0,
       }));
-      formRef.current?.setFieldsValue({ items });
+      createFormRef.current?.setFieldsValue({ items });
     }
   };
 
@@ -883,7 +885,7 @@ const ReceiptNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="入库仓库"
             placeholder="请选择入库仓库"
-            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(val, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
       </Row>
@@ -913,9 +915,9 @@ const ReceiptNoticesPage: React.FC = () => {
               type="dashed"
               icon={<PlusOutlined />}
               onClick={() => {
-                const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                const items = [...(createFormRef.current?.getFieldValue('items') ?? [])];
                 items.push({ ...defaultReceiptItem });
-                formRef.current?.setFieldsValue({ items });
+                createFormRef.current?.setFieldsValue({ items });
               }}
             >
               添加明细
@@ -1033,7 +1035,7 @@ const ReceiptNoticesPage: React.FC = () => {
             name="warehouse_id"
             label="入库仓库"
             placeholder="请选择入库仓库"
-            onChange={(val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
+            onChange={(val, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
         <Col span={8}>
@@ -1402,7 +1404,7 @@ const ReceiptNoticesPage: React.FC = () => {
         title="新建收货通知单"
         open={createModalVisible}
         onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
-        formRef={formRef}
+        formRef={createFormRef}
         onFinish={handleCreateSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
@@ -1415,7 +1417,17 @@ const ReceiptNoticesPage: React.FC = () => {
         title="编辑收货通知单"
         open={editModalVisible}
         onClose={() => setEditModalVisible(false)}
-        formRef={formRef}
+        afterOpenChange={(open) => {
+          if (open && pendingEditFormValues) {
+            editFormRef.current?.setFieldsValue(pendingEditFormValues);
+            return;
+          }
+          if (!open) {
+            setPendingEditFormValues(null);
+            editFormRef.current?.resetFields?.();
+          }
+        }}
+        formRef={editFormRef}
         onFinish={handleEditSubmit}
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}

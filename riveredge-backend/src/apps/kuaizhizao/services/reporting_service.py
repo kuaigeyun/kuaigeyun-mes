@@ -1791,8 +1791,13 @@ class ReportingService(AppBaseService[ReportingRecord]):
                     raise ValidationError("报工时间不能晚于当前时间")
 
             update_data['remarks'] = updated_remarks
-            update_data['updated_by'] = corrected_by
-            update_data['updated_by_name'] = user_info['name']
+            # ReportingRecord 当前模型未定义 updated_by / updated_by_name，
+            # 仅在字段存在时写入，避免触发 ORM FieldError 导致 500。
+            fields_map = getattr(getattr(ReportingRecord, "_meta", None), "fields_map", {}) or {}
+            if "updated_by" in fields_map:
+                update_data["updated_by"] = corrected_by
+            if "updated_by_name" in fields_map:
+                update_data["updated_by_name"] = user_info["name"]
 
             await ReportingRecord.filter(
                 tenant_id=tenant_id,

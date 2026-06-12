@@ -179,12 +179,14 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const handleCreate = async () => {
     setCreateModalVisible(true);
     setEntryMode('document');
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      registration_date: dayjs(),
-      barcode_type: '1d',
-      items: [{ quantity: 1 }],
-    });
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        registration_date: dayjs(),
+        barcode_type: '1d',
+        items: [{ quantity: 1 }],
+      });
+    }, 0);
   };
 
   const handleScanBarcode = async (barcode: string) => {

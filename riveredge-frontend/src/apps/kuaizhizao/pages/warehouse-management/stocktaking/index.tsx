@@ -92,6 +92,7 @@ const StocktakingPage: React.FC = () => {
   const [currentStocktakingId, setCurrentStocktakingId] = useState<number | null>(null);
   // 当前执行盘点的明细ID
   const [currentItemId, setCurrentItemId] = useState<number | null>(null);
+  const [pendingExecuteFormValues, setPendingExecuteFormValues] = useState<Record<string, any> | null>(null);
 
   // 仓库加载交由 UniWarehouseSelect
 
@@ -116,11 +117,13 @@ const StocktakingPage: React.FC = () => {
    */
   const handleCreate = () => {
     setCreateModalVisible(true);
-    formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      stocktaking_date: dayjs(),
-      stocktaking_type: 'full',
-    });
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        stocktaking_date: dayjs(),
+        stocktaking_type: 'full',
+      });
+    }, 0);
   };
 
   /**
@@ -238,8 +241,7 @@ const StocktakingPage: React.FC = () => {
   const handleExecuteItem = (item: StocktakingItem) => {
     setCurrentItemId(item.id!);
     setExecuteModalVisible(true);
-    executeFormRef.current?.resetFields();
-    executeFormRef.current?.setFieldsValue({
+    setPendingExecuteFormValues({
       actual_quantity: item.actual_quantity || item.book_quantity,
       remarks: item.remarks,
     });
@@ -264,6 +266,7 @@ const StocktakingPage: React.FC = () => {
       messageApi.success('盘点明细执行成功');
       setExecuteModalVisible(false);
       setCurrentItemId(null);
+      setPendingExecuteFormValues(null);
       executeFormRef.current?.resetFields();
       // 刷新详情
       if (currentStocktaking) {
@@ -650,7 +653,18 @@ const StocktakingPage: React.FC = () => {
         onClose={() => {
           setExecuteModalVisible(false);
           setCurrentItemId(null);
+          setPendingExecuteFormValues(null);
           executeFormRef.current?.resetFields();
+        }}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingExecuteFormValues) {
+              executeFormRef.current?.setFieldsValue(pendingExecuteFormValues);
+            }
+            return;
+          }
+          executeFormRef.current?.resetFields?.();
+          setPendingExecuteFormValues(null);
         }}
         onFinish={handleExecuteItemSubmit}
         formRef={executeFormRef}

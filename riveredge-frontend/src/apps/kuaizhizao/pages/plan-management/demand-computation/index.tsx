@@ -172,6 +172,26 @@ function normalizeComputationSourceNote(computation?: DemandComputation): string
   return raw
 }
 
+function normalizeComputationStatusValue(status?: string): string {
+  return String(status ?? '').trim().toLowerCase()
+}
+
+const COMPUTATION_COMPLETED_STATUSES = new Set(['完成', '已完成', 'completed', 'success'])
+const COMPUTATION_FAILED_STATUSES = new Set(['失败', 'failed', 'error'])
+const COMPUTATION_EXECUTABLE_STATUSES = new Set(['进行中', 'pending', 'running'])
+
+function isComputationCompleted(status?: string): boolean {
+  return COMPUTATION_COMPLETED_STATUSES.has(normalizeComputationStatusValue(status))
+}
+
+function isComputationFailed(status?: string): boolean {
+  return COMPUTATION_FAILED_STATUSES.has(normalizeComputationStatusValue(status))
+}
+
+function canExecuteComputation(status?: string): boolean {
+  return COMPUTATION_EXECUTABLE_STATUSES.has(normalizeComputationStatusValue(status))
+}
+
 /** 可用库存列：hover 展示分仓库构成与净需求计算说明（依赖 detail_results.inventory_breakdown） */
 function AvailableInventoryPopoverContent({ detail }: { detail?: Record<string, unknown> | null }) {
   const bd = detail?.inventory_breakdown as Record<string, unknown> | undefined
@@ -1436,9 +1456,8 @@ const DemandComputationPage: React.FC = () => {
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
-        const canExecute = record.computation_status === '进行中'
-        const canRecompute =
-          record.computation_status === '完成' || record.computation_status === '失败'
+        const canExecute = canExecuteComputation(record.computation_status)
+        const canRecompute = isComputationCompleted(record.computation_status) || isComputationFailed(record.computation_status)
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail([record.id!])}>
             详情
@@ -1475,7 +1494,17 @@ const DemandComputationPage: React.FC = () => {
     return lastComputationsCacheRef.current.find((row) => row.id === id) ?? null
   }, [selectedRowKeys])
 
-  const canUseToolbarPush = selectedComputationForToolbar?.computation_status === '完成'
+  const canUseToolbarPush = selectedComputationForToolbar ? isComputationCompleted(selectedComputationForToolbar.computation_status) : false
+
+  const toolbarPushDisabledReason = useMemo(() => {
+    if (selectedRowKeys.length === 0) return '请先选择一条需求计算'
+    if (selectedRowKeys.length > 1) return '下推仅支持单条需求计算，请只保留一条选中记录'
+    if (!selectedComputationForToolbar) return '所选记录不在当前列表，请刷新后重新选择'
+    if (!canUseToolbarPush) {
+      return `仅“已完成”的需求计算可下推（当前状态：${selectedComputationForToolbar.computation_status || '未知'}）`
+    }
+    return undefined
+  }, [canUseToolbarPush, selectedComputationForToolbar, selectedRowKeys])
 
   const toolbarPushMenuItems = useMemo(
     () =>
@@ -1610,30 +1639,41 @@ const DemandComputationPage: React.FC = () => {
         showCreateButton={false}
         createButtonText="新建需求计算"
         onCreate={handleCreate}
-        toolBarRender={() => [
-          <UniPullCreateToolbar
-            compactKey="create-demand-computation-with-pull"
-            createIcon={<PlayCircleOutlined />}
-            createLabel="新建需求计算"
-            onCreate={() => {
-              void handleCreate()
-            }}
-            menuItems={buildKuaizhizaoPullCreateMenuItems([
-              {
-                key: 'pull-from-demand',
-                actionKey: 'demand_computation.pull_from_demand',
-                onClick: () => {
-                  void handlePullFromDemand()
+        toolBarRender={() => {
+          const pushButton = (
+            <UniPushToolbarButton
+              key={`computation-push-${selectedComputationForToolbar?.id ?? 'none'}`}
+              menuItems={toolbarPushMenuItems}
+              disabled={!!toolbarPushDisabledReason}
+            />
+          )
+          return [
+            <UniPullCreateToolbar
+              compactKey="create-demand-computation-with-pull"
+              createIcon={<PlayCircleOutlined />}
+              createLabel="新建需求计算"
+              onCreate={() => {
+                void handleCreate()
+              }}
+              menuItems={buildKuaizhizaoPullCreateMenuItems([
+                {
+                  key: 'pull-from-demand',
+                  actionKey: 'demand_computation.pull_from_demand',
+                  onClick: () => {
+                    void handlePullFromDemand()
+                  },
                 },
-              },
-            ])}
-          />,
-          <UniPushToolbarButton
-            key={`computation-push-${selectedComputationForToolbar?.id ?? 'none'}`}
-            menuItems={toolbarPushMenuItems}
-            disabled={!selectedComputationForToolbar || !canUseToolbarPush}
-          />,
-        ]}
+              ])}
+            />,
+            toolbarPushDisabledReason ? (
+              <Tooltip key="computation-push-tooltip" title={toolbarPushDisabledReason}>
+                <span style={{ display: 'inline-block' }}>{pushButton}</span>
+              </Tooltip>
+            ) : (
+              pushButton
+            ),
+          ]
+        }}
         toolBarActionsAfterDelete={[<MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />]}
       />
 

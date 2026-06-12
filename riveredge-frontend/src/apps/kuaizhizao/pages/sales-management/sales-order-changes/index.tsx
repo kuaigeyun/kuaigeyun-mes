@@ -58,6 +58,7 @@ const SalesOrderChangesPage: React.FC = () => {
   const [detail, setDetail] = useState<SalesOrderChange | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm] = Form.useForm();
+  const [pendingEditFormValues, setPendingEditFormValues] = useState<Record<string, any> | null>(null);
   const [editItems, setEditItems] = useState<SalesOrderChange['items']>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -86,7 +87,7 @@ const SalesOrderChangesPage: React.FC = () => {
     const full = await getSalesOrderChange(record.id!);
     setEditingId(full.id!);
     setEditItems(full.items ?? []);
-    editForm.setFieldsValue({
+    setPendingEditFormValues({
       change_reason: full.change_reason,
       notes: full.notes,
       attachments: mapAttachmentsToUploadList(full.attachments),
@@ -121,6 +122,7 @@ const SalesOrderChangesPage: React.FC = () => {
     });
     message.success('保存成功');
     setEditOpen(false);
+    setPendingEditFormValues(null);
     actionRef.current?.reload();
   };
 
@@ -327,6 +329,16 @@ const SalesOrderChangesPage: React.FC = () => {
         title="编辑销售变更单"
         open={editOpen}
         onClose={() => setEditOpen(false)}
+        afterOpenChange={(open) => {
+          if (open) {
+            if (pendingEditFormValues) {
+              editForm.setFieldsValue(pendingEditFormValues);
+            }
+            return;
+          }
+          editForm.resetFields();
+          setPendingEditFormValues(null);
+        }}
         onFinish={handleSaveEdit}
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
