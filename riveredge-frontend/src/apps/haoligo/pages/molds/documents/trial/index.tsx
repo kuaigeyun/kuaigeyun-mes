@@ -68,6 +68,7 @@ import { formatUserDisplayLabel } from '../../../../../../utils/userDisplay';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/layout-templates';
 import { uploadFile } from '../../../../../../services/file';
 import { normUploadUuids, uuidsToSecureUploadFileList } from '../../../patrol/shared/uploadHelpers';
+import { searchHaoligoUserIdOptions } from '../../../../utils/haoligoUserPicker';
 import { supplierApi, unwrapSupplyPagedList } from '../../../../../../apps/master-data/services/supply-chain';
 import type { Supplier } from '../../../../../../apps/master-data/types/supply-chain';
 import {
@@ -92,8 +93,6 @@ import {
   recallMoldTrialSheet,
   revokeMoldTrialSheetApproval,
   updateMold,
-  resolveMoldTrialOperators,
-  searchMoldTrialOperators,
   updateMoldTrialSheet,
   type MoldRow,
   type MoldWarehouseCreatePayload,
@@ -1160,46 +1159,13 @@ const MoldTrialSheetsPage: React.FC = () => {
         const n = raw != null ? Number(raw) : NaN;
         if (Number.isFinite(n) && n > 0 && !presetIds.includes(n)) presetIds.push(n);
       }
-      const kw = keyword?.trim() || '';
-      let opts: { label: string; value: number }[] = [];
-      if (kw || presetIds.length === 0) {
-        const res = await searchMoldTrialOperators({
-          page: 1,
-          page_size: 50,
-          keyword: kw || undefined,
-          is_active: true,
-        });
-        opts = (res.items || []).map((u) => ({
-          label: u.label || formatUserDisplayLabel(u),
-          value: u.id,
-        }));
-      }
-      const seen = new Set(opts.map((o) => o.value));
-      for (const id of presetIds) {
-        if (seen.has(id)) continue;
-        const preset =
-          trialUserPresets.find((p) => p.id === id) ||
-          productionTrialUserPresets.find((p) => p.id === id);
-        opts.unshift({
-          value: id,
-          label: preset?.label || `用户#${id}`,
-        });
-      }
-      if (presetIds.some((id) => !seen.has(id) && !opts.some((o) => o.value === id))) {
-        try {
-          const resolved = await resolveMoldTrialOperators({ user_ids: presetIds });
-          for (const u of resolved.items || []) {
-            if (!opts.some((o) => o.value === u.id)) {
-              opts.unshift({ value: u.id, label: u.label || formatUserDisplayLabel(u) });
-            }
-          }
-        } catch {
-          /* 回显解析失败不阻断下拉 */
-        }
-      }
-      return opts;
+      return searchHaoligoUserIdOptions({
+        keyword,
+        pageSize: 50,
+        selectedIds: presetIds,
+      });
     },
-    [productionTrialUserPresets, trialUserPresets],
+    [],
   );
 
   /** 从模具台账带出上次「待处理」时选择的消息提醒人员（新建单，可再改） */
