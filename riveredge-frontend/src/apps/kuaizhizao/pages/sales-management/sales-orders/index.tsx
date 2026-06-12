@@ -42,6 +42,11 @@ import {
   SalesOrderDetailTimelinePane,
   SalesOrderDetailCollaborationTitleSuffix,
 } from './components/SalesOrderDetailBody';
+import {
+  alignProColumns,
+  SALES_COMMON_FORM_LABELS,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../shared/documentFieldAlignment';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesOrderLifecycle, isSalesOrderDeliveryOverdue, isSalesOrderLineDeliveryOverdue, buildSalesOrderLifecycleValueEnum, resolveSalesOrderListLifecycleParams, isSalesOrderClosed, canWithdrawSalesOrderRecord, canUnapproveSalesOrderRecord } from '../../../utils/salesOrderLifecycle';
@@ -2661,8 +2666,16 @@ const SalesOrdersPage: React.FC = () => {
     },
     // 明细表格视图以每行订单明细为展示维度，纯查看用途，不提供操作按钮
   ];
+  const alignedOrderColumns = useMemo(
+    () => alignProColumns(orderColumns, SALES_DOC_LIST_FIELD_RANK),
+    [orderColumns],
+  );
+  const alignedDetailColumns = useMemo(
+    () => alignProColumns(detailColumns, SALES_DOC_LIST_FIELD_RANK),
+    [detailColumns],
+  );
 
-  const columns = (dataViewMode === 'detail' ? detailColumns : orderColumns) as any[];
+  const columns = (dataViewMode === 'detail' ? alignedDetailColumns : alignedOrderColumns) as any[];
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -2911,15 +2924,15 @@ const SalesOrdersPage: React.FC = () => {
             <Col span={6}>
               <ProFormText
                 name="customer_contact"
-                label="客户联系人"
-                placeholder="请输入客户联系人"
+                label={SALES_COMMON_FORM_LABELS.contact}
+                placeholder="请输入联系人"
               />
             </Col>
             <Col span={6}>
               <ProFormText
                 name="customer_phone"
-                label="客户电话"
-                placeholder="请输入客户电话"
+                label={SALES_COMMON_FORM_LABELS.phone}
+                placeholder="请输入联系电话"
               />
             </Col>
             <Col span={6}>

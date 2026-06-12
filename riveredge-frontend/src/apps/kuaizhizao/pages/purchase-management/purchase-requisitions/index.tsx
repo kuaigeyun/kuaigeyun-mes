@@ -84,7 +84,6 @@ import { useDocumentTracking, DocumentTrackingTimelineBody } from '../../../../.
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import { ROUTES } from '../../../constants/routes';
-import { PriceHistoryInsight } from '../purchase-orders/ProcurementEmpowermentComponents';
 import { useTranslation } from 'react-i18next';
 import { useGlobalStore } from '../../../../../stores';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
@@ -1401,15 +1400,10 @@ const PurchaseRequisitionsPage: React.FC = () => {
                         }
                       >
                         {({ getFieldValue }: any) => {
-                          const materialId = getFieldValue(['items', index, 'material_id']);
-                          const price = getFieldValue(['items', index, 'suggested_unit_price']);
                           return (
-                            <Space size={4}>
-                              <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
-                                <InputNumber placeholder="0" min={0} precision={2} style={{ width: 80 }} size="small" />
-                              </AntForm.Item>
-                              {materialId && <PriceHistoryInsight materialId={materialId} currentPrice={price} />}
-                            </Space>
+                            <AntForm.Item name={[index, 'suggested_unit_price']} style={{ margin: 0 }}>
+                              <InputNumber placeholder="0" min={0} precision={2} style={{ width: 80 }} size="small" />
+                            </AntForm.Item>
                           );
                         }}
                       </AntForm.Item>
@@ -2022,14 +2016,7 @@ const PurchaseRequisitionsPage: React.FC = () => {
                           dataIndex: 'suggested_unit_price',
                           width: 140,
                           align: 'right',
-                          render: (v: number, record: PurchaseRequisitionItem) => (
-                            <Space size={4}>
-                              ¥{Number(v || 0).toFixed(2)}
-                              {record.material_id ? (
-                                <PriceHistoryInsight materialId={record.material_id} currentPrice={v} />
-                              ) : null}
-                            </Space>
-                          ),
+                          render: (v: number) => `¥${Number(v || 0).toFixed(2)}`,
                         },
                         {
                           title: '要求到货日期',

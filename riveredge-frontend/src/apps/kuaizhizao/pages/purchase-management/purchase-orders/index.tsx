@@ -78,7 +78,6 @@ import {
   type PurchaseRequisition,
 } from '../../../services/purchase-requisition';
 import { listPurchaseOrderChangesByOrder, type PurchaseOrderChange } from '../../../services/purchase-order-change';
-import { PriceHistoryInsight } from './ProcurementEmpowermentComponents';
 import LandingCostAllocationModal from './LandingCostAllocationModal';
 import { supplierApi } from '../../../../master-data/services/supply-chain';
 import {
@@ -2320,19 +2319,16 @@ const PurchaseOrdersPage: React.FC = () => {
                           const items = getFieldValue('items') ?? [];
                           const row = items[index];
                           return (
-                            <Space size={4}>
-                              <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
-                                <InputNumber
-                                  placeholder={showTaxColumns ? '含税单价' : '单价'}
-                                  min={0}
-                                  precision={2}
-                                  prefix="¥"
-                                  style={adaptiveNumberInputStyle(row?.unit_price, { minCh: 9, maxCh: 16, extraCh: 5, reservePx: 28 })}
-                                  size="small"
-                                />
-                              </AntForm.Item>
-                              {row?.material_id && <PriceHistoryInsight materialId={row.material_id} currentPrice={Number(row.unit_price) || 0} />}
-                            </Space>
+                            <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
+                              <InputNumber
+                                placeholder={showTaxColumns ? '含税单价' : '单价'}
+                                min={0}
+                                precision={2}
+                                prefix="¥"
+                                style={adaptiveNumberInputStyle(row?.unit_price, { minCh: 9, maxCh: 16, extraCh: 5, reservePx: 28 })}
+                                size="small"
+                              />
+                            </AntForm.Item>
                           );
                         }}
                       </AntForm.Item>

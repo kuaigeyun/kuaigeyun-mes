@@ -29,7 +29,7 @@ import {
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
 import { getUserFormCoreReferenceOptions, primeUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
-import { rowActionKind, rowActionToneDestructive } from '../../../../components/uni-action';
+import { rowActionKind, rowActionResetPassword, rowActionToneDestructive } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
 
 /**
@@ -529,9 +529,8 @@ const UserListPage: React.FC = () => {
             </Popconfirm>,
             <Button
               key="reset"
-              {...rowActionKind('update')}
+              {...rowActionResetPassword('update')}
               {...rowActionToneDestructive()}
-              data-action-priority={3}
               type="link"
               size="small"
               icon={<ReloadOutlined />}

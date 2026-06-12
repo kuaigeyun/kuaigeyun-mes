@@ -26,6 +26,7 @@ export {
 } from './actionCatalog'
 export {
   rowActionKind,
+  rowActionResetPassword,
   rowActionAddFollowUpFromDocument,
   rowActionToneDestructive,
   ROW_ACTION_KIND_ATTR,

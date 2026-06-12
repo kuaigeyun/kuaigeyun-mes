@@ -112,6 +112,13 @@ import {
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import { UniPdfPreview } from '../../../../../components/uni-preview';
+import {
+  alignDescriptionColumns,
+  alignProColumns,
+  SALES_COMMON_FORM_LABELS,
+  SALES_DOC_DETAIL_BASIC_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../shared/documentFieldAlignment';
 
 const QUOTATION_LIST_PATH = '/apps/kuaizhizao/sales-management/quotations';
 const QUOTATION_CREATE_PATH = `${QUOTATION_LIST_PATH}/new`;
@@ -1240,6 +1247,7 @@ const QuotationsPage: React.FC = () => {
       },
     },
   ];
+  const alignedListColumns = alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK);
 
   // columns 定义已合并
 
@@ -2361,8 +2369,8 @@ const QuotationsPage: React.FC = () => {
     },
     // —— 客户信息 ——
     { title: '客户', dataIndex: 'customer_name' },
-    { title: '联系人', dataIndex: 'customer_contact' },
-    { title: '电话', dataIndex: 'customer_phone' },
+    { title: SALES_COMMON_FORM_LABELS.contact, dataIndex: 'customer_contact' },
+    { title: SALES_COMMON_FORM_LABELS.phone, dataIndex: 'customer_phone' },
     // —— 商务条款（日期、金额、支付、本方责任人）——
     { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
     { title: '有效期至', dataIndex: 'valid_until', valueType: 'date' },
@@ -2393,7 +2401,7 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
-    { title: '销售员', dataIndex: 'salesman_name' },
+    { title: SALES_COMMON_FORM_LABELS.salesman, dataIndex: 'salesman_name' },
     // —— 交货履约 ——
     { title: '预计交货日期', dataIndex: 'delivery_date', valueType: 'date' },
     {
@@ -2412,6 +2420,10 @@ const QuotationsPage: React.FC = () => {
     // —— 系统信息 ——
     { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
+  const alignedDetailBasicColumns = alignDescriptionColumns(
+    detailBasicColumns,
+    SALES_DOC_DETAIL_BASIC_FIELD_RANK,
+  );
 
   const openLinkedSalesOrderDrawer = useCallback(
     async (id: number) => {
@@ -2697,10 +2709,10 @@ const QuotationsPage: React.FC = () => {
       {/* 联系人 1/6 · 电话 1/6 · 地址 1/3 · 付款条件 1/6 · 币种 1/6 */}
       <Row gutter={16}>
         <Col span={4}>
-          <ProFormText name="customer_contact" label="联系人" />
+          <ProFormText name="customer_contact" label={SALES_COMMON_FORM_LABELS.contact} />
         </Col>
         <Col span={4}>
-          <ProFormText name="customer_phone" label="联系人电话" />
+          <ProFormText name="customer_phone" label={SALES_COMMON_FORM_LABELS.phone} />
         </Col>
         <Col span={8}>
           <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
@@ -3243,7 +3255,7 @@ const QuotationsPage: React.FC = () => {
           formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
-          columns={columns}
+          columns={alignedListColumns}
           showAdvancedSearch
           beforeSearchButtons={
             <ThemedSegmented
@@ -3473,7 +3485,7 @@ const QuotationsPage: React.FC = () => {
             <Descriptions
               column={3}
               size="small"
-              items={buildDescriptionItemsFromColumns(quotationDetail, detailBasicColumns)}
+              items={buildDescriptionItemsFromColumns(quotationDetail, alignedDetailBasicColumns)}
             />
           ) : undefined
         }

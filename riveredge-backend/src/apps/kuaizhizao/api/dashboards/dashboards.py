@@ -1609,23 +1609,84 @@ async def get_menu_badge_counts(
     try:
         # 采购订单
         from apps.kuaizhizao.models.purchase_order import PurchaseOrder
+        from apps.kuaizhizao.constants import DocumentStatus
+        po = PurchaseOrder.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        po_terminal = [
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.REJECTED.value,
+            DocumentStatus.COMPLETED.value,
+            "已取消",
+            "已驳回",
+            "已完成",
+            "CANCELLED",
+            "REJECTED",
+            "COMPLETED",
+        ]
         counts["purchase_order"] = {
-            "overdue": await PurchaseOrder.filter(
-                tenant_id=tenant_id,
-                delivery_date__lt=now_date,
-            ).exclude(status__in=["COMPLETED", "已完成", "CANCELLED", "已取消"]).count(),
-            "pending": await PurchaseOrder.filter(
-                tenant_id=tenant_id,
+            # 与采购申请一致采用“待处理口径”，菜单优先展示 pending / in_progress
+            "overdue": 0,
+            "pending": await po.filter(
                 review_status__in=["PENDING", "PENDING_REVIEW", "待审核"],
-            ).count(),
-            "in_progress": await PurchaseOrder.filter(
-                tenant_id=tenant_id,
-                status__in=["IN_PROGRESS", "进行中", "APPROVED", "已审核", "CONFIRMED", "已确认", "AUDITED", "RELEASED"],
-            ).count()
+            ).exclude(status__in=po_terminal).count(),
+            "in_progress": await po.filter(
+                status__in=[
+                    "IN_PROGRESS",
+                    "进行中",
+                    "APPROVED",
+                    "已审核",
+                    "CONFIRMED",
+                    "已确认",
+                    "AUDITED",
+                    "RELEASED",
+                    "执行中",
+                    "部分入库",
+                ],
+            ).exclude(status__in=po_terminal).count(),
         }
     except Exception as e:
         logger.warning(f"menu-badge-counts purchase_order: {e}")
         counts["purchase_order"] = 0
+
+    try:
+        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
+        prq = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        prq_term = [
+            DocumentStatus.CANCELLED.value,
+            DocumentStatus.REJECTED.value,
+            DocumentStatus.FULL_CONVERTED.value,
+            "已取消",
+            "已驳回",
+            "全部转单",
+            "CANCELLED",
+            "REJECTED",
+            "FULL_CONVERTED",
+        ]
+        counts["purchase_requisition"] = {
+            # 与采购订单一致采用“待处理口径”，避免逾期单独抢占红点
+            "overdue": 0,
+            "pending": await prq.filter(
+                review_status__in=[
+                    ReviewStatus.PENDING.value,
+                    "待审核",
+                    "PENDING",
+                    "PENDING_REVIEW",
+                ]
+            ).exclude(status__in=prq_term).count(),
+            "in_progress": await prq.filter(
+                status__in=[
+                    DocumentStatus.APPROVED.value,
+                    "已通过",
+                    DocumentStatus.PARTIAL_CONVERTED.value,
+                    "部分转单",
+                    DocumentStatus.AUDITED.value,
+                    "已审核",
+                ]
+            ).exclude(status__in=prq_term).count(),
+        }
+    except Exception as e:
+        logger.warning(f"menu-badge-counts purchase_requisition: {e}")
+        counts["purchase_requisition"] = 0
 
     try:
         # 销售预测
@@ -1959,46 +2020,6 @@ async def get_menu_badge_counts(
     except Exception as e:
         logger.warning(f"menu-badge-counts quotation: {e}")
         counts["quotation"] = 0
-
-    try:
-        from apps.kuaizhizao.models.purchase_requisition import PurchaseRequisition
-        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus
-        prq = PurchaseRequisition.filter(tenant_id=tenant_id, deleted_at__isnull=True)
-        prq_term = [
-            DocumentStatus.CANCELLED.value,
-            DocumentStatus.REJECTED.value,
-            DocumentStatus.FULL_CONVERTED.value,
-            "已取消",
-            "已驳回",
-            "全部转单",
-        ]
-        counts["purchase_requisition"] = {
-            "overdue": await prq.filter(
-                required_date__lt=now_date,
-                required_date__isnull=False,
-            ).exclude(status__in=prq_term).count(),
-            "pending": await prq.filter(
-                review_status__in=[
-                    ReviewStatus.PENDING.value,
-                    "待审核",
-                    "PENDING",
-                    "PENDING_REVIEW",
-                ]
-            ).exclude(status__in=prq_term).count(),
-            "in_progress": await prq.filter(
-                status__in=[
-                    DocumentStatus.APPROVED.value,
-                    "已通过",
-                    DocumentStatus.PARTIAL_CONVERTED.value,
-                    "部分转单",
-                    DocumentStatus.AUDITED.value,
-                    "已审核",
-                ]
-            ).count(),
-        }
-    except Exception as e:
-        logger.warning(f"menu-badge-counts purchase_requisition: {e}")
-        counts["purchase_requisition"] = 0
 
     try:
         from apps.kuaizhizao.models.receipt_notice import ReceiptNotice

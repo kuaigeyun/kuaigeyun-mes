@@ -187,6 +187,13 @@ import salesContractApi, {
 } from '../../../services/sales-contract';
 
 import { SalesContractItemsFormTable } from './SalesContractItemsFormTable';
+import {
+  alignDescriptionColumns,
+  alignProColumns,
+  SALES_COMMON_FORM_LABELS,
+  SALES_DOC_DETAIL_BASIC_FIELD_RANK,
+  SALES_DOC_LIST_FIELD_RANK,
+} from '../shared/documentFieldAlignment';
 import SalesContractTermsManageModal from './SalesContractTermsManageModal';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -1263,7 +1270,7 @@ const SalesContractsPage: React.FC = () => {
 
         <Col flex={1} style={{ minWidth: 0 }}>
 
-          <ProFormText name="salesman_name" label="业务员" placeholder="请输入业务员" />
+          <ProFormText name="salesman_name" label={SALES_COMMON_FORM_LABELS.salesman} placeholder="请输入销售员" />
 
         </Col>
 
@@ -1321,13 +1328,13 @@ const SalesContractsPage: React.FC = () => {
 
         <Col span={4}>
 
-          <ProFormText name="customer_contact" label="联系人" />
+          <ProFormText name="customer_contact" label={SALES_COMMON_FORM_LABELS.contact} />
 
         </Col>
 
         <Col span={4}>
 
-          <ProFormText name="customer_phone" label="电话" />
+          <ProFormText name="customer_phone" label={SALES_COMMON_FORM_LABELS.phone} />
 
         </Col>
 
@@ -2483,6 +2490,10 @@ const SalesContractsPage: React.FC = () => {
     ],
 
   );
+  const alignedListColumns = useMemo(
+    () => alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK),
+    [columns],
+  );
 
 
 
@@ -2516,9 +2527,9 @@ const SalesContractsPage: React.FC = () => {
 
     { title: '客户', dataIndex: 'customer_name' },
 
-    { title: '联系人', dataIndex: 'customer_contact' },
+    { title: SALES_COMMON_FORM_LABELS.contact, dataIndex: 'customer_contact' },
 
-    { title: '电话', dataIndex: 'customer_phone' },
+    { title: SALES_COMMON_FORM_LABELS.phone, dataIndex: 'customer_phone' },
 
     { title: '签订日期', dataIndex: 'contract_date', valueType: 'date' },
 
@@ -2594,7 +2605,7 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    { title: '业务员', dataIndex: 'salesman_name' },
+    { title: SALES_COMMON_FORM_LABELS.salesman, dataIndex: 'salesman_name' },
 
     {
 
@@ -2681,6 +2692,10 @@ const SalesContractsPage: React.FC = () => {
     { title: '备注', dataIndex: 'notes', span: 3 },
 
   ];
+  const alignedDetailBasicColumns = useMemo(
+    () => alignDescriptionColumns(detailBasicColumns, SALES_DOC_DETAIL_BASIC_FIELD_RANK),
+    [detailBasicColumns],
+  );
 
 
 
@@ -2785,7 +2800,7 @@ const SalesContractsPage: React.FC = () => {
 
         columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-contracts"
 
-        columns={columns}
+        columns={alignedListColumns}
 
         showAdvancedSearch
 
@@ -2993,7 +3008,7 @@ const SalesContractsPage: React.FC = () => {
 
               size="small"
 
-              items={buildDescriptionItemsFromColumns(detail, detailBasicColumns)}
+              items={buildDescriptionItemsFromColumns(detail, alignedDetailBasicColumns)}
 
             />
 

@@ -49,7 +49,7 @@ export const ROW_ACTION_TONE_ATTR = 'data-action-tone' as const
 /** 与 manifest action 正交的统一视觉配置（禁止用文案推断） */
 export const ROW_ACTION_VISUAL_PROFILE_ATTR = 'data-action-visual-profile' as const
 
-export type RowActionVisualProfile = 'add-follow-up-from-document'
+export type RowActionVisualProfile = 'add-follow-up-from-document' | 'reset-password'
 
 export function rowActionKind(
   kind: RowActionPermissionKind,
@@ -70,10 +70,23 @@ export function rowActionAddFollowUpFromDocument(
   }
 }
 
+/** 账户类行操作「重置」：统一视觉语义并在 overflow 排序靠后 */
+export function rowActionResetPassword(
+  permission: 'skip' | 'update' = 'update',
+): {
+  [ROW_ACTION_KIND_ATTR]: RowActionPermissionKind
+  [ROW_ACTION_VISUAL_PROFILE_ATTR]: RowActionVisualProfile
+} {
+  return {
+    [ROW_ACTION_KIND_ATTR]: permission,
+    [ROW_ACTION_VISUAL_PROFILE_ATTR]: 'reset-password',
+  }
+}
+
 export function readActionVisualProfile(node: React.ReactNode): RowActionVisualProfile | null {
   if (!React.isValidElement(node)) return null
   const raw = (node.props as Record<string, unknown>)?.[ROW_ACTION_VISUAL_PROFILE_ATTR]
-  if (raw === 'add-follow-up-from-document') return raw
+  if (raw === 'add-follow-up-from-document' || raw === 'reset-password') return raw
   const children = (node.props as Record<string, unknown>)?.children
   if (children != null) {
     for (const child of React.Children.toArray(children)) {

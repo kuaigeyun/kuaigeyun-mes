@@ -8,7 +8,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * @date 2026-02-02
  */
 
-import React, { useRef, useState, useEffect, useCallback, lazy, Suspense } from 'react'
+import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip, Card } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined } from '@ant-design/icons'
@@ -50,6 +50,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker'
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select'
 import { UniTableDetail } from '../../../../../components/uni-table-detail'
+import { alignProColumns, SALES_DOC_LIST_FIELD_RANK } from '../shared/documentFieldAlignment'
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
 )
@@ -1198,6 +1199,10 @@ export default function SalesForecastsPage() {
       },
     },
   ];
+  const alignedColumns = useMemo(
+    () => alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK),
+    [columns],
+  );
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -1654,7 +1659,7 @@ export default function SalesForecastsPage() {
           actionRef={actionRef}
           formRef={tableSearchFormRef}
           rowKey={viewTypeState === 'table' ? 'id' : '_rowKey'}
-          columns={columns}
+          columns={alignedColumns}
           viewTypes={['table', 'detailTable', 'help']}
           defaultViewType="table"
           helpViewConfig={{

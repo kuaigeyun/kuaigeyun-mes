@@ -27,6 +27,7 @@ import {
   SaveOutlined,
   BranchesOutlined,
   CommentOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons'
 import type { NormalizeActionContext } from './types'
 import {
@@ -101,6 +102,9 @@ function defaultIconForRowActionWithKind(
 ): React.ReactNode | undefined {
   if (readActionVisualProfile(node) === 'add-follow-up-from-document') {
     return <CommentOutlined />
+  }
+  if (readActionVisualProfile(node) === 'reset-password') {
+    return <ReloadOutlined />
   }
   const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
   if (explicit === 'read' || explicit === 'display') return <EyeOutlined />

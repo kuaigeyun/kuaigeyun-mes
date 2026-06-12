@@ -42,6 +42,7 @@ const ROW_ACTION_LABEL_FALLBACK: Partial<Record<RowActionPermissionKind, string>
 
 const VISUAL_PROFILE_LABEL_FALLBACK: Record<RowActionVisualProfile, string> = {
   'add-follow-up-from-document': '添加跟进',
+  'reset-password': '重置',
 }
 
 const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
@@ -73,6 +74,7 @@ const ROW_ACTION_I18N_KEY: Partial<Record<RowActionPermissionKind, string>> = {
 
 const VISUAL_PROFILE_I18N_KEY: Record<RowActionVisualProfile, string> = {
   'add-follow-up-from-document': 'components.uniAction.addFollowUpFromDocument',
+  'reset-password': 'components.uniAction.resetPassword',
 }
 
 /** 行内操作排序（细于 detail/edit/delete 三分法；与 overflow 直出/折叠一致） */
@@ -80,32 +82,33 @@ const ROW_ACTION_SORT_RANK: Partial<Record<RowActionPermissionKind, number>> = {
   read: 10,
   display: 11,
   update: 20,
-  create: 30,
+  delete: 30,
   submit: 40,
-  audit: 50,
-  approve: 51,
-  reject: 52,
-  revoke: 53,
-  execute: 60,
-  complete: 61,
-  assign: 70,
-  dispatch: 71,
-  recall: 72,
-  confirm_adjustment: 73,
-  import: 80,
-  export: 81,
-  print: 82,
-  claim: 90,
-  recycle: 91,
-  release: 92,
-  close: 93,
-  delete: 200,
-  obsolete: 201,
+  revoke: 50,
+  audit: 60,
+  approve: 61,
+  reject: 62,
+  create: 70,
+  execute: 200,
+  complete: 201,
+  assign: 210,
+  dispatch: 211,
+  recall: 212,
+  confirm_adjustment: 213,
+  import: 300,
+  export: 301,
+  print: 302,
+  claim: 320,
+  recycle: 330,
+  release: 340,
+  close: 350,
+  obsolete: 360,
   skip: 1000,
 }
 
 const VISUAL_PROFILE_SORT_RANK: Record<RowActionVisualProfile, number> = {
   'add-follow-up-from-document': 85,
+  'reset-password': 990,
 }
 
 export function rowActionLabel(kind: RowActionPermissionKind): string {

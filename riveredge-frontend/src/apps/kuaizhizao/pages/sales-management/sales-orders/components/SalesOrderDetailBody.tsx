@@ -263,6 +263,8 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         { key: 'delivery_date', label: t('app.kuaizhizao.salesOrder.deliveryDate'), children: order.delivery_date || '-' },
         // 客户联系
         { key: 'customer_name', label: t('app.kuaizhizao.salesOrder.customerName'), children: order.customer_name || '-' },
+        { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
+        { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
         {
           key: 'contract_code',
           label: t('app.kuaizhizao.salesContract.linkedContract', { defaultValue: '关联合同' }),
@@ -283,8 +285,6 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
             '-'
           ),
         },
-        { key: 'customer_contact', label: t('app.kuaizhizao.salesOrder.customerContact'), children: order.customer_contact || '-' },
-        { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
         {
           key: 'shipping_address',
           label: t('app.kuaizhizao.salesOrder.shippingAddress'),
