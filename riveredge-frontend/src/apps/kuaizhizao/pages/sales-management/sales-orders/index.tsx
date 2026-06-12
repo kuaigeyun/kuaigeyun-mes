@@ -49,6 +49,7 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import {
   isAuditedStatus,
   isDraftStatus,
+  isPendingReviewStatus,
 } from '../../../constants/documentStatus';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
@@ -203,19 +204,6 @@ type PullQuotationCandidate = {
 /** 明细行是否已挂工单（直推工单路径与需求计算路径互斥） */
 function orderHasLineWorkOrders(order: SalesOrder | null | undefined): boolean {
   return !!(order?.items?.some((it) => it?.work_order_id != null && Number(it.work_order_id) > 0));
-}
-
-function canOpenDemandComputationPush(order: SalesOrder | null | undefined, nodeEnabled: boolean): boolean {
-  if (!nodeEnabled) return false;
-  if (order?.pushed_to_computation) return false;
-  if (orderHasLineWorkOrders(order)) return false;
-  return true;
-}
-
-function canOpenDirectWorkOrderPush(order: SalesOrder | null | undefined, nodeEnabled: boolean): boolean {
-  if (!nodeEnabled) return false;
-  if (order?.pushed_to_computation) return false;
-  return true;
 }
 
 function formatMoneyYuan(n: number): string {
@@ -1254,17 +1242,37 @@ const SalesOrdersPage: React.FC = () => {
       if (isDraft) {
          messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.updated') : t('app.kuaizhizao.salesOrder.savedDraft'));
       } else if (orderId) {
-        // 非草稿（即点击了“提交订单”或“更新”），则执行提交。编辑时若 update 已自动审核则跳过 submit，避免重复审核
-        const alreadyApproved = updateRes?.status === 'AUDITED' || updateRes?.status === '已审核';
+        // 非草稿（即点击了“提交订单”或“更新”），则按状态决定是否继续提交。
+        // 编辑态若 update 后已是待审核/已审核，则无需再次 submit，避免“二次编辑待审核单”重复提交报错。
+        const updatedStatus = String(updateRes?.status ?? '').trim();
+        const updatedReviewStatus = String(updateRes?.review_status ?? '').trim();
+        const alreadyApproved = updateRes != null && (
+          isAuditedStatus(updatedStatus) ||
+          updatedReviewStatus === ReviewStatus.APPROVED
+        );
+        const alreadyPendingReview = updateRes != null && (
+          isPendingReviewStatus(updatedStatus) ||
+          updatedReviewStatus === ReviewStatus.PENDING
+        );
+        const shouldSubmitAfterSave = !isEditPage || (!alreadyApproved && !alreadyPendingReview);
+
+        if (isEditPage && (alreadyPendingReview || alreadyApproved)) {
+          messageApi.success(t('app.kuaizhizao.salesOrder.updated'));
+        }
+
         try {
-          const submitRes = alreadyApproved ? updateRes : await submitSalesOrder(orderId!);
+          const submitRes = shouldSubmitAfterSave
+            ? await submitSalesOrder(orderId!)
+            : updateRes;
           // 判断后端返回的状态是否已经是“已审核”
-          const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
-          const syncTip = submitRes?.demand_synced ? t('app.kuaizhizao.salesOrder.demandSyncTip') : '';
-          if (isApproved) {
-             messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderUpdatedAndAutoApproved', { syncTip }) : t('app.kuaizhizao.salesOrder.orderCreatedAndAutoApproved', { syncTip }));
-          } else {
-             messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderResubmitted') : t('app.kuaizhizao.salesOrder.orderCreatedAndSubmitted'));
+          if (shouldSubmitAfterSave) {
+            const isApproved = submitRes?.status === 'AUDITED' || submitRes?.status === '已审核';
+            const syncTip = submitRes?.demand_synced ? t('app.kuaizhizao.salesOrder.demandSyncTip') : '';
+            if (isApproved) {
+               messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderUpdatedAndAutoApproved', { syncTip }) : t('app.kuaizhizao.salesOrder.orderCreatedAndAutoApproved', { syncTip }));
+            } else {
+               messageApi.success(isEditPage ? t('app.kuaizhizao.salesOrder.orderResubmitted') : t('app.kuaizhizao.salesOrder.orderCreatedAndSubmitted'));
+            }
           }
         } catch (submitError: any) {
           messageApi.error(t('app.kuaizhizao.salesOrder.saveSuccessSubmitFailed', { message: submitError.message || t('app.kuaizhizao.salesOrder.unknownError') }));
@@ -1516,7 +1524,10 @@ const SalesOrdersPage: React.FC = () => {
       messageApi.warning('需求计算节点未启用，无法下推');
       return;
     }
-    if (order?.pushed_to_computation) return;
+    if (order?.pushed_to_computation) {
+      messageApi.warning(t('app.kuaizhizao.salesOrder.computationAlreadyPushed', '该销售订单已下推需求计算，如需重推请先“撤回计算”'));
+      return;
+    }
     if (orderHasLineWorkOrders(order)) {
       messageApi.warning(t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked'));
       return;
@@ -2130,48 +2141,114 @@ const SalesOrdersPage: React.FC = () => {
     [resolveSelectedOrders, selectedRowKeys],
   );
 
+  const renderPushItemLabelWithReason = useCallback(
+    (label: React.ReactNode, disabledReason?: string) =>
+      disabledReason ? (
+        <Tooltip title={disabledReason}>
+          <span>{label}</span>
+        </Tooltip>
+      ) : (
+        label
+      ),
+    [],
+  );
+
+  const getPushMenuItemClassName = useCallback(
+    (disabledReason?: string) => (disabledReason ? 'ant-dropdown-menu-item-disabled' : undefined),
+    [],
+  );
+
   const buildToolbarPushMenuItems = useCallback((record: SalesOrder) => {
     const pushEnabledBase = canPushDownSalesOrder(record);
-    const canPushComputation =
-      pushEnabledBase && canOpenDemandComputationPush(record, salesNodeEnabled.demand_computation);
-    const canPushWorkOrder =
-      pushEnabledBase && canOpenDirectWorkOrderPush(record, salesNodeEnabled.work_order);
-    const canPushShipment = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-    const canPushDelivery = pushEnabledBase && !!salesNodeEnabled.shipment_notice;
-    const canPushInvoice = pushEnabledBase && !!salesNodeEnabled.invoice;
+    const computationDisabledReason =
+      !pushEnabledBase
+        ? '仅已审核/已确认且未关闭的销售订单可下推'
+        : !salesNodeEnabled.demand_computation
+        ? '需求计算节点未启用，无法下推'
+        : record.pushed_to_computation
+        ? t('app.kuaizhizao.salesOrder.computationAlreadyPushed', '该销售订单已下推需求计算，如需重推请先“撤回计算”')
+        : orderHasLineWorkOrders(record)
+        ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked')
+        : undefined;
+    const workOrderDisabledReason =
+      !pushEnabledBase
+        ? '仅已审核/已确认且未关闭的销售订单可下推'
+        : !salesNodeEnabled.work_order
+        ? '工单节点未启用，无法下推'
+        : record.pushed_to_computation
+        ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked')
+        : undefined;
+    const invoiceDisabledReason =
+      !pushEnabledBase
+        ? '仅已审核/已确认且未关闭的销售订单可下推'
+        : !salesNodeEnabled.invoice
+        ? '销售发票节点未启用，无法下推'
+        : undefined;
+    const shipmentDisabledReason =
+      !pushEnabledBase
+        ? '仅已审核/已确认且未关闭的销售订单可下推'
+        : !salesNodeEnabled.shipment_notice
+        ? '发货通知节点未启用，无法下推'
+        : undefined;
+    const deliveryDisabledReason =
+      !pushEnabledBase
+        ? '仅已审核/已确认且未关闭的销售订单可下推'
+        : !salesNodeEnabled.shipment_notice
+        ? '销售出库节点未启用，无法下推'
+        : undefined;
+    const canPushComputation = !computationDisabledReason;
+    const canPushWorkOrder = !workOrderDisabledReason;
+    const canPushShipment = !shipmentDisabledReason;
+    const canPushDelivery = !deliveryDisabledReason;
+    const canPushInvoice = !invoiceDisabledReason;
     const canPushSalesReturn = pushEnabledBase;
     const canWithdrawComputation = pushEnabledBase && !!record.pushed_to_computation;
 
     return buildUniPushMenuItems([
       {
         key: 'computation',
-        label: t('app.kuaizhizao.salesOrder.demandComputation'),
-        disabled: !canPushComputation,
+        label: renderPushItemLabelWithReason(
+          t('app.kuaizhizao.salesOrder.demandComputation'),
+          computationDisabledReason,
+        ),
+        className: getPushMenuItemClassName(computationDisabledReason),
         onClick: () => canPushComputation && handlePushToComputation(record.id!, record),
       },
       {
         key: 'workorder',
-        label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
-        disabled: !canPushWorkOrder,
+        label: renderPushItemLabelWithReason(
+          t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+          workOrderDisabledReason,
+        ),
+        className: getPushMenuItemClassName(workOrderDisabledReason),
         onClick: () => canPushWorkOrder && handlePushToWorkOrder(record.id!, record),
       },
       { type: 'divider' as const },
       {
         key: 'invoice',
-        label: t('app.kuaizhizao.salesOrder.salesInvoice'),
-        disabled: !canPushInvoice,
+        label: renderPushItemLabelWithReason(
+          t('app.kuaizhizao.salesOrder.salesInvoice'),
+          invoiceDisabledReason,
+        ),
+        className: getPushMenuItemClassName(invoiceDisabledReason),
         onClick: () => canPushInvoice && handlePushToInvoice(record.id!),
       },
       {
         key: 'shipment',
-        label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
-        disabled: !canPushShipment,
+        label: renderPushItemLabelWithReason(
+          t('app.kuaizhizao.salesOrder.shipmentNotice'),
+          shipmentDisabledReason,
+        ),
+        className: getPushMenuItemClassName(shipmentDisabledReason),
         onClick: () => canPushShipment && handlePushToShipmentNotice(record.id!),
       },
       {
         key: 'delivery',
-        label: t('app.kuaizhizao.salesOrder.salesDelivery'),
-        disabled: !canPushDelivery,
+        label: renderPushItemLabelWithReason(
+          t('app.kuaizhizao.salesOrder.salesDelivery'),
+          deliveryDisabledReason,
+        ),
+        className: getPushMenuItemClassName(deliveryDisabledReason),
         onClick: () => canPushDelivery && handlePushToDelivery(record.id!),
       },
       {
@@ -2192,7 +2269,7 @@ const SalesOrdersPage: React.FC = () => {
           ]
         : []),
     ]);
-  }, [handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
+  }, [getPushMenuItemClassName, handlePushToComputation, handlePushToDelivery, handlePushToInvoice, handlePushToSalesReturn, handlePushToShipmentNotice, handlePushToWorkOrder, handleWithdrawFromComputation, renderPushItemLabelWithReason, salesNodeEnabled.demand_computation, salesNodeEnabled.invoice, salesNodeEnabled.shipment_notice, salesNodeEnabled.work_order, t]);
   const toolbarPushMenuItems = useMemo(
     () => (selectedOrderForToolbar ? buildToolbarPushMenuItems(selectedOrderForToolbar) : []),
     [buildToolbarPushMenuItems, selectedOrderForToolbar]
@@ -3875,46 +3952,92 @@ const SalesOrdersPage: React.FC = () => {
                   <Dropdown {...rowActionKind('skip')}
                     menu={{
                       items: buildUniPushMenuItems([
-                        {
-                          key: 'computation',
-                          label: t('app.kuaizhizao.salesOrder.demandComputation'),
-                          icon: <ArrowDownOutlined />,
-                          disabled: !canOpenDemandComputationPush(currentSalesOrder as SalesOrder, salesNodeEnabled.demand_computation),
-                          onClick: () =>
-                            canOpenDemandComputationPush(currentSalesOrder as SalesOrder, salesNodeEnabled.demand_computation) &&
-                            handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
-                        },
-                        {
-                          key: 'workorder',
-                          label: t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
-                          icon: <ArrowDownOutlined />,
-                          disabled: !canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrder, salesNodeEnabled.work_order),
-                          onClick: () =>
-                            canOpenDirectWorkOrderPush(currentSalesOrder as SalesOrder, salesNodeEnabled.work_order) &&
-                            handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
-                        },
+                        (() => {
+                          const computationDisabledReason = !salesNodeEnabled.demand_computation
+                            ? '需求计算节点未启用，无法下推'
+                            : (currentSalesOrder as SalesOrder)?.pushed_to_computation
+                            ? t('app.kuaizhizao.salesOrder.computationAlreadyPushed', '该销售订单已下推需求计算，如需重推请先“撤回计算”')
+                            : orderHasLineWorkOrders(currentSalesOrder as SalesOrder)
+                            ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveComputationBlocked')
+                            : undefined;
+                          return {
+                            key: 'computation',
+                            label: renderPushItemLabelWithReason(
+                              t('app.kuaizhizao.salesOrder.demandComputation'),
+                              computationDisabledReason,
+                            ),
+                            icon: <ArrowDownOutlined />,
+                            className: getPushMenuItemClassName(computationDisabledReason),
+                            onClick: () =>
+                              !computationDisabledReason &&
+                              handlePushToComputation(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
+                          };
+                        })(),
+                        (() => {
+                          const workOrderDisabledReason = !salesNodeEnabled.work_order
+                            ? '工单节点未启用，无法下推'
+                            : (currentSalesOrder as SalesOrder)?.pushed_to_computation
+                            ? t('app.kuaizhizao.salesOrder.pushMutualExclusiveWorkOrderBlocked')
+                            : undefined;
+                          return {
+                            key: 'workorder',
+                            label: renderPushItemLabelWithReason(
+                              t('app.kuaizhizao.salesOrder.pushToWorkOrder'),
+                              workOrderDisabledReason,
+                            ),
+                            icon: <ArrowDownOutlined />,
+                            className: getPushMenuItemClassName(workOrderDisabledReason),
+                            onClick: () =>
+                              !workOrderDisabledReason &&
+                              handlePushToWorkOrder(currentSalesOrder.id!, currentSalesOrder as SalesOrder),
+                          };
+                        })(),
                         { type: 'divider' },
-                        {
-                          key: 'invoice',
-                          label: t('app.kuaizhizao.salesOrder.salesInvoice'),
-                          icon: <FileTextOutlined />,
-                          disabled: !salesNodeEnabled.invoice,
-                          onClick: () => handlePushToInvoice(currentSalesOrder.id!),
-                        },
-                        {
-                          key: 'shipment',
-                          label: t('app.kuaizhizao.salesOrder.shipmentNotice'),
-                          icon: <SendOutlined />,
-                          disabled: !salesNodeEnabled.shipment_notice,
-                          onClick: () => handlePushToShipmentNotice(currentSalesOrder.id!),
-                        },
-                        {
-                          key: 'delivery',
-                          label: t('app.kuaizhizao.salesOrder.salesDelivery'),
-                          icon: <SendOutlined />,
-                          disabled: !salesNodeEnabled.shipment_notice,
-                          onClick: () => handlePushToDelivery(currentSalesOrder.id!),
-                        },
+                        (() => {
+                          const invoiceDisabledReason = !salesNodeEnabled.invoice
+                            ? '销售发票节点未启用，无法下推'
+                            : undefined;
+                          return {
+                            key: 'invoice',
+                            label: renderPushItemLabelWithReason(
+                              t('app.kuaizhizao.salesOrder.salesInvoice'),
+                              invoiceDisabledReason,
+                            ),
+                            icon: <FileTextOutlined />,
+                            className: getPushMenuItemClassName(invoiceDisabledReason),
+                            onClick: () => !invoiceDisabledReason && handlePushToInvoice(currentSalesOrder.id!),
+                          };
+                        })(),
+                        (() => {
+                          const shipmentDisabledReason = !salesNodeEnabled.shipment_notice
+                            ? '发货通知节点未启用，无法下推'
+                            : undefined;
+                          return {
+                            key: 'shipment',
+                            label: renderPushItemLabelWithReason(
+                              t('app.kuaizhizao.salesOrder.shipmentNotice'),
+                              shipmentDisabledReason,
+                            ),
+                            icon: <SendOutlined />,
+                            className: getPushMenuItemClassName(shipmentDisabledReason),
+                            onClick: () => !shipmentDisabledReason && handlePushToShipmentNotice(currentSalesOrder.id!),
+                          };
+                        })(),
+                        (() => {
+                          const deliveryDisabledReason = !salesNodeEnabled.shipment_notice
+                            ? '销售出库节点未启用，无法下推'
+                            : undefined;
+                          return {
+                            key: 'delivery',
+                            label: renderPushItemLabelWithReason(
+                              t('app.kuaizhizao.salesOrder.salesDelivery'),
+                              deliveryDisabledReason,
+                            ),
+                            icon: <SendOutlined />,
+                            className: getPushMenuItemClassName(deliveryDisabledReason),
+                            onClick: () => !deliveryDisabledReason && handlePushToDelivery(currentSalesOrder.id!),
+                          };
+                        })(),
                         {
                           key: 'sales-return',
                           label: t('app.kuaizhizao.salesOrder.salesReturn'),

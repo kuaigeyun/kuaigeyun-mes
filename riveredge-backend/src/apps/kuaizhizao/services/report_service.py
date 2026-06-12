@@ -8,7 +8,7 @@ Date: 2025-01-15
 """
 
 from datetime import datetime, timedelta, date
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from decimal import Decimal
 
 from apps.common.base_service import AppBaseService
@@ -1112,6 +1112,31 @@ class ReportService:
             "summary": {"avg_execution_rate": summary_rate},
         }
 
+    async def _resolve_material_default_warehouse_for_report(
+        self,
+        tenant_id: int,
+        material: Any,
+        cache: Dict[int, Optional[Tuple[int, str]]],
+    ) -> Optional[Tuple[int, str]]:
+        """
+        解析报表展示所需的主仓仓库（按物料 defaults 默认仓库优先级）。
+        结果按 material_id 做内存缓存，避免重复查询。
+        """
+        material_id = int(getattr(material, "id", 0) or 0)
+        if material_id <= 0:
+            return None
+        if material_id in cache:
+            return cache[material_id]
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+        resolved = await resolve_primary_default_warehouse_from_material(
+            tenant_id=tenant_id,
+            material=material,
+        )
+        cache[material_id] = resolved
+        return resolved
+
     async def _load_inventory_rows(
         self,
         tenant_id: int,
@@ -1126,12 +1151,15 @@ class ReportService:
         from tortoise.expressions import Q
 
         include_main_batches = True
+        main_warehouse_filter_id: Optional[int] = None
         if warehouse_id:
             wh = await Warehouse.get_or_none(
                 tenant_id=tenant_id, id=warehouse_id, deleted_at__isnull=True
             )
             if wh and wh.warehouse_type == "line_side":
                 include_main_batches = False
+            elif wh:
+                main_warehouse_filter_id = int(wh.id)
 
         batch_query = MaterialBatch.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if material_id:
@@ -1155,8 +1183,18 @@ class ReportService:
         lines = await line_query.all()
 
         rows: List[Dict[str, Any]] = []
+        main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
         if include_main_batches:
             for b in batches:
+                resolved_wh = await self._resolve_material_default_warehouse_for_report(
+                    tenant_id=tenant_id,
+                    material=getattr(b, "material", None),
+                    cache=main_wh_cache,
+                )
+                resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
+                resolved_wh_name = resolved_wh[1] if resolved_wh else "主仓"
+                if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
+                    continue
                 expiry_iso = b.expiry_date.isoformat() if b.expiry_date else None
                 qty = float(b.quantity or 0)
                 status = "已过期" if b.expiry_date and b.expiry_date < date.today() else ("在库" if qty > 0 else "无库存")
@@ -1171,7 +1209,8 @@ class ReportService:
                     "supplier_batch_no": b.supplier_batch_no,
                     "quantity": qty,
                     "status": status,
-                    "warehouse_name": "主仓",
+                    "warehouse_id": resolved_wh_id,
+                    "warehouse_name": resolved_wh_name,
                 })
         for l in lines:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))
@@ -1409,6 +1448,7 @@ class ReportService:
         if batch_number: query = query.filter(batch_no__icontains=batch_number)
         if not include_expired: query = query.filter(Q(expiry_date__isnull=True) | Q(expiry_date__gte=date.today()))
         include_main_batches = True
+        main_warehouse_filter_id: Optional[int] = None
         if warehouse_id:
             from apps.master_data.models.warehouse import Warehouse
             wh = await Warehouse.get_or_none(
@@ -1416,6 +1456,8 @@ class ReportService:
             )
             if wh and wh.warehouse_type == "line_side":
                 include_main_batches = False
+            elif wh:
+                main_warehouse_filter_id = int(wh.id)
         batches = await query.prefetch_related('material').all()
         line_query = LineSideInventory.filter(tenant_id=tenant_id, deleted_at__isnull=True, status="available")
         if material_ids: line_query = line_query.filter(material_id__in=material_ids)
@@ -1458,8 +1500,18 @@ class ReportService:
                         totals[key] = next_qty if next_qty > 0 else 0.0
             return {"material_totals": totals}
         items = []
+        main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
         for b in batches:
             if not include_main_batches:
+                continue
+            resolved_wh = await self._resolve_material_default_warehouse_for_report(
+                tenant_id=tenant_id,
+                material=getattr(b, "material", None),
+                cache=main_wh_cache,
+            )
+            resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
+            resolved_wh_name = resolved_wh[1] if resolved_wh else "主仓"
+            if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
                 continue
             status = b.status
             if b.expiry_date and b.expiry_date < date.today(): status = "已过期"
@@ -1475,7 +1527,8 @@ class ReportService:
                 "supplier_batch_no": b.supplier_batch_no,
                 "quantity": float(b.quantity or 0), 
                 "status": status, 
-                "warehouse_name": "主仓"
+                "warehouse_id": resolved_wh_id,
+                "warehouse_name": resolved_wh_name,
             })
         for l in line_items:
             qty = float((l.quantity or 0) - (l.reserved_quantity or 0))

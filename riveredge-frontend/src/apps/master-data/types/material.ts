@@ -142,6 +142,8 @@ export interface Material {
   codeAliases?: MaterialCodeAlias[]; // 编号别名列表
   sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
   source_type?: string; // 物料来源类型（向后兼容）
+  sourceTypes?: string[]; // 物料来源类型（多选）
+  source_types?: string[]; // 物料来源类型（多选，向后兼容）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   source_config?: Record<string, any>; // 物料来源相关配置（向后兼容）
   processRouteId?: number; // 默认工艺路线ID（自制件）
@@ -264,6 +266,7 @@ export interface MaterialCreate {
   defaults?: MaterialDefaults;
   // 物料来源控制
   sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
+  sourceTypes?: string[]; // 物料来源类型（多选）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
 }
 
@@ -293,6 +296,7 @@ export interface MaterialUpdate {
   defaults?: MaterialDefaults;
   // 物料来源控制
   sourceType?: string; // 物料来源类型（Make/Buy/Phantom/Outsource）
+  sourceTypes?: string[]; // 物料来源类型（多选）
   sourceConfig?: Record<string, any>; // 物料来源相关配置
   /** 自制件默认工艺路线 FK（产品工艺页保存） */
   process_route_id?: number | null;

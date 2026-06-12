@@ -5826,6 +5826,14 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                     deleted_at__isnull=True,
                 )
                 if material:
+                    # 兜底补齐物料展示字段，避免前端仅传 material_id 时详情页出现空编码/空名称/空单位
+                    if not str(item_dict.get("material_code") or "").strip():
+                        item_dict["material_code"] = (getattr(material, "main_code", None) or getattr(material, "code", None) or "")
+                    if not str(item_dict.get("material_name") or "").strip():
+                        item_dict["material_name"] = getattr(material, "name", "") or ""
+                    if not str(item_dict.get("material_unit") or "").strip():
+                        item_dict["material_unit"] = getattr(material, "base_unit", "") or ""
+
                     batch_no = await ensure_batch_no_for_item(
                         tenant_id=tenant_id,
                         material=material,
@@ -5863,6 +5871,38 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             raise NotFoundError(f"其他入库单不存在: {inbound_id}")
 
         items = await OtherInboundItem.filter(tenant_id=tenant_id, inbound_id=inbound_id).all()
+        if items:
+            # 历史数据修复：若明细未落 material_code/material_name/material_unit，则按 material_id 回填展示值
+            missing_material_ids = {
+                int(getattr(item, "material_id"))
+                for item in items
+                if getattr(item, "material_id", None)
+                and (
+                    not str(getattr(item, "material_code", "") or "").strip()
+                    or not str(getattr(item, "material_name", "") or "").strip()
+                    or not str(getattr(item, "material_unit", "") or "").strip()
+                )
+            }
+            if missing_material_ids:
+                from apps.master_data.models.material import Material
+
+                materials = await Material.filter(
+                    tenant_id=tenant_id,
+                    id__in=list(missing_material_ids),
+                    deleted_at__isnull=True,
+                ).all()
+                material_map = {m.id: m for m in materials}
+                for item in items:
+                    material = material_map.get(getattr(item, "material_id", None))
+                    if not material:
+                        continue
+                    if not str(getattr(item, "material_code", "") or "").strip():
+                        item.material_code = (getattr(material, "main_code", None) or getattr(material, "code", None) or "")
+                    if not str(getattr(item, "material_name", "") or "").strip():
+                        item.material_name = getattr(material, "name", "") or ""
+                    if not str(getattr(item, "material_unit", "") or "").strip():
+                        item.material_unit = getattr(material, "base_unit", "") or ""
+
         from apps.kuaizhizao.services.document_lifecycle_service import get_other_inbound_lifecycle, get_document_milestones
 
         response = OtherInboundWithItemsResponse.model_validate(inbound)

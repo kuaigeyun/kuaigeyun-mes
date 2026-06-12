@@ -8,8 +8,8 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
+import { ActionType, ProColumns, ProFormSelect } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -19,14 +19,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
-import CodeField from '../../../../../components/code-field';
 import { apiRequest } from '../../../../../services/api';
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
@@ -171,11 +170,6 @@ const OutboundPage: React.FC = () => {
   const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_sales_order');
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  // Modal 相关状态（创建出库单）
-  const [createModalVisible, setCreateModalVisible] = useState(false);
-  const formRef = useRef<any>(null);
-  const [outboundType, setOutboundType] = useState<string>('production');
-
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
@@ -404,8 +398,10 @@ const OutboundPage: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setOutboundType('production');
-    setCreateModalVisible(true);
+    // 生产领料必须基于工单下推创建；直接打开批量出库弹窗并默认到生产领料。
+    batchForm.resetFields();
+    setBatchOutboundType('production_picking');
+    setBatchModalVisible(true);
   };
 
   useNewShortcut(handleCreate);
@@ -845,20 +841,6 @@ const OutboundPage: React.FC = () => {
     },
   ];
 
-  const handleFormFinish = async () => {
-    try {
-      messageApi.success('出库单创建成功');
-      setCreateModalVisible(false);
-      formRef.current?.resetFields();
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-    } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
-      throw error;
-    }
-  };
-
   return (
     <ListPageTemplate>
       <UniTable
@@ -1036,102 +1018,6 @@ const OutboundPage: React.FC = () => {
         ]}
         scroll={{ x: 2000 }}
       />
-
-      <FormModalTemplate
-        title="新建出库单"
-        open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
-        onFinish={handleFormFinish}
-        isEdit={false}
-        initialValues={{ type: 'production' }}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
-        formRef={formRef}
-        grid={false}
-      >
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="type"
-              label="出库类型"
-              placeholder="请选择出库类型"
-              rules={[{ required: true, message: '请选择出库类型' }]}
-              options={[
-                { label: '生产领料', value: 'production' },
-                { label: '销售出库', value: 'sales' },
-                { label: '退货出库', value: 'return' },
-              ]}
-              fieldProps={{
-                onChange: (value: string) => setOutboundType(value),
-              }}
-            />
-          </Col>
-          <Col span={12}>
-            {outboundType === 'production' && (
-              <CodeField
-                pageCode="kuaizhizao-warehouse-inbound"
-                name="picking_code"
-                label="生产领料单编号"
-                required={true}
-                autoGenerateOnCreate={true}
-                context={{}}
-              />
-            )}
-            {outboundType === 'sales' && (
-              <CodeField
-                pageCode="kuaizhizao-sales-delivery"
-                name="delivery_code"
-                label="销售出库单编号"
-                required={true}
-                autoGenerateOnCreate={true}
-                context={{}}
-              />
-            )}
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormSelect
-              name="warehouse"
-              label="出库仓库"
-              placeholder="请选择出库仓库"
-              rules={[{ required: true, message: '请选择出库仓库' }]}
-              options={[
-                { label: '原材料仓库', value: 'raw-materials' },
-                { label: '半成品仓库', value: 'semi-finished' },
-                { label: '成品仓库', value: 'finished-goods' },
-              ]}
-            />
-          </Col>
-          <Col span={12}>
-            <ProFormText name="customer" label="客户" placeholder="选择客户" />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormText name="workOrder" label="关联工单" placeholder="选择工单" />
-          </Col>
-          <Col span={12}>
-            <ProFormText
-              name="batch_number"
-              label="批号"
-              placeholder="请输入批号（批号管理物料必填）"
-              tooltip="如果所选物料启用了批号管理，此字段为必填"
-            />
-          </Col>
-        </Row>
-        <Row gutter={16}>
-          <Col span={12}>
-            <ProFormTextArea
-              name="serial_numbers"
-              label="序列号"
-              placeholder="请输入序列号，多个序列号用逗号分隔（序列号管理物料必填）"
-              tooltip="如果所选物料启用了序列号管理，此字段为必填"
-              fieldProps={{ rows: 2 }}
-            />
-          </Col>
-          <Col span={12} />
-        </Row>
-      </FormModalTemplate>
 
       <Modal
         title="批量出库"

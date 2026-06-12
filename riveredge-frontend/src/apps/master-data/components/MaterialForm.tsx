@@ -94,6 +94,26 @@ const SOURCE_CONFIG_FIELDS: Record<string, string[]> = {
   Service: [],
 };
 
+function normalizeSourceTypeValues(
+  sourceType?: string | null,
+  sourceConfig?: Record<string, any> | null,
+): string[] {
+  const configValues = Array.isArray(sourceConfig?.source_types)
+    ? sourceConfig!.source_types
+    : [];
+  const merged = [
+    ...configValues,
+    sourceType,
+  ]
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
+  return Array.from(new Set(merged));
+}
+
+function getPrimarySourceType(sourceTypes: string[]): string | undefined {
+  return sourceTypes[0];
+}
+
 /**
  * 物料表单组件属性
  */
@@ -428,7 +448,9 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
 
       // 如果是新建模式且启用了自动编号，生成编号
       if (!isEdit) {
-        generateCode(initialValues?.groupId, initialValues?.sourceType, initialValues?.name);
+        const initialSourceType = (initialValues as any)?.sourceType
+          || getPrimarySourceType((initialValues as any)?.sourceTypes || []);
+        generateCode(initialValues?.groupId, initialSourceType, initialValues?.name);
       }
 
       // 如果是编辑模式，加载物料数据
@@ -600,13 +622,19 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         // 加载物料来源数据（兼容处理：后端可能返回 snake_case 或 camelCase）
         const materialSourceType = (material as any).source_type || material.sourceType;
         const materialSourceConfig = (material as any).source_config || material.sourceConfig;
+        const materialSourceTypes = normalizeSourceTypeValues(
+          materialSourceType,
+          materialSourceConfig,
+        );
+        const primaryMaterialSourceType = getPrimarySourceType(materialSourceTypes);
         
         if (materialSourceType || materialSourceConfig) {
           setTimeout(() => {
             // 关键修复：ProForm 的条件渲染字段使用扁平 key，需要同时设置嵌套对象和扁平 key
             const fieldsToSet: any = {
-              sourceType: materialSourceType,
-              source_type: materialSourceType, // 向后兼容
+              sourceTypes: materialSourceTypes,
+              sourceType: primaryMaterialSourceType,
+              source_type: primaryMaterialSourceType, // 向后兼容
               sourceConfig: materialSourceConfig,
               source_config: materialSourceConfig, // 向后兼容
             };
@@ -743,7 +771,11 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         hasFlatDefaultTaxRate: values?.['defaults.defaultTaxRate'] !== undefined,
       });
       // 处理物料来源数据（兼容处理：同时设置 camelCase 和 snake_case）
-      const sourceType = values.sourceType || values.source_type;
+      const sourceTypes = normalizeSourceTypeValues(
+        values.sourceType || values.source_type,
+        { source_types: values.sourceTypes },
+      );
+      const sourceType = getPrimarySourceType(sourceTypes);
       const originalSourceType = (material as any)?.source_type || (material as any)?.sourceType;
       // 关键修复：仅当 sourceType 未改变时才合并 existingSourceConfig，避免不同类型字段混合
       const existingSourceConfig = (sourceType === originalSourceType) 
@@ -772,7 +804,7 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
       const sourceConfig = { ...existingSourceConfig, ...formSourceConfig };
       
       // 关键修复：过滤掉不属于当前 sourceType 的字段（避免不同类型字段混合）
-      const allowedFields = SOURCE_CONFIG_FIELDS[sourceType] || [];
+      const allowedFields = SOURCE_CONFIG_FIELDS[sourceType ?? ''] || [];
       const filteredSourceConfig: Record<string, any> = {};
       for (const key of Object.keys(sourceConfig)) {
         if (allowedFields.includes(key)) {
@@ -787,6 +819,13 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           filteredSourceConfig[key] = val;
         }
       }
+      // 同步多来源值（保留单值 source_type 作为主来源，不破坏现有业务链路）
+      if (sourceTypes.length > 0) {
+        filteredSourceConfig.source_types = sourceTypes;
+      } else {
+        delete filteredSourceConfig.source_types;
+      }
+
       // 同步名称字段，便于后端与下游使用
       if (sourceConfig.default_supplier_id && suppliers.length > 0) {
         const supplier = suppliers.find(s => s.id === sourceConfig.default_supplier_id);
@@ -1192,11 +1231,23 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
           let vals = !isEdit && !(initialValues?.baseUnit != null && initialValues?.baseUnit !== '')
             ? { ...initialValues, baseUnit: 'PC' }
             : initialValues;
+          const normalizedSourceTypes = normalizeSourceTypeValues(
+            (vals as any)?.sourceType,
+            { source_types: (vals as any)?.sourceTypes },
+          );
+          const primarySourceType = getPrimarySourceType(normalizedSourceTypes);
+          if (normalizedSourceTypes.length > 0) {
+            vals = {
+              ...(vals as any),
+              sourceTypes: normalizedSourceTypes,
+              sourceType: primarySourceType,
+            } as any;
+          }
           // 新建模式：根据来源类型设置默认税率（服务6%，其他13%）
-          if (!isEdit && vals?.sourceType != null && (vals?.defaults?.defaultTaxRate == null)) {
+          if (!isEdit && primarySourceType != null && vals?.defaults?.defaultTaxRate == null) {
             vals = {
               ...vals,
-              defaults: { ...vals?.defaults, defaultTaxRate: vals.sourceType === 'Service' ? 6 : 13 },
+              defaults: { ...vals?.defaults, defaultTaxRate: primarySourceType === 'Service' ? 6 : 13 },
             };
           }
           return vals;
@@ -1206,12 +1257,16 @@ export const MaterialForm: React.FC<MaterialFormProps> = ({
         onValuesChange={(changedValues, allValues) => {
           if (!isEdit && isAutoGenerateEnabled('master-data-material')) {
             const groupId = allValues.groupId;
-            const sourceType = allValues.sourceType;
+            const sourceType = allValues.sourceType || getPrimarySourceType(allValues.sourceTypes || []);
             const name = allValues.name;
             if (changedValues.groupId !== undefined) {
               // 切换分组时立即刷新编号预览，显示该分组对应的流水号
               generateCode(groupId, sourceType, name, true);
-            } else if (changedValues.sourceType !== undefined || changedValues.name !== undefined) {
+            } else if (
+              changedValues.sourceType !== undefined
+              || changedValues.sourceTypes !== undefined
+              || changedValues.name !== undefined
+            ) {
               generateCode(groupId, sourceType, name, false);
             }
           }
@@ -2780,7 +2835,12 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { token } = theme.useToken();
-  const [sourceType, setSourceType] = useState<string | undefined>(material?.sourceType || material?.source_type);
+  const [sourceTypes, setSourceTypes] = useState<string[]>(() =>
+    normalizeSourceTypeValues(
+      material?.sourceType || material?.source_type,
+      ((material as any)?.sourceConfig || (material as any)?.source_config || {}) as Record<string, any>,
+    ),
+  );
   const manufacturingModeOptions = useMemo(() => [
     { label: t('app.master-data.materialForm.manufacturingFabrication'), value: 'fabrication' },
     { label: t('app.master-data.materialForm.manufacturingAssembly'), value: 'assembly' },
@@ -2794,9 +2854,20 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
     navigate('/apps/master-data/process/routes');
   };
 
-  const handleSourceTypeChange = (value: string, manufacturingMode?: string) => {
-    setSourceType(value);
+  useEffect(() => {
+    const nextSourceTypes = normalizeSourceTypeValues(
+      material?.sourceType || material?.source_type,
+      ((material as any)?.sourceConfig || (material as any)?.source_config || {}) as Record<string, any>,
+    );
+    setSourceTypes(nextSourceTypes);
+  }, [material]);
+
+  const handleSourceTypeChange = (values: string[], manufacturingMode?: string) => {
+    const nextSourceTypes = Array.isArray(values) ? values : [];
+    const value = getPrimarySourceType(nextSourceTypes);
+    setSourceTypes(nextSourceTypes);
     formRef.current?.setFieldsValue({
+      sourceTypes: nextSourceTypes,
       sourceType: value,
       source_type: value,
       'defaults.defaultTaxRate': value === 'Service' ? 6 : 13,
@@ -2852,13 +2923,15 @@ const MaterialSourceTab: React.FC<MaterialSourceTabProps> = ({
       <Row gutter={16}>
         <Col span={12}>
           <ProFormSelect
-            name="sourceType"
+            name="sourceTypes"
             label={t('app.master-data.materialForm.sourceTypeLabel')}
             placeholder={t('app.master-data.materialForm.sourceTypePlaceholder')}
             options={sourceTypeOptions}
             fieldProps={{
-              value: sourceType,
-              onChange: (val: string) => handleSourceTypeChange(val),
+              mode: 'multiple',
+              value: sourceTypes,
+              onChange: (vals: string[]) => handleSourceTypeChange(vals),
+              maxTagCount: 'responsive',
             }}
             extra={t('app.master-data.materialForm.sourceTypeExtra')}
           />
