@@ -83,9 +83,41 @@ interface LoginFormData {
   password: string;
 }
 
-function readPlatformSettingsPublicCache(): PlatformSettings | null {
+const PLATFORM_SETTINGS_CACHE_PREFIX = 'platformSettingsPublic';
+
+function resolveTenantDomain(pathname: string, search: string): string | null {
   try {
-    const raw = localStorage.getItem('platformSettingsPublic');
+    const queryDomain = new URLSearchParams(search).get('tenant_domain');
+    const normalized = (queryDomain || '').trim().toLowerCase();
+    if (normalized) return normalized;
+  } catch {
+    /* ignore */
+  }
+
+  const segments = pathname.split('/').filter(Boolean);
+  if (!segments.length) return null;
+  const reserved = new Set([
+    'login',
+    'infra',
+    'apps',
+    'system',
+    'personal',
+    'init',
+    'lock-screen',
+  ]);
+  if (!reserved.has(segments[0])) return segments[0].toLowerCase();
+  if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();
+  return null;
+}
+
+function getPlatformSettingsCacheKey(pathname: string, search: string): string {
+  const tenantDomain = resolveTenantDomain(pathname, search);
+  return `${PLATFORM_SETTINGS_CACHE_PREFIX}:${tenantDomain || 'global'}`;
+}
+
+function readPlatformSettingsPublicCache(cacheKey: string): PlatformSettings | null {
+  try {
+    const raw = localStorage.getItem(cacheKey);
     if (!raw) return null;
     const p = JSON.parse(raw) as unknown;
     if (p && typeof p === 'object') return p as PlatformSettings;
@@ -109,6 +141,10 @@ export default function LoginPage() {
   const { message } = App.useApp();
   const { token } = theme.useToken(); // 获取主题 token
   const queryClient = useQueryClient();
+  const platformSettingsCacheKey = useMemo(
+    () => getPlatformSettingsCacheKey(window.location.pathname, window.location.search),
+    [],
+  );
 
   /** 登录成功：同步用户态并清理会话级 query，避免 navigate 时 AuthGuard 竞态 */
   const syncUserStateAfterLogin = useCallback((userInfo: Parameters<typeof setUserInfo>[0]) => {
@@ -151,10 +187,10 @@ export default function LoginPage() {
   }, [navigate]);
 
   const [platformSettings, setPlatformSettings] = useState<PlatformSettings | null>(() =>
-    readPlatformSettingsPublicCache(),
+    readPlatformSettingsPublicCache(platformSettingsCacheKey),
   );
   const [isLoadingPlatformSettings, setIsLoadingPlatformSettings] = useState(
-    () => readPlatformSettingsPublicCache() === null,
+    () => readPlatformSettingsPublicCache(platformSettingsCacheKey) === null,
   );
 
   useEffect(() => {
@@ -180,7 +216,7 @@ export default function LoginPage() {
   // 从缓存读取平台设置作为初始值，避免闪烁
   const [cachedPlatformName, setCachedPlatformName] = useState<string | null>(() => {
     try {
-      const cachedSettings = localStorage.getItem('platformSettingsPublic');
+      const cachedSettings = localStorage.getItem(platformSettingsCacheKey);
       if (cachedSettings) {
         const parsed = JSON.parse(cachedSettings);
         if (i18n.language === 'en-US') {
@@ -214,7 +250,7 @@ export default function LoginPage() {
   // 初始值：尝试从 localStorage 读取缓存的设置，避免闪烁
   const [logoUrl, setLogoUrl] = useState<string>(() => {
     try {
-      const cachedSettings = localStorage.getItem('platformSettingsPublic');
+      const cachedSettings = localStorage.getItem(platformSettingsCacheKey);
       if (cachedSettings) {
         const parsed = JSON.parse(cachedSettings);
         // 优先使用缓存的LOGO URL
@@ -244,7 +280,7 @@ export default function LoginPage() {
 
   const handleLogoImgLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     e.currentTarget.parentElement?.querySelector('.logo-placeholder')?.remove();
-  }, []);
+  }, [platformSettingsCacheKey]);
 
   const handleLogoImgError = useCallback(() => {
     const next = nextSiteLogoUrlAfterImageError(logoUrl);
@@ -300,6 +336,7 @@ export default function LoginPage() {
   const [lottieSourceBackground, setLottieSourceBackground] = useState<object | null>(null);
   // 装饰画 Lottie：保持原始配色，不跟随主题
   const [animationData, setAnimationData] = useState<object | null>(null);
+  const [decorationImageUrl, setDecorationImageUrl] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return () => {};
     if (window.matchMedia('(max-width: 992px)').matches) {
@@ -343,7 +380,7 @@ export default function LoginPage() {
     let cancelled = false;
     (async () => {
       try {
-        const raw = localStorage.getItem('platformSettingsPublic');
+        const raw = localStorage.getItem(platformSettingsCacheKey);
         if (!raw) return;
         const parsed = JSON.parse(raw) as Record<string, unknown>;
         const pl = typeof parsed.platform_logo === 'string' ? parsed.platform_logo.trim() : '';
@@ -358,7 +395,7 @@ export default function LoginPage() {
         if (cancelled || !previewInfo.preview_url) return;
         setLogoUrl(previewInfo.preview_url);
         const merged = { ...parsed, platform_logo: pl, platform_logo_url: previewInfo.preview_url };
-        localStorage.setItem('platformSettingsPublic', JSON.stringify(merged));
+        localStorage.setItem(platformSettingsCacheKey, JSON.stringify(merged));
       } catch {
         /* ignore */
       }
@@ -381,7 +418,7 @@ export default function LoginPage() {
         setLogoUrl(DEFAULT_SITE_LOGO_URL);
         // 更新缓存
         try {
-          localStorage.setItem('platformSettingsPublic', JSON.stringify({ platform_logo: null }));
+          localStorage.setItem(platformSettingsCacheKey, JSON.stringify({ platform_logo: null }));
         } catch (error) {
           // 忽略存储错误
         }
@@ -400,7 +437,7 @@ export default function LoginPage() {
           setLogoUrl(previewInfo.preview_url);
           // 更新缓存
           try {
-            localStorage.setItem('platformSettingsPublic', JSON.stringify({
+            localStorage.setItem(platformSettingsCacheKey, JSON.stringify({
               platform_logo: logoValue,
               platform_logo_url: previewInfo.preview_url,
             }));
@@ -416,7 +453,7 @@ export default function LoginPage() {
         setLogoUrl(logoValue);
         // 更新缓存
         try {
-          localStorage.setItem('platformSettingsPublic', JSON.stringify({
+          localStorage.setItem(platformSettingsCacheKey, JSON.stringify({
             platform_logo: logoValue,
             platform_logo_url: logoValue,
           }));
@@ -427,7 +464,35 @@ export default function LoginPage() {
     };
 
     loadLogo();
-  }, [platformSettings?.platform_logo, isLoadingPlatformSettings]);
+  }, [platformSettings?.platform_logo, isLoadingPlatformSettings, platformSettingsCacheKey]);
+
+  // 加载登录页装饰图（租户可配置）；未配置时回退到默认 Lottie
+  useEffect(() => {
+    const loadDecorationImage = async () => {
+      if (isLoadingPlatformSettings) return;
+      const rawValue = typeof platformSettings?.login_decoration_image === 'string'
+        ? platformSettings.login_decoration_image.trim()
+        : '';
+      if (!rawValue) {
+        setDecorationImageUrl(null);
+        return;
+      }
+      if (!isUUID(rawValue)) {
+        setDecorationImageUrl(rawValue);
+        return;
+      }
+      try {
+        const response = await fetchWithRetry(
+          `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
+        );
+        const previewInfo = await response.json();
+        setDecorationImageUrl(previewInfo?.preview_url || null);
+      } catch {
+        setDecorationImageUrl(null);
+      }
+    };
+    void loadDecorationImage();
+  }, [platformSettings?.login_decoration_image, isLoadingPlatformSettings]);
 
   // 更新平台设置缓存（包含platform_name）
   useEffect(() => {
@@ -443,7 +508,7 @@ export default function LoginPage() {
         ) {
           cachedData.platform_logo_url = logoUrl;
         }
-        localStorage.setItem('platformSettingsPublic', JSON.stringify(cachedData));
+        localStorage.setItem(platformSettingsCacheKey, JSON.stringify(cachedData));
         // 更新缓存的平台名称，用于显示
         const name = i18n.language === 'en-US' 
           ? (platformSettings.platform_name_en || platformSettings.login_title_en || platformSettings.platform_name) 
@@ -455,14 +520,14 @@ export default function LoginPage() {
         // 忽略存储错误
       }
     }
-  }, [platformSettings, isLoadingPlatformSettings, logoUrl]);
+  }, [platformSettings, isLoadingPlatformSettings, logoUrl, platformSettingsCacheKey, i18n.language]);
 
   // 设置页面标题
   useEffect(() => {
     if (isLoadingPlatformSettings) {
       // 加载中时，尝试从缓存读取
       try {
-        const cachedSettings = localStorage.getItem('platformSettingsPublic');
+        const cachedSettings = localStorage.getItem(platformSettingsCacheKey);
         if (cachedSettings) {
           const parsed = JSON.parse(cachedSettings);
           const name = i18n.language === 'en-US' 
@@ -485,7 +550,7 @@ export default function LoginPage() {
     return () => {
       document.title = t('pages.login.defaultDocTitle');
     };
-  }, [platformSettings?.platform_name, isLoadingPlatformSettings, t]);
+  }, [platformSettings?.platform_name, isLoadingPlatformSettings, t, platformSettingsCacheKey]);
 
   // 组织选择弹窗状态
   const [tenantSelectionVisible, setTenantSelectionVisible] = useState(false);
@@ -1647,7 +1712,13 @@ export default function LoginPage() {
         <div className="login-left-content">
           {/* Lottie 动画装饰显示在左侧上方（懒加载，未加载时显示占位） */}
           <div className="login-decoration-lottie">
-            {animationData ? (
+            {decorationImageUrl ? (
+              <img
+                src={decorationImageUrl}
+                alt={t('pages.system.siteSettings.loginDecorationImage')}
+                className="login-decoration-image"
+              />
+            ) : animationData ? (
               <Suspense fallback={<div className="login-decoration-lottie-placeholder" />}>
                 <LottiePlayer
                   animationData={animationData}

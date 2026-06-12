@@ -27,12 +27,31 @@ _DEFAULT_SITE_SECURITY: Dict[str, Any] = {
 _PLATFORM_FALLBACK_KEYS = {
     "site_name": "platform_name",
     "site_logo": "platform_logo",
+    "platform_name": "platform_name",
+    "platform_name_en": "platform_name_en",
+    "login_title": "login_title",
+    "login_title_en": "login_title_en",
+    "login_content": "login_content",
+    "login_content_en": "login_content_en",
+    "login_decoration_image": "login_decoration_image",
+    "icp_license": "icp_license",
+    "icp_license_en": "icp_license_en",
+    "login_theme_color": "theme_color",
+    "login_guest_enabled": "login_guest_enabled",
+    "login_client_win_enabled": "login_client_win_enabled",
+    "login_client_android_enabled": "login_client_android_enabled",
 }
 
 # 平台未配置时的默认值（新租户未设置时使用）
 _PLATFORM_DEFAULT_VALUES = {
     "site_name": "RiverEdge SaaS",
     "site_logo": "",  # 无默认 logo 时留空
+}
+
+_PLATFORM_FALLBACK_BOOL_KEYS = {
+    "login_guest_enabled",
+    "login_client_win_enabled",
+    "login_client_android_enabled",
 }
 
 _LOGO_UUID_RE = re.compile(
@@ -161,10 +180,21 @@ class SiteSettingService:
         platform = await PlatformSettings.first()
         for site_key, platform_attr in _PLATFORM_FALLBACK_KEYS.items():
             tenant_val = tenant_settings.get(site_key)
-            if not tenant_val or (isinstance(tenant_val, str) and not tenant_val.strip()):
+            should_fallback = False
+            if site_key in _PLATFORM_FALLBACK_BOOL_KEYS:
+                # 布尔项仅在未设置（None）时回退；False 必须视为显式覆盖
+                should_fallback = tenant_val is None
+            else:
+                should_fallback = (not tenant_val) or (
+                    isinstance(tenant_val, str) and not tenant_val.strip()
+                )
+            if should_fallback:
                 # 优先使用平台配置，其次使用系统默认
                 platform_val = getattr(platform, platform_attr, None) if platform else None
-                if platform_val and (not isinstance(platform_val, str) or platform_val.strip()):
+                if site_key in _PLATFORM_FALLBACK_BOOL_KEYS:
+                    if platform_val is not None:
+                        tenant_settings[site_key] = platform_val
+                elif platform_val and (not isinstance(platform_val, str) or platform_val.strip()):
                     tenant_settings[site_key] = platform_val
                 elif site_key in _PLATFORM_DEFAULT_VALUES and _PLATFORM_DEFAULT_VALUES[site_key]:
                     tenant_settings[site_key] = _PLATFORM_DEFAULT_VALUES[site_key]

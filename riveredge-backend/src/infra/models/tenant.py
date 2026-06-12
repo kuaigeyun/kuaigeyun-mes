@@ -72,6 +72,8 @@ class Tenant(BaseModel):
         description="组织套餐"
     )
     settings = fields.JSONField(default=dict, description="组织配置（JSONB 存储）")
+    parent_tenant_id = fields.IntField(null=True, description="父组织 ID（仅子组织有值）")
+    is_subtenant = fields.BooleanField(default=False, description="是否子组织")
     max_users = fields.IntField(default=10, description="最大用户数限制")
     max_storage = fields.IntField(default=1024, description="最大存储空间限制（MB）")
     expires_at = fields.DatetimeField(null=True, description="过期时间（可选）")
@@ -85,6 +87,8 @@ class Tenant(BaseModel):
             ("domain",),  # 域名索引
             ("status",),  # 状态索引
             ("plan",),    # 套餐索引
+            ("parent_tenant_id",),  # 父组织索引
+            ("is_subtenant",),  # 子组织索引
         ]
     
     def __str__(self) -> str:

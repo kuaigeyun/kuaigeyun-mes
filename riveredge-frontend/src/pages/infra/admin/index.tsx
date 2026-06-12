@@ -7,7 +7,7 @@
 
 import { ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Tabs } from 'antd';
-import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined } from '@ant-design/icons';
+import { LogoutOutlined, SafetyCertificateOutlined, SettingOutlined, UserOutlined, GlobalOutlined } from '@ant-design/icons';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -109,7 +109,17 @@ export default function InfraSuperAdminPage() {
           {t('pages.infra.admin.tabSettings')}
         </span>
       ),
-      children: <PlatformSettingsPage />,
+      children: <PlatformSettingsPage mode="basic" />,
+    },
+    {
+      key: 'login-settings',
+      label: (
+        <span>
+          <GlobalOutlined />
+          {t('pages.infra.platform.loginConfig')}
+        </span>
+      ),
+      children: <PlatformSettingsPage mode="login" />,
     },
     {
       key: 'license-center',

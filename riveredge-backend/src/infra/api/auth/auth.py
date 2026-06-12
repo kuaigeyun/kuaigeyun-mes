@@ -21,6 +21,8 @@ from infra.schemas.auth import (
     OrganizationRegisterRequest, 
     RegisterResponse, 
     CurrentUserResponse, 
+    TenantInfo,
+    SwitchTenantRequest,
     SendVerificationCodeRequest, 
     SendVerificationCodeResponse, 
     BatchAccessCheckRequest, 
@@ -162,6 +164,35 @@ async def get_current_user_info(
         raise NotFoundError("用户", str(current_user.id))
 
     return CurrentUserResponse(**user_info)
+
+
+@router.get("/my-tenants", response_model=list[TenantInfo])
+async def get_my_tenants(
+    current_user: User = Depends(get_current_user),
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """
+    获取当前登录账号可切换的组织列表。
+    """
+    return await auth_service.get_accessible_tenants(current_user)
+
+
+@router.post("/switch-tenant", response_model=LoginResponse)
+async def switch_tenant(
+    data: SwitchTenantRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    auth_service: Any = Depends(get_auth_service_with_fallback),
+):
+    """
+    在当前账号可访问的组织间切换，并签发新的会话 Token。
+    """
+    result = await auth_service.switch_tenant(
+        current_user=current_user,
+        target_tenant_id=data.tenant_id,
+        request=request,
+    )
+    return LoginResponse(**result)
 
 
 @router.post("/check-access", response_model=list[AccessCheckResult])

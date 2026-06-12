@@ -37,7 +37,9 @@ export interface PackageConfig {
   name: string;
   max_users: number;
   max_storage_mb: number;
+  max_branch_organizations?: number | null;
   allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
   description: string;
 }
 
@@ -58,7 +60,9 @@ export interface Package {
   plan: string;
   max_users: number;
   max_storage_mb: number;
+  max_branch_organizations?: number | null;
   allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
   description?: string;
   features?: string[];
   is_active: boolean;
@@ -74,7 +78,9 @@ export interface PackageCreate {
   plan: string;
   max_users: number;
   max_storage_mb: number;
+  max_branch_organizations?: number | null;
   allow_pro_apps: boolean;
+  allowed_app_codes?: string[];
   description?: string;
   features?: string[];
   is_active?: boolean;
@@ -88,7 +94,9 @@ export interface PackageUpdate {
   plan?: string;
   max_users?: number;
   max_storage_mb?: number;
+  max_branch_organizations?: number | null;
   allow_pro_apps?: boolean;
+  allowed_app_codes?: string[];
   description?: string;
   features?: string[];
   is_active?: boolean;
@@ -115,6 +123,8 @@ export interface Tenant {
   status: TenantStatus;
   plan: TenantPlan;
   settings: Record<string, any>;
+  parent_tenant_id?: number | null;
+  is_subtenant?: boolean;
   max_users: number;
   max_storage: number;
   user_count?: number;
@@ -132,6 +142,8 @@ export interface TenantListParams {
   page_size?: number;
   status?: TenantStatus;
   plan?: TenantPlan;
+  parent_tenant_id?: number;
+  is_subtenant?: boolean;
   keyword?: string;  // 关键词搜索（组织名称、域名，使用 OR 逻辑）
   name?: string;  // 组织名称搜索（精确搜索）
   domain?: string;  // 域名搜索（精确搜索）
@@ -165,6 +177,7 @@ export interface CreateTenantData {
   status?: TenantStatus;
   plan?: TenantPlan;
   settings?: Record<string, any>;
+  parent_tenant_id?: number;
   max_users?: number;
   max_storage?: number;
   expires_at?: string;
@@ -392,28 +405,36 @@ function getDefaultPackageConfigs(): AllPackageConfigs {
       name: '体验套餐',
       max_users: 10,
       max_storage_mb: 1024,
+      max_branch_organizations: 0,
       allow_pro_apps: false,
+      allowed_app_codes: [],
       description: '适合快速体验系统功能，限制用户数和存储空间',
     },
     basic: {
       name: '基础版',
       max_users: 50,
       max_storage_mb: 5120,
+      max_branch_organizations: 1,
       allow_pro_apps: false,
+      allowed_app_codes: [],
       description: '适合小型团队使用，提供基础功能',
     },
     professional: {
       name: '专业版',
       max_users: 200,
       max_storage_mb: 20480,
+      max_branch_organizations: 3,
       allow_pro_apps: true,
+      allowed_app_codes: [],
       description: '适合中型企业使用，提供完整功能和 PRO 应用支持',
     },
     enterprise: {
       name: '企业版',
       max_users: 1000,
       max_storage_mb: 102400,
+      max_branch_organizations: 5,
       allow_pro_apps: true,
+      allowed_app_codes: [],
       description: '适合大型企业使用，提供最高配置和完整功能',
     },
   };
@@ -443,6 +464,29 @@ export interface TenantUsage {
   user_usage_percent: number;
   storage_usage_percent: number;
   warnings: string[];
+}
+
+export interface SharedUserQuotaTenantUsage {
+  tenant_id: number;
+  tenant_name: string;
+  is_subtenant: boolean;
+  user_count: number;
+}
+
+export interface SharedUserQuota {
+  root_tenant_id: number;
+  root_tenant_name: string;
+  max_users: number;
+  used_users: number;
+  remaining_users: number;
+  over_quota: boolean;
+  tenants: SharedUserQuotaTenantUsage[];
+}
+
+export async function getSharedUserQuota(tenantId: number): Promise<SharedUserQuota> {
+  return apiRequest<SharedUserQuota>(`/infra/tenants/${tenantId}/shared-user-quota`, {
+    method: 'GET',
+  });
 }
 
 /**

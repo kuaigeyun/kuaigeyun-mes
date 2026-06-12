@@ -112,6 +112,11 @@ class PlatformSettings(Model):
         null=True,
         description="登录页内容描述（英文）"
     )
+    login_decoration_image = fields.CharField(
+        max_length=500,
+        null=True,
+        description="登录页装饰图（URL或文件UUID）"
+    )
     icp_license = fields.CharField(
         max_length=100,
         null=True,

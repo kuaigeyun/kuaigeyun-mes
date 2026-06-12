@@ -8,7 +8,7 @@ import { App, Button, Space, Popconfirm, Tag } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import React, { useState, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { getPackageList, deletePackage, type Package, TenantPlan } from '../../../services/tenant';
+import { createPackage, getPackageList, deletePackage, updatePackage, type Package, type PackageCreate, type PackageUpdate, TenantPlan } from '../../../services/tenant';
 import { UniTable } from '../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../components/layout-templates';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +27,28 @@ export default function PackageManagementPage() {
   const [editFormData, setEditFormData] = useState<Package | null>(null);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const createMutation = useMutation({
+    mutationFn: (data: PackageCreate) => createPackage(data),
+    onSuccess: () => {
+      messageApi.success(t('pages.infra.package.createSuccess'));
+      handleSave();
+    },
+    onError: (error: any) => {
+      messageApi.error(error?.message || t('pages.infra.package.createFailed'));
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: PackageUpdate }) => updatePackage(id, data),
+    onSuccess: () => {
+      messageApi.success(t('pages.infra.package.updateSuccess'));
+      handleSave();
+    },
+    onError: (error: any) => {
+      messageApi.error(error?.message || t('pages.infra.package.updateFailed'));
+    },
+  });
 
   // UniTable的request函数
   const handleRequest = async (
@@ -130,6 +152,27 @@ export default function PackageManagementPage() {
     setCreateModalVisible(true);
   };
 
+  const normalizePackageValues = (values: any) => {
+    const processedValues = { ...values };
+    if (typeof processedValues.features === 'string') {
+      processedValues.features = processedValues.features
+        .split('\n')
+        .map((feature: string) => feature.trim())
+        .filter((feature: string) => feature.length > 0);
+    } else if (!Array.isArray(processedValues.features)) {
+      processedValues.features = [];
+    }
+
+    if (!Array.isArray(processedValues.allowed_app_codes)) {
+      processedValues.allowed_app_codes = [];
+    }
+
+    if (processedValues.max_branch_organizations === '' || processedValues.max_branch_organizations === undefined) {
+      processedValues.max_branch_organizations = null;
+    }
+    return processedValues;
+  };
+
   /**
    * 处理保存
    */
@@ -140,6 +183,18 @@ export default function PackageManagementPage() {
     queryClient.invalidateQueries({ queryKey: ['packages'] });
     // 手动刷新表格
     actionRef.current?.reload();
+  };
+
+  const handleModalFinish = async (values: any) => {
+    const processedValues = normalizePackageValues(values);
+    if (editModalVisible && editFormData) {
+      await updateMutation.mutateAsync({
+        id: editFormData.id,
+        data: processedValues,
+      });
+      return;
+    }
+    await createMutation.mutateAsync(processedValues);
   };
 
   /**
@@ -212,6 +267,16 @@ export default function PackageManagementPage() {
       render: (_, record) => record.max_storage_mb?.toLocaleString() || '-',
     },
     {
+      title: t('pages.infra.package.maxBranchOrganizations'),
+      dataIndex: 'max_branch_organizations',
+      key: 'max_branch_organizations',
+      sorter: true,
+      render: (_, record) =>
+        record.max_branch_organizations === null || record.max_branch_organizations === undefined
+          ? t('pages.infra.package.unlimited')
+          : record.max_branch_organizations,
+    },
+    {
       title: t('pages.infra.package.allowProApps'),
       dataIndex: 'allow_pro_apps',
       key: 'allow_pro_apps',
@@ -220,6 +285,16 @@ export default function PackageManagementPage() {
           {record.allow_pro_apps ? t('pages.infra.package.yes') : t('pages.infra.package.no')}
         </Tag>
       ),
+    },
+    {
+      title: t('pages.infra.package.allowedApps'),
+      dataIndex: 'allowed_app_codes',
+      key: 'allowed_app_codes',
+      render: (_, record) => {
+        const codes = record.allowed_app_codes || [];
+        if (!codes.length) return <Tag>{t('pages.infra.package.unlimited')}</Tag>;
+        return <Tag color="processing">{t('pages.infra.package.allowedAppsCount', { count: codes.length })}</Tag>;
+      },
     },
     {
       title: t('pages.infra.package.status'),
@@ -303,19 +378,20 @@ export default function PackageManagementPage() {
           setEditModalVisible(false);
           setEditFormData(null);
         }}
-        onFinish={handleSave}
+        onFinish={handleModalFinish}
+        isEdit
+        loading={updateMutation.isPending}
+        initialValues={
+          editFormData
+            ? {
+                ...editFormData,
+                features: Array.isArray(editFormData.features) ? editFormData.features.join('\n') : editFormData.features,
+              }
+            : undefined
+        }
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        {editFormData && (
-          <PackageForm
-            initialValues={editFormData}
-            onSubmit={handleSave}
-            onCancel={() => {
-              setEditModalVisible(false);
-              setEditFormData(null);
-            }}
-          />
-        )}
+        <PackageForm isEdit />
       </FormModalTemplate>
 
       {/* 创建弹窗 */}
@@ -323,13 +399,12 @@ export default function PackageManagementPage() {
         title={t('pages.infra.package.createTitle')}
         open={createModalVisible}
         onClose={() => setCreateModalVisible(false)}
-        onFinish={handleSave}
+        onFinish={handleModalFinish}
+        loading={createMutation.isPending}
+        initialValues={{ is_active: true }}
         width={MODAL_CONFIG.SMALL_WIDTH}
       >
-        <PackageForm
-          onSubmit={handleSave}
-          onCancel={() => setCreateModalVisible(false)}
-        />
+        <PackageForm />
       </FormModalTemplate>
     </>
   );

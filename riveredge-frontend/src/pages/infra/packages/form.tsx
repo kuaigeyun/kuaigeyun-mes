@@ -1,117 +1,60 @@
 /**
- * 套餐表单组件
- *
- * 用于创建和编辑套餐信息
+ * 套餐表单项组件（仅渲染字段，不包含 submitter）
  */
 
-import { ProForm, ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { ProFormText, ProFormDigit, ProFormSwitch, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { message } from 'antd';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { createPackage, updatePackage, type PackageCreate, type PackageUpdate } from '../../../services/tenant';
+import { useQuery } from '@tanstack/react-query';
+import { getApplicationList } from '../../../services/application';
+import { getPackageConfigs } from '../../../services/tenant';
 import { useTranslation } from 'react-i18next';
 
 interface PackageFormProps {
-  initialValues?: any;
-  onSubmit: () => void;
-  onCancel: () => void;
+  isEdit?: boolean;
 }
 
-/**
- * 套餐表单组件
- */
-export default function PackageForm({ initialValues, onSubmit, onCancel }: PackageFormProps) {
+export default function PackageForm({ isEdit = false }: PackageFormProps) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-  const isEdit = !!initialValues;
+  const { data: packageConfigs = {} } = useQuery({
+    queryKey: ['package-configs-options'],
+    queryFn: async () => getPackageConfigs(),
+  });
+  const planOptions = Object.entries(packageConfigs)
+    .map(([plan, config]) => ({
+      label: config?.name || plan,
+      value: plan,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
-  // 处理初始值，将features数组转换为换行分隔的字符串
-  const processedInitialValues = initialValues ? {
-    ...initialValues,
-    features: Array.isArray(initialValues.features)
-      ? initialValues.features.join('\n')
-      : initialValues.features
-  } : undefined;
-
-  // 创建套餐
-  const createMutation = useMutation({
-    mutationFn: (data: PackageCreate) => createPackage(data),
-    onSuccess: () => {
-      message.success(t('pages.infra.package.createSuccess'));
-      queryClient.invalidateQueries({ queryKey: ['packages'] });
-      onSubmit();
-    },
-    onError: (error: any) => {
-      message.error(error?.message || t('pages.infra.package.createFailed'));
+  const { data: applicationOptions = [], isLoading: appOptionsLoading } = useQuery({
+    queryKey: ['package-app-options'],
+    queryFn: async () => {
+      const apps = await getApplicationList({ limit: 1000 });
+      return (apps || [])
+        .map((app) => ({
+          label: `${app.name} (${app.code})`,
+          value: app.code,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label));
     },
   });
-
-  // 更新套餐
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: PackageUpdate }) => updatePackage(id, data),
-    onSuccess: () => {
-      message.success(t('pages.infra.package.updateSuccess'));
-      queryClient.invalidateQueries({ queryKey: ['packages'] });
-      onSubmit();
-    },
-    onError: (error: any) => {
-      message.error(error?.message || t('pages.infra.package.updateFailed'));
-    },
-  });
-
-  /**
-   * 处理提交
-   */
-  const handleFinish = async (values: any) => {
-    // 处理features字段，将换行分隔的字符串转换为数组
-    const processedValues = { ...values };
-    if (processedValues.features && typeof processedValues.features === 'string') {
-      // 将换行符分割，并过滤空行
-      processedValues.features = processedValues.features
-        .split('\n')
-        .map((feature: string) => feature.trim())
-        .filter((feature: string) => feature.length > 0);
-    }
-
-    if (isEdit) {
-      await updateMutation.mutateAsync({
-        id: initialValues.id,
-        data: processedValues,
-      });
-    } else {
-      await createMutation.mutateAsync(processedValues);
-    }
-  };
-
-  const planOptions = [
-    { label: t('pages.infra.package.planTrial'), value: 'trial' },
-    { label: t('pages.infra.package.planBasic'), value: 'basic' },
-    { label: t('pages.infra.package.planProfessional'), value: 'professional' },
-    { label: t('pages.infra.package.planEnterprise'), value: 'enterprise' },
-  ];
 
   return (
-    <ProForm
-      initialValues={processedInitialValues}
-      onFinish={handleFinish}
-      submitter={{
-        submitButtonProps: {
-          loading: createMutation.isPending || updateMutation.isPending,
-        },
-      }}
-    >
+    <>
       <ProFormText
         name="name"
         label={t('pages.infra.package.name')}
         rules={[{ required: true, message: t('pages.infra.package.nameRequired') }]}
       />
 
-      <SafeProFormSelect
-        name="plan"
-        label={t('pages.infra.package.plan')}
-        options={planOptions}
-        rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
-      />
+      {!isEdit && (
+        <SafeProFormSelect
+          name="plan"
+          label={t('pages.infra.package.plan')}
+          options={planOptions}
+          rules={[{ required: true, message: t('pages.infra.package.planRequired') }]}
+        />
+      )}
 
       <ProFormDigit
         name="max_users"
@@ -127,9 +70,30 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
         rules={[{ required: true, message: t('pages.infra.package.maxStorageRequired') }]}
       />
 
+      <ProFormDigit
+        name="max_branch_organizations"
+        label={t('pages.infra.package.maxBranchOrganizations')}
+        min={0}
+        fieldProps={{ precision: 0 }}
+        tooltip={t('pages.infra.package.maxBranchOrganizationsHelp')}
+      />
+
       <ProFormSwitch
         name="allow_pro_apps"
         label={t('pages.infra.package.allowProApps')}
+      />
+
+      <ProFormSelect
+        name="allowed_app_codes"
+        label={t('pages.infra.package.allowedApps')}
+        mode="multiple"
+        options={applicationOptions}
+        loading={appOptionsLoading}
+        fieldProps={{
+          optionFilterProp: 'label',
+          showSearch: true,
+        }}
+        extra={t('pages.infra.package.allowedAppsHelp')}
       />
 
       <ProFormText
@@ -149,6 +113,6 @@ export default function PackageForm({ initialValues, onSubmit, onCancel }: Packa
         label={t('pages.infra.package.isActive')}
         initialValue={true}
       />
-    </ProForm>
+    </>
   );
 }

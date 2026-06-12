@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, Dropdown, Space, Popconfirm, Tooltip } from 'antd'
+import { Button, Dropdown, Modal, Space, Popconfirm, Tooltip } from 'antd'
 import i18next from 'i18next'
 import {
   ApartmentOutlined,
@@ -85,6 +85,20 @@ function findInteractiveElement(node: React.ReactNode): React.ReactElement | nul
   if (ch != null) {
     for (const child of React.Children.toArray(ch)) {
       const found = findInteractiveElement(child)
+      if (found) return found
+    }
+  }
+  return null
+}
+
+function findPopconfirmElement(node: React.ReactNode): React.ReactElement | null {
+  if (!React.isValidElement(node)) return null
+  const t = node.type
+  if (t === Popconfirm) return node
+  const ch = (node.props as { children?: React.ReactNode } | undefined)?.children
+  if (ch != null) {
+    for (const child of React.Children.toArray(ch)) {
+      const found = findPopconfirmElement(child)
       if (found) return found
     }
   }
@@ -189,13 +203,36 @@ function isClickableVisibleAction(node: React.ReactNode): boolean {
 function toMenuItem(node: React.ReactNode, key: string) {
   const text = normalizeActionLabelText(readNodeText(node)) || '操作'
   const interactive = findInteractiveElement(node)
+  const popconfirm = findPopconfirmElement(node)
   const inheritedExplicit = readExplicitActionKind(node)
   const tone = resolveButtonToneFromNode(interactive ?? node, inheritedExplicit)
 
   if (interactive) {
     const props = (interactive.props || {}) as Record<string, unknown>
-    const onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined
+    let onClick = typeof props.onClick === 'function' ? (props.onClick as () => void) : undefined
     const destructive = tone.mode === 'destructive'
+
+    // 折叠到「更多」后，Popconfirm 不会自动触发；这里显式转成 Modal.confirm 以保留二次确认。
+    if (popconfirm) {
+      const popProps = (popconfirm.props || {}) as Record<string, unknown>
+      onClick = () => {
+        const onConfirm = popProps.onConfirm
+        Modal.confirm({
+          title: (popProps.title as React.ReactNode) ?? text,
+          content: popProps.description as React.ReactNode,
+          okText: (popProps.okText as string) || i18next.t('common.confirm', { defaultValue: 'Confirm' }),
+          cancelText:
+            (popProps.cancelText as string) || i18next.t('common.cancel', { defaultValue: 'Cancel' }),
+          okButtonProps: destructive ? { danger: true } : undefined,
+          onOk: async () => {
+            if (typeof onConfirm === 'function') {
+              await (onConfirm as () => void | Promise<void>)()
+            }
+          },
+        })
+      }
+    }
+
     return {
       key,
       label: text,

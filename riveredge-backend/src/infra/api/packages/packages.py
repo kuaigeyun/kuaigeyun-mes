@@ -17,7 +17,6 @@ from infra.api.deps.services import get_package_service_with_fallback
 from infra.models.tenant import TenantPlan
 from infra.models.infra_superadmin import InfraSuperAdmin
 from infra.api.deps.deps import get_current_infra_superadmin
-from infra.domain.package_config import get_package_config, get_all_package_configs
 from typing import Dict, Any
 
 # 创建路由 - 测试专用，只包含公开接口
@@ -39,7 +38,8 @@ async def get_all_package_configs_endpoint():
     from fastapi import Request
     logger.info("📦 [get_all_package_configs_endpoint] 开始处理请求（无需认证）")
     try:
-        result = get_all_package_configs()
+        package_service = PackageService()
+        result = await package_service.get_all_effective_package_configs()
         logger.info(f"✅ [get_all_package_configs_endpoint] 成功返回套餐配置，套餐数量: {len(result)}")
         return result
     except Exception as e:
@@ -66,13 +66,8 @@ async def get_package_config_by_plan(
     Raises:
         HTTPException: 当套餐类型不存在时抛出
     """
-    try:
-        return get_package_config(plan)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    package_service = PackageService()
+    return await package_service.get_package_config_for_plan(plan)
 
 
 @router.get("", response_model=PackageListResponse)

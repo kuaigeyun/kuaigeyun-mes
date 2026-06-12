@@ -15,6 +15,7 @@ from infra.models.user import User
 from infra.schemas.user import UserCreate, UserUpdate
 from infra.domain.tenant_context import get_current_tenant_id, require_tenant_context
 from infra.domain.security.security import hash_password
+from infra.services.tenant_service import TenantService
 from core.services.authorization.user_permission_service import UserPermissionService
 from core.services.authorization.permission_version_service import PermissionVersionService
 
@@ -65,12 +66,19 @@ class UserService:
         # 检查组织内用户名是否已存在
         existing_username = await User.get_or_none(
             tenant_id=tenant_id,
-            username=data.username
+            username=data.username,
+            deleted_at__isnull=True,
         )
         if existing_username:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="该组织下用户名已被使用"
+            )
+
+        if data.is_active:
+            await TenantService().assert_shared_user_quota_capacity(
+                tenant_id=tenant_id,
+                increment=1,
             )
         
         # 创建用户（自动设置 tenant_id）⭐ 关键

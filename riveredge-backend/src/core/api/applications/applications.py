@@ -29,8 +29,6 @@ from core.schemas.system_parameter import SystemParameterCreate, SystemParameter
 from core.services.system.system_parameter_service import SystemParameterService
 from infra.services.license_center_service import LicenseCenterService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
-from infra.models.tenant import Tenant
-from infra.domain.package_config import can_use_pro_apps
 from loguru import logger
 
 router = APIRouter(prefix="/applications", tags=["Core · Applications"])
@@ -238,9 +236,6 @@ async def list_applications(
         is_active=is_active,
     )
 
-    # 获取租户套餐是否允许 PRO 应用
-    tenant = await Tenant.get_or_none(id=tenant_id)
-    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
     activated_codes = await _get_activated_pro_codes(tenant_id)
 
     # 安全构造响应对象，避免传递多余字段
@@ -313,9 +308,6 @@ async def list_installed_applications(
         is_active=is_active,
     )
 
-    # 获取租户套餐是否允许 PRO 应用
-    tenant = await Tenant.get_or_none(id=tenant_id)
-    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
     activated_codes = await _get_activated_pro_codes(tenant_id)
 
     # 安全构造响应对象，避免传递多余字段
@@ -397,8 +389,6 @@ async def get_application(
             uuid=uuid
         )
         await _assert_application_visible_to_viewer(tenant_id, application, auth)
-        tenant = await Tenant.get_or_none(id=tenant_id)
-        allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(application, activated_codes)
         return ApplicationResponse.model_validate(_application_response_dict(application, pro_info))
@@ -611,8 +601,6 @@ async def enable_application(
             uuid=uuid,
         )
         await _assert_application_visible_to_viewer(tenant_id, app_detail, auth)
-        tenant = await Tenant.get_or_none(id=tenant_id)
-        allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
         activated_codes = await _get_activated_pro_codes(tenant_id)
         pro_info = _enrich_app_with_pro_info(app_detail, activated_codes)
         if pro_info.get("is_pro") and not pro_info.get("can_access"):
@@ -701,8 +689,6 @@ async def activate_pro_application(
     }
     await _save_pro_activation_registry(tenant_id, registry)
 
-    tenant = await Tenant.get_or_none(id=tenant_id)
-    allow_pro_apps = can_use_pro_apps(tenant.plan) if tenant else False
     activated_codes = await _get_activated_pro_codes(tenant_id)
     pro_info = _enrich_app_with_pro_info(app, activated_codes)
     return ApplicationResponse.model_validate(_application_response_dict(app, pro_info))

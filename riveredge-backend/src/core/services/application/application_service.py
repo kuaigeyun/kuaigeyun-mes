@@ -16,6 +16,8 @@ import asyncpg
 from core.schemas.application import ApplicationCreate, ApplicationUpdate
 from core.services.application.application_dedicated_binding_service import ApplicationDedicatedBindingService
 from core.utils.timezone_utils import now_utc
+from infra.models.tenant import Tenant
+from infra.services.package_service import PackageService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.infrastructure.database.database import get_db_connection
 from loguru import logger
@@ -131,6 +133,32 @@ class ApplicationService:
             else:
                 out.append(a)
         return out
+
+    @staticmethod
+    async def _resolve_package_controls(tenant_id: int) -> Dict[str, Any]:
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            return {"allow_pro_apps": False, "allowed_app_codes": []}
+        return await PackageService().get_effective_package_config_for_plan(tenant.plan)
+
+    @staticmethod
+    async def _is_app_allowed_by_package(tenant_id: int, app_code: str) -> bool:
+        controls = await ApplicationService._resolve_package_controls(tenant_id)
+        allowed_codes = set(controls.get("allowed_app_codes") or [])
+        if not allowed_codes:
+            return True
+        return str(app_code or "") in allowed_codes
+
+    @staticmethod
+    async def _filter_apps_by_package_whitelist(
+        tenant_id: int,
+        applications: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        controls = await ApplicationService._resolve_package_controls(tenant_id)
+        allowed_codes = set(controls.get("allowed_app_codes") or [])
+        if not allowed_codes:
+            return applications
+        return [app for app in applications if str(app.get("code") or "") in allowed_codes]
 
     @staticmethod
     async def reconcile_is_dedicated_with_manifest(tenant_id: int, applications: List[Dict[str, Any]]) -> None:
@@ -423,6 +451,7 @@ class ApplicationService:
                 applications.sort(key=lambda a: (a.get("sort_order") or 999, a.get("id") or 0))
 
             await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, applications)
+            applications = await ApplicationService._filter_apps_by_package_whitelist(tenant_id, applications)
 
             return ApplicationService._filter_dedicated_for_viewer(
                 applications,
@@ -904,6 +933,7 @@ class ApplicationService:
 
             bound = await ApplicationDedicatedBindingService.fetch_bound_codes_for_tenant(tenant_id)
             await ApplicationService.reconcile_is_dedicated_with_manifest(tenant_id, result)
+            result = await ApplicationService._filter_apps_by_package_whitelist(tenant_id, result)
             return ApplicationService._filter_dedicated_for_viewer(
                 result,
                 bound_codes=bound,
@@ -1255,7 +1285,10 @@ class ApplicationService:
 
     @staticmethod
     async def _can_enable_or_install_app(tenant_id: int, app_code: str) -> bool:
-        """应用安装/启用门禁：PRO 应用必须已激活 License Key。"""
+        """应用安装/启用门禁：套餐白名单 + PRO 激活联合校验。"""
+        if not await ApplicationService._is_app_allowed_by_package(tenant_id, app_code):
+            return False
+
         manifest = ApplicationService._get_manifest_by_code(app_code)
         is_pro = bool(manifest.get("is_pro", False)) if manifest else False
         if not is_pro:

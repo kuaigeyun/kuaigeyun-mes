@@ -132,6 +132,8 @@ class TenantServiceInterface(InfraServiceInterface):
         page_size: int = 10,
         status: Optional[Any] = None,
         plan: Optional[Any] = None,
+        parent_tenant_id: Optional[int] = None,
+        is_subtenant: Optional[bool] = None,
         name: Optional[str] = None,
         domain: Optional[str] = None,
         sort: Optional[str] = None,
@@ -146,6 +148,8 @@ class TenantServiceInterface(InfraServiceInterface):
             page_size: 每页数量
             status: 组织状态筛选
             plan: 组织套餐筛选
+            parent_tenant_id: 父组织筛选
+            is_subtenant: 是否分支组织筛选
             name: 组织名称搜索
             domain: 域名搜索
             sort: 排序字段
@@ -267,6 +271,46 @@ class PackageServiceInterface(InfraServiceInterface):
             
         Returns:
             套餐对象，如果不存在则返回None
+        """
+        pass
+
+    @abstractmethod
+    async def create_package(self, data: Any) -> Any:
+        """
+        创建套餐
+
+        Args:
+            data: 套餐创建数据
+
+        Returns:
+            创建后的套餐对象
+        """
+        pass
+
+    @abstractmethod
+    async def update_package(self, package_id: int, data: Any) -> Optional[Any]:
+        """
+        更新套餐
+
+        Args:
+            package_id: 套餐ID
+            data: 套餐更新数据
+
+        Returns:
+            更新后的套餐对象，如果不存在则返回None
+        """
+        pass
+
+    @abstractmethod
+    async def delete_package(self, package_id: int) -> bool:
+        """
+        删除套餐
+
+        Args:
+            package_id: 套餐ID
+
+        Returns:
+            是否删除成功
         """
         pass
 

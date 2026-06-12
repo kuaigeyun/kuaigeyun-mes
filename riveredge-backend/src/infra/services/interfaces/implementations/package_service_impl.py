@@ -55,3 +55,15 @@ class PackageServiceImpl(PackageServiceInterface):
         """根据ID获取套餐"""
         return await self._package_service.get_package_by_id(package_id)
 
+    async def create_package(self, data: Any) -> Any:
+        """创建套餐"""
+        return await self._package_service.create_package(data)
+
+    async def update_package(self, package_id: int, data: Any) -> Optional[Any]:
+        """更新套餐"""
+        return await self._package_service.update_package(package_id, data)
+
+    async def delete_package(self, package_id: int) -> bool:
+        """删除套餐"""
+        return await self._package_service.delete_package(package_id)
+

@@ -14,7 +14,13 @@ from pydantic import BaseModel, Field
 from fastapi import APIRouter, HTTPException, Query, Depends, status
 from loguru import logger
 
-from infra.schemas.tenant import TenantResponse, TenantListResponse, TenantUpdate, TenantCreate
+from infra.schemas.tenant import (
+    TenantResponse,
+    TenantListResponse,
+    TenantUpdate,
+    TenantCreate,
+    SharedUserQuotaResponse,
+)
 from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
 from infra.api.deps.services import get_tenant_service_with_fallback
 from infra.models.tenant import TenantStatus, TenantPlan
@@ -55,6 +61,8 @@ async def list_tenants_for_superadmin(
     page_size: int = Query(10, ge=1, le=100, description="每页数量"),
     status: Optional[TenantStatus] = Query(None, description="组织状态筛选"),
     plan: Optional[TenantPlan] = Query(None, description="组织套餐筛选"),
+    parent_tenant_id: Optional[int] = Query(None, ge=1, description="父组织筛选"),
+    is_subtenant: Optional[bool] = Query(None, description="是否子组织筛选"),
     name: Optional[str] = Query(None, description="组织名称搜索（模糊搜索）"),
     domain: Optional[str] = Query(None, description="域名搜索（模糊搜索）"),
     sort: Optional[str] = Query(None, description="排序字段（如：name、status、created_at）"),
@@ -96,6 +104,8 @@ async def list_tenants_for_superadmin(
         page_size=page_size,
         status=status,
         plan=plan,
+        parent_tenant_id=parent_tenant_id,
+        is_subtenant=is_subtenant,
         name=name,
         domain=domain,
         sort=sort,
@@ -140,6 +150,26 @@ async def get_tenant_detail_for_superadmin(
         )
     
     return tenant
+
+
+@router.get("/{tenant_id}/shared-user-quota", response_model=SharedUserQuotaResponse)
+async def get_shared_user_quota_for_superadmin(
+    tenant_id: int,
+    current_admin: InfraSuperAdmin = Depends(get_current_infra_superadmin),
+    tenant_service: Any = Depends(get_tenant_service_with_fallback),
+):
+    """
+    获取主组织共享用户池统计（主组织 + 全部子组织）。
+    """
+    if not tenant_service:
+        tenant_service = TenantService()  # 向后兼容
+
+    summary = await tenant_service.get_shared_user_quota_summary(tenant_id)
+    logger.info(
+        f"平台超级管理员 {current_admin.username} 查看共享用户池: "
+        f"root_tenant_id={summary['root_tenant_id']}"
+    )
+    return SharedUserQuotaResponse(**summary)
 
 
 @router.post("/{tenant_id}/approve", response_model=TenantResponse)

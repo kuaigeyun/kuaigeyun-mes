@@ -58,6 +58,14 @@ export interface LoginResponse {
   requires_tenant_selection?: boolean;
 }
 
+export interface TenantSwitchOption {
+  id: number;
+  uuid: string;
+  name: string;
+  domain: string;
+  status: string;
+}
+
 /**
  * 用户信息接口
  */
@@ -102,6 +110,23 @@ export async function login(data: LoginRequest): Promise<LoginResponse> {
  */
 export async function getCurrentUser(): Promise<CurrentUser> {
   return apiRequest<CurrentUser>('/auth/me');
+}
+
+/**
+ * 获取当前账号可切换的组织列表
+ */
+export async function getMyTenants(): Promise<TenantSwitchOption[]> {
+  return apiRequest<TenantSwitchOption[]>('/auth/my-tenants');
+}
+
+/**
+ * 切换当前会话组织并返回新的登录上下文
+ */
+export async function switchTenant(tenant_id: number): Promise<LoginResponse> {
+  return apiRequest<LoginResponse>('/auth/switch-tenant', {
+    method: 'POST',
+    data: { tenant_id },
+  });
 }
 
 /** 登录响应中的组织名称（唯一来源：后端 user.tenant_name） */

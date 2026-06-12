@@ -160,6 +160,84 @@ class AuthService:
             queryset = queryset.filter(tenant_id=tenant_id)
         users = await queryset.all()
         return await self._filter_users_with_active_tenant(users)
+
+    async def _build_user_tenants(self, user: User) -> list[dict]:
+        """构建当前账号可访问组织列表（仅返回激活组织）。"""
+        q = Q(username=user.username)
+        if user.phone:
+            q = q | Q(phone=user.phone)
+        users_with_same_account = await User.filter(
+            q,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        users_with_same_account = await self._filter_users_with_active_tenant(users_with_same_account)
+        tenant_ids = [u.tenant_id for u in users_with_same_account if u.tenant_id is not None]
+        if not tenant_ids:
+            return []
+        tenants = await Tenant.filter(id__in=tenant_ids, status=TenantStatus.ACTIVE).all()
+        return [
+            {
+                "id": tenant.id,
+                "uuid": str(tenant.uuid),
+                "name": tenant.name,
+                "domain": tenant.domain,
+                "status": tenant.status.value,
+            }
+            for tenant in tenants
+        ]
+
+    async def get_accessible_tenants(self, current_user: User) -> list[dict]:
+        """获取当前登录账号可访问组织列表。"""
+        if bool(getattr(current_user, "is_infra_admin", False)):
+            tenants = await Tenant.filter(status=TenantStatus.ACTIVE).all()
+            return [
+                {
+                    "id": tenant.id,
+                    "uuid": str(tenant.uuid),
+                    "name": tenant.name,
+                    "domain": tenant.domain,
+                    "status": tenant.status.value,
+                }
+                for tenant in tenants
+            ]
+        return await self._build_user_tenants(current_user)
+
+    async def switch_tenant(
+        self,
+        current_user: User,
+        target_tenant_id: int,
+        request: Optional[Request] = None,
+    ) -> dict:
+        """为当前账号切换组织并签发新的 JWT。"""
+        if bool(getattr(current_user, "is_infra_admin", False)):
+            return await self.generate_login_result(
+                current_user,
+                request=request,
+                tenant_id=target_tenant_id,
+            )
+
+        q = Q(username=current_user.username)
+        if current_user.phone:
+            q = q | Q(phone=current_user.phone)
+        candidate_users = await User.filter(
+            q,
+            is_active=True,
+            deleted_at__isnull=True,
+        ).all()
+        candidate_users = await self._filter_users_with_active_tenant(candidate_users)
+        target_user = next((u for u in candidate_users if u.tenant_id == target_tenant_id), None)
+        if not target_user:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="当前账号不属于目标组织，无法切换",
+            )
+
+        return await self.generate_login_result(
+            target_user,
+            request=request,
+            tenant_id=target_tenant_id,
+        )
     
     async def register(
         self,
@@ -1155,6 +1233,8 @@ class AuthService:
             
             return result
             
+        except HTTPException:
+            raise
         except Exception as e:
             import traceback
             error_trace = traceback.format_exc()

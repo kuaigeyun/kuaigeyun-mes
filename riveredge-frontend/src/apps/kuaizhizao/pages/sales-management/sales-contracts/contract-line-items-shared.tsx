@@ -157,12 +157,16 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
 
 export const ContractFormSummary: React.FC = () => {
   const items = Form.useWatch('items');
+  const normalizedItems = Array.isArray(items) ? items : [];
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
   const { token } = AntdTheme.useToken();
-  const totalQuantity = items?.reduce((sum: number, it: any) => sum + (Number(it?.contract_quantity) || 0), 0) || 0;
+  const totalQuantity = normalizedItems.reduce(
+    (sum: number, it: any) => sum + (Number(it?.contract_quantity) || 0),
+    0,
+  );
   let totalExcl = 0;
   let totalIncl = 0;
-  for (const it of items || []) {
+  for (const it of normalizedItems) {
     const line = calcContractLineAmounts(it?.contract_quantity, it?.unit_price, it?.tax_rate, priceType);
     totalExcl += line.excl;
     totalIncl += line.incl;

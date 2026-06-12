@@ -261,31 +261,32 @@ const ClientReleasesPage: React.FC = () => {
               {t('pages.infra.clientReleases.activate')}
             </Button>,
           );
-          actions.push(
-            <Popconfirm
-              {...rowActionKind('delete')}
-              key="delete"
-              title={t('pages.infra.clientReleases.deleteConfirmTitle')}
-              description={t('pages.infra.clientReleases.deleteConfirmDesc', {
-                version: record.app_version,
-                code: record.version_code,
-              })}
-              okText={t('common.delete')}
-              cancelText={t('common.cancel')}
-              onConfirm={() => void handleDelete(record)}
-            >
-              <Button
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                loading={deletingId === record.id}
-              >
-                {t('common.delete')}
-              </Button>
-            </Popconfirm>,
-          );
         }
+
+        actions.push(
+          <Popconfirm
+            {...rowActionKind('delete')}
+            key="delete"
+            title={t('pages.infra.clientReleases.deleteConfirmTitle')}
+            description={t('pages.infra.clientReleases.deleteConfirmDesc', {
+              version: record.app_version,
+              code: record.version_code,
+            })}
+            okText={t('common.delete')}
+            cancelText={t('common.cancel')}
+            onConfirm={() => void handleDelete(record)}
+          >
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              loading={deletingId === record.id}
+            >
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>,
+        );
 
         return actions.length ? <Space size={0} wrap>{actions}</Space> : '—';
       },

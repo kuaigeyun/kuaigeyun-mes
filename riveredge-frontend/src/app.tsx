@@ -86,6 +86,26 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
   // 公开页面：根路径、登录、初始化向导等，无需鉴权即可访问
   const pathname = location.pathname;
+  const resolveTenantDomainFromPathname = (path: string): string | null => {
+    const segments = path.split('/').filter(Boolean);
+    if (!segments.length) return null;
+    const reserved = new Set([
+      'login',
+      'infra',
+      'apps',
+      'system',
+      'personal',
+      'init',
+      'lock-screen',
+      'docs',
+      'debug',
+      'qrcode',
+    ]);
+    if (!reserved.has(segments[0])) return segments[0].toLowerCase();
+    if (segments[0] === 'login' && segments[1] && !reserved.has(segments[1])) return segments[1].toLowerCase();
+    return null;
+  };
+  const tenantDomainFromPath = resolveTenantDomainFromPathname(pathname);
   const isPublicPath = pathname === '/' ||
     pathname.startsWith('/login') ||
     pathname === '/infra/login' ||
@@ -426,12 +446,15 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
       if (location.pathname.startsWith('/infra')) {
         return '/infra/login';
       }
+      if (tenantDomainFromPath) {
+        return `/login?tenant_domain=${encodeURIComponent(tenantDomainFromPath)}`;
+      }
       // 系统级路由重定向到用户登录页
       return '/login';
     }
 
     return null;
-  }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken]);
+  }, [isPublicPath, currentUser, isInfraLoginPage, location.pathname, hasToken, tenantDomainFromPath]);
 
   // ⚠️ 关键修复：公开页面且无 token 时，直接渲染，跳过 loading/redirect，避免登录页循环加载
   if (isPublicPath && !hasToken) {

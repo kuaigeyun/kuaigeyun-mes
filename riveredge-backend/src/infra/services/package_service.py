@@ -8,11 +8,12 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
+from loguru import logger
 
 from infra.models.package import Package
 from infra.models.tenant import TenantPlan
 from infra.schemas.package import PackageCreate, PackageUpdate
-from infra.domain.package_config import get_package_config
+from infra.domain.package_config import get_package_config as get_package_config_fallback
 
 
 class PackageService:
@@ -23,6 +24,21 @@ class PackageService:
     注意：套餐管理是平台级功能，不涉及组织隔离。
     """
     
+    @staticmethod
+    def _normalize_allowed_app_codes(raw_codes: Optional[List[str]]) -> List[str]:
+        """标准化应用白名单：去空、去重、保持顺序。"""
+        if raw_codes is None:
+            return []
+        normalized: List[str] = []
+        seen = set()
+        for item in raw_codes:
+            code = str(item or "").strip()
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            normalized.append(code)
+        return normalized
+
     async def create_package(self, data: PackageCreate) -> Package:
         """
         创建套餐
@@ -59,6 +75,10 @@ class PackageService:
         create_data = data.model_dump(exclude_unset=True)
         # 额外过滤掉None值，确保数据完整性
         create_data = {k: v for k, v in create_data.items() if v is not None}
+        if "allowed_app_codes" in create_data:
+            create_data["allowed_app_codes"] = self._normalize_allowed_app_codes(
+                create_data.get("allowed_app_codes")
+            )
 
         package = await Package.create(
             **create_data
@@ -88,6 +108,43 @@ class PackageService:
             Optional[Package]: 套餐对象，如果不存在则返回 None
         """
         return await Package.get_or_none(plan=plan)
+
+    async def get_effective_package_config_for_plan(self, plan: TenantPlan) -> Dict[str, Any]:
+        """
+        获取套餐能力配置（DB 优先，静态配置兜底）。
+        """
+        package = await self.get_package_by_plan(plan)
+        if package:
+            return {
+                "name": package.name,
+                "max_users": int(package.max_users),
+                "max_storage_mb": int(package.max_storage_mb),
+                "max_branch_organizations": package.max_branch_organizations,
+                "allow_pro_apps": bool(package.allow_pro_apps),
+                "allowed_app_codes": self._normalize_allowed_app_codes(package.allowed_app_codes or []),
+                "description": package.description or "",
+            }
+
+        logger.warning("套餐 {} 未在 DB 中找到，回落到静态 package_config", plan.value)
+        fallback = get_package_config_fallback(plan)
+        return {
+            "name": fallback.get("name") or plan.value,
+            "max_users": int(fallback.get("max_users") or 0),
+            "max_storage_mb": int(fallback.get("max_storage_mb") or 0),
+            "max_branch_organizations": fallback.get("max_branch_organizations"),
+            "allow_pro_apps": bool(fallback.get("allow_pro_apps", False)),
+            "allowed_app_codes": self._normalize_allowed_app_codes(fallback.get("allowed_app_codes") or []),
+            "description": fallback.get("description") or "",
+        }
+
+    async def get_all_effective_package_configs(self) -> Dict[str, Dict[str, Any]]:
+        """
+        获取所有套餐配置（按 TenantPlan 枚举输出，DB 优先）。
+        """
+        result: Dict[str, Dict[str, Any]] = {}
+        for plan in TenantPlan:
+            result[plan.value] = await self.get_effective_package_config_for_plan(plan)
+        return result
     
     async def list_packages(
         self,
@@ -143,6 +200,7 @@ class PackageService:
                 'updated_at': 'updated_at',
                 'max_users': 'max_users',
                 'max_storage_mb': 'max_storage_mb',
+                'max_branch_organizations': 'max_branch_organizations',
             }
             sort_field = sort_field_map.get(sort, 'created_at')
             
@@ -189,6 +247,10 @@ class PackageService:
         
         # 只更新提供的字段
         update_data = data.model_dump(exclude_unset=True)
+        if "allowed_app_codes" in update_data:
+            update_data["allowed_app_codes"] = self._normalize_allowed_app_codes(
+                update_data.get("allowed_app_codes")
+            )
         for field, value in update_data.items():
             setattr(package, field, value)
         
@@ -224,5 +286,5 @@ class PackageService:
         Returns:
             Dict[str, Any]: 套餐配置字典
         """
-        return get_package_config(plan)
+        return await self.get_effective_package_config_for_plan(plan)
 

@@ -10,15 +10,16 @@ import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptions, ProForm, ProFormText, ProFormSelect, ProFormDigit, ProFormDateTimePicker, ProFormInstance, ProFormGroup } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Drawer, Modal, Progress, List, Typography, Divider } from 'antd';
 import { CheckOutlined, CloseOutlined, PlayCircleOutlined, PauseCircleOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../components/layout-templates';
 import {
   getTenantList,
-  getPackageConfig,
+  getPackageList,
   getPackageConfigs,
   Tenant,
+  SharedUserQuota,
   TenantStatus,
   TenantPlan,
   CreateTenantData,
@@ -27,6 +28,7 @@ import {
   activateTenant,
   deactivateTenant,
   deleteTenantBySuperAdmin,
+  getSharedUserQuota,
 } from '../../../../services/tenant';
 // 使用 apiRequest 统一处理 HTTP 请求
 
@@ -39,13 +41,6 @@ const statusTagMap: Record<TenantStatus, { color: string; textKey: string }> = {
   [TenantStatus.INACTIVE]: { color: 'default', textKey: 'pages.infra.tenant.statusInactive' },
   [TenantStatus.EXPIRED]: { color: 'warning', textKey: 'pages.infra.tenant.statusExpired' },
   [TenantStatus.SUSPENDED]: { color: 'error', textKey: 'pages.infra.tenant.statusSuspended' },
-};
-
-const planTagMap: Record<TenantPlan, { color: string; textKey: string }> = {
-  [TenantPlan.TRIAL]: { color: 'default', textKey: 'pages.infra.tenant.planTrial' },
-  [TenantPlan.BASIC]: { color: 'blue', textKey: 'pages.infra.tenant.planBasic' },
-  [TenantPlan.PROFESSIONAL]: { color: 'purple', textKey: 'pages.infra.tenant.planProfessional' },
-  [TenantPlan.ENTERPRISE]: { color: 'gold', textKey: 'pages.infra.tenant.planEnterprise' },
 };
 
 
@@ -67,7 +62,50 @@ const SuperAdminTenantList: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [packageConfigs, setPackageConfigs] = useState<Record<string, PackageConfig>>({});
-  const [selectedPlan, setSelectedPlan] = useState<TenantPlan>(TenantPlan.TRIAL);
+  const [selectedPlan, setSelectedPlan] = useState<string>('');
+  const [createParentTenantId, setCreateParentTenantId] = useState<number | null>(null);
+  const [sharedQuota, setSharedQuota] = useState<SharedUserQuota | null>(null);
+  const [sharedQuotaLoading, setSharedQuotaLoading] = useState(false);
+
+  const packagePlanOptions = useMemo(
+    () =>
+      Object.entries(packageConfigs)
+        .map(([plan, config]) => ({
+          label: config.name || plan,
+          value: plan as TenantPlan,
+        }))
+        .sort((a, b) => a.label.localeCompare(b.label)),
+    [packageConfigs],
+  );
+
+  const packagePlanValueEnum = useMemo(() => {
+    const valueEnum: Record<string, { text: string }> = {};
+    packagePlanOptions.forEach((item) => {
+      valueEnum[item.value] = { text: item.label };
+    });
+    return valueEnum;
+  }, [packagePlanOptions]);
+
+  const getPlanTagColor = (plan: string): string => {
+    const planKey = String(plan || '').toLowerCase();
+    if (planKey === TenantPlan.TRIAL) return 'default';
+    if (planKey === TenantPlan.BASIC) return 'blue';
+    if (planKey === TenantPlan.PROFESSIONAL) return 'purple';
+    if (planKey === TenantPlan.ENTERPRISE) return 'gold';
+    return 'blue';
+  };
+
+  const getPlanName = (plan: string): string => {
+    const planKey = String(plan || '').toLowerCase();
+    return (
+      packageConfigs[planKey]?.name ||
+      packagePlanValueEnum[planKey]?.text ||
+      planKey ||
+      '-'
+    );
+  };
+
+  const defaultPlan = useMemo<string>(() => packagePlanOptions[0]?.value || '', [packagePlanOptions]);
   
   /**
    * 审核通过组织注册
@@ -136,7 +174,7 @@ const SuperAdminTenantList: React.FC = () => {
     m[t('pages.infra.tenant.expiresAt')] = 'expires_at';
     m[t('pages.infra.tenant.expiresAtShort')] = 'expires_at';
     return m;
-  }, [t]);
+  }, []);
 
   /**
    * 处理导入数据
@@ -232,24 +270,22 @@ const SuperAdminTenantList: React.FC = () => {
       }
 
       // 解析套餐类型（支持当前语言与英文）
-      let plan: TenantPlan = TenantPlan.TRIAL;
+      let plan: TenantPlan = (defaultPlan || '') as TenantPlan;
       if (rowData.plan) {
-        const planMap: Record<string, TenantPlan> = {
-          'trial': TenantPlan.TRIAL,
-          [t('pages.infra.tenant.planTrial')]: TenantPlan.TRIAL,
-          'basic': TenantPlan.BASIC,
-          [t('pages.infra.tenant.planBasic')]: TenantPlan.BASIC,
-          'professional': TenantPlan.PROFESSIONAL,
-          [t('pages.infra.tenant.planProfessional')]: TenantPlan.PROFESSIONAL,
-          'enterprise': TenantPlan.ENTERPRISE,
-          [t('pages.infra.tenant.planEnterprise')]: TenantPlan.ENTERPRISE,
-        };
         const normalizedPlan = String(rowData.plan).trim();
         const normalizedPlanLower = normalizedPlan.toLowerCase();
-        if (planMap[normalizedPlan]) {
-          plan = planMap[normalizedPlan];
-        } else if (planMap[normalizedPlanLower]) {
-          plan = planMap[normalizedPlanLower];
+        const matchedByKey = packagePlanOptions.find(
+          (item) => item.value === normalizedPlan || item.value.toLowerCase() === normalizedPlanLower,
+        );
+        if (matchedByKey) {
+          plan = matchedByKey.value;
+        } else {
+          const matchedByName = packagePlanOptions.find(
+            (item) => item.label.trim().toLowerCase() === normalizedPlanLower,
+          );
+          if (matchedByName) {
+            plan = matchedByName.value;
+          }
         }
       }
 
@@ -461,10 +497,24 @@ const SuperAdminTenantList: React.FC = () => {
     }
   };
 
+  const loadSharedQuota = async (tenantId: number) => {
+    setSharedQuotaLoading(true);
+    try {
+      const quota = await getSharedUserQuota(tenantId);
+      setSharedQuota(quota);
+    } catch (error: any) {
+      setSharedQuota(null);
+      message.error(error.message || t('pages.infra.tenant.operationFailed'));
+    } finally {
+      setSharedQuotaLoading(false);
+    }
+  };
+
   const handleOpenDetail = (tenantId: number) => {
     setCurrentTenantId(tenantId);
     setDrawerVisible(true);
     loadTenantDetail(tenantId);
+    loadSharedQuota(tenantId);
   };
 
   /**
@@ -474,6 +524,7 @@ const SuperAdminTenantList: React.FC = () => {
     setDrawerVisible(false);
     setCurrentTenantId(null);
     setTenantDetail(null);
+    setSharedQuota(null);
   };
 
   /**
@@ -508,60 +559,51 @@ const SuperAdminTenantList: React.FC = () => {
    * 加载套餐配置
    */
   useEffect(() => {
-    // 加载所有套餐配置（用于显示套餐信息）
-    getPackageConfigs()
-      .then((configs) => {
-        // 将后端返回的套餐配置转换为前端需要的格式
+    getPackageList({
+      page: 1,
+      pageSize: 200,
+      sort: 'created_at',
+      order: 'asc',
+    })
+      .then((resp) => {
         const formattedConfigs: Record<string, PackageConfig> = {};
-        Object.keys(configs).forEach((planKey) => {
-          const config = configs[planKey];
-          formattedConfigs[planKey] = {
-            name: config.name,
-            max_users: config.max_users,
-            max_storage_mb: config.max_storage_mb,
-            allow_pro_apps: config.allow_pro_apps || false,
-            description: config.description || '',
+        (resp.items || []).forEach((item) => {
+          formattedConfigs[String(item.plan).toLowerCase()] = {
+            name: item.name,
+            max_users: item.max_users,
+            max_storage_mb: item.max_storage_mb,
+            max_branch_organizations: item.max_branch_organizations ?? null,
+            allow_pro_apps: item.allow_pro_apps || false,
+            allowed_app_codes: item.allowed_app_codes || [],
+            description: item.description || '',
           };
         });
         setPackageConfigs(formattedConfigs);
       })
       .catch((error: any) => {
-        // 静默处理错误，避免 401 错误导致页面刷新
-        // 如果套餐配置加载失败，不影响页面正常使用
-        console.warn('⚠️ 加载套餐配置失败（将使用默认配置）:', error);
-        // 设置默认套餐配置，确保页面可以正常使用
-        setPackageConfigs({
-          trial: {
-            name: t('pages.infra.tenant.planTrial'),
-            max_users: 10,
-            max_storage_mb: 1024,
-            allow_pro_apps: false,
-            description: t('pages.infra.tenant.planDescriptionTrial'),
-          },
-          basic: {
-            name: t('pages.infra.tenant.planBasic'),
-            max_users: 50,
-            max_storage_mb: 5120,
-            allow_pro_apps: false,
-            description: t('pages.infra.tenant.planDescriptionBasic'),
-          },
-          professional: {
-            name: t('pages.infra.tenant.planProfessional'),
-            max_users: 200,
-            max_storage_mb: 20480,
-            allow_pro_apps: true,
-            description: t('pages.infra.tenant.planDescriptionProfessional'),
-          },
-          enterprise: {
-            name: t('pages.infra.tenant.planEnterprise'),
-            max_users: 1000,
-            max_storage_mb: 102400,
-            allow_pro_apps: true,
-            description: t('pages.infra.tenant.planDescriptionEnterprise'),
-          },
-        });
+        console.warn('⚠️ 加载套餐列表失败，回退套餐配置接口:', error);
+        getPackageConfigs()
+          .then((configs) => {
+            const formattedConfigs: Record<string, PackageConfig> = {};
+            Object.keys(configs).forEach((planKey) => {
+              const config = configs[planKey];
+              formattedConfigs[String(planKey).toLowerCase()] = {
+                name: config.name,
+                max_users: config.max_users,
+                max_storage_mb: config.max_storage_mb,
+                max_branch_organizations: config.max_branch_organizations ?? null,
+                allow_pro_apps: config.allow_pro_apps || false,
+                allowed_app_codes: config.allowed_app_codes || [],
+                description: config.description || '',
+              };
+            });
+            setPackageConfigs(formattedConfigs);
+          })
+          .catch((fallbackError: any) => {
+            console.warn('⚠️ 回退套餐配置接口也失败:', fallbackError);
+          });
       });
-  }, [t]);
+  }, []);
 
   /**
    * 处理套餐选择变化
@@ -570,38 +612,15 @@ const SuperAdminTenantList: React.FC = () => {
   const handlePlanChange = async (plan: TenantPlan) => {
     setSelectedPlan(plan);
     try {
-      // 优先使用已加载的套餐配置
-      const planKey = plan.toLowerCase();
+      const planKey = String(plan).toLowerCase();
       if (packageConfigs[planKey]) {
-        // 使用已加载的配置
         formRef.current?.setFieldsValue({
           max_users: packageConfigs[planKey].max_users,
           max_storage: packageConfigs[planKey].max_storage_mb,
         });
-      } else {
-        // 如果配置未加载，尝试从 API 获取
-        const config = await getPackageConfig(plan);
-        formRef.current?.setFieldsValue({
-          max_users: config.max_users,
-          max_storage: config.max_storage_mb,
-        });
       }
     } catch (error: any) {
-      // 如果获取失败，使用默认值
-      console.warn('⚠️ 获取套餐配置失败，使用默认值:', error);
-      const defaultConfigs: Record<string, { max_users: number; max_storage_mb: number }> = {
-        trial: { max_users: 10, max_storage_mb: 1024 },
-        basic: { max_users: 50, max_storage_mb: 5120 },
-        professional: { max_users: 200, max_storage_mb: 20480 },
-        enterprise: { max_users: 1000, max_storage_mb: 102400 },
-      };
-      const planKey = plan.toLowerCase();
-      if (defaultConfigs[planKey]) {
-        formRef.current?.setFieldsValue({
-          max_users: defaultConfigs[planKey].max_users,
-          max_storage: defaultConfigs[planKey].max_storage_mb,
-        });
-      }
+      console.warn('⚠️ 获取套餐配置失败:', error);
     }
   };
 
@@ -609,16 +628,40 @@ const SuperAdminTenantList: React.FC = () => {
    * 打开新建 Modal
    */
   const handleCreate = () => {
+    if (!defaultPlan) {
+      message.error('暂无可用套餐，请先在套餐管理中创建并激活套餐');
+      return;
+    }
     setIsEdit(false);
     setCurrentTenantId(null);
-    setSelectedPlan(TenantPlan.TRIAL);
+    setCreateParentTenantId(null);
+    setSelectedPlan(defaultPlan);
     setModalVisible(true);
     // 重置表单
     setTimeout(() => {
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         status: TenantStatus.INACTIVE,
-        plan: TenantPlan.TRIAL,
+        plan: defaultPlan,
+      });
+    }, 0);
+  };
+
+  const handleCreateSubtenant = (parentTenantId: number) => {
+    if (!defaultPlan) {
+      message.error('暂无可用套餐，请先在套餐管理中创建并激活套餐');
+      return;
+    }
+    setIsEdit(false);
+    setCurrentTenantId(null);
+    setCreateParentTenantId(parentTenantId);
+    setSelectedPlan(defaultPlan);
+    setModalVisible(true);
+    setTimeout(() => {
+      formRef.current?.resetFields();
+      formRef.current?.setFieldsValue({
+        status: TenantStatus.ACTIVE,
+        plan: defaultPlan,
       });
     }, 0);
   };
@@ -676,6 +719,7 @@ const SuperAdminTenantList: React.FC = () => {
     setModalVisible(false);
     setIsEdit(false);
     setCurrentTenantId(null);
+    setCreateParentTenantId(null);
     setFormLoading(false);
     formRef.current?.resetFields();
   };
@@ -711,8 +755,9 @@ const SuperAdminTenantList: React.FC = () => {
           name: values.name,
           domain: values.domain,
           status: values.status || TenantStatus.ACTIVE,
-          plan: values.plan || TenantPlan.TRIAL,
+          plan: (values.plan || defaultPlan) as TenantPlan,
           settings: values.settings || {},
+          parent_tenant_id: createParentTenantId || undefined,
           max_users: values.max_users,
           max_storage: values.max_storage,
           expires_at: values.expires_at,
@@ -806,6 +851,17 @@ const SuperAdminTenantList: React.FC = () => {
       },
     },
     {
+      title: '组织类型',
+      dataIndex: 'is_subtenant',
+      hideInSearch: true,
+      width: 120,
+      render: (_, record) => (
+        <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
+          {record.is_subtenant ? '子组织' : '主组织'}
+        </Tag>
+      ),
+    },
+    {
       title: t('pages.infra.tenant.status'),
       dataIndex: 'status',
       valueType: 'select',
@@ -826,15 +882,9 @@ const SuperAdminTenantList: React.FC = () => {
       dataIndex: 'plan',
       valueType: 'select',
       sorter: true,
-      valueEnum: {
-        [TenantPlan.TRIAL]: { text: t('pages.infra.tenant.planTrial') },
-        [TenantPlan.BASIC]: { text: t('pages.infra.tenant.planBasic') },
-        [TenantPlan.PROFESSIONAL]: { text: t('pages.infra.tenant.planProfessional') },
-        [TenantPlan.ENTERPRISE]: { text: t('pages.infra.tenant.planEnterprise') },
-      },
+      valueEnum: packagePlanValueEnum,
       render: (_, record) => {
-        const planInfo = planTagMap[record.plan] ?? { color: 'default', textKey: '' };
-        return <Tag color={planInfo.color}>{planInfo.textKey ? t(planInfo.textKey) : (record.plan ?? '-')}</Tag>;
+        return <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>;
       },
     },
     {
@@ -844,6 +894,10 @@ const SuperAdminTenantList: React.FC = () => {
       hideInSearch: true,
       sorter: true,
       responsive: ['lg'],
+      render: (_, record) => {
+        const packageMaxUsers = packageConfigs[String(record.plan).toLowerCase()]?.max_users;
+        return packageMaxUsers ?? record.max_users ?? '-';
+      },
     },
     {
       title: t('pages.infra.tenant.userCount'),
@@ -903,6 +957,16 @@ const SuperAdminTenantList: React.FC = () => {
             >
               {t('common.edit')}
             </Button>
+            {!record.is_subtenant && (
+              <Button
+                key="create-subtenant"
+                {...rowActionKind('create')}
+                size="small"
+                onClick={() => handleCreateSubtenant(record.id)}
+              >
+                新增子组织
+              </Button>
+            )}
             {isSuspended && (
               <Popconfirm key="delete" {...rowActionKind('delete')} title={t('pages.infra.tenant.deleteRowConfirmTitle')}
                 description={t('pages.infra.tenant.deleteRowConfirmContent')}
@@ -990,7 +1054,7 @@ const SuperAdminTenantList: React.FC = () => {
       showImportButton={true}
       onImport={handleImport}
       importHeaders={[t('pages.infra.tenant.importHeaderName'), t('pages.infra.tenant.importHeaderDomain'), t('pages.infra.tenant.importHeaderPlan'), t('pages.infra.tenant.importHeaderStatus'), t('pages.infra.tenant.importHeaderMaxUsers'), t('pages.infra.tenant.importHeaderMaxStorage'), t('pages.infra.tenant.importHeaderExpiresAt')]}
-      importExampleRow={[t('pages.infra.tenant.importExampleName'), 'example', t('pages.infra.tenant.planTrial'), t('pages.infra.tenant.statusInactive'), '10', '1024', '']}
+      importExampleRow={[t('pages.infra.tenant.importExampleName'), 'example', packagePlanOptions[0]?.label || '-', t('pages.infra.tenant.statusInactive'), '10', '1024', '']}
       showExportButton={true}
       onExport={handleExport}
       viewTypes={['table', 'help']}
@@ -1024,6 +1088,9 @@ const SuperAdminTenantList: React.FC = () => {
         if (searchFormValues?.plan && searchFormValues.plan !== '' && searchFormValues.plan !== undefined && searchFormValues.plan !== null) {
           apiParams.plan = searchFormValues.plan as TenantPlan;
         }
+        if (searchFormValues?.parent_tenant_id !== undefined && searchFormValues?.parent_tenant_id !== null && searchFormValues?.parent_tenant_id !== '') {
+          apiParams.parent_tenant_id = Number(searchFormValues.parent_tenant_id);
+        }
         
         // 搜索条件处理：name 和 domain 使用模糊搜索
         if (searchFormValues?.name) {
@@ -1039,8 +1106,37 @@ const SuperAdminTenantList: React.FC = () => {
             true  // 平台超级管理员接口
           );
 
+          const flatRows = (result.items || []) as Tenant[];
+          const nodeMap = new Map<number, Tenant & { children?: Tenant[] }>();
+          flatRows.forEach((item) => {
+            nodeMap.set(item.id, { ...item, children: [] });
+          });
+          const roots: (Tenant & { children?: Tenant[] })[] = [];
+          flatRows.forEach((item) => {
+            const current = nodeMap.get(item.id)!;
+            const parentId = item.parent_tenant_id;
+            if (parentId && nodeMap.has(parentId)) {
+              const parent = nodeMap.get(parentId)!;
+              if (!parent.children) parent.children = [];
+              parent.children.push(current);
+            } else {
+              roots.push(current);
+            }
+          });
+          const normalizeChildren = (rows: (Tenant & { children?: Tenant[] })[]) =>
+            rows.map((row) => {
+              const next = { ...row } as Tenant & { children?: Tenant[] };
+              if (!next.children || next.children.length === 0) {
+                delete next.children;
+                return next;
+              }
+              next.children = normalizeChildren(next.children as (Tenant & { children?: Tenant[] })[]);
+              return next;
+            });
+          const treeRows = normalizeChildren(roots);
+
           return {
-            data: result.items,
+            data: treeRows,
             success: true,
             total: result.total,
           };
@@ -1056,7 +1152,8 @@ const SuperAdminTenantList: React.FC = () => {
           };
         }
       }}
-      scroll={{ x: 1200 }}
+      scroll={{ x: 1400 }}
+      expandable={{ defaultExpandAllRows: true }}
         />
       </ListPageTemplate>
     
@@ -1078,6 +1175,20 @@ const SuperAdminTenantList: React.FC = () => {
               dataIndex: 'domain',
             },
             {
+              title: '组织类型',
+              dataIndex: 'is_subtenant',
+              render: (_, record) => (
+                <Tag color={record.is_subtenant ? 'purple' : 'blue'}>
+                  {record.is_subtenant ? '子组织' : '主组织'}
+                </Tag>
+              ),
+            },
+            {
+              title: '父组织ID',
+              dataIndex: 'parent_tenant_id',
+              render: (_, record) => (record.parent_tenant_id ?? '-'),
+            },
+            {
               title: t('pages.infra.tenant.status'),
               dataIndex: 'status',
               render: (_, record) => {
@@ -1089,13 +1200,16 @@ const SuperAdminTenantList: React.FC = () => {
               title: t('pages.infra.tenant.plan'),
               dataIndex: 'plan',
               render: (_, record) => {
-                const planInfo = planTagMap[record.plan] ?? { color: 'default', textKey: '' };
-                return <Tag color={planInfo.color}>{planInfo.textKey ? t(planInfo.textKey) : (record.plan ?? '-')}</Tag>;
+                return <Tag color={getPlanTagColor(String(record.plan))}>{getPlanName(String(record.plan))}</Tag>;
               },
             },
             {
               title: t('pages.infra.tenant.maxUsers'),
               dataIndex: 'max_users',
+              render: (_, record) => {
+                const packageMaxUsers = packageConfigs[String(record.plan).toLowerCase()]?.max_users;
+                return packageMaxUsers ?? record.max_users ?? '-';
+              },
             },
             {
               title: t('pages.infra.tenant.maxStorage'),
@@ -1148,12 +1262,40 @@ const SuperAdminTenantList: React.FC = () => {
                 }
               },
             },
+            {
+              title: '共享用户池看板',
+              dataIndex: 'shared_user_quota',
+              span: 2,
+              render: () => {
+                if (sharedQuotaLoading) return '加载中...';
+                if (!sharedQuota) return '-';
+                return (
+                  <div>
+                    <Typography.Text>
+                      主组织：{sharedQuota.root_tenant_name}（ID: {sharedQuota.root_tenant_id}）
+                    </Typography.Text>
+                    <br />
+                    <Typography.Text>
+                      配额：{sharedQuota.used_users}/{sharedQuota.max_users}，剩余 {sharedQuota.remaining_users}
+                    </Typography.Text>
+                    <Divider style={{ margin: '8px 0' }} />
+                    {sharedQuota.tenants.map((item) => (
+                      <div key={item.tenant_id}>
+                        <Typography.Text>
+                          {item.is_subtenant ? '子组织' : '主组织'} · {item.tenant_name}（ID: {item.tenant_id}）：{item.user_count}
+                        </Typography.Text>
+                      </div>
+                    ))}
+                  </div>
+                );
+              },
+            },
           ]}
         />
     
     {/* 新建/编辑组织 Modal */}
     <FormModalTemplate
-      title={isEdit ? t('pages.infra.tenant.editTitle') : t('pages.infra.tenant.createTitle')}
+      title={isEdit ? t('pages.infra.tenant.editTitle') : (createParentTenantId ? '新增子组织' : t('pages.infra.tenant.createTitle'))}
       open={modalVisible}
       onClose={handleCloseModal}
       onFinish={handleSubmit}
@@ -1164,9 +1306,18 @@ const SuperAdminTenantList: React.FC = () => {
       grid
       initialValues={{
         status: TenantStatus.ACTIVE,
-        plan: TenantPlan.TRIAL,
+        plan: defaultPlan || undefined,
       }}
     >
+        {!isEdit && createParentTenantId && (
+          <ProFormText
+            name="parent_tenant_id_hint"
+            label="父组织ID"
+            colProps={{ span: 24 }}
+            disabled
+            initialValue={String(createParentTenantId)}
+          />
+        )}
         <ProFormGroup title={t('pages.infra.tenant.basicInfoTitle')} colProps={{ span: 24 }}>
         <ProFormText
           name="name"
@@ -1202,18 +1353,13 @@ const SuperAdminTenantList: React.FC = () => {
           ]}
         />
         </ProFormGroup>
-        <ProFormGroup title={t('pages.infra.tenant.formPlanLabel')} colProps={{ span: 24 }}>
+        <ProFormGroup colProps={{ span: 24 }}>
         <SafeProFormSelect
           name="plan"
           label={t('pages.infra.tenant.formPlanLabel')}
           placeholder={t('pages.infra.tenant.formPlanPlaceholder')}
           colProps={{ span: 24 }}
-          options={[
-            { label: t('pages.infra.tenant.planTrial'), value: TenantPlan.TRIAL },
-            { label: t('pages.infra.tenant.planBasic'), value: TenantPlan.BASIC },
-            { label: t('pages.infra.tenant.planProfessional'), value: TenantPlan.PROFESSIONAL },
-            { label: t('pages.infra.tenant.planEnterprise'), value: TenantPlan.ENTERPRISE },
-          ]}
+          options={packagePlanOptions}
           fieldProps={{
             onChange: (value: TenantPlan) => {
               handlePlanChange(value);

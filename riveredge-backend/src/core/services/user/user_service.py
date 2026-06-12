@@ -21,6 +21,7 @@ from core.models.user_role import UserRole
 from core.schemas.user import UserCreate, UserUpdate
 from core.services.authorization.permission_version_service import PermissionVersionService
 from core.services.user.user_import_reference_service import UserImportReferenceService
+from infra.services.tenant_service import TenantService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, AuthorizationError
 
 # 向后兼容别名
@@ -122,6 +123,12 @@ class UserService:
 
         # 创建用户与角色分配放在同一事务中，并显式使用同一连接
         async with in_transaction() as conn:
+            if data.is_active is not False:
+                await TenantService().assert_shared_user_quota_capacity(
+                    tenant_id=tenant_id,
+                    increment=1,
+                    using_db=conn,
+                )
             user = await User.create(
                 tenant_id=tenant_id,
                 username=data.username,
@@ -406,6 +413,11 @@ class UserService:
         
         # 更新其他字段
         update_data = data.model_dump(exclude_unset=True, exclude={'department_uuid', 'position_uuid', 'role_uuids'})
+        if old_is_active is False and update_data.get("is_active") is True:
+            await TenantService().assert_shared_user_quota_capacity(
+                tenant_id=tenant_id,
+                increment=1,
+            )
         if "password" in update_data:
             password = update_data.pop("password")
             if password:
@@ -954,6 +966,10 @@ class UserService:
                 
                 # 创建用户
                 password_hash = User.hash_password(user_data['password'])
+                await TenantService().assert_shared_user_quota_capacity(
+                    tenant_id=tenant_id,
+                    increment=1,
+                )
                 
                 user = await User.create(
                     tenant_id=tenant_id,

@@ -11,6 +11,7 @@ from loguru import logger
 
 from tortoise.exceptions import DoesNotExist, IntegrityError
 from tortoise.functions import Max, Count
+from tortoise.backends.base.client import BaseDBAsyncClient
 
 from infra.models.tenant import Tenant, TenantStatus, TenantPlan
 from infra.models.user import User
@@ -19,7 +20,7 @@ from infra.models.tenant_config import TenantConfig
 from infra.models.tenant_activity_log import TenantActivityLog
 from infra.schemas.tenant import TenantCreate, TenantUpdate
 from infra.domain.query_filter import get_tenant_queryset
-from infra.domain.package_config import get_package_config
+from infra.services.package_service import PackageService
 from infra.exceptions.exceptions import tenant_name_already_exists, TenantError, ValidationError
 
 
@@ -63,14 +64,24 @@ class TenantService:
         if await Tenant.filter(name__iexact=tenant_name).exists():
             raise tenant_name_already_exists(tenant_name)
 
+        parent_tenant_id = data.parent_tenant_id
+        is_subtenant = parent_tenant_id is not None
+        if parent_tenant_id is not None:
+            parent_tenant = await Tenant.get_or_none(id=parent_tenant_id)
+            if not parent_tenant:
+                raise ValidationError("父组织不存在，无法创建子组织")
+            # 层级硬规则：仅允许两级（主组织 -> 子组织）。
+            if parent_tenant.is_subtenant:
+                raise ValidationError("子组织不允许再创建下级组织")
+
         try:
             # 如果未指定 max_users 或 max_storage，根据套餐配置自动设置
             max_users = data.max_users
             max_storage = data.max_storage
             
             if max_users is None or max_storage is None:
-                # 根据套餐配置获取默认限制
-                package_config = get_package_config(data.plan)
+                # 根据套餐配置获取默认限制（DB 优先，静态配置兜底）
+                package_config = await PackageService().get_effective_package_config_for_plan(data.plan)
                 if max_users is None:
                     max_users = package_config["max_users"]
                 if max_storage is None:
@@ -84,6 +95,8 @@ class TenantService:
                 status=data.status,
                 plan=data.plan,
                 settings=data.settings,
+                parent_tenant_id=parent_tenant_id,
+                is_subtenant=is_subtenant,
                 max_users=max_users,
                 max_storage=max_storage,
                 expires_at=data.expires_at,
@@ -97,6 +110,15 @@ class TenantService:
                 operator_id=None,  # 创建时可能没有操作人信息
                 operator_name=None,
             )
+
+            if parent_tenant_id is not None:
+                await self._log_activity(
+                    tenant_id=parent_tenant_id,
+                    action="create_subtenant",
+                    description=f"新增子组织：{tenant.name} (ID: {tenant.id}, 域名: {tenant.domain})",
+                    operator_id=None,
+                    operator_name=None,
+                )
             
             return tenant
         except IntegrityError as e:
@@ -152,6 +174,8 @@ class TenantService:
         page_size: int = 10,
         status: Optional[TenantStatus] = None,
         plan: Optional[TenantPlan] = None,
+        parent_tenant_id: Optional[int] = None,
+        is_subtenant: Optional[bool] = None,
         name: Optional[str] = None,
         domain: Optional[str] = None,
         sort: Optional[str] = None,
@@ -193,6 +217,10 @@ class TenantService:
             query = query.filter(status=status)
         if plan is not None:
             query = query.filter(plan=plan)
+        if parent_tenant_id is not None:
+            query = query.filter(parent_tenant_id=parent_tenant_id)
+        if is_subtenant is not None:
+            query = query.filter(is_subtenant=is_subtenant)
         
         # 应用文本字段的模糊搜索（name、domain）
         # ProTable 默认对文本字段使用模糊搜索
@@ -204,7 +232,11 @@ class TenantService:
         # 应用排序
         if sort:
             # 验证排序字段是否允许
-            allowed_sort_fields = ['id', 'name', 'domain', 'status', 'plan', 'max_users', 'max_storage', 'created_at', 'updated_at']
+            allowed_sort_fields = [
+                'id', 'name', 'domain', 'status', 'plan',
+                'is_subtenant', 'parent_tenant_id',
+                'max_users', 'max_storage', 'created_at', 'updated_at'
+            ]
             if sort in allowed_sort_fields:
                 if order == 'desc':
                     query = query.order_by(f'-{sort}')
@@ -262,6 +294,142 @@ class TenantService:
         )
 
         return {row["tenant_id"]: row["user_count"] for row in rows}
+
+    async def resolve_root_tenant(self, tenant_id: int) -> Tenant:
+        """
+        解析共享配额主组织。
+
+        若传入子组织，则返回其父组织；若传入主组织则返回自身。
+        """
+        tenant = await Tenant.get_or_none(id=tenant_id)
+        if not tenant:
+            raise ValidationError("组织不存在")
+        if not tenant.is_subtenant:
+            return tenant
+        if not tenant.parent_tenant_id:
+            raise ValidationError("子组织缺少父组织配置，请先修复组织关系")
+        root_tenant = await Tenant.get_or_none(id=tenant.parent_tenant_id)
+        if not root_tenant:
+            raise ValidationError("父组织不存在，请先修复组织关系")
+        return root_tenant
+
+    async def get_shared_user_quota_summary(self, tenant_id: int) -> Dict[str, Any]:
+        """
+        获取主组织共享用户池统计。
+
+        统计口径：主组织 + 全部直属子组织的“启用且未删除”用户总数。
+        """
+        root_tenant = await self.resolve_root_tenant(tenant_id)
+        if root_tenant.is_subtenant:
+            raise ValidationError("共享配额统计仅支持主组织")
+
+        subtenants = await Tenant.filter(
+            parent_tenant_id=root_tenant.id,
+        ).all()
+        tenant_list = [root_tenant, *subtenants]
+        tenant_ids = [t.id for t in tenant_list]
+
+        rows = await User.filter(
+            tenant_id__in=tenant_ids,
+            deleted_at__isnull=True,
+            is_active=True,
+        ).group_by("tenant_id").annotate(user_count=Count("id")).values("tenant_id", "user_count")
+        count_map = {row["tenant_id"]: row["user_count"] for row in rows}
+
+        tenants_usage = []
+        used_users = 0
+        for tenant in tenant_list:
+            user_count = count_map.get(tenant.id, 0)
+            used_users += user_count
+            tenants_usage.append({
+                "tenant_id": tenant.id,
+                "tenant_name": tenant.name,
+                "is_subtenant": bool(tenant.is_subtenant),
+                "user_count": user_count,
+            })
+
+        max_users = int(root_tenant.max_users or 0)
+        remaining_users = max(max_users - used_users, 0)
+        return {
+            "root_tenant_id": root_tenant.id,
+            "root_tenant_name": root_tenant.name,
+            "max_users": max_users,
+            "used_users": used_users,
+            "remaining_users": remaining_users,
+            "over_quota": used_users > max_users,
+            "tenants": tenants_usage,
+        }
+
+    async def assert_shared_user_quota_capacity(
+        self,
+        tenant_id: int,
+        increment: int = 1,
+        using_db: Optional[BaseDBAsyncClient] = None,
+    ) -> None:
+        """
+        校验共享用户池容量是否足够新增/启用用户。
+
+        Args:
+            tenant_id: 目标组织 ID（可传主组织或子组织）
+            increment: 本次新增占用数量
+        """
+        if increment <= 0:
+            return
+        tenant_query = Tenant.filter(id=tenant_id)
+        if using_db is not None:
+            tenant_query = tenant_query.using_db(using_db)
+        tenant = await tenant_query.first()
+        if not tenant:
+            raise ValidationError("组织不存在")
+
+        root_tenant_id = tenant.parent_tenant_id if tenant.is_subtenant else tenant.id
+        if not root_tenant_id:
+            raise ValidationError("子组织缺少父组织配置，请先修复组织关系")
+
+        root_query = Tenant.filter(id=root_tenant_id)
+        if using_db is not None:
+            root_query = root_query.using_db(using_db)
+        root_tenant = await root_query.select_for_update().first()
+        if not root_tenant:
+            raise ValidationError("父组织不存在，请先修复组织关系")
+
+        subtenant_query = Tenant.filter(
+            parent_tenant_id=root_tenant.id,
+        )
+        if using_db is not None:
+            subtenant_query = subtenant_query.using_db(using_db)
+        subtenants = await subtenant_query.all()
+        tenant_ids = [root_tenant.id, *[item.id for item in subtenants]]
+
+        user_query = User.filter(
+            tenant_id__in=tenant_ids,
+            deleted_at__isnull=True,
+            is_active=True,
+        )
+        if using_db is not None:
+            user_query = user_query.using_db(using_db)
+        used_users = int(await user_query.count())
+        max_users = int(root_tenant.max_users or 0)
+        after_used = used_users + increment
+        if after_used <= max_users:
+            return
+        overflow = after_used - max_users
+        await self._log_activity(
+            tenant_id=root_tenant.id,
+            action="shared_quota_reject",
+            description=(
+                f"共享配额校验拒绝：已用 {used_users}/{max_users}，"
+                f"请求新增 {increment}，超出 {overflow}"
+            ),
+            operator_id=None,
+            operator_name=None,
+        )
+        raise ValidationError(
+            "主组织共享用户配额不足："
+            f"已用 {used_users}/{max_users}，"
+            f"本次需新增 {increment}，"
+            f"超出 {overflow}。"
+        )
     
     async def update_tenant(
         self,
@@ -306,7 +474,7 @@ class TenantService:
         if "plan" in update_data:
             new_plan = update_data["plan"]
             if "max_users" not in update_data or "max_storage" not in update_data:
-                package_config = get_package_config(new_plan)
+                package_config = await PackageService().get_effective_package_config_for_plan(new_plan)
                 if "max_users" not in update_data:
                     update_data["max_users"] = package_config["max_users"]
                 if "max_storage" not in update_data:

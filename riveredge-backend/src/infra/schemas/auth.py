@@ -73,6 +73,16 @@ class LoginResponse(BaseModel):
     requires_tenant_selection: bool = Field(default=False, description="是否需要选择组织（当用户有多个组织时）")
 
 
+class SwitchTenantRequest(BaseModel):
+    """
+    租户切换请求 Schema
+
+    用于已登录用户在其可访问租户间切换会话上下文。
+    """
+
+    tenant_id: int = Field(..., description="目标组织 ID")
+
+
 class UserRegisterRequest(BaseModel):
     """
     用户注册请求 Schema

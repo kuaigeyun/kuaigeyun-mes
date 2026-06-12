@@ -7,14 +7,22 @@
 
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker } from 'antd';
-import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined } from '@ant-design/icons';
+import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography } from 'antd';
+import dayjs from 'dayjs';
+import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
 import {
   getSiteSetting,
   updateSiteSetting,
+  checkTenantDomainAvailability,
+  getBranchOrganizationCapability,
+  getBranchOrganizationList,
+  createBranchOrganization,
+  BranchOrganizationCapability,
+  BranchOrganizationItem,
 } from '../../../services/siteSetting';
+import { TenantPlan, TenantStatus } from '../../../services/tenant';
 import { useConfigStore, getPersistedConfigs } from '../../../stores/configStore';
 import { useThemeStore } from '../../../stores/themeStore';
 import { uploadFile, getSiteLogoPreview, invalidateSiteLogoPreviewCache, FileUploadResponse } from '../../../services/file';
@@ -61,6 +69,21 @@ function getInitialValuesFromConfigStore(
     enable_register: configs.enable_register !== false,
     enable_launch_wizard: configs.enable_launch_wizard !== false,
     enable_system_dashboard: configs.enable_system_dashboard !== false,
+    tenant_domain: configs.tenant_domain ?? '',
+    platform_name: configs.platform_name ?? '',
+    platform_name_en: configs.platform_name_en ?? '',
+    login_logo: configs.login_logo ?? '',
+    login_title: configs.login_title ?? '',
+    login_title_en: configs.login_title_en ?? '',
+    login_content: configs.login_content ?? '',
+    login_content_en: configs.login_content_en ?? '',
+    login_decoration_image: configs.login_decoration_image ?? '',
+    icp_license: configs.icp_license ?? '',
+    icp_license_en: configs.icp_license_en ?? '',
+    login_theme_color: configs.login_theme_color ?? undefined,
+    login_guest_enabled: configs.login_guest_enabled !== false,
+    login_client_win_enabled: configs.login_client_win_enabled !== false,
+    login_client_android_enabled: configs.login_client_android_enabled !== false,
     copyright: configs.copyright ?? '',
     description: configs.description ?? '',
     'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
@@ -107,6 +130,11 @@ const SiteSettingsPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [logoFileList, setLogoFileList] = useState<UploadFile[]>([]);
   const [logoUrl, setLogoUrl] = useState<string | undefined>(undefined);
+  const [loginLogoFileList, setLoginLogoFileList] = useState<UploadFile[]>([]);
+  const [loginLogoUrl, setLoginLogoUrl] = useState<string | undefined>(undefined);
+  const [useCustomLoginLogo, setUseCustomLoginLogo] = useState(false);
+  const [decorationFileList, setDecorationFileList] = useState<UploadFile[]>([]);
+  const [decorationImageUrl, setDecorationImageUrl] = useState<string | undefined>(undefined);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
@@ -117,6 +145,29 @@ const SiteSettingsPage: React.FC = () => {
   const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>(
     () => (getSiteSettingsDictCache()?.timezone ?? []) as DictionaryItem[]
   );
+  const [branchOrgCapability, setBranchOrgCapability] = useState<BranchOrganizationCapability | null>(null);
+  const [branchOrgList, setBranchOrgList] = useState<BranchOrganizationItem[]>([]);
+  const [branchOrgTotal, setBranchOrgTotal] = useState(0);
+  const [branchOrgPage, setBranchOrgPage] = useState(1);
+  const [branchOrgPageSize, setBranchOrgPageSize] = useState(10);
+  const [branchOrgLoading, setBranchOrgLoading] = useState(false);
+  const [branchOrgModalOpen, setBranchOrgModalOpen] = useState(false);
+  const [creatingBranchOrg, setCreatingBranchOrg] = useState(false);
+  const [branchOrgForm] = Form.useForm();
+  const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
+  const tenantDomainValue = Form.useWatch('tenant_domain', form);
+  const loginLogoValue = Form.useWatch('login_logo', form);
+  const loginDecorationValue = Form.useWatch('login_decoration_image', form);
+  const currentTenantDomain = String(tenantDomainValue || '').trim().toLowerCase();
+  const tenantPathAccessUrl = (() => {
+    if (!currentTenantDomain) return '';
+    const { protocol, hostname, port } = window.location;
+    const labels = hostname.split('.');
+    const baseHost = labels.length >= 3 && labels[0].toLowerCase() === currentTenantDomain ? labels.slice(1).join('.') : hostname;
+    return `${protocol}//${port ? `${baseHost}:${port}` : baseHost}/${currentTenantDomain}`;
+  })();
+  const RESERVED_DOMAIN_KEYWORDS = ['admin', 'login', 'infra', 'system', 'apps', 'api', 'docs', 'debug', 'qrcode', 'init', 'personal', 'lock'];
+  const TENANT_DOMAIN_PATTERN = /^[a-z][a-z0-9_-]{2,11}$/;
 
   /**
    * 判断字符串是否是UUID格式
@@ -164,6 +215,72 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
+  const loadDecorationPreview = async (imageValue: string | undefined) => {
+    if (!imageValue || !imageValue.trim()) {
+      setDecorationImageUrl(undefined);
+      setDecorationFileList([]);
+      return;
+    }
+    if (isUUID(imageValue.trim())) {
+      const previewInfo = await getSiteLogoPreview(imageValue.trim());
+      if (!previewInfo?.preview_url) {
+        setDecorationImageUrl(undefined);
+        setDecorationFileList([]);
+        return;
+      }
+      const previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+      setDecorationImageUrl(previewUrl);
+      setDecorationFileList([{
+        uid: imageValue.trim(),
+        name: t('pages.system.siteSettings.loginDecorationImage'),
+        status: 'done',
+        url: previewUrl,
+      }]);
+      return;
+    }
+    const normalized = toRelativeIfLocalhost(imageValue.trim());
+    setDecorationImageUrl(normalized);
+    setDecorationFileList([{
+      uid: imageValue.trim(),
+      name: t('pages.system.siteSettings.loginDecorationImage'),
+      status: 'done',
+      url: normalized,
+    }]);
+  };
+
+  const loadLoginLogoPreview = async (logoValue: string | undefined) => {
+    if (!logoValue || !logoValue.trim()) {
+      setLoginLogoUrl(undefined);
+      setLoginLogoFileList([]);
+      return;
+    }
+    if (isUUID(logoValue.trim())) {
+      const previewInfo = await getSiteLogoPreview(logoValue.trim());
+      if (!previewInfo?.preview_url) {
+        setLoginLogoUrl(undefined);
+        setLoginLogoFileList([]);
+        return;
+      }
+      const previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+      setLoginLogoUrl(previewUrl);
+      setLoginLogoFileList([{
+        uid: logoValue.trim(),
+        name: t('pages.system.siteSettings.loginLogo'),
+        status: 'done',
+        url: previewUrl,
+      }]);
+      return;
+    }
+    const normalized = toRelativeIfLocalhost(logoValue.trim());
+    setLoginLogoUrl(normalized);
+    setLoginLogoFileList([{
+      uid: logoValue.trim(),
+      name: t('pages.system.siteSettings.loginLogo'),
+      status: 'done',
+      url: normalized,
+    }]);
+  };
+
   const [languageOptions, setLanguageOptions] = useState<{ label: string; value: string; key: string }[]>(() => {
     const cached = getSiteSettingsDictCache()?.language;
     return Array.isArray(cached) ? (cached as { label: string; value: string; key: string }[]) : [];
@@ -175,7 +292,93 @@ const SiteSettingsPage: React.FC = () => {
   useEffect(() => {
     loadSiteSetting();
     loadDictionaryData();
+    loadBranchOrganizationCapability();
   }, []);
+
+  useEffect(() => {
+    const value = String(loginLogoValue || '').trim();
+    if (!value) {
+      setLoginLogoUrl(undefined);
+      setLoginLogoFileList([]);
+      return;
+    }
+    if (!isUUID(value)) {
+      const normalized = toRelativeIfLocalhost(value);
+      setLoginLogoUrl(normalized);
+      setLoginLogoFileList([{
+        uid: value,
+        name: t('pages.system.siteSettings.loginLogo'),
+        status: 'done',
+        url: normalized,
+      }]);
+      return;
+    }
+    if (value.length !== 36) return;
+    void loadLoginLogoPreview(value);
+  }, [loginLogoValue]);
+
+  useEffect(() => {
+    const value = String(loginDecorationValue || '').trim();
+    if (!value) {
+      setDecorationImageUrl(undefined);
+      setDecorationFileList([]);
+      return;
+    }
+    if (!isUUID(value)) {
+      const normalized = toRelativeIfLocalhost(value);
+      setDecorationImageUrl(normalized);
+      setDecorationFileList([{
+        uid: value,
+        name: t('pages.system.siteSettings.loginDecorationImage'),
+        status: 'done',
+        url: normalized,
+      }]);
+      return;
+    }
+    if (value.length !== 36) return;
+    void loadDecorationPreview(value);
+  }, [loginDecorationValue]);
+
+  const loadBranchOrganizationCapability = async () => {
+    try {
+      const capability = await getBranchOrganizationCapability();
+      setBranchOrgCapability(capability);
+    } catch {
+      setBranchOrgCapability(null);
+    }
+  };
+
+  const loadBranchOrganizations = async (page: number = branchOrgPage, pageSize: number = branchOrgPageSize) => {
+    try {
+      setBranchOrgLoading(true);
+      const result = await getBranchOrganizationList({ page, page_size: pageSize });
+      setBranchOrgList(result.items || []);
+      setBranchOrgTotal(result.total || 0);
+      setBranchOrgPage(result.page || page);
+      setBranchOrgPageSize(result.page_size || pageSize);
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.branchOrgListLoadFailed'));
+    } finally {
+      setBranchOrgLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTabKey !== 'branch-organizations') return;
+    loadBranchOrganizations(1, branchOrgPageSize);
+  }, [activeTabKey]);
+
+  useEffect(() => {
+    if (branchOrgCapability?.is_branch_organization && activeTabKey === 'branch-organizations') {
+      setActiveTabKey('basic');
+    }
+  }, [branchOrgCapability, activeTabKey]);
+
+  useEffect(() => {
+    if (branchOrgCapability?.is_branch_organization && activeTabKey === 'login-page') {
+      setActiveTabKey('basic');
+    }
+  }, [branchOrgCapability, activeTabKey]);
 
   /**
    * 加载字典数据
@@ -336,6 +539,21 @@ const SiteSettingsPage: React.FC = () => {
         enable_register: setting.settings?.enable_register !== false,
         enable_launch_wizard: setting.settings?.enable_launch_wizard !== false,
         enable_system_dashboard: setting.settings?.enable_system_dashboard !== false,
+        tenant_domain: setting.settings?.tenant_domain || '',
+        platform_name: setting.settings?.platform_name || setting.settings?.site_name || '',
+        platform_name_en: setting.settings?.platform_name_en || '',
+        login_logo: setting.settings?.login_logo || '',
+        login_title: setting.settings?.login_title || '',
+        login_title_en: setting.settings?.login_title_en || '',
+        login_content: setting.settings?.login_content || '',
+        login_content_en: setting.settings?.login_content_en || '',
+        login_decoration_image: setting.settings?.login_decoration_image || '',
+        icp_license: setting.settings?.icp_license || '',
+        icp_license_en: setting.settings?.icp_license_en || '',
+        login_theme_color: setting.settings?.login_theme_color || undefined,
+        login_guest_enabled: setting.settings?.login_guest_enabled !== false,
+        login_client_win_enabled: setting.settings?.login_client_win_enabled !== false,
+        login_client_android_enabled: setting.settings?.login_client_android_enabled !== false,
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
@@ -348,6 +566,7 @@ const SiteSettingsPage: React.FC = () => {
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
       };
+      setUseCustomLoginLogo(Boolean(String(newValues.login_logo || '').trim()));
 
       if (!hasCache) {
         form.setFieldsValue(newValues);
@@ -376,6 +595,8 @@ const SiteSettingsPage: React.FC = () => {
 
       // 加载LOGO预览
       await loadLogoPreview(siteLogoValue);
+      await loadLoginLogoPreview(setting.settings?.login_logo || '');
+      await loadDecorationPreview(setting.settings?.login_decoration_image || '');
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.siteSettings.loadFailed'));
     } finally {
@@ -500,6 +721,71 @@ const SiteSettingsPage: React.FC = () => {
     }
   };
 
+  const handleDecorationUpload: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      if (!file.type.startsWith('image/')) {
+        messageApi.error(t('pages.system.siteSettings.selectImage'));
+        return Upload.LIST_IGNORE;
+      }
+      const response = await uploadFile(file as File, {
+        category: 'site-logo',
+        description: t('pages.system.siteSettings.loginDecorationImage'),
+      });
+      if (!response.uuid) {
+        messageApi.error(t('pages.system.siteSettings.uploadFailed'));
+        return Upload.LIST_IGNORE;
+      }
+      form.setFieldsValue({ login_decoration_image: response.uuid });
+      await loadDecorationPreview(response.uuid);
+      messageApi.success(t('pages.system.siteSettings.loginDecorationUploadSuccess'));
+      return Upload.LIST_IGNORE;
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.loginDecorationUploadFailed'));
+      return Upload.LIST_IGNORE;
+    }
+  };
+
+  const handleLoginLogoUpload: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      if (!file.type.startsWith('image/')) {
+        messageApi.error(t('pages.system.siteSettings.selectImage'));
+        return Upload.LIST_IGNORE;
+      }
+      const response = await uploadFile(file as File, {
+        category: 'site-logo',
+        description: t('pages.system.siteSettings.loginLogo'),
+      });
+      if (!response.uuid) {
+        messageApi.error(t('pages.system.siteSettings.uploadFailed'));
+        return Upload.LIST_IGNORE;
+      }
+      form.setFieldsValue({ login_logo: response.uuid });
+      await loadLoginLogoPreview(response.uuid);
+      messageApi.success(t('pages.system.siteSettings.loginLogoUploadSuccess'));
+      return Upload.LIST_IGNORE;
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.loginLogoUploadFailed'));
+      return Upload.LIST_IGNORE;
+    }
+  };
+
+  const handleClearLoginLogo = () => {
+    form.setFieldsValue({ login_logo: '' });
+    setLoginLogoUrl(undefined);
+    setLoginLogoFileList([]);
+  };
+
+  const handleDisableCustomLoginLogo = () => {
+    handleClearLoginLogo();
+    setUseCustomLoginLogo(false);
+  };
+
+  const handleClearDecorationImage = () => {
+    form.setFieldsValue({ login_decoration_image: '' });
+    setDecorationImageUrl(undefined);
+    setDecorationFileList([]);
+  };
+
   /**
    * 处理保存
    */
@@ -523,6 +809,21 @@ const SiteSettingsPage: React.FC = () => {
         enable_register: values.enable_register,
         enable_launch_wizard: values.enable_launch_wizard,
         enable_system_dashboard: values.enable_system_dashboard,
+        tenant_domain: values.tenant_domain,
+        platform_name: values.platform_name,
+        platform_name_en: values.platform_name_en,
+        login_logo: values.login_logo,
+        login_title: values.login_title,
+        login_title_en: values.login_title_en,
+        login_content: values.login_content,
+        login_content_en: values.login_content_en,
+        login_decoration_image: values.login_decoration_image,
+        icp_license: values.icp_license,
+        icp_license_en: values.icp_license_en,
+        login_theme_color: values.login_theme_color,
+        login_guest_enabled: values.login_guest_enabled,
+        login_client_win_enabled: values.login_client_win_enabled,
+        login_client_android_enabled: values.login_client_android_enabled,
         description: values.description,
       };
 
@@ -581,6 +882,67 @@ const SiteSettingsPage: React.FC = () => {
       messageApi.error(error?.message || t('pages.system.siteSettings.saveFailed'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleResetLoginPageSettings = async () => {
+    try {
+      setSaving(true);
+      await updateSiteSetting({
+        settings: {
+          platform_name: '',
+          platform_name_en: '',
+          login_logo: '',
+          login_title: '',
+          login_title_en: '',
+          login_content: '',
+          login_content_en: '',
+          login_decoration_image: '',
+          icp_license: '',
+          icp_license_en: '',
+          login_theme_color: '',
+          login_guest_enabled: null,
+          login_client_win_enabled: null,
+          login_client_android_enabled: null,
+        },
+      });
+      await loadSiteSetting();
+      await fetchConfigs(true);
+      messageApi.success(t('pages.system.siteSettings.loginPageResetSuccess'));
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.loginPageResetFailed'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateBranchOrganization = async () => {
+    try {
+      const values = await branchOrgForm.validateFields();
+      setCreatingBranchOrg(true);
+      await createBranchOrganization({
+        name: values.name,
+        domain: values.domain,
+        admin_account: useNewBranchAdmin
+          ? {
+              username: values.admin_username,
+              password: values.admin_password,
+              full_name: values.admin_full_name || undefined,
+              phone: values.admin_phone || undefined,
+            }
+          : undefined,
+      });
+      messageApi.success(t('pages.system.siteSettings.branchOrgCreateSuccess'));
+      setBranchOrgModalOpen(false);
+      branchOrgForm.resetFields();
+      setUseNewBranchAdmin(false);
+      await loadBranchOrganizationCapability();
+      await loadBranchOrganizations(1, branchOrgPageSize);
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      messageApi.error(error?.message || t('pages.system.siteSettings.branchOrgCreateFailed'));
+    } finally {
+      setCreatingBranchOrg(false);
     }
   };
 
@@ -914,7 +1276,389 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
+  const loginPageSettingsContent = (
+    <Row gutter={[0, 16]}>
+      <Col span={24}>
+        <Card size="small" style={{ borderRadius: 10 }}>
+          <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <div
+              style={{
+                border: '1px solid #e5e6eb',
+                borderRadius: 10,
+                padding: '12px 14px',
+                background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, width: '100%' }}>
+                <div style={{ flex: '0 0 320px', minWidth: 280 }}>
+                  <Form.Item
+                    name="tenant_domain"
+                    label={t('pages.system.siteSettings.currentTenantDomain')}
+                    rules={[
+                      { required: true, message: t('pages.system.siteSettings.tenantDomainRequired') },
+                      { min: 3, message: t('pages.system.siteSettings.tenantDomainMinLength') },
+                      { max: 12, message: t('pages.system.siteSettings.tenantDomainMaxLength') },
+                      { pattern: TENANT_DOMAIN_PATTERN, message: t('pages.system.siteSettings.tenantDomainPattern') },
+                      {
+                        validator: async (_, value) => {
+                          const domain = String(value || '').trim().toLowerCase();
+                          if (!domain) return;
+                          if (domain.length < 3 || domain.length > 12) return;
+                          if (!TENANT_DOMAIN_PATTERN.test(domain)) return;
+                          const hit = RESERVED_DOMAIN_KEYWORDS.find((kw) => domain.includes(kw));
+                          if (hit) {
+                            throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: hit }));
+                          }
+                          const result = await checkTenantDomainAvailability(domain);
+                          if (!result.available) {
+                            throw new Error(result.message || t('pages.system.siteSettings.tenantDomainDuplicate'));
+                          }
+                        },
+                      },
+                    ]}
+                    normalize={(v) => String(v || '').trim().toLowerCase()}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <Input placeholder={t('pages.system.siteSettings.tenantDomainPlaceholder')} />
+                  </Form.Item>
+                </div>
+                <div
+                  style={{
+                    width: 1,
+                    background: '#d9e0ea',
+                    alignSelf: 'stretch',
+                    margin: '0 10px',
+                  }}
+                />
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                  <Space size={6} style={{ marginBottom: 4 }}>
+                    <LinkOutlined style={{ color: '#1677ff' }} />
+                    <Typography.Text type="secondary">
+                      {t('pages.system.siteSettings.tenantPathAccessUrl')}
+                    </Typography.Text>
+                  </Space>
+                  <Typography.Paragraph
+                    style={{
+                      marginBottom: 0,
+                      fontSize: 20,
+                      lineHeight: 1.45,
+                      fontWeight: 600,
+                      color: '#1f2329',
+                      wordBreak: 'break-all',
+                    }}
+                    copyable={tenantPathAccessUrl ? { text: tenantPathAccessUrl } : false}
+                  >
+                    {tenantPathAccessUrl || '-'}
+                  </Typography.Paragraph>
+                </div>
+              </div>
+            </div>
+          </Space>
+        </Card>
+      </Col>
+      <Col span={24}>
+        <Card title={t('pages.infra.platform.loginConfig')} size="small">
+          <Row gutter={[16, 0]}>
+            <Col span={24}>
+              {!useCustomLoginLogo ? (
+                <Form.Item label={t('pages.system.siteSettings.loginLogo')}>
+                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                    <Typography.Text type="secondary">
+                      {t('pages.system.siteSettings.loginLogoFollowingSiteLogo')}
+                    </Typography.Text>
+                    <Button onClick={() => setUseCustomLoginLogo(true)}>
+                      {t('pages.system.siteSettings.enableCustomLoginLogo')}
+                    </Button>
+                  </Space>
+                </Form.Item>
+              ) : (
+                <>
+                  <Form.Item name="login_logo" label={t('pages.system.siteSettings.loginLogo')}>
+                    <Input placeholder={t('pages.system.siteSettings.loginLogoPlaceholder')} />
+                  </Form.Item>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
+                    {t('pages.system.siteSettings.loginLogoFollowSiteLogo')}
+                  </Typography.Text>
+                  <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
+                    {loginLogoUrl && (
+                      <img
+                        src={loginLogoUrl}
+                        alt={t('pages.system.siteSettings.loginLogo')}
+                        style={{
+                          width: '100%',
+                          maxWidth: 200,
+                          maxHeight: 100,
+                          objectFit: 'contain',
+                          border: '1px solid var(--river-border-color)',
+                          borderRadius: 8,
+                          background: '#fff',
+                          padding: 8,
+                        }}
+                      />
+                    )}
+                    <Space style={{ marginBottom: 8 }}>
+                      <Upload
+                        beforeUpload={handleLoginLogoUpload}
+                        fileList={loginLogoFileList}
+                        maxCount={1}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadLoginLogo')}</Button>
+                      </Upload>
+                      {(loginLogoUrl || String(form.getFieldValue('login_logo') || '').trim()) && (
+                        <Button icon={<DeleteOutlined />} onClick={handleClearLoginLogo} danger>
+                          {t('pages.system.siteSettings.clearLoginLogo')}
+                        </Button>
+                      )}
+                      <Button onClick={handleDisableCustomLoginLogo}>
+                        {t('pages.system.siteSettings.disableCustomLoginLogo')}
+                      </Button>
+                    </Space>
+                  </Space>
+                </>
+              )}
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="platform_name" label={t('pages.infra.platform.platformName')}>
+                <Input placeholder={t('pages.infra.platform.platformNamePlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="platform_name_en" label={t('pages.infra.platform.platformNameEn')}>
+                <Input placeholder={t('pages.infra.platform.platformNameEnPlaceholder')} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')}>
+                <Input />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Form.Item name="login_decoration_image" label={t('pages.system.siteSettings.loginDecorationImage')}>
+                <Input placeholder={t('pages.system.siteSettings.loginDecorationImagePlaceholder')} />
+              </Form.Item>
+              <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
+                {t('pages.system.siteSettings.loginDecorationRecommendedSize')}
+              </Typography.Text>
+              <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
+                {decorationImageUrl && (
+                  <img
+                    src={decorationImageUrl}
+                    alt={t('pages.system.siteSettings.loginDecorationImage')}
+                    style={{
+                      width: '100%',
+                      maxWidth: 320,
+                      maxHeight: 220,
+                      objectFit: 'contain',
+                      border: '1px solid var(--river-border-color)',
+                      borderRadius: 8,
+                      background: '#fff',
+                      padding: 8,
+                    }}
+                  />
+                )}
+                <Space style={{ marginBottom: 8 }}>
+                  <Upload
+                    beforeUpload={handleDecorationUpload}
+                    fileList={decorationFileList}
+                    maxCount={1}
+                    accept="image/*"
+                    showUploadList={false}
+                  >
+                    <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadDecorationImage')}</Button>
+                  </Upload>
+                  {(decorationImageUrl || String(form.getFieldValue('login_decoration_image') || '').trim()) && (
+                    <Button icon={<DeleteOutlined />} onClick={handleClearDecorationImage} danger>
+                      {t('pages.system.siteSettings.clearDecorationImage')}
+                    </Button>
+                  )}
+                </Space>
+              </Space>
+            </Col>
+            <Col xs={24} sm={12}>
+              <Form.Item
+                name="login_theme_color"
+                label={t('pages.infra.platform.themeColor')}
+                getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+              >
+                <ColorPicker showText />
+              </Form.Item>
+            </Col>
+            <Col span={24}>
+              <Row gutter={[16, 0]}>
+                <Col xs={24} sm={8}>
+                  <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={8}>
+                  <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </Col>
+          </Row>
+        </Card>
+      </Col>
+    </Row>
+  );
+
+  const loginPageSettingsWithActions = (
+    <>
+      {loginPageSettingsContent}
+      <div style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-start' }}>
+        <Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={loadSiteSetting}
+            loading={loading}
+          >
+            {t('pages.system.siteSettings.refresh')}
+          </Button>
+          <Button
+            onClick={handleResetLoginPageSettings}
+            loading={saving}
+          >
+            {t('components.uniQuery.reset')}
+          </Button>
+          <Button
+            type="primary"
+            icon={<SaveOutlined />}
+            onClick={handleSave}
+            loading={saving}
+          >
+            {t('pages.system.siteSettings.save')}
+          </Button>
+        </Space>
+      </div>
+    </>
+  );
+
+  const branchOrgColumns = [
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnName'),
+      dataIndex: 'name',
+      key: 'name',
+    },
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnDomain'),
+      dataIndex: 'domain',
+      key: 'domain',
+    },
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnStatus'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (value: string) => {
+        const color = value === TenantStatus.ACTIVE ? 'success' : value === TenantStatus.SUSPENDED ? 'error' : 'default';
+        const labelMap: Record<string, string> = {
+          [TenantStatus.ACTIVE]: t('pages.infra.tenant.statusActive'),
+          [TenantStatus.INACTIVE]: t('pages.infra.tenant.statusInactive'),
+          [TenantStatus.EXPIRED]: t('pages.infra.tenant.statusExpired'),
+          [TenantStatus.SUSPENDED]: t('pages.infra.tenant.statusSuspended'),
+        };
+        return <Tag color={color}>{labelMap[value] || value}</Tag>;
+      },
+    },
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnPlan'),
+      dataIndex: 'plan',
+      key: 'plan',
+      render: (value: string) => {
+        const color = value === TenantPlan.ENTERPRISE ? 'gold' : value === TenantPlan.PROFESSIONAL ? 'purple' : 'blue';
+        const labelMap: Record<string, string> = {
+          [TenantPlan.TRIAL]: t('pages.infra.tenant.planTrial'),
+          [TenantPlan.BASIC]: t('pages.infra.tenant.planBasic'),
+          [TenantPlan.PROFESSIONAL]: t('pages.infra.tenant.planProfessional'),
+          [TenantPlan.ENTERPRISE]: t('pages.infra.tenant.planEnterprise'),
+        };
+        return <Tag color={color}>{labelMap[value] || value}</Tag>;
+      },
+    },
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnQuota'),
+      key: 'quota',
+      render: (_: unknown, record: BranchOrganizationItem) => `${record.user_count || 0}/${record.max_users}`,
+    },
+    {
+      title: t('pages.system.siteSettings.branchOrgColumnCreatedAt'),
+      dataIndex: 'created_at',
+      key: 'created_at',
+      render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-'),
+    },
+  ];
+
+  const branchOrganizationsTabContent = (
+    <Space direction="vertical" style={{ width: '100%' }} size={16}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <Space size={12}>
+          <span>{t('pages.system.siteSettings.branchOrgTitle')}</span>
+          <Typography.Text type="secondary">
+            {t('pages.system.siteSettings.branchOrgHint')}
+          </Typography.Text>
+        </Space>
+        <Space>
+          <Button onClick={() => loadBranchOrganizations(branchOrgPage, branchOrgPageSize)} loading={branchOrgLoading}>
+            {t('pages.system.siteSettings.refresh')}
+          </Button>
+          {branchOrgCapability?.can_create_branch_organization && (
+            <Button type="primary" onClick={() => setBranchOrgModalOpen(true)}>
+              {t('pages.system.siteSettings.branchOrgCreateButton')}
+            </Button>
+          )}
+        </Space>
+      </div>
+      <Table<BranchOrganizationItem>
+        rowKey="id"
+        loading={branchOrgLoading}
+        columns={branchOrgColumns}
+        dataSource={branchOrgList}
+        pagination={{
+          current: branchOrgPage,
+          pageSize: branchOrgPageSize,
+          total: branchOrgTotal,
+          showSizeChanger: true,
+          onChange: (page, pageSize) => loadBranchOrganizations(page, pageSize),
+        }}
+      />
+    </Space>
+  );
+
   const tenantInitTabContent = <TenantInitDataPanel />;
+  const showBranchOrganizationsTab = !!branchOrgCapability && !branchOrgCapability.is_branch_organization;
+  const showLoginPageTab = !branchOrgCapability?.is_branch_organization;
 
   return (
     <Form
@@ -927,7 +1671,13 @@ const SiteSettingsPage: React.FC = () => {
         onTabChange={setActiveTabKey}
         tabs={[
           { key: 'basic', label: (<Space><InfoCircleOutlined /><span>{t('pages.system.siteSettings.tabBasic')}</span></Space>), children: basicInfoWithActions },
+          ...(showLoginPageTab
+            ? [{ key: 'login-page', label: (<Space><GlobalOutlined /><span>{t('pages.system.siteSettings.tabLoginPage')}</span></Space>), children: loginPageSettingsWithActions }]
+            : []),
           { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
+          ...(showBranchOrganizationsTab
+            ? [{ key: 'branch-organizations', label: (<Space><ApartmentOutlined /><span>{t('pages.system.siteSettings.tabBranchOrganizations')}</span></Space>), children: branchOrganizationsTabContent }]
+            : []),
           { key: 'init-data', label: (<Space><CloudDownloadOutlined /><span>{t('pages.system.siteSettings.tabInitData')}</span></Space>), children: tenantInitTabContent },
         ]}
       />
@@ -941,6 +1691,59 @@ const SiteSettingsPage: React.FC = () => {
         onCancel={handleCropCancel}
         onConfirm={handleCropConfirm}
       />
+      <Modal
+        title={t('pages.system.siteSettings.branchOrgCreateModalTitle')}
+        open={branchOrgModalOpen}
+        onCancel={() => {
+          setBranchOrgModalOpen(false);
+          setUseNewBranchAdmin(false);
+        }}
+        onOk={handleCreateBranchOrganization}
+        okButtonProps={{ loading: creatingBranchOrg }}
+        destroyOnClose
+      >
+        <Form form={branchOrgForm} layout="vertical">
+          <Form.Item name="name" label={t('pages.system.siteSettings.branchOrgNameLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgNameRequired') }]}>
+            <Input />
+          </Form.Item>
+          <Form.Item
+            name="domain"
+            label={t('pages.system.siteSettings.branchOrgDomainLabel')}
+            rules={[
+              { required: true, message: t('pages.system.siteSettings.branchOrgDomainRequired') },
+              { pattern: /^[a-z0-9-]+$/, message: t('pages.system.siteSettings.branchOrgDomainPattern') },
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item label={t('pages.system.siteSettings.branchOrgAdminDefaultLabel')}>
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Typography.Text type="secondary">
+                {t('pages.system.siteSettings.branchOrgAdminDefaultHint')}
+              </Typography.Text>
+              {!useNewBranchAdmin && (
+                <Button onClick={() => setUseNewBranchAdmin(true)}>{t('pages.system.siteSettings.branchOrgAddAdminButton')}</Button>
+              )}
+            </Space>
+          </Form.Item>
+          {useNewBranchAdmin && (
+            <>
+              <Form.Item name="admin_username" label={t('pages.system.siteSettings.branchOrgAdminUsernameLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminUsernameRequired') }]}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="admin_password" label={t('pages.system.siteSettings.branchOrgAdminPasswordLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminPasswordRequired') }, { min: 8, message: t('pages.system.siteSettings.branchOrgAdminPasswordMin') }]}>
+                <Input.Password />
+              </Form.Item>
+              <Form.Item name="admin_full_name" label={t('pages.system.siteSettings.branchOrgAdminFullNameLabel')}>
+                <Input />
+              </Form.Item>
+              <Form.Item name="admin_phone" label={t('pages.system.siteSettings.branchOrgAdminPhoneLabel')} rules={[{ pattern: /^$|^1[3-9]\d{9}$/, message: t('pages.system.siteSettings.branchOrgAdminPhonePattern') }]}>
+                <Input />
+              </Form.Item>
+            </>
+          )}
+        </Form>
+      </Modal>
     </Form>
   );
 };

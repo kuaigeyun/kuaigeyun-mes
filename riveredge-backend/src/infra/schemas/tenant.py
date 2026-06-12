@@ -89,6 +89,11 @@ class TenantCreate(TenantBase):
         None,
         description="组织管理员账户（平台新建组织时必填）",
     )
+    parent_tenant_id: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="父组织 ID。传入表示创建子组织，不传表示创建主组织",
+    )
 
 
 class TenantUpdate(BaseModel):
@@ -144,6 +149,8 @@ class TenantResponse(TenantBase):
     
     id: int = Field(..., description="组织 ID（内部使用）")
     uuid: str = Field(..., description="组织 UUID（对外暴露，业务标识）")
+    parent_tenant_id: Optional[int] = Field(None, description="父组织 ID（仅子组织有值）")
+    is_subtenant: bool = Field(default=False, description="是否子组织")
     last_login_at: Optional[datetime] = Field(None, description="组织内用户最后登录时间")
     user_count: int = Field(default=0, description="已使用用户数")
     created_at: datetime = Field(..., description="创建时间")
@@ -294,4 +301,28 @@ class TenantActivityLogListResponse(BaseModel):
     total: int = Field(..., description="总数量")
     page: int = Field(..., description="当前页码")
     page_size: int = Field(..., description="每页数量")
+
+
+class SharedUserQuotaTenantUsage(BaseModel):
+    """共享用户池中的单组织用量"""
+
+    tenant_id: int = Field(..., description="组织 ID")
+    tenant_name: str = Field(..., description="组织名称")
+    is_subtenant: bool = Field(..., description="是否子组织")
+    user_count: int = Field(..., description="有效用户数（启用且未删除）")
+
+
+class SharedUserQuotaResponse(BaseModel):
+    """主组织共享用户池统计结果"""
+
+    root_tenant_id: int = Field(..., description="主组织 ID")
+    root_tenant_name: str = Field(..., description="主组织名称")
+    max_users: int = Field(..., description="主组织用户配额上限")
+    used_users: int = Field(..., description="主组织 + 子组织已用有效用户数")
+    remaining_users: int = Field(..., description="剩余可用用户数（不小于 0）")
+    over_quota: bool = Field(..., description="是否超配额")
+    tenants: list[SharedUserQuotaTenantUsage] = Field(
+        default_factory=list,
+        description="按组织分布的用量明细（含主组织）",
+    )
 

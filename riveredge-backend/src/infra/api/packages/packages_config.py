@@ -7,7 +7,7 @@
 from typing import Dict, Any
 from fastapi import APIRouter
 
-from infra.domain.package_config import get_all_package_configs
+from infra.services.package_service import PackageService
 
 # 创建路由
 router = APIRouter()
@@ -24,4 +24,4 @@ async def get_all_package_configs_endpoint():
     Returns:
         Dict[str, Any]: 所有套餐配置字典
     """
-    return get_all_package_configs()
+    return await PackageService().get_all_effective_package_configs()

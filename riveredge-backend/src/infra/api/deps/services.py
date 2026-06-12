@@ -126,6 +126,16 @@ def get_auth_service_with_fallback() -> Any:
         
         async def register_organization(self, data: Any) -> Dict[str, Any]:
             return await self._auth_service.register_organization(data)
+
+        async def get_accessible_tenants(self, current_user: Any) -> list[dict]:
+            return await self._auth_service.get_accessible_tenants(current_user)
+
+        async def switch_tenant(self, current_user: Any, target_tenant_id: int, request: Any = None) -> Dict[str, Any]:
+            return await self._auth_service.switch_tenant(
+                current_user=current_user,
+                target_tenant_id=target_tenant_id,
+                request=request,
+            )
     
     return AuthServiceAdapter()
 
@@ -209,6 +219,15 @@ def get_package_service_with_fallback() -> Any:
         
         async def get_package_by_id(self, package_id: int) -> Optional[Any]:
             return await self._package_service.get_package_by_id(package_id)
+
+        async def create_package(self, data: Any) -> Any:
+            return await self._package_service.create_package(data)
+
+        async def update_package(self, package_id: int, data: Any) -> Optional[Any]:
+            return await self._package_service.update_package(package_id, data)
+
+        async def delete_package(self, package_id: int) -> bool:
+            return await self._package_service.delete_package(package_id)
     
     return PackageServiceAdapter()
 

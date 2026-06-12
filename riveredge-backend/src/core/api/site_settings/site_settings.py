@@ -4,13 +4,112 @@
 提供站点设置的获取和更新操作。
 """
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
+from typing import Optional, Any
 
 from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
 from core.services.system.site_setting_service import SiteSettingService
-from core.api.deps.deps import get_current_tenant
+from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.models.user import User
+from infra.models.tenant import Tenant
+from infra.schemas.tenant import (
+    TenantResponse,
+    TenantListResponse,
+    TenantAdminAccountCreate,
+    TenantCreate,
+)
+from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
+from infra.services.package_service import PackageService
 
 router = APIRouter(prefix="/site-settings", tags=["Core · Site Settings"])
+
+
+class SubtenantCapabilityResponse(BaseModel):
+    tenant_id: int
+    is_subtenant: bool
+    can_create_subtenant: bool
+
+
+class SubtenantCreateRequest(BaseModel):
+    name: str = Field(..., min_length=1, max_length=100)
+    domain: str = Field(..., min_length=1, max_length=100)
+    admin_account: Optional[TenantAdminAccountCreate] = None
+
+
+class BranchOrganizationCapabilityResponse(BaseModel):
+    tenant_id: int
+    is_branch_organization: bool
+    can_create_branch_organization: bool
+
+
+class TenantDomainAvailabilityResponse(BaseModel):
+    domain: str
+    available: bool
+    message: str
+
+
+_RESERVED_DOMAIN_KEYWORDS = (
+    "admin",
+    "login",
+    "infra",
+    "system",
+    "apps",
+    "api",
+    "docs",
+    "debug",
+    "qrcode",
+    "init",
+    "personal",
+    "lock",
+)
+
+_LOGIN_PAGE_SETTING_KEYS = {
+    "platform_name",
+    "platform_name_en",
+    "login_logo",
+    "login_title",
+    "login_title_en",
+    "login_content",
+    "login_content_en",
+    "login_decoration_image",
+    "icp_license",
+    "icp_license_en",
+    "login_theme_color",
+    "login_guest_enabled",
+    "login_client_win_enabled",
+    "login_client_android_enabled",
+}
+
+
+def _normalize_tenant_domain(domain: str) -> str:
+    normalized = (domain or "").strip().lower()
+    if not normalized:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="组织域名不能为空")
+    import re
+    if len(normalized) < 3 or len(normalized) > 12:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="组织域名长度需为3-12位")
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{2,11}", normalized):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="组织域名必须以小写字母开头，仅支持小写字母、数字、下划线和中划线，且不允许中文",
+        )
+    hit = next((kw for kw in _RESERVED_DOMAIN_KEYWORDS if kw in normalized), None)
+    if hit:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"组织域名不能包含保留关键词：{hit}",
+        )
+    return normalized
+
+
+async def _rollback_created_tenant(tenant_id: int) -> None:
+    """创建流程失败时清理已写入的组织记录。"""
+    from infra.models.tenant import Tenant as TenantModel
+    from infra.models.tenant_activity_log import TenantActivityLog
+
+    await TenantActivityLog.filter(tenant_id=tenant_id).delete()
+    await TenantModel.filter(id=tenant_id).delete()
 
 
 @router.get("", response_model=SiteSettingResponse)
@@ -31,6 +130,9 @@ async def get_settings(
     """
     site_settings = await SiteSettingService.get_settings(tenant_id)
     merged_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    if tenant:
+        merged_settings["tenant_domain"] = tenant.domain
     return SiteSettingResponse(
         uuid=site_settings.uuid,
         tenant_id=site_settings.tenant_id,
@@ -57,6 +159,232 @@ async def update_settings(
     Returns:
         SiteSettingResponse: 更新后的站点设置对象
     """
-    settings = await SiteSettingService.update_settings(tenant_id, data)
-    return SiteSettingResponse.model_validate(settings)
+    settings_payload = dict(data.settings or {})
+    tenant_domain = settings_payload.pop("tenant_domain", None)
+    current_tenant = await Tenant.get_or_none(id=tenant_id)
+    if not current_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前组织不存在")
+
+    if bool(current_tenant.is_subtenant):
+        touched_login_keys = [k for k in settings_payload.keys() if k in _LOGIN_PAGE_SETTING_KEYS]
+        if touched_login_keys:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="分支组织不允许单独设置登录页配置",
+            )
+
+    if tenant_domain is not None:
+        normalized_domain = _normalize_tenant_domain(str(tenant_domain))
+        exists = await Tenant.filter(domain=normalized_domain).exclude(id=tenant_id).exists()
+        if exists:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=f"组织域名 {normalized_domain} 已被占用")
+        if current_tenant.domain != normalized_domain:
+            current_tenant.domain = normalized_domain
+            await current_tenant.save(update_fields=["domain", "updated_at"])
+
+    settings = await SiteSettingService.update_settings(
+        tenant_id,
+        SiteSettingUpdate(settings=settings_payload),
+    )
+    merged_settings = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    if tenant:
+        merged_settings["tenant_domain"] = tenant.domain
+    return SiteSettingResponse(
+        uuid=settings.uuid,
+        tenant_id=settings.tenant_id,
+        settings=merged_settings,
+        created_at=settings.created_at,
+        updated_at=settings.updated_at,
+    )
+
+
+@router.get("/domain-availability", response_model=TenantDomainAvailabilityResponse)
+async def check_tenant_domain_availability(
+    domain: str = Query(..., min_length=1, description="待检查组织域名"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    normalized_domain = _normalize_tenant_domain(domain)
+    exists = await Tenant.filter(domain=normalized_domain).exclude(id=tenant_id).exists()
+    if exists:
+        return TenantDomainAvailabilityResponse(
+            domain=normalized_domain,
+            available=False,
+            message=f"组织域名 {normalized_domain} 已被占用",
+        )
+    return TenantDomainAvailabilityResponse(
+        domain=normalized_domain,
+        available=True,
+        message="组织域名可用",
+    )
+
+
+@router.get("/subtenants/capability", response_model=SubtenantCapabilityResponse)
+async def get_subtenant_capability(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+    can_create = bool(getattr(current_user, "is_tenant_admin", False)) and not bool(tenant.is_subtenant)
+    return SubtenantCapabilityResponse(
+        tenant_id=tenant.id,
+        is_subtenant=bool(tenant.is_subtenant),
+        can_create_subtenant=can_create,
+    )
+
+
+@router.get("/branch-organizations/capability", response_model=BranchOrganizationCapabilityResponse)
+async def get_branch_organization_capability(
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    tenant = await Tenant.get_or_none(id=tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="组织不存在")
+    can_create = bool(getattr(current_user, "is_tenant_admin", False)) and not bool(tenant.is_subtenant)
+    return BranchOrganizationCapabilityResponse(
+        tenant_id=tenant.id,
+        is_branch_organization=bool(tenant.is_subtenant),
+        can_create_branch_organization=can_create,
+    )
+
+
+@router.get("/branch-organizations", response_model=TenantListResponse)
+async def list_branch_organizations(
+    page: int = 1,
+    page_size: int = 20,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    if not bool(getattr(current_user, "is_tenant_admin", False)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅组织管理员可查看分支组织")
+
+    current_tenant = await Tenant.get_or_none(id=tenant_id)
+    if not current_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前组织不存在")
+    if bool(current_tenant.is_subtenant):
+        return TenantListResponse(items=[], total=0, page=page, page_size=page_size)
+
+    tenant_service = TenantService()
+    result = await tenant_service.list_tenants(
+        page=page,
+        page_size=page_size,
+        parent_tenant_id=current_tenant.id,
+        is_subtenant=True,
+        skip_tenant_filter=True,
+        sort="created_at",
+        order="desc",
+    )
+    return TenantListResponse(**result)
+
+
+@router.post("/subtenants", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+async def create_subtenant_from_site_settings(
+    data: SubtenantCreateRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    if not bool(getattr(current_user, "is_tenant_admin", False)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅组织管理员可创建分支组织")
+
+    current_tenant = await Tenant.get_or_none(id=tenant_id)
+    if not current_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前组织不存在")
+    if bool(current_tenant.is_subtenant):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="分支组织不允许再创建下级组织")
+
+    package_config = await PackageService().get_effective_package_config_for_plan(current_tenant.plan)
+    max_branch_organizations = package_config.get("max_branch_organizations")
+    if max_branch_organizations is not None:
+        current_branch_count = await Tenant.filter(
+            parent_tenant_id=current_tenant.id,
+            is_subtenant=True,
+        ).count()
+        if current_branch_count >= int(max_branch_organizations):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"当前套餐最多允许创建 {max_branch_organizations} 个分支组织，请升级套餐后重试",
+            )
+
+    tenant_service = TenantService()
+    tenant = await tenant_service.create_tenant(
+        TenantCreate(
+            name=data.name,
+            domain=data.domain,
+            status=current_tenant.status,
+            plan=current_tenant.plan,
+            settings={"description": f"由主组织 {current_tenant.name} 在站点管理创建"},
+            max_users=None,
+            max_storage=None,
+            expires_at=current_tenant.expires_at,
+            parent_tenant_id=current_tenant.id,
+            admin_account=data.admin_account,
+        )
+    )
+
+    from infra.schemas.user import UserCreate
+    from infra.services.user_service import UserService
+
+    user_service = UserService()
+    try:
+        if data.admin_account is not None:
+            admin = data.admin_account
+            await user_service.create_user(
+                UserCreate(
+                    username=admin.username,
+                    phone=admin.phone,
+                    password=admin.password,
+                    full_name=admin.full_name,
+                    tenant_id=tenant.id,
+                    is_active=True,
+                    is_infra_admin=False,
+                    is_tenant_admin=True,
+                ),
+                tenant_id=tenant.id,
+            )
+        else:
+            creator = await User.get_or_none(
+                id=current_user.id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not creator or not creator.password_hash:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="当前管理员账号异常，无法沿用当前账号创建分支组织管理员",
+                )
+            await tenant_service.assert_shared_user_quota_capacity(tenant.id, increment=1)
+            await User.create(
+                tenant_id=tenant.id,
+                username=creator.username,
+                phone=creator.phone,
+                email=creator.email,
+                password_hash=creator.password_hash,
+                full_name=creator.full_name,
+                is_active=True,
+                is_infra_admin=False,
+                is_tenant_admin=True,
+                source=creator.source,
+            )
+    except Exception:
+        await _rollback_created_tenant(tenant.id)
+        raise
+
+    schedule_initialize_tenant_data(tenant.id)
+    return tenant
+
+
+@router.post("/branch-organizations", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+async def create_branch_organization_from_site_settings(
+    data: SubtenantCreateRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    return await create_subtenant_from_site_settings(
+        data=data,
+        tenant_id=tenant_id,
+        current_user=current_user,
+    )
 

@@ -9,8 +9,8 @@
  */
 
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
-import { App, Card, Button, Space, Upload, message, Form, ColorPicker } from 'antd';
+import { ProForm, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Card, Button, Space, Upload, Form, ColorPicker, Row, Col, Input, Switch, Typography } from 'antd';
 import { UploadOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -29,7 +29,13 @@ import { applyFavicon } from '../../../../utils/favicon';
 /**
  * 平台设置页面组件
  */
-export default function PlatformSettingsPage() {
+type PlatformSettingsPageMode = 'basic' | 'login';
+
+interface PlatformSettingsPageProps {
+  mode?: PlatformSettingsPageMode;
+}
+
+export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSettingsPageProps) {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
@@ -46,6 +52,8 @@ export default function PlatformSettingsPage() {
   const [faviconUrl, setFaviconUrl] = useState<string | undefined>(undefined);
   const [faviconCropModalVisible, setFaviconCropModalVisible] = useState(false);
   const [selectedFaviconFile, setSelectedFaviconFile] = useState<File | null>(null);
+  const [decorationFileList, setDecorationFileList] = useState<UploadFile[]>([]);
+  const [decorationUrl, setDecorationUrl] = useState<string | undefined>(undefined);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platformSettings'],
@@ -69,6 +77,7 @@ export default function PlatformSettingsPage() {
         login_title_en: data.login_title_en,
         login_content: data.login_content,
         login_content_en: data.login_content_en,
+        login_decoration_image: data.login_decoration_image,
         icp_license: data.icp_license,
         icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
@@ -168,6 +177,42 @@ export default function PlatformSettingsPage() {
     }
   };
 
+  const loadDecorationPreview = async (imageValue: string | undefined) => {
+    if (!imageValue || !imageValue.trim()) {
+      setDecorationUrl(undefined);
+      setDecorationFileList([]);
+      return;
+    }
+    if (isUUID(imageValue.trim())) {
+      try {
+        const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        if (!previewInfo?.preview_url) {
+          setDecorationUrl(undefined);
+          setDecorationFileList([]);
+          return;
+        }
+        setDecorationUrl(previewInfo.preview_url);
+        setDecorationFileList([{
+          uid: imageValue.trim(),
+          name: t('pages.infra.platform.loginDecorationImage'),
+          status: 'done',
+          url: previewInfo.preview_url,
+        }]);
+      } catch {
+        setDecorationUrl(undefined);
+        setDecorationFileList([]);
+      }
+      return;
+    }
+    setDecorationUrl(imageValue.trim());
+    setDecorationFileList([{
+      uid: imageValue.trim(),
+      name: t('pages.infra.platform.loginDecorationImage'),
+      status: 'done',
+      url: imageValue.trim(),
+    }]);
+  };
+
   // 当设置数据加载完成时，填充表单
   useEffect(() => {
     if (settings) {
@@ -180,6 +225,7 @@ export default function PlatformSettingsPage() {
         login_title_en: settings.login_title_en,
         login_content: settings.login_content,
         login_content_en: settings.login_content_en,
+        login_decoration_image: settings.login_decoration_image,
         icp_license: settings.icp_license,
         icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
@@ -194,6 +240,7 @@ export default function PlatformSettingsPage() {
       loadLogoPreview(settings.platform_logo);
       // 加载 Favicon 预览
       loadFaviconPreview(settings.favicon);
+      loadDecorationPreview(settings.login_decoration_image);
     }
   }, [settings, form]);
 
@@ -377,6 +424,36 @@ export default function PlatformSettingsPage() {
     messageApi.success(t('pages.infra.platform.faviconCleared'));
   };
 
+  const handleDecorationUpload: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      if (!file.type.startsWith('image/')) {
+        messageApi.error(t('pages.infra.platform.selectImage'));
+        return Upload.LIST_IGNORE;
+      }
+      const response: FileUploadResponse = await uploadFile(file as File, {
+        category: 'platform-logo',
+        description: t('pages.infra.platform.loginDecorationImage'),
+      });
+      if (response.uuid) {
+        form.setFieldsValue({ login_decoration_image: response.uuid });
+        await loadDecorationPreview(response.uuid);
+        messageApi.success(t('pages.infra.platform.loginDecorationUploadSuccess'));
+      } else {
+        messageApi.error(t('pages.infra.platform.loginDecorationUploadFailed'));
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.infra.platform.loginDecorationUploadFailed'));
+    }
+    return Upload.LIST_IGNORE;
+  };
+
+  const handleClearDecoration = () => {
+    form.setFieldsValue({ login_decoration_image: undefined });
+    setDecorationUrl(undefined);
+    setDecorationFileList([]);
+    messageApi.success(t('pages.infra.platform.loginDecorationCleared'));
+  };
+
   /**
    * 处理保存
    */
@@ -389,7 +466,7 @@ export default function PlatformSettingsPage() {
 
   return (
     <ListPageTemplate>
-      <Card title={t('pages.infra.platform.title')} loading={isLoading}>
+      <Card loading={isLoading}>
         <ProForm<PlatformSettingsUpdateRequest>
           form={form}
           layout="vertical"
@@ -403,265 +480,265 @@ export default function PlatformSettingsPage() {
             },
           }}
         >
-          <ProFormText
-            name="platform_name"
-            label={t('pages.infra.platform.platformName')}
-            placeholder={t('pages.infra.platform.platformNamePlaceholder')}
-            rules={[
-              { required: true, message: t('pages.infra.platform.platformNameRequired') },
-              { max: 200, message: t('pages.infra.platform.platformNameMax') },
-            ]}
-            fieldProps={{
-              maxLength: 200,
-            }}
-          />
-
-          <ProFormText
-            name="platform_name_en"
-            label={t('pages.infra.platform.platformNameEn')}
-            placeholder={t('pages.infra.platform.platformNameEnPlaceholder')}
-            rules={[
-              { max: 200, message: t('pages.infra.platform.platformNameMax') },
-            ]}
-            fieldProps={{
-              maxLength: 200,
-            }}
-          />
-
-          <ProForm.Item
-            name="platform_logo"
-            label={t('pages.infra.platform.platformLogo')}
-            tooltip={t('pages.infra.platform.platformLogoTooltip')}
-          >
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {logoUrl && (
-                <div style={{ marginBottom: 8 }}>
-                  <img
-                    src={logoUrl}
-                    alt={t('pages.infra.platform.platformLogo')}
-                    style={{
-                      maxWidth: '200px',
-                      maxHeight: '100px',
-                      objectFit: 'contain',
-                      border: '1px solid var(--river-border-color)',
-                      borderRadius: '4px',
-                      padding: '8px',
-                    }}
+          {mode === 'basic' ? (
+            <>
+              <Row gutter={[16, 0]}>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="platform_name"
+                    label={t('pages.infra.platform.platformName')}
+                    placeholder={t('pages.infra.platform.platformNamePlaceholder')}
+                    rules={[
+                      { required: true, message: t('pages.infra.platform.platformNameRequired') },
+                      { max: 200, message: t('pages.infra.platform.platformNameMax') },
+                    ]}
+                    fieldProps={{ maxLength: 200 }}
                   />
-                </div>
-              )}
-              <Space>
-                <Upload
-                  beforeUpload={handleLogoFileSelect}
-                  fileList={logoFileList}
-                  maxCount={1}
-                  accept="image/*"
-                  showUploadList={false}
-                >
-                  <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadLogo')}</Button>
-                </Upload>
-                {logoUrl && (
-                  <Button
-                    icon={<DeleteOutlined />}
-                    danger
-                    onClick={handleClearLogo}
-                  >
-                    {t('pages.infra.platform.clearLogo')}
-                  </Button>
-                )}
-              </Space>
-              <ProFormText
+                </Col>
+                <Col xs={24} sm={12}>
+                  <ProFormText
+                    name="platform_name_en"
+                    label={t('pages.infra.platform.platformNameEn')}
+                    placeholder={t('pages.infra.platform.platformNameEnPlaceholder')}
+                    rules={[{ max: 200, message: t('pages.infra.platform.platformNameMax') }]}
+                    fieldProps={{ maxLength: 200 }}
+                  />
+                </Col>
+              </Row>
+              <ProForm.Item
                 name="platform_logo"
-                placeholder={t('pages.infra.platform.logoUrlPlaceholder')}
-                fieldProps={{
-                  maxLength: 500,
-                }}
-                style={{ marginTop: 8 }}
-              />
-            </Space>
-          </ProForm.Item>
-
-          <ProForm.Item
-            name="favicon"
-            label={t('pages.infra.platform.favicon')}
-            tooltip={t('pages.infra.platform.faviconTooltip')}
-          >
-            <Space direction="vertical" style={{ width: '100%' }}>
-              {faviconUrl && (
-                <div style={{ marginBottom: 8 }}>
-                  <img
-                    src={faviconUrl}
-                    alt={t('pages.infra.platform.favicon')}
-                    style={{
-                      width: 32,
-                      height: 32,
-                      objectFit: 'contain',
-                      border: '1px solid var(--river-border-color)',
-                      borderRadius: '4px',
-                      padding: '4px',
-                    }}
+                label={t('pages.infra.platform.platformLogo')}
+                tooltip={t('pages.infra.platform.platformLogoTooltip')}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {logoUrl && (
+                    <div style={{ marginBottom: 8 }}>
+                      <img
+                        src={logoUrl}
+                        alt={t('pages.infra.platform.platformLogo')}
+                        style={{
+                          maxWidth: '200px',
+                          maxHeight: '100px',
+                          objectFit: 'contain',
+                          border: '1px solid var(--river-border-color)',
+                          borderRadius: '4px',
+                          padding: '8px',
+                        }}
+                      />
+                    </div>
+                  )}
+                  <Space>
+                    <Upload
+                      beforeUpload={handleLogoFileSelect}
+                      fileList={logoFileList}
+                      maxCount={1}
+                      accept="image/*"
+                      showUploadList={false}
+                    >
+                      <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadLogo')}</Button>
+                    </Upload>
+                    {logoUrl && (
+                      <Button icon={<DeleteOutlined />} danger onClick={handleClearLogo}>
+                        {t('pages.infra.platform.clearLogo')}
+                      </Button>
+                    )}
+                  </Space>
+                  <ProFormText
+                    name="platform_logo"
+                    placeholder={t('pages.infra.platform.logoUrlPlaceholder')}
+                    fieldProps={{ maxLength: 500 }}
+                    style={{ marginTop: 8 }}
                   />
-                </div>
-              )}
-              <Space>
-                <Upload
-                  beforeUpload={handleFaviconFileSelect}
-                  fileList={faviconFileList}
-                  maxCount={1}
-                  accept="image/*"
-                  showUploadList={false}
-                >
-                  <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadFavicon')}</Button>
-                </Upload>
-                {faviconUrl && (
-                  <Button
-                    icon={<DeleteOutlined />}
-                    danger
-                    onClick={handleClearFavicon}
-                  >
-                    {t('pages.infra.platform.clearFavicon')}
-                  </Button>
-                )}
-              </Space>
-              <ProFormText
+                </Space>
+              </ProForm.Item>
+              <ProForm.Item
                 name="favicon"
-                placeholder={t('pages.infra.platform.faviconUrlPlaceholder')}
-                fieldProps={{
-                  maxLength: 500,
-                }}
-                style={{ marginTop: 8 }}
-              />
-            </Space>
-          </ProForm.Item>
-
-          <Card type="inner" title={t('pages.infra.platform.tenantConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
-            <ProFormSwitch
-              name="tenant_auto_approve"
-              label={t('pages.infra.platform.tenantAutoApprove')}
-              tooltip={t('pages.infra.platform.tenantAutoApproveTooltip')}
-            />
-            <ProFormSwitch
-              name="float_button_enabled"
-              label={t('pages.infra.platform.floatButtonEnabled')}
-              tooltip={t('pages.infra.platform.floatButtonEnabledTooltip')}
-            />
-          </Card>
-
-          <Card type="inner" title={t('pages.infra.platform.loginConfig')} style={{ marginTop: 16, marginBottom: 16 }}>
-            <ProFormText
-              name="login_title"
-              label={t('pages.infra.platform.loginTitle')}
-              placeholder={t('pages.infra.platform.loginTitlePlaceholder')}
-              rules={[
-                { max: 200, message: t('pages.infra.platform.loginTitleMax') },
-              ]}
-              fieldProps={{
-                maxLength: 200,
-              }}
-            />
-
-            <ProFormText
-              name="login_title_en"
-              label={t('pages.infra.platform.loginTitleEn')}
-              placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')}
-              rules={[
-                { max: 200, message: t('pages.infra.platform.loginTitleMax') },
-              ]}
-              fieldProps={{
-                maxLength: 200,
-              }}
-            />
-
-            <ProFormTextArea
-              name="login_content"
-              label={t('pages.infra.platform.loginContent')}
-              placeholder={t('pages.infra.platform.loginContentPlaceholder')}
-              fieldProps={{
-                rows: 4,
-                maxLength: 1000,
-              }}
-            />
-
-            <ProFormTextArea
-              name="login_content_en"
-              label={t('pages.infra.platform.loginContentEn')}
-              placeholder={t('pages.infra.platform.loginContentEnPlaceholder')}
-              fieldProps={{
-                rows: 4,
-                maxLength: 1000,
-              }}
-            />
-
-            <Form.Item
-              name="theme_color"
-              label={t('pages.infra.platform.themeColor')}
-              tooltip={t('pages.infra.platform.themeColorTooltip')}
-            >
-              <ColorPicker
-                showText
-                format="hex"
-                presets={[
-                  {
-                    label: t('pages.infra.platform.recommendedColors'),
-                    colors: [
-                      '#1890ff', // 科技蓝（默认）
-                      '#F5222D', // 薄暮
-                      '#FA541C', // 火山
-                      '#FAAD14', // 金盏花
-                      '#13C2C2', // 明青
-                      '#52C41A', // 极光绿
-                      '#2F54EB', // 极客蓝
-                      '#722ED1', // 酱紫
-                    ],
-                  },
-                ]}
-                onChange={(value) => {
-                  const hexColor = value.toHexString();
-                  form.setFieldValue('theme_color', hexColor);
-                }}
-              />
-            </Form.Item>
-
-            <ProFormSwitch
-              name="login_guest_enabled"
-              label={t('pages.infra.platform.loginGuestEnabled')}
-              tooltip={t('pages.infra.platform.loginGuestEnabledTooltip')}
-            />
-            <ProFormSwitch
-              name="login_client_win_enabled"
-              label={t('pages.infra.platform.loginClientWinEnabled')}
-              tooltip={t('pages.infra.platform.loginClientWinEnabledTooltip')}
-            />
-            <ProFormSwitch
-              name="login_client_android_enabled"
-              label={t('pages.infra.platform.loginClientAndroidEnabled')}
-              tooltip={t('pages.infra.platform.loginClientAndroidEnabledTooltip')}
-            />
-          </Card>
-
-          <ProFormText
-            name="icp_license"
-            label={t('pages.infra.platform.icpLicense')}
-            placeholder={t('pages.infra.platform.icpLicensePlaceholder')}
-            rules={[
-              { max: 100, message: t('pages.infra.platform.icpLicenseMax') },
-            ]}
-            fieldProps={{
-              maxLength: 100,
-            }}
-          />
-
-          <ProFormText
-            name="icp_license_en"
-            label={t('pages.infra.platform.icpLicenseEn')}
-            placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')}
-            rules={[
-              { max: 100, message: t('pages.infra.platform.icpLicenseMax') },
-            ]}
-            fieldProps={{
-              maxLength: 100,
-            }}
-          />
+                label={t('pages.infra.platform.favicon')}
+                tooltip={t('pages.infra.platform.faviconTooltip')}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {faviconUrl && (
+                    <div style={{ marginBottom: 8 }}>
+                      <img
+                        src={faviconUrl}
+                        alt={t('pages.infra.platform.favicon')}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          objectFit: 'contain',
+                          border: '1px solid var(--river-border-color)',
+                          borderRadius: '4px',
+                          padding: '4px',
+                        }}
+                      />
+                    </div>
+                  )}
+                  <Space>
+                    <Upload
+                      beforeUpload={handleFaviconFileSelect}
+                      fileList={faviconFileList}
+                      maxCount={1}
+                      accept="image/*"
+                      showUploadList={false}
+                    >
+                      <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadFavicon')}</Button>
+                    </Upload>
+                    {faviconUrl && (
+                      <Button icon={<DeleteOutlined />} danger onClick={handleClearFavicon}>
+                        {t('pages.infra.platform.clearFavicon')}
+                      </Button>
+                    )}
+                  </Space>
+                  <ProFormText
+                    name="favicon"
+                    placeholder={t('pages.infra.platform.faviconUrlPlaceholder')}
+                    fieldProps={{ maxLength: 500 }}
+                    style={{ marginTop: 8 }}
+                  />
+                </Space>
+              </ProForm.Item>
+              <Row gutter={[16, 0]} style={{ marginTop: 4 }}>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="tenant_auto_approve"
+                    label={t('pages.infra.platform.tenantAutoApprove')}
+                    tooltip={t('pages.infra.platform.tenantAutoApproveTooltip')}
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="float_button_enabled"
+                    label={t('pages.infra.platform.floatButtonEnabled')}
+                    tooltip={t('pages.infra.platform.floatButtonEnabledTooltip')}
+                    valuePropName="checked"
+                  >
+                    <Switch />
+                  </Form.Item>
+                </Col>
+              </Row>
+            </>
+          ) : (
+            <>
+              <Row gutter={[16, 0]}>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
+                    <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitlePlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
+                    <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
+                    <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentPlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
+                    <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentEnPlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')}>
+                    <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicensePlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')}>
+                    <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')} />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Form.Item name="login_decoration_image" label={t('pages.infra.platform.loginDecorationImage')}>
+                    <Input
+                      maxLength={500}
+                      placeholder={t('pages.infra.platform.loginDecorationImagePlaceholder')}
+                    />
+                  </Form.Item>
+                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
+                    {t('pages.infra.platform.loginDecorationRecommendedSize')}
+                  </Typography.Text>
+                  <Space direction="vertical" style={{ width: '100%', marginBottom: 8 }}>
+                    {decorationUrl && (
+                      <img
+                        src={decorationUrl}
+                        alt={t('pages.infra.platform.loginDecorationImage')}
+                        style={{
+                          width: '100%',
+                          maxWidth: 320,
+                          maxHeight: 220,
+                          objectFit: 'contain',
+                          border: '1px solid var(--river-border-color)',
+                          borderRadius: 8,
+                          background: '#fff',
+                          padding: 8,
+                        }}
+                      />
+                    )}
+                    <Space style={{ marginBottom: 8 }}>
+                      <Upload
+                        beforeUpload={handleDecorationUpload}
+                        fileList={decorationFileList}
+                        maxCount={1}
+                        accept="image/*"
+                        showUploadList={false}
+                      >
+                        <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadDecorationImage')}</Button>
+                      </Upload>
+                      {(decorationUrl || String(form.getFieldValue('login_decoration_image') || '').trim()) && (
+                        <Button icon={<DeleteOutlined />} danger onClick={handleClearDecoration}>
+                          {t('pages.infra.platform.clearDecorationImage')}
+                        </Button>
+                      )}
+                    </Space>
+                  </Space>
+                </Col>
+                <Col xs={24} sm={12}>
+                  <Form.Item
+                    name="theme_color"
+                    label={t('pages.infra.platform.themeColor')}
+                    tooltip={t('pages.infra.platform.themeColorTooltip')}
+                  >
+                    <ColorPicker
+                      showText
+                      format="hex"
+                      presets={[
+                        {
+                          label: t('pages.infra.platform.recommendedColors'),
+                          colors: ['#1890ff', '#F5222D', '#FA541C', '#FAAD14', '#13C2C2', '#52C41A', '#2F54EB', '#722ED1'],
+                        },
+                      ]}
+                      onChange={(value) => form.setFieldValue('theme_color', value.toHexString())}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={24}>
+                  <Row gutter={[16, 0]}>
+                    <Col xs={24} sm={8}>
+                      <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={8}>
+                      <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                </Col>
+              </Row>
+            </>
+          )}
         </ProForm>
       </Card>
 

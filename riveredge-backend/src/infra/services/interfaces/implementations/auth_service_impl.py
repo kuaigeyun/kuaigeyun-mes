@@ -58,3 +58,20 @@ class AuthServiceImpl(AuthServiceInterface):
         """组织注册"""
         return await self._auth_service.register_organization(data)
 
+    async def get_accessible_tenants(self, current_user: Any) -> list[dict]:
+        """获取当前账号可切换组织列表"""
+        return await self._auth_service.get_accessible_tenants(current_user)
+
+    async def switch_tenant(
+        self,
+        current_user: Any,
+        target_tenant_id: int,
+        request: Any = None,
+    ) -> Dict[str, Any]:
+        """切换组织并签发新会话"""
+        return await self._auth_service.switch_tenant(
+            current_user=current_user,
+            target_tenant_id=target_tenant_id,
+            request=request,
+        )
+

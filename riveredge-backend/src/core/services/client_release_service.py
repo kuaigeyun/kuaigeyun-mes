@@ -524,8 +524,27 @@ async def delete_release(release_id: int) -> None:
     row = await CoreClientRelease.get_or_none(id=release_id)
     if not row:
         raise NotFoundError("发布记录不存在")
+
+    # 允许删除当前生效版本：自动切换到同端最新的其它版本，避免“删除功能看似可用但实际删不掉”。
     if row.is_active:
-        raise ValidationError("无法删除当前生效的发布版本，请先激活其它版本")
+        replacement = (
+            await CoreClientRelease.filter(client_key=row.client_key, platform=row.platform)
+            .exclude(id=row.id)
+            .order_by("-version_code", "-id")
+            .first()
+        )
+        if not replacement:
+            raise ValidationError("当前生效版本是唯一版本，请先创建并激活新版本后再删除")
+
+        await CoreClientRelease.filter(
+            client_key=row.client_key,
+            platform=row.platform,
+            is_active=True,
+        ).update(is_active=False)
+        replacement.is_active = True
+        if not replacement.published_at:
+            replacement.published_at = now()
+        await replacement.save()
 
     artifact_filename = (row.artifact_filename or "").strip()
     ota_relative_path = (row.ota_relative_path or "").strip()

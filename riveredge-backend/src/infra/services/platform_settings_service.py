@@ -112,6 +112,7 @@ class PlatformSettingsService:
                 login_title_en=data.login_title_en,
                 login_content=data.login_content,
                 login_content_en=data.login_content_en,
+                login_decoration_image=data.login_decoration_image,
                 icp_license=data.icp_license,
                 icp_license_en=data.icp_license_en,
                 theme_color=data.theme_color,

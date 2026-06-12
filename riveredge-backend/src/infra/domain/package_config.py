@@ -14,28 +14,36 @@ PACKAGE_CONFIG: Dict[str, Dict[str, Any]] = {
         "name": "体验套餐",
         "max_users": 10,
         "max_storage_mb": 1024,  # 1GB
+        "max_branch_organizations": 0,
         "allow_pro_apps": False,  # 不允许使用 PRO 应用
+        "allowed_app_codes": [],
         "description": "适合快速体验系统功能，限制用户数和存储空间",
     },
     "basic": {
         "name": "基础版",
         "max_users": 50,
         "max_storage_mb": 5120,  # 5GB
+        "max_branch_organizations": 1,
         "allow_pro_apps": False,  # 不允许使用 PRO 应用
+        "allowed_app_codes": [],
         "description": "适合小型团队使用，提供基础功能",
     },
     "professional": {
         "name": "专业版",
         "max_users": 200,
         "max_storage_mb": 20480,  # 20GB
+        "max_branch_organizations": 3,
         "allow_pro_apps": True,  # 允许使用 PRO 应用
+        "allowed_app_codes": [],
         "description": "适合中型企业使用，提供完整功能和 PRO 应用支持",
     },
     "enterprise": {
         "name": "企业版",
         "max_users": 1000,
         "max_storage_mb": 102400,  # 100GB
+        "max_branch_organizations": 5,
         "allow_pro_apps": True,  # 允许使用 PRO 应用
+        "allowed_app_codes": [],
         "description": "适合大型企业使用，提供最高配置和完整功能",
     },
 }

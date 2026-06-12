@@ -707,12 +707,12 @@ const getMenuConfig = (t: (key: string) => string): PermissionMenuDataItem[] => 
     icon: getMenuIcon(t('menu.infra'), '/infra/operation'),
     children: [
       { path: '/infra/operation', name: t('menu.infra.operation'), icon: getMenuIcon(t('menu.infra.operation'), '/infra/operation') },
+      { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
       { path: '/infra/tenants', name: t('menu.infra.tenants'), icon: getMenuIcon(t('menu.infra.tenants'), '/infra/tenants') },
       { path: '/infra/packages', name: t('menu.infra.packages'), icon: getMenuIcon(t('menu.infra.packages'), '/infra/packages') },
       { path: '/infra/scripts', name: t('menu.infra.scripts'), icon: getMenuIcon(t('menu.infra.scripts'), '/infra/scripts') },
       { path: '/infra/scheduled-tasks', name: t('menu.infra.scheduled-tasks'), icon: getMenuIcon(t('menu.infra.scheduled-tasks'), '/infra/scheduled-tasks') },
       { path: '/infra/client-releases', name: t('menu.infra.client-releases'), icon: getMenuIcon(t('menu.infra.client-releases'), '/infra/client-releases') },
-      { path: '/infra/admin', name: t('menu.infra.admin'), icon: getMenuIcon(t('menu.infra.admin'), '/infra/admin') },
     ],
   },
 ];
@@ -3649,7 +3649,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 顶栏按钮 hover 状态 - 浅色模式浅色背景无hover */
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover,
         .ant-pro-layout .ant-layout-header .ant-btn:hover {
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn:hover .anticon,
@@ -3667,7 +3667,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         /* 顶栏按钮 active 状态 - 浅色模式浅色背景无active效果 */
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active,
         .ant-pro-layout .ant-layout-header .ant-btn:active {
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
         .ant-pro-layout .ant-pro-layout-header .ant-btn:active .anticon,
@@ -3942,7 +3942,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           align-items: center !important;
           justify-content: center !important;
           border-radius: 50% !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
           border: none !important;
           transition: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
@@ -3960,7 +3960,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
           border-radius: 50% !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
           transition: none !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
         }
@@ -3981,7 +3981,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-pro-layout-header .ant-badge:hover .ant-btn,
         .ant-pro-layout .ant-layout-header .ant-badge .ant-btn:hover,
         .ant-pro-layout .ant-layout-header .ant-badge:hover .ant-btn {
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           border-color: transparent !important;
           box-shadow: none !important;
@@ -4042,7 +4042,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           gap: 6px !important;
           padding: 4px 12px !important;
           border-radius: 16px !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           font-size: ${token.fontSize}px !important;
           font-weight: 500 !important;
@@ -4085,8 +4085,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           border-radius: 16px !important; /* 胶囊型圆角 */
           border: none !important;
           box-shadow: none !important;
-          background-color: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
+          background: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
           height: 32px !important;
         }
         /* 租户选择器文字颜色与字号 - 根据显示模式统一，深色背景时强制浅色，文字跟随系统 */
@@ -4170,7 +4170,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-layout .ant-layout-header .tenant-selector-wrapper .ant-select:not(.ant-select-disabled):hover .ant-select-selector {
           border: none !important;
           box-shadow: none !important;
-          background: ${isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)'} !important;
+          background: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.1)'} !important;
         }
         /* 租户选择器 hover 和 focused 状态下的文字颜色 - 根据显示模式统一 */
         .ant-pro-layout .ant-pro-layout-header .tenant-selector-wrapper .ant-select:hover .ant-select-selection-item,
@@ -5294,7 +5294,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                     alignItems: 'center',
                     justifyContent: 'center',
                     borderRadius: '16px',
-                    background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
+                    background: isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)',
                   }}
                 >
                   <Avatar
