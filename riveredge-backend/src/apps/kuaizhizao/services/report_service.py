@@ -25,6 +25,11 @@ class ReportService:
     处理各类报表分析相关的业务逻辑。
     """
 
+    @staticmethod
+    def _normalize_warehouse_display_name(warehouse_name: Optional[str]) -> str:
+        name = str(warehouse_name or "").strip()
+        return name or "未配置仓库"
+
     async def _scoped_sales_order_query(self, tenant_id: int, current_user: Optional[Any] = None):
         from apps.kuaizhizao.models.sales_order import SalesOrder
 
@@ -167,19 +172,32 @@ class ReportService:
         # 注意：这里需要 prefetch_related('material') 如果需要物料名称
         batches = await batch_query.prefetch_related('material').all()
         material_summary = {}
+        main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
         for b in batches:
+            resolved_wh = await self._resolve_material_default_warehouse_for_report(
+                tenant_id=tenant_id,
+                material=getattr(b, "material", None),
+                cache=main_wh_cache,
+            )
+            resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
+            resolved_wh_name = self._normalize_warehouse_display_name(
+                resolved_wh[1] if resolved_wh else None
+            )
+            if warehouse_id and resolved_wh_id != int(warehouse_id):
+                continue
             mid = b.material_id
-            if mid not in material_summary:
-                material_summary[mid] = {
+            key = (mid, resolved_wh_name)
+            if key not in material_summary:
+                material_summary[key] = {
                     "material_code": b.material.main_code if b.material else "Unknown",
                     "material_name": b.material.name if b.material else "Unknown",
                     "closing_qty": 0.0,
                     "inbound_qty": 0.0, # 简化处理，实际需要从记录表中统计
                     "outbound_qty": 0.0,
                     "opening_qty": 0.0,
-                    "warehouse_name": "主仓" # 示例
+                    "warehouse_name": resolved_wh_name,
                 }
-            material_summary[mid]["closing_qty"] += float(b.quantity or 0)
+            material_summary[key]["closing_qty"] += float(b.quantity or 0)
             
         items = list(material_summary.values())
 
@@ -1192,7 +1210,9 @@ class ReportService:
                     cache=main_wh_cache,
                 )
                 resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
-                resolved_wh_name = resolved_wh[1] if resolved_wh else "主仓"
+                resolved_wh_name = self._normalize_warehouse_display_name(
+                    resolved_wh[1] if resolved_wh else None
+                )
                 if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
                     continue
                 expiry_iso = b.expiry_date.isoformat() if b.expiry_date else None
@@ -1226,7 +1246,7 @@ class ReportService:
                 "supplier_batch_no": None,
                 "quantity": qty,
                 "status": status,
-                "warehouse_name": l.warehouse_name,
+                "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None)),
             })
         return rows
 
@@ -1376,7 +1396,8 @@ class ReportService:
         )
         grouped: Dict[tuple, Dict[str, Any]] = {}
         for it in rows:
-            key = (it.get("material_id"), it.get("warehouse_name") or "主仓")
+            warehouse_name = self._normalize_warehouse_display_name(it.get("warehouse_name"))
+            key = (it.get("material_id"), warehouse_name)
             if key not in grouped:
                 grouped[key] = {
                     "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1]))) % 10000),
@@ -1385,7 +1406,7 @@ class ReportService:
                     "material_name": it.get("material_name"),
                     "quantity": 0.0,
                     "status": "无库存",
-                    "warehouse_name": it.get("warehouse_name") or "主仓",
+                    "warehouse_name": warehouse_name,
                 }
             grouped[key]["quantity"] += float(it.get("quantity") or 0)
         balances = list(grouped.values())
@@ -1510,7 +1531,9 @@ class ReportService:
                 cache=main_wh_cache,
             )
             resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
-            resolved_wh_name = resolved_wh[1] if resolved_wh else "主仓"
+            resolved_wh_name = self._normalize_warehouse_display_name(
+                resolved_wh[1] if resolved_wh else None
+            )
             if main_warehouse_filter_id is not None and resolved_wh_id != main_warehouse_filter_id:
                 continue
             status = b.status
@@ -1543,13 +1566,14 @@ class ReportService:
                 "supplier_batch_no": None,
                 "quantity": qty, 
                 "status": "在库" if qty > 0 else "无库存", 
-                "warehouse_name": l.warehouse_name
+                "warehouse_name": self._normalize_warehouse_display_name(getattr(l, "warehouse_name", None))
             })
         if aggregate_by_material:
             # 即时库存口径：按物料（可按仓库）汇总，不按批次拆分
             grouped: Dict[tuple, Dict[str, Any]] = {}
             for it in items:
-                key = (it.get("material_id"), it.get("warehouse_name") or "主仓")
+                warehouse_name = self._normalize_warehouse_display_name(it.get("warehouse_name"))
+                key = (it.get("material_id"), warehouse_name)
                 if key not in grouped:
                     grouped[key] = {
                         "id": int(it.get("material_id") or 0) * 100000 + (abs(hash(str(key[1]))) % 10000),
@@ -1558,7 +1582,7 @@ class ReportService:
                         "material_name": it.get("material_name"),
                         "quantity": 0.0,
                         "status": "无库存",
-                        "warehouse_name": it.get("warehouse_name") or "主仓",
+                        "warehouse_name": warehouse_name,
                     }
                 grouped[key]["quantity"] += float(it.get("quantity") or 0)
             agg_items = []
@@ -2060,16 +2084,28 @@ class ReportService:
         from apps.master_data.models.material_batch import MaterialBatch
         # 由于当前没有独立的 InvStock，使用 MaterialBatch 按物料汇总
         batches = await MaterialBatch.filter(tenant_id=tenant_id).prefetch_related("material").all()
+        main_wh_cache: Dict[int, Optional[Tuple[int, str]]] = {}
         summary = {}
         for b in batches:
+            resolved_wh = await self._resolve_material_default_warehouse_for_report(
+                tenant_id=tenant_id,
+                material=getattr(b, "material", None),
+                cache=main_wh_cache,
+            )
+            resolved_wh_id = int(resolved_wh[0]) if resolved_wh else None
+            if warehouse_id and resolved_wh_id != int(warehouse_id):
+                continue
+            resolved_wh_name = self._normalize_warehouse_display_name(
+                resolved_wh[1] if resolved_wh else None
+            )
             m_name = b.material.name if b.material else "未知"
             m_code = b.material.main_code if b.material else "N/A"
-            key = (m_code, m_name)
+            key = (m_code, m_name, resolved_wh_name)
             if key not in summary:
                 summary[key] = {
                     "material_code": m_code,
                     "material_name": m_name,
-                    "warehouse_name": "主仓",
+                    "warehouse_name": resolved_wh_name,
                     "opening_qty": 0.0,
                     "inbound_qty": 0.0,
                     "outbound_qty": 0.0,

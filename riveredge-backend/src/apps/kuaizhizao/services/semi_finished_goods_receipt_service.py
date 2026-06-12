@@ -27,6 +27,7 @@ from apps.kuaizhizao.schemas.warehouse import (
 )
 from apps.kuaizhizao.services.warehouse_service import (
     _get_warehouse_policy_flags,
+    _resolve_warehouse_name_by_id,
     _validate_location_if_required,
 )
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -222,7 +223,11 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 if update_dict:

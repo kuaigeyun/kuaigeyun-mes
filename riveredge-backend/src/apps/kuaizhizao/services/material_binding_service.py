@@ -93,8 +93,19 @@ class MaterialBindingService(AppBaseService[MaterialBinding]):
             # 获取仓库信息（如果提供了仓库ID）
             warehouse_name = None
             if binding_data.warehouse_id:
-                # TODO: 从仓库服务获取仓库名称
-                warehouse_name = f"仓库{binding_data.warehouse_id}"  # 临时处理
+                from apps.master_data.models.warehouse import Warehouse
+
+                warehouse = await Warehouse.get_or_none(
+                    tenant_id=tenant_id,
+                    id=binding_data.warehouse_id,
+                    is_active=True,
+                    deleted_at__isnull=True,
+                )
+                if not warehouse:
+                    raise ValidationError(f"仓库不存在或未启用: {binding_data.warehouse_id}")
+                warehouse_name = str(getattr(warehouse, "name", "") or "").strip()
+                if not warehouse_name:
+                    raise ValidationError(f"仓库名称未配置: {binding_data.warehouse_id}")
 
             # 创建物料绑定记录
             material_binding = await MaterialBinding.create(

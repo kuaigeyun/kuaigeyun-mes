@@ -193,6 +193,70 @@ def _to_base_quantity(
     return qty * factor
 
 
+async def _resolve_warehouse_name_by_id(
+    tenant_id: int,
+    warehouse_id: Any,
+    preferred_name: Optional[str] = None,
+) -> str:
+    """按仓库ID解析仓库名称；若传入名称则优先使用。"""
+    preferred = str(preferred_name or "").strip()
+    if preferred:
+        return preferred
+    if warehouse_id is None or str(warehouse_id).strip() == "":
+        raise ValidationError("缺少仓库ID，无法解析仓库名称")
+    try:
+        wid = int(warehouse_id)
+    except (TypeError, ValueError):
+        raise ValidationError(f"仓库ID无效: {warehouse_id}")
+    from apps.master_data.models.warehouse import Warehouse
+
+    wh = await Warehouse.get_or_none(
+        tenant_id=tenant_id,
+        id=wid,
+        is_active=True,
+        deleted_at__isnull=True,
+    )
+    if not wh:
+        raise ValidationError(f"仓库不存在或未启用: {wid}")
+    name = str(getattr(wh, "name", "") or "").strip()
+    if not name:
+        raise ValidationError(f"仓库名称未配置: {wid}")
+    return name
+
+
+async def _resolve_warehouse_identity(
+    tenant_id: int,
+    warehouse_id: Optional[Any] = None,
+    warehouse_name: Optional[str] = None,
+) -> Tuple[int, str]:
+    """统一解析仓库ID与名称（支持传ID或名称）。"""
+    if warehouse_id is not None and str(warehouse_id).strip() != "":
+        try:
+            wid = int(warehouse_id)
+        except (TypeError, ValueError):
+            raise ValidationError(f"仓库ID无效: {warehouse_id}")
+        wname = await _resolve_warehouse_name_by_id(tenant_id, wid, warehouse_name)
+        return wid, wname
+
+    name = str(warehouse_name or "").strip()
+    if not name:
+        raise ValidationError("必须指定仓库ID或仓库名称")
+
+    from apps.master_data.models.warehouse import Warehouse
+
+    wh = await Warehouse.filter(
+        tenant_id=tenant_id,
+        is_active=True,
+        deleted_at__isnull=True,
+    ).filter(Q(name=name) | Q(code=name)).first()
+    if not wh:
+        raise ValidationError(f"仓库不存在或未启用: {name}")
+    resolved_name = str(getattr(wh, "name", "") or "").strip()
+    if not resolved_name:
+        raise ValidationError(f"仓库名称未配置: {wh.id}")
+    return int(wh.id), resolved_name
+
+
 async def _validate_batch_serial_policy(
     tenant_id: int,
     material: Any,
@@ -1101,7 +1165,11 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 
@@ -1114,7 +1182,11 @@ class ProductionReturnService(AppBaseService[ProductionReturn]):
                         item_update = {}
                         if item_data.warehouse_id:
                             item_update["warehouse_id"] = item_data.warehouse_id
-                            item_update["warehouse_name"] = item_data.warehouse_name or f"仓库{item_data.warehouse_id}"
+                            item_update["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                                tenant_id,
+                                item_data.warehouse_id,
+                                item_data.warehouse_name,
+                            )
                         if item_data.location_id:
                             item_update["location_id"] = item_data.location_id
                             item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
@@ -1477,7 +1549,11 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 
@@ -2573,8 +2649,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         
         # 如果没有指定仓库名称，尝试从仓库服务获取
         if not warehouse_name:
-            # TODO: 从仓库服务获取仓库名称
-            warehouse_name = f"仓库{warehouse_id}"
+            warehouse_name = await _resolve_warehouse_name_by_id(
+                tenant_id,
+                warehouse_id,
+                warehouse_name,
+            )
         
         # 准备出库单明细
         delivery_items = []
@@ -2708,8 +2787,11 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
         
         # 如果没有指定仓库名称，尝试从仓库服务获取
         if not warehouse_name:
-            # TODO: 从仓库服务获取仓库名称
-            warehouse_name = f"仓库{warehouse_id}"
+            warehouse_name = await _resolve_warehouse_name_by_id(
+                tenant_id,
+                warehouse_id,
+                warehouse_name,
+            )
         
         # 准备出库单明细
         delivery_items = []
@@ -3395,14 +3477,20 @@ class SalesDeliveryService(AppBaseService[SalesDelivery]):
                     failure_count += 1
                     continue
                 
+                delivery_wh_id, delivery_wh_name = await _resolve_warehouse_identity(
+                    tenant_id=tenant_id,
+                    warehouse_id=delivery_data.get("warehouse_id"),
+                    warehouse_name=delivery_data.get("warehouse_name"),
+                )
+
                 # 创建出库单
                 delivery_create_data = SalesDeliveryCreate(
                     sales_order_id=sales_order.id,
                     sales_order_code=sales_order.order_code,
                     customer_id=sales_order.customer_id,
                     customer_name=sales_order.customer_name,
-                    warehouse_id=1,  # TODO: 从仓库名称查找仓库ID
-                    warehouse_name=delivery_data.get('warehouse_name', '默认仓库'),
+                    warehouse_id=delivery_wh_id,
+                    warehouse_name=delivery_wh_name,
                     delivery_time=delivery_data.get('delivery_time') or datetime.now(),
                     items=delivery_items,
                     shipping_method=delivery_data.get('shipping_method'),
@@ -3929,7 +4017,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 
@@ -3943,7 +4035,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         item_update = {}
                         if item_data.warehouse_id:
                             item_update["warehouse_id"] = item_data.warehouse_id
-                            item_update["warehouse_name"] = item_data.warehouse_name or f"仓库{item_data.warehouse_id}"
+                            item_update["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                                tenant_id,
+                                item_data.warehouse_id,
+                                item_data.warehouse_name,
+                            )
                         if item_data.location_id:
                             item_update["location_id"] = item_data.location_id
                             item_update["location_code"] = item_data.location_code or f"库位{item_data.location_id}"
@@ -4484,14 +4580,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     failure_count += 1
                     continue
                 
+                receipt_wh_id, receipt_wh_name = await _resolve_warehouse_identity(
+                    tenant_id=tenant_id,
+                    warehouse_id=receipt_data.get("warehouse_id"),
+                    warehouse_name=receipt_data.get("warehouse_name"),
+                )
+
                 # 创建入库单
                 receipt_create_data = PurchaseReceiptCreate(
                     purchase_order_id=purchase_order.id,
                     purchase_order_code=purchase_order.order_code,
                     supplier_id=purchase_order.supplier_id,
                     supplier_name=purchase_order.supplier_name,
-                    warehouse_id=1,  # TODO: 从仓库名称查找仓库ID
-                    warehouse_name=receipt_data.get('warehouse_name', '默认仓库'),
+                    warehouse_id=receipt_wh_id,
+                    warehouse_name=receipt_wh_name,
                     receipt_time=receipt_data.get('receipt_time') or datetime.now(),
                     items=receipt_items,
                     notes=receipt_data.get('notes')
@@ -4818,7 +4920,7 @@ class SalesReturnService(AppBaseService[SalesReturn]):
             customer_id=sales_order.customer_id,
             customer_name=sales_order.customer_name,
             warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name or f"仓库{warehouse_id}",
+            warehouse_name=await _resolve_warehouse_name_by_id(tenant_id, warehouse_id, warehouse_name),
             status="待退货",
             return_reason="订单退货",
             notes=f"从销售订单 {sales_order.order_code} 下推生成",
@@ -4902,7 +5004,11 @@ class SalesReturnService(AppBaseService[SalesReturn]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 
@@ -5421,7 +5527,7 @@ class PurchaseReturnService(AppBaseService[PurchaseReturn]):
             supplier_id=purchase_order.supplier_id,
             supplier_name=purchase_order.supplier_name,
             warehouse_id=warehouse_id,
-            warehouse_name=warehouse_name or f"仓库{warehouse_id}",
+            warehouse_name=await _resolve_warehouse_name_by_id(tenant_id, warehouse_id, warehouse_name),
             status="待退货",
             return_reason="订单退货",
             notes=f"从采购订单 {purchase_order.order_code} 下推生成",
@@ -6051,7 +6157,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                 update_dict = {}
                 if confirmation_data.warehouse_id:
                     update_dict["warehouse_id"] = confirmation_data.warehouse_id
-                    update_dict["warehouse_name"] = confirmation_data.warehouse_name or f"仓库{confirmation_data.warehouse_id}"
+                    update_dict["warehouse_name"] = await _resolve_warehouse_name_by_id(
+                        tenant_id,
+                        confirmation_data.warehouse_id,
+                        confirmation_data.warehouse_name,
+                    )
                 if confirmation_data.notes:
                     update_dict["notes"] = confirmation_data.notes
                 

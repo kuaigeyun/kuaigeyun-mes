@@ -9,7 +9,7 @@ Date: 2026-02-22
 
 import logging
 from collections import defaultdict
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 from decimal import Decimal
 from tortoise.transactions import in_transaction
@@ -30,10 +30,36 @@ from apps.kuaizhizao.schemas.shipment_notice import (
     ShipmentNoticeItemCreate,
     ShipmentNoticeItemResponse,
 )
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 from apps.kuaizhizao.services.inspection_policy_service import assert_oqc_for_outbound_lines
 from infra.services.business_config_service import BusinessConfigService
 from apps.kuaizhizao.utils.inventory_helper import get_material_available_quantity
+
+
+async def _resolve_warehouse_name_by_id(
+    tenant_id: int,
+    warehouse_id: int,
+    preferred_name: Optional[str] = None,
+) -> str:
+    preferred = str(preferred_name or "").strip()
+    if preferred:
+        return preferred
+    if warehouse_id is None:
+        raise ValidationError("缺少仓库ID，无法解析仓库名称")
+    from apps.master_data.models.warehouse import Warehouse
+
+    wh = await Warehouse.get_or_none(
+        tenant_id=tenant_id,
+        id=int(warehouse_id),
+        is_active=True,
+        deleted_at__isnull=True,
+    )
+    if not wh:
+        raise ValidationError(f"仓库不存在或未启用: {warehouse_id}")
+    name = str(getattr(wh, "name", "") or "").strip()
+    if not name:
+        raise ValidationError(f"仓库名称未配置: {warehouse_id}")
+    return name
 
 
 class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
@@ -412,6 +438,16 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
                 notes=getattr(item, "notes", None)
             ))
             
+        notice_warehouse_id = getattr(notice, "warehouse_id", None)
+        if notice_warehouse_id is None:
+            raise ValidationError("发货通知单缺少仓库，无法生成销售出库单")
+        notice_warehouse_id = int(notice_warehouse_id)
+        notice_warehouse_name = await _resolve_warehouse_name_by_id(
+            tenant_id=tenant_id,
+            warehouse_id=notice_warehouse_id,
+            preferred_name=getattr(notice, "warehouse_name", None),
+        )
+
         delivery_data = SalesDeliveryCreate(
             sales_order_id=notice.sales_order_id,
             sales_order_code=notice.sales_order_code,
@@ -422,8 +458,8 @@ class ShipmentNoticeService(AppBaseService[ShipmentNotice]):
             customer_name=notice.customer_name,
             customer_contact=getattr(notice, "customer_contact", None),
             customer_phone=getattr(notice, "customer_phone", None),
-            warehouse_id=notice.warehouse_id or 1,
-            warehouse_name=notice.warehouse_name or "默认仓库",
+            warehouse_id=notice_warehouse_id,
+            warehouse_name=notice_warehouse_name,
             delivery_time=notice.planned_ship_date,
             shipping_address=getattr(notice, "shipping_address", None),
             notes=getattr(notice, "notes", None),

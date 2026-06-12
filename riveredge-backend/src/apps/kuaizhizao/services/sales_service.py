@@ -1227,6 +1227,42 @@ class SalesOrderService(AppBaseService[SalesOrder]):
         
         if not delivery_items:
             raise BusinessLogicError("没有可出库的明细")
+
+        # 统一按物料默认仓库解析出库仓，禁止写死默认仓库
+        from apps.master_data.models.material import Material
+        from apps.master_data.services.material_service import (
+            resolve_primary_default_warehouse_from_material,
+        )
+
+        material_wh_cache: Dict[int, Optional[tuple[int, str]]] = {}
+        resolved_wh_pairs: List[tuple[int, str]] = []
+        for row in delivery_items:
+            material_id = int(row.material_id or 0)
+            if material_id <= 0:
+                raise ValidationError("销售出库明细缺少物料ID，无法解析出库仓库")
+            if material_id not in material_wh_cache:
+                material = await Material.get_or_none(
+                    tenant_id=tenant_id,
+                    id=material_id,
+                    deleted_at__isnull=True,
+                )
+                if not material:
+                    raise ValidationError(f"物料不存在: {material_id}")
+                material_wh_cache[material_id] = await resolve_primary_default_warehouse_from_material(
+                    tenant_id=tenant_id,
+                    material=material,
+                )
+            resolved = material_wh_cache[material_id]
+            if not resolved:
+                raise ValidationError(f"物料 {row.material_code or material_id} 未配置默认仓库，无法生成销售出库单")
+            resolved_wh_pairs.append((int(resolved[0]), str(resolved[1])))
+
+        unique_warehouse_ids = {wid for wid, _ in resolved_wh_pairs}
+        if len(unique_warehouse_ids) != 1:
+            raise ValidationError(
+                "当前出库明细对应多个默认仓库，请先拆分单据后再生成销售出库单"
+            )
+        resolved_wh_id, resolved_wh_name = resolved_wh_pairs[0]
         
         # 创建出库单
         delivery_data = SalesDeliveryCreate(
@@ -1234,8 +1270,8 @@ class SalesOrderService(AppBaseService[SalesOrder]):
             sales_order_code=order.order_code,
             customer_id=order.customer_id,
             customer_name=order.customer_name or '',
-            warehouse_id=1,  # TODO: 从订单或配置中获取默认仓库
-            warehouse_name='默认仓库',  # TODO: 从订单或配置中获取默认仓库名称
+            warehouse_id=resolved_wh_id,
+            warehouse_name=resolved_wh_name,
             items=delivery_items
         )
         

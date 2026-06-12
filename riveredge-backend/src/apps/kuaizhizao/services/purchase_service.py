@@ -965,6 +965,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         wh = await Warehouse.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True).order_by("id").first()
         if not wh:
             raise BusinessLogicError("未配置可用仓库，无法生成采购入库单。请先在主数据维护仓库。")
+        wh_name = str(getattr(wh, "name", None) or getattr(wh, "code", None) or "").strip()
+        if not wh_name:
+            raise BusinessLogicError(f"仓库名称未配置: {wh.id}")
 
         receipt_data = PurchaseReceiptCreate(
             purchase_order_id=int(order.id),
@@ -972,7 +975,7 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             supplier_id=int(order.supplier_id),
             supplier_name=str(order.supplier_name or ""),
             warehouse_id=int(wh.id),
-            warehouse_name=str(wh.name or wh.code or f"仓库{wh.id}"),
+            warehouse_name=wh_name,
             status="草稿",
             review_status="待审核",
             notes=f"由采购订单 {order.order_code} 下推生成（草稿）",

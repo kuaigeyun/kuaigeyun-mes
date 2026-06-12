@@ -24,7 +24,7 @@ class SparePartService:
         spare_part_id: int,
         quantity: int,
         operation_type: str,
-        warehouse_location: str = "默认仓库",
+        warehouse_location: Optional[str] = None,
         rel_type: Optional[str] = None,
         rel_id: Optional[int] = None,
         operator_id: Optional[int] = None,
@@ -37,6 +37,9 @@ class SparePartService:
         spare_part = await SparePart.filter(id=spare_part_id, tenant_id=tenant_id).first()
         if not spare_part:
             raise NotFoundError(f"备件不存在: {spare_part_id}")
+        warehouse_location = str(warehouse_location or "").strip()
+        if not warehouse_location:
+            raise ValidationError("仓库位置不能为空，请传入实际仓库/库位名称")
 
         inventory, created = await SparePartInventory.get_or_create(
             tenant_id=tenant_id,
