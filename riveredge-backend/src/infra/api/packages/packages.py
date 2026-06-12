@@ -23,30 +23,6 @@ from typing import Dict, Any
 router = APIRouter(prefix="/packages", tags=["Platform · Packages"])
 
 
-@router.get("/config", response_model=Dict[str, Any])
-async def get_all_package_configs_endpoint():
-    """
-    获取所有套餐配置（公开接口）
-    
-    返回所有套餐类型的配置信息，包括用户数限制、存储空间限制等。
-    套餐配置是静态配置信息，不需要认证。
-    
-    Returns:
-        Dict[str, Any]: 所有套餐配置字典
-    """
-    from loguru import logger
-    from fastapi import Request
-    logger.info("📦 [get_all_package_configs_endpoint] 开始处理请求（无需认证）")
-    try:
-        package_service = PackageService()
-        result = await package_service.get_all_effective_package_configs()
-        logger.info(f"✅ [get_all_package_configs_endpoint] 成功返回套餐配置，套餐数量: {len(result)}")
-        return result
-    except Exception as e:
-        logger.error(f"❌ [get_all_package_configs_endpoint] 处理失败: {e}")
-        raise
-
-
 @router.get("/{plan}/config", response_model=Dict[str, Any])
 async def get_package_config_by_plan(
     plan: TenantPlan,
