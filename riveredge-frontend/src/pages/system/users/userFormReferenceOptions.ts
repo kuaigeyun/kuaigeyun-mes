@@ -32,7 +32,6 @@ function buildDeptOptions(items: DepartmentTreeItem[], level = 0): UserFormSelec
   return options;
 }
 
-let coreCache: UserFormCoreReferenceOptions | null = null;
 let coreInflight: Promise<UserFormCoreReferenceOptions> | null = null;
 
 async function fetchCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions> {
@@ -62,34 +61,19 @@ async function fetchCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions
   };
 }
 
-/** 列表页预加载 / 弹窗复用：同会话内只拉一次部门树+职位+角色 */
-export async function getUserFormCoreReferenceOptions(options?: {
-  force?: boolean;
-}): Promise<UserFormCoreReferenceOptions> {
-  if (!options?.force && coreCache) {
-    return coreCache;
-  }
-  if (!options?.force && coreInflight) {
+/** 每次调用均请求最新部门树、职位、角色（仅合并同一时刻的并发请求） */
+export async function getUserFormCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions> {
+  if (coreInflight) {
     return coreInflight;
   }
 
-  coreInflight = fetchCoreReferenceOptions()
-    .then((result) => {
-      coreCache = result;
-      return result;
-    })
-    .finally(() => {
-      coreInflight = null;
-    });
+  coreInflight = fetchCoreReferenceOptions().finally(() => {
+    coreInflight = null;
+  });
 
   return coreInflight;
 }
 
-export function primeUserFormCoreReferenceOptions(): void {
-  void getUserFormCoreReferenceOptions().catch(() => {});
-}
-
-const partnerCache: Partial<Record<'supplier' | 'customer', UserFormSelectOption[]>> = {};
 const partnerInflight: Partial<Record<'supplier' | 'customer', Promise<UserFormSelectOption[]>>> = {};
 
 async function fetchPartnerOptions(dimension: 'supplier' | 'customer'): Promise<UserFormSelectOption[]> {
@@ -109,24 +93,16 @@ async function fetchPartnerOptions(dimension: 'supplier' | 'customer'): Promise<
     .filter((x) => !!x.value);
 }
 
-/** 仅在外部角色需要供应商/客户绑定时按需加载 */
+/** 外部角色绑定供应商/客户时按需加载（每次调用均请求最新数据） */
 export async function getUserFormPartnerOptions(
   dimension: 'supplier' | 'customer',
 ): Promise<UserFormSelectOption[]> {
-  const cached = partnerCache[dimension];
-  if (cached) return cached;
-
   const inflight = partnerInflight[dimension];
   if (inflight) return inflight;
 
-  const promise = fetchPartnerOptions(dimension)
-    .then((options) => {
-      partnerCache[dimension] = options;
-      return options;
-    })
-    .finally(() => {
-      delete partnerInflight[dimension];
-    });
+  const promise = fetchPartnerOptions(dimension).finally(() => {
+    delete partnerInflight[dimension];
+  });
 
   partnerInflight[dimension] = promise;
   return promise;

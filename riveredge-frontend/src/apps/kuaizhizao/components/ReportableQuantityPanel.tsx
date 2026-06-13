@@ -52,7 +52,7 @@ const ReportableQuantityPanel: React.FC<ReportableQuantityPanelProps> = ({
         )
         .reduce((sum: number, c: any) => sum + (Number(c.delivered_quantity) || 0), 0);
     },
-    staleTime: 30_000,
+    staleTime: 0,
   });
 
   const statTitleStyle: React.CSSProperties = {

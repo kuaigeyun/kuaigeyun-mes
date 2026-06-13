@@ -15,7 +15,7 @@ import type { WorkOrderListRow } from './workOrderListTreeTypes'
 
 export const WORK_ORDER_LIST_TANSTACK_PREFIX = ['kuaizhizao', 'work-orders', 'list'] as const
 
-export const WORK_ORDER_LIST_STALE_MS = 5 * 60 * 1000
+export const WORK_ORDER_LIST_STALE_MS = 0
 
 /** 从列表 rowKey 解析工单组 ID（组父行：work_order_group-123 或负数 id） */
 export function parseWorkOrderGroupIdFromListRowKey(key: React.Key): number | null {

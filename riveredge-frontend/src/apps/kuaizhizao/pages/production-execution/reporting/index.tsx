@@ -218,7 +218,7 @@ const ReportingPage: React.FC = () => {
   const { data: stats } = useQuery({
     queryKey: ['reportingStatistics'],
     queryFn: getReportingStatistics,
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const statCards: StatCard[] = useMemo(() => {
@@ -288,7 +288,7 @@ const ReportingPage: React.FC = () => {
   const { data: executionConfig } = useQuery({
     queryKey: ['workOrderExecutionConfig'],
     queryFn: () => workOrderApi.getExecutionConfig(),
-    staleTime: 60_000,
+    staleTime: 0,
   });
 
   const currentUser = useGlobalStore((s) => s.currentUser);

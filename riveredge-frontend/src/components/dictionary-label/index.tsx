@@ -51,9 +51,7 @@ function resolveLabelSync(
  *
  * 根据字典代码和值，显示对应的字典项标签（Label）。
  *
- * 缓存策略：与 `getDictionaryOptions/Sync` 共用 `dataDictionaryCache` 模块缓存。
- * 同一会话下任意页面/组件加载过该字典后，本组件首屏即可同步取到标签，
- * 不再出现「先显示原始 code → 再替换为标签」的闪烁。
+ * 缓存策略：每次 value/dictionaryCode 变化均请求最新字典项。
  */
 export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
   dictionaryCode,

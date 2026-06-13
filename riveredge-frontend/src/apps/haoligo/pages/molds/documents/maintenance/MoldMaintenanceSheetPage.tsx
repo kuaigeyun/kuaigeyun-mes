@@ -199,7 +199,7 @@ export function MoldMaintenanceSheetPage({
   const { data: businessConfigRes } = useQuery({
     queryKey: ['businessConfig'],
     queryFn: getBusinessConfig,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const maintSubmittedNotifyRule = useMemo(
     () =>

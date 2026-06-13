@@ -164,7 +164,7 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
     },
     enabled: shouldFetchUser,
     retry: false,
-    staleTime: 30_000,
+    staleTime: 0,
     refetchOnWindowFocus: true,
   });
 

@@ -87,9 +87,14 @@ const PositionListPage: React.FC = () => {
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
   useEffect(() => {
-    getDepartmentTree()
-      .then((res) => setDeptTreeData(toTreeData(res.items)))
-      .catch(() => setDeptTreeData([]));
+    const refreshDeptTree = () => {
+      getDepartmentTree()
+        .then((res) => setDeptTreeData(toTreeData(res.items)))
+        .catch(() => setDeptTreeData([]));
+    };
+    refreshDeptTree();
+    window.addEventListener('focus', refreshDeptTree);
+    return () => window.removeEventListener('focus', refreshDeptTree);
   }, []);
 
   const handleCreate = () => {
@@ -286,15 +291,19 @@ const PositionListPage: React.FC = () => {
           actionRef={actionRef}
           columns={columns}
           request={async (params, _sort, _filter, searchFormValues) => {
-            const response = await getPositionList({
-              page: params.current || 1,
-              page_size: params.pageSize || 20,
-              keyword: searchFormValues?.keyword,
-              name: searchFormValues?.name,
-              code: searchFormValues?.code,
-              department_uuid: searchFormValues?.department_uuid,
-              is_active: searchFormValues?.is_active,
-            });
+            const [response, deptRes] = await Promise.all([
+              getPositionList({
+                page: params.current || 1,
+                page_size: params.pageSize || 20,
+                keyword: searchFormValues?.keyword,
+                name: searchFormValues?.name,
+                code: searchFormValues?.code,
+                department_uuid: searchFormValues?.department_uuid,
+                is_active: searchFormValues?.is_active,
+              }),
+              getDepartmentTree(),
+            ]);
+            setDeptTreeData(toTreeData(deptRes.items));
             return { data: response.items, success: true, total: response.total };
           }}
           rowKey="uuid"

@@ -3694,19 +3694,12 @@ const SalesOrdersPage: React.FC = () => {
             };
 
             try {
-              const cache = lastOrdersCacheRef.current;
-              let orders: SalesOrder[];
-              let total: number;
-
-              if (cache?.paramsKey === paramsKey && cache.orders) {
-                orders = cache.orders;
-                total = cache.total;
-              } else {
-                const response = await listSalesOrders(apiParams);
-                orders = Array.isArray(response) ? response : (response as any).data || [];
-                total = (response as any).total ?? orders.length;
-                lastOrdersCacheRef.current = { orders, total, paramsKey };
-              }
+              const response = await listSalesOrders(apiParams);
+              const orders: SalesOrder[] = Array.isArray(response)
+                ? response
+                : (response as any).data || [];
+              const total: number = (response as any).total ?? orders.length;
+              lastOrdersCacheRef.current = { orders, total, paramsKey };
               const mode = dataViewModeRef.current;
               if (mode === 'order') {
                 const map = new Map<string, number>();

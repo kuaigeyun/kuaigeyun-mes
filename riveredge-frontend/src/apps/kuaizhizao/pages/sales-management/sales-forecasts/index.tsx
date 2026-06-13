@@ -1709,18 +1709,10 @@ export default function SalesForecastsPage() {
             const paramsKey = JSON.stringify(apiParams);
 
             try {
-              const cache = lastForecastsCacheRef.current;
-              let forecasts: SalesForecast[];
-              let total: number;
-              if (cache?.paramsKey === paramsKey && Array.isArray(cache.forecasts)) {
-                forecasts = cache.forecasts;
-                total = cache.total;
-              } else {
-                const res = await listSalesForecasts(apiParams);
-                forecasts = Array.isArray(res.data) ? res.data : [];
-                total = res.total ?? forecasts.length;
-                lastForecastsCacheRef.current = { forecasts, total, paramsKey };
-              }
+              const res = await listSalesForecasts(apiParams);
+              const forecasts: SalesForecast[] = Array.isArray(res.data) ? res.data : [];
+              const total: number = res.total ?? forecasts.length;
+              lastForecastsCacheRef.current = { forecasts, total, paramsKey };
 
               const mode = dataViewModeRef.current;
               if (mode === 'order') {

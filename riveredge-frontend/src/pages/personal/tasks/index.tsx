@@ -464,7 +464,7 @@ const UserTasksPage: React.FC = () => {
           }}
           tanstackQuery={{
             queryKeyPrefix: ['user-personal-tasks'],
-            staleTime: 5000, // 5秒缓存，兼顾实时性与稳定性
+            staleTime: 0,
             prefetchNextPage: true,
           }}
           rowKey="uuid"

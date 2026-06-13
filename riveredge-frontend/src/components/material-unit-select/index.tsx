@@ -21,44 +21,45 @@ interface MaterialUnitSelectProps {
   noStyle?: boolean;
 }
 
-// 全局简单缓存，避免同一页面内多次并发请求同一个物料。
-// 实际生产中可考虑更完善的缓存机制。
-export const materialCache: Record<string, Material> = {};
+// 同一瞬间并发去重，不跨渲染/操作复用物料档案。
+const materialInflight = new Map<string, Promise<Material | null>>();
 
 export { getMaterialUnitDisplayMapShared } from '../../utils/materialUnitDisplay';
 
 /**
- * 拉取单条物料并写入缓存（与组件内逻辑一致，供批量预取复用）
+ * 拉取单条物料（每次请求最新；同 id 并发去重）
  */
 async function fetchMaterialForUnitSelectCache(materialId: number | string): Promise<Material | null> {
   const cacheKey = String(materialId);
-  if (materialCache[cacheKey]) {
-    return materialCache[cacheKey];
-  }
+  const inflight = materialInflight.get(cacheKey);
+  if (inflight) return inflight;
 
-  const idStr = String(materialId);
-  let resp: Material | null = null;
+  const promise = (async () => {
+    const idStr = String(materialId);
+    let resp: Material | null = null;
 
-  if (idStr.includes('-') && idStr.length > 20) {
-    resp = await materialApi.get(idStr);
-  } else {
-    const listRes = await materialApi.list({ limit: 10, keyword: idStr });
-    const items = Array.isArray(listRes?.items) ? listRes.items : [];
-    resp = items.find((m) => String(m.id) === idStr) || null;
+    if (idStr.includes('-') && idStr.length > 20) {
+      resp = await materialApi.get(idStr);
+    } else {
+      const listRes = await materialApi.list({ limit: 10, keyword: idStr });
+      const items = Array.isArray(listRes?.items) ? listRes.items : [];
+      resp = items.find((m) => String(m.id) === idStr) || null;
 
-    if (!resp) {
-      try {
-        resp = await materialApi.get(idStr);
-      } catch {
-        resp = null;
+      if (!resp) {
+        try {
+          resp = await materialApi.get(idStr);
+        } catch {
+          resp = null;
+        }
       }
     }
-  }
+    return resp;
+  })().finally(() => {
+    materialInflight.delete(cacheKey);
+  });
 
-  if (resp) {
-    materialCache[cacheKey] = resp;
-  }
-  return resp;
+  materialInflight.set(cacheKey, promise);
+  return promise;
 }
 
 /**
@@ -67,7 +68,7 @@ async function fetchMaterialForUnitSelectCache(materialId: number | string): Pro
  */
 export async function prefetchMaterialsForUnitSelect(
   materialIds: Array<number | string | null | undefined>
-): Promise<void> {
+): Promise<Map<string, Material>> {
   await getMaterialUnitDisplayMapShared();
 
   const unique = [
@@ -77,18 +78,20 @@ export async function prefetchMaterialsForUnitSelect(
         .map((x) => String(x))
     ),
   ];
-  if (unique.length === 0) return;
+  const out = new Map<string, Material>();
+  if (unique.length === 0) return out;
 
   await Promise.all(
     unique.map(async (key) => {
-      if (materialCache[key]) return;
       try {
-        await fetchMaterialForUnitSelectCache(key);
+        const material = await fetchMaterialForUnitSelectCache(key);
+        if (material) out.set(key, material);
       } catch {
         /* 单条失败不影响其余行 */
       }
     })
   );
+  return out;
 }
 
 /**
@@ -127,13 +130,6 @@ export const MaterialUnitSelect: React.FC<MaterialUnitSelectProps> = ({
   useEffect(() => {
     if (!materialId) {
       setMaterial(null);
-      return;
-    }
-
-    const cacheKey = String(materialId);
-
-    if (materialCache[cacheKey]) {
-      setMaterial(materialCache[cacheKey]);
       return;
     }
 

@@ -218,8 +218,6 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
     departmentTreeRef,
     searchApplicantUsers,
   } = useApplicantUserIdField(formRef);
-  /** 新建时复用下拉数据，减少重复请求（编辑带回显 preset 会跳过缓存）；含外协单位列表 */
-  const combinedFormOptionsValidUntilRef = useRef(0);
   const supplierOptionsRef = useRef<SupplierOpt[]>([]);
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -244,7 +242,7 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
   const { data: businessConfigRes } = useQuery({
     queryKey: ['businessConfig'],
     queryFn: getBusinessConfig,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const outsSubmittedNotifyRule = useMemo(
     () =>
@@ -298,19 +296,9 @@ const MoldOutsourceMaintenancePage: React.FC = () => {
 
   const preloadFormOptions = useCallback(
     async (applicantPresets?: UniUserIdSelectPreset[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const hasExtras = Boolean(applicantPresets?.length);
-      const warm =
-        !hasExtras &&
-        now < combinedFormOptionsValidUntilRef.current &&
-        departmentTreeRef.current.length > 0 &&
-        supplierOptionsRef.current.length > 0;
-      if (warm) return;
       await Promise.all([preloadApplicantAndDepartments(applicantPresets), loadActiveSuppliers()]);
-      combinedFormOptionsValidUntilRef.current = hasExtras ? 0 : Date.now() + ttlMs;
     },
-    [departmentTreeRef, loadActiveSuppliers, preloadApplicantAndDepartments],
+    [loadActiveSuppliers, preloadApplicantAndDepartments],
   );
 
   const loadMoldsForPicker = useCallback(async (keyword?: string) => {

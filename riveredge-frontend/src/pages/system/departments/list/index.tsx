@@ -26,7 +26,6 @@ import {
   Space,
   Table,
   Tag,
-  Tooltip,
 } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined, EyeOutlined } from '@ant-design/icons';
 import { flushDrawerOpen, ListPageTemplate, DRAWER_CONFIG } from '../../../../components/layout-templates';
@@ -114,6 +113,12 @@ const DepartmentListPage: React.FC = () => {
   const [bindingColumnOptions, setBindingColumnOptions] = useState<{ value: string; label: string }[]>([]);
   const [bindingColumnsLoading, setBindingColumnsLoading] = useState(false);
   const [syncIntroModalOpen, setSyncIntroModalOpen] = useState(false);
+
+  useEffect(() => {
+    const refresh = () => actionRef.current?.reload();
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
+  }, []);
 
   const getAllKeys = (data: DepartmentTreeItem[]): string[] => {
     let keys: string[] = [];
@@ -438,19 +443,6 @@ const DepartmentListPage: React.FC = () => {
     }
   };
 
-  const checkCanDelete = (record: Department): { can: boolean; reason?: string } => {
-    if ((record.children_count || 0) > 0) {
-      return { can: false, reason: t('field.department.checkHasChildren') };
-    }
-    if ((record.position_count || 0) > 0) {
-      return { can: false, reason: t('field.department.checkHasPositions') };
-    }
-    if ((record.user_count || 0) > 0) {
-      return { can: false, reason: t('field.department.checkHasUsers') };
-    }
-    return { can: true };
-  };
-
   const isDepartmentNotFoundError = (error: unknown): boolean => {
     const msg = String((error as { message?: string })?.message ?? '');
     const status = (error as { status?: number })?.status;
@@ -473,41 +465,10 @@ const DepartmentListPage: React.FC = () => {
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
-    const cannotDeleteNames: string[] = [];
-    const canDeleteKeys: string[] = [];
-
-    keys.forEach((key) => {
-      const dept = allDepts.find((d) => d.uuid === key);
-      if (dept) {
-        const check = checkCanDelete(dept);
-        if (!check.can) {
-          cannotDeleteNames.push(`${dept.name} (${check.reason})`);
-        } else {
-          canDeleteKeys.push(dept.uuid);
-        }
-      }
-    });
-
-    if (cannotDeleteNames.length > 0) {
-      modal.error({
-        title: t('field.department.batchDeleteBlocked'),
-        content: (
-          <div>
-            {t('field.department.batchDeleteBlockedList')}
-            <ul style={{ marginTop: 8 }}>
-              {cannotDeleteNames.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-            {t('field.department.batchDeleteBlockedHint')}
-          </div>
-        ),
-      });
-      return;
-    }
+    if (keys.length === 0) return;
 
     try {
-      await Promise.all(canDeleteKeys.map((key) => deleteDepartment(key)));
+      await Promise.all(keys.map((key) => deleteDepartment(String(key))));
       messageApi.success(t('pages.system.deleteSuccess'));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
@@ -633,10 +594,9 @@ const DepartmentListPage: React.FC = () => {
     {
       title: t('common.actions'),
       valueType: 'option',
-      width: 220,
+      width: 300,
       fixed: 'right',
       render: (_, record) => {
-        const canDelete = checkCanDelete(record);
         const actions: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="view" onClick={() => handleView(record)}>
             {t('field.department.view')}
@@ -660,21 +620,15 @@ const DepartmentListPage: React.FC = () => {
             onConfirm={() => handleDelete(record)}
             okText={t('common.confirm')}
             cancelText={t('common.cancel')}
-            disabled={!canDelete.can}
           >
-            <Tooltip title={!canDelete.can ? canDelete.reason : undefined}>
-              <span>
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<DeleteOutlined />}
-                  disabled={!canDelete.can}
-                >
-                  {t('field.department.delete')}
-                </Button>
-              </span>
-            </Tooltip>
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+            >
+              {t('field.department.delete')}
+            </Button>
           </Popconfirm>,
         ];
         return actions;
@@ -686,6 +640,7 @@ const DepartmentListPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<Department>
         columnPersistenceId="pages.system.departments.list"
+        permissionResource="system:department"
         viewTypes={['table', 'help']}
         actionRef={actionRef}
         headerTitle={t('field.department.listTitle')}

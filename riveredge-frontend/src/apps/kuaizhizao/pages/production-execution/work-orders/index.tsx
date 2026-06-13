@@ -9,7 +9,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useEffect, useLayoutEffect, useMemo, useCallback, lazy, Suspense } from 'react'
+import React, { useRef, useState, useEffect, useMemo, useCallback, lazy, Suspense } from 'react'
 import { DatePicker } from 'antd'
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -101,7 +101,6 @@ import { useConfigStore } from '../../../../../stores/configStore'
 import {
   fetchWorkOrderListForTable,
   prefetchDefaultWorkOrderList,
-  hydrateDefaultWorkOrderListPageFromSession,
   resolveDissolvableWorkOrderGroupIdsFromRowKeys,
   resolveMergeableWorkOrderIdsFromRowKeys,
   resolveWorkOrderGroupIdFromListRow,
@@ -203,7 +202,7 @@ import { UniUserSelect } from '../../../../../components/uni-user-select'
 
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
 const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
-const WORK_ORDER_ROW_EXPAND_STALE_MS = 60_000
+const WORK_ORDER_ROW_EXPAND_STALE_MS = 0
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
 import { batchImport } from '../../../../../utils/batchOperations'
 import {
@@ -1178,24 +1177,16 @@ const WorkOrdersPage: React.FC = () => {
   const { data: statistics } = useQuery({
     queryKey: ['workOrderStatistics'],
     queryFn: getWorkOrderStatistics,
-    staleTime: 30_000, // 30 秒内不重复请求统计接口
+    staleTime: 0, // 统计与列表均实时拉取
   })
   const { data: executionConfig } = useQuery({
     queryKey: ['workOrderExecutionConfig'],
     queryFn: () => workOrderApi.getExecutionConfig(),
-    staleTime: 60_000,
+    staleTime: 0,
   })
 
   useEffect(() => {
     prefetchDefaultWorkOrderList(queryClient, workOrderListDefaultPageSize)
-  }, [queryClient, workOrderListDefaultPageSize])
-
-  useLayoutEffect(() => {
-    hydrateDefaultWorkOrderListPageFromSession(
-      queryClient,
-      workOrderListDefaultPageSize,
-      WORK_ORDER_LIST_STALE_MS
-    )
   }, [queryClient, workOrderListDefaultPageSize])
 
   const workOrderRowByKeyRef = useRef<Map<string, WorkOrder>>(new Map())
@@ -5916,7 +5907,7 @@ const WorkOrdersPage: React.FC = () => {
             staleTime: WORK_ORDER_LIST_STALE_MS,
             gcTime: 15 * 60 * 1000,
             prefetchNextPage: true,
-            staleWhileRevalidate: true,
+            staleWhileRevalidate: false,
           }}
           request={handleWorkOrderTableRequest}
           postData={syncWorkOrderListRowIndexFromTableData}

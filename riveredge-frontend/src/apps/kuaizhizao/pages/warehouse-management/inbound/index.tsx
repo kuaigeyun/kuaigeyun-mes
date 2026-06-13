@@ -27,7 +27,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
-import { MaterialUnitSelect, prefetchMaterialsForUnitSelect, materialCache } from '../../../../../components/material-unit-select';
+import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -886,7 +886,7 @@ const InboundPage: React.FC = () => {
         fetchDetail(),
       ]);
       const whList = Array.isArray(whRes) ? whRes : (whRes as any)?.data ?? (whRes as any)?.items ?? whRes ?? [];
-      await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
+      const materialById = await prefetchMaterialsForUnitSelect((detailData.items || []).map((it: any) => it?.material_id));
       setPurchaseConfirmWarehouseOptions(
         (Array.isArray(whList) ? whList : []).map((w: any) => ({
           label: `${w.code || ''} ${w.name || ''}`.trim() || String(w.id),
@@ -916,7 +916,7 @@ const InboundPage: React.FC = () => {
           it.warehouse_id != null && Number(it.warehouse_id) > 0 ? Number(it.warehouse_id) : undefined;
         
         if (rowWh == null && it.material_id) {
-          const material = materialCache[String(it.material_id)];
+          const material = materialById.get(String(it.material_id));
           const defWhs = material?.defaults?.defaultWarehouses;
           if (defWhs && defWhs.length > 0) {
             const sortedWhs = [...defWhs].sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999));

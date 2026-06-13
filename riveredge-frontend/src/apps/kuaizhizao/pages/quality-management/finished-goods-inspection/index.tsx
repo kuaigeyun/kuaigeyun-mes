@@ -243,7 +243,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
   const { data: statsData } = useQuery({
     queryKey: ['finished-goods-inspection-statistics'],
     queryFn: () => qualityApi.finishedGoodsInspection.statistics(),
-    staleTime: 30 * 1000,
+    staleTime: 0,
   });
   const stats = {
     pendingCount: statsData?.pending_count ?? 0,

@@ -26,7 +26,7 @@ const SuspendedModalFloatingButton: React.FC = () => {
   const { data: settings } = useQuery({
     queryKey: ['platformSettingsPublic'],
     queryFn: getPlatformSettingsPublic,
-    staleTime: 60 * 1000,
+    staleTime: 0,
   });
   const iterationButtonEnabled = settings?.float_button_enabled !== false;
 

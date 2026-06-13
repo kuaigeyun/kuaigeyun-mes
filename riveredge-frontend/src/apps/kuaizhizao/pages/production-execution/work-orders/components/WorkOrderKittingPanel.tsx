@@ -13,7 +13,7 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
     queryKey: ['workOrderKittingAnalysis', workOrderId],
     queryFn: () => workOrderApi.getKittingAnalysis(workOrderId!.toString()),
     enabled: !!workOrderId,
-    staleTime: 10_000,
+    staleTime: 0,
   })
 
   const [calling, setCalling] = useState<Record<number, boolean>>({})

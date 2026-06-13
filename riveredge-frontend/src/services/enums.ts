@@ -19,22 +19,19 @@ export interface DocumentStatusConfig {
   };
 }
 
-let documentStatusCache: DocumentStatusConfig | null = null;
 let documentStatusInflight: Promise<DocumentStatusConfig> | null = null;
+let lastDocumentStatusConfig: DocumentStatusConfig | null = null;
 
 /**
- * 获取单据状态枚举配置（带缓存 + in-flight 单例，防并发重复请求）
+ * 获取单据状态枚举配置（每次请求最新；并发去重）
  */
 export async function getDocumentStatusConfig(): Promise<DocumentStatusConfig> {
-  if (documentStatusCache) {
-    return documentStatusCache;
-  }
   if (documentStatusInflight) {
     return documentStatusInflight;
   }
   documentStatusInflight = apiRequest<DocumentStatusConfig>('/core/enums/document-status')
     .then((data) => {
-      documentStatusCache = data;
+      lastDocumentStatusConfig = data;
       return data;
     })
     .finally(() => {
@@ -44,15 +41,18 @@ export async function getDocumentStatusConfig(): Promise<DocumentStatusConfig> {
 }
 
 /**
- * 初始化单据状态缓存（在 App 启动时调用）
+ * 启动时预热（仍走实时 API）
  */
 export async function initDocumentStatusCache(): Promise<void> {
   await getDocumentStatusConfig();
 }
 
-/**
- * 获取当前缓存的单据状态配置（同步，可能为 null）
- */
+/** 同步读取最近一次 API 结果（不触发请求；请先 init 或 getDocumentStatusConfig） */
 export function getDocumentStatusCache(): DocumentStatusConfig | null {
-  return documentStatusCache;
+  return lastDocumentStatusConfig;
+}
+
+export function invalidateDocumentStatusCache(): void {
+  documentStatusInflight = null;
+  lastDocumentStatusConfig = null;
 }

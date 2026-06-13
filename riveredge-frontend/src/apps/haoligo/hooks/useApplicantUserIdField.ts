@@ -16,7 +16,6 @@ import {
 export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance | null>) {
   const applicantDeptUuidByUserIdRef = useRef<Map<number, string>>(new Map());
   const departmentTreeRef = useRef<DepartmentTreeItem[]>([]);
-  const tenantFormOptionsValidUntilRef = useRef(0);
 
   const [applicantPresetUsers, setApplicantPresetUsers] = useState<UniUserIdSelectPreset[]>([]);
   const [leafDeptOptions, setLeafDeptOptions] = useState<{ label: string; value: string }[]>([]);
@@ -90,10 +89,6 @@ export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance
 
   const preloadTenantFormOptions = useCallback(
     async (extras?: UniUserIdSelectPreset[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const warm = !extras && now < tenantFormOptionsValidUntilRef.current && departmentTreeRef.current.length > 0;
-      if (warm) return;
       const presets = mergeApplicantPresets(extras);
       const deptMap = new Map(applicantDeptUuidByUserIdRef.current);
       for (const ex of presets) {
@@ -102,7 +97,6 @@ export function useApplicantUserIdField(formRef: React.RefObject<ProFormInstance
       applicantDeptUuidByUserIdRef.current = deptMap;
       setApplicantPresetUsers(presets);
       await loadLeafDepartments();
-      tenantFormOptionsValidUntilRef.current = extras ? 0 : Date.now() + ttlMs;
     },
     [loadLeafDepartments, mergeApplicantPresets],
   );

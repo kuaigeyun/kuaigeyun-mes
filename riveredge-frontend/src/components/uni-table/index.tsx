@@ -1067,13 +1067,12 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   toolBarButtonSize?: 'large' | 'middle' | 'small'
   /**
-   * 用 TanStack Query 缓存列表：相同分页+筛选在 staleTime 内即显缓存；工具栏刷新会先 invalidate 再拉数。
-   * 不改变 ProTable 外观，仅替换底层请求去重/缓存（与 patch 后 debounceTime=0 配合）。
+   * 用 TanStack Query 管理列表请求：相同分页+筛选在并发去重；默认实时拉数（staleTime=0）。
+   * 不改变 ProTable 外观，仅替换底层请求去重（与 patch 后 debounceTime=0 配合）。
    *
    * **默认启用**：当传入稳定的 `columnPersistenceId` 时，组件会自动启用：
    * - `queryKeyPrefix = [columnPersistenceId]`
-   * - `staleTime = 60_000`，`gcTime = 300_000`
-   * - `prefetchNextPage = true`，`staleWhileRevalidate = true`
+   * - `staleTime = 0`，`gcTime = 300_000`，`staleWhileRevalidate = false`
    *
    * 若需关闭：传 `tanstackQuery={{ enabled: false }}`。如需自定义则传完整对象覆盖。
    */
@@ -1289,10 +1288,9 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   onTableDataChangeRef.current = onTableDataChange
 
   /**
-   * 自动启用 TanStack Query 缓存：
-   * - 全量列表页已带稳定 `columnPersistenceId`，可直接作为缓存命名空间。
-   * - 默认开启 staleWhileRevalidate（即点即显） + prefetchNextPage（翻页瞬开），
-   *   并设置 60s 内视为新鲜、5min 后回收。
+   * 自动启用 TanStack Query（实时列表）：
+   * - 全量列表页已带稳定 `columnPersistenceId`，可直接作为 query 命名空间。
+   * - 默认 staleTime=0，禁止 staleWhileRevalidate 展示过期行。
    * - 显式传入 `tanstackQuery` 时与默认值合并（`queryKeyPrefix` 缺省时取 `columnPersistenceId`）。
    * - 显式传入 `tanstackQuery={{ enabled: false }}` 可彻底关闭。
    */
@@ -1305,10 +1303,10 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (!queryKeyPrefix || queryKeyPrefix.length === 0) return undefined
     return {
       queryKeyPrefix,
-      staleTime: tanstackQuery?.staleTime ?? 60_000,
+      staleTime: tanstackQuery?.staleTime ?? 0,
       gcTime: tanstackQuery?.gcTime ?? 300_000,
       prefetchNextPage: tanstackQuery?.prefetchNextPage ?? true,
-      staleWhileRevalidate: tanstackQuery?.staleWhileRevalidate ?? true,
+      staleWhileRevalidate: tanstackQuery?.staleWhileRevalidate ?? false,
     }
   }, [tanstackQuery, columnPersistenceId])
 
@@ -1912,7 +1910,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       if (tq?.queryKeyPrefix && tq.queryKeyPrefix.length > 0) {
         const pageSize = reqPageSize
         const current = params.current ?? 1
-        const staleTimeMs = tq.staleTime ?? 60_000
+        const staleTimeMs = tq.staleTime ?? 0
         const gcTimeMs = tq.gcTime ?? 300_000
         const paramsKey = stableJsonForQueryKey(params)
         const sortKey = stableJsonForQueryKey(sort)

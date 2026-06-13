@@ -102,8 +102,6 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   } = useApplicantUserIdField(formRef);
   const workshopMapRef = useRef<Map<number, { code: string; name: string }>>(new Map());
   const [upkeepSetOptions, setUpkeepSetOptions] = useState<{ value: number; label: string }[]>([]);
-  /** 下拉缓存 TTL：部门树来自 hook；车间独立加载 */
-  const combinedFormOptionsValidUntilRef = useRef(0);
   const [equipmentWorkshopLabel, setEquipmentWorkshopLabel] = useState('');
 
   const [modalVisible, setModalVisible] = useState(false);
@@ -118,7 +116,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   const { data: businessConfigRes } = useQuery({
     queryKey: ['businessConfig'],
     queryFn: getBusinessConfig,
-    staleTime: 60_000,
+    staleTime: 0,
   });
   const upkeepSheetNotifyRule = useMemo(
     () =>
@@ -169,23 +167,13 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
 
   const preloadFormOptions = useCallback(
     async (applicantPresets?: UniUserIdSelectPreset[]) => {
-      const ttlMs = 90_000;
-      const now = Date.now();
-      const hasExtras = Boolean(applicantPresets?.length);
-      const warm =
-        !hasExtras &&
-        now < combinedFormOptionsValidUntilRef.current &&
-        departmentTreeRef.current.length > 0 &&
-        workshopMapRef.current.size > 0;
-      if (warm) return;
       await Promise.all([
         preloadApplicantAndDepartments(applicantPresets),
         loadWorkshopMap(),
         loadUpkeepSetOptions(),
       ]);
-      combinedFormOptionsValidUntilRef.current = hasExtras ? 0 : Date.now() + ttlMs;
     },
-    [departmentTreeRef, loadUpkeepSetOptions, loadWorkshopMap, preloadApplicantAndDepartments],
+    [loadUpkeepSetOptions, loadWorkshopMap, preloadApplicantAndDepartments],
   );
 
   const formatWorkshopLabel = useCallback((workshopId: number) => {

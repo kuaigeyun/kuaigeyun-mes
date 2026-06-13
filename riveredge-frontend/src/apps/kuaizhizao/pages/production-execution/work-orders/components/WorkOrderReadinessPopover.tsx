@@ -146,7 +146,7 @@ const WorkOrderMaterialCallModal: React.FC<{
   const { data: kittingData } = useQuery({
     queryKey: ['workOrderKittingAnalysis', workOrderId],
     queryFn: () => workOrderApi.getKittingAnalysis(String(workOrderId)),
-    staleTime: 30_000,
+    staleTime: 0,
     enabled: open,
   })
 
@@ -159,7 +159,7 @@ const WorkOrderMaterialCallModal: React.FC<{
         .sort((a, b) => a.sort_order - b.sort_order)
         .map((i) => ({ label: i.label, value: i.value }))
     },
-    staleTime: 60_000,
+    staleTime: 0,
     retry: false,
     enabled: open,
   })
@@ -182,7 +182,7 @@ const WorkOrderMaterialCallModal: React.FC<{
         return FALLBACK_CALL_REASON_OPTIONS
       }
     },
-    staleTime: 60_000,
+    staleTime: 0,
     retry: false,
     enabled: open,
   })
@@ -433,7 +433,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   } = useQuery({
     queryKey: ['workOrderKittingAnalysis', workOrderId],
     queryFn: () => workOrderApi.getKittingAnalysis(String(workOrderId)),
-    staleTime: 30_000,
+    staleTime: 0,
   })
 
   const { data: calls, isLoading: callsLoading } = useQuery({
@@ -444,7 +444,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         limit: 50,
         skip: 0,
       }),
-    staleTime: 30_000,
+    staleTime: 0,
   })
 
   const loading = kittingLoading || callsLoading

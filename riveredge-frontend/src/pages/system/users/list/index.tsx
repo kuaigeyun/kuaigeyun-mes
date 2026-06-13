@@ -28,7 +28,7 @@ import {
 } from '../../../../services/user';
 import { QRCodeGenerator } from '../../../../components/qrcode';
 import { qrcodeApi } from '../../../../services/qrcode';
-import { getUserFormCoreReferenceOptions, primeUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
+import { getUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
 import { rowActionKind, rowActionResetPassword, rowActionToneDestructive } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
 
@@ -141,8 +141,15 @@ const UserListPage: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    primeUserFormCoreReferenceOptions();
     loadReferenceOptions();
+  }, [loadReferenceOptions]);
+
+  useEffect(() => {
+    const refresh = () => {
+      void loadReferenceOptions();
+    };
+    window.addEventListener('focus', refresh);
+    return () => window.removeEventListener('focus', refresh);
   }, [loadReferenceOptions]);
 
   const handleCreate = () => {
@@ -724,6 +731,7 @@ const UserListPage: React.FC = () => {
         }}
         onSuccess={() => {
           actionRef.current?.reload();
+          void loadReferenceOptions();
         }}
       />
 
