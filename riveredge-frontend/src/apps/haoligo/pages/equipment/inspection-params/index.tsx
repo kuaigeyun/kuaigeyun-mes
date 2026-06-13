@@ -59,6 +59,7 @@ const InspectionParamsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>(null);
+  const existingCodesRef = useRef<Set<string>>(new Set());
 
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
@@ -192,11 +193,20 @@ const InspectionParamsPage: React.FC = () => {
     [t],
   );
 
+  const syncExistingCodes = useCallback((rows: InspectionParamRow[]) => {
+    existingCodesRef.current = new Set(rows.map((r) => r.code.trim()).filter(Boolean));
+  }, []);
+
   const handleCreate = () => {
     setIsEdit(false);
     setEditId(null);
     setFormInitialValues({ value_type: 'numeric' });
     setModalVisible(true);
+    void listInspectionParams()
+      .then(syncExistingCodes)
+      .catch(() => {
+        existingCodesRef.current = new Set();
+      });
   };
 
   useNewShortcut(handleCreate);
@@ -571,6 +581,7 @@ const InspectionParamsPage: React.FC = () => {
             const pageSize = params.pageSize ?? 20;
             try {
               const all = await listInspectionParams();
+              syncExistingCodes(all);
               const codeQ = String(searchFormValues?.code ?? '').trim().toLowerCase();
               const nameQ = String(searchFormValues?.name ?? '').trim().toLowerCase();
               const vtQ = searchFormValues?.value_type as InspectionValueTypeKey | undefined;
@@ -620,6 +631,9 @@ const InspectionParamsPage: React.FC = () => {
               numeric_max: undefined,
             });
           }
+          if ('code' in changed && !isEdit) {
+            void formRef.current?.validateFields(['code']).catch(() => undefined);
+          }
         }}
       >
         <ProFormText
@@ -628,7 +642,20 @@ const InspectionParamsPage: React.FC = () => {
           placeholder={t('app.haoligo.equipment.inspectionParams.formCodePh')}
           disabled={isEdit}
           colProps={{ span: FORM_LAYOUT.FULL_COL_SPAN }}
-          rules={[{ required: true, message: t('app.haoligo.equipment.inspectionParams.formCodeReq') }]}
+          rules={[
+            { required: true, message: t('app.haoligo.equipment.inspectionParams.formCodeReq') },
+            {
+              validateTrigger: ['onChange', 'onBlur'],
+              validator: async (_, value) => {
+                if (isEdit) return;
+                const code = String(value ?? '').trim();
+                if (!code) return;
+                if (existingCodesRef.current.has(code)) {
+                  throw new Error(t('app.haoligo.equipment.inspectionParams.formCodeDuplicate', { code }));
+                }
+              },
+            },
+          ]}
         />
         <ProFormText
           name="name"

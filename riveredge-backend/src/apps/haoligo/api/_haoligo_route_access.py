@@ -12,6 +12,42 @@ from core.api.deps.deps import get_current_tenant
 from core.config.permission_contract import build_permission_code
 
 
+def haoligo_shared_workshops_read_permission_codes() -> list[str]:
+    """车间列表为各模块共用的只读同步数据，满足任一业务读权限即可。"""
+    modules = (
+        "workspace-dashboard",
+        "equipment-ledger",
+        "equipment-patrol-routes",
+        "equipment-documents-upkeep-sheet",
+        "molds-warehouse",
+        "patrol-daily-form",
+        "master-data-factory-workshops",
+    )
+    return [build_permission_code("haoligo", mod, "read") for mod in modules]
+
+
+def require_haoligo_shared_workshops_read(*, check_abac: bool = True):
+    """车间同步列表：多模块 read 任一即可（非 URL 推断）。"""
+
+    async def dependency(
+        request: Request,
+        auth: AuthContext = Depends(get_auth_context),
+        tenant_id: int = Depends(get_current_tenant),
+    ) -> AuthContext:
+        await ensure_permission_codes(
+            auth,
+            tenant_id,
+            request,
+            haoligo_shared_workshops_read_permission_codes(),
+            require_all=False,
+            check_abac=check_abac,
+        )
+        auth.tenant_id = tenant_id
+        return auth
+
+    return dependency
+
+
 def resolve_haoligo_module_action(method: str, path: str) -> str:
     """HaoliGO 子路径 action；与 manifest STANDARD_ACTIONS 一一对应，禁止 approve/reject 合并为 audit。"""
     p = (path or "").lower()

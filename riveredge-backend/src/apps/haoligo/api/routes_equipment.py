@@ -38,14 +38,36 @@ from apps.haoligo.models.equipment import (
 from apps.haoligo.models.equipment_status_log import HaoligoEquipmentOperationalStatusLog
 from apps.haoligo.models.equipment_upkeep_param import HaoligoEquipmentUpkeepParamSet
 from apps.haoligo.services.equipment_operational_status_since import operational_status_since_by_equipment
-from apps.haoligo.api._equipment_route_access import require_equipment_master_path_access
+from apps.haoligo.api._haoligo_route_access import (
+    require_haoligo_module_access,
+    require_haoligo_shared_workshops_read,
+)
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.models.user import User
 
 router = APIRouter(
     prefix="/equipment",
     tags=["App · HaoliGO · 设备"],
-    dependencies=[Depends(require_equipment_master_path_access())],
+)
+
+_workshops_router = APIRouter()
+_manufacturers_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-manufacturers"))],
+)
+_inspection_params_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-inspection-params"))],
+)
+_inspection_param_sets_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-inspection-param-sets"))],
+)
+_categories_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-categories"))],
+)
+_equipment_ledger_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-ledger"))],
+)
+_patrol_routes_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-patrol-routes"))],
 )
 
 
@@ -494,7 +516,7 @@ async def _not_found():
 # --- workshops ---
 
 
-@router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表（主数据启用车间，同步至好力侧）")
+@_workshops_router.get("/workshops", response_model=List[WorkshopOut], summary="车间列表（主数据启用车间，同步至好力侧）", dependencies=[Depends(require_haoligo_shared_workshops_read())])
 async def list_workshops(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -503,7 +525,7 @@ async def list_workshops(
     return [WorkshopOut.model_validate(r) for r in rows]
 
 
-@router.post("/workshops", response_model=WorkshopOut, summary="创建车间（已停用）")
+@_workshops_router.post("/workshops", response_model=WorkshopOut, summary="创建车间（已停用）", dependencies=[Depends(require_haoligo_module_access("master-data-factory-workshops"))])
 async def create_workshop(
     body: WorkshopCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -515,7 +537,7 @@ async def create_workshop(
     )
 
 
-@router.patch("/workshops/{row_id}", response_model=WorkshopOut, summary="更新车间（已停用）")
+@_workshops_router.patch("/workshops/{row_id}", response_model=WorkshopOut, summary="更新车间（已停用）", dependencies=[Depends(require_haoligo_module_access("master-data-factory-workshops"))])
 async def update_workshop(
     row_id: int,
     body: WorkshopUpdate,
@@ -528,7 +550,7 @@ async def update_workshop(
     )
 
 
-@router.delete("/workshops/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除车间（已停用）")
+@_workshops_router.delete("/workshops/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除车间（已停用）", dependencies=[Depends(require_haoligo_module_access("master-data-factory-workshops"))])
 async def delete_workshop(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -543,7 +565,7 @@ async def delete_workshop(
 # --- manufacturers ---
 
 
-@router.get("/manufacturers", response_model=List[ManufacturerOut], summary="制造商列表")
+@_manufacturers_router.get("/manufacturers", response_model=List[ManufacturerOut], summary="制造商列表")
 async def list_manufacturers(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -552,7 +574,7 @@ async def list_manufacturers(
     return [ManufacturerOut.model_validate(r) for r in rows]
 
 
-@router.post("/manufacturers", response_model=ManufacturerOut, summary="创建制造商")
+@_manufacturers_router.post("/manufacturers", response_model=ManufacturerOut, summary="创建制造商")
 async def create_manufacturer(
     body: ManufacturerCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -562,7 +584,7 @@ async def create_manufacturer(
     return ManufacturerOut.model_validate(row)
 
 
-@router.patch("/manufacturers/{row_id}", response_model=ManufacturerOut, summary="更新制造商")
+@_manufacturers_router.patch("/manufacturers/{row_id}", response_model=ManufacturerOut, summary="更新制造商")
 async def update_manufacturer(
     row_id: int,
     body: ManufacturerUpdate,
@@ -578,7 +600,7 @@ async def update_manufacturer(
     return ManufacturerOut.model_validate(row)
 
 
-@router.delete("/manufacturers/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除制造商")
+@_manufacturers_router.delete("/manufacturers/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除制造商")
 async def delete_manufacturer(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -594,7 +616,7 @@ async def delete_manufacturer(
 # --- inspection params ---
 
 
-@router.get("/inspection-params", response_model=List[InspectionParamOut], summary="点检参数列表")
+@_inspection_params_router.get("/inspection-params", response_model=List[InspectionParamOut], summary="点检参数列表")
 async def list_inspection_params(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -603,7 +625,7 @@ async def list_inspection_params(
     return [InspectionParamOut.model_validate(r) for r in rows]
 
 
-@router.post("/inspection-params", response_model=InspectionParamOut, summary="创建点检参数")
+@_inspection_params_router.post("/inspection-params", response_model=InspectionParamOut, summary="创建点检参数")
 async def create_inspection_param(
     body: InspectionParamCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -615,23 +637,31 @@ async def create_inspection_param(
         numeric_min, numeric_max = normalize_numeric_range_bounds(vt, body.numeric_min, body.numeric_max)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+    code = body.code.strip()
+    if not code:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="点检编号不能为空")
+    if await tenant_alive(HaoligoInspectionParam, tenant_id).filter(code=code).exists():
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="点检编号已存在")
     level1_category = await _resolve_inspection_param_level1_category(tenant_id, body.level1_category)
-    row = await HaoligoInspectionParam.create(
-        tenant_id=tenant_id,
-        code=body.code.strip(),
-        name=body.name.strip(),
-        level1_category=level1_category,
-        requirement=(body.requirement or "").strip() or None,
-        unit=body.unit,
-        value_type=vt,
-        default_value=default_value,
-        numeric_min=numeric_min,
-        numeric_max=numeric_max,
-    )
+    try:
+        row = await HaoligoInspectionParam.create(
+            tenant_id=tenant_id,
+            code=code,
+            name=body.name.strip(),
+            level1_category=level1_category,
+            requirement=(body.requirement or "").strip() or None,
+            unit=body.unit,
+            value_type=vt,
+            default_value=default_value,
+            numeric_min=numeric_min,
+            numeric_max=numeric_max,
+        )
+    except IntegrityError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="点检编号已存在") from exc
     return InspectionParamOut.model_validate(row)
 
 
-@router.patch("/inspection-params/{row_id}", response_model=InspectionParamOut, summary="更新点检参数")
+@_inspection_params_router.patch("/inspection-params/{row_id}", response_model=InspectionParamOut, summary="更新点检参数")
 async def update_inspection_param(
     row_id: int,
     body: InspectionParamUpdate,
@@ -681,7 +711,7 @@ async def update_inspection_param(
     return InspectionParamOut.model_validate(row)
 
 
-@router.delete("/inspection-params/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数")
+@_inspection_params_router.delete("/inspection-params/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数")
 async def delete_inspection_param(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -700,7 +730,7 @@ async def delete_inspection_param(
     await row.save()
 
 
-@router.post(
+@_inspection_params_router.post(
     "/inspection-params/batch-level1-category",
     response_model=InspectionParamBatchLevel1Out,
     summary="批量修改点检项一级分类",
@@ -726,7 +756,7 @@ async def batch_update_inspection_param_level1(
 # --- inspection param sets ---
 
 
-@router.get("/inspection-param-sets", response_model=List[InspectionParamSetOut], summary="点检参数集列表")
+@_inspection_param_sets_router.get("/inspection-param-sets", response_model=List[InspectionParamSetOut], summary="点检参数集列表")
 async def list_inspection_param_sets(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -735,7 +765,7 @@ async def list_inspection_param_sets(
     return [InspectionParamSetOut.model_validate(r) for r in rows]
 
 
-@router.post("/inspection-param-sets", response_model=InspectionParamSetOut, summary="创建点检参数集")
+@_inspection_param_sets_router.post("/inspection-param-sets", response_model=InspectionParamSetOut, summary="创建点检参数集")
 async def create_inspection_param_set(
     body: InspectionParamSetCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -747,7 +777,7 @@ async def create_inspection_param_set(
     return InspectionParamSetOut.model_validate(row)
 
 
-@router.post(
+@_inspection_param_sets_router.post(
     "/inspection-param-sets/with-items",
     response_model=InspectionParamSetOut,
     summary="创建点检参数集及明细（事务）",
@@ -796,7 +826,7 @@ async def create_inspection_param_set_with_items(
     return InspectionParamSetOut.model_validate(row)
 
 
-@router.post(
+@_inspection_param_sets_router.post(
     "/inspection-param-sets/import",
     response_model=InspectionParamSetImportResult,
     summary="导入点检方案（自动创建缺失点检项）",
@@ -927,7 +957,7 @@ async def import_inspection_param_sets(
     )
 
 
-@router.patch("/inspection-param-sets/{row_id}", response_model=InspectionParamSetOut, summary="更新点检参数集")
+@_inspection_param_sets_router.patch("/inspection-param-sets/{row_id}", response_model=InspectionParamSetOut, summary="更新点检参数集")
 async def update_inspection_param_set(
     row_id: int,
     body: InspectionParamSetUpdate,
@@ -943,7 +973,7 @@ async def update_inspection_param_set(
     return InspectionParamSetOut.model_validate(row)
 
 
-@router.delete("/inspection-param-sets/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数集")
+@_inspection_param_sets_router.delete("/inspection-param-sets/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除点检参数集")
 async def delete_inspection_param_set(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -974,7 +1004,7 @@ async def delete_inspection_param_set(
     await row.save()
 
 
-@router.get(
+@_inspection_param_sets_router.get(
     "/inspection-param-sets/{set_id}/items",
     response_model=List[SetItemOut],
     summary="参数集明细",
@@ -1004,7 +1034,7 @@ async def list_set_items(
     ]
 
 
-@router.post(
+@_inspection_param_sets_router.post(
     "/inspection-param-sets/{set_id}/items",
     response_model=SetItemOut,
     summary="参数集添加明细",
@@ -1039,7 +1069,7 @@ async def add_set_item(
     )
 
 
-@router.patch(
+@_inspection_param_sets_router.patch(
     "/inspection-param-set-items/{item_id}",
     response_model=SetItemOut,
     summary="更新参数集明细（排序、是否必检）",
@@ -1063,7 +1093,7 @@ async def update_set_item(
     )
 
 
-@router.delete(
+@_inspection_param_sets_router.delete(
     "/inspection-param-set-items/{item_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="删除参数集明细（软删除）",
@@ -1083,7 +1113,7 @@ async def delete_set_item(
 # --- categories ---
 
 
-@router.get("/categories", response_model=List[CategoryOut], summary="设备类别列表")
+@_categories_router.get("/categories", response_model=List[CategoryOut], summary="设备类别列表")
 async def list_categories(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1094,7 +1124,7 @@ async def list_categories(
     return [CategoryOut.model_validate(r) for r in rows]
 
 
-@router.post("/categories", response_model=CategoryOut, summary="创建设备类别")
+@_categories_router.post("/categories", response_model=CategoryOut, summary="创建设备类别")
 async def create_category(
     body: CategoryCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1117,7 +1147,7 @@ async def create_category(
     return CategoryOut.model_validate(row)
 
 
-@router.patch("/categories/{row_id}", response_model=CategoryOut, summary="更新设备类别")
+@_categories_router.patch("/categories/{row_id}", response_model=CategoryOut, summary="更新设备类别")
 async def update_category(
     row_id: int,
     body: CategoryUpdate,
@@ -1144,7 +1174,7 @@ async def update_category(
     return CategoryOut.model_validate(row)
 
 
-@router.delete("/categories/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备类别")
+@_categories_router.delete("/categories/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备类别")
 async def delete_category(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1160,7 +1190,7 @@ async def delete_category(
 # --- equipment ledger ---
 
 
-@router.get("/equipments", summary="设备台账分页")
+@_equipment_ledger_router.get("/equipments", summary="设备台账分页")
 async def list_equipments(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1217,7 +1247,7 @@ async def list_equipments(
     }
 
 
-@router.post("/equipments", response_model=EquipmentOut, summary="创建设备")
+@_equipment_ledger_router.post("/equipments", response_model=EquipmentOut, summary="创建设备")
 async def create_equipment(
     body: EquipmentCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1256,7 +1286,7 @@ async def create_equipment(
     return await _equipment_out(tenant_id, row)
 
 
-@router.get("/equipments/{row_id}", response_model=EquipmentOut, summary="设备详情")
+@_equipment_ledger_router.get("/equipments/{row_id}", response_model=EquipmentOut, summary="设备详情")
 async def get_equipment(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1268,7 +1298,7 @@ async def get_equipment(
     return await _equipment_out(tenant_id, row)
 
 
-@router.get(
+@_equipment_ledger_router.get(
     "/equipments/{row_id}/operational-status-history",
     response_model=List[EquipmentOperationalStatusLogOut],
     summary="设备运行状态变更历史",
@@ -1290,7 +1320,7 @@ async def list_equipment_operational_status_history(
     return [EquipmentOperationalStatusLogOut.model_validate(r) for r in rows]
 
 
-@router.patch("/equipments/{row_id}", response_model=EquipmentOut, summary="更新设备")
+@_equipment_ledger_router.patch("/equipments/{row_id}", response_model=EquipmentOut, summary="更新设备")
 async def update_equipment(
     row_id: int,
     body: EquipmentUpdate,
@@ -1342,7 +1372,7 @@ async def update_equipment(
     return await _equipment_out(tenant_id, row)
 
 
-@router.delete("/equipments/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备")
+@_equipment_ledger_router.delete("/equipments/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备")
 async def delete_equipment(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1358,7 +1388,7 @@ async def delete_equipment(
 # --- patrol routes ---
 
 
-@router.get("/patrol-routes", response_model=List[PatrolRouteOut], summary="巡检路线列表")
+@_patrol_routes_router.get("/patrol-routes", response_model=List[PatrolRouteOut], summary="巡检路线列表")
 async def list_patrol_routes(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1367,7 +1397,7 @@ async def list_patrol_routes(
     return [PatrolRouteOut.model_validate(r) for r in rows]
 
 
-@router.post("/patrol-routes", response_model=PatrolRouteOut, summary="创建巡检路线")
+@_patrol_routes_router.post("/patrol-routes", response_model=PatrolRouteOut, summary="创建巡检路线")
 async def create_patrol_route(
     body: PatrolRouteCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1386,7 +1416,7 @@ async def create_patrol_route(
     return PatrolRouteOut.model_validate(row)
 
 
-@router.post(
+@_patrol_routes_router.post(
     "/patrol-routes/with-steps",
     response_model=PatrolRouteOut,
     summary="创建巡检路线及步骤（事务）",
@@ -1446,7 +1476,7 @@ async def create_patrol_route_with_steps(
     return PatrolRouteOut.model_validate(row)
 
 
-@router.patch("/patrol-routes/{row_id}", response_model=PatrolRouteOut, summary="更新巡检路线")
+@_patrol_routes_router.patch("/patrol-routes/{row_id}", response_model=PatrolRouteOut, summary="更新巡检路线")
 async def update_patrol_route(
     row_id: int,
     body: PatrolRouteUpdate,
@@ -1471,7 +1501,7 @@ async def update_patrol_route(
     return PatrolRouteOut.model_validate(row)
 
 
-@router.delete("/patrol-routes/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除巡检路线")
+@_patrol_routes_router.delete("/patrol-routes/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除巡检路线")
 async def delete_patrol_route(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1488,7 +1518,7 @@ async def delete_patrol_route(
     ).update(deleted_at=now)
 
 
-@router.get(
+@_patrol_routes_router.get(
     "/patrol-routes/{route_id}/steps",
     response_model=List[PatrolStepOut],
     summary="路线步骤列表",
@@ -1505,7 +1535,7 @@ async def list_patrol_steps(
     return [PatrolStepOut.model_validate(r) for r in rows]
 
 
-@router.put(
+@_patrol_routes_router.put(
     "/patrol-routes/{route_id}/steps",
     response_model=List[PatrolStepOut],
     summary="覆盖保存路线步骤",
@@ -1536,3 +1566,12 @@ async def replace_patrol_steps(
             )
     rows = await tenant_alive(HaoligoPatrolRouteStep, tenant_id).filter(route_id=route_id).order_by("sequence", "id")
     return [PatrolStepOut.model_validate(r) for r in rows]
+
+router.include_router(_workshops_router)
+router.include_router(_manufacturers_router)
+router.include_router(_inspection_params_router)
+router.include_router(_inspection_param_sets_router)
+router.include_router(_categories_router)
+router.include_router(_equipment_ledger_router)
+router.include_router(_patrol_routes_router)
+

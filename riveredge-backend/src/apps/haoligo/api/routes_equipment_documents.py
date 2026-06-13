@@ -53,7 +53,7 @@ from apps.haoligo.services.spot_check_side_effects import (
     send_spot_check_report_messages,
     validate_report_notify_users,
 )
-from apps.haoligo.api._equipment_route_access import require_equipment_document_path_access
+from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from core.schemas.dataset import ExecuteQueryRequest
 from core.services.data.dataset_service import DatasetService
@@ -63,7 +63,16 @@ from infra.models.user import User
 router = APIRouter(
     prefix="/equipment",
     tags=["App · HaoliGO · 设备单据"],
-    dependencies=[Depends(require_equipment_document_path_access())],
+)
+
+_output_record_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-documents-output-record"))],
+)
+_spot_check_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-documents-spot-check"))],
+)
+_route_patrol_router = APIRouter(
+    dependencies=[Depends(require_haoligo_module_access("equipment-documents-route-patrol"))],
 )
 
 
@@ -155,7 +164,7 @@ def _serialize_output_binding(row: Optional[HaoligoEquipmentOutputDatasetBinding
     )
 
 
-@router.get("/output-dataset-binding", response_model=EquipmentOutputDatasetBindingOut, summary="设备产出关联数据集配置")
+@_output_record_router.get("/output-dataset-binding", response_model=EquipmentOutputDatasetBindingOut, summary="设备产出关联数据集配置")
 async def get_equipment_output_dataset_binding(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -164,7 +173,7 @@ async def get_equipment_output_dataset_binding(
     return _serialize_output_binding(row)
 
 
-@router.put("/output-dataset-binding", response_model=EquipmentOutputDatasetBindingOut, summary="保存设备产出关联数据集配置")
+@_output_record_router.put("/output-dataset-binding", response_model=EquipmentOutputDatasetBindingOut, summary="保存设备产出关联数据集配置")
 async def put_equipment_output_dataset_binding(
     body: EquipmentOutputDatasetBindingUpsert,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -215,7 +224,7 @@ class EquipmentOutputPrefillFromDatasetOut(BaseModel):
     dataset_row: Optional[dict] = None
 
 
-@router.post(
+@_output_record_router.post(
     "/output-records/preview-by-work-order",
     response_model=EquipmentOutputPrefillFromDatasetOut,
     summary="按制令单号查询数据集并映射产出单字段",
@@ -637,7 +646,7 @@ async def _serialize_spot_check(row: HaoligoEquipmentSpotCheck, *, with_lines: b
     )
 
 
-@router.get("/spot-checks/preview-lines", response_model=SpotCheckPreviewOut, summary="预览点检方案展开行（不落库）")
+@_spot_check_router.get("/spot-checks/preview-lines", response_model=SpotCheckPreviewOut, summary="预览点检方案展开行（不落库）")
 async def preview_spot_check_lines(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -681,7 +690,7 @@ async def preview_spot_check_lines(
     )
 
 
-@router.get("/spot-checks", summary="设备点检单分页列表")
+@_spot_check_router.get("/spot-checks", summary="设备点检单分页列表")
 async def list_spot_checks(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -723,7 +732,7 @@ async def list_spot_checks(
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
-@router.post("/spot-checks", response_model=SpotCheckOut, summary="创建设备点检单（按点检方案生成行）")
+@_spot_check_router.post("/spot-checks", response_model=SpotCheckOut, summary="创建设备点检单（按点检方案生成行）")
 async def create_spot_check(
     body: SpotCheckCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -812,7 +821,7 @@ async def create_spot_check(
     return await _serialize_spot_check(header, with_lines=True)
 
 
-@router.get("/spot-checks/{row_id}", response_model=SpotCheckOut, summary="设备点检单详情")
+@_spot_check_router.get("/spot-checks/{row_id}", response_model=SpotCheckOut, summary="设备点检单详情")
 async def get_spot_check(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -824,7 +833,7 @@ async def get_spot_check(
     return await _serialize_spot_check(row, with_lines=True)
 
 
-@router.patch("/spot-checks/{row_id}", response_model=SpotCheckOut, summary="更新设备点检单")
+@_spot_check_router.patch("/spot-checks/{row_id}", response_model=SpotCheckOut, summary="更新设备点检单")
 async def update_spot_check(
     row_id: int,
     body: SpotCheckUpdate,
@@ -935,7 +944,7 @@ async def update_spot_check(
     return await _serialize_spot_check(row, with_lines=True)
 
 
-@router.delete("/spot-checks/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备点检单")
+@_spot_check_router.delete("/spot-checks/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备点检单")
 async def delete_spot_check(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1098,7 +1107,7 @@ async def _serialize_route_patrol(row: HaoligoEquipmentRoutePatrol, *, with_line
     )
 
 
-@router.get("/route-patrols/preview-lines", response_model=List[RoutePatrolPreviewLineOut], summary="预览巡检路线展开行（不落库）")
+@_route_patrol_router.get("/route-patrols/preview-lines", response_model=List[RoutePatrolPreviewLineOut], summary="预览巡检路线展开行（不落库）")
 async def preview_route_patrol_lines(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1128,7 +1137,7 @@ async def preview_route_patrol_lines(
     return out
 
 
-@router.get("/route-patrols", summary="设备路线巡检单分页列表")
+@_route_patrol_router.get("/route-patrols", summary="设备路线巡检单分页列表")
 async def list_route_patrols(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1160,7 +1169,7 @@ async def list_route_patrols(
     return {"items": items, "total": total, "skip": skip, "limit": limit}
 
 
-@router.post("/route-patrols", response_model=RoutePatrolOut, summary="创建设备路线巡检单（按路线步骤生成行）")
+@_route_patrol_router.post("/route-patrols", response_model=RoutePatrolOut, summary="创建设备路线巡检单（按路线步骤生成行）")
 async def create_route_patrol(
     body: RoutePatrolCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1215,7 +1224,7 @@ async def create_route_patrol(
     return await _serialize_route_patrol(header, with_lines=True)
 
 
-@router.get("/route-patrols/{row_id}", response_model=RoutePatrolOut, summary="设备路线巡检单详情")
+@_route_patrol_router.get("/route-patrols/{row_id}", response_model=RoutePatrolOut, summary="设备路线巡检单详情")
 async def get_route_patrol(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1232,7 +1241,7 @@ async def get_route_patrol(
     return await _serialize_route_patrol(row, with_lines=True)
 
 
-@router.patch("/route-patrols/{row_id}", response_model=RoutePatrolOut, summary="更新设备路线巡检单")
+@_route_patrol_router.patch("/route-patrols/{row_id}", response_model=RoutePatrolOut, summary="更新设备路线巡检单")
 async def update_route_patrol(
     row_id: int,
     body: RoutePatrolUpdate,
@@ -1334,7 +1343,7 @@ async def update_route_patrol(
     return await _serialize_route_patrol(row, with_lines=True)
 
 
-@router.delete("/route-patrols/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备路线巡检单")
+@_route_patrol_router.delete("/route-patrols/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备路线巡检单")
 async def delete_route_patrol(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1455,7 +1464,7 @@ async def _serialize_output_record(row: HaoligoEquipmentOutputRecord) -> OutputR
     )
 
 
-@router.get("/output-records", summary="设备产出单分页列表")
+@_output_record_router.get("/output-records", summary="设备产出单分页列表")
 async def list_output_records(
     tenant_id: Annotated[int, Depends(get_current_tenant)],
     _: Annotated[User, Depends(get_current_user)],
@@ -1504,7 +1513,7 @@ async def list_output_records(
     }
 
 
-@router.post("/output-records", response_model=OutputRecordOut, summary="创建设备产出单")
+@_output_record_router.post("/output-records", response_model=OutputRecordOut, summary="创建设备产出单")
 async def create_output_record(
     body: OutputRecordCreate,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1544,7 +1553,7 @@ async def create_output_record(
     return await _serialize_output_record(row)
 
 
-@router.get("/output-records/{row_id}", response_model=OutputRecordOut, summary="设备产出单详情")
+@_output_record_router.get("/output-records/{row_id}", response_model=OutputRecordOut, summary="设备产出单详情")
 async def get_output_record(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1556,7 +1565,7 @@ async def get_output_record(
     return await _serialize_output_record(row)
 
 
-@router.patch("/output-records/{row_id}", response_model=OutputRecordOut, summary="更新设备产出单")
+@_output_record_router.patch("/output-records/{row_id}", response_model=OutputRecordOut, summary="更新设备产出单")
 async def update_output_record(
     row_id: int,
     body: OutputRecordUpdate,
@@ -1606,7 +1615,7 @@ async def update_output_record(
     return await _serialize_output_record(row)
 
 
-@router.delete("/output-records/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备产出单")
+@_output_record_router.delete("/output-records/{row_id}", status_code=status.HTTP_204_NO_CONTENT, summary="软删除设备产出单")
 async def delete_output_record(
     row_id: int,
     tenant_id: Annotated[int, Depends(get_current_tenant)],
@@ -1621,3 +1630,8 @@ async def delete_output_record(
     await row.save()
     if eq_id and qty:
         await adjust_equipment_used_yield(tenant_id, eq_id, -qty)
+
+router.include_router(_output_record_router)
+router.include_router(_spot_check_router)
+router.include_router(_route_patrol_router)
+

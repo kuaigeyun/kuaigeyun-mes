@@ -2343,6 +2343,7 @@ export default {
   'app.haoligo.equipment.inspectionParams.formCode': '点检编号',
   'app.haoligo.equipment.inspectionParams.formCodePh': '如 VIB、TEMP',
   'app.haoligo.equipment.inspectionParams.formCodeReq': '请输入点检编号',
+  'app.haoligo.equipment.inspectionParams.formCodeDuplicate': '点检编号「{{code}}」已存在，请使用其他编号',
   'app.haoligo.equipment.inspectionParams.formName': '点检项名称',
   'app.haoligo.equipment.inspectionParams.formNamePh': '如 主轴振动',
   'app.haoligo.equipment.inspectionParams.formNameReq': '请输入点检项名称',

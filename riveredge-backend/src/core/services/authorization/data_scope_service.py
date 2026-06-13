@@ -247,6 +247,30 @@ class DataScopeService:
         policies = await cls._load_policies(tenant_id, role_uuids, resource_key)
 
         if not policies:
+            default_external_q = await cls._default_external_partner_q(
+                tenant_id=tenant_id,
+                user=user,
+                profile=profile,
+                roles=roles,
+            )
+            if default_external_q is not None:
+                return queryset.filter(default_external_q)
+            default_resolver = (getattr(profile, "no_policy_default_resolver", None) or "").strip().lower()
+            if default_resolver:
+                custom = get_scope_resolver(default_resolver)
+                if custom is not None:
+                    ctx = ScopeResolveContext(
+                        tenant_id=tenant_id,
+                        user_id=user.id,
+                        resource=resource_key,
+                        profile=profile,
+                        scope_payload=None,
+                        department_uuid=None,
+                        department_user_ids=[user.id],
+                    )
+                    part = await custom(ctx)
+                    if part is not None:
+                        return queryset.filter(part)
             # 默认数据权限为“全部”：只有显式配置策略时才收敛数据范围。
             return queryset
 

@@ -2333,6 +2333,7 @@ export default {
   'app.haoligo.equipment.inspectionParams.formCode': 'Inspection no.',
   'app.haoligo.equipment.inspectionParams.formCodePh': 'e.g. VIB, TEMP',
   'app.haoligo.equipment.inspectionParams.formCodeReq': 'Enter inspection no.',
+  'app.haoligo.equipment.inspectionParams.formCodeDuplicate': 'Inspection no. "{{code}}" already exists',
   'app.haoligo.equipment.inspectionParams.formName': 'Item name',
   'app.haoligo.equipment.inspectionParams.formNamePh': 'e.g. spindle vibration',
   'app.haoligo.equipment.inspectionParams.formNameReq': 'Enter item name',
