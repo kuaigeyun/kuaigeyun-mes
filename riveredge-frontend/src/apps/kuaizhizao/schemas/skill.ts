@@ -28,6 +28,7 @@ export const skillFormSchema: FieldConfig[] = [
     labelKey: 'field.skill.category',
     colSpan: 12,
   },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
   {
     name: 'description',
     type: 'textarea',

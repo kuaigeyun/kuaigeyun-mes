@@ -8,7 +8,7 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
@@ -29,6 +29,15 @@ import {
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const MOLD_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_molds';
 
 interface Mold {
   id?: number;
@@ -146,13 +155,36 @@ const MoldsPage: React.FC = () => {
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
 
+  const {
+    customFields: moldFormCustomFields,
+    customFieldValues: moldFormCustomFieldValues,
+    loadFieldValues: loadMoldFormFieldValues,
+    extractFormValues: extractMoldFormValues,
+    saveCustomFieldValues: saveMoldCustomFieldValues,
+    resetFieldValues: resetMoldFormFieldValues,
+  } = useCustomFields({ tableName: MOLD_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: moldListCustomFields,
+    generateCustomFieldColumns: generateMoldCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichMoldRecordsWithCustomFields,
+    customFieldValues: moldDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadMoldFieldValuesForDetail,
+    resetDetailFieldValues: resetMoldDetailFieldValues,
+  } = useCustomFieldsForList<Mold>({ tableName: MOLD_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (moldListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [moldListCustomFields.length]);
+
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentMold(null);
-    // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都会重新挂载，
-    // 传空 initialValues 即可，无需 setTimeout 等 ref 就绪再 resetFields。
     setFormInitialValues(undefined);
+    resetMoldFormFieldValues();
     setModalVisible(true);
   };
 
@@ -168,9 +200,8 @@ const MoldsPage: React.FC = () => {
       const detail = await moldApi.get(record.uuid);
       setIsEdit(true);
       setCurrentMold(detail);
-      // 用 initialValues 替代 setTimeout + setFieldsValue：
-      // destroyOnHidden 下 ProForm 重新挂载时会读取最新 initialValues，
-      // 不再依赖 "等 ref 就绪" 的妥协
+      const fieldFormValues =
+        detail.id != null ? await loadMoldFormFieldValues(detail.id) : {};
       setFormInitialValues({
         code: detail.code,
         name: detail.name,
@@ -189,6 +220,7 @@ const MoldsPage: React.FC = () => {
         cavity_count: detail.cavity_count,
         design_lifetime: detail.design_lifetime,
         description: detail.description,
+        ...fieldFormValues,
       });
       setModalVisible(true);
     } catch (error) {
@@ -241,6 +273,9 @@ const MoldsPage: React.FC = () => {
       loadUsages(record.uuid);
       loadCalibrations(record.uuid);
       setMoldTrackingRefreshKey((k) => k + 1);
+      if (detail.id != null) {
+        await loadMoldFieldValuesForDetail(detail.id);
+      }
     } catch (error) {
       messageApi.error('获取模具详情失败');
     }
@@ -363,25 +398,34 @@ const MoldsPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractMoldFormValues(values);
       const submitData = {
-        ...values,
-        purchase_date: values.purchase_date ? values.purchase_date.format('YYYY-MM-DD') : null,
-        installation_date: values.installation_date ? values.installation_date.format('YYYY-MM-DD') : null,
-        cavity_count: values.cavity_count ?? null,
-        design_lifetime: values.design_lifetime ?? null,
+        ...standardValues,
+        purchase_date: standardValues.purchase_date ? standardValues.purchase_date.format('YYYY-MM-DD') : null,
+        installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
+        cavity_count: standardValues.cavity_count ?? null,
+        design_lifetime: standardValues.design_lifetime ?? null,
       };
 
       const editedUuid = isEdit ? currentMold?.uuid : undefined;
       if (isEdit && editedUuid) {
         await moldApi.update(editedUuid, submitData);
         messageApi.success('模具更新成功');
+        const updated = await moldApi.get(editedUuid);
+        if (updated?.id != null) {
+          await saveMoldCustomFieldValues(updated.id, customData);
+        }
       } else {
-        await moldApi.create(submitData);
+        const created = await moldApi.create(submitData);
+        if (created?.id != null) {
+          await saveMoldCustomFieldValues(created.id, customData);
+        }
         messageApi.success('模具创建成功');
       }
       setModalVisible(false);
       setCurrentMold(null);
       formRef.current?.resetFields();
+      resetMoldFormFieldValues();
       actionRef.current?.reload();
       if (editedUuid && moldDetail?.uuid === editedUuid) {
         try {
@@ -533,7 +577,9 @@ const MoldsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Mold>[] = [
+  const columns: ProColumns<Mold>[] = useMemo(() => {
+    const customFieldColumns = generateMoldCustomFieldColumns();
+    return [
     {
       title: '模具编号',
       dataIndex: 'code',
@@ -614,6 +660,7 @@ const MoldsPage: React.FC = () => {
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
+    ...customFieldColumns,
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
@@ -683,6 +730,7 @@ const MoldsPage: React.FC = () => {
       ),
     },
   ];
+  }, [moldListCustomFields, generateMoldCustomFieldColumns, t, navigate]);
 
   return (
     <>
@@ -706,8 +754,9 @@ const MoldsPage: React.FC = () => {
                 ...params,
                 keyword: (params as any).keyword,
               });
+              const enriched = await enrichMoldRecordsWithCustomFields(response.items || []);
               return {
-                data: response.items || [],
+                data: enriched,
                 success: true,
                 total: response.total || 0,
               };
@@ -830,6 +879,7 @@ const MoldsPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentMold(null);
+          resetMoldFormFieldValues();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -938,6 +988,12 @@ const MoldsPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <CustomFieldsFormSection
+              customFields={moldFormCustomFields}
+              customFieldValues={moldFormCustomFieldValues}
+            />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea
               name="description"
               label="描述"
@@ -961,6 +1017,7 @@ const MoldsPage: React.FC = () => {
           setMoldDetail(null);
           setUsages([]);
           setCalibrations([]);
+          resetMoldDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={moldDetail}
@@ -968,6 +1025,14 @@ const MoldsPage: React.FC = () => {
         customContent={
           moldDetail && (
             <>
+              {hasCustomFieldsDetailContent(moldListCustomFields, moldDetailCustomFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields', { defaultValue: '自定义字段' })}>
+                  <CustomFieldsDetailSection
+                    customFields={moldListCustomFields}
+                    customFieldValues={moldDetailCustomFieldValues}
+                  />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title="生命周期">
                 {moldDetail.id != null ? (
                   <DetailDrawerInlineFullChain

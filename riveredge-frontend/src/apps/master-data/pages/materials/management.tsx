@@ -259,9 +259,11 @@ import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut'
 import { extractProTableSort } from '../../../../utils/tableQueryKey'
 import { getSuspendedModal, clearSuspendedModal } from '../../utils/suspendedModal'
 import { useCustomFieldsForList } from '../../../../hooks/useCustomFieldsForList'
+import { useCustomFields } from '../../../../hooks/useCustomFields'
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode'
 import {
   CustomFieldsDetailSection,
+  CustomFieldsFormSection,
   hasCustomFieldsDetailContent,
 } from '../../../../components/custom-fields'
 
@@ -477,6 +479,19 @@ const MaterialsManagementPage: React.FC = () => {
   /** 新建分组时预填的父分组 ID（右键「新建子分组」） */
   const [groupParentIdPreset, setGroupParentIdPreset] = useState<number | undefined>(undefined)
   const [groupFormLoading, setGroupFormLoading] = useState(false)
+
+  const {
+    customFields: groupCustomFields,
+    customFieldValues: groupCustomFieldValues,
+    loadFieldValues: loadGroupFieldValues,
+    extractFormValues: extractGroupFormValues,
+    saveCustomFieldValues: saveGroupCustomFieldValues,
+    resetFieldValues: resetGroupFieldValues,
+  } = useCustomFields({
+    tableName: 'master_data_material_groups',
+    loadWhenOpen: true,
+    open: groupModalVisible,
+  })
 
   const [materialModalVisible, setMaterialModalVisible] = useState(false)
   const [materialRestoreInitialValues, setMaterialRestoreInitialValues] = useState<Record<string, any> | null>(null)
@@ -1037,7 +1052,8 @@ const MaterialsManagementPage: React.FC = () => {
   const handleCloseGroupModal = useCallback(() => {
     setGroupModalVisible(false)
     setGroupParentIdPreset(undefined)
-  }, [])
+    resetGroupFieldValues()
+  }, [resetGroupFieldValues])
 
   const handleEditGroup = useCallback((group: MaterialGroup) => {
     setGroupParentIdPreset(undefined)
@@ -1078,19 +1094,32 @@ const MaterialsManagementPage: React.FC = () => {
     if (groupModalVisible) loadProcessRoutesForGroup()
   }, [groupModalVisible, loadProcessRoutesForGroup])
 
+  useEffect(() => {
+    if (!groupModalVisible) return
+    if (groupIsEdit && currentGroup?.id) {
+      void loadGroupFieldValues(currentGroup.id).then((fieldFormValues) => {
+        groupFormRef.current?.setFieldsValue(fieldFormValues)
+      })
+    }
+  }, [groupModalVisible, groupIsEdit, currentGroup?.id, loadGroupFieldValues])
+
   const handleGroupSubmit = async (values: any) => {
     try {
       setGroupFormLoading(true)
+      const { customData, standardValues } = extractGroupFormValues(values)
       const payload = {
-        ...values,
-        processRouteId: values.processRouteId ?? null,
+        ...standardValues,
+        processRouteId: standardValues.processRouteId ?? null,
       }
 
       if (groupIsEdit && currentGroup) {
         await materialGroupApi.update(currentGroup.uuid, payload as MaterialGroupUpdate)
+        const updated = await materialGroupApi.get(currentGroup.uuid)
+        await saveGroupCustomFieldValues(updated.id, customData)
         messageApi.success(t('common.updateSuccess'))
       } else {
-        await materialGroupApi.create(payload as MaterialGroupCreate)
+        const created = await materialGroupApi.create(payload as MaterialGroupCreate)
+        await saveGroupCustomFieldValues(created.id, customData)
         messageApi.success(t('common.createSuccess'))
       }
 
@@ -3559,6 +3588,10 @@ const MaterialsManagementPage: React.FC = () => {
             loading: processRoutesForGroupLoading,
             optionFilterProp: 'label',
           }}
+        />
+        <CustomFieldsFormSection
+          customFields={groupCustomFields}
+          customFieldValues={groupCustomFieldValues}
         />
         <ProFormTextArea
           name="description"

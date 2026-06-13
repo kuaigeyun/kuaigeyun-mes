@@ -622,36 +622,62 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
             </>
           ) : (
             <>
-              <Row gutter={[16, 0]}>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
-                    <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitlePlaceholder')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
-                    <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
-                    <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentPlaceholder')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
-                    <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentEnPlaceholder')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')}>
-                    <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicensePlaceholder')} />
-                  </Form.Item>
-                </Col>
-                <Col xs={24} sm={12}>
-                  <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')}>
-                    <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')} />
-                  </Form.Item>
+              <Row gutter={[16, 16]}>
+                <Col span={24}>
+                  <Row gutter={16}>
+                    <Col xs={24} lg={12}>
+                      <Card
+                        size="small"
+                        title={t('common.languages.zhCN')}
+                        style={{
+                          borderRadius: 10,
+                          height: '100%',
+                          border: '1px solid #e5e6eb',
+                          background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
+                        }}
+                        styles={{
+                          header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
+                          body: { background: 'transparent' },
+                        }}
+                      >
+                        <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
+                          <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitlePlaceholder')} />
+                        </Form.Item>
+                        <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
+                          <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentPlaceholder')} />
+                        </Form.Item>
+                        <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')} style={{ marginBottom: 0 }}>
+                          <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicensePlaceholder')} />
+                        </Form.Item>
+                      </Card>
+                    </Col>
+                    <Col xs={24} lg={12}>
+                      <Card
+                        size="small"
+                        title={t('common.languages.enUS')}
+                        style={{
+                          borderRadius: 10,
+                          height: '100%',
+                          border: '1px solid #e5e6eb',
+                          background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
+                        }}
+                        styles={{
+                          header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
+                          body: { background: 'transparent' },
+                        }}
+                      >
+                        <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
+                          <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')} />
+                        </Form.Item>
+                        <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
+                          <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentEnPlaceholder')} />
+                        </Form.Item>
+                        <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')} style={{ marginBottom: 0 }}>
+                          <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')} />
+                        </Form.Item>
+                      </Card>
+                    </Col>
+                  </Row>
                 </Col>
                 <Col span={24}>
                   <Form.Item name="login_decoration_image" label={t('pages.infra.platform.loginDecorationImage')}>
@@ -718,7 +744,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                   </Form.Item>
                 </Col>
                 <Col span={24}>
-                  <Row gutter={[16, 0]}>
+                  <Row gutter={[16, 16]}>
                     <Col xs={24} sm={8}>
                       <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
                         <Switch />

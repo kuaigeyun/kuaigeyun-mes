@@ -1,5 +1,6 @@
 """可视排产 API。"""
 
+from datetime import date
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -46,6 +47,7 @@ async def scan_scheduling_board(
     work_order_ids: Optional[str] = Query(None, description="逗号分隔工单 ID"),
     work_center_id: Optional[int] = Query(None),
     horizon_days: int = Query(14, ge=1, le=90),
+    plan_date: Optional[date] = Query(None, description="滚动计划日过滤"),
     tenant_id: int = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
 ) -> VisualSchedulingScanResponse:
@@ -55,6 +57,7 @@ async def scan_scheduling_board(
         work_order_ids=_parse_work_order_ids(work_order_ids),
         work_center_id=work_center_id,
         horizon_days=horizon_days,
+        plan_date=plan_date,
     )
     return VisualSchedulingScanResponse(**raw)
 

@@ -18,6 +18,11 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -125,6 +130,9 @@ function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking
   return undefined;
 }
 
+const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
+const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickings';
+
 function mapOutsourceIssueToOutbound(item: Record<string, unknown>): OutboundOrder {
   const code = String(item.code ?? '');
   const statusRaw = String(item.status ?? '');
@@ -170,6 +178,37 @@ const OutboundPage: React.FC = () => {
   const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_sales_order');
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+
+  const {
+    customFields: salesDeliveryListCustomFields,
+    generateCustomFieldColumns: generateSalesDeliveryCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichSalesDeliveryRecordsWithCustomFields,
+    customFieldValues: salesDeliveryDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSalesDeliveryFieldValuesForDetail,
+    resetDetailFieldValues: resetSalesDeliveryDetailFieldValues,
+  } = useCustomFieldsForList<OutboundOrder>({ tableName: SALES_DELIVERY_CUSTOM_FIELD_TABLE });
+
+  const {
+    customFields: productionPickingListCustomFields,
+    generateCustomFieldColumns: generateProductionPickingCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichProductionPickingRecordsWithCustomFields,
+    customFieldValues: productionPickingDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadProductionPickingFieldValuesForDetail,
+    resetDetailFieldValues: resetProductionPickingDetailFieldValues,
+  } = useCustomFieldsForList<OutboundOrder>({ tableName: PRODUCTION_PICKING_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (salesDeliveryListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [salesDeliveryListCustomFields.length]);
+
+  useEffect(() => {
+    if (productionPickingListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [productionPickingListCustomFields.length]);
+
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
@@ -428,6 +467,11 @@ const OutboundPage: React.FC = () => {
       setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : null);
       setDetailDrawerVisible(true);
       setOutboundTrackingRefreshKey((k) => k + 1);
+      if (record.outbound_type === 'sales_delivery' && record.id != null) {
+        await loadSalesDeliveryFieldValuesForDetail(record.id);
+      } else if (record.outbound_type === 'production_picking' && record.id != null) {
+        await loadProductionPickingFieldValuesForDetail(record.id);
+      }
     } catch {
       messageApi.error('获取出库单详情失败');
     }
@@ -445,6 +489,11 @@ const OutboundPage: React.FC = () => {
         }
         if (detailData) {
           setCurrentOrder({ ...detailData, outbound_type: record.outbound_type });
+          if (record.outbound_type === 'sales_delivery' && record.id != null) {
+            await loadSalesDeliveryFieldValuesForDetail(record.id);
+          } else if (record.outbound_type === 'production_picking' && record.id != null) {
+            await loadProductionPickingFieldValuesForDetail(record.id);
+          }
         }
       } catch {
         /* ignore */
@@ -671,6 +720,8 @@ const OutboundPage: React.FC = () => {
     return '出库单';
   };
 
+  const salesDeliveryCustomFieldColumns = generateSalesDeliveryCustomFieldColumns();
+  const productionPickingCustomFieldColumns = generateProductionPickingCustomFieldColumns();
   const columns: ProColumns<OutboundOrder>[] = [
     {
       title: '主体 / 单号',
@@ -786,6 +837,8 @@ const OutboundPage: React.FC = () => {
         );
       },
     },
+    ...salesDeliveryCustomFieldColumns,
+    ...productionPickingCustomFieldColumns,
     {
       title: '操作',
       width: 180,
@@ -890,16 +943,20 @@ const OutboundPage: React.FC = () => {
 
             const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
             const pickingData = fetchPicking
-              ? toList(pickingRes).map((item: any) => ({
-                  ...item,
-                  outbound_type: 'production_picking' as const,
-                }))
+              ? await enrichProductionPickingRecordsWithCustomFields(
+                  toList(pickingRes).map((item: any) => ({
+                    ...item,
+                    outbound_type: 'production_picking' as const,
+                  })),
+                )
               : [];
             const deliveryData = fetchDelivery
-              ? toList(deliveryRes).map((item: any) => ({
-                  ...item,
-                  outbound_type: 'sales_delivery' as const,
-                }))
+              ? await enrichSalesDeliveryRecordsWithCustomFields(
+                  toList(deliveryRes).map((item: any) => ({
+                    ...item,
+                    outbound_type: 'sales_delivery' as const,
+                  })),
+                )
               : [];
             const outsourceData = fetchOutsource
               ? toList(outsourceRes).map((item: any) => mapOutsourceIssueToOutbound(item))
@@ -1202,6 +1259,8 @@ const OutboundPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
+          resetSalesDeliveryDetailFieldValues();
+          resetProductionPickingDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1269,8 +1328,29 @@ const OutboundPage: React.FC = () => {
                 <p><strong>操作员：</strong>{currentOrder.delivered_by}</p>
                 <p><strong>总数量：</strong>{currentOrder.total_quantity}</p>
                 <p><strong>总品种：</strong>{currentOrder.total_items}</p>
+                {currentOrder.outbound_type === 'sales_delivery' &&
+                hasCustomFieldsDetailContent(salesDeliveryListCustomFields, salesDeliveryDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 12 }}>
+                    <CustomFieldsDetailSection
+                      customFields={salesDeliveryListCustomFields}
+                      customFieldValues={salesDeliveryDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {currentOrder.outbound_type === 'production_picking' &&
+                hasCustomFieldsDetailContent(
+                  productionPickingListCustomFields,
+                  productionPickingDetailCustomFieldValues,
+                ) ? (
+                  <div style={{ marginTop: 12 }}>
+                    <CustomFieldsDetailSection
+                      customFields={productionPickingListCustomFields}
+                      customFieldValues={productionPickingDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
                 {currentOrder.notes && (
-                  <p><strong>备注：</strong>{currentOrder.notes}</p>
+                  <p style={{ marginTop: 12 }}><strong>备注：</strong>{currentOrder.notes}</p>
                 )}
               </Card>
 

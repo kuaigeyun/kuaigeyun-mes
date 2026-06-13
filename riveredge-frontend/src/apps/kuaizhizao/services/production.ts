@@ -466,11 +466,13 @@ export const visualSchedulingApi = {
     work_order_ids?: number[];
     work_center_id?: number;
     horizon_days?: number;
+    plan_date?: string;
   }) => {
     const query: Record<string, string | number> = {};
     if (params?.horizon_days != null) query.horizon_days = params.horizon_days;
     if (params?.work_center_id != null) query.work_center_id = params.work_center_id;
     if (params?.work_order_ids?.length) query.work_order_ids = params.work_order_ids.join(',');
+    if (params?.plan_date) query.plan_date = params.plan_date;
     return apiRequest<VisualSchedulingBoardScan>('/apps/kuaizhizao/scheduling/board-scan', {
       method: 'GET',
       params: query,

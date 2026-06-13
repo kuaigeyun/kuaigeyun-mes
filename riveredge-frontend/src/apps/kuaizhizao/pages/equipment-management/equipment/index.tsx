@@ -9,7 +9,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
@@ -62,6 +62,15 @@ import {
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const EQUIPMENT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_equipment';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -188,12 +197,36 @@ const EquipmentPage: React.FC = () => {
   const [calibModalVisible, setCalibModalVisible] = useState(false);
   const [calibForm] = Form.useForm();
 
+  const {
+    customFields: equipmentFormCustomFields,
+    customFieldValues: equipmentFormCustomFieldValues,
+    loadFieldValues: loadEquipmentFormFieldValues,
+    extractFormValues: extractEquipmentFormValues,
+    saveCustomFieldValues: saveEquipmentCustomFieldValues,
+    resetFieldValues: resetEquipmentFormFieldValues,
+  } = useCustomFields({ tableName: EQUIPMENT_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: equipmentListCustomFields,
+    generateCustomFieldColumns: generateEquipmentCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichEquipmentRecordsWithCustomFields,
+    customFieldValues: equipmentDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadEquipmentFieldValuesForDetail,
+    resetDetailFieldValues: resetEquipmentDetailFieldValues,
+  } = useCustomFieldsForList<Equipment>({ tableName: EQUIPMENT_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (equipmentListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [equipmentListCustomFields.length]);
+
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentEquipment(null);
-    // destroyOnHidden 下 ProForm 每次打开都会重新挂载，initialValues 为空即可
     setFormInitialValues(undefined);
+    resetEquipmentFormFieldValues();
     setModalVisible(true);
   };
 
@@ -209,7 +242,8 @@ const EquipmentPage: React.FC = () => {
       const detail = await equipmentApi.get(record.uuid);
       setIsEdit(true);
       setCurrentEquipment(detail);
-      // 用 initialValues 替代 setTimeout + setFieldsValue
+      const fieldFormValues =
+        detail.id != null ? await loadEquipmentFormFieldValues(detail.id) : {};
       setFormInitialValues({
         code: detail.code,
         name: detail.name,
@@ -228,6 +262,7 @@ const EquipmentPage: React.FC = () => {
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
+        ...fieldFormValues,
       });
       setModalVisible(true);
     } catch (error) {
@@ -248,6 +283,9 @@ const EquipmentPage: React.FC = () => {
       setEquipmentDetail(detail);
       setDrawerVisible(true);
       setEqTrackingRefreshKey((k) => k + 1);
+      if (detail.id != null) {
+        await loadEquipmentFieldValuesForDetail(detail.id);
+      }
     } catch (error) {
       messageApi.error('获取设备详情失败');
     }
@@ -332,23 +370,32 @@ const EquipmentPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractEquipmentFormValues(values);
       const submitData = {
-        ...values,
-        purchase_date: values.purchase_date ? values.purchase_date.format('YYYY-MM-DD') : null,
-        installation_date: values.installation_date ? values.installation_date.format('YYYY-MM-DD') : null,
+        ...standardValues,
+        purchase_date: standardValues.purchase_date ? standardValues.purchase_date.format('YYYY-MM-DD') : null,
+        installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
       };
 
       const editedUuid = isEdit ? currentEquipment?.uuid : undefined;
       if (isEdit && editedUuid) {
         await equipmentApi.update(editedUuid, submitData);
         messageApi.success('设备更新成功');
+        const updated = await equipmentApi.get(editedUuid);
+        if (updated.id != null) {
+          await saveEquipmentCustomFieldValues(updated.id, customData);
+        }
       } else {
-        await equipmentApi.create(submitData);
+        const created = await equipmentApi.create(submitData);
+        if (created?.id != null) {
+          await saveEquipmentCustomFieldValues(created.id, customData);
+        }
         messageApi.success('设备创建成功');
       }
       setModalVisible(false);
       setCurrentEquipment(null);
       formRef.current?.resetFields();
+      resetEquipmentFormFieldValues();
       actionRef.current?.reload();
       if (editedUuid && equipmentDetail?.uuid === editedUuid) {
         try {
@@ -535,7 +582,9 @@ const EquipmentPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Equipment>[] = [
+  const columns: ProColumns<Equipment>[] = useMemo(() => {
+    const customFieldColumns = generateEquipmentCustomFieldColumns();
+    return [
     {
       title: '设备编号',
       dataIndex: 'code',
@@ -598,6 +647,7 @@ const EquipmentPage: React.FC = () => {
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
+    ...customFieldColumns,
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
@@ -629,6 +679,7 @@ const EquipmentPage: React.FC = () => {
         renderEquipmentRowActions(renderEquipmentRowNodes(record), `eq-${record.uuid ?? 'row'}`),
     },
   ];
+  }, [equipmentListCustomFields, generateEquipmentCustomFieldColumns, t, navigate]);
 
   return (
     <>
@@ -648,8 +699,9 @@ const EquipmentPage: React.FC = () => {
                 ...params,
                 keyword: (params as any).keyword,
               });
+              const enriched = await enrichEquipmentRecordsWithCustomFields(response.items || []);
               return {
-                data: response.items || [],
+                data: enriched,
                 success: true,
                 total: response.total || 0,
               };
@@ -777,6 +829,7 @@ const EquipmentPage: React.FC = () => {
         onClose={() => {
           setModalVisible(false);
           setCurrentEquipment(null);
+          resetEquipmentFormFieldValues();
         }}
         onFinish={handleSubmit}
         isEdit={isEdit}
@@ -902,6 +955,12 @@ const EquipmentPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <CustomFieldsFormSection
+              customFields={equipmentFormCustomFields}
+              customFieldValues={equipmentFormCustomFieldValues}
+            />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea
               name="description"
               label="描述"
@@ -923,6 +982,7 @@ const EquipmentPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setEquipmentDetail(null);
+          resetEquipmentDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -938,6 +998,14 @@ const EquipmentPage: React.FC = () => {
                   items={buildDescriptionItemsFromColumns(equipmentDetail, detailBaseColumns)}
                 />
               </DetailDrawerSection>
+              {hasCustomFieldsDetailContent(equipmentListCustomFields, equipmentDetailCustomFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields', { defaultValue: '自定义字段' })}>
+                  <CustomFieldsDetailSection
+                    customFields={equipmentListCustomFields}
+                    customFieldValues={equipmentDetailCustomFieldValues}
+                  />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {

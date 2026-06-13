@@ -271,31 +271,38 @@ class MenuService:
         return ManifestMenuSortIndex(by_path=by_path, by_title=by_title)
 
     @staticmethod
-    def _resolve_manifest_sort_order(
+    def _try_resolve_manifest_sort_order(
         *,
         menu_path: Optional[str],
         menu_name: Optional[str],
         index: ManifestMenuSortIndex,
-        application_uuid: str,
-    ) -> int:
+    ) -> Optional[int]:
+        """manifest 中声明的排序；未声明时返回 None（由调用方用 sort_order 兜底）。"""
         path = (menu_path or "").strip()
         if path and path in index["by_path"]:
             return index["by_path"][path]
         name = (menu_name or "").strip()
         if name and name in index["by_title"]:
             return index["by_title"][name]
-        from loguru import logger
+        return None
 
-        logger.error(
-            "应用菜单项未在 manifest 中配置排序 path={} name={} application_uuid={}",
-            path or None,
-            name or None,
-            application_uuid,
+    # manifest 菜单 sort_order 通常 < 1000；自定义子菜单排在 manifest 项之后
+    _MANUAL_APP_MENU_SORT_OFFSET = 100_000
+
+    @staticmethod
+    def _app_menu_item_sort_key(
+        item: MenuTreeResponse,
+        index: ManifestMenuSortIndex,
+    ) -> tuple:
+        manifest_order = MenuService._try_resolve_manifest_sort_order(
+            menu_path=item.path,
+            menu_name=item.name,
+            index=index,
         )
-        raise ValidationError(
-            f"菜单未在应用 manifest menu_config 中声明排序"
-            f"（path={path or '-'}, name={name or '-'}）"
-        )
+        if manifest_order is not None:
+            return (manifest_order, str(item.uuid))
+        db_order = int(item.sort_order) if item.sort_order is not None else 0
+        return (MenuService._MANUAL_APP_MENU_SORT_OFFSET + db_order, str(item.uuid))
 
     @staticmethod
     async def _load_manifest_sort_indexes_for_apps(
@@ -327,7 +334,7 @@ class MenuService:
         """
         递归稳定排序每级 children。
 
-        - 应用菜单：只认 manifest（path 或 title/sort_order）；不读 core_menus.sort_order
+        - 应用菜单：manifest 声明项优先；未在 manifest 声明的自定义子菜单用 core_menus.sort_order（排在 manifest 项之后）
         - 系统菜单（无 application_uuid）：只认 core_menus.sort_order
         """
         from loguru import logger
@@ -358,14 +365,8 @@ class MenuService:
                         "请确认 riveredge-backend/src/apps 下 manifest.json 已部署"
                     )
 
-                def _app_menu_sort_key(item: MenuTreeResponse, _idx=manifest_idx, _au=app_uuid) -> tuple:
-                    order = MenuService._resolve_manifest_sort_order(
-                        menu_path=item.path,
-                        menu_name=item.name,
-                        index=_idx,
-                        application_uuid=_au,
-                    )
-                    return (order, str(item.uuid))
+                def _app_menu_sort_key(item: MenuTreeResponse, _idx=manifest_idx) -> tuple:
+                    return MenuService._app_menu_item_sort_key(item, _idx)
 
                 ch.sort(key=_app_menu_sort_key)
             else:
@@ -389,12 +390,13 @@ class MenuService:
                 app_uuid = str(node.application_uuid)
                 idx = app_manifest_sort_indexes.get(app_uuid)
                 if idx:
-                    node.sort_order = MenuService._resolve_manifest_sort_order(
+                    manifest_order = MenuService._try_resolve_manifest_sort_order(
                         menu_path=node.path,
                         menu_name=node.name,
                         index=idx,
-                        application_uuid=app_uuid,
                     )
+                    if manifest_order is not None:
+                        node.sort_order = manifest_order
             if node.children:
                 MenuService._overlay_manifest_sort_order_on_tree(
                     node.children, app_manifest_sort_indexes
@@ -437,6 +439,7 @@ class MenuService:
         """
         # 验证父菜单（如果提供）
         parent_id = None
+        parent = None
         if data.parent_uuid:
             parent = await Menu.filter(
                 uuid=data.parent_uuid,
@@ -448,6 +451,17 @@ class MenuService:
                 raise ValidationError("父菜单不存在或不属于当前组织")
             
             parent_id = parent.id
+        
+        application_uuid = data.application_uuid
+        if parent and parent.application_uuid:
+            application_uuid = parent.application_uuid
+        elif application_uuid:
+            raise ValidationError(
+                "仅在选择应用菜单作为父级时可关联应用；系统菜单请勿填写关联应用"
+            )
+
+        if data.is_external and not (data.external_url or "").strip():
+            raise ValidationError("外部链接菜单必须填写外部链接 URL")
         
         # 可点击页面必须显式绑定权限码，禁止空值入库
         if data.path and (not data.is_external) and (not data.permission_code):
@@ -472,7 +486,7 @@ class MenuService:
             icon=data.icon,
             component=data.component,
             permission_code=data.permission_code,
-            application_uuid=data.application_uuid,
+            application_uuid=application_uuid,
             parent_id=parent_id,
             sort_order=data.sort_order,
             is_active=data.is_active,
@@ -851,6 +865,11 @@ class MenuService:
                 if not parent:
                     raise ValidationError("父菜单不存在或不属于当前组织")
                 
+                if parent.application_uuid:
+                    menu.application_uuid = parent.application_uuid
+                elif menu.application_uuid:
+                    menu.application_uuid = None
+                
                 # 检查循环引用：不能将自己或自己的子菜单设置为父菜单
                 if parent.id == menu.id:
                     raise ValidationError("不能将菜单设置为自己的父菜单")
@@ -877,6 +896,11 @@ class MenuService:
         for key, value in update_data.items():
             if hasattr(menu, key):
                 setattr(menu, key, value)
+
+        next_is_external = menu.is_external
+        next_external_url = menu.external_url
+        if next_is_external and not (next_external_url or "").strip():
+            raise ValidationError("外部链接菜单必须填写外部链接 URL")
         
         await menu.save()
         

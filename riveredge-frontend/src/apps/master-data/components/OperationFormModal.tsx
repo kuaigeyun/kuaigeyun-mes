@@ -30,8 +30,11 @@ import type { Operation, OperationCreate, OperationUpdate, DefectTypeMinimal, De
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { operationFormSchema } from '../schemas/operation';
 import { DefectTypeFormModal } from './DefectTypeFormModal';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-process-operation';
+const CUSTOM_FIELD_TABLE = 'master_data_operations';
 
 /** 上线「质检模式」前的工序可能未存该字段或库中为 none；按绑定关系推断展示与编辑 */
 function resolveInspectionModeForLegacyDetail(
@@ -78,6 +81,15 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
   const [inspectionPlanOptions, setInspectionPlanOptions] = useState<{ label: string; value: number }[]>([]);
   const [currentOperationId, setCurrentOperationId] = useState<number | null>(null);
   const [defectQuickAddOpen, setDefectQuickAddOpen] = useState(false);
+
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
 
@@ -202,6 +214,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     if (!open) return;
     formRef.current?.resetFields();
     setCurrentOperationId(null);
+    resetFieldValues();
 
     if (!editUuid) {
       formRef.current?.setFieldsValue({
@@ -312,6 +325,9 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           defaultWorkshopIds: detail.defaultWorkshopIds ?? dAny.default_workshop_ids ?? undefined,
           defaultEquipmentIds: detail.defaultEquipmentIds ?? dAny.default_equipment_ids ?? undefined,
         });
+        const fieldFormValues = await loadFieldValues(detail.id);
+        if (cancelled) return;
+        formRef.current?.setFieldsValue(fieldFormValues);
       } catch (err: any) {
         if (!cancelled) {
           messageApi.error(err?.message || t('app.master-data.operations.getDetailFailed'));
@@ -327,8 +343,11 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     try {
       setFormLoading(true);
       const formValues = formRef.current?.getFieldsValue?.() ?? {};
-      const defectTypeUuids = Array.isArray(formValues.defectTypeUuids) ? formValues.defectTypeUuids : (Array.isArray(values?.defectTypeUuids) ? values.defectTypeUuids : []);
-      const personnelConfigs = (formValues.defaultPersonnelConfigs || values?.defaultPersonnelConfigs || []) as string[];
+      const { customData, standardValues } = extractFormValues({ ...formValues, ...values });
+      const defectTypeUuids = Array.isArray(standardValues.defectTypeUuids)
+        ? standardValues.defectTypeUuids
+        : [];
+      const personnelConfigs = (standardValues.defaultPersonnelConfigs || []) as string[];
       const defaultOperatorUuids: string[] = [];
       const defaultTeamIds: number[] = [];
       personnelConfigs.forEach(val => {
@@ -336,7 +355,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         else if (val.startsWith('T_')) defaultTeamIds.push(Number(val.substring(2)));
       });
 
-      const resourceConfigs = (formValues.defaultResourceConfigs || values?.defaultResourceConfigs || []) as string[];
+      const resourceConfigs = (standardValues.defaultResourceConfigs || []) as string[];
       const defaultWorkCenterIds: number[] = [];
       const defaultStationIds: number[] = [];
       resourceConfigs.forEach(val => {
@@ -344,11 +363,11 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         else if (val.startsWith('S_')) defaultStationIds.push(Number(val.substring(2)));
       });
 
-      const defaultWorkshopIds = Array.isArray(formValues.defaultWorkshopIds) ? formValues.defaultWorkshopIds : (Array.isArray(values?.defaultWorkshopIds) ? values.defaultWorkshopIds : []);
-      const defaultEquipmentIds = Array.isArray(formValues.defaultEquipmentIds) ? formValues.defaultEquipmentIds : (Array.isArray(values?.defaultEquipmentIds) ? values.defaultEquipmentIds : []);
+      const defaultWorkshopIds = Array.isArray(standardValues.defaultWorkshopIds) ? standardValues.defaultWorkshopIds : [];
+      const defaultEquipmentIds = Array.isArray(standardValues.defaultEquipmentIds) ? standardValues.defaultEquipmentIds : [];
       
-      const inspectionMode = formValues.inspectionMode ?? values?.inspectionMode ?? 'none';
-      const defaultInspectionPlanId = formValues.defaultInspectionPlanId ?? values?.defaultInspectionPlanId;
+      const inspectionMode = standardValues.inspectionMode ?? 'none';
+      const defaultInspectionPlanId = standardValues.defaultInspectionPlanId;
       const inspectionPayload =
         inspectionMode === 'plan'
           ? { inspectionMode, defaultInspectionPlanId: defaultInspectionPlanId || null }
@@ -356,8 +375,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
 
       if (isEdit && editUuid) {
         const updatePayload: OperationUpdate = {
-          ...formValues,
-          ...values,
+          ...standardValues,
           defectTypeUuids,
           defaultOperatorUuids,
           defaultTeamIds,
@@ -372,6 +390,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         await operationApi.update(editUuid, updatePayload);
         messageApi.success(t('common.updateSuccess'));
         const updated = await operationApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         let ruleCode: string | undefined;
@@ -385,24 +404,23 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
         }
         if (autoGenerate && ruleCode) {
-          const currentCode = values.code?.trim?.() ?? '';
+          const currentCode = standardValues.code?.trim?.() ?? '';
           const useAutoCode = !currentCode || currentCode === previewCode;
           if (useAutoCode) {
             try {
               const codeResponse = await generateCode({ rule_code: ruleCode });
-              values.code = codeResponse.code;
+              standardValues.code = codeResponse.code;
             } catch {
-              if (previewCode) values.code = previewCode;
+              if (previewCode) standardValues.code = previewCode;
             }
           }
         }
-        if (!values.code?.trim?.()) {
+        if (!standardValues.code?.trim?.()) {
           messageApi.error(t('app.master-data.operations.codeRequired'));
           return;
         }
         const createPayload: OperationCreate = {
-          ...formValues,
-          ...values,
+          ...standardValues,
           defectTypeUuids,
           defaultOperatorUuids,
           defaultTeamIds,
@@ -414,12 +432,14 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
           isNodeOperation: false,
         };
         const created = await operationApi.create(createPayload);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -433,6 +453,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
     formRef.current?.resetFields();
     setPreviewCode(null);
     setCurrentOperationId(null);
+    resetFieldValues();
   };
 
   const optionsMap: Record<string, Array<{ value: any; label: string }>> = {
@@ -487,6 +508,9 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
       <SchemaFormRenderer
         schema={operationFormSchema}
         slots={{
+          customFields: (
+            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
+          ),
           inspectionBlock: (
             <>
               <QualityMasterDataHint scope="operation" />

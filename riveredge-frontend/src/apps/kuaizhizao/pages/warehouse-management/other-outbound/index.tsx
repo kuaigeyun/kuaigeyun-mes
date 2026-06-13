@@ -9,6 +9,13 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
@@ -79,6 +86,8 @@ interface OtherOutboundItem {
   notes?: string;
 }
 
+const OTHER_OUTBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_outbounds';
+
 const OtherOutboundPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -92,6 +101,34 @@ const OtherOutboundPage: React.FC = () => {
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: otherOutboundFormCustomFields,
+    customFieldValues: otherOutboundFormCustomFieldValues,
+    extractFormValues: extractOtherOutboundFormValues,
+    saveCustomFieldValues: saveOtherOutboundCustomFieldValues,
+    resetFieldValues: resetOtherOutboundFormFieldValues,
+  } = useCustomFields({
+    tableName: OTHER_OUTBOUND_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: otherOutboundListCustomFields,
+    generateCustomFieldColumns: generateOtherOutboundCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOtherOutboundRecordsWithCustomFields,
+    customFieldValues: otherOutboundDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOtherOutboundFieldValuesForDetail,
+    resetDetailFieldValues: resetOtherOutboundDetailFieldValues,
+  } = useCustomFieldsForList<OtherOutbound>({ tableName: OTHER_OUTBOUND_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (otherOutboundListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [otherOutboundListCustomFields.length]);
+
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const {
     selectedWarehouseId,
@@ -139,6 +176,8 @@ const OtherOutboundPage: React.FC = () => {
     };
     loadReasonType();
   }, []);
+
+  const otherOutboundCustomFieldColumns = generateOtherOutboundCustomFieldColumns();
 
   const columns: ProColumns<OtherOutbound>[] = [
     {
@@ -191,6 +230,7 @@ const OtherOutboundPage: React.FC = () => {
         );
       },
     },
+    ...otherOutboundCustomFieldColumns,
     {
       title: '操作',
       width: 180,
@@ -214,6 +254,9 @@ const OtherOutboundPage: React.FC = () => {
       const detail = await warehouseApi.otherOutbound.get(record.id!.toString());
       setOutboundDetail(detail as OtherOutboundDetail);
       setDetailDrawerVisible(true);
+      if (record.id != null) {
+        await loadOtherOutboundFieldValuesForDetail(record.id);
+      }
     } catch {
       messageApi.error('获取其他出库单详情失败');
     }
@@ -287,13 +330,14 @@ const OtherOutboundPage: React.FC = () => {
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
       const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
-      await warehouseApi.otherOutbound.create({
-        outbound_code: values.outbound_code,
-        reason_type: values.reason_type,
-        reason_desc: values.reason_desc,
-        warehouse_id: values.warehouse_id,
+      const { standardValues, customData } = extractOtherOutboundFormValues(values);
+      const created = await warehouseApi.otherOutbound.create({
+        outbound_code: standardValues.outbound_code,
+        reason_type: standardValues.reason_type,
+        reason_desc: standardValues.reason_desc,
+        warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
-        notes: values.notes,
+        notes: standardValues.notes,
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -304,7 +348,12 @@ const OtherOutboundPage: React.FC = () => {
           unit_price: Number(it.unit_price) || 0,
         })),
       });
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0 && Object.keys(customData).length > 0) {
+        await saveOtherOutboundCustomFieldValues(recordId, customData);
+      }
       messageApi.success('创建成功');
+      resetOtherOutboundFormFieldValues();
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
@@ -336,8 +385,13 @@ const OtherOutboundPage: React.FC = () => {
     },
     { title: '出库人', dataIndex: 'deliverer_name' },
     { title: '出库时间', dataIndex: 'delivery_time', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
   ];
+
+  const detailNotesColumn: ProDescriptionsItemProps<OtherOutboundDetail> = {
+    title: '备注',
+    dataIndex: 'notes',
+    span: 2,
+  };
 
   return (
     <>
@@ -362,7 +416,8 @@ const OtherOutboundPage: React.FC = () => {
                 warehouse_id: params.warehouse_id,
                 keyword: (params as any).keyword,
               });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const raw = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const data = await enrichOtherOutboundRecordsWithCustomFields(raw);
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
@@ -398,11 +453,32 @@ const OtherOutboundPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`其他出库单详情${outboundDetail?.outbound_code ? ` - ${outboundDetail.outbound_code}` : ''}`}
         open={detailDrawerVisible}
-        onClose={() => { setDetailDrawerVisible(false); setOutboundDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setOutboundDetail(null);
+          resetOtherOutboundDetailFieldValues();
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           outboundDetail ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
+            <>
+              <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, outboundDetail)} />
+              {hasCustomFieldsDetailContent(otherOutboundListCustomFields, otherOutboundDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={otherOutboundListCustomFields}
+                    customFieldValues={otherOutboundDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              {outboundDetail.notes ? (
+                <Descriptions
+                  column={2}
+                  style={{ marginTop: 16 }}
+                  items={detailDrawerDescriptionItems([detailNotesColumn], outboundDetail)}
+                />
+              ) : null}
+            </>
           ) : undefined
         }
         lines={
@@ -442,6 +518,7 @@ const OtherOutboundPage: React.FC = () => {
         onClose={() => {
           resetSelectedWarehouseId();
           setCreateModalVisible(false);
+          resetOtherOutboundFormFieldValues();
         }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
@@ -494,6 +571,10 @@ const OtherOutboundPage: React.FC = () => {
             </ProFormItem>
           </Col>
         </Row>
+        <CustomFieldsFormSection
+          customFields={otherOutboundFormCustomFields}
+          customFieldValues={otherOutboundFormCustomFieldValues}
+        />
         <div className="uni-table-detail" style={{ width: '100%' }}>
           <UniTableDetailHeader title="明细" required />
           <AntForm.List name="items">

@@ -1732,6 +1732,8 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         tenant_id: int,
         updates: list,
         updated_by: int,
+        *,
+        bypass_freeze: bool = False,
     ) -> Dict[str, Any]:
         """
         批量更新工单计划日期（甘特图拖拽后持久化）
@@ -1764,7 +1766,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 if not wo:
                     result["failed"].append({"id": int(wo_id), "reason": "工单不存在"})
                     continue
-                lock = freeze_lock_reason(wo, freeze_days)
+                lock = None if bypass_freeze else freeze_lock_reason(wo, freeze_days)
                 if lock == "frozen":
                     result["skipped_frozen"].append(int(wo_id))
                     continue

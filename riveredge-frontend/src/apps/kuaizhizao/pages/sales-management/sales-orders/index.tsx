@@ -59,6 +59,12 @@ import {
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import { strokeColorWithAlpha } from '../../../../../components/common/StatCardTrendArea';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -440,6 +446,8 @@ const DEFAULT_PAYMENT_TERMS_OPTIONS = [
   { label: '月结60天', value: 'NET60' },
 ];
 
+const SALES_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_orders';
+
 const SALES_ORDER_LIST_PATH = '/apps/kuaizhizao/sales-management/sales-orders';
 const SALES_ORDER_CREATE_PATH = `${SALES_ORDER_LIST_PATH}/new`;
 const salesOrderEditPath = (id: number) => `${SALES_ORDER_LIST_PATH}/${id}/edit`;
@@ -461,6 +469,31 @@ const SalesOrdersPage: React.FC = () => {
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: salesOrderFormCustomFields,
+    customFieldValues: salesOrderFormCustomFieldValues,
+    loadFieldValues: loadSalesOrderFormFieldValues,
+    extractFormValues: extractSalesOrderFormValues,
+    saveCustomFieldValues: saveSalesOrderCustomFieldValues,
+    resetFieldValues: resetSalesOrderFormFieldValues,
+  } = useCustomFields({ tableName: SALES_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: isFormPage });
+
+  const {
+    customFields: salesOrderListCustomFields,
+    generateCustomFieldColumns: generateSalesOrderCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichSalesOrderRecordsWithCustomFields,
+    customFieldValues: salesOrderDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSalesOrderFieldValuesForDetail,
+    resetDetailFieldValues: resetSalesOrderDetailFieldValues,
+  } = useCustomFieldsForList<SalesOrder>({ tableName: SALES_ORDER_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (salesOrderListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [salesOrderListCustomFields.length]);
+
   /** 表格搜索表单 ref，用于 statCard 点击时设置筛选并刷新 */
   const tableSearchFormRef = useRef<any>(null);
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
@@ -735,6 +768,7 @@ const SalesOrdersPage: React.FC = () => {
         ? getDocumentFormDraft<Record<string, unknown>>(salesOrderCreateDraftKey)
         : null;
     setFormEditOrder(null);
+    resetSalesOrderFormFieldValues();
     formRef.current?.resetFields();
     setTimeout(() => {
       formRef.current?.setFieldsValue({
@@ -883,6 +917,11 @@ const SalesOrdersPage: React.FC = () => {
       window.setTimeout(() => {
         formRef.current?.setFieldsValue(formData);
         lastPriceTypeRef.current = ((formData as any)?.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive');
+        if (orderId != null) {
+          loadSalesOrderFormFieldValues(orderId).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }
       }, 100);
     } catch (error: any) {
       messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
@@ -931,6 +970,9 @@ const SalesOrdersPage: React.FC = () => {
         setCurrentSalesOrder(data);
 
         setDrawerVisible(true);
+        if (data.id != null) {
+          await loadSalesOrderFieldValuesForDetail(data.id);
+        }
       } catch (error: any) {
         messageApi.error(t('app.kuaizhizao.salesOrder.detailFailed'));
       }
@@ -1176,6 +1218,12 @@ const SalesOrdersPage: React.FC = () => {
    */
   const handleSaveInternal = async (values: any, isDraft: boolean) => {
     try {
+      const { customData, standardValues } = extractSalesOrderFormValues(values);
+      Object.keys(values).forEach((key) => {
+        if (key.startsWith('custom_')) delete values[key];
+      });
+      Object.assign(values, standardValues);
+
       const validItems = normalizeFormListItems<SalesOrderItem>(values.items).filter(
         (it) => it.material_id && Number((it as any).required_quantity) > 0,
       );
@@ -1280,6 +1328,10 @@ const SalesOrdersPage: React.FC = () => {
       } else {
         const res = await createSalesOrder(values);
         orderId = (res as any)?.id;
+      }
+
+      if (orderId != null) {
+        await saveSalesOrderCustomFieldValues(orderId, customData);
       }
 
       // 2. 草稿保存直接提示
@@ -1847,6 +1899,7 @@ const SalesOrdersPage: React.FC = () => {
         const res = await getSalesOrder(targetId, true, true);
         setCurrentSalesOrder(res);
         setTrackingRefreshKey((k) => k + 1);
+        await loadSalesOrderFieldValuesForDetail(targetId);
       } catch {
         // 忽略
       }
@@ -2352,6 +2405,7 @@ const SalesOrdersPage: React.FC = () => {
   );
 
   // 订单视图列（一行一单，可展开明细）
+  const salesOrderCustomFieldColumns = generateSalesOrderCustomFieldColumns();
   const orderColumns: ProColumns<SalesOrder>[] = [
     {
       title: t('app.kuaizhizao.salesOrder.colOrderPrimary'),
@@ -2466,6 +2520,7 @@ const SalesOrdersPage: React.FC = () => {
         );
       },
     },
+    ...salesOrderCustomFieldColumns,
     {
       title: t('app.kuaizhizao.salesOrder.actions'),
       fixed: 'right' as const,
@@ -2983,6 +3038,10 @@ const SalesOrdersPage: React.FC = () => {
             </Col>
           </Row>
 
+          <CustomFieldsFormSection
+            customFields={salesOrderFormCustomFields}
+            customFieldValues={salesOrderFormCustomFieldValues}
+          />
 
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
             {({ getFieldValue: getFormValue }: any) => {
@@ -3707,7 +3766,8 @@ const SalesOrdersPage: React.FC = () => {
                   if (o.id) map.set(String(o.id), o.id);
                 });
                 rowKeyToOrderIdRef.current = map;
-                return { data: orders, success: true, total };
+                const enriched = await enrichSalesOrderRecordsWithCustomFields(orders);
+                return { data: enriched, success: true, total };
               }
               return { data: toFlatRows(orders), success: true, total };
             } catch (error: any) {
@@ -3886,6 +3946,8 @@ const SalesOrdersPage: React.FC = () => {
           shippingMethodOptions={shippingMethodOptions}
           paymentTermsOptions={paymentTermsOptions}
           feeTypeOptions={feeTypeOptions}
+          customFields={salesOrderListCustomFields}
+          customFieldValues={salesOrderDetailCustomFieldValues}
         >
           <DetailDrawerTemplate
             title={
@@ -3916,6 +3978,7 @@ const SalesOrdersPage: React.FC = () => {
             open={drawerVisible}
             onClose={() => {
               setDrawerVisible(false);
+              resetSalesOrderDetailFieldValues();
             }}
             width={DRAWER_CONFIG.HALF_WIDTH}
             zIndex={salesOrderDetailDrawerZIndex}

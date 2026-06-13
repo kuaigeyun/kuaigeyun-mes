@@ -3,7 +3,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 技能管理页面
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -20,6 +20,11 @@ import { SkillFormModal } from '../../../components/SkillFormModal';
 import type { Skill } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const SKILL_DETAIL_COLUMNS: ProDescriptionsItemProps<Skill>[] = [
   { title: '技能编号', dataIndex: 'code' },
@@ -45,6 +50,21 @@ const SkillsPage: React.FC = () => {
   const [skillTrackingRefreshKey, setSkillTrackingRefreshKey] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Skill>({ tableName: 'master_data_skills' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const skillTracking = useDocumentTracking(
     drawerVisible && skillDetail?.id != null ? 'performance_skill' : undefined,
@@ -95,6 +115,9 @@ const SkillsPage: React.FC = () => {
       setDetailLoading(true);
       const detail = await skillApi.get(record.uuid);
       setSkillDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
       setSkillTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.skills.getDetailFailed'));
@@ -105,9 +128,12 @@ const SkillsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setSkillDetail(null);
+    resetDetailFieldValues();
   };
 
-  const columns: ProColumns<Skill>[] = [
+  const columns: ProColumns<Skill>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '技能编号',
       dataIndex: 'code',
@@ -122,6 +148,7 @@ const SkillsPage: React.FC = () => {
     { title: '技能名称', dataIndex: 'name', width: 200, ellipsis: true },
     { title: '技能分类', dataIndex: 'category', width: 150, hideInSearch: true },
     { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    ...customFieldColumns,
     {
       title: '启用',
       dataIndex: 'isActive',
@@ -178,7 +205,8 @@ const SkillsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields]);
 
   return (
     <>
@@ -197,8 +225,9 @@ const SkillsPage: React.FC = () => {
             try {
               const result = await skillApi.list(apiParams);
               const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const enrichedRows = await enrichRecordsWithCustomFields(rows);
+              const total = enrichedRows.length < pageSize ? skip + enrichedRows.length : skip + enrichedRows.length + 1;
+              return { data: enrichedRows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || '获取技能列表失败');
               return { data: [], success: false, total: 0 };
@@ -240,6 +269,11 @@ const SkillsPage: React.FC = () => {
                   items={buildMasterDetailDescriptionItems(skillDetail, SKILL_DETAIL_COLUMNS)}
                 />
               </DetailDrawerSection>
+              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields')}>
+                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {

@@ -5,7 +5,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 提供假期的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -22,6 +22,11 @@ import { HolidayFormModal } from '../../../components/HolidayFormModal';
 import type { Holiday } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const HOLIDAY_DETAIL_COLUMNS: ProDescriptionsItemProps<Holiday>[] = [
   { title: '假期名称', dataIndex: 'name' },
@@ -47,6 +52,21 @@ const HolidaysPage: React.FC = () => {
   const [holidayTrackingRefreshKey, setHolidayTrackingRefreshKey] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Holiday>({ tableName: 'master_data_holidays' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const holidayTracking = useDocumentTracking(
     drawerVisible && holidayDetail?.id != null ? 'performance_holiday' : undefined,
@@ -109,6 +129,9 @@ const HolidaysPage: React.FC = () => {
       setDetailLoading(true);
       const detail = await holidayApi.get(record.uuid);
       setHolidayDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
       setHolidayTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.holidays.getDetailFailed'));
@@ -121,9 +144,12 @@ const HolidaysPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setHolidayDetail(null);
+    resetDetailFieldValues();
   };
 
-  const columns: ProColumns<Holiday>[] = [
+  const columns: ProColumns<Holiday>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '假期名称',
       dataIndex: 'name',
@@ -138,6 +164,7 @@ const HolidaysPage: React.FC = () => {
     { title: '假期日期', dataIndex: 'holidayDate', width: 150, valueType: 'date', sorter: true },
     { title: '假期类型', dataIndex: 'holidayType', width: 150, hideInSearch: true },
     { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    ...customFieldColumns,
     {
       title: '启用',
       dataIndex: 'isActive',
@@ -194,7 +221,8 @@ const HolidaysPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields]);
 
   return (
     <>
@@ -212,8 +240,9 @@ const HolidaysPage: React.FC = () => {
             try {
               const result = await holidayApi.list(apiParams);
               const rows = Array.isArray(result) ? result : [];
-              const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
-              return { data: rows, success: true, total };
+              const enrichedRows = await enrichRecordsWithCustomFields(rows);
+              const total = enrichedRows.length < pageSize ? skip + enrichedRows.length : skip + enrichedRows.length + 1;
+              return { data: enrichedRows, success: true, total };
             } catch (error: any) {
               messageApi.error(error?.message || '获取假期列表失败');
               return { data: [], success: false, total: 0 };
@@ -255,6 +284,11 @@ const HolidaysPage: React.FC = () => {
                   items={buildMasterDetailDescriptionItems(holidayDetail, HOLIDAY_DETAIL_COLUMNS)}
                 />
               </DetailDrawerSection>
+              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields')}>
+                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title="生命周期">
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {

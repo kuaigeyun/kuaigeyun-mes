@@ -34,8 +34,11 @@ import {
   normalizeCustomerContactsForSubmit,
 } from '../utils/partner-form-map';
 import { CustomerContactsFormTable } from './CustomerContactsFormTable';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-supply-chain-customer';
+const CUSTOM_FIELD_TABLE = 'master_data_customers';
 
 export interface CustomerFormModalProps {
   open: boolean;
@@ -72,6 +75,15 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [quickCreateName, setQuickCreateName] = useState('');
   const [quickCreateAnchorEl, setQuickCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
+
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
 
@@ -127,6 +139,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       isPublic: true,
       salesmanId: undefined,
     });
+    resetFieldValues();
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -174,8 +187,10 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     setEffectiveRuleCode(null);
     customerApi
       .get(editUuid)
-      .then((detail) => {
+      .then(async (detail) => {
         formRef.current?.setFieldsValue(customerDetailToFormValues(detail));
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.customers.getDetailFailed'));
@@ -186,12 +201,13 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     try {
       setFormLoading(true);
       const currentUser = useGlobalStore.getState().currentUser;
-      const { isPublic: _isPublic, ...restValues } = values;
+      const { customData, standardValues } = extractFormValues(values);
+      const { isPublic: _isPublic, ...restValues } = standardValues;
       const payload: Record<string, unknown> = {
         ...restValues,
-        contacts: normalizeCustomerContactsForSubmit(values.contacts),
+        contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };
-      if (values.isPublic === true) {
+      if (standardValues.isPublic === true) {
         payload.salesmanId = undefined;
       } else if (!payload.salesmanId && currentUser?.id) {
         payload.salesmanId = currentUser.id;
@@ -200,31 +216,34 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         await customerApi.update(editUuid, payload as CustomerUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await customerApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (values.code === previewCode || !values.code)
+          (standardValues.code === previewCode || !standardValues.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            values.code = codeResponse.code;
+            payload.code = codeResponse.code;
           } catch {
             // keep form code
           }
         }
-        if (values.isActive === undefined) {
-          values.isActive = true;
+        if (payload.isActive === undefined) {
+          payload.isActive = true;
         }
         const created = await customerApi.create(payload as CustomerCreate);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -236,6 +255,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    resetFieldValues();
   };
 
   const handleQuickCreateSubmit = async () => {
@@ -325,6 +345,12 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                         },
                       }}
                     />
+                    <Col span={24}>
+                      <CustomFieldsFormSection
+                        customFields={customFields}
+                        customFieldValues={customFieldValues}
+                      />
+                    </Col>
                     <Col span={24}>
                       <CustomerContactsFormTable
                         contactTitleOptions={optionsMap.contactTitle ?? []}

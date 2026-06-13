@@ -174,6 +174,10 @@ const SchedulingPage: React.FC = () => {
     const ids = raw.split(',').map((s) => Number(s.trim())).filter((n) => !Number.isNaN(n) && n > 0);
     return ids.length > 0 ? ids : undefined;
   }, [searchParams]);
+  const filterPlanDate = useMemo(() => {
+    const raw = searchParams.get('plan_date')?.trim();
+    return raw || undefined;
+  }, [searchParams]);
 
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -260,10 +264,16 @@ const SchedulingPage: React.FC = () => {
       if (filterWorkOrderIds?.length) {
         const idSet = new Set(filterWorkOrderIds);
         list = list.filter((wo: WorkOrderForGantt) => idSet.has(wo.id));
+      } else if (filterPlanDate) {
+        list = list.filter(
+          (wo: WorkOrderForGantt) =>
+            wo.planned_start_date &&
+            dayjs(wo.planned_start_date).format('YYYY-MM-DD') === filterPlanDate,
+        );
       }
       return list as WorkOrderForGantt[];
     },
-    { refreshDeps: [filterWorkOrderIds, buildWorkOrderParams] }
+    { refreshDeps: [filterWorkOrderIds, filterPlanDate, buildWorkOrderParams] }
   );
 
   const ganttBoardWorkOrders = useMemo(
@@ -331,12 +341,13 @@ const SchedulingPage: React.FC = () => {
       const res = await visualSchedulingApi.boardScan({
         horizon_days: schedulingConstraints.rolling_horizon_days || 14,
         work_order_ids: scanBoardWorkOrderIds,
+        plan_date: filterPlanDate,
       });
       setBoardScan(res);
       return res;
     },
     {
-      refreshDeps: [schedulingConstraints.rolling_horizon_days, scanBoardWorkOrderIdsKey],
+      refreshDeps: [schedulingConstraints.rolling_horizon_days, scanBoardWorkOrderIdsKey, filterPlanDate],
     }
   );
 
@@ -1210,6 +1221,23 @@ const SchedulingPage: React.FC = () => {
           action={
             <Button size="small" onClick={() => navigate('/apps/kuaizhizao/plan-management/dashboard')}>
               返回协调中心
+            </Button>
+          }
+        />
+      ) : null}
+      {filterPlanDate ? (
+        <Alert
+          type="info"
+          showIcon
+          closable
+          style={{ marginBottom: 12 }}
+          message={`已按滚动计划日 ${filterPlanDate} 过滤待排池`}
+          action={
+            <Button
+              size="small"
+              onClick={() => navigate(`/apps/kuaizhizao/plan-management/rolling-scheduling?plan_date=${filterPlanDate}`)}
+            >
+              返回滚动计划
             </Button>
           }
         />

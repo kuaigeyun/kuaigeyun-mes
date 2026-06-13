@@ -39,6 +39,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 供应商管理列表页面组件
@@ -71,6 +76,21 @@ const SuppliersPage: React.FC = () => {
     return seed;
   });
   const supplierDetailReqRef = useRef(0);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Supplier>({ tableName: 'master_data_suppliers' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const supplierImportTemplate = useMemo(
     () =>
@@ -217,6 +237,9 @@ const SuppliersPage: React.FC = () => {
       const detail = await supplierApi.get(record.uuid);
       if (supplierDetailReqRef.current !== req) return;
       setSupplierDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (supplierDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.suppliers.getDetailFailed'));
@@ -234,6 +257,7 @@ const SuppliersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setSupplierDetail(null);
+    resetDetailFieldValues();
   };
 
   const handleModalSuccess = () => {
@@ -506,7 +530,9 @@ const SuppliersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Supplier>[] = [
+  const columns: ProColumns<Supplier>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('field.supplier.code'),
       dataIndex: 'code',
@@ -602,6 +628,7 @@ const SuppliersPage: React.FC = () => {
       ),
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
@@ -645,7 +672,8 @@ const SuppliersPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t, dictLabel]);
 
   /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
   const detailColumnsBasic: ProDescriptionsItemProps<Supplier>[] = [
@@ -804,8 +832,9 @@ const SuppliersPage: React.FC = () => {
           try {
             const result = await supplierApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = await enrichRecordsWithCustomFields(listData);
             return {
-              data: listData,
+              data: enrichedData,
               success: true,
               total: typeof result?.total === 'number' ? result.total : listData.length,
             };
@@ -884,12 +913,17 @@ const SuppliersPage: React.FC = () => {
                   items={detailDrawerDescriptionItems(detailColumnsInvoice, supplierDetail)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title={t('field.partner.tabExtended')} marginBottom={0}>
+              <DetailDrawerSection title={t('field.partner.tabExtended')}>
                 <Descriptions
                   column={2}
                   items={detailDrawerDescriptionItems(detailColumnsExtended, supplierDetail)}
                 />
               </DetailDrawerSection>
+              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
+                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+                </DetailDrawerSection>
+              ) : null}
             </>
           ) : null
         }

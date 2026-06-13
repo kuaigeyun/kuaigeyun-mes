@@ -23,6 +23,7 @@ STANDARD_ACTIONS: set[str] = {
     "claim",
     "recycle",
     "release",
+    "publish",
     "close",
     "obsolete",
     # 试模单等业务子操作（manifest 声明后由路由路径映射，勿用 update 代替）
@@ -63,6 +64,7 @@ ACTION_DISPLAY_LABELS: dict[str, str] = {
     "claim": "认领",
     "recycle": "回收",
     "release": "释放",
+    "publish": "发布",
     "close": "关闭",
     "obsolete": "作废",
 }
@@ -91,6 +93,7 @@ MANIFEST_ACTION_ORDER: tuple[str, ...] = (
     "claim",
     "recycle",
     "release",
+    "publish",
     "dispatch",
     "recall",
     "confirm_adjustment",

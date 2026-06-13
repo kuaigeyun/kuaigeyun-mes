@@ -21,8 +21,11 @@ import { operationApi, processRouteApi, unwrapProcessPagedList } from '../servic
 import { uploadMultipleFiles, buildImageUploadFileUrls } from '../../../services/file';
 import { generateCode, getCodeRulePageConfig, testGenerateCode } from '../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRulePage';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-process-drawing';
+const CUSTOM_FIELD_TABLE = 'apps_master_data_engineering_drawings';
 const DRAWING_ACCEPT = '.pdf,.dwg,.dxf,.step,.stp,.png,.jpg,.jpeg';
 const DRAWING_CATEGORY = 'engineering_drawing';
 
@@ -81,6 +84,15 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
 
   const isEdit = Boolean(editUuid);
 
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
+
   const drawingTypeOptions = [
     { label: t('app.master-data.drawings.type.part'), value: 'part' },
     { label: t('app.master-data.drawings.type.assembly'), value: 'assembly' },
@@ -116,6 +128,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     loadRelationOptions();
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ revision: 'A', drawingType: 'part' });
+    resetFieldValues();
 
     if (!editUuid) {
       (async () => {
@@ -167,6 +180,8 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
           operationUuids: detail.operationUuids ?? [],
           description: detail.description,
         });
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: Error) => {
         messageApi.error(err?.message || t('app.master-data.drawings.getDetailFailed'));
@@ -188,31 +203,33 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   });
 
   const handleSubmit = async (values: Record<string, unknown>) => {
-    const mainUuids = extractUploadUuids(values.mainFile as UploadFile[]);
+    const { customData, standardValues } = extractFormValues(values);
+    const mainUuids = extractUploadUuids(standardValues.mainFile as UploadFile[]);
     if (!mainUuids.length) {
       messageApi.error(t('app.master-data.drawings.fileRequired'));
       return;
     }
-    const suppUuids = extractUploadUuids(values.supplementaryFiles as UploadFile[]);
+    const suppUuids = extractUploadUuids(standardValues.supplementaryFiles as UploadFile[]);
 
     try {
       setFormLoading(true);
       if (isEdit && editUuid) {
         await drawingApi.update(editUuid, {
-          name: values.name as string,
-          drawingType: values.drawingType as EngineeringDrawingCreate['drawingType'],
+          name: standardValues.name as string,
+          drawingType: standardValues.drawingType as EngineeringDrawingCreate['drawingType'],
           fileUuid: mainUuids[0],
           supplementaryFileUuids: suppUuids.length ? suppUuids : [],
-          materialUuids: (values.materialUuids as string[]) ?? [],
-          processRouteUuids: (values.processRouteUuids as string[]) ?? [],
-          operationUuids: (values.operationUuids as string[]) ?? [],
-          description: values.description as string | undefined,
+          materialUuids: (standardValues.materialUuids as string[]) ?? [],
+          processRouteUuids: (standardValues.processRouteUuids as string[]) ?? [],
+          operationUuids: (standardValues.operationUuids as string[]) ?? [],
+          description: standardValues.description as string | undefined,
         });
         messageApi.success(t('common.updateSuccess'));
         const updated = await drawingApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
-        let code = values.code as string;
+        let code = standardValues.code as string;
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
@@ -228,22 +245,24 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         }
         const created = await drawingApi.create({
           code,
-          name: values.name as string,
-          revision: (values.revision as string) || 'A',
-          drawingType: (values.drawingType as EngineeringDrawingCreate['drawingType']) || 'part',
+          name: standardValues.name as string,
+          revision: (standardValues.revision as string) || 'A',
+          drawingType: (standardValues.drawingType as EngineeringDrawingCreate['drawingType']) || 'part',
           fileUuid: mainUuids[0],
           supplementaryFileUuids: suppUuids.length ? suppUuids : undefined,
-          materialUuids: (values.materialUuids as string[]) ?? undefined,
-          processRouteUuids: (values.processRouteUuids as string[]) ?? undefined,
-          operationUuids: (values.operationUuids as string[]) ?? undefined,
-          description: values.description as string | undefined,
+          materialUuids: (standardValues.materialUuids as string[]) ?? undefined,
+          processRouteUuids: (standardValues.processRouteUuids as string[]) ?? undefined,
+          operationUuids: (standardValues.operationUuids as string[]) ?? undefined,
+          description: standardValues.description as string | undefined,
         });
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      resetFieldValues();
     } catch (err: any) {
       messageApi.error(err?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -255,6 +274,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    resetFieldValues();
   };
 
   return (
@@ -301,6 +321,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         rules={[{ required: true }]}
         colProps={{ span: 12 }}
       />
+      <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
       <ProFormUploadButton
         name="mainFile"
         label={t('app.master-data.drawings.uploadMain')}

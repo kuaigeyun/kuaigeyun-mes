@@ -21,6 +21,11 @@ import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle'
 import type { LifecycleResult } from '../../../../../../components/uni-lifecycle/types';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../../components/document-tracking-panel';
 import { DetailDrawerSection, DetailDrawerInlineFullChain } from '../../../../../../components/layout-templates';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../../components/custom-fields';
+import type { CustomField } from '../../../../../../services/customField';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
@@ -34,6 +39,8 @@ export interface SalesOrderDetailBodyProps {
   shippingMethodOptions?: Array<{ label: string; value: string }>;
   paymentTermsOptions?: Array<{ label: string; value: string }>;
   feeTypeOptions?: any[];
+  customFields?: CustomField[];
+  customFieldValues?: Record<string, any>;
 }
 
 interface SalesOrderDetailContextValue {
@@ -44,6 +51,8 @@ interface SalesOrderDetailContextValue {
   shippingMethodOptions: Array<{ label: string; value: string }>;
   paymentTermsOptions: Array<{ label: string; value: string }>;
   handlePrintSalesOrder: () => Promise<void>;
+  customFields: CustomField[];
+  customFieldValues: Record<string, any>;
 }
 
 const SalesOrderDetailContext = createContext<SalesOrderDetailContextValue | null>(null);
@@ -63,6 +72,8 @@ export const SalesOrderDetailProvider: React.FC<
   shippingMethodOptions: shippingProp,
   paymentTermsOptions: paymentProp,
   feeTypeOptions: feeProp,
+  customFields: customFieldsProp = [],
+  customFieldValues: customFieldValuesProp = {},
   children,
 }) => {
   const { t } = useTranslation();
@@ -176,6 +187,8 @@ export const SalesOrderDetailProvider: React.FC<
       shippingMethodOptions,
       paymentTermsOptions,
       handlePrintSalesOrder,
+      customFields: customFieldsProp,
+      customFieldValues: customFieldValuesProp,
     }),
     [
       order,
@@ -185,6 +198,8 @@ export const SalesOrderDetailProvider: React.FC<
       shippingMethodOptions,
       paymentTermsOptions,
       handlePrintSalesOrder,
+      customFieldsProp,
+      customFieldValuesProp,
     ],
   );
 
@@ -219,8 +234,17 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
-  const { order, shippingMethodOptions, paymentTermsOptions, handlePrintSalesOrder } = useSalesOrderDetailContext();
+  const {
+    order,
+    shippingMethodOptions,
+    paymentTermsOptions,
+    handlePrintSalesOrder,
+    customFields,
+    customFieldValues,
+  } = useSalesOrderDetailContext();
+  const showCustomFields = hasCustomFieldsDetailContent(customFields, customFieldValues);
   return (
+    <>
     <Descriptions
       column={3}
       size="small"
@@ -322,9 +346,22 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
           label: '总费用金额',
           children: <AmountDisplay resource={SO} fieldName="amount" value={order.total_fee_amount ?? 0} />,
         },
+      ]}
+    />
+    {showCustomFields ? (
+      <div style={{ marginTop: 16 }}>
+        <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+      </div>
+    ) : null}
+    <Descriptions
+      column={3}
+      size="small"
+      style={{ marginTop: showCustomFields ? 16 : 0 }}
+      items={[
         { key: 'notes', label: t('app.kuaizhizao.salesOrder.notes'), children: order.notes || '-', span: 3 },
       ]}
     />
+    </>
   );
 };
 

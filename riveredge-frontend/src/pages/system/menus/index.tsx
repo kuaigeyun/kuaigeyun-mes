@@ -8,7 +8,7 @@
 
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../components/uni-action';
-import { ProFormText, ProFormTextArea, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProDescriptionsItemProps } from '@ant-design/pro-components';
+import { ProFormText, ProFormSwitch, ProColumns, ProFormTreeSelect, ProFormSelect, ProFormItem, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 import {
   DeleteOutlined,
   PlusOutlined,
@@ -19,11 +19,11 @@ import {
   HomeOutlined,
   SettingOutlined,
 } from '@ant-design/icons';
-import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Popconfirm, Tooltip, Descriptions, Col } from 'antd';
 import { flushDrawerOpen, ListPageTemplate, FormModalTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../components/uni-detail';
 import { UniTable } from '../../../components/uni-table';
-import * as Icons from '@ant-design/icons';
+import MenuIconPicker, { renderMenuIconByKey } from '../../../components/MenuIconPicker';
 import {
   getMenuTree,
   getMenuDetail,
@@ -47,13 +47,22 @@ import {
   translateAppMenuItemName,
 } from '../../../utils/menuTranslation';
 
-// 动态图标组件
-const IconItem = ({ icon }: { icon?: string }) => {
-  if (!icon) return null;
-  const AntdIcons = Icons as unknown as Record<string, React.ComponentType>;
-  const Icon = AntdIcons[icon];
-  return Icon ? <Icon /> : null;
-};
+// 菜单图标展示（与侧栏 ManufacturingIcons 一致）
+const IconItem = ({ icon }: { icon?: string }) => renderMenuIconByKey(icon, 16);
+
+function findMenuInTree(uuid: string | undefined | null, nodes: MenuTree[]): MenuTree | undefined {
+  if (!uuid) return undefined;
+  for (const node of nodes) {
+    if (node.uuid === uuid) return node;
+    if (node.children?.length) {
+      const found = findMenuInTree(uuid, node.children);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+const trimField = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
   /**
    * 递归获取所有菜单 UUID（用于一键展开）
@@ -81,6 +90,7 @@ const MenuListPage: React.FC = () => {
     staleTime: 30 * 1000,
   });
   const actionRef = useRef<any>();
+  const menuFormRef = useRef<ProFormInstance>();
   const menuDetailReqRef = useRef(0);
 
   const menuDetailDescColumns = useMemo<ProDescriptionsItemProps<Menu>[]>(
@@ -92,7 +102,19 @@ const MenuListPage: React.FC = () => {
           translateAppMenuItemName(row?.name, row?.path, t, (row as any)?.children),
       },
       { title: t('pages.system.menus.path'), dataIndex: 'path' },
-      { title: t('pages.system.menus.icon'), dataIndex: 'icon' },
+      {
+        title: t('pages.system.menus.icon'),
+        dataIndex: 'icon',
+        render: (_: unknown, row: Menu) =>
+          row?.icon ? (
+            <Space size={6}>
+              {renderMenuIconByKey(row.icon, 16)}
+              <span>{row.icon}</span>
+            </Space>
+          ) : (
+            '—'
+          ),
+      },
       { title: t('pages.system.menus.component'), dataIndex: 'component' },
       { title: t('pages.system.menus.permissionCode'), dataIndex: 'permission_code' },
       { title: t('pages.system.menus.sort'), dataIndex: 'sort_order' },
@@ -117,27 +139,6 @@ const MenuListPage: React.FC = () => {
       { title: t('pages.system.menus.externalUrl'), dataIndex: 'external_url' },
       { title: t('pages.system.menus.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('pages.system.menus.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-      {
-        title: t('pages.system.menus.metadata'),
-        dataIndex: 'meta',
-        render: (_: unknown, entity: Menu) => (
-          <pre
-            style={{
-              backgroundColor: '#f6f8fa',
-              padding: '12px',
-              borderRadius: '8px',
-              border: '1px solid #d0d7de',
-              fontSize: '12px',
-              fontFamily: 'monospace',
-              margin: 0,
-              maxHeight: '200px',
-              overflow: 'auto',
-            }}
-          >
-            {JSON.stringify(entity?.meta, null, 2)}
-          </pre>
-        ),
-      },
     ],
     [t]
   );
@@ -372,16 +373,18 @@ const MenuListPage: React.FC = () => {
   }, [allMenus, messageApi, refreshLayoutMenus, t]);
 
   const handleCreate = useCallback((parentUuid?: string) => {
+    const parent = findMenuInTree(parentUuid, menuTreeData);
     setIsEdit(false);
     setCurrentMenuUuid(null);
     setFormInitialValues({
       parent_uuid: parentUuid || null,
+      application_uuid: parent?.application_uuid || undefined,
       is_active: true,
       is_external: false,
       sort_order: 0,
     });
     setModalVisible(true);
-  }, []);
+  }, [menuTreeData]);
 
   const handleEdit = useCallback(async (record: Menu) => {
     try {
@@ -389,10 +392,8 @@ const MenuListPage: React.FC = () => {
         setCurrentMenuUuid(record.uuid);
         const detail = await getMenuDetail(record.uuid);
         
-        setFormInitialValues({
-            ...detail,
-            meta: detail.meta ? JSON.stringify(detail.meta, null, 2) : '',
-        });
+        const { meta: _meta, ...detailWithoutMeta } = detail;
+        setFormInitialValues(detailWithoutMeta);
         setModalVisible(true);
     } catch (error: any) {
         messageApi.error(error.message || t('pages.system.menus.getDetailFailed'));
@@ -427,22 +428,7 @@ const MenuListPage: React.FC = () => {
   const handleSubmit = useCallback(async (values: any) => {
     try {
         setFormLoading(true);
-        // 处理 meta：空串不传，避免后端 422（meta 须为 object）；合法 JSON 字符串则解析
-        if (values.meta !== undefined && values.meta !== null) {
-          if (typeof values.meta === 'string') {
-            const trimmed = values.meta.trim();
-            if (trimmed === '') {
-              delete values.meta;
-            } else {
-              try {
-                values.meta = JSON.parse(values.meta);
-              } catch {
-                values.meta = {};
-              }
-            }
-          }
-        }
-        // 只提交后端支持的字段，去掉详情里可能混入的只读字段
+        // 只提交后端支持的字段，去掉详情里可能混入的只读字段；meta 由 manifest 同步维护，不在此编辑
         const payload: Record<string, any> = {
           name: values.name,
           path: values.path,
@@ -456,13 +442,18 @@ const MenuListPage: React.FC = () => {
           is_external: values.is_external,
           external_url: values.external_url,
         };
-        if (values.meta !== undefined) {
-          payload.meta = values.meta;
-        }
         Object.keys(payload).forEach((k) => {
           const v = payload[k];
           if (v === undefined) delete payload[k];
         });
+        if (!isEdit) {
+          const parent = findMenuInTree(values.parent_uuid, menuTreeData);
+          if (parent?.application_uuid) {
+            payload.application_uuid = parent.application_uuid;
+          } else {
+            delete payload.application_uuid;
+          }
+        }
         
         if (isEdit && currentMenuUuid) {
             await updateMenu(currentMenuUuid, payload as any);
@@ -479,7 +470,7 @@ const MenuListPage: React.FC = () => {
     } finally {
         setFormLoading(false);
     }
-  }, [currentMenuUuid, isEdit, messageApi, refreshLayoutMenus, t]);
+  }, [currentMenuUuid, isEdit, menuTreeData, messageApi, refreshLayoutMenus, t]);
 
   const columns: ProColumns<Menu>[] = useMemo(() => [
     {
@@ -496,9 +487,12 @@ const MenuListPage: React.FC = () => {
                treeItem.children
              );
              return (
-               <Space>
+               <Space size={6}>
                  <IconItem icon={record.icon} />
                  <span style={{ fontWeight: 500 }}>{displayName}</span>
+                 {backendHome?.menu_uuid === record.uuid ? (
+                   <Tag color="gold">{t('pages.system.menus.backendHomeCurrent')}</Tag>
+                 ) : null}
                </Space>
              );
         }
@@ -510,23 +504,19 @@ const MenuListPage: React.FC = () => {
         ellipsis: true,
     },
     {
-        title: t('pages.system.menus.backendHome'),
-        dataIndex: 'backend_home',
-        width: 110,
-        hideInSearch: true,
-        render: (_: unknown, record: Menu) =>
-          backendHome?.menu_uuid === record.uuid ? (
-            <Tag color="gold">{t('pages.system.menus.backendHomeCurrent')}</Tag>
-          ) : (
-            <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
-          ),
-    },
-    {
         title: t('pages.system.menus.icon'),
         dataIndex: 'icon',
         width: 100,
         hideInSearch: true,
-        render: (_: any, record: Menu) => record.icon ? <Tag>{record.icon}</Tag> : '-'
+        render: (_: any, record: Menu) =>
+          record.icon ? (
+            <Space size={4}>
+              {renderMenuIconByKey(record.icon, 14)}
+              <Tag>{record.icon}</Tag>
+            </Space>
+          ) : (
+            '-'
+          ),
     },
     {
         title: t('pages.system.menus.component'),
@@ -556,15 +546,6 @@ const MenuListPage: React.FC = () => {
                 {record.is_active ? t('pages.system.applications.enabled') : t('pages.system.applications.disabled')}
             </Tag>
         )
-    },
-    {
-        title: t('pages.system.menus.externalLink'),
-      dataIndex: 'is_external',
-      width: 100,
-      hideInSearch: true,
-      render: (_: any, record: Menu) => (
-        record.is_external ? <Tag color="orange">{t('pages.system.menus.externalYes')}</Tag> : <span style={{color: '#ccc'}}>-</span>
-      ),
     },
     {
         title: t('pages.system.menus.source'),
@@ -638,22 +619,15 @@ const MenuListPage: React.FC = () => {
                   </span>
                 </Tooltip>
               </Popconfirm>,
-              <Tooltip {...rowActionKind('create')}
+              <Button {...rowActionKind('create')}
                 key="addChild"
-                title={isAppMenu ? t('menu.system.appMenuAddDisabled') : undefined}
+                type="default"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => handleCreate(record.uuid)}
               >
-                <span>
-                  <Button
-                    type="default"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    onClick={() => handleCreate(record.uuid)}
-                    disabled={isAppMenu}
-                  >
-                    {t('pages.system.menus.addChild')}
-                  </Button>
-                </span>
-              </Tooltip>,
+                {t('pages.system.menus.addChild')}
+              </Button>,
             ];
             return actions;
         }
@@ -755,10 +729,34 @@ const MenuListPage: React.FC = () => {
             loading={formLoading}
             width={MODAL_CONFIG.STANDARD_WIDTH}
             grid
+            formRef={menuFormRef}
+            onValuesChange={(changed, all) => {
+              if (!('parent_uuid' in changed)) return;
+              const parent = findMenuInTree(all.parent_uuid, menuTreeData);
+              menuFormRef.current?.setFieldValue(
+                'application_uuid',
+                parent?.application_uuid ?? undefined,
+              );
+            }}
         >
-             <ProFormText name="name" label={t('pages.system.menus.menuName')} rules={[{ required: true }]} placeholder={t('pages.system.menus.menuNamePlaceholder')} colProps={{ span: 12 }} />
+             <ProFormText
+               name="name"
+               label={t('pages.system.menus.menuName')}
+               rules={[{ required: true, message: t('pages.system.menus.menuNameRequired') }]}
+               placeholder={t('pages.system.menus.menuNamePlaceholder')}
+               colProps={{ span: 12 }}
+             />
              <ProFormText name="path" label={t('pages.system.menus.path')} placeholder={t('pages.system.menus.pathPlaceholder')} colProps={{ span: 12 }} />
-             <ProFormText name="icon" label={t('pages.system.menus.icon')} placeholder={t('pages.system.menus.iconPlaceholder')} colProps={{ span: 12 }} />
+             <Col span={12}>
+               <ProFormItem name="icon" label={t('pages.system.menus.icon')}>
+                 <MenuIconPicker
+                   placeholder={t('pages.system.menus.iconPickerPlaceholder')}
+                   searchPlaceholder={t('pages.system.menus.iconSearchPlaceholder')}
+                   clearText={t('common.clear')}
+                   emptyText={t('pages.system.menus.iconSearchEmpty')}
+                 />
+               </ProFormItem>
+             </Col>
              <ProFormText name="component" label={t('pages.system.menus.componentPath')} placeholder={t('pages.system.menus.componentPathPlaceholder')} colProps={{ span: 12 }} />
              <ProFormTreeSelect
                 name="parent_uuid"
@@ -769,7 +767,7 @@ const MenuListPage: React.FC = () => {
                     fieldNames: { label: 'name', value: 'uuid', children: 'children' },
                     showSearch: true,
                     allowClear: true,
-                    treeDefaultExpandAll: false, // 禁用默认展开以优化性能
+                    treeDefaultExpandAll: true,
                     variant: 'outlined',
                 }}
                 colProps={{ span: 24 }}
@@ -779,15 +777,53 @@ const MenuListPage: React.FC = () => {
                 label={t('pages.system.menus.relatedApp')}
                 options={applications}
                 placeholder={t('pages.system.menus.relatedAppPlaceholder')}
+                disabled
+                tooltip={t('pages.system.menus.relatedAppInheritedHint')}
                 fieldProps={{ variant: 'outlined' }}
-                colProps={{ span: 8 }}
+                colProps={{ span: 12 }}
              />
-             <ProFormText name="permission_code" label={t('pages.system.menus.permissionCode')} colProps={{ span: 8 }} />
-             <ProFormText name="sort_order" label={t('pages.system.menus.sort')} fieldProps={{ type: 'number' }} colProps={{ span: 8 }} />
-             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 6 }} />
-             <ProFormText name="external_url" label={t('pages.system.menus.externalUrl')} colProps={{ span: 18 }} />
-             <ProFormTextArea name="meta" label={t('pages.system.menus.metadataJson')} fieldProps={{ rows: 3 }} colProps={{ span: 24 }} />
+             <ProFormText
+               name="permission_code"
+               label={t('pages.system.menus.permissionCode')}
+               dependencies={['is_external', 'path']}
+               rules={[
+                 ({ getFieldValue }) => ({
+                   validator: async (_, value) => {
+                     if (getFieldValue('is_external')) return;
+                     const path = trimField(getFieldValue('path'));
+                     if (path && !trimField(value)) {
+                       throw new Error(t('pages.system.menus.permissionCodeRequired'));
+                     }
+                   },
+                 }),
+               ]}
+               colProps={{ span: 12 }}
+             />
+             <ProFormText
+               name="sort_order"
+               label={t('pages.system.menus.sort')}
+               tooltip={t('pages.system.menus.sortOrderAppMenuHint')}
+               fieldProps={{ type: 'number' }}
+               colProps={{ span: 12 }}
+             />
              <ProFormSwitch name="is_active" label={t('pages.system.menus.enabled')} colProps={{ span: 12 }} />
+             <ProFormSwitch name="is_external" label={t('pages.system.menus.externalLink')} colProps={{ span: 12 }} />
+             <ProFormText
+               name="external_url"
+               label={t('pages.system.menus.externalUrl')}
+               dependencies={['is_external']}
+               rules={[
+                 ({ getFieldValue }) => ({
+                   validator: async (_, value) => {
+                     if (!getFieldValue('is_external')) return;
+                     if (!trimField(value)) {
+                       throw new Error(t('pages.system.menus.externalUrlRequired'));
+                     }
+                   },
+                 }),
+               ]}
+               colProps={{ span: 12 }}
+             />
         </FormModalTemplate>
 
         <UniDetail

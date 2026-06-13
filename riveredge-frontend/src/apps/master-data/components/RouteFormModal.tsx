@@ -20,8 +20,11 @@ import {
   parseOperationSequenceFromRoute,
 } from '../utils/processRouteSequenceUtils';
 import { routeFormSchema } from '../schemas/route';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-process-route';
+const CUSTOM_FIELD_TABLE = 'master_data_process_routes';
 
 export interface RouteFormModalProps {
   open: boolean;
@@ -42,6 +45,15 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   const [formLoading, setFormLoading] = useState(false);
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [operationSequence, setOperationSequence] = useState<OperationItem[]>([]);
+
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
 
@@ -71,6 +83,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       overReportValue: 0,
     });
     setOperationSequence([]);
+    resetFieldValues();
 
     if (!editUuid) {
       getCodeRulePageConfig(PAGE_CODE)
@@ -175,6 +188,8 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true })),
         );
         if (ops.length > 0) setOperationSequence(ops);
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.routes.getDetailFailed'));
@@ -184,11 +199,12 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      if (!values.code?.trim()) {
+      const { customData, standardValues } = extractFormValues(values);
+      if (!standardValues.code?.trim()) {
         messageApi.error(t('app.master-data.routes.codeRequired'));
         return;
       }
-      if (!values.name?.trim()) {
+      if (!standardValues.name?.trim()) {
         messageApi.error(t('app.master-data.routes.nameRequired'));
         return;
       }
@@ -197,10 +213,10 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         return;
       }
 
-      const allowJump = !!values.allowOperationJump;
+      const allowJump = !!standardValues.allowOperationJump;
       const operationSequenceData = buildOperationSequencePayload(operationSequence, allowJump);
 
-      let finalCode = values.code.trim();
+      let finalCode = standardValues.code.trim();
       if (!isEdit) {
         let ruleCode: string | undefined;
         let autoGenerate = false;
@@ -212,7 +228,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
           ruleCode = getPageRuleCode(PAGE_CODE);
           autoGenerate = isAutoGenerateEnabled(PAGE_CODE);
         }
-        const currentCode = values.code?.trim();
+        const currentCode = standardValues.code?.trim();
         const useAutoCode = !currentCode || currentCode === previewCode;
         if (autoGenerate && ruleCode && useAutoCode) {
           try {
@@ -226,12 +242,12 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
 
       const submitData = {
         code: finalCode,
-        name: values.name.trim(),
-        description: values.description?.trim() || null,
-        is_active: values.isActive ?? true,
-        allow_operation_jump: !!values.allowOperationJump,
-        over_report_mode: values.overReportMode ?? 'none',
-        over_report_value: Number(values.overReportValue) || 0,
+        name: standardValues.name.trim(),
+        description: standardValues.description?.trim() || null,
+        is_active: standardValues.isActive ?? true,
+        allow_operation_jump: !!standardValues.allowOperationJump,
+        over_report_mode: standardValues.overReportMode ?? 'none',
+        over_report_value: Number(standardValues.overReportValue) || 0,
         operation_sequence: operationSequenceData,
       };
 
@@ -239,9 +255,11 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         await processRouteApi.update(editUuid, submitData as ProcessRouteUpdate);
         messageApi.success(t('app.master-data.routes.updateSuccess'));
         const updated = await processRouteApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const created = await processRouteApi.create(submitData as ProcessRouteCreate);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('app.master-data.routes.createSuccess'));
         onSuccess(created);
       }
@@ -250,6 +268,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
       formRef.current?.resetFields();
       setPreviewCode(null);
       setOperationSequence([]);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -262,6 +281,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
     formRef.current?.resetFields();
     setPreviewCode(null);
     setOperationSequence([]);
+    resetFieldValues();
   };
 
   return (
@@ -292,6 +312,7 @@ export const RouteFormModal: React.FC<RouteFormModalProps> = ({
         codeAutoGeneratedKey="field.route.codeAutoGenerated"
         isEdit={isEdit}
       />
+      <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
       <ProForm.Item
         label={t('field.route.operationSequence')}
         colProps={{ span: 24 }}

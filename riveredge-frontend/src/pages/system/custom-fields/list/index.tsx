@@ -9,13 +9,13 @@
  * - 右侧：选中页面的自定义字段列表和配置
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
-import { App, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, theme } from 'antd';
+import { App, Badge, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, Tooltip, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
@@ -122,6 +122,7 @@ const CustomFieldListPage: React.FC = () => {
   // 页面配置状态
   const [pageConfigs, setPageConfigs] = useState<CustomFieldPageConfig[]>([]);
   const [pageConfigsLoading, setPageConfigsLoading] = useState(true);
+  const [tableFieldCounts, setTableFieldCounts] = useState<Record<string, number>>({});
 
   const { data: menuTree } = useNavigationMenuTreeQuery();
 
@@ -152,6 +153,29 @@ const CustomFieldListPage: React.FC = () => {
   };
 
   /**
+   * 按表名统计已配置自定义字段数量（左栏徽章）
+   */
+  const loadTableFieldCounts = useCallback(async () => {
+    try {
+      const counts: Record<string, number> = {};
+      const pageSize = 1000;
+      let page = 1;
+      let total = 0;
+      do {
+        const response = await getCustomFieldList({ page, page_size: pageSize });
+        for (const item of response.items || []) {
+          counts[item.table_name] = (counts[item.table_name] || 0) + 1;
+        }
+        total = response.total ?? 0;
+        page += 1;
+      } while ((page - 1) * pageSize < total);
+      setTableFieldCounts(counts);
+    } catch (error) {
+      console.warn('Failed to load custom field counts:', error);
+    }
+  }, []);
+
+  /**
    * 加载页面配置列表
    */
   const loadPageConfigs = async () => {
@@ -164,6 +188,7 @@ const CustomFieldListPage: React.FC = () => {
       ]);
       const pages = filterPagesByEnabledApps(allPages, apps);
       setPageConfigs(pages);
+      void loadTableFieldCounts();
 
       // 默认选中第一个页面（仅当没有选中页面时）；若当前选中项已不在列表中（应用被禁用），则重置为第一项
       if (pages.length > 0) {
@@ -296,6 +321,7 @@ const CustomFieldListPage: React.FC = () => {
       await deleteCustomField(record.uuid);
       messageApi.success(t('pages.system.deleteSuccess'));
       actionRef.current?.reload();
+      void loadTableFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
@@ -329,6 +355,7 @@ const CustomFieldListPage: React.FC = () => {
 
       setSelectedRowKeys([]);
       actionRef.current?.reload();
+      void loadTableFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
     }
@@ -440,6 +467,7 @@ const CustomFieldListPage: React.FC = () => {
 
       setModalVisible(false);
       actionRef.current?.reload();
+      void loadTableFieldCounts();
     } catch (error: any) {
       messageApi.error(error.message || t('pages.system.deleteFailed'));
       throw error;
@@ -1053,6 +1081,7 @@ const CustomFieldListPage: React.FC = () => {
                       </div>
                       {modulePages.map(page => {
                         const isSelected = selectedPageCode === page.pageCode;
+                        const fieldCount = tableFieldCounts[page.tableName] || 0;
                         return (
                           <div
                             key={page.pageCode}
@@ -1068,6 +1097,7 @@ const CustomFieldListPage: React.FC = () => {
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
+                              gap: 8,
                             }}
                             onMouseEnter={(e) => {
                               if (!isSelected) {
@@ -1080,9 +1110,27 @@ const CustomFieldListPage: React.FC = () => {
                               }
                             }}
                           >
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: isSelected ? 500 : 400, marginBottom: '4px' }}>
-                                {page.pageName}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontWeight: isSelected ? 500 : 400,
+                                  marginBottom: '4px',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                }}
+                              >
+                                <span style={{ minWidth: 0 }}>{page.pageName}</span>
+                                {fieldCount > 0 ? (
+                                  <Tooltip title={t('field.customField.sidebarCountTitle', { count: fieldCount })}>
+                                    <Badge
+                                      count={fieldCount}
+                                      size="small"
+                                      color={token.colorPrimary}
+                                      style={{ flexShrink: 0 }}
+                                    />
+                                  </Tooltip>
+                                ) : null}
                               </div>
                               <div style={{ fontSize: '12px', color: token.colorTextSecondary }}>
                                 {page.tableNameLabel}

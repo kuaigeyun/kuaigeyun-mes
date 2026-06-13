@@ -74,8 +74,16 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const PROCESS_RESOURCE = 'kuaizhizao:quality-management-process-inspection';
+const PROCESS_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_process_inspections';
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
@@ -270,6 +278,34 @@ const ProcessInspectionPage: React.FC = () => {
   const [currentInspection, setCurrentInspection] = useState<ProcessInspection | null>(null);
   const formRef = useRef<any>(null);
 
+  const {
+    customFields: inspectionFormCustomFields,
+    customFieldValues: inspectionFormCustomFieldValues,
+    extractFormValues: extractInspectionFormValues,
+    saveCustomFieldValues: saveInspectionCustomFieldValues,
+    loadFieldValues: loadInspectionFormFieldValues,
+    resetFieldValues: resetInspectionFormFieldValues,
+  } = useCustomFields({
+    tableName: PROCESS_INSPECTION_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: inspectionModalVisible,
+  });
+
+  const {
+    customFields: inspectionListCustomFields,
+    generateCustomFieldColumns: generateInspectionCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichInspectionRecordsWithCustomFields,
+    customFieldValues: inspectionDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadInspectionFieldValuesForDetail,
+    resetDetailFieldValues: resetInspectionDetailFieldValues,
+  } = useCustomFieldsForList<ProcessInspection>({ tableName: PROCESS_INSPECTION_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (inspectionListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [inspectionListCustomFields.length]);
+
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<ProcessInspection | null>(null);
@@ -313,41 +349,57 @@ const ProcessInspectionPage: React.FC = () => {
       setInspectionDetail(detail);
       setDetailDrawerVisible(true);
       setPiTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadInspectionFieldValuesForDetail(record.id);
+      }
     } catch (error) {
       messageApi.error('获取过程检验详情失败');
     }
   };
 
   // 处理检验
-  const handleInspect = (record: ProcessInspection) => {
+  const handleInspect = async (record: ProcessInspection) => {
     setCurrentInspection(record);
     setInspectionModalVisible(true);
-
-    formRef.current?.setFieldsValue({
+    const baseValues = {
       qualified_quantity: record.inspection_quantity || 0,
       unqualified_quantity: 0,
       notes: '',
-    });
+    };
+    if (record.id != null) {
+      const customFormValues = await loadInspectionFormFieldValues(record.id);
+      formRef.current?.setFieldsValue({ ...baseValues, ...customFormValues });
+    } else {
+      formRef.current?.setFieldsValue(baseValues);
+    }
   };
 
   // 处理检验提交
   const handleInspectionSubmit = async (values: any) => {
     try {
+      const { standardValues, customData } = extractInspectionFormValues(values);
       if (currentInspection?.id) {
         await qualityApi.processInspection.conduct(currentInspection.id.toString(), {
-          qualified_quantity: values.qualified_quantity,
-          unqualified_quantity: values.unqualified_quantity,
-          notes: values.notes,
-          nonconformance_reason: values.nonconformance_reason,
-          ...pickInspectionConductExtras(values),
+          qualified_quantity: standardValues.qualified_quantity,
+          unqualified_quantity: standardValues.unqualified_quantity,
+          notes: standardValues.notes,
+          nonconformance_reason: standardValues.nonconformance_reason,
+          ...pickInspectionConductExtras(standardValues),
         });
+        if (Object.keys(customData).length > 0) {
+          await saveInspectionCustomFieldValues(currentInspection.id, customData);
+        }
       }
 
       messageApi.success('过程检验完成');
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
+      resetInspectionFormFieldValues();
       invalidateStats();
       actionRef.current?.reload();
+      if (inspectionDetail?.id === currentInspection?.id && currentInspection?.id != null) {
+        await loadInspectionFieldValuesForDetail(currentInspection.id);
+      }
     } catch (error: any) {
       messageApi.error(error.message || '检验提交失败');
       throw error;
@@ -558,10 +610,18 @@ const ProcessInspectionPage: React.FC = () => {
       { title: '检验时间', dataIndex: 'inspection_time', valueType: 'dateTime' },
       { title: '审核人', dataIndex: 'reviewer_name', render: (t) => t || '-' },
       { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime', render: (t) => formatDateTimeBySiteSetting(t) },
-      { title: '检验备注', dataIndex: 'notes', span: 2, render: (t) => t || '-' },
     ],
     []
   );
+
+  const detailNotesColumn: ProDescriptionsItemProps<ProcessInspection> = {
+    title: '检验备注',
+    dataIndex: 'notes',
+    span: 2,
+    render: (t) => t || '-',
+  };
+
+  const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
   const renderProcessRowNodes = (record: ProcessInspection): React.ReactNode[] => {
     if (record.status === '待检验' || record.inspection_result === '待检验') {
@@ -572,7 +632,7 @@ const ProcessInspectionPage: React.FC = () => {
           type="primary"
           onClick={(e) => {
             e.stopPropagation();
-            handleInspect(record);
+            void handleInspect(record);
           }}
         >
           检验
@@ -617,9 +677,12 @@ const ProcessInspectionPage: React.FC = () => {
           if (inspectionDetail?.id === record.id) {
             qualityApi.processInspection
               .get(record.id!.toString())
-              .then((d) => {
+              .then(async (d) => {
                 setInspectionDetail(d);
                 setPiTrackingRefreshKey((k) => k + 1);
+                if (record.id != null) {
+                  await loadInspectionFieldValuesForDetail(record.id);
+                }
               })
               .catch(() => {});
           }
@@ -734,6 +797,7 @@ const ProcessInspectionPage: React.FC = () => {
       defaultSortOrder: 'descend',
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
+    ...inspectionCustomFieldColumns,
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
@@ -824,9 +888,10 @@ const ProcessInspectionPage: React.FC = () => {
               ),
             ]);
             // 后端返回的是数组
-            const data = Array.isArray(response) ? response : (response.data || []);
+            const raw = Array.isArray(response) ? response : (response.data || []);
+            const data = await enrichInspectionRecordsWithCustomFields(raw);
             return {
-              data: data,
+              data,
               success: true,
               total,
             };
@@ -886,7 +951,10 @@ const ProcessInspectionPage: React.FC = () => {
       <FormModalTemplate
         title={`过程检验 - ${currentInspection?.inspection_code || ''}`}
         open={inspectionModalVisible}
-        onClose={() => setInspectionModalVisible(false)}
+        onClose={() => {
+          setInspectionModalVisible(false);
+          resetInspectionFormFieldValues();
+        }}
         onFinish={handleInspectionSubmit}
         isEdit={false}
         initialValues={{
@@ -972,6 +1040,10 @@ const ProcessInspectionPage: React.FC = () => {
           fieldProps={{ rows: 2 }}
           colProps={{ span: 24 }}
         />
+        <CustomFieldsFormSection
+          customFields={inspectionFormCustomFields}
+          customFieldValues={inspectionFormCustomFieldValues}
+        />
         <ProFormTextArea
           name="notes"
           label="检验备注"
@@ -1037,6 +1109,7 @@ const ProcessInspectionPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setInspectionDetail(null);
+          resetInspectionDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1067,9 +1140,10 @@ const ProcessInspectionPage: React.FC = () => {
                 if (inspectionDetail?.id) {
                   qualityApi.processInspection
                     .get(inspectionDetail.id.toString())
-                    .then((d) => {
+                    .then(async (d) => {
                       setInspectionDetail(d);
                       setPiTrackingRefreshKey((k) => k + 1);
+                      await loadInspectionFieldValuesForDetail(inspectionDetail.id!);
                     })
                     .catch(() => {});
                 }
@@ -1092,6 +1166,22 @@ const ProcessInspectionPage: React.FC = () => {
                   size="small"
                   items={buildDescriptionItemsFromColumns(inspectionDetail, detailBaseColumns)}
                 />
+                {hasCustomFieldsDetailContent(inspectionListCustomFields, inspectionDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={inspectionListCustomFields}
+                      customFieldValues={inspectionDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {inspectionDetail.notes ? (
+                  <Descriptions
+                    column={3}
+                    size="small"
+                    style={{ marginTop: 16 }}
+                    items={buildDescriptionItemsFromColumns(inspectionDetail, [detailNotesColumn])}
+                  />
+                ) : null}
               </DetailDrawerSection>
 
               <DetailDrawerSection title="生命周期">

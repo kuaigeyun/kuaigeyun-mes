@@ -4,7 +4,7 @@
  * 提供工艺路线的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -27,6 +27,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 工艺路线管理列表页面组件
@@ -45,6 +50,21 @@ const ProcessRoutesPage: React.FC = () => {
   const [editUuid, setEditUuid] = useState<string | null>(null);
 
   const routeDetailReqRef = useRef(0);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<ProcessRoute>({ tableName: 'master_data_process_routes' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const routeImportTemplate = useMemo(
     () =>
@@ -395,6 +415,9 @@ const ProcessRoutesPage: React.FC = () => {
       const detail = await processRouteApi.get(record.uuid);
       if (routeDetailReqRef.current !== req) return;
       setProcessRouteDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (routeDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.routes.getDetailFailed'));
@@ -412,12 +435,15 @@ const ProcessRoutesPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setProcessRouteDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ProcessRoute>[] = [
+  const columns: ProColumns<ProcessRoute>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '工艺路线编号',
       dataIndex: 'code',
@@ -456,6 +482,7 @@ const ProcessRoutesPage: React.FC = () => {
       },
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: '创建时间',
       dataIndex: 'created_at',
@@ -499,7 +526,8 @@ const ProcessRoutesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   return (
     <ListPageTemplate>
@@ -536,8 +564,9 @@ const ProcessRoutesPage: React.FC = () => {
           try {
             const result = await processRouteApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = await enrichRecordsWithCustomFields(listData);
             return {
-              data: listData,
+              data: enrichedData,
               success: true,
               total: typeof result?.total === 'number' ? result.total : listData.length,
             };
@@ -602,6 +631,12 @@ const ProcessRoutesPage: React.FC = () => {
               column={1}
               items={detailDrawerDescriptionItems(processRouteDetailColumns, processRouteDetail)}
             />
+          ) : null
+        }
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />

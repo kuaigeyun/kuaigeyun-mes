@@ -23,8 +23,11 @@ import { getDataDictionaryByCode, createDictionaryItem } from '../../../services
 import { QuickCreateAnchorPopover } from '../../../components/uni-dropdown';
 import { normalizePartnerContactsForSubmit, supplierDetailToFormValues } from '../utils/partner-form-map';
 import { SupplierContactsFormTable } from './SupplierContactsFormTable';
+import { useCustomFields } from '../../../hooks/useCustomFields';
+import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-supply-chain-supplier';
+const CUSTOM_FIELD_TABLE = 'master_data_suppliers';
 
 export interface SupplierFormModalProps {
   open: boolean;
@@ -58,6 +61,15 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   const [quickCreateName, setQuickCreateName] = useState('');
   const [quickCreateAnchorEl, setQuickCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
+
+  const {
+    customFields,
+    customFieldValues,
+    loadFieldValues,
+    extractFormValues,
+    saveCustomFieldValues,
+    resetFieldValues,
+  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
 
   const isEdit = Boolean(editUuid);
 
@@ -93,6 +105,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     if (!open) return;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true });
+    resetFieldValues();
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -127,8 +140,10 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     setEffectiveRuleCode(null);
     supplierApi
       .get(editUuid)
-      .then((detail) => {
+      .then(async (detail) => {
         formRef.current?.setFieldsValue(supplierDetailToFormValues(detail));
+        const fieldFormValues = await loadFieldValues(detail.id);
+        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.suppliers.getDetailFailed'));
@@ -138,39 +153,43 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
+      const { customData, standardValues } = extractFormValues(values);
       const payload = {
-        ...values,
-        contacts: normalizePartnerContactsForSubmit(values.contacts),
+        ...standardValues,
+        contacts: normalizePartnerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };
       if (isEdit && editUuid) {
         await supplierApi.update(editUuid, payload as SupplierUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await supplierApi.get(editUuid);
+        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (values.code === previewCode || !values.code)
+          (standardValues.code === previewCode || !standardValues.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
-            values.code = codeResponse.code;
+            payload.code = codeResponse.code;
           } catch {
             // keep form code
           }
         }
-        if (values.isActive === undefined) {
-          values.isActive = true;
+        if (payload.isActive === undefined) {
+          payload.isActive = true;
         }
         const created = await supplierApi.create(payload as SupplierCreate);
+        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
       onClose();
       formRef.current?.resetFields();
       setPreviewCode(null);
+      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -182,6 +201,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
     onClose();
     formRef.current?.resetFields();
     setPreviewCode(null);
+    resetFieldValues();
   };
 
   const handleQuickCreateSubmit = async () => {
@@ -262,6 +282,12 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                         },
                       }}
                     />
+                    <Col span={24}>
+                      <CustomFieldsFormSection
+                        customFields={customFields}
+                        customFieldValues={customFieldValues}
+                      />
+                    </Col>
                     <Col span={24}>
                       <SupplierContactsFormTable
                         contactTitleOptions={optionsMap.contactTitle ?? []}

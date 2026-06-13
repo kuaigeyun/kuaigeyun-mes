@@ -78,6 +78,15 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import { supplierApi, getDictionaryOptions } from '../../../../master-data/services/supply-chain';
 import { initializeSystemDictionaries } from '../../../../../services/dataDictionary';
 import { getPurchaseReturnLifecycle } from '../../../utils/purchaseReturnLifecycle';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const PURCHASE_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_returns';
 
 interface PurchaseReturn {
   id?: number;
@@ -208,6 +217,31 @@ const PurchaseReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
+
+  const {
+    customFields: purchaseReturnFormCustomFields,
+    customFieldValues: purchaseReturnFormCustomFieldValues,
+    loadFieldValues: loadPurchaseReturnFormFieldValues,
+    extractFormValues: extractPurchaseReturnFormValues,
+    saveCustomFieldValues: savePurchaseReturnCustomFieldValues,
+    resetFieldValues: resetPurchaseReturnFormFieldValues,
+  } = useCustomFields({ tableName: PURCHASE_RETURN_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: purchaseReturnListCustomFields,
+    generateCustomFieldColumns: generatePurchaseReturnCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichPurchaseReturnRecordsWithCustomFields,
+    customFieldValues: purchaseReturnDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPurchaseReturnFieldValuesForDetail,
+    resetDetailFieldValues: resetPurchaseReturnDetailFieldValues,
+  } = useCustomFieldsForList<PurchaseReturn>({ tableName: PURCHASE_RETURN_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (purchaseReturnListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [purchaseReturnListCustomFields.length]);
+
   const {
     selectedWarehouseId,
     locationOptions,
@@ -280,6 +314,9 @@ const PurchaseReturnsPage: React.FC = () => {
       setReturnDetail(detail as PurchaseReturnDetail);
       setDetailDrawerVisible(true);
       setPrRetTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadPurchaseReturnFieldValuesForDetail(record.id);
+      }
     } catch {
       messageApi.error('获取采购退货单详情失败');
     }
@@ -312,6 +349,7 @@ const PurchaseReturnsPage: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null);
     setEditingDetail(null);
+    resetPurchaseReturnFormFieldValues();
     resetSelectedWarehouseId();
     setPendingFormValues({
       return_time: dayjs(),
@@ -354,6 +392,13 @@ const PurchaseReturnsPage: React.FC = () => {
           material_unit: (it as any).material_unit ?? '件',
         })),
       });
+      if (record.id != null) {
+        window.setTimeout(() => {
+          loadPurchaseReturnFormFieldValues(record.id!).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }, 100);
+      }
       setModalVisible(true);
     } catch {
       messageApi.error('加载退货单失败');
@@ -406,11 +451,13 @@ const PurchaseReturnsPage: React.FC = () => {
 
   const onFinish = async (values: any) => {
     try {
-      const itemsPayload = buildPurchaseReturnItemsPayload(values.items);
+      const { customData, standardValues } = extractPurchaseReturnFormValues(values);
+      const itemsPayload = buildPurchaseReturnItemsPayload(standardValues.items);
       const returnTime =
-        values.return_time && typeof values.return_time.format === 'function'
-          ? values.return_time.format('YYYY-MM-DD')
-          : values.return_time;
+        standardValues.return_time && typeof standardValues.return_time.format === 'function'
+          ? standardValues.return_time.format('YYYY-MM-DD')
+          : standardValues.return_time;
+      let recordId: number | undefined;
       if (editingId) {
         const detail = editingDetail;
         if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
@@ -418,17 +465,17 @@ const PurchaseReturnsPage: React.FC = () => {
           return;
         }
         await warehouseApi.purchaseReturn.update(editingId.toString(), {
-          supplier_id: values.supplier_id,
-          supplier_name: values.supplier_name ?? detail.supplier_name,
-          warehouse_id: values.warehouse_id,
-          warehouse_name: values.warehouse_name ?? detail.warehouse_name,
+          supplier_id: standardValues.supplier_id,
+          supplier_name: standardValues.supplier_name ?? detail.supplier_name,
+          warehouse_id: standardValues.warehouse_id,
+          warehouse_name: standardValues.warehouse_name ?? detail.warehouse_name,
           return_time: returnTime,
-          return_reason: values.return_reason ?? null,
-          return_type: values.return_type ?? detail.return_type ?? '质量问题',
-          shipping_method: values.shipping_method ?? null,
+          return_reason: standardValues.return_reason ?? null,
+          return_type: standardValues.return_type ?? detail.return_type ?? '质量问题',
+          shipping_method: standardValues.shipping_method ?? null,
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
-          notes: values.notes ?? null,
+          notes: standardValues.notes ?? null,
           purchase_receipt_id: detail.purchase_receipt_id ?? null,
           purchase_receipt_code: detail.purchase_receipt_code ?? null,
           purchase_order_id: detail.purchase_order_id ?? null,
@@ -436,16 +483,22 @@ const PurchaseReturnsPage: React.FC = () => {
           status: detail.status,
           items: itemsPayload,
         });
+        recordId = editingId;
         messageApi.success('采购退货单已更新');
       } else {
-        await warehouseApi.purchaseReturn.create({
-          ...values,
+        const created = await warehouseApi.purchaseReturn.create({
+          ...standardValues,
           return_time: returnTime,
           items: itemsPayload,
         });
+        recordId = (created as any)?.id;
         messageApi.success('采购退货单创建成功');
       }
+      if (recordId != null) {
+        await savePurchaseReturnCustomFieldValues(recordId, customData);
+      }
       setModalVisible(false);
+      resetPurchaseReturnFormFieldValues();
       setEditingId(null);
       setEditingDetail(null);
       setPendingFormValues(null);
@@ -553,9 +606,16 @@ const PurchaseReturnsPage: React.FC = () => {
     { title: '退货人', dataIndex: 'returner_name' },
     { title: '审核人', dataIndex: 'reviewer_name' },
     { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 3, render: (text: any) => text || '-' },
   ];
 
+  const detailNotesColumn: ProDescriptionsItemProps<PurchaseReturnDetail> = {
+    title: '备注',
+    dataIndex: 'notes',
+    span: 3,
+    render: (text: any) => text || '-',
+  };
+
+  const purchaseReturnCustomFieldColumns = generatePurchaseReturnCustomFieldColumns();
   const columns: ProColumns<PurchaseReturn>[] = [
     {
       title: '供应商 / 退货单号',
@@ -658,6 +718,7 @@ const PurchaseReturnsPage: React.FC = () => {
         );
       },
     },
+    ...purchaseReturnCustomFieldColumns,
     {
       title: '操作',
       width: 220,
@@ -785,10 +846,12 @@ const PurchaseReturnsPage: React.FC = () => {
                 supplier_id: params.supplier_id,
                 keyword: params.keyword,
               });
+              const list = Array.isArray(response) ? response : response.data || [];
+              const enriched = await enrichPurchaseReturnRecordsWithCustomFields(list);
               return {
-                data: Array.isArray(response) ? response : response.data || [],
+                data: enriched,
                 success: true,
-                total: Array.isArray(response) ? response.length : response.total || 0,
+                total: Array.isArray(response) ? enriched.length : response.total || enriched.length,
               };
             } catch {
               messageApi.error('获取采购退货单列表失败');
@@ -844,6 +907,7 @@ const PurchaseReturnsPage: React.FC = () => {
           setEditingId(null);
           setEditingDetail(null);
           setPendingFormValues(null);
+          resetPurchaseReturnFormFieldValues();
           resetSelectedWarehouseId();
         }}
         afterOpenChange={(open) => {
@@ -940,6 +1004,11 @@ const PurchaseReturnsPage: React.FC = () => {
             />
           </Col>
         </Row>
+
+        <CustomFieldsFormSection
+          customFields={purchaseReturnFormCustomFields}
+          customFieldValues={purchaseReturnFormCustomFieldValues}
+        />
 
         <UniTableDetail
           name="items"
@@ -1086,6 +1155,7 @@ const PurchaseReturnsPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setReturnDetail(null);
+          resetPurchaseReturnDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1140,6 +1210,20 @@ const PurchaseReturnsPage: React.FC = () => {
                   column={3}
                   size="small"
                   items={buildDescriptionItemsFromColumns(returnDetail, detailColumns)}
+                />
+                {hasCustomFieldsDetailContent(purchaseReturnListCustomFields, purchaseReturnDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={purchaseReturnListCustomFields}
+                      customFieldValues={purchaseReturnDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                <Descriptions
+                  column={3}
+                  size="small"
+                  style={{ marginTop: 16 }}
+                  items={buildDescriptionItemsFromColumns(returnDetail, [detailNotesColumn])}
                 />
               </DetailDrawerSection>
 

@@ -242,9 +242,18 @@
             "permission": "kuaizhizao:plan-management-scheduling:read"
           },
           {
+            "title": "app.kuaizhizao.menu.plan-management.rolling-scheduling",
+            "path": "/apps/kuaizhizao/plan-management/rolling-scheduling",
+            "sort_order": 5,
+            "meta": {
+              "module": "plan-management-rolling-scheduling"
+            },
+            "permission": "kuaizhizao:plan-management-rolling-scheduling:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.plan-management.reports",
             "icon": "fileText",
-            "sort_order": 5,
+            "sort_order": 6,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.demand-plan-detail",
@@ -1504,6 +1513,17 @@
       ],
       "data_scope_key": "kuaizhizao:plan-management-scheduling"
     },
+    "plan-management-rolling-scheduling": {
+      "permission_prefix": "kuaizhizao:plan-management-rolling-scheduling",
+      "display_fields": [
+        "id",
+        "uuid",
+        "code",
+        "name",
+        "label"
+      ],
+      "data_scope_key": "kuaizhizao:plan-management-rolling-scheduling"
+    },
     "equipment": {
       "permission_prefix": "kuaizhizao:equipment-management-equipment",
       "display_fields": [
@@ -2150,6 +2170,11 @@
     "kuaizhizao:plan-management-reports-purchase-plan-comparison:print",
     "kuaizhizao:plan-management-scheduling:read",
     "kuaizhizao:plan-management-scheduling:update",
+    "kuaizhizao:plan-management-rolling-scheduling:read",
+    "kuaizhizao:plan-management-rolling-scheduling:create",
+    "kuaizhizao:plan-management-rolling-scheduling:update",
+    "kuaizhizao:plan-management-rolling-scheduling:publish",
+    "kuaizhizao:plan-management-rolling-scheduling:close",
     "kuaizhizao:production-execution-dashboard:read",
     "kuaizhizao:production-execution-dashboard:print",
     "kuaizhizao:production-execution-reporting-statistics:read",

@@ -7,7 +7,7 @@ import React, { lazy, startTransition, Suspense, useCallback, useDeferredValue, 
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip, theme } from 'antd';
+import { App, Button, Grid, Input, Modal, Popconfirm, Space, Spin, Tag, Tooltip, theme, Descriptions } from 'antd';
 import type { DataNode } from 'antd/es/tree';
 import {
   DeleteOutlined,
@@ -60,6 +60,11 @@ import {
   type DrawingNavMode,
 } from './drawingTreeNav';
 import { isStepFile } from '../../../../../utils/filePreviewKind';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 const STATUS_COLOR: Record<DrawingStatus, string> = {
   Draft: 'default',
@@ -223,6 +228,21 @@ const DrawingsPage: React.FC = () => {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+
+  const {
+    customFields,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    customFieldValues,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<EngineeringDrawing>({ tableName: 'apps_master_data_engineering_drawings' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState<FileBrief | null>(null);
@@ -396,7 +416,12 @@ const DrawingsPage: React.FC = () => {
     flushDrawerOpen();
     try {
       const data = await drawingApi.get(uuid);
-      if (reqId === detailReqRef.current) setDetail(data);
+      if (reqId === detailReqRef.current) {
+        setDetail(data);
+        if (data.id != null) {
+          await loadFieldValuesForDetail(data.id);
+        }
+      }
     } catch (err: any) {
       if (reqId === detailReqRef.current) {
         messageApi.error(err?.message || t('app.master-data.drawings.getDetailFailed'));
@@ -581,7 +606,9 @@ const DrawingsPage: React.FC = () => {
   );
 
   const columns: ProColumns<EngineeringDrawing>[] = useMemo(
-    () => [
+    () => {
+      const customFieldColumns = generateCustomFieldColumns();
+      return [
       {
         title: t('app.master-data.drawings.code'),
         dataIndex: 'code',
@@ -666,6 +693,7 @@ const DrawingsPage: React.FC = () => {
         search: false,
         width: 170,
       },
+      ...customFieldColumns,
       {
         title: t('common.actions'),
         valueType: 'option',
@@ -740,8 +768,9 @@ const DrawingsPage: React.FC = () => {
           </Space>
         ),
       },
-    ],
-    [t, messageApi, detail?.uuid, showInlinePreview, navigate, handleDeleteDrawing],
+    ];
+    },
+    [t, customFields, generateCustomFieldColumns, showInlinePreview, navigate, handleDeleteDrawing, loadDetail, handleRelease, handleObsolete, handleRevision, openPreview],
   );
 
   const tableQueryKey = useMemo(
@@ -810,7 +839,8 @@ const DrawingsPage: React.FC = () => {
                 materialUuid: tf.materialUuid,
                 processRouteUuid: tf.processRouteUuid,
               });
-              return { data: res.data ?? [], success: true, total: res.total ?? 0 };
+              const enriched = await enrichRecordsWithCustomFields(res.data ?? []);
+              return { data: enriched, success: true, total: res.total ?? 0 };
             } catch (err: any) {
               messageApi.error(err?.message || t('app.master-data.drawings.listFailed'));
               return { data: [], success: false, total: 0 };
@@ -913,10 +943,21 @@ const DrawingsPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setDetail(null);
+          resetDetailFieldValues();
         }}
         loading={detailLoading}
         width={DRAWER_CONFIG.STANDARD_WIDTH}
-        items={detailDrawerDescriptionItems(detailColumns, detail)}
+        basic={
+          detail ? (
+            <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detail)} />
+          ) : null
+        }
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+          ) : null
+        }
       />
 
       <DrawingFormModal

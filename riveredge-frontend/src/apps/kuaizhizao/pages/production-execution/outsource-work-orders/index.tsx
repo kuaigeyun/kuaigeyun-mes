@@ -72,6 +72,15 @@ import dayjs from 'dayjs';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_OUTSOURCE_ORDER_FIELD_RESOURCE as OO } from '../../../constants/fieldPermissionResources';
 import { useTranslation } from 'react-i18next';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 
 interface OutsourceWorkOrder {
   id?: number;
@@ -208,6 +217,30 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentWorkOrder, setCurrentWorkOrder] = useState<OutsourceWorkOrder | null>(null);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: owoFormCustomFields,
+    customFieldValues: owoFormCustomFieldValues,
+    loadFieldValues: loadOwoFormFieldValues,
+    extractFormValues: extractOwoFormValues,
+    saveCustomFieldValues: saveOwoCustomFieldValues,
+    resetFieldValues: resetOwoFormFieldValues,
+  } = useCustomFields({ tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: owoListCustomFields,
+    generateCustomFieldColumns: generateOwoCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOwoRecordsWithCustomFields,
+    customFieldValues: owoDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOwoFieldValuesForDetail,
+    resetDetailFieldValues: resetOwoDetailFieldValues,
+  } = useCustomFieldsForList<OutsourceWorkOrder>({ tableName: OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (owoListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [owoListCustomFields.length]);
 
   // 详情 Drawer 相关状态
   const [drawerVisible, setDrawerVisible] = useState(false);
@@ -467,15 +500,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
         },
       },
-      {
-        title: '备注',
-        dataIndex: 'remarks',
-        span: 3,
-        render: (text) => text || '-',
-      },
     ],
     []
   );
+
+  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceWorkOrder> = {
+    title: '备注',
+    dataIndex: 'remarks',
+    span: 3,
+    render: (text) => text || '-',
+  };
 
   /** 产品选择变更：获取物料来源信息并自动填充 */
   const handleProductChange = async (value: number | undefined) => {
@@ -546,6 +580,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     setIsEdit(false);
     setCurrentWorkOrder(null);
     setSelectedMaterialSourceInfo(null);
+    resetOwoFormFieldValues();
     setModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
@@ -572,6 +607,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           plannedEndDate: (detail.plannedEndDate || detail.planned_end_date) ? dayjs(detail.plannedEndDate || detail.planned_end_date) : undefined,
           remarks: detail.remarks,
         });
+        if (detail.id != null) {
+          loadOwoFormFieldValues(detail.id).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }
       }, 100);
     } catch (error) {
       messageApi.error('获取工单委外详情失败');
@@ -621,6 +661,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       setWorkOrderDetail(detail);
       setDrawerVisible(true);
       setOwoTrackingRefreshKey((k) => k + 1);
+      if (detail.id != null) {
+        await loadOwoFieldValuesForDetail(detail.id);
+      }
     } catch (error) {
       messageApi.error('获取工单委外详情失败');
     }
@@ -631,6 +674,12 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractOwoFormValues(values);
+      Object.keys(values).forEach((key) => {
+        if (key.startsWith('custom_')) delete values[key];
+      });
+      Object.assign(values, standardValues);
+
       // 物料来源验证
       if (values.productId && selectedMaterialSourceInfo) {
         if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
@@ -702,25 +751,34 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       }
 
       const wid = currentWorkOrder?.id;
+      let recordId = wid;
 
       if (isEdit && wid) {
         await outsourceWorkOrderApi.update(wid.toString(), values);
         messageApi.success('工单委外更新成功');
       } else {
-        await outsourceWorkOrderApi.create(values);
+        const created = await outsourceWorkOrderApi.create(values);
+        recordId = created?.id;
         messageApi.success('工单委外创建成功');
       }
+
+      if (recordId != null) {
+        await saveOwoCustomFieldValues(recordId, customData);
+      }
+
       setModalVisible(false);
+      resetOwoFormFieldValues();
       setSelectedMaterialSourceInfo(null);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
       setStatsVersion((v) => v + 1);
-      if (wid && workOrderDetail?.id === wid) {
+      if (recordId && workOrderDetail?.id === recordId) {
         try {
-          const fresh = await outsourceWorkOrderApi.get(String(wid));
+          const fresh = await outsourceWorkOrderApi.get(String(recordId));
           setWorkOrderDetail(fresh);
           setOwoTrackingRefreshKey((k) => k + 1);
+          await loadOwoFieldValuesForDetail(recordId);
         } catch {
           /* ignore */
         }
@@ -958,6 +1016,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     return nodes;
   };
 
+  const owoCustomFieldColumns = generateOwoCustomFieldColumns();
   const columns: ProColumns<OutsourceWorkOrder>[] = [
     {
       title: '工单委外编号',
@@ -1138,6 +1197,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         );
       },
     },
+    ...owoCustomFieldColumns,
     {
       title: '操作',
       width: 200,
@@ -1158,17 +1218,20 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       });
 
       if (Array.isArray(response)) {
+        const enriched = await enrichOwoRecordsWithCustomFields(response);
         return {
-          data: response,
+          data: enriched,
           success: true,
-          total: response.length,
+          total: enriched.length,
         };
       }
       if (response && typeof response === 'object') {
+        const list = (response as any).data || (response as any).items || [];
+        const enriched = await enrichOwoRecordsWithCustomFields(list);
         return {
-          data: (response as any).data || (response as any).items || [],
+          data: enriched,
           success: (response as any).success !== false,
-          total: (response as any).total || ((response as any).data || (response as any).items || []).length,
+          total: (response as any).total || enriched.length,
         };
       }
 
@@ -1243,6 +1306,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           setModalVisible(false);
           setCurrentWorkOrder(null);
           setSelectedMaterialSourceInfo(null);
+          resetOwoFormFieldValues();
           formRef.current?.resetFields();
         }}
         onFinish={handleSubmit}
@@ -1438,6 +1502,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           colProps={{ span: 12 }}
         />
 
+        <CustomFieldsFormSection
+          customFields={owoFormCustomFields}
+          customFieldValues={owoFormCustomFieldValues}
+        />
+
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -1456,6 +1525,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false);
           setWorkOrderDetail(null);
+          resetOwoDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -1469,6 +1539,20 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                   column={3}
                   size="small"
                   items={buildDescriptionItemsFromColumns(workOrderDetail, detailBaseColumns)}
+                />
+                {hasCustomFieldsDetailContent(owoListCustomFields, owoDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={owoListCustomFields}
+                      customFieldValues={owoDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                <Descriptions
+                  column={3}
+                  size="small"
+                  style={{ marginTop: 16 }}
+                  items={buildDescriptionItemsFromColumns(workOrderDetail, [detailRemarksColumn])}
                 />
               </DetailDrawerSection>
 

@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -52,6 +52,7 @@ STAGE_DEFS = [
     ("purchase_receipt", "采购入库"),
     ("outsource", "委外发收"),
     ("kitting", "齐套就绪"),
+    ("rolling_schedule", "滚动计划"),
     ("scheduling", "排程定日"),
     ("release", "工单下达"),
     ("production", "配料报工入库"),
@@ -348,6 +349,7 @@ class CoordinationBoardService:
         )
         if comp:
             stages = await self._enrich_kitting_stage(tenant_id, stages, docs)
+        stages = await self._enrich_rolling_schedule_stage(tenant_id, stages, docs)
 
         computation_payload = (
             {
@@ -982,12 +984,24 @@ class CoordinationBoardService:
             )
         )
 
-        # 6 scheduling
         active_wos = [
             w
             for w in docs["work_orders"]
             if w["status"] not in ("completed", "cancelled")
         ]
+
+        stages.append(
+            self._stage(
+                "rolling_schedule",
+                "滚动计划",
+                "pending" if active_wos else "skipped",
+                "检查明日日计划…" if active_wos else "无待派工工单",
+                [],
+                [],
+            )
+        )
+
+        # 7 scheduling
         if not active_wos:
             sch_status, sch_summary, sch_blockers = "skipped", "无待排程工单", []
         else:
@@ -1008,6 +1022,7 @@ class CoordinationBoardService:
                 sch_blockers = [f"{w['code']} 缺计划开工日" for w in no_date[:5]]
 
         wo_query = ",".join(str(i) for i in wo_ids) if wo_ids else ""
+        next_workday_placeholder = (date.today() + timedelta(days=1)).isoformat()
         stages.append(
             self._stage(
                 "scheduling",
@@ -1018,7 +1033,7 @@ class CoordinationBoardService:
                 [
                     self._nav(
                         "去排程",
-                        f"/apps/kuaizhizao/plan-management/scheduling?work_order_ids={wo_query}",
+                        f"/apps/kuaizhizao/plan-management/scheduling?work_order_ids={wo_query}&plan_date={next_workday_placeholder}",
                     ),
                 ]
                 if sch_status not in ("skipped", "done")
@@ -1115,6 +1130,7 @@ class CoordinationBoardService:
             ("purchase_receipt", "采购入库"),
             ("outsource", "委外发收"),
             ("kitting", "齐套就绪"),
+            ("rolling_schedule", "滚动计划"),
             ("scheduling", "排程定日"),
             ("release", "工单下达"),
             ("production", "配料报工入库"),
@@ -1123,6 +1139,63 @@ class CoordinationBoardService:
             self._stage(key, title, "skipped", reason, [], [])
             for key, title in skipped_defs
         ]
+
+    async def _enrich_rolling_schedule_stage(
+        self,
+        tenant_id: int,
+        stages: List[Dict[str, Any]],
+        docs: Dict[str, List[Dict[str, Any]]],
+    ) -> List[Dict[str, Any]]:
+        """刷新滚动计划阶段：明日是否已发布日计划。"""
+        from apps.kuaizhizao.services.rolling_schedule_service import RollingScheduleService
+
+        active_wos = [
+            w for w in docs["work_orders"] if w["status"] not in ("completed", "cancelled")
+        ]
+        rolling_svc = RollingScheduleService()
+        next_workday = await rolling_svc.get_next_workday(tenant_id, date.today())
+        next_plan = await rolling_svc.get_plan_by_date(tenant_id, next_workday)
+
+        for stage in stages:
+            if stage["key"] != "rolling_schedule":
+                continue
+            if not active_wos:
+                stage["status"] = "skipped"
+                stage["summary"] = "无待派工工单"
+                stage["blockers"] = []
+                stage["actions"] = []
+                break
+            if next_plan and next_plan.status == "published":
+                stage["status"] = "done"
+                stage["summary"] = f"明日 {next_workday} 日计划已发布（{len(next_plan.lines)} 单）"
+                stage["blockers"] = []
+            elif next_plan and next_plan.status == "draft":
+                stage["status"] = "partial"
+                stage["summary"] = f"明日 {next_workday} 日计划草稿待发布"
+                stage["blockers"] = ["滚动计划尚未发布"]
+            else:
+                stage["status"] = "pending"
+                stage["summary"] = f"明日 {next_workday} 未发布日计划"
+                stage["blockers"] = ["请至滚动计划生成并发布次日计划"]
+            stage["actions"] = [
+                self._nav(
+                    "去滚动计划",
+                    f"/apps/kuaizhizao/plan-management/rolling-scheduling?plan_date={next_workday.isoformat()}",
+                ),
+            ]
+            break
+
+        for stage in stages:
+            if stage["key"] != "scheduling":
+                continue
+            for action in stage.get("actions") or []:
+                route = action.get("route") or ""
+                if action.get("type") == "nav" and "plan_date=" in route:
+                    base = route.split("&plan_date=")[0]
+                    action["route"] = f"{base}&plan_date={next_workday.isoformat()}"
+            break
+
+        return stages
 
     async def _enrich_kitting_stage(
         self,

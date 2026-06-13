@@ -19,7 +19,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
-import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, MODAL_CONFIG, DRAWER_CONFIG, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
 import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
@@ -46,6 +46,15 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const BOM_CUSTOM_FIELD_TABLE = 'master_data_boms';
 
 /** ProTable 操作列可传 UniTable 扩展：控制溢出菜单 directMax 等 */
 type MaterialBOMProColumn = ProColumns<MaterialBOMRow> & {
@@ -255,6 +264,30 @@ const BOMPage: React.FC = () => {
   const [formLoading, setFormLoading] = useState(false);
   /** 编辑时：按主料+版本定位整份 BOM，保存时先删后批量创建 */
   const [editContext, setEditContext] = useState<{ materialId: number; version: string; uuidsToReplace: string[] } | null>(null);
+
+  const {
+    customFields: bomFormCustomFields,
+    customFieldValues: bomFormCustomFieldValues,
+    loadFieldValues: loadBomFormFieldValues,
+    extractFormValues: extractBomFormValues,
+    saveCustomFieldValues: saveBomCustomFieldValues,
+    resetFieldValues: resetBomFormFieldValues,
+  } = useCustomFields({ tableName: BOM_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: bomListCustomFields,
+    generateCustomFieldColumns: generateBomCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichBomRecordsWithCustomFields,
+    customFieldValues: bomDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadBomFieldValuesForDetail,
+    resetDetailFieldValues: resetBomDetailFieldValues,
+  } = useCustomFieldsForList<MaterialBOMRow>({ tableName: BOM_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (bomListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [bomListCustomFields.length]);
   
   // 审核Modal状态
   const [approvalModalVisible, setApprovalModalVisible] = useState(false);
@@ -467,6 +500,7 @@ const BOMPage: React.FC = () => {
     setEditContext(null);
     setCurrentBOMUuid(null);
     setModalVisible(true);
+    resetBomFormFieldValues();
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       isActive: true,
@@ -584,6 +618,9 @@ const BOMPage: React.FC = () => {
           // 单独设置 items，确保 AntForm.List 能正确接收数据
           setTimeout(() => {
             formRef.current?.setFieldValue('items', itemsData);
+            loadBomFormFieldValues(first.id).then((fieldFormValues) => {
+              formRef.current?.setFieldsValue(fieldFormValues);
+            });
           }, 50);
         }
       }, 150);
@@ -926,6 +963,9 @@ const BOMPage: React.FC = () => {
       const firstItem = allBomItems[0]!;
       setBomDetail(firstItem);
       setBomItems(allBomItems);
+      if (firstItem.id != null) {
+        await loadBomFieldValuesForDetail(firstItem.id);
+      }
 
       // 并行加载层级结构
       const hierarchy = await bomApi.getHierarchy(record.materialId, record.version).catch(() => null);
@@ -1023,6 +1063,15 @@ const BOMPage: React.FC = () => {
     setHierarchyData(null);
     setHierarchyTreeData([]);
     setExpandedKeys([]);
+    resetBomDetailFieldValues();
+  };
+
+  const enrichBomListPage = async (result: { data: MaterialBOMRow[]; success: boolean; total: number }) => {
+    if (!result.success || result.data.length === 0) return result;
+    const data = await enrichBomRecordsWithCustomFields(
+      result.data.map((r) => ({ ...r, id: r.selectedVersion?.firstItem?.id }))
+    );
+    return { ...result, data };
   };
 
   /**
@@ -1032,19 +1081,20 @@ const BOMPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      if (!values.items || values.items.length === 0) {
+      const { customData, standardValues } = extractBomFormValues(values);
+      if (!standardValues.items || standardValues.items.length === 0) {
         messageApi.error(t('app.master-data.bom.addAtLeastOneChild'));
         return;
       }
-      if (!values.materialId) {
+      if (!standardValues.materialId) {
         messageApi.error(t('app.master-data.bom.selectMainMaterial'));
         return;
       }
 
       const buildBatch = () => {
         return {
-          material_id: values.materialId,
-          items: values.items.map((item: any) => {
+          material_id: standardValues.materialId,
+          items: standardValues.items.map((item: any) => {
             if (!item.componentId) throw new Error(t('app.master-data.bom.selectChildMaterial'));
             if (!item.quantity || item.quantity <= 0) throw new Error(t('app.master-data.bom.quantityMustBePositive'));
             const unitValue = (item.unit && item.unit.trim()) ? item.unit.trim() : null;
@@ -1062,33 +1112,40 @@ const BOMPage: React.FC = () => {
               remark: item.remark || null,
             };
           }),
-          version: values.version || '1.0',
-          bom_code: values.bomCode,
-          effective_date: values.effectiveDate,
-          expiry_date: values.expiryDate,
-          approval_status: values.approvalStatus || 'draft',
-          description: values.description,
-          remark: values.remark,
-          is_active: values.isActive !== false,
+          version: standardValues.version || '1.0',
+          bom_code: standardValues.bomCode,
+          effective_date: standardValues.effectiveDate,
+          expiry_date: standardValues.expiryDate,
+          approval_status: standardValues.approvalStatus || 'draft',
+          description: standardValues.description,
+          remark: standardValues.remark,
+          is_active: standardValues.isActive !== false,
         };
       };
 
+      let createdList: BOM[] = [];
       if (isEdit && editContext) {
         for (const uuid of editContext.uuidsToReplace) {
           await bomApi.delete(uuid);
         }
         const batchData = buildBatch();
-        await bomApi.create(batchData as any);
+        createdList = await bomApi.create(batchData as any);
         messageApi.success(t('app.master-data.bom.structureUpdated', { count: batchData.items.length }));
         setEditContext(null);
       } else {
         const batchData = buildBatch();
-        await bomApi.create(batchData as any);
+        createdList = await bomApi.create(batchData as any);
         messageApi.success(t('app.master-data.bom.itemsCreated', { count: batchData.items.length }));
+      }
+
+      const headerId = createdList[0]?.id;
+      if (headerId != null) {
+        await saveBomCustomFieldValues(headerId, customData);
       }
 
       setModalVisible(false);
       formRef.current?.resetFields();
+      resetBomFormFieldValues();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
@@ -1104,6 +1161,7 @@ const BOMPage: React.FC = () => {
     setModalVisible(false);
     setEditContext(null);
     formRef.current?.resetFields();
+    resetBomFormFieldValues();
   };
 
   /**
@@ -1693,6 +1751,7 @@ const BOMPage: React.FC = () => {
    */
   const isRootRow = (r: any) => 'versions' in r && Array.isArray(r.versions);
   const isBomItemRow = (r: any) => !isRootRow(r);
+  const bomCustomFieldColumns = generateBomCustomFieldColumns() as MaterialBOMProColumn[];
 
   const groupColumns: MaterialBOMProColumn[] = [
     { 
@@ -1882,6 +1941,7 @@ const BOMPage: React.FC = () => {
       search: { transform: (v: boolean) => (v ? true : undefined) },
       fieldProps: { checkedChildren: '', unCheckedChildren: '' },
     },
+    ...bomCustomFieldColumns,
     {
       title: t('app.master-data.bom.actionTitle'),
       valueType: 'option',
@@ -2354,7 +2414,9 @@ const BOMPage: React.FC = () => {
                 groupKeyToUuidsRef.current = keyToUuids;
                 // 传入完整 groupRows 作为 allGroupRows，否则成品下的半成品无法展开
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
+                return enrichBomListPage(
+                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+                );
               }
               throw apiErr;
             }
@@ -2407,7 +2469,9 @@ const BOMPage: React.FC = () => {
                 }
                 groupKeyToUuidsRef.current = keyToUuids;
                 const materialRows = groupBomsByMaterial(filteredGroupRows, selectedVersionByMaterial, groupRows);
-                return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
+                return enrichBomListPage(
+                  pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+                );
               }
               throw batchErr;
             }
@@ -2510,7 +2574,9 @@ const BOMPage: React.FC = () => {
             }
             groupKeyToUuidsRef.current = keyToUuids;
             const materialRows = groupBomsByMaterial(displayGroupRows, selectedVersionByMaterial, allGroupRowsForNesting);
-            return pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials);
+            return enrichBomListPage(
+              pageMaterialBomRows(materialRows, params, searchFormValues as Record<string, unknown>, sort, materials)
+            );
           } catch (error: any) {
             console.error('获取BOM列表失败:', error);
             messageApi.error(error?.message || t('app.master-data.bom.getListFailed'));
@@ -2633,7 +2699,16 @@ const BOMPage: React.FC = () => {
         }
         linesTitle={t('app.master-data.bom.hierarchyStructure')}
         lines={
-          <Spin spinning={hierarchyLoading}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {hasCustomFieldsDetailContent(bomListCustomFields, bomDetailCustomFieldValues) ? (
+              <DetailDrawerSection title={t('app.master-data.customFields')}>
+                <CustomFieldsDetailSection
+                  customFields={bomListCustomFields}
+                  customFieldValues={bomDetailCustomFieldValues}
+                />
+              </DetailDrawerSection>
+            ) : null}
+            <Spin spinning={hierarchyLoading}>
             {hierarchyTreeData.length === 0 && !hierarchyLoading ? (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
                 {t('app.master-data.bom.noHierarchyData')}
@@ -2675,6 +2750,7 @@ const BOMPage: React.FC = () => {
               </div>
             )}
           </Spin>
+          </div>
         }
       />
 
@@ -2786,6 +2862,10 @@ const BOMPage: React.FC = () => {
           label={t('app.master-data.bom.expiryDateLabel')}
           colProps={{ span: 12 }}
           fieldProps={{ style: { width: '100%' } }}
+        />
+        <CustomFieldsFormSection
+          customFields={bomFormCustomFields}
+          customFieldValues={bomFormCustomFieldValues}
         />
         <ProForm.Item
             label={t('app.master-data.bom.childMaterialList')}

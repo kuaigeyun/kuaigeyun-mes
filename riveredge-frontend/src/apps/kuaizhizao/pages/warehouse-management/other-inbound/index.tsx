@@ -10,6 +10,13 @@
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Form as AntForm, InputNumber, Input, Row, Col, Select, Typography, Descriptions } from 'antd';
@@ -102,6 +109,8 @@ const defaultInboundItem = {
   serial_numbers: undefined,
 };
 
+const OTHER_INBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_inbounds';
+
 const OtherInboundPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -114,6 +123,34 @@ const OtherInboundPage: React.FC = () => {
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: otherInboundFormCustomFields,
+    customFieldValues: otherInboundFormCustomFieldValues,
+    extractFormValues: extractOtherInboundFormValues,
+    saveCustomFieldValues: saveOtherInboundCustomFieldValues,
+    resetFieldValues: resetOtherInboundFormFieldValues,
+  } = useCustomFields({
+    tableName: OTHER_INBOUND_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: otherInboundListCustomFields,
+    generateCustomFieldColumns: generateOtherInboundCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOtherInboundRecordsWithCustomFields,
+    customFieldValues: otherInboundDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOtherInboundFieldValuesForDetail,
+    resetDetailFieldValues: resetOtherInboundDetailFieldValues,
+  } = useCustomFieldsForList<OtherInbound>({ tableName: OTHER_INBOUND_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (otherInboundListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [otherInboundListCustomFields.length]);
+
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
@@ -162,6 +199,8 @@ const OtherInboundPage: React.FC = () => {
     };
     loadReasonType();
   }, []);
+
+  const otherInboundCustomFieldColumns = generateOtherInboundCustomFieldColumns();
 
   const columns: ProColumns<OtherInbound>[] = [
     {
@@ -214,6 +253,7 @@ const OtherInboundPage: React.FC = () => {
         );
       },
     },
+    ...otherInboundCustomFieldColumns,
     {
       title: '操作',
       width: 180,
@@ -240,6 +280,9 @@ const OtherInboundPage: React.FC = () => {
       const detail = await warehouseApi.otherInbound.get(record.id!.toString());
       setInboundDetail(detail as OtherInboundDetail);
       setDetailDrawerVisible(true);
+      if (record.id != null) {
+        await loadOtherInboundFieldValuesForDetail(record.id);
+      }
     } catch {
       messageApi.error('获取其他入库单详情失败');
     }
@@ -334,13 +377,14 @@ const OtherInboundPage: React.FC = () => {
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
       const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
-      await warehouseApi.otherInbound.create({
-        inbound_code: values.inbound_code,
-        reason_type: values.reason_type,
-        reason_desc: values.reason_desc,
-        warehouse_id: values.warehouse_id,
+      const { standardValues, customData } = extractOtherInboundFormValues(values);
+      const created = await warehouseApi.otherInbound.create({
+        inbound_code: standardValues.inbound_code,
+        reason_type: standardValues.reason_type,
+        reason_desc: standardValues.reason_desc,
+        warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
-        notes: values.notes,
+        notes: standardValues.notes,
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -353,7 +397,12 @@ const OtherInboundPage: React.FC = () => {
           serial_numbers: it.serial_numbers || undefined,
         })),
       });
+      const recordId = Number((created as { id?: number })?.id ?? 0);
+      if (recordId > 0 && Object.keys(customData).length > 0) {
+        await saveOtherInboundCustomFieldValues(recordId, customData);
+      }
       messageApi.success('创建成功');
+      resetOtherInboundFormFieldValues();
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
@@ -457,8 +506,13 @@ const OtherInboundPage: React.FC = () => {
     },
     { title: '入库人', dataIndex: 'receiver_name' },
     { title: '入库时间', dataIndex: 'receipt_time', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
   ];
+
+  const detailNotesColumn: ProDescriptionsItemProps<OtherInboundDetail> = {
+    title: '备注',
+    dataIndex: 'notes',
+    span: 2,
+  };
 
   return (
     <>
@@ -483,7 +537,8 @@ const OtherInboundPage: React.FC = () => {
                 warehouse_id: params.warehouse_id,
                 keyword: (params as any).keyword,
               });
-              const data = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const raw = Array.isArray(response) ? response : response?.items || response?.data || [];
+              const data = await enrichOtherInboundRecordsWithCustomFields(raw);
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
@@ -519,11 +574,32 @@ const OtherInboundPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`其他入库单详情${inboundDetail?.inbound_code ? ` - ${inboundDetail.inbound_code}` : ''}`}
         open={detailDrawerVisible}
-        onClose={() => { setDetailDrawerVisible(false); setInboundDetail(null); }}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setInboundDetail(null);
+          resetOtherInboundDetailFieldValues();
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         basic={
           inboundDetail ? (
-            <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
+            <>
+              <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, inboundDetail)} />
+              {hasCustomFieldsDetailContent(otherInboundListCustomFields, otherInboundDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={otherInboundListCustomFields}
+                    customFieldValues={otherInboundDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              {inboundDetail.notes ? (
+                <Descriptions
+                  column={2}
+                  style={{ marginTop: 16 }}
+                  items={detailDrawerDescriptionItems([detailNotesColumn], inboundDetail)}
+                />
+              ) : null}
+            </>
           ) : undefined
         }
         lines={
@@ -563,6 +639,7 @@ const OtherInboundPage: React.FC = () => {
         onClose={() => {
           resetSelectedWarehouseId();
           setCreateModalVisible(false);
+          resetOtherInboundFormFieldValues();
         }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
@@ -615,6 +692,10 @@ const OtherInboundPage: React.FC = () => {
             </ProFormItem>
           </Col>
         </Row>
+        <CustomFieldsFormSection
+          customFields={otherInboundFormCustomFields}
+          customFieldValues={otherInboundFormCustomFieldValues}
+        />
         <div className="uni-table-detail" style={{ width: '100%' }}>
           <UniTableDetailHeader title="明细" required />
           <AntForm.List name="items">

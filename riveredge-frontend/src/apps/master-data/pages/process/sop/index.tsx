@@ -19,8 +19,17 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { downloadFile } from '../../../../../utils';
 import { batchImport } from '../../../../../utils/batchOperations';
-import { ListPageTemplate, FormModalTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, flushDrawerOpen, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const SOP_CUSTOM_FIELD_TABLE = 'master_data_sops';
 
 import { sopApi, operationApi, processRouteApi, unwrapProcessPagedList } from '../../../services/process';
 import { extractProTableSort, mapProcessListSortField } from '../../../../../utils/tableQueryKey';
@@ -67,6 +76,30 @@ const SOPPage: React.FC = () => {
   const [materials, setMaterials] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const [routes, setRoutes] = useState<{ uuid: string; code: string; name: string }[]>([]);
   const sopDetailReqRef = useRef(0);
+
+  const {
+    customFields: sopFormCustomFields,
+    customFieldValues: sopFormCustomFieldValues,
+    loadFieldValues: loadSopFormFieldValues,
+    extractFormValues: extractSopFormValues,
+    saveCustomFieldValues: saveSopCustomFieldValues,
+    resetFieldValues: resetSopFormFieldValues,
+  } = useCustomFields({ tableName: SOP_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: sopListCustomFields,
+    generateCustomFieldColumns: generateSopCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichSopRecordsWithCustomFields,
+    customFieldValues: sopDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSopFieldValuesForDetail,
+    resetDetailFieldValues: resetSopDetailFieldValues,
+  } = useCustomFieldsForList<SOP>({ tableName: SOP_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (sopListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [sopListCustomFields.length]);
 
   const sopImportTemplate = useMemo(
     () =>
@@ -201,6 +234,8 @@ const SOPPage: React.FC = () => {
         material_group_uuids: d.material_group_uuids ?? d.materialGroupUuids ?? undefined,
         material_uuids: d.material_uuids ?? d.materialUuids ?? undefined,
       });
+      const fieldFormValues = await loadSopFormFieldValues(detail.id);
+      formRef.current?.setFieldsValue(fieldFormValues);
     } catch (error: any) {
       messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
     }
@@ -281,6 +316,9 @@ const SOPPage: React.FC = () => {
       const detail = await sopApi.get(record.uuid);
       if (sopDetailReqRef.current !== req) return;
       setSopDetail(detail);
+      if (detail.id != null) {
+        await loadSopFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (sopDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.sop.getDetailFailed'));
@@ -299,6 +337,7 @@ const SOPPage: React.FC = () => {
     setDrawerVisible(false);
     setCurrentSOPUuid(null);
     setSopDetail(null);
+    resetSopDetailFieldValues();
   };
 
   /**
@@ -307,26 +346,29 @@ const SOPPage: React.FC = () => {
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      
+      const { customData, standardValues } = extractSopFormValues(values);
+
       // 仅提交基本信息与适用范围；流程与报工采集在设计页保存
       const payload: Record<string, unknown> = {
-        ...values,
-        material_group_uuids: values.material_group_uuids ?? values.materialGroupUuids ?? null,
-        material_uuids: values.material_uuids ?? values.materialUuids ?? null,
+        ...standardValues,
+        material_group_uuids: standardValues.material_group_uuids ?? standardValues.materialGroupUuids ?? null,
+        material_uuids: standardValues.material_uuids ?? standardValues.materialUuids ?? null,
       };
-      
+
       if (isEdit && currentSOPUuid) {
-        // 更新SOP
         await sopApi.update(currentSOPUuid, payload as SOPUpdate);
         messageApi.success(t('common.updateSuccess'));
+        const updated = await sopApi.get(currentSOPUuid);
+        await saveSopCustomFieldValues(updated.id, customData);
       } else {
-        // 创建SOP
-        await sopApi.create(payload as unknown as SOPCreate);
+        const created = await sopApi.create(payload as unknown as SOPCreate);
+        await saveSopCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
       }
-      
+
       setModalVisible(false);
       formRef.current?.resetFields();
+      resetSopFormFieldValues();
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
@@ -483,6 +525,7 @@ const SOPPage: React.FC = () => {
     setIsEdit(false);
     setCurrentSOPUuid(null);
     formRef.current?.resetFields();
+    resetSopFormFieldValues();
   };
 
   /**
@@ -493,6 +536,7 @@ const SOPPage: React.FC = () => {
     setIsEdit(false);
     setCurrentSOPUuid(null);
     formRef.current?.resetFields();
+    resetSopFormFieldValues();
     setModalVisible(true);
   };
 
@@ -702,7 +746,9 @@ const SOPPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<SOP>[] = [
+  const columns: ProColumns<SOP>[] = useMemo(() => {
+    const customFieldColumns = generateSopCustomFieldColumns();
+    return [
     {
       title: 'SOP编号',
       dataIndex: 'code',
@@ -818,6 +864,7 @@ const SOPPage: React.FC = () => {
       },
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -881,6 +928,7 @@ const SOPPage: React.FC = () => {
       },
     },
   ];
+  }, [sopListCustomFields, generateSopCustomFieldColumns, operations, materials, materialGroups, routes, navigate, getOperationName, t]);
 
   return (
     <ListPageTemplate>
@@ -926,8 +974,9 @@ const SOPPage: React.FC = () => {
           try {
             const result = await sopApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = await enrichSopRecordsWithCustomFields(listData);
             return {
-              data: listData,
+              data: enrichedData,
               success: true,
               total: typeof result?.total === 'number' ? result.total : listData.length,
             };
@@ -1003,16 +1052,26 @@ const SOPPage: React.FC = () => {
           ) : null
         }
         collaborationTitle={t('app.master-data.sop.detailSectionBinding', { defaultValue: '绑定与 BOM 载入' })}
+        linesTitle={t('app.master-data.sop.detailSectionDigital', { defaultValue: '数字化作业指导' })}
         lines={
           sopDetail ? (
-            <Descriptions
-              column={1}
-              size="small"
-              items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
-            />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {hasCustomFieldsDetailContent(sopListCustomFields, sopDetailCustomFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields')}>
+                  <CustomFieldsDetailSection
+                    customFields={sopListCustomFields}
+                    customFieldValues={sopDetailCustomFieldValues}
+                  />
+                </DetailDrawerSection>
+              ) : null}
+              <Descriptions
+                column={1}
+                size="small"
+                items={detailDrawerDescriptionItems(sopDetailDigitalColumns, sopDetail)}
+              />
+            </div>
           ) : null
         }
-        linesTitle={t('app.master-data.sop.detailSectionDigital', { defaultValue: '数字化作业指导' })}
       />
 
       {/* 新建 SOP Modal：按工艺路线批量创建 */}
@@ -1113,6 +1172,10 @@ const SOPPage: React.FC = () => {
               />
             </Col>
           </Row>
+          <CustomFieldsFormSection
+            customFields={sopFormCustomFields}
+            customFieldValues={sopFormCustomFieldValues}
+          />
           <ProFormTextArea
             name="content"
             label="备注"

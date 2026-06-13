@@ -31,6 +31,13 @@ import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../
 import type { Material } from '../../../../master-data/types/material';
 import { useTranslation } from 'react-i18next';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -274,6 +281,10 @@ async function fetchStorageLocationsForWarehouse(
 
 const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1100;
 
+const PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_receipts';
+const PRODUCTION_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_returns';
+const FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_finished_goods_receipts';
+
 function inboundDocumentTrackingType(
   order: InboundOrder
 ):
@@ -329,6 +340,64 @@ const InboundPage: React.FC = () => {
   // Modal 相关状态（创建入库单）
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: purchaseReceiptFormCustomFields,
+    customFieldValues: purchaseReceiptFormCustomFieldValues,
+    extractFormValues: extractPurchaseReceiptFormValues,
+    saveCustomFieldValues: savePurchaseReceiptCustomFieldValues,
+    resetFieldValues: resetPurchaseReceiptFormFieldValues,
+  } = useCustomFields({
+    tableName: PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: purchaseReceiptListCustomFields,
+    generateCustomFieldColumns: generatePurchaseReceiptCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichPurchaseReceiptRecordsWithCustomFields,
+    customFieldValues: purchaseReceiptDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPurchaseReceiptFieldValuesForDetail,
+    resetDetailFieldValues: resetPurchaseReceiptDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE });
+
+  const {
+    customFields: productionReturnListCustomFields,
+    generateCustomFieldColumns: generateProductionReturnCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichProductionReturnRecordsWithCustomFields,
+    customFieldValues: productionReturnDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadProductionReturnFieldValuesForDetail,
+    resetDetailFieldValues: resetProductionReturnDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: PRODUCTION_RETURN_CUSTOM_FIELD_TABLE });
+
+  const {
+    customFields: finishedGoodsReceiptListCustomFields,
+    generateCustomFieldColumns: generateFinishedGoodsReceiptCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichFinishedGoodsReceiptRecordsWithCustomFields,
+    customFieldValues: finishedGoodsReceiptDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadFinishedGoodsReceiptFieldValuesForDetail,
+    resetDetailFieldValues: resetFinishedGoodsReceiptDetailFieldValues,
+  } = useCustomFieldsForList<InboundOrder>({ tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (purchaseReceiptListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [purchaseReceiptListCustomFields.length]);
+
+  useEffect(() => {
+    if (productionReturnListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [productionReturnListCustomFields.length]);
+
+  useEffect(() => {
+    if (finishedGoodsReceiptListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [finishedGoodsReceiptListCustomFields.length]);
+
   const [inboundType, setInboundType] = useState<string>('purchase');
 
   // Drawer 相关状态（详情查看）
@@ -772,6 +841,13 @@ const InboundPage: React.FC = () => {
         setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
         setDetailDrawerVisible(true);
         setInboundTrackingRefreshKey((k) => k + 1);
+        if (record.receipt_type === 'purchase' && record.id != null) {
+          await loadPurchaseReceiptFieldValuesForDetail(record.id);
+        } else if (record.receipt_type === 'production_return' && record.id != null) {
+          await loadProductionReturnFieldValuesForDetail(record.id);
+        } else if (record.receipt_type === 'finished_goods' && record.id != null) {
+          await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
+        }
       }
     } catch (error: any) {
       const msg =
@@ -1159,6 +1235,13 @@ const InboundPage: React.FC = () => {
             if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
           });
           setEditableReceiptQuantities(quantities);
+          if (order.receipt_type === 'purchase' && order.id != null) {
+            await loadPurchaseReceiptFieldValuesForDetail(order.id);
+          } else if (order.receipt_type === 'production_return' && order.id != null) {
+            await loadProductionReturnFieldValuesForDetail(order.id);
+          } else if (order.receipt_type === 'finished_goods' && order.id != null) {
+            await loadFinishedGoodsReceiptFieldValuesForDetail(order.id);
+          }
         } catch {
           /* ignore */
         }
@@ -1256,6 +1339,13 @@ const InboundPage: React.FC = () => {
               }
               if (detailData) {
                 setCurrentOrder({ ...detailData, receipt_type: record.receipt_type });
+                if (record.receipt_type === 'purchase' && record.id != null) {
+                  await loadPurchaseReceiptFieldValuesForDetail(record.id);
+                } else if (record.receipt_type === 'production_return' && record.id != null) {
+                  await loadProductionReturnFieldValuesForDetail(record.id);
+                } else if (record.receipt_type === 'finished_goods' && record.id != null) {
+                  await loadFinishedGoodsReceiptFieldValuesForDetail(record.id);
+                }
               }
             } catch {
               /* ignore */
@@ -1331,6 +1421,9 @@ const InboundPage: React.FC = () => {
     return '入库单';
   };
 
+  const purchaseReceiptCustomFieldColumns = generatePurchaseReceiptCustomFieldColumns();
+  const productionReturnCustomFieldColumns = generateProductionReturnCustomFieldColumns();
+  const finishedGoodsReceiptCustomFieldColumns = generateFinishedGoodsReceiptCustomFieldColumns();
   const columns: ProColumns<InboundOrder>[] = [
     {
       title: '主体 / 单号',
@@ -1435,6 +1528,9 @@ const InboundPage: React.FC = () => {
         );
       },
     },
+    ...purchaseReceiptCustomFieldColumns,
+    ...productionReturnCustomFieldColumns,
+    ...finishedGoodsReceiptCustomFieldColumns,
     {
       title: '操作',
       width: 200,
@@ -1516,28 +1612,29 @@ const InboundPage: React.FC = () => {
   const handleFormFinish = async (values: any) => {
     try {
       if (values.type === 'purchase' || inboundType === 'purchase') {
-        const items = (values.items ?? []).filter(
+        const { customData, standardValues } = extractPurchaseReceiptFormValues(values);
+        const items = (standardValues.items ?? []).filter(
           (it: any) => it.material_id && (Number(it.receipt_quantity) || 0) > 0
         );
         if (items.length === 0) {
           messageApi.warning('请至少添加一条有效物料明细');
           throw new Error('请至少添加一条有效物料明细');
         }
-        const wh = createWarehouseOptions.find((w) => w.value === values.warehouse_id);
-        const sup = supplierOptions.find((s) => s.value === values.supplier_id);
+        const wh = createWarehouseOptions.find((w) => w.value === standardValues.warehouse_id);
+        const sup = supplierOptions.find((s) => s.value === standardValues.supplier_id);
         if (!wh || !sup) {
           messageApi.warning('请选择入库仓库和供应商');
           throw new Error('请选择入库仓库和供应商');
         }
         const payload = {
-          receipt_code: values.receipt_code || undefined,
-          purchase_order_id: values.purchase_order_id ?? 0,
-          purchase_order_code: values.purchase_order_code || '手动',
+          receipt_code: standardValues.receipt_code || undefined,
+          purchase_order_id: standardValues.purchase_order_id ?? 0,
+          purchase_order_code: standardValues.purchase_order_code || '手动',
           supplier_id: sup.value,
           supplier_name: sup.name,
           warehouse_id: wh.value,
           warehouse_name: wh.name,
-          notes: values.notes,
+          notes: standardValues.notes,
           items: items.map((it: any) => ({
             purchase_order_item_id: it.purchase_order_item_id ?? 0,
             material_id: it.material_id,
@@ -1551,10 +1648,15 @@ const InboundPage: React.FC = () => {
             unqualified_quantity: Number(it.unqualified_quantity ?? 0) || 0,
           })),
         };
-        await warehouseApi.purchaseReceipt.create(payload);
+        const created = await warehouseApi.purchaseReceipt.create(payload);
+        const recordId = (created as any)?.id;
+        if (recordId != null) {
+          await savePurchaseReceiptCustomFieldValues(recordId, customData);
+        }
       }
       messageApi.success('入库单创建成功');
       setCreateModalVisible(false);
+      resetPurchaseReceiptFormFieldValues();
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
@@ -1593,23 +1695,29 @@ const InboundPage: React.FC = () => {
 
             // 后端可能直接返回数组，或 { data/items: [] } 格式
             const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
-            const purchaseData = toList(purchaseRes).map((item: any) => ({
-              ...item,
-              receipt_type: 'purchase' as const,
-            }));
-            const finishedData = toList(finishedRes).map((item: any) => ({
-              ...item,
-              receipt_type: 'finished_goods' as const,
-            }));
+            const purchaseData = await enrichPurchaseReceiptRecordsWithCustomFields(
+              toList(purchaseRes).map((item: any) => ({
+                ...item,
+                receipt_type: 'purchase' as const,
+              })),
+            );
+            const finishedData = await enrichFinishedGoodsReceiptRecordsWithCustomFields(
+              toList(finishedRes).map((item: any) => ({
+                ...item,
+                receipt_type: 'finished_goods' as const,
+              })),
+            );
             const semiData = toList(semiRes).map((item: any) => ({
               ...item,
               receipt_type: 'semi_finished_goods' as const,
             }));
-            const returnData = toList(returnRes).map((item: any) => ({
-              ...item,
-              receipt_type: 'production_return' as const,
-              receipt_code: item.return_code,
-            }));
+            const returnData = await enrichProductionReturnRecordsWithCustomFields(
+              toList(returnRes).map((item: any) => ({
+                ...item,
+                receipt_type: 'production_return' as const,
+                receipt_code: item.return_code,
+              })),
+            );
             const customerMaterialData = toList(customerMaterialRes).map((item: any) => ({
               ...item,
               receipt_type: 'customer_material' as const,
@@ -1727,7 +1835,10 @@ const InboundPage: React.FC = () => {
       <FormModalTemplate
         title="新建入库单"
         open={createModalVisible}
-        onClose={() => setCreateModalVisible(false)}
+        onClose={() => {
+          setCreateModalVisible(false);
+          resetPurchaseReceiptFormFieldValues();
+        }}
         onFinish={handleFormFinish}
         isEdit={false}
         initialValues={{ type: 'purchase' }}
@@ -1841,6 +1952,10 @@ const InboundPage: React.FC = () => {
                 />
               </Col>
             </Row>
+            <CustomFieldsFormSection
+              customFields={purchaseReceiptFormCustomFields}
+              customFieldValues={purchaseReceiptFormCustomFieldValues}
+            />
             <div className="uni-table-detail" style={{ width: '100%' }}>
               <UniTableDetailHeader title="入库明细" required />
               <AntForm.List name="items" initialValue={[defaultPurchaseItem]}>
@@ -2334,6 +2449,9 @@ const InboundPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
           setEditableReceiptQuantities({});
+          resetPurchaseReceiptDetailFieldValues();
+          resetProductionReturnDetailFieldValues();
+          resetFinishedGoodsReceiptDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -2464,11 +2582,49 @@ const InboundPage: React.FC = () => {
                       label: '操作员',
                       children: currentOrder.received_by || currentOrder.returner_name || '-',
                     },
-                    ...(currentOrder.notes
-                      ? [{ key: 'notes', label: '备注', span: 3, children: currentOrder.notes }]
-                      : []),
                   ]}
                 />
+                {currentOrder.receipt_type === 'purchase' &&
+                hasCustomFieldsDetailContent(purchaseReceiptListCustomFields, purchaseReceiptDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={purchaseReceiptListCustomFields}
+                      customFieldValues={purchaseReceiptDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {currentOrder.receipt_type === 'production_return' &&
+                hasCustomFieldsDetailContent(
+                  productionReturnListCustomFields,
+                  productionReturnDetailCustomFieldValues,
+                ) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={productionReturnListCustomFields}
+                      customFieldValues={productionReturnDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {currentOrder.receipt_type === 'finished_goods' &&
+                hasCustomFieldsDetailContent(
+                  finishedGoodsReceiptListCustomFields,
+                  finishedGoodsReceiptDetailCustomFieldValues,
+                ) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={finishedGoodsReceiptListCustomFields}
+                      customFieldValues={finishedGoodsReceiptDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {currentOrder.notes ? (
+                  <Descriptions
+                    column={3}
+                    size="small"
+                    style={{ marginTop: 16 }}
+                    items={[{ key: 'notes', label: '备注', span: 3, children: currentOrder.notes }]}
+                  />
+                ) : null}
               </DetailDrawerSection>
 
               <DetailDrawerSection title="生命周期">

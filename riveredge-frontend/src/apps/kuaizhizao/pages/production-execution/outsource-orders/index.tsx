@@ -61,6 +61,15 @@ import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { useTranslation } from 'react-i18next';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 
 interface OutsourceOrder {
   id?: number;
@@ -157,6 +166,30 @@ export const OutsourceOrdersTable: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOutsourceOrder, setCurrentOutsourceOrder] = useState<OutsourceOrder | null>(null);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: outsourceFormCustomFields,
+    customFieldValues: outsourceFormCustomFieldValues,
+    loadFieldValues: loadOutsourceFormFieldValues,
+    extractFormValues: extractOutsourceFormValues,
+    saveCustomFieldValues: saveOutsourceCustomFieldValues,
+    resetFieldValues: resetOutsourceFormFieldValues,
+  } = useCustomFields({ tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: outsourceListCustomFields,
+    generateCustomFieldColumns: generateOutsourceCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichOutsourceRecordsWithCustomFields,
+    customFieldValues: outsourceDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadOutsourceFieldValuesForDetail,
+    resetDetailFieldValues: resetOutsourceDetailFieldValues,
+  } = useCustomFieldsForList<OutsourceOrder>({ tableName: OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (outsourceListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [outsourceListCustomFields.length]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -269,15 +302,16 @@ export const OutsourceOrdersTable: React.FC = () => {
           </Typography.Text>
         ),
       },
-      {
-        title: '备注',
-        dataIndex: 'remarks',
-        span: 3,
-        render: (text) => text || '-',
-      },
     ],
     []
   );
+
+  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceOrder> = {
+    title: '备注',
+    dataIndex: 'remarks',
+    span: 3,
+    render: (text) => text || '-',
+  };
 
   const handleDetail = async (record: OutsourceOrder) => {
     try {
@@ -285,6 +319,9 @@ export const OutsourceOrdersTable: React.FC = () => {
       setOutsourceOrderDetail(detail);
       setDetailDrawerVisible(true);
       setOoTrackingRefreshKey((k) => k + 1);
+      if (detail.id != null) {
+        await loadOutsourceFieldValuesForDetail(detail.id);
+      }
     } catch (error) {
       messageApi.error('获取工序委外单详情失败');
     }
@@ -348,6 +385,11 @@ export const OutsourceOrdersTable: React.FC = () => {
           unqualified_quantity: detail.unqualified_quantity,
           remarks: detail.remarks,
         });
+        if (detail.id != null) {
+          loadOutsourceFormFieldValues(detail.id).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }
       }, 100);
     } catch (error) {
       messageApi.error('获取工序委外单详情失败');
@@ -400,16 +442,22 @@ export const OutsourceOrdersTable: React.FC = () => {
    */
   const handleSubmitForm = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractOutsourceFormValues(values);
       const submitData = {
-        ...values,
-        planned_start_date: values.planned_start_date ? values.planned_start_date.format('YYYY-MM-DD HH:mm:ss') : undefined,
-        planned_end_date: values.planned_end_date ? values.planned_end_date.format('YYYY-MM-DD HH:mm:ss') : undefined,
+        ...standardValues,
+        planned_start_date: standardValues.planned_start_date
+          ? standardValues.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
+        planned_end_date: standardValues.planned_end_date
+          ? standardValues.planned_end_date.format('YYYY-MM-DD HH:mm:ss')
+          : undefined,
       };
 
       const oid = currentOutsourceOrder?.id;
 
       if (isEdit && oid) {
         await outsourceOrderApi.update(oid.toString(), submitData);
+        await saveOutsourceCustomFieldValues(oid, customData);
         messageApi.success('工序委外单更新成功');
       } else {
         // 新建委外单需要更多字段，这里需要从工单创建，所以这里暂时不支持直接创建
@@ -417,6 +465,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         throw new Error('请从工单详情页创建工序委外单');
       }
       setModalVisible(false);
+      resetOutsourceFormFieldValues();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -426,6 +475,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           const fresh = await outsourceOrderApi.get(String(oid));
           setOutsourceOrderDetail(fresh);
           setOoTrackingRefreshKey((k) => k + 1);
+          await loadOutsourceFieldValuesForDetail(oid);
         } catch {
           /* ignore */
         }
@@ -486,6 +536,7 @@ export const OutsourceOrdersTable: React.FC = () => {
     return nodes;
   };
 
+  const outsourceCustomFieldColumns = generateOutsourceCustomFieldColumns();
   const columns: ProColumns<OutsourceOrder>[] = [
     {
       title: '工序委外单编号',
@@ -593,6 +644,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         );
       },
     },
+    ...outsourceCustomFieldColumns,
     {
       title: '操作',
       width: 200,
@@ -614,10 +666,12 @@ export const OutsourceOrdersTable: React.FC = () => {
         ...params,
         keyword: params.keyword,
       });
+      const list = response || [];
+      const enriched = await enrichOutsourceRecordsWithCustomFields(list);
       return {
-        data: response || [],
+        data: enriched,
         success: true,
-        total: response?.length || 0,
+        total: enriched.length,
       };
     } catch (error) {
       messageApi.error('获取工序委外单列表失败');
@@ -680,7 +734,10 @@ export const OutsourceOrdersTable: React.FC = () => {
         <FormModalTemplate
           title="编辑工序委外"
           open={modalVisible}
-          onClose={() => setModalVisible(false)}
+          onClose={() => {
+            setModalVisible(false);
+            resetOutsourceFormFieldValues();
+          }}
           onFinish={handleSubmitForm}
           formRef={formRef}
           {...MODAL_CONFIG}
@@ -774,6 +831,10 @@ export const OutsourceOrdersTable: React.FC = () => {
             min={0}
             fieldProps={{ precision: 2 }}
           />
+          <CustomFieldsFormSection
+            customFields={outsourceFormCustomFields}
+            customFieldValues={outsourceFormCustomFieldValues}
+          />
           <ProFormTextArea
             name="remarks"
             label="备注"
@@ -790,6 +851,7 @@ export const OutsourceOrdersTable: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setOutsourceOrderDetail(null);
+          resetOutsourceDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -803,6 +865,20 @@ export const OutsourceOrdersTable: React.FC = () => {
                   column={3}
                   size="small"
                   items={buildDescriptionItemsFromColumns(outsourceOrderDetail, detailBaseColumns)}
+                />
+                {hasCustomFieldsDetailContent(outsourceListCustomFields, outsourceDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={outsourceListCustomFields}
+                      customFieldValues={outsourceDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                <Descriptions
+                  column={3}
+                  size="small"
+                  style={{ marginTop: 16 }}
+                  items={buildDescriptionItemsFromColumns(outsourceOrderDetail, [detailRemarksColumn])}
                 />
               </DetailDrawerSection>
 

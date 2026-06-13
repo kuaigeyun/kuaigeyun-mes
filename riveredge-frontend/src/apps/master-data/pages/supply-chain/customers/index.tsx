@@ -44,6 +44,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 客户管理列表页面组件
@@ -79,6 +84,21 @@ const CustomersPage: React.FC = () => {
   });
   const customerDetailReqRef = useRef(0);
 
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Customer>({ tableName: 'master_data_customers' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
+
   const renderPoolStatus = useCallback(
     (status?: string) => {
       if (status === 'pool') return <Tag color="blue">{t('field.customer.poolStatusPool')}</Tag>;
@@ -100,6 +120,12 @@ const CustomersPage: React.FC = () => {
         const detail = await customerApi.get(uuid);
         if (customerDetailReqRef.current !== req) return;
         setCustomerDetail(detail);
+        if (detail.id != null) {
+          await loadFieldValuesForDetail(detail.id);
+        }
+        if (detail.id != null) {
+          await loadFieldValuesForDetail(detail.id);
+        }
       } catch (error: any) {
         if (customerDetailReqRef.current === req) {
           messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
@@ -295,6 +321,9 @@ const CustomersPage: React.FC = () => {
       const detail = await customerApi.get(record.uuid);
       if (customerDetailReqRef.current !== req) return;
       setCustomerDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (customerDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.customers.getDetailFailed'));
@@ -312,6 +341,7 @@ const CustomersPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setCustomerDetail(null);
+    resetDetailFieldValues();
   };
 
   const handleOpenFollowUp = () => {
@@ -597,7 +627,9 @@ const CustomersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Customer>[] = [
+  const columns: ProColumns<Customer>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: t('field.customer.code'),
       dataIndex: 'code',
@@ -721,6 +753,7 @@ const CustomersPage: React.FC = () => {
       ),
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: t('app.master-data.warehouses.createTime'),
       dataIndex: 'createdAt',
@@ -764,7 +797,8 @@ const CustomersPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t, dictLabel, salesmanValueEnum, salesmanOptions, renderPoolStatus]);
 
   /** 详情列：与表单 Tab「基本信息 / 开票资料 / 业务与扩展」一致 */
   const detailColumnsBasic: ProDescriptionsItemProps<Customer>[] = [
@@ -948,8 +982,9 @@ const CustomersPage: React.FC = () => {
           try {
             const result = await customerApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = await enrichRecordsWithCustomFields(listData);
             return {
-              data: listData,
+              data: enrichedData,
               success: true,
               total: typeof result?.total === 'number' ? result.total : listData.length,
             };
@@ -1034,6 +1069,11 @@ const CustomersPage: React.FC = () => {
                   items={detailDrawerDescriptionItems(detailColumnsExtended, customerDetail)}
                 />
               </DetailDrawerSection>
+              {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+                <DetailDrawerSection title={t('app.master-data.customFields')} marginBottom={0}>
+                  <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
+                </DetailDrawerSection>
+              ) : null}
               <DetailDrawerSection title={t('app.kuaizhizao.customerFollowUp.new')} marginBottom={0}>
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
                   {t('app.kuaizhizao.quotationStage.detailHint')}

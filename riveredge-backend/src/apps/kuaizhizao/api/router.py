@@ -38,6 +38,7 @@ from .document_push_pull.document_push_pull import router as document_push_pull_
 from .document_relations.document_relations import router as document_relation_router
 from .scheduling_configs.scheduling_configs import router as scheduling_config_router
 from .visual_scheduling.visual_scheduling import router as visual_scheduling_router
+from .rolling_schedules.rolling_schedules import router as rolling_schedules_router
 from .dashboards.dashboards import router as dashboard_router
 from .reports.reports import router as reports_router
 from .wave_pickings.wave_pickings import router as wave_picking_router
@@ -97,6 +98,7 @@ router.include_router(document_push_pull_router)  # 单据下推和上拉
 router.include_router(document_relation_router)  # 单据关联关系
 router.include_router(scheduling_config_router)  # 排程配置
 router.include_router(visual_scheduling_router)  # 可视排产诊断
+router.include_router(rolling_schedules_router)  # 滚动计划
 router.include_router(production_control_router)  # 生产计划管控塔
 router.include_router(coordination_board_router)  # 生产协调看板
 router.include_router(dashboard_router)

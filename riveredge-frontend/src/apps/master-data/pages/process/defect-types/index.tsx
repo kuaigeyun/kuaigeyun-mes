@@ -4,7 +4,7 @@
  * 提供不良品信息的 CRUD 功能，包括列表展示、创建、编辑、删除等操作。
  */
 
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
@@ -29,6 +29,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 不良品信息管理列表页面组件
@@ -70,6 +75,21 @@ const DefectTypesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
   const defectDetailReqRef = useRef(0);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<DefectType>({ tableName: 'master_data_defect_types' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const defectTypeDetailColumns: ProDescriptionsItemProps<DefectType>[] = useMemo(
     () => [
@@ -186,6 +206,9 @@ const DefectTypesPage: React.FC = () => {
       const detail = await defectTypeApi.get(record.uuid);
       if (defectDetailReqRef.current !== req) return;
       setDefectTypeDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (defectDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.defectTypes.getDetailFailed'));
@@ -200,6 +223,7 @@ const DefectTypesPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setDefectTypeDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
@@ -388,7 +412,9 @@ const DefectTypesPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<DefectType>[] = [
+  const columns: ProColumns<DefectType>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '不良品编号',
       dataIndex: 'code',
@@ -427,6 +453,7 @@ const DefectTypesPage: React.FC = () => {
       },
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -474,7 +501,8 @@ const DefectTypesPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   return (
     <ListPageTemplate>
@@ -513,8 +541,9 @@ const DefectTypesPage: React.FC = () => {
             const list = result?.data ?? result;
             const data = Array.isArray(list) ? list : [];
             const total = typeof result?.total === 'number' ? result.total : data.length;
+            const enrichedData = await enrichRecordsWithCustomFields(data);
             return {
-              data,
+              data: enrichedData,
               success: true,
               total,
             };
@@ -578,6 +607,12 @@ const DefectTypesPage: React.FC = () => {
               column={1}
               items={detailDrawerDescriptionItems(defectTypeDetailColumns, defectTypeDetail)}
             />
+          ) : null
+        }
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />

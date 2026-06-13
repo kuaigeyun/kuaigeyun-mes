@@ -29,6 +29,15 @@ import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useGlobalStore } from '../../../../../stores/globalStore';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
 interface ReworkOrder {
   id?: number;
@@ -117,6 +126,30 @@ const ReworkOrdersPage: React.FC = () => {
   const [reportingOptions, setReportingOptions] = useState<any>(null);
   const reportFormRef = useRef<any>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const {
+    customFields: reworkFormCustomFields,
+    customFieldValues: reworkFormCustomFieldValues,
+    loadFieldValues: loadReworkFormFieldValues,
+    extractFormValues: extractReworkFormValues,
+    saveCustomFieldValues: saveReworkCustomFieldValues,
+    resetFieldValues: resetReworkFormFieldValues,
+  } = useCustomFields({ tableName: REWORK_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: reworkListCustomFields,
+    generateCustomFieldColumns: generateReworkCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichReworkRecordsWithCustomFields,
+    customFieldValues: reworkDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadReworkFieldValuesForDetail,
+    resetDetailFieldValues: resetReworkDetailFieldValues,
+  } = useCustomFieldsForList<ReworkOrder>({ tableName: REWORK_ORDER_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (reworkListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [reworkListCustomFields.length]);
 
   /**
    * 详情列定义
@@ -224,7 +257,9 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ReworkOrder>[] = [
+  const columns: ProColumns<ReworkOrder>[] = useMemo(() => {
+    const customFieldColumns = generateReworkCustomFieldColumns();
+    return [
     {
       title: '返工单编号',
       dataIndex: 'code',
@@ -300,6 +335,7 @@ const ReworkOrdersPage: React.FC = () => {
       width: 160,
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: '操作',
       valueType: 'option',
@@ -340,6 +376,7 @@ const ReworkOrdersPage: React.FC = () => {
       },
     },
   ];
+  }, [reworkListCustomFields, generateReworkCustomFieldColumns]);
 
   /**
    * 处理详情查看
@@ -349,6 +386,9 @@ const ReworkOrdersPage: React.FC = () => {
       const detail = await reworkOrderApi.get(record.id!.toString());
       setReworkOrderDetail(detail);
       setDetailDrawerVisible(true);
+      if (detail.id != null) {
+        await loadReworkFieldValuesForDetail(detail.id);
+      }
     } catch (error) {
       messageApi.error('获取返工单详情失败');
     }
@@ -393,6 +433,11 @@ const ReworkOrdersPage: React.FC = () => {
             ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
           remarks: detail.remarks,
         });
+        if (detail.id != null) {
+          loadReworkFormFieldValues(detail.id).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }
       }, 100);
     } catch (error) {
       messageApi.error('获取返工单详情失败');
@@ -499,6 +544,7 @@ const ReworkOrdersPage: React.FC = () => {
     setIsEdit(false);
     setCurrentReworkOrder(null);
     setWorkOrderProduct(null);
+    resetReworkFormFieldValues();
     setModalVisible(true);
     // FormModalTemplate 设置了 destroyOnHidden，ProForm 每次打开都是全新挂载，无需 setTimeout + resetFields
   };
@@ -508,14 +554,20 @@ const ReworkOrdersPage: React.FC = () => {
    */
   const handleSubmitForm = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractReworkFormValues(values);
       if (isEdit && currentReworkOrder?.id) {
-        await reworkOrderApi.update(currentReworkOrder.id.toString(), values);
+        await reworkOrderApi.update(currentReworkOrder.id.toString(), standardValues);
         messageApi.success('返工单更新成功');
+        await saveReworkCustomFieldValues(currentReworkOrder.id, customData);
       } else {
-        await reworkOrderApi.create(values);
+        const created = await reworkOrderApi.create(standardValues);
+        if (created?.id != null) {
+          await saveReworkCustomFieldValues(created.id, customData);
+        }
         messageApi.success('返工单创建成功');
       }
       setModalVisible(false);
+      resetReworkFormFieldValues();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -538,10 +590,12 @@ const ReworkOrdersPage: React.FC = () => {
         page: params.current || 1,
         page_size: params.pageSize || 20,
       });
+      const list = Array.isArray(response) ? response : [];
+      const enriched = await enrichReworkRecordsWithCustomFields(list);
       return {
-        data: response || [],
+        data: enriched,
         success: true,
-        total: response?.length || 0,
+        total: enriched.length,
       };
     } catch (error: any) {
       messageApi.error('获取返工单列表失败');
@@ -657,7 +711,10 @@ const ReworkOrdersPage: React.FC = () => {
       <FormModalTemplate
         title={isEdit ? '编辑返工单' : '新建返工单'}
         open={modalVisible}
-        onClose={() => setModalVisible(false)}
+        onClose={() => {
+          setModalVisible(false);
+          resetReworkFormFieldValues();
+        }}
         onFinish={handleSubmitForm}
         formRef={formRef}
         {...MODAL_CONFIG}
@@ -887,6 +944,10 @@ const ReworkOrdersPage: React.FC = () => {
           rules={[{ required: true, message: '请输入返工原因' }]}
           fieldProps={{ rows: 3 }}
         />
+        <CustomFieldsFormSection
+          customFields={reworkFormCustomFields}
+          customFieldValues={reworkFormCustomFieldValues}
+        />
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -899,7 +960,10 @@ const ReworkOrdersPage: React.FC = () => {
       <DetailDrawerTemplate
         title="返工单详情"
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          resetReworkDetailFieldValues();
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={detailColumns}
         dataSource={reworkOrderDetail ?? undefined}
@@ -967,6 +1031,14 @@ const ReworkOrdersPage: React.FC = () => {
           })()
         }
       >
+        {hasCustomFieldsDetailContent(reworkListCustomFields, reworkDetailCustomFieldValues) ? (
+          <DetailDrawerSection title="自定义字段">
+            <CustomFieldsDetailSection
+              customFields={reworkListCustomFields}
+              customFieldValues={reworkDetailCustomFieldValues}
+            />
+          </DetailDrawerSection>
+        ) : null}
         {reworkOrderDetail && (() => {
           const lifecycle = getReworkOrderLifecycle(reworkOrderDetail);
           const mainStages = lifecycle.mainStages ?? [];

@@ -24,6 +24,7 @@ const withPageSuspense = (LazyComponent: React.LazyExoticComponent<React.Compone
 const DemandManagementPage = lazy(() => import('./pages/plan-management/demand-management'));
 const DemandComputationPage = lazy(() => import('./pages/plan-management/demand-computation'));
 const SchedulingPage = lazy(() => import('./pages/plan-management/scheduling'));
+const RollingSchedulingPage = lazy(() => import('./pages/plan-management/rolling-scheduling'));
 const ProductionControlTower = lazy(() => import('./pages/plan-management/production-plans/ProductionControlTower'));
 const MESDashboard = lazy(() => import('./pages/dashboard'));
 
@@ -243,6 +244,7 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="plan-management/dashboard" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/production-control-tower" element={withPageSuspense(ProductionControlTower)} />
       <Route path="plan-management/scheduling" element={withPageSuspense(SchedulingPage)} />
+      <Route path="plan-management/rolling-scheduling" element={withPageSuspense(RollingSchedulingPage)} />
 
       {/* 采购管理路由 */}
       <Route path="purchase-management/dashboard" element={withPageSuspense(PurchaseDashboardPage)} />

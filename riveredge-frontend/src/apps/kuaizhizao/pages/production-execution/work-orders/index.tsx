@@ -123,6 +123,15 @@ import {
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
+import { useCustomFields } from '../../../../../hooks/useCustomFields'
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList'
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields'
+
+const WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_work_orders'
 import { qrcodeApi } from '../../../../../services/qrcode'
 import {
   workOrderApi,
@@ -1259,6 +1268,8 @@ const WorkOrdersPage: React.FC = () => {
         )
         if (result.success && Array.isArray(result.data)) {
           syncWorkOrderListRowIndexFromTableData(result.data)
+          const enriched = await enrichWorkOrderRecordsWithCustomFields(result.data)
+          return { ...result, data: enriched }
         }
         return result
       } catch (error) {
@@ -1271,7 +1282,7 @@ const WorkOrdersPage: React.FC = () => {
         }
       }
     },
-    [messageApi, syncWorkOrderListRowIndexFromTableData]
+    [messageApi, syncWorkOrderListRowIndexFromTableData, enrichWorkOrderRecordsWithCustomFields]
   )
 
   // 产品列表状态
@@ -1562,6 +1573,30 @@ const WorkOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false)
   const [currentWorkOrder, setCurrentWorkOrder] = useState<WorkOrder | null>(null)
   const formRef = useRef<any>(null)
+
+  const {
+    customFields: workOrderFormCustomFields,
+    customFieldValues: workOrderFormCustomFieldValues,
+    loadFieldValues: loadWorkOrderFormFieldValues,
+    extractFormValues: extractWorkOrderFormValues,
+    saveCustomFieldValues: saveWorkOrderCustomFieldValues,
+    resetFieldValues: resetWorkOrderFormFieldValues,
+  } = useCustomFields({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible })
+
+  const {
+    customFields: workOrderListCustomFields,
+    generateCustomFieldColumns: generateWorkOrderCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichWorkOrderRecordsWithCustomFields,
+    customFieldValues: workOrderDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadWorkOrderFieldValuesForDetail,
+    resetDetailFieldValues: resetWorkOrderDetailFieldValues,
+  } = useCustomFieldsForList<WorkOrder>({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE })
+
+  useEffect(() => {
+    if (workOrderListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200)
+    }
+  }, [workOrderListCustomFields.length])
 
   // 从加载来源填充表单：当 productSourceData 有 items 且新建工单弹窗打开时，自动填充产品与数量
   useEffect(() => {
@@ -2321,6 +2356,11 @@ const WorkOrdersPage: React.FC = () => {
           remarks: detail.remarks,
           attachments: mapWorkOrderAttachmentsToUploadList((detail as any).attachments),
         })
+        if (detail.id != null) {
+          loadWorkOrderFormFieldValues(detail.id).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues)
+          })
+        }
       }, 100)
     } catch (error) {
       messageApi.error('获取工单详情失败')
@@ -3276,6 +3316,9 @@ const WorkOrdersPage: React.FC = () => {
       setWorkOrderDetail(detail)
       setDrawerVisible(true)
       setWoTrackingRefreshKey((k) => k + 1)
+      if (detail.id != null) {
+        await loadWorkOrderFieldValuesForDetail(detail.id)
+      }
 
       // 加载工单工序列表
       try {
@@ -3473,6 +3516,12 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleSubmit = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractWorkOrderFormValues(values)
+      Object.keys(values).forEach((key) => {
+        if (key.startsWith('custom_')) delete values[key]
+      })
+      Object.assign(values, standardValues)
+
       if (!isEdit && createWorkOrderMode === 'peer_group') {
         const items = (values.group_items || []).filter(
           (row: { product_id?: number }) => row?.product_id != null
@@ -3657,6 +3706,9 @@ const WorkOrdersPage: React.FC = () => {
           }
         }
         messageApi.success('工单更新成功')
+        if (currentWorkOrder.id != null) {
+          await saveWorkOrderCustomFieldValues(currentWorkOrder.id, customData)
+        }
       } else {
         if (!values.enable_production_tracking) {
           delete values.enable_production_tracking
@@ -3689,8 +3741,12 @@ const WorkOrdersPage: React.FC = () => {
             ? `，已按序列号拆分为 ${created.serial_split_child_count} 张子工单`
             : ''
         messageApi.success(`工单创建成功！系统已自动匹配工艺路线并生成工序单${childHint}`)
+        if (created?.id != null) {
+          await saveWorkOrderCustomFieldValues(created.id, customData)
+        }
       }
       setModalVisible(false)
+      resetWorkOrderFormFieldValues()
       invalidateStatistics(); actionRef.current?.reload()
     } catch (error: any) {
       messageApi.error(error.message || '操作失败')
@@ -5219,6 +5275,7 @@ const WorkOrdersPage: React.FC = () => {
   /**
    * 表格列定义
    */
+  const workOrderCustomFieldColumns = generateWorkOrderCustomFieldColumns()
   const columns: ProColumns<WorkOrder>[] = [
     {
       title: '产品 / 工单编号',
@@ -5518,6 +5575,7 @@ const WorkOrdersPage: React.FC = () => {
         return renderWorkOrderListLifecycle(record)
       },
     },
+    ...workOrderCustomFieldColumns,
     {
       title: '操作',
       valueType: 'option',
@@ -6576,6 +6634,7 @@ const WorkOrdersPage: React.FC = () => {
           setCreateProcessRouteId(undefined)
           setCreateAddOperationsModalVisible(false)
           setCreateAddOperationUuids([])
+          resetWorkOrderFormFieldValues()
           formRef.current?.resetFields()
         }}
         onFinish={handleSubmit}
@@ -7102,6 +7161,10 @@ const WorkOrdersPage: React.FC = () => {
             )}
           </ProFormDependency>
         )}
+        <CustomFieldsFormSection
+          customFields={workOrderFormCustomFields}
+          customFieldValues={workOrderFormCustomFieldValues}
+        />
         <ProFormUploadButton
           name="attachments"
           label="附件"
@@ -7354,6 +7417,7 @@ const WorkOrdersPage: React.FC = () => {
         onClose={() => {
           setDrawerVisible(false)
           setWorkOrderDetail(null)
+          resetWorkOrderDetailFieldValues()
         }}
         dataSource={workOrderDetail || undefined}
         columns={detailColumns}
@@ -7431,6 +7495,15 @@ const WorkOrdersPage: React.FC = () => {
                     </Col>
                   </Row>
                 </DetailDrawerSection>
+
+                {hasCustomFieldsDetailContent(workOrderListCustomFields, workOrderDetailCustomFieldValues) ? (
+                  <DetailDrawerSection title={t('app.master-data.customFields', { defaultValue: '自定义字段' })}>
+                    <CustomFieldsDetailSection
+                      customFields={workOrderListCustomFields}
+                      customFieldValues={workOrderDetailCustomFieldValues}
+                    />
+                  </DetailDrawerSection>
+                ) : null}
 
                 {/* 2. 生命周期（上下游关联见左侧全链路浮层） */}
                 {(() => {

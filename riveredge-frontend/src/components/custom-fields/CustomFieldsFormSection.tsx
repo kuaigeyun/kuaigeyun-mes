@@ -13,12 +13,15 @@ import {
   ProFormDigit,
   ProFormDatePicker,
 } from '@ant-design/pro-components';
-import { Tag, Col } from 'antd';
+import { Tag } from 'antd';
 import SafeProFormSelect from '../safe-pro-form-select';
 import { AssociatedObjectSelect } from './AssociatedObjectSelect';
 import type { CustomField } from '../../services/customField';
 
 const CUSTOM_PREFIX = 'custom_';
+
+const customFieldColSpan = (fieldType: CustomField['field_type']) =>
+  fieldType === 'textarea' ? 24 : 12;
 
 const safeOptions = (options: any): Array<{ label: string; value: any }> => {
   if (!Array.isArray(options)) return [];
@@ -63,103 +66,103 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
         const placeholder = field.placeholder || `请输入${label}`;
         const initialVal = customFieldValues[field.code] ?? field.config?.default;
         const rules = field.is_required ? [{ required: true, message: `请输入${label}` }] : [];
-        
-        // 统一包裹在 Col 中以确保对齐一致
-        const colProps = { span: field.field_type === 'textarea' ? 24 : 6, style: { minWidth: 0 } };
+        const colProps = { span: customFieldColSpan(field.field_type) };
 
-        let component;
         switch (field.field_type) {
           case 'text':
-            component = (
+            return (
               <ProFormText
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={rules}
-                fieldProps={{ maxLength: field.config?.maxLength }}
+                colProps={colProps}
+                fieldProps={{ maxLength: field.config?.maxLength, style: { width: '100%' } }}
                 initialValue={initialVal}
               />
             );
-            break;
           case 'number':
-            component = (
+            return (
               <ProFormDigit
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={rules}
-                fieldProps={{ min: field.config?.min, max: field.config?.max }}
+                colProps={colProps}
+                fieldProps={{ min: field.config?.min, max: field.config?.max, style: { width: '100%' } }}
                 initialValue={initialVal}
               />
             );
-            break;
           case 'date':
-            component = (
+            return (
               <ProFormDatePicker
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
+                colProps={colProps}
                 fieldProps={{ format: field.config?.format || 'YYYY-MM-DD', style: { width: '100%' } }}
                 initialValue={initialVal}
               />
             );
-            break;
           case 'select':
-            component = (
+            return (
               <SafeProFormSelect
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={rules}
+                colProps={colProps}
                 options={safeOptions(field.config?.options)}
                 initialValue={initialVal}
                 fieldProps={{ style: { width: '100%' } }}
               />
             );
-            break;
           case 'textarea':
-            component = (
+            return (
               <ProFormTextArea
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={rules}
-                fieldProps={{ rows: field.config?.rows || 4 }}
+                colProps={colProps}
+                fieldProps={{ rows: field.config?.rows || 4, style: { width: '100%' } }}
                 initialValue={initialVal}
               />
             );
-            break;
           case 'associated_object':
-            component = (
+            return (
               <AssociatedObjectSelect
+                key={field.uuid}
                 field={field}
                 name={fieldName}
                 label={labelNode}
                 labelText={label}
                 placeholder={placeholder}
                 required={field.is_required}
+                colProps={colProps}
                 initialValue={initialVal}
               />
             );
-            break;
           default:
-            component = (
+            return (
               <ProFormText
+                key={field.uuid}
                 name={fieldName}
                 label={labelNode}
                 placeholder={placeholder}
                 rules={rules}
+                colProps={colProps}
+                fieldProps={{ style: { width: '100%' } }}
                 initialValue={initialVal}
               />
             );
         }
-
-        return (
-          <Col key={field.uuid} {...colProps}>
-            {component}
-          </Col>
-        );
       })}
     </>
   );

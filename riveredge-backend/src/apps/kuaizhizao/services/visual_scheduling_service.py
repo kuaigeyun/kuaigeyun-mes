@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from decimal import Decimal
 
@@ -27,6 +27,10 @@ from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
 from apps.kuaizhizao.schemas.scheduling_constraints import SchedulingConstraints
 
 from apps.kuaizhizao.services.scheduling_config_service import SchedulingConfigService
+
+from core.utils.timezone_utils import make_aware
+
+from infra.config.infra_config import infra_settings
 
 from apps.kuaizhizao.services.scheduling_freeze import (
 
@@ -186,7 +190,12 @@ class VisualSchedulingService(BaseService):
 
     """可视排产诊断与校验。"""
 
-
+    @staticmethod
+    def _plan_day_bounds(plan_date: date) -> Tuple[datetime, datetime]:
+        tz_name = infra_settings.TIMEZONE or "Asia/Shanghai"
+        start = make_aware(datetime.combine(plan_date, datetime.min.time()), tz_name)
+        end = make_aware(datetime.combine(plan_date, datetime.max.time()), tz_name)
+        return start, end
 
     def __init__(self):
 
@@ -226,6 +235,8 @@ class VisualSchedulingService(BaseService):
 
         horizon_days: int = 14,
 
+        plan_date: Optional[date] = None,
+
     ) -> Dict[str, Any]:
 
         constraints = await self._load_constraints(tenant_id)
@@ -255,6 +266,13 @@ class VisualSchedulingService(BaseService):
         if work_center_id:
 
             query = query.filter(work_center_id=work_center_id)
+
+        if plan_date:
+            day_start, day_end = self._plan_day_bounds(plan_date)
+            query = query.filter(
+                planned_start_date__gte=day_start,
+                planned_start_date__lte=day_end,
+            )
 
         work_orders = await query.all()
 

@@ -44,6 +44,15 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
 
 // 销售退货单接口定义
 interface SalesReturn {
@@ -164,6 +173,31 @@ const SalesReturnsPage: React.FC = () => {
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const formRef = useRef<ProFormInstance>(null);
+
+  const {
+    customFields: salesReturnFormCustomFields,
+    customFieldValues: salesReturnFormCustomFieldValues,
+    loadFieldValues: loadSalesReturnFormFieldValues,
+    extractFormValues: extractSalesReturnFormValues,
+    saveCustomFieldValues: saveSalesReturnCustomFieldValues,
+    resetFieldValues: resetSalesReturnFormFieldValues,
+  } = useCustomFields({ tableName: SALES_RETURN_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible });
+
+  const {
+    customFields: salesReturnListCustomFields,
+    generateCustomFieldColumns: generateSalesReturnCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichSalesReturnRecordsWithCustomFields,
+    customFieldValues: salesReturnDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadSalesReturnFieldValuesForDetail,
+    resetDetailFieldValues: resetSalesReturnDetailFieldValues,
+  } = useCustomFieldsForList<SalesReturn>({ tableName: SALES_RETURN_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (salesReturnListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [salesReturnListCustomFields.length]);
+
   const {
     selectedWarehouseId,
     locationOptions,
@@ -216,6 +250,8 @@ const SalesReturnsPage: React.FC = () => {
   const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
     return actions;
   };
+
+  const salesReturnCustomFieldColumns = generateSalesReturnCustomFieldColumns();
 
   // 表格列定义
   const columns: ProColumns<SalesReturn>[] = [
@@ -291,6 +327,7 @@ const SalesReturnsPage: React.FC = () => {
         />
       ),
     },
+    ...salesReturnCustomFieldColumns,
     {
       title: '操作',
       width: 220,
@@ -317,6 +354,9 @@ const SalesReturnsPage: React.FC = () => {
       setReturnDetail(detail as SalesReturnDetail);
       setDetailDrawerVisible(true);
       setTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadSalesReturnFieldValuesForDetail(record.id);
+      }
     } catch (error) {
       messageApi.error('获取销售退货单详情失败');
     }
@@ -347,6 +387,7 @@ const SalesReturnsPage: React.FC = () => {
   const handleCreate = () => {
     setEditingId(null);
     setEditingDetail(null);
+    resetSalesReturnFormFieldValues();
     resetSelectedWarehouseId();
     setPendingFormValues({
       return_time: dayjs(),
@@ -390,6 +431,13 @@ const SalesReturnsPage: React.FC = () => {
           material_unit: (it as any).material_unit ?? '件',
         })),
       });
+      if (record.id != null) {
+        window.setTimeout(() => {
+          loadSalesReturnFormFieldValues(record.id!).then((fieldFormValues) => {
+            formRef.current?.setFieldsValue(fieldFormValues);
+          });
+        }, 100);
+      }
       setModalVisible(true);
     } catch {
       messageApi.error('加载退货单失败');
@@ -457,11 +505,13 @@ const SalesReturnsPage: React.FC = () => {
   // 表单提交处理
   const onFinish = async (values: any) => {
     try {
-      const itemsPayload = buildSalesReturnItemsPayload(values.items);
+      const { customData, standardValues } = extractSalesReturnFormValues(values);
+      const itemsPayload = buildSalesReturnItemsPayload(standardValues.items);
       const returnTime =
-        values.return_time && typeof values.return_time.format === 'function'
-          ? values.return_time.format('YYYY-MM-DD')
-          : values.return_time;
+        standardValues.return_time && typeof standardValues.return_time.format === 'function'
+          ? standardValues.return_time.format('YYYY-MM-DD')
+          : standardValues.return_time;
+      let recordId: number | undefined;
       if (editingId) {
         const detail = editingDetail;
         if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
@@ -469,17 +519,17 @@ const SalesReturnsPage: React.FC = () => {
           return;
         }
         await warehouseApi.salesReturn.update(editingId.toString(), {
-          customer_id: values.customer_id,
-          customer_name: values.customer_name ?? detail.customer_name,
-          warehouse_id: values.warehouse_id,
-          warehouse_name: values.warehouse_name ?? detail.warehouse_name,
+          customer_id: standardValues.customer_id,
+          customer_name: standardValues.customer_name ?? detail.customer_name,
+          warehouse_id: standardValues.warehouse_id,
+          warehouse_name: standardValues.warehouse_name ?? detail.warehouse_name,
           return_time: returnTime,
-          return_reason: values.return_reason ?? null,
-          return_type: values.return_type ?? detail.return_type ?? '质量问题',
-          shipping_method: values.shipping_method ?? null,
+          return_reason: standardValues.return_reason ?? null,
+          return_type: standardValues.return_type ?? detail.return_type ?? '质量问题',
+          shipping_method: standardValues.shipping_method ?? null,
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
-          notes: values.notes ?? null,
+          notes: standardValues.notes ?? null,
           sales_delivery_id: detail.sales_delivery_id ?? null,
           sales_delivery_code: detail.sales_delivery_code ?? null,
           sales_order_id: detail.sales_order_id ?? null,
@@ -487,16 +537,22 @@ const SalesReturnsPage: React.FC = () => {
           status: detail.status,
           items: itemsPayload,
         });
+        recordId = editingId;
         messageApi.success('销售退货单已更新');
       } else {
-        await warehouseApi.salesReturn.create({
-          ...values,
+        const created = await warehouseApi.salesReturn.create({
+          ...standardValues,
           return_time: returnTime,
           items: itemsPayload,
         });
+        recordId = (created as any)?.id;
         messageApi.success('销售退货单创建成功');
       }
+      if (recordId != null) {
+        await saveSalesReturnCustomFieldValues(recordId, customData);
+      }
       setModalVisible(false);
+      resetSalesReturnFormFieldValues();
       setEditingId(null);
       setEditingDetail(null);
       setPendingFormValues(null);
@@ -605,12 +661,6 @@ const SalesReturnsPage: React.FC = () => {
       title: '退货人',
       dataIndex: 'returner_name',
     },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      span: 2,
-      render: (text: any) => text || '-',
-    },
   ];
 
   return (
@@ -635,10 +685,12 @@ const SalesReturnsPage: React.FC = () => {
                 sales_delivery_id: params.sales_delivery_id,
                 customer_id: params.customer_id,
               });
+              const list = Array.isArray(response) ? response : response.data || [];
+              const enriched = await enrichSalesReturnRecordsWithCustomFields(list);
               return {
-                data: Array.isArray(response) ? response : response.data || [],
+                data: enriched,
                 success: true,
-                total: Array.isArray(response) ? response.length : response.total || 0,
+                total: Array.isArray(response) ? enriched.length : response.total || enriched.length,
               };
             } catch (error) {
               messageApi.error('获取销售退货单列表失败');
@@ -664,6 +716,7 @@ const SalesReturnsPage: React.FC = () => {
           setEditingId(null);
           setEditingDetail(null);
           setPendingFormValues(null);
+          resetSalesReturnFormFieldValues();
         }}
         afterOpenChange={(open) => {
           if (open) {
@@ -758,6 +811,11 @@ const SalesReturnsPage: React.FC = () => {
             />
           </Col>
         </Row>
+
+        <CustomFieldsFormSection
+          customFields={salesReturnFormCustomFields}
+          customFieldValues={salesReturnFormCustomFieldValues}
+        />
 
         <UniTableDetail
           name="items"
@@ -905,6 +963,7 @@ const SalesReturnsPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setReturnDetail(null);
+          resetSalesReturnDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
@@ -939,10 +998,31 @@ const SalesReturnsPage: React.FC = () => {
                     { key: 'return_reason', k: '退货原因', v: returnDetail.return_reason || '-' },
                     { key: 'return_type', k: '退货类型', v: returnDetail.return_type || '-' },
                     { key: 'return_time', k: '退货时间', v: returnDetail.return_time || '-' },
-                    { key: 'notes', k: '备注', v: returnDetail.notes || '-' },
                   ]}
                   rowKey="key"
                 />
+                {hasCustomFieldsDetailContent(salesReturnListCustomFields, salesReturnDetailCustomFieldValues) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={salesReturnListCustomFields}
+                      customFieldValues={salesReturnDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {returnDetail.notes ? (
+                  <Table
+                    size="small"
+                    pagination={false}
+                    style={{ marginTop: 16 }}
+                    showHeader={false}
+                    columns={[
+                      { title: '字段', dataIndex: 'k', width: 120 },
+                      { title: '值', dataIndex: 'v' },
+                    ]}
+                    dataSource={[{ key: 'notes', k: '备注', v: returnDetail.notes }]}
+                    rowKey="key"
+                  />
+                ) : null}
               </DetailDrawerSection>
 
               <DetailDrawerSection title="生命周期">

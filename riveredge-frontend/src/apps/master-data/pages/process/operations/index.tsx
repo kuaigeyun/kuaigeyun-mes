@@ -30,6 +30,11 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../utils/factoryImportTemplate';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 
 /**
  * 工序信息管理列表页面组件
@@ -56,6 +61,21 @@ const OperationsPage: React.FC = () => {
   const [selectedPresetKeys, setSelectedPresetKeys] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
   const operationDetailReqRef = useRef(0);
+
+  const {
+    customFields,
+    customFieldValues,
+    generateCustomFieldColumns,
+    enrichRecordsWithCustomFields,
+    loadFieldValuesForDetail,
+    resetDetailFieldValues,
+  } = useCustomFieldsForList<Operation>({ tableName: 'master_data_operations' });
+
+  useEffect(() => {
+    if (customFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [customFields.length]);
 
   const operationImportTemplate = useMemo(
     () =>
@@ -164,6 +184,9 @@ const OperationsPage: React.FC = () => {
       const detail = await operationApi.get(record.uuid);
       if (operationDetailReqRef.current !== req) return;
       setOperationDetail(detail);
+      if (detail.id != null) {
+        await loadFieldValuesForDetail(detail.id);
+      }
     } catch (error: any) {
       if (operationDetailReqRef.current === req) {
         messageApi.error(error.message || t('app.master-data.operations.getDetailFailed'));
@@ -456,12 +479,15 @@ const OperationsPage: React.FC = () => {
   const handleCloseDetail = () => {
     setDrawerVisible(false);
     setOperationDetail(null);
+    resetDetailFieldValues();
   };
 
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Operation>[] = [
+  const columns: ProColumns<Operation>[] = useMemo(() => {
+    const customFieldColumns = generateCustomFieldColumns();
+    return [
     {
       title: '工序编号',
       dataIndex: 'code',
@@ -566,6 +592,7 @@ const OperationsPage: React.FC = () => {
       ),
       sorter: true,
     },
+    ...customFieldColumns,
     {
       title: '创建时间',
       dataIndex: 'createdAt',
@@ -615,7 +642,8 @@ const OperationsPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+    ];
+  }, [customFields, t]);
 
   return (
     <ListPageTemplate>
@@ -652,8 +680,9 @@ const OperationsPage: React.FC = () => {
           try {
             const result = await operationApi.list(apiParams);
             const listData = Array.isArray(result) ? result : result?.data ?? [];
+            const enrichedData = await enrichRecordsWithCustomFields(listData);
             return {
-              data: listData,
+              data: enrichedData,
               success: true,
               total: typeof result?.total === 'number' ? result.total : listData.length,
             };
@@ -781,6 +810,12 @@ const OperationsPage: React.FC = () => {
                 />
               </div>
             </div>
+          ) : null
+        }
+        linesTitle={t('app.master-data.customFields')}
+        lines={
+          hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
+            <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
           ) : null
         }
       />

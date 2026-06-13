@@ -159,6 +159,7 @@ from .state_transition import StateTransitionRule, StateTransitionLog
 from .document_relation import DocumentRelation
 from .scheduling_config import SchedulingConfig
 from .work_order_score import WorkOrderScore
+from .rolling_schedule_plan import RollingSchedulePlan, RollingSchedulePlanLine
 
 __all__ = [
     # 生产执行模块
@@ -317,4 +318,6 @@ __all__ = [
     'DocumentRelation',
     'SchedulingConfig',
     'WorkOrderScore',
+    'RollingSchedulePlan',
+    'RollingSchedulePlanLine',
 ]

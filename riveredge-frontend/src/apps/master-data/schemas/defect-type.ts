@@ -23,6 +23,7 @@ export const defectTypeFormSchema: FieldConfig[] = [
     colSpan: 12,
     rules: [{ required: true, messageKey: 'field.defectType.nameRequired' }],
   },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
   {
     name: 'description',
     type: 'textarea',

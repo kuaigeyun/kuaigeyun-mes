@@ -44,6 +44,13 @@ import {
 } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
 import { useSubmitShortcut } from '../../../../../hooks/useSubmitShortcut';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../utils/globalSubmitShortcut';
 import {
   buildDocumentCreateDraftKey,
@@ -410,6 +417,8 @@ const ORDER_TYPE_FALLBACK: Array<{ label: string; value: string }> = [
   { label: '框架协议', value: '框架协议' },
 ];
 
+const PURCHASE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_orders';
+
 const PURCHASE_ORDER_LIST_PATH = '/apps/kuaizhizao/purchase-management/purchase-orders';
 const PURCHASE_ORDER_CREATE_PATH = `${PURCHASE_ORDER_LIST_PATH}/new`;
 const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}/edit`;
@@ -506,6 +515,31 @@ const PurchaseOrdersPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<PurchaseOrder | null>(null);
   const formRef = useRef<any>(null);
+
+  const {
+    customFields: purchaseOrderFormCustomFields,
+    customFieldValues: purchaseOrderFormCustomFieldValues,
+    loadFieldValues: loadPurchaseOrderFormFieldValues,
+    extractFormValues: extractPurchaseOrderFormValues,
+    saveCustomFieldValues: savePurchaseOrderCustomFieldValues,
+    resetFieldValues: resetPurchaseOrderFormFieldValues,
+  } = useCustomFields({ tableName: PURCHASE_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: isFormPage });
+
+  const {
+    customFields: purchaseOrderListCustomFields,
+    generateCustomFieldColumns: generatePurchaseOrderCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichPurchaseOrderRecordsWithCustomFields,
+    customFieldValues: purchaseOrderDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadPurchaseOrderFieldValuesForDetail,
+    resetDetailFieldValues: resetPurchaseOrderDetailFieldValues,
+  } = useCustomFieldsForList<PurchaseOrder>({ tableName: PURCHASE_ORDER_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (purchaseOrderListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [purchaseOrderListCustomFields.length]);
+
   /** 标记是否在保存后自动提交（草稿转正式） */
   const submitAfterSaveRef = useRef(false);
 
@@ -773,6 +807,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const [landingCostOrder, setLandingCostOrder] = useState<PurchaseOrder | null>(null);
 
   /** 列表列顺序：金额/数量/时间在前；生命周期固定倒数第二；操作列最后（与 UI_Standard 一致） */
+  const purchaseOrderCustomFieldColumns = generatePurchaseOrderCustomFieldColumns();
   const columns: ProColumns<PurchaseOrder>[] = [
     {
       title: '供应商 / 订单',
@@ -859,6 +894,7 @@ const PurchaseOrdersPage: React.FC = () => {
         );
       },
     },
+    ...purchaseOrderCustomFieldColumns,
     {
       title: '操作',
       width: 120,
@@ -930,6 +966,9 @@ const PurchaseOrdersPage: React.FC = () => {
 
       setDetailDrawerVisible(true);
       setPoTrackingRefreshKey((k) => k + 1);
+      if (record.id != null) {
+        await loadPurchaseOrderFieldValuesForDetail(record.id);
+      }
     } catch (error) {
       messageApi.error('获取采购订单详情失败');
     }
@@ -1533,6 +1572,9 @@ const PurchaseOrdersPage: React.FC = () => {
           fee_details: (detail as any).fee_details || [],
           items: items.length > 0 ? items : [defaultOrderItem],
         });
+        loadPurchaseOrderFormFieldValues(orderId).then((fieldFormValues) => {
+          formRef.current?.setFieldsValue(fieldFormValues);
+        });
       }, 100);
     } catch {
       messageApi.error('获取采购订单详情失败');
@@ -1547,6 +1589,7 @@ const PurchaseOrdersPage: React.FC = () => {
         : null;
     setIsEdit(false);
     setCurrentOrder(null);
+    resetPurchaseOrderFormFieldValues();
     formRef.current?.resetFields();
     window.setTimeout(() => {
       formRef.current?.setFieldsValue({ items: [defaultOrderItem], price_type: 'tax_exclusive' });
@@ -1720,6 +1763,12 @@ const PurchaseOrdersPage: React.FC = () => {
   // 处理表单提交（创建/更新）
   const handleFormSubmit = async (values: any): Promise<void> => {
     try {
+      const { customData, standardValues } = extractPurchaseOrderFormValues(values);
+      Object.keys(values).forEach((key) => {
+        if (key.startsWith('custom_')) delete values[key];
+      });
+      Object.assign(values, standardValues);
+
       const normalizedItems = normalizeFormListItems<any>(values.items);
       const validItems = normalizedItems.filter(
         (it: any) => it.material_id && (Number(it.ordered_quantity) || 0) > 0
@@ -1805,6 +1854,10 @@ const PurchaseOrdersPage: React.FC = () => {
         if (!submitAfterSaveRef.current) {
           messageApi.success('采购订单创建成功');
         }
+      }
+
+      if (orderId != null) {
+        await savePurchaseOrderCustomFieldValues(orderId, customData);
       }
 
       if (submitAfterSaveRef.current && orderId) {
@@ -1907,13 +1960,14 @@ const PurchaseOrdersPage: React.FC = () => {
       dataIndex: 'net_amount',
       render: (text: any) => (text != null && text !== '') ? `¥${formatAmount(text)}` : '-',
     },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      span: 3,
-      render: (text: any) => text || '-',
-    },
   ];
+
+  const detailNotesColumn: ProDescriptionsItemProps<PurchaseOrderDetail> = {
+    title: '备注',
+    dataIndex: 'notes',
+    span: 3,
+    render: (text: any) => text || '-',
+  };
 
   const statCards: StatCard[] = statistics
     ? [
@@ -2160,6 +2214,12 @@ const PurchaseOrdersPage: React.FC = () => {
         <AntForm.Item name="price_type" hidden initialValue="tax_exclusive">
           <Input />
         </AntForm.Item>
+
+        <CustomFieldsFormSection
+          customFields={purchaseOrderFormCustomFields}
+          customFieldValues={purchaseOrderFormCustomFieldValues}
+        />
+
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue: getFormValue }: any) => {
             const rawPriceType = getFormValue('price_type');
@@ -2708,8 +2768,9 @@ const PurchaseOrdersPage: React.FC = () => {
               if (lifecycleMapped.review_status) apiParams.review_status = lifecycleMapped.review_status;
               const response = await listPurchaseOrders(apiParams as Parameters<typeof listPurchaseOrders>[0]);
               lastOrdersCacheRef.current = response.data || [];
+              const enriched = await enrichPurchaseOrderRecordsWithCustomFields(response.data || []);
               return {
-                data: response.data || [],
+                data: enriched,
                 success: response.success !== false,
                 total: response.total || 0,
               };
@@ -2854,6 +2915,7 @@ const PurchaseOrdersPage: React.FC = () => {
           setDetailDrawerVisible(false);
           setOrderDetail(null);
           setApprovalStatus(null);
+          resetPurchaseOrderDetailFieldValues();
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         collaborationTitleSuffix={
@@ -3036,6 +3098,20 @@ const PurchaseOrdersPage: React.FC = () => {
                   />
                 </>
               )}
+              {hasCustomFieldsDetailContent(purchaseOrderListCustomFields, purchaseOrderDetailCustomFieldValues) ? (
+                <div style={{ marginTop: 16 }}>
+                  <CustomFieldsDetailSection
+                    customFields={purchaseOrderListCustomFields}
+                    customFieldValues={purchaseOrderDetailCustomFieldValues}
+                  />
+                </div>
+              ) : null}
+              <Descriptions
+                column={3}
+                size="small"
+                style={{ marginTop: 16 }}
+                items={buildDescriptionItemsFromColumns(orderDetail, [detailNotesColumn])}
+              />
             </>
           ) : null
         }
