@@ -44,6 +44,7 @@ async def send_equipment_upkeep_sheet_created_messages(
     ctx: dict = {"service_type": (row.service_type or "").strip()}
     if row.applicant_user_id and int(row.applicant_user_id) > 0:
         ctx["creator_user_id"] = int(row.applicant_user_id)
+    ctx = with_form_notify_user_ids(ctx, getattr(row, "complete_notify_user_ids", None))
     await dispatch_haoligo_notification(
         tenant_id,
         trigger_document=DOC_EQUIPMENT_UPKEEP_SHEET,

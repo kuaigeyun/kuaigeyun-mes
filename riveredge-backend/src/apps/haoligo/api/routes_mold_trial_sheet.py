@@ -815,7 +815,6 @@ async def update_trial_sheet(
             data["pending_notify_user_ids"] = []
             data["repair_warehouse_id"] = None
             data["dispatch_origin_warehouse_id"] = None
-            data["adjustment_points"] = None
     else:
         effective_result = str(data.get("trial_result", row.trial_result) or "").strip()
         if not skip_fh_validation and (
@@ -843,7 +842,6 @@ async def update_trial_sheet(
             data["pending_notify_user_ids"] = []
             data["repair_warehouse_id"] = None
             data["dispatch_origin_warehouse_id"] = None
-            data["adjustment_points"] = None
         data.pop("production_trial_result", None)
         data.pop("production_trial_user_id", None)
         if phase == WORKFLOW_PHASE_TRIAL:

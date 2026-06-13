@@ -79,12 +79,18 @@ def resolve_adjustment_points_for_sheet(
     production_trial_result: str | None,
     adjustment_points: str | None,
 ) -> str | None:
-    if not sheet_has_unqualified_result(
+    pts = normalize_adjustment_points(adjustment_points)
+    unqualified = sheet_has_unqualified_result(
         trial_result=trial_result,
         production_trial_result=production_trial_result,
-    ):
-        return None
-    pts = normalize_adjustment_points(adjustment_points)
+    )
+    if not unqualified:
+        if pts and len(pts) > ADJUSTMENT_POINTS_MAX_LEN:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"需要调整的点不超过{ADJUSTMENT_POINTS_MAX_LEN}字",
+            )
+        return pts
     if not pts:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -106,11 +112,18 @@ def resolve_adjustment_points_for_update(
     adjustment_points_in_body: bool,
     existing_adjustment_points: str | None,
 ) -> str | None:
-    if not sheet_has_unqualified_result(
+    unqualified = sheet_has_unqualified_result(
         trial_result=trial_result,
         production_trial_result=production_trial_result,
-    ):
-        return None
+    )
+    if not unqualified:
+        if adjustment_points_in_body:
+            return resolve_adjustment_points_for_sheet(
+                trial_result=trial_result,
+                production_trial_result=production_trial_result,
+                adjustment_points=body_adjustment_points,
+            )
+        return normalize_adjustment_points(existing_adjustment_points)
     if adjustment_points_in_body:
         return resolve_adjustment_points_for_sheet(
             trial_result=trial_result,

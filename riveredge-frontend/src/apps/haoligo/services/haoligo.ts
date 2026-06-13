@@ -796,6 +796,7 @@ export interface EquipmentUpkeepSheetRow {
   upkeep_param_set_code?: string | null;
   upkeep_param_set_name?: string | null;
   reporter_user_id: number;
+  complete_notify_user_ids?: number[];
   created_at: string;
   /** 是否可发起维保完成：尚无未删除的关联完成单 */
   can_complete?: boolean;
@@ -809,6 +810,7 @@ export type EquipmentUpkeepSheetCreatePayload = {
   description?: string | null;
   upkeep_param_set_id?: number | null;
   header_attachment_file_uuids?: string[] | null;
+  complete_notify_user_ids?: number[];
 };
 
 export type EquipmentUpkeepSheetUpdatePayload = {
@@ -819,6 +821,7 @@ export type EquipmentUpkeepSheetUpdatePayload = {
   description?: string;
   upkeep_param_set_id?: number | null;
   header_attachment_file_uuids?: string[] | null;
+  complete_notify_user_ids?: number[];
 };
 
 export function listEquipmentUpkeepSheets(params?: {

@@ -26,7 +26,7 @@ from apps.haoligo.models.equipment import HaoligoEquipment
 from apps.haoligo.models.equipment_upkeep import HaoligoEquipmentUpkeepCompleteSheet, HaoligoEquipmentUpkeepSheet
 from apps.haoligo.models.equipment_upkeep_param import HaoligoEquipmentUpkeepParamSet
 from apps.haoligo.services.equipment_upkeep_scheme import equipment_ledger_upkeep_param_set_id
-from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids
+from apps.haoligo.services.spot_check_side_effects import normalize_report_user_ids, validate_report_notify_users
 from apps.haoligo.api._haoligo_route_access import require_haoligo_module_access
 from core.api.deps.deps import get_current_tenant, get_current_user
 from infra.exceptions.exceptions import ValidationError
@@ -90,6 +90,7 @@ class EquipmentUpkeepSheetOut(BaseModel):
     upkeep_param_set_code: Optional[str] = None
     upkeep_param_set_name: Optional[str] = None
     reporter_user_id: int
+    complete_notify_user_ids: List[int] = Field(default_factory=list)
     created_at: datetime
     can_complete: bool = Field(
         False,
@@ -105,6 +106,7 @@ class EquipmentUpkeepSheetCreate(BaseModel):
     description: Optional[str] = Field(default=None, description="维修原因/保养要求（可选）")
     upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案（保养单必填；未传时用设备台账默认）")
     header_attachment_file_uuids: Optional[List[str]] = None
+    complete_notify_user_ids: List[int] = Field(default_factory=list)
 
     @field_validator("department_uuid", mode="before")
     @classmethod
@@ -133,6 +135,7 @@ class EquipmentUpkeepSheetUpdate(BaseModel):
     description: Optional[str] = None
     upkeep_param_set_id: Optional[int] = Field(None, ge=1, description="保养方案")
     header_attachment_file_uuids: Optional[List[str]] = None
+    complete_notify_user_ids: Optional[List[int]] = None
 
 
 async def _resolve_upkeep_set_snapshot(
@@ -190,6 +193,7 @@ async def _serialize(
         upkeep_param_set_code=row.upkeep_param_set_code,
         upkeep_param_set_name=row.upkeep_param_set_name,
         reporter_user_id=row.reporter_user_id,
+        complete_notify_user_ids=normalize_report_user_ids(getattr(row, "complete_notify_user_ids", None)),
         created_at=row.created_at,
         can_complete=int(row.id) not in (linked_complete_ids or set()),
     )
@@ -261,6 +265,9 @@ async def create_upkeep_sheet(
     ups_id, ups_code, ups_name = await _resolve_upkeep_set_snapshot(
         tenant_id, body.equipment_id, svc, body.upkeep_param_set_id
     )
+    complete_notify_ids = normalize_report_user_ids(body.complete_notify_user_ids)
+    if complete_notify_ids:
+        await validate_report_notify_users(tenant_id, complete_notify_ids)
     rule_code = (
         HAOLIGO_EQUIPMENT_MAINTENANCE_REPAIR_SHEET_NO if svc == "维修" else HAOLIGO_EQUIPMENT_UPKEEP_SHEET_NO
     )
@@ -284,6 +291,7 @@ async def create_upkeep_sheet(
             upkeep_param_set_code=ups_code,
             upkeep_param_set_name=ups_name,
             reporter_user_id=user.id,
+            complete_notify_user_ids=complete_notify_ids,
         )
         await apply_equipment_status_on_upkeep_sheet_created(
             tenant_id,
@@ -365,6 +373,11 @@ async def update_upkeep_sheet(
         data["upkeep_param_set_id"] = ups_id
         data["upkeep_param_set_code"] = ups_code
         data["upkeep_param_set_name"] = ups_name
+    if "complete_notify_user_ids" in data and data["complete_notify_user_ids"] is not None:
+        notify_ids = normalize_report_user_ids(data["complete_notify_user_ids"])
+        if notify_ids:
+            await validate_report_notify_users(tenant_id, notify_ids)
+        data["complete_notify_user_ids"] = notify_ids
     for k, v in data.items():
         setattr(row, k, v)
     await row.save()

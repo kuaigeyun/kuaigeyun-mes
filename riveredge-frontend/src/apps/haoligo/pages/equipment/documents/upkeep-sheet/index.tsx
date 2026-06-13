@@ -4,6 +4,7 @@ import { rowActionKind } from '../../../../../../components/uni-action';
  */
 
 import React, { startTransition, useCallback, useMemo, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   ActionType,
   ProColumns,
@@ -25,6 +26,12 @@ import { ListPageTemplate, MODAL_CONFIG } from '../../../../../../components/lay
 import { useSubmitShortcut } from '../../../../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../../../../utils/globalSubmitShortcut';
 import { uploadFile } from '../../../../../../services/file';
+import { getBusinessConfig } from '../../../../../../services/businessConfig';
+import {
+  findEnabledBusinessNotificationRule,
+  getFormNotifyUserDefaultsFromRule,
+} from '../../../../../../components/business-notification-rules/notificationRuleFormUsers';
+import { FormNotifyUsersSelect } from '../../../../components/FormNotifyUsersSelect';
 import { UniUserIdSelect, type UniUserIdSelectPreset } from '../../../../../../components/uni-user-id-select';
 import { useApplicantUserIdField } from '../../../../hooks/useApplicantUserIdField';
 import {
@@ -36,6 +43,7 @@ import {
   listEquipmentUpkeepParamSets,
   listEquipmentUpkeepSheets,
   listEquipments,
+  listHaoligoNotifyUserOptions,
   listWorkshops,
   updateEquipmentUpkeepSheet,
   type EquipmentUpkeepSheetRow,
@@ -54,6 +62,14 @@ import {
 } from '../../../../../../utils/documentWorkflowPermission';
 import { useGlobalStore } from '../../../../../../stores';
 import { buildEquipmentUpkeepCompleteCreateFromSheetUrl } from '../../../../utils/equipmentUpkeepCompleteNavigation';
+
+const EQUIP_UPKEEP_SHEET_DOC_NOTIFICATION = 'haoligo_equipment_upkeep_sheet';
+const EQUIP_UPKEEP_SHEET_ACTION_CREATED = 'created';
+
+function parseNotifyUserIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((v) => Number(v)).filter((id) => Number.isFinite(id) && id > 0);
+}
 
 const EquipmentUpkeepSheetPage: React.FC = () => {
   const { t } = useTranslation();
@@ -97,6 +113,26 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
   const [editId, setEditId] = useState<number | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, unknown> | undefined>(undefined);
+  const notifyLabelRef = useRef(new Map<number, string>());
+
+  const { data: businessConfigRes } = useQuery({
+    queryKey: ['businessConfig'],
+    queryFn: getBusinessConfig,
+    staleTime: 60_000,
+  });
+  const upkeepSheetNotifyRule = useMemo(
+    () =>
+      findEnabledBusinessNotificationRule(
+        businessConfigRes?.parameters?.notifications,
+        EQUIP_UPKEEP_SHEET_DOC_NOTIFICATION,
+        EQUIP_UPKEEP_SHEET_ACTION_CREATED,
+      ),
+    [businessConfigRes?.parameters?.notifications],
+  );
+  const upkeepSheetNotifyDefaults = useMemo(
+    () => getFormNotifyUserDefaultsFromRule(upkeepSheetNotifyRule),
+    [upkeepSheetNotifyRule],
+  );
 
   const title = t('app.haoligo.menu.equipment.documents.upkeep-sheet');
 
@@ -173,6 +209,27 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
     [formatWorkshopLabel],
   );
 
+  const searchUpkeepSheetNotifyUsers = useCallback(
+    async (keyword?: string, selectedIds?: number[]) => {
+      const fromArg = (selectedIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+      const selIds =
+        fromArg.length > 0
+          ? fromArg
+          : ((formRef.current?.getFieldValue('complete_notify_user_ids') as number[] | undefined) || []);
+      const users = await listHaoligoNotifyUserOptions({
+        keyword,
+        limit: 80,
+        selected_user_ids: selIds,
+      });
+      const opts = users.map((u) => ({ label: u.label, value: u.id }));
+      for (const o of opts) {
+        notifyLabelRef.current.set(o.value, o.label);
+      }
+      return opts;
+    },
+    [],
+  );
+
   const uploadFieldProps = useMemo(
     (): Partial<UploadProps> =>
       withMoldPictureCardUploadClass({
@@ -216,6 +273,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           equipment_id: undefined,
           description: '',
           header_attachments: [],
+          complete_notify_user_ids: [...upkeepSheetNotifyDefaults],
         });
         startTransition(() => setFormOptionsReady(true));
       } catch {
@@ -224,7 +282,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
         setFormOptionsReady(false);
       }
     })();
-  }, [getCreateApplicantDefaults, messageApi, preloadFormOptions, t, urlServiceType]);
+  }, [getCreateApplicantDefaults, messageApi, preloadFormOptions, t, urlServiceType, upkeepSheetNotifyDefaults]);
 
   const handleMainModalCancel = useCallback(() => {
     setModalVisible(false);
@@ -254,6 +312,8 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
           upkeep_param_set_id: d.upkeep_param_set_id ?? undefined,
           description: d.description,
           header_attachments: await uuidsToSecureUploadFileList(d.header_attachment_file_uuids),
+          complete_notify_user_ids:
+            d.complete_notify_user_ids?.length ? d.complete_notify_user_ids : [...upkeepSheetNotifyDefaults],
         });
         await syncEquipmentWorkshop(d.equipment_id);
         startTransition(() => setFormOptionsReady(true));
@@ -271,6 +331,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       resolveInitDepartmentUuid,
       syncEquipmentWorkshop,
       t,
+      upkeepSheetNotifyDefaults,
     ],
   );
 
@@ -329,6 +390,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
       return Promise.reject(new Error('validation'));
     }
     const headerUuids = normUploadUuids(values.header_attachments);
+    const completeNotifyIds = parseNotifyUserIds(values.complete_notify_user_ids);
     setFormLoading(true);
     try {
       if (isEdit && editId != null) {
@@ -343,6 +405,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
               ? Number(values.upkeep_param_set_id)
               : undefined,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : [],
+          complete_notify_user_ids: completeNotifyIds,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.saved'));
       } else {
@@ -357,6 +420,7 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
               ? Number(values.upkeep_param_set_id)
               : undefined,
           header_attachment_file_uuids: headerUuids.length ? headerUuids : undefined,
+          complete_notify_user_ids: completeNotifyIds,
         });
         messageApi.success(t('app.haoligo.equipment.upkeep.submitted'));
       }
@@ -654,6 +718,18 @@ const EquipmentUpkeepSheetPage: React.FC = () => {
                     }}
                   />
                 </Col>
+                <FormNotifyUsersSelect
+                  inline
+                  colSpan={12}
+                  name="complete_notify_user_ids"
+                  label="提交通知人员"
+                  placeholder="请选择提交通知人员（抄送）"
+                  readonly={isDetailView}
+                  seedUserIds={upkeepSheetNotifyDefaults}
+                  searchUsers={(keyword, selectedIds) =>
+                    searchUpkeepSheetNotifyUsers(keyword, selectedIds)
+                  }
+                />
                 <Col span={12}>
                   <ProFormDependency name={['service_type', 'equipment_id']}>
                     {({ service_type, equipment_id }) =>
