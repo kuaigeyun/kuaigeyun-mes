@@ -69,6 +69,7 @@ class TraceabilityService:
     async def get_trace_graph_by_work_order(self, tenant_id: int, work_order_id: int) -> Dict:
         """按工单获取追溯图谱（含检验/不合格节点）。"""
         from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.services.work_order_tracking_service import WorkOrderTrackingService
 
         wo = await WorkOrder.get_or_none(id=work_order_id, deleted_at__isnull=True)
         if not wo:
@@ -80,7 +81,12 @@ class TraceabilityService:
                 "id": wo_node_id,
                 "label": f"工单: {wo.code}",
                 "type": "work_order",
-                "data": {"work_order_id": wo.id},
+                "data": {
+                    "work_order_id": wo.id,
+                    "batch_no": WorkOrderTrackingService.effective_batch_no(wo),
+                    "serial_no": WorkOrderTrackingService.effective_serial_no(wo),
+                    "tracking_mode": getattr(wo, "tracking_mode", None),
+                },
             }
         }
         edges: List[Dict] = []

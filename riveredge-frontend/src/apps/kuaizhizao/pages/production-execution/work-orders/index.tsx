@@ -50,7 +50,6 @@ import {
   Select,
   Progress,
   Spin,
-  Divider,
   Input,
   Form,
   theme,
@@ -61,6 +60,7 @@ import {
   Switch,
   Statistic,
   Alert,
+  Tooltip,
 } from 'antd'
 import type { GlobalToken } from 'antd/es/theme/interface'
 import {
@@ -87,6 +87,7 @@ import {
   LockOutlined,
   UnlockOutlined,
   DownOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniBatchButton, UniBatchMenuButton } from '../../../../../components/uni-batch'
@@ -178,6 +179,10 @@ import { buildOperationsForCreatePayload } from './workOrderCreateOperations'
 const LazyWorkOrderOperationsList = lazy(() => import('./components/WorkOrderDetailDndOperations'))
 import { WorkOrderReadinessPopover } from './components/WorkOrderReadinessPopover'
 import { WorkOrderOperationStepsStrip } from './components/WorkOrderOperationStepsStrip'
+import WorkOrderTrackingFields from './components/WorkOrderTrackingFields'
+import WorkOrderCompleteTrackingModal, {
+  type WorkOrderTrackingConfirmValues,
+} from './components/WorkOrderCompleteTrackingModal'
 import type { WorkOrderOperationStep } from './workOrderOperationSteps'
 import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell'
 const LazyQRCodeGenerator = lazy(() =>
@@ -397,6 +402,16 @@ interface WorkOrder {
   picking_score?: number
   picking_rank_band?: string
   picking_score_breakdown?: Record<string, any>
+  tracking_mode?: string
+  planned_batch_no?: string | null
+  confirmed_batch_no?: string | null
+  planned_serial_no?: string | null
+  confirmed_serial_no?: string | null
+  effective_batch_no?: string | null
+  effective_serial_no?: string | null
+  batch_rule_id?: number | null
+  serial_rule_id?: number | null
+  serial_split_child_count?: number | null
 }
 
 type PullDemandComputationCandidate = {
@@ -551,6 +566,23 @@ function manufacturingModeTag(mode: string | undefined | null) {
 
 function getProductionModeLabel(mode?: string | null): string {
   return mode === 'MTO' ? '按订单生产' : '按库存生产'
+}
+
+function formLabelWithHint(title: string, hint: string): React.ReactNode {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      {title}
+      <Tooltip title={hint}>
+        <Button
+          type="text"
+          size="small"
+          icon={<QuestionCircleOutlined />}
+          aria-label={`${title}说明`}
+          style={{ padding: 0, width: 16, height: 16, color: 'var(--ant-color-text-quaternary)' }}
+        />
+      </Tooltip>
+    </span>
+  )
 }
 
 function resolveWorkOrderManufacturingMode(record: {
@@ -1290,6 +1322,9 @@ const WorkOrdersPage: React.FC = () => {
     validationErrors?: string[]
     canCreateWorkOrder?: boolean
   } | null>(null)
+  const [completeTrackingModalOpen, setCompleteTrackingModalOpen] = useState(false)
+  const [completeTrackingLoading, setCompleteTrackingLoading] = useState(false)
+  const [completeTrackingWorkOrder, setCompleteTrackingWorkOrder] = useState<WorkOrder | null>(null)
 
   /** 按统一优先级加载生效工艺（产品工艺 API 已聚合路线与工序行） */
   const loadProcessRouteForMaterial = useCallback(async (materialUuid: string) => {
@@ -1406,7 +1441,7 @@ const WorkOrdersPage: React.FC = () => {
     messageApi.success(`已添加 ${appendRows.length} 个工序`)
   }, [createAddOperationUuids, messageApi, operationList, selectedOperations])
   // 只显示自制件
-  const [onlyShowMake, setOnlyShowMake] = useState(false)
+  const [onlyShowMake, setOnlyShowMake] = useState(true)
   // 从文档加载的产品列表（销售订单/销售预测/需求）
   const [productSourceData, setProductSourceData] = useState<{
     type: string
@@ -3623,8 +3658,37 @@ const WorkOrdersPage: React.FC = () => {
         }
         messageApi.success('工单更新成功')
       } else {
-        await workOrderApi.create(values)
-        messageApi.success('工单创建成功！系统已自动匹配工艺路线并生成工序单')
+        if (!values.enable_production_tracking) {
+          delete values.enable_production_tracking
+          delete values.tracking_assign_mode
+          delete values.batch_rule_id
+          delete values.serial_rule_id
+          delete values.planned_batch_no
+          delete values.planned_serial_nos
+        } else {
+          const assignMode = values.tracking_assign_mode as string | undefined
+          if (assignMode === 'batch') {
+            delete values.planned_serial_nos
+            delete values.serial_rule_id
+          } else if (assignMode === 'serial') {
+            delete values.planned_batch_no
+            delete values.batch_rule_id
+          }
+        }
+        if (Array.isArray(values.planned_serial_nos)) {
+          values.planned_serial_nos = values.planned_serial_nos
+            .map((s: string) => String(s).trim())
+            .filter(Boolean)
+          if (!values.planned_serial_nos.length) {
+            delete values.planned_serial_nos
+          }
+        }
+        const created = await workOrderApi.create(values)
+        const childHint =
+          created?.serial_split_child_count && created.serial_split_child_count > 0
+            ? `，已按序列号拆分为 ${created.serial_split_child_count} 张子工单`
+            : ''
+        messageApi.success(`工单创建成功！系统已自动匹配工艺路线并生成工序单${childHint}`)
       }
       setModalVisible(false)
       invalidateStatistics(); actionRef.current?.reload()
@@ -3657,6 +3721,16 @@ const WorkOrdersPage: React.FC = () => {
     {
       title: '计划数量',
       dataIndex: 'quantity',
+    },
+    {
+      title: '批号',
+      dataIndex: 'effective_batch_no',
+      render: (_, record) => record.effective_batch_no || record.planned_batch_no || '-',
+    },
+    {
+      title: '序列号',
+      dataIndex: 'effective_serial_no',
+      render: (_, record) => record.effective_serial_no || record.planned_serial_no || '-',
     },
     {
       title: '生产模式',
@@ -4000,6 +4074,18 @@ const WorkOrdersPage: React.FC = () => {
    * 处理指定结束工单
    */
   const handleComplete = async (record: WorkOrder) => {
+    const needsTracking =
+      record.tracking_mode && record.tracking_mode !== 'none' && record.status !== 'split'
+    if (needsTracking) {
+      try {
+        const detail = await workOrderApi.get(record.id!.toString())
+        setCompleteTrackingWorkOrder(detail)
+        setCompleteTrackingModalOpen(true)
+      } catch (error: any) {
+        messageApi.error(error.message || '获取工单详情失败')
+      }
+      return
+    }
     Modal.confirm({
       title: '确认指定结束',
       content: `确定要指定结束工单"${record.code}"吗？指定结束的工单如果没有报工记录，可以撤回。`,
@@ -4013,6 +4099,26 @@ const WorkOrdersPage: React.FC = () => {
         }
       },
     })
+  }
+
+  const handleConfirmCompleteTracking = async (values: WorkOrderTrackingConfirmValues) => {
+    if (!completeTrackingWorkOrder?.id) return
+    setCompleteTrackingLoading(true)
+    try {
+      await workOrderApi.complete(completeTrackingWorkOrder.id.toString(), {
+        confirmed_batch_no: values.confirmed_batch_no?.trim() || undefined,
+        confirmed_serial_no: values.confirmed_serial_no?.trim() || undefined,
+      })
+      messageApi.success('工单已指定结束')
+      setCompleteTrackingModalOpen(false)
+      setCompleteTrackingWorkOrder(null)
+      invalidateStatistics()
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || '指定结束失败')
+    } finally {
+      setCompleteTrackingLoading(false)
+    }
   }
 
   /**
@@ -6478,86 +6584,96 @@ const WorkOrdersPage: React.FC = () => {
         formRef={formRef}
         grid
       >
-        {!isEdit && createWorkOrderMode === 'peer_group' ? (
-          <ProFormText
-            name="group_name"
-            label="工单组名称"
-            placeholder="可选；未填则使用默认名称"
-            colProps={{ span: 12 }}
-          />
-        ) : (
-          <CodeField
-            pageCode="kuaizhizao-production-work-order"
-            name="code"
-            label="工单编号"
-            required={true}
-            autoGenerateOnCreate={!isEdit}
-            showGenerateButton={false}
-            context={{}}
-            colProps={{ span: 12 }}
-          />
-        )}
         {!isEdit ? (
-          <Col span={12}>
-            <Row gutter={16} align="top" wrap={false}>
-              <Col flex="none">
-                <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
-                  <ThemedSegmented
-                    value={createWorkOrderMode}
-                    onChange={(v) => {
-                      const mode = v as 'normal' | 'peer_group'
-                      setCreateWorkOrderMode(mode)
-                      if (mode === 'peer_group') {
-                        setSelectedOperations([])
-                        const items = formRef.current?.getFieldValue('group_items')
-                        if (!items?.length) {
-                          formRef.current?.setFieldsValue({
-                            group_items: [
-                              { ...EMPTY_PEER_GROUP_ITEM },
-                              { ...EMPTY_PEER_GROUP_ITEM },
-                            ],
-                          })
-                        }
-                      } else {
-                        setSelectedOperations([])
+          <>
+            <Col span={6}>
+              <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
+                <ThemedSegmented
+                  block
+                  className="form-field-segmented"
+                  value={createWorkOrderMode}
+                  onChange={(v) => {
+                    const mode = v as 'normal' | 'peer_group'
+                    setCreateWorkOrderMode(mode)
+                    if (mode === 'peer_group') {
+                      setSelectedOperations([])
+                      const items = formRef.current?.getFieldValue('group_items')
+                      if (!items?.length) {
                         formRef.current?.setFieldsValue({
-                          process_route_id: undefined,
-                          operations: undefined,
-                          allow_operation_jump: false,
-                          over_report_mode: 'none',
-                          over_report_value: 0,
+                          group_items: [
+                            { ...EMPTY_PEER_GROUP_ITEM },
+                            { ...EMPTY_PEER_GROUP_ITEM },
+                          ],
                         })
                       }
-                    }}
-                    options={[
-                      { label: '普通工单', value: 'normal' },
-                      { label: '平级组工单', value: 'peer_group' },
-                    ]}
-                  />
-                </Form.Item>
-              </Col>
-              {createWorkOrderMode === 'normal' && (
-                <Col flex="auto" style={{ minWidth: 0 }}>
-                  <ProFormText
-                    name="name"
-                    label="工单名称"
-                    placeholder="可选"
-                    formItemProps={{ style: { marginBottom: 24 } }}
-                  />
-                </Col>
-              )}
-            </Row>
-          </Col>
+                    } else {
+                      setSelectedOperations([])
+                      formRef.current?.setFieldsValue({
+                        process_route_id: undefined,
+                        operations: undefined,
+                        allow_operation_jump: false,
+                        over_report_mode: 'none',
+                        over_report_value: 0,
+                      })
+                    }
+                  }}
+                  options={[
+                    { label: '普通工单', value: 'normal' },
+                    { label: '平级组工单', value: 'peer_group' },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            {createWorkOrderMode === 'normal' ? (
+              <CodeField
+                pageCode="kuaizhizao-production-work-order"
+                name="code"
+                label="工单编号"
+                required={true}
+                autoGenerateOnCreate={!isEdit}
+                showGenerateButton={false}
+                context={{}}
+                colProps={{ span: 6 }}
+              />
+            ) : (
+              <ProFormText
+                name="group_name"
+                label="工单组名称"
+                placeholder="可选；未填则使用默认名称"
+                colProps={{ span: 6 }}
+              />
+            )}
+            {createWorkOrderMode === 'normal' && (
+              <ProFormText
+                name="name"
+                label="工单名称"
+                placeholder="可选"
+                colProps={{ span: 12 }}
+              />
+            )}
+          </>
         ) : (
-          createWorkOrderMode === 'normal' && (
-            <ProFormText
-              name="name"
-              label="工单名称"
-              placeholder="可选"
-              disabled
-              colProps={{ span: 12 }}
+          <>
+            <CodeField
+              pageCode="kuaizhizao-production-work-order"
+              name="code"
+              label="工单编号"
+              required={true}
+              autoGenerateOnCreate={false}
+              showGenerateButton={false}
+              context={{}}
+              colProps={{ span: 6 }}
             />
-          )
+            {createWorkOrderMode === 'normal' && (
+              <ProFormText
+                name="name"
+                label="工单名称"
+                placeholder="可选"
+                disabled
+                colProps={{ span: 12 }}
+              />
+            )}
+          </>
         )}
         <ProFormText name="production_mode" initialValue="MTS" hidden />
 
@@ -6571,8 +6687,24 @@ const WorkOrdersPage: React.FC = () => {
 
         {createWorkOrderMode === 'normal' && (
           <>
-        {/* 产品与数量：裸 Col 与 ProForm 栅格并存为既有布局，勿改为 ProFormGroup（会改变内部 Form.Item 宽度与行高） */}
-        <Col span={10}>
+        {/* 第二行：产品类型 6 | 产品 6 | 加载按钮 4+4+4 */}
+        {!isEdit && (
+          <Col span={6}>
+            <Form.Item label="产品类型" style={{ marginBottom: 24 }}>
+              <ThemedSegmented
+                block
+                className="form-field-segmented"
+                value={onlyShowMake ? 'make' : 'all'}
+                onChange={(v) => setOnlyShowMake(v === 'make')}
+                options={[
+                  { label: '自制件', value: 'make' },
+                  { label: '全部', value: 'all' },
+                ]}
+              />
+            </Form.Item>
+          </Col>
+        )}
+        <Col span={isEdit ? 24 : 6}>
           <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
             <LazyUniMaterialSelect
               name="product_id"
@@ -6581,7 +6713,6 @@ const WorkOrdersPage: React.FC = () => {
               required
               disabled={isEdit}
               sourceType={onlyShowMake ? 'Make' : undefined}
-              /* UniMaterialSelect 默认 formItem style={{ margin: 0 }}，会吃掉与其它 ProForm 行一致的底间距 */
               formItemProps={{ style: { marginBottom: 24 } }}
               fallbackOption={
                 isEdit && currentWorkOrder?.product_id
@@ -6630,11 +6761,96 @@ const WorkOrdersPage: React.FC = () => {
                       setSelectedMaterialSourceInfo(null)
                     }
                   } else setSelectedMaterialSourceInfo(null)
-                } else setSelectedMaterialSourceInfo(null)
+                } else {
+                  setSelectedMaterialSourceInfo(null)
+                }
               }}
             />
           </Suspense>
         </Col>
+        {!isEdit && (
+          <>
+            <Col span={4}>
+              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
+                <Button
+                  block
+                  type="dashed"
+                  style={{
+                    borderStyle: 'dashed',
+                    borderColor: 'var(--ant-color-primary)',
+                    color: 'var(--ant-color-primary)',
+                  }}
+                  onClick={() => {
+                    setProductSourceModalType('sales_order')
+                    setProductSourceModalVisible(true)
+                  }}
+                >
+                  从销售订单加载
+                </Button>
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
+                <Button
+                  block
+                  type="dashed"
+                  style={{
+                    borderStyle: 'dashed',
+                    borderColor: 'var(--ant-color-primary)',
+                    color: 'var(--ant-color-primary)',
+                  }}
+                  onClick={() => {
+                    setProductSourceModalType('sales_forecast')
+                    setProductSourceModalVisible(true)
+                  }}
+                >
+                  从销售预测加载
+                </Button>
+              </Form.Item>
+            </Col>
+            <Col span={4}>
+              <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
+                <Space.Compact block>
+                  <Button
+                    block
+                    type="dashed"
+                    style={{
+                      borderStyle: 'dashed',
+                      borderColor: 'var(--ant-color-primary)',
+                      color: 'var(--ant-color-primary)',
+                    }}
+                    onClick={() => {
+                      setProductSourceModalType('demand')
+                      setProductSourceModalVisible(true)
+                    }}
+                  >
+                    从需求管理加载
+                  </Button>
+                  {productSourceData && (
+                    <Button
+                      type="link"
+                      onClick={() => {
+                        if (productSourceData.type === 'sales_order') {
+                          formRef.current?.setFieldsValue({
+                            sales_order_id: undefined,
+                            sales_order_code: undefined,
+                            sales_order_name: undefined,
+                            production_mode: 'MTS',
+                          })
+                          setProductionMode('MTS')
+                        }
+                        setProductSourceData(null)
+                      }}
+                      style={{ padding: '0 4px', minWidth: 'auto' }}
+                    >
+                      清除
+                    </Button>
+                  )}
+                </Space.Compact>
+              </Form.Item>
+            </Col>
+          </>
+        )}
         {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
           <ProFormText
             name="variant_attributes"
@@ -6660,71 +6876,7 @@ const WorkOrdersPage: React.FC = () => {
             colProps={{ span: 12 }}
           />
         )}
-        <ProFormGroup colProps={{ span: 14 }} style={{ marginBottom: 0 }}>
-          <Form.Item label=" " colon={false} style={{ marginBottom: 0 }}>
-            <Space size="middle" wrap={false} style={{ flexWrap: 'nowrap' }}>
-              <ThemedSegmented
-                value={onlyShowMake ? 'make' : 'all'}
-                onChange={(v) => setOnlyShowMake(v === 'make')}
-                options={[
-                  { label: '全部', value: 'all' },
-                  { label: '自制件', value: 'make' },
-                ]}
-              />
-              <Divider orientation="vertical" style={{ margin: 0, height: 20 }} />
-              <Space size="small" wrap={false}>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setProductSourceModalType('sales_order')
-                    setProductSourceModalVisible(true)
-                  }}
-                >
-                  从销售订单加载
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setProductSourceModalType('sales_forecast')
-                    setProductSourceModalVisible(true)
-                  }}
-                >
-                  从销售预测加载
-                </Button>
-                <Button
-                  size="small"
-                  onClick={() => {
-                    setProductSourceModalType('demand')
-                    setProductSourceModalVisible(true)
-                  }}
-                >
-                  从需求管理加载
-                </Button>
-                {productSourceData && (
-                  <Button
-                    size="small"
-                    type="link"
-                    onClick={() => {
-                      if (productSourceData.type === 'sales_order') {
-                        formRef.current?.setFieldsValue({
-                          sales_order_id: undefined,
-                          sales_order_code: undefined,
-                          sales_order_name: undefined,
-                          production_mode: 'MTS',
-                        })
-                        setProductionMode('MTS')
-                      }
-                      setProductSourceData(null)
-                    }}
-                    style={{ padding: '0 4px', minWidth: 'auto' }}
-                  >
-                    清除
-                  </Button>
-                )}
-              </Space>
-            </Space>
-          </Form.Item>
-        </ProFormGroup>
+
         <ProFormDigit
           name="quantity"
           label="计划数量"
@@ -6749,23 +6901,26 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormDatePicker
           name="planned_start_date"
           label="计划开始"
-          placeholder="可选"
+          placeholder="请选择"
+          required
+          rules={[{ required: true, message: '请选择计划开始时间' }]}
           colProps={{ span: 6 }}
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="planned_end_date"
           label="计划结束"
-          placeholder="可选"
+          placeholder="请选择"
+          required
+          rules={[{ required: true, message: '请选择计划结束时间' }]}
           colProps={{ span: 6 }}
           fieldProps={{ style: { width: '100%' } }}
         />
 
-        {/* 与「产品」一致：裸 Col span={10} + Form.Item，避免 ProForm.Item colProps span=24 与栅格行错位导致裁切 */}
-        <Col span={10}>
+        <Col span={24}>
           <Form.Item name="process_route_id" label="工艺路线" style={{ marginBottom: 16 }}>
             <UniDropdown
-              placeholder="选择后自动加载工序"
+              placeholder="可选；选择后自动加载工序"
               options={uniqueProcessRouteList.map(route => ({
                 label: `${route.code} - ${route.name}`,
                 value: route.id,
@@ -6836,9 +6991,7 @@ const WorkOrdersPage: React.FC = () => {
                   }
                 } else {
                   setCreateProcessRouteId(undefined)
-                  setSelectedOperations([])
                   formRef.current?.setFieldsValue({
-                    operations: undefined,
                     allow_operation_jump: false,
                   })
                 }
@@ -6878,7 +7031,8 @@ const WorkOrdersPage: React.FC = () => {
               />
             </Suspense>
           </div>
-          {!isEdit && createProcessRouteId != null && (
+          {(!isEdit ||
+            !['completed', 'cancelled', 'split'].includes(String(currentWorkOrder?.status || ''))) && (
             <Button
               type="dashed"
               block
@@ -6899,32 +7053,55 @@ const WorkOrdersPage: React.FC = () => {
           )}
         </Form.Item>
 
-        <ProFormSwitch
-          name="allow_operation_jump"
-          label="允许跳转工序"
-          extra="默认随所选工艺路线；可再修改。关闭时须按序报工且下道数量不超过上道；开启时路线中的节点工序仍不可跳过。"
-          initialValue={false}
-          colProps={{ span: 24 }}
-        />
-        <ProFormSelect
-          name="over_report_mode"
-          label="工单默认超报"
-          colProps={{ span: 12 }}
-          options={[
-            { label: t('field.operation.overReportModeNone'), value: 'none' },
-            { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
-            { label: t('field.operation.overReportModePercent'), value: 'percent' },
-          ]}
-          initialValue="none"
-        />
+        <Col span={12}>
+          <Form.Item
+            name="over_report_mode"
+            label="工单默认超报"
+            initialValue="none"
+            style={{ marginBottom: 24 }}
+          >
+            <ThemedSegmented
+              className="form-field-segmented"
+              style={{ width: 'fit-content', maxWidth: '100%' }}
+              options={[
+                { label: t('field.operation.overReportModeNone'), value: 'none' },
+                { label: t('field.operation.overReportModeFixed'), value: 'fixed' },
+                { label: t('field.operation.overReportModePercent'), value: 'percent' },
+              ]}
+            />
+          </Form.Item>
+        </Col>
         <ProFormDigit
           name="over_report_value"
-          label="超报数值"
+          label={formLabelWithHint(
+            '超报数值',
+            '固定模式为额外件数；比例模式为百分数。工序行可单独覆盖。'
+          )}
           colProps={{ span: 12 }}
           min={0}
           fieldProps={{ precision: 4 }}
-          extra="固定模式为额外件数；比例模式为百分数。工序行可单独覆盖。"
         />
+        <ProFormSwitch
+          name="allow_operation_jump"
+          label={formLabelWithHint(
+            '允许跳转工序',
+            '默认随所选工艺路线；可再修改。关闭时须按序报工且下道数量不超过上道；开启时路线中的节点工序仍不可跳过。'
+          )}
+          initialValue={false}
+          colProps={{ span: 12 }}
+        />
+        {!isEdit && createWorkOrderMode === 'normal' && (
+          <ProFormDependency name={['product_id']}>
+            {({ product_id }) => (
+              <WorkOrderTrackingFields
+                formRef={formRef}
+                productId={product_id}
+                productList={productList}
+                disabled={isEdit}
+              />
+            )}
+          </ProFormDependency>
+        )}
         <ProFormUploadButton
           name="attachments"
           label="附件"
@@ -6961,14 +7138,18 @@ const WorkOrdersPage: React.FC = () => {
             <ProFormDatePicker
               name="planned_start_date"
               label="计划开始"
-              placeholder="可选（应用于各成员）"
+              placeholder="请选择"
+              required
+              rules={[{ required: true, message: '请选择计划开始时间' }]}
               colProps={{ span: 12 }}
               fieldProps={{ style: { width: '100%' } }}
             />
             <ProFormDatePicker
               name="planned_end_date"
               label="计划结束"
-              placeholder="可选（应用于各成员）"
+              placeholder="请选择"
+              required
+              rules={[{ required: true, message: '请选择计划结束时间' }]}
               colProps={{ span: 12 }}
               fieldProps={{ style: { width: '100%' } }}
             />
@@ -8566,6 +8747,26 @@ const WorkOrdersPage: React.FC = () => {
           </Col>
         </Row>
       </Modal>
+
+      <WorkOrderCompleteTrackingModal
+        open={completeTrackingModalOpen}
+        loading={completeTrackingLoading}
+        workOrderCode={completeTrackingWorkOrder?.code}
+        trackingMode={completeTrackingWorkOrder?.tracking_mode}
+        plannedBatchNo={
+          completeTrackingWorkOrder?.planned_batch_no ??
+          completeTrackingWorkOrder?.effective_batch_no
+        }
+        plannedSerialNo={
+          completeTrackingWorkOrder?.planned_serial_no ??
+          completeTrackingWorkOrder?.effective_serial_no
+        }
+        onCancel={() => {
+          setCompleteTrackingModalOpen(false)
+          setCompleteTrackingWorkOrder(null)
+        }}
+        onConfirm={handleConfirmCompleteTracking}
+      />
     </>
   )
 }

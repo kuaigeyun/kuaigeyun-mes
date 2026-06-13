@@ -2819,7 +2819,8 @@
     "kuaizhizao:work-order:audit",
     "kuaizhizao:work-order:reject",
     "kuaizhizao:work-order:print",
-    "kuaizhizao:work-order:assign"
+    "kuaizhizao:work-order:assign",
+    "kuaizhizao:work-order:confirm_adjustment"
   ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",

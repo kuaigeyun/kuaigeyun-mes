@@ -47,6 +47,11 @@ from apps.kuaizhizao.schemas.work_order import (
     MaterialLocationInfo,
 )
 from apps.kuaizhizao.utils.bom_helper import calculate_material_requirements_from_bom
+from apps.kuaizhizao.services.work_order_tracking_service import (
+    WorkOrderTrackingService,
+    TRACKING_SERIAL,
+    TRACKING_BOTH,
+)
 from apps.kuaizhizao.utils.inventory_helper import (
     get_material_available_quantity,
     get_material_detailed_locations,
@@ -819,6 +824,20 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 work_order_data.sales_order_name,
             )
 
+            tracking_service = WorkOrderTrackingService()
+            tracking_input = tracking_service.extract_create_tracking_input(work_order_data)
+            tracking_mode = tracking_service.validate_create_tracking(
+                material=material,
+                quantity=work_order_data.quantity,
+                tracking_input=tracking_input,
+            )
+            tracking_kwargs = tracking_service.build_tracking_create_kwargs(
+                tracking_mode, tracking_input
+            )
+            if tracking_input.get("planned_serial_nos"):
+                # 父单不存列表，拆分时写入子单
+                pass
+
             # 创建工单
             work_order = await WorkOrder.create(
                 tenant_id=tenant_id,
@@ -855,6 +874,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 over_report_value=getattr(work_order_data, "over_report_value", None) or Decimal("0"),
                 created_by=created_by,
                 created_by_name=user_info["name"],
+                **tracking_kwargs,
             )
 
             # 记录"创建"节点开始时间（必须在同一事务内，失败时需抛出以触发回滚）
@@ -1026,8 +1046,27 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     # 自动生成工序单失败不影响工单创建，记录日志
                     logger.error(f"为工单 {work_order.code} 自动生成工序单失败: {e}", exc_info=True)
 
+            serial_split_children: List[WorkOrder] = []
+            if tracking_mode in (TRACKING_SERIAL, TRACKING_BOTH):
+                serial_split_children = await tracking_service.apply_serial_split_after_create(
+                    tenant_id=tenant_id,
+                    parent_work_order=work_order,
+                    material=material,
+                    tracking_input=tracking_input,
+                    created_by=created_by,
+                    created_by_name=user_info["name"],
+                    work_order_service=self,
+                )
+
             work_order_id_created = work_order.id
             response = WorkOrderResponse.model_validate(work_order)
+            response = response.model_copy(
+                update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
+            )
+            if serial_split_children:
+                response = response.model_copy(
+                    update={"serial_split_child_count": len(serial_split_children)}
+                )
 
         from apps.kuaizhizao.services.work_order_readiness_service import (
             dispatch_work_order_readiness_refresh,
@@ -1088,6 +1127,16 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         if (work_order.status or "") == "split" and work_order.parent_work_order_id is None:
             remaining = await self.compute_split_remaining_quantity(tenant_id, work_order_id)
             response = response.model_copy(update={"split_remaining_quantity": remaining})
+            child_count = await WorkOrder.filter(
+                tenant_id=tenant_id,
+                parent_work_order_id=work_order_id,
+                deleted_at__isnull=True,
+            ).count()
+            if child_count:
+                response = response.model_copy(update={"serial_split_child_count": child_count})
+        response = response.model_copy(
+            update=WorkOrderTrackingService.tracking_fields_for_response(work_order)
+        )
         return response
 
     async def compute_split_remaining_quantity(
@@ -2074,6 +2123,17 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                     )
 
             # 更新状态
+            material = await Material.get_or_none(
+                id=work_order.product_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if material:
+                tracking_service = WorkOrderTrackingService()
+                work_order = await tracking_service.allocate_on_release(
+                    tenant_id, work_order, material
+                )
+
             work_order = await self.update_with_user(
                 tenant_id=tenant_id,
                 record_id=work_order_id,
@@ -2108,7 +2168,7 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 # 节点时间记录失败不影响主流程，记录日志
                 logger.warning(f"记录工单下达节点时间失败: {e}")
 
-            return WorkOrderResponse.model_validate(work_order)
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
 
     async def update_work_order_status(
         self,
@@ -3957,7 +4017,10 @@ class WorkOrderService(AppBaseService[WorkOrder]):
         self,
         tenant_id: int,
         work_order_id: int,
-        completed_by: int
+        completed_by: int,
+        *,
+        confirmed_batch_no: Optional[str] = None,
+        confirmed_serial_no: Optional[str] = None,
     ) -> WorkOrderResponse:
         """
         指定结束工单
@@ -3991,7 +4054,26 @@ class WorkOrderService(AppBaseService[WorkOrder]):
 
             # 如果已经是已完成状态，直接返回
             if previous_status == 'completed':
-                return WorkOrderResponse.model_validate(work_order)
+                return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+            material = await Material.get_or_none(
+                id=work_order.product_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if material and (work_order.tracking_mode or "none") != "none":
+                tracking_service = WorkOrderTrackingService()
+                if confirmed_serial_no:
+                    await tracking_service.check_serial_modification_allowed(
+                        tenant_id, work_order_id
+                    )
+                work_order = await tracking_service.confirm_tracking(
+                    tenant_id,
+                    work_order,
+                    material,
+                    confirmed_batch_no=confirmed_batch_no,
+                    confirmed_serial_no=confirmed_serial_no,
+                )
 
             # 更新状态为已完成，并标记为指定结束
             from datetime import datetime
@@ -4034,4 +4116,38 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 logger.warning(f"记录工单指定结束节点时间失败: {e}")
 
             logger.info(f"工单 {work_order.code} 已指定结束")
-            return WorkOrderResponse.model_validate(work_order)
+            return await self.get_work_order_by_id(tenant_id, work_order_id)
+
+    async def confirm_work_order_tracking(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+        updated_by: int,
+        *,
+        confirmed_batch_no: Optional[str] = None,
+        confirmed_serial_no: Optional[str] = None,
+    ) -> WorkOrderResponse:
+        """完工前/完工时确认批号序列号（不改工单状态）。"""
+        work_order = await self.get_by_id(tenant_id, work_order_id, raise_if_not_found=True)
+        if (work_order.status or "") == "split":
+            raise BusinessLogicError("已拆分主工单不可直接确认追踪号，请在子工单上操作")
+
+        material = await Material.get_or_none(
+            id=work_order.product_id,
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+        )
+        if not material:
+            raise ValidationError("工单产品物料不存在")
+
+        tracking_service = WorkOrderTrackingService()
+        if confirmed_serial_no:
+            await tracking_service.check_serial_modification_allowed(tenant_id, work_order_id)
+        await tracking_service.confirm_tracking(
+            tenant_id,
+            work_order,
+            material,
+            confirmed_batch_no=confirmed_batch_no,
+            confirmed_serial_no=confirmed_serial_no,
+        )
+        return await self.get_work_order_by_id(tenant_id, work_order_id)

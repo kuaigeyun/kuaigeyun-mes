@@ -2177,10 +2177,20 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 updated_by=created_by
             )
             
-            # 6. 创建入库单明细（批号管理物料自动生成批号）
-            batch_number = None
+            # 6. 创建入库单明细（优先继承工单批号/序列号，无值再按规则生成）
             from apps.master_data.models.material import Material
-            from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+            from apps.kuaizhizao.services.work_order_tracking_service import WorkOrderTrackingService
+            from apps.kuaizhizao.services.batch_serial_helper import (
+                ensure_batch_no_for_item,
+                ensure_serial_nos_for_item,
+            )
+
+            batch_number = WorkOrderTrackingService.effective_batch_no(work_order)
+            serial_numbers: Optional[List[str]] = None
+            effective_serial = WorkOrderTrackingService.effective_serial_no(work_order)
+            if effective_serial:
+                serial_numbers = [effective_serial]
+
             material = await Material.get_or_none(
                 tenant_id=tenant_id,
                 id=work_order.product_id,
@@ -2188,13 +2198,24 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
             )
             if material:
                 class _ItemData:
-                    batch_number = None
-                batch_number = await ensure_batch_no_for_item(
-                    tenant_id=tenant_id,
-                    material=material,
-                    item_data=_ItemData(),
-                    supplier_code=None,
-                )
+                    pass
+                item_data = _ItemData()
+                item_data.batch_number = batch_number
+                item_data.serial_numbers = serial_numbers
+                if not batch_number:
+                    batch_number = await ensure_batch_no_for_item(
+                        tenant_id=tenant_id,
+                        material=material,
+                        item_data=item_data,
+                        supplier_code=None,
+                    )
+                if material.serial_managed and not serial_numbers:
+                    serial_numbers = await ensure_serial_nos_for_item(
+                        tenant_id=tenant_id,
+                        material=material,
+                        item_data=item_data,
+                        count=1,
+                    )
             material_unit = (getattr(material, "base_unit", None) or "个") if material else "个"
             await FinishedGoodsReceiptItem.create(
                 tenant_id=tenant_id,
@@ -2207,6 +2228,7 @@ class FinishedGoodsReceiptService(AppBaseService[FinishedGoodsReceipt]):
                 qualified_quantity=Decimal(str(receipt_quantity)),
                 unqualified_quantity=Decimal('0'),
                 batch_number=batch_number,
+                serial_numbers=serial_numbers,
                 status='待入库'
             )
 

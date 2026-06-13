@@ -229,7 +229,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
 }) => {
   const { t } = useTranslation()
   const form = Form.useFormInstance()
-  const [onlyShowMake, setOnlyShowMake] = useState(false)
+  const [onlyShowMake, setOnlyShowMake] = useState(true)
   const materialSourceType = onlyShowMake ? 'Make' : undefined
 
   const appendRow = () => {
@@ -336,8 +336,8 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
             value={onlyShowMake ? 'make' : 'all'}
             onChange={(v) => setOnlyShowMake(v === 'make')}
             options={[
-              { label: '全部', value: 'all' },
               { label: '自制件', value: 'make' },
+              { label: '全部', value: 'all' },
             ]}
           />
         }

@@ -119,7 +119,23 @@ export const workOrderApi = {
   get: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}`, { method: 'GET' }),
   release: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/release`, { method: 'POST' }),
   revoke: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/revoke`, { method: 'POST' }),
-  complete: async (id: string) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST' }),
+  complete: async (id: string, data?: { confirmed_batch_no?: string; confirmed_serial_no?: string }) =>
+    apiRequest(`/apps/kuaizhizao/work-orders/${id}/complete`, { method: 'POST', data: data ?? {} }),
+  confirmTracking: async (
+    id: string,
+    data: { confirmed_batch_no?: string; confirmed_serial_no?: string }
+  ) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/confirm-tracking`, { method: 'POST', data }),
+  previewTracking: async (data: {
+    product_id: number;
+    quantity: number;
+    batch_rule_id?: number;
+    serial_rule_id?: number;
+  }) =>
+    apiRequest<{
+      tracking_mode: string;
+      planned_batch_no?: string;
+      planned_serial_nos?: string[];
+    }>('/apps/kuaizhizao/work-orders/tracking/preview', { method: 'POST', data }),
   split: async (id: string, data: any) => apiRequest(`/apps/kuaizhizao/work-orders/${id}/split`, { method: 'POST', data }),
   getOperations: async (id: string, options?: { includeMeta?: boolean }) =>
     apiRequest(`/apps/kuaizhizao/work-orders/${id}/operations`, {

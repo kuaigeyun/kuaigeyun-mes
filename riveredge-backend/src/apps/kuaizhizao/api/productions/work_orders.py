@@ -51,6 +51,10 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderOperationsUpdateRequest,
     WorkOrderOperationDispatch,
     WorkOrderKittingAnalysisResponse,
+    WorkOrderTrackingPreviewRequest,
+    WorkOrderTrackingPreviewResponse,
+    WorkOrderConfirmTrackingRequest,
+    WorkOrderCompleteRequest,
 )
 from apps.kuaizhizao.schemas.work_order_score import (
     WorkOrderScoreResponse,
@@ -106,6 +110,58 @@ async def create_work_order(
         tenant_id=tenant_id,
         work_order_data=work_order,
         created_by=current_user.id
+    )
+
+
+@router.post(
+    "/work-orders/tracking/preview",
+    response_model=WorkOrderTrackingPreviewResponse,
+    summary="Preview batch/serial numbers for work order",
+)
+async def preview_work_order_tracking(
+    body: WorkOrderTrackingPreviewRequest,
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderTrackingPreviewResponse:
+    """按物料追踪模式预览批号/序列号（不占用流水号）。"""
+    from apps.master_data.models.material import Material
+    from apps.kuaizhizao.services.work_order_tracking_service import WorkOrderTrackingService
+
+    material = await Material.get_or_none(
+        id=body.product_id,
+        tenant_id=tenant_id,
+        deleted_at__isnull=True,
+    )
+    if not material:
+        raise HTTPException(status_code=404, detail="物料不存在")
+    preview = await WorkOrderTrackingService().preview_tracking_numbers(
+        tenant_id=tenant_id,
+        material=material,
+        quantity=body.quantity,
+        batch_rule_id=body.batch_rule_id,
+        serial_rule_id=body.serial_rule_id,
+    )
+    return WorkOrderTrackingPreviewResponse.model_validate(preview)
+
+
+@router.post(
+    "/work-orders/{work_order_id}/confirm-tracking",
+    response_model=WorkOrderResponse,
+    summary="Confirm work order batch/serial tracking",
+)
+async def confirm_work_order_tracking(
+    work_order_id: int,
+    body: WorkOrderConfirmTrackingRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _: None = Depends(require_permission_codes("kuaizhizao:work-order:confirm_adjustment")),
+) -> WorkOrderResponse:
+    """完工时确认或修改批号/序列号（不改工单状态）。"""
+    return await WorkOrderService().confirm_work_order_tracking(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+        updated_by=current_user.id,
+        confirmed_batch_no=body.confirmed_batch_no,
+        confirmed_serial_no=body.confirmed_serial_no,
     )
 
 
@@ -1507,6 +1563,7 @@ async def revoke_work_order(
 @router.post("/work-orders/{work_order_id}/complete", response_model=WorkOrderResponse, summary="Force-close work order")
 async def manually_complete_work_order(
     work_order_id: int,
+    body: Optional[WorkOrderCompleteRequest] = None,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> WorkOrderResponse:
@@ -1514,14 +1571,15 @@ async def manually_complete_work_order(
     指定结束工单
 
     将工单状态改为已完成，并标记为指定结束。
-    指定结束的工单也允许撤回（如果工单没有产生过报工记录）。
-
-    - **work_order_id**: 工单ID
+    可附带确认批号/序列号；未传则沿用计划值或按规则生成。
     """
+    req = body or WorkOrderCompleteRequest()
     return await WorkOrderService().manually_complete_work_order(
         tenant_id=tenant_id,
         work_order_id=work_order_id,
-        completed_by=current_user.id
+        completed_by=current_user.id,
+        confirmed_batch_no=req.confirmed_batch_no,
+        confirmed_serial_no=req.confirmed_serial_no,
     )
 
 

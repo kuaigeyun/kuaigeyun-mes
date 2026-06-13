@@ -37,6 +37,7 @@ class FinishedGoodsReceiptItem(BaseModel):
 
     # 批次信息
     batch_number = fields.CharField(max_length=50, null=True, description="批次号")
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON数组）")
     expiry_date = fields.DateField(null=True, description="到期日期")
 
     # 质量信息

@@ -83,6 +83,17 @@ class WorkOrderBase(BaseModel):
     remarks: Optional[str] = Field(None, description="备注")
     attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
+    # 批号/序列号追踪（模式由物料主数据决定，此处为赋值）
+    tracking_mode: Optional[str] = Field(None, description="追踪模式 none/batch/serial/both")
+    planned_batch_no: Optional[str] = Field(None, description="计划批号")
+    confirmed_batch_no: Optional[str] = Field(None, description="确认批号")
+    planned_serial_no: Optional[str] = Field(None, description="计划序列号（子工单）")
+    confirmed_serial_no: Optional[str] = Field(None, description="确认序列号")
+    batch_rule_id: Optional[int] = Field(None, description="批号规则ID")
+    serial_rule_id: Optional[int] = Field(None, description="序列号规则ID")
+    effective_batch_no: Optional[str] = Field(None, description="有效批号（确认优先，回落计划）")
+    effective_serial_no: Optional[str] = Field(None, description="有效序列号（确认优先，回落计划）")
+
 
 class WorkOrderCreate(WorkOrderBase):
     """
@@ -110,6 +121,17 @@ class WorkOrderCreate(WorkOrderBase):
     operations: Optional[List["WorkOrderOperationCreate"]] = Field(None, description="工单工序列表（可选，如果提供则使用提供的工序，否则自动匹配工艺路线生成）")
     variant_attributes: Optional[dict] = Field(None, description="属性（配置件产品必填，如 {\"color\":\"red\",\"size\":\"M\"}）")
     configurable_selections: Optional[dict] = Field(None, description="配置位选择（BOM配置位，格式 {\"parentMaterialId_configurableGroupId\": componentId}）")
+    # 批号/序列号（追踪模式由物料主数据驱动）
+    enable_production_tracking: Optional[bool] = Field(
+        None, description="开单时是否启用投产批号/序列号"
+    )
+    tracking_assign_mode: Optional[str] = Field(
+        None, description="投产方式 batch/serial/both，决定普通工单或按件拆分子工单"
+    )
+    planned_batch_no: Optional[str] = Field(None, description="计划批号（手工录入）")
+    planned_serial_nos: Optional[List[str]] = Field(None, description="计划序列号列表（序列号物料，数量须等于 quantity）")
+    batch_rule_id: Optional[int] = Field(None, description="批号规则ID（覆盖物料默认）")
+    serial_rule_id: Optional[int] = Field(None, description="序列号规则ID（覆盖物料默认）")
 
 
 class WorkOrderBatchUpdateDatesItem(BaseModel):
@@ -213,6 +235,9 @@ class WorkOrderResponse(WorkOrderBase):
     bom_parent_work_order_id: Optional[int] = Field(None, description="BOM 上级工单 ID")
     demand_item_id: Optional[int] = Field(None, description="需求行 ID")
     supply_mode: Optional[str] = Field(None, description="供应模式 stocked/direct")
+    serial_split_child_count: Optional[int] = Field(
+        None, description="序列号自动拆分子工单数量（仅父单）"
+    )
 
 
 class WorkOrderOperationMinimalForGantt(BaseModel):
@@ -655,6 +680,33 @@ class WorkOrderCreatePeerGroupResponse(BaseModel):
     group_code: str = Field(..., description="工单组编码")
     work_order_ids: list[int] = Field(..., description="已创建的工单 ID")
     work_order_codes: list[str] = Field(..., description="已创建的工单编码")
+
+
+class WorkOrderTrackingPreviewRequest(BaseModel):
+    """批号/序列号预览请求"""
+    product_id: int = Field(..., description="产品物料 ID")
+    quantity: Decimal = Field(..., gt=0, description="计划数量")
+    batch_rule_id: Optional[int] = Field(None, description="批号规则 ID")
+    serial_rule_id: Optional[int] = Field(None, description="序列号规则 ID")
+
+
+class WorkOrderTrackingPreviewResponse(BaseModel):
+    """批号/序列号预览响应"""
+    tracking_mode: str = Field(..., description="追踪模式")
+    planned_batch_no: Optional[str] = Field(None, description="预览批号")
+    planned_serial_nos: List[str] = Field(default_factory=list, description="预览序列号列表")
+
+
+class WorkOrderConfirmTrackingRequest(BaseModel):
+    """完工确认批号/序列号"""
+    confirmed_batch_no: Optional[str] = Field(None, description="确认批号（不传则沿用计划或按规则生成）")
+    confirmed_serial_no: Optional[str] = Field(None, description="确认序列号（不传则沿用计划或按规则生成）")
+
+
+class WorkOrderCompleteRequest(BaseModel):
+    """指定结束工单（可附带追踪确认）"""
+    confirmed_batch_no: Optional[str] = Field(None, description="确认批号")
+    confirmed_serial_no: Optional[str] = Field(None, description="确认序列号")
 
 
 # 更新前向引用（Pydantic v2 需要）

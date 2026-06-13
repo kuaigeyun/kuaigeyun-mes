@@ -92,11 +92,14 @@ async def _require_fqc_stage_enabled(tenant_id: int) -> None:
 
 def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
     """工单产品物料字段（product_* 与历史 material_* 兼容）。"""
+    from apps.kuaizhizao.services.work_order_tracking_service import WorkOrderTrackingService
+
     mid = getattr(work_order, "product_id", None) or getattr(work_order, "material_id", None)
     code = getattr(work_order, "product_code", None) or getattr(work_order, "material_code", None)
     name = getattr(work_order, "product_name", None) or getattr(work_order, "material_name", None)
     spec = getattr(work_order, "material_spec", None) or getattr(work_order, "product_spec", None)
-    batch = getattr(work_order, "batch_number", None)
+    batch = WorkOrderTrackingService.effective_batch_no(work_order)
+    serial = WorkOrderTrackingService.effective_serial_no(work_order)
     qty = getattr(work_order, "quantity", None) or getattr(work_order, "planned_quantity", None)
     return {
         "material_id": mid,
@@ -104,6 +107,7 @@ def _work_order_product_fields(work_order: Any) -> Dict[str, Any]:
         "material_name": name,
         "material_spec": spec,
         "batch_number": batch,
+        "serial_number": serial,
         "planned_qty": qty,
     }
 

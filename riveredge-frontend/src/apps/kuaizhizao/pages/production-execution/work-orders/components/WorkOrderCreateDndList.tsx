@@ -131,7 +131,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
           borderRadius: 4,
         }}
       >
-        请选择工艺路线或手动添加工序
+        可手工添加工序，或选择工艺路线自动加载
       </div>
     )
   }

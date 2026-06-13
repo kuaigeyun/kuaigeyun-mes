@@ -153,6 +153,19 @@ class WorkOrder(BaseModel):
     qualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="合格数量")
     unqualified_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="不合格数量")
 
+    # 批号/序列号追踪（模式由物料主数据快照；计划值开单/下达，确认值完工）
+    tracking_mode = fields.CharField(
+        max_length=20,
+        default="none",
+        description="追踪模式 none/batch/serial/both",
+    )
+    planned_batch_no = fields.CharField(max_length=100, null=True, description="计划批号")
+    confirmed_batch_no = fields.CharField(max_length=100, null=True, description="确认批号")
+    planned_serial_no = fields.CharField(max_length=100, null=True, description="计划序列号")
+    confirmed_serial_no = fields.CharField(max_length=100, null=True, description="确认序列号")
+    batch_rule_id = fields.IntField(null=True, description="批号规则ID")
+    serial_rule_id = fields.IntField(null=True, description="序列号规则ID")
+
     # 拆分工单：指向被拆分的原工单
     parent_work_order_id = fields.IntField(null=True, description="原工单 ID（拆分工单）")
 
