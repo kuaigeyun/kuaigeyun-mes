@@ -31,6 +31,8 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateDatesRequest,
     WorkOrderOperationBatchUpdateStationsRequest,
+    WorkOrderSchedulingQuickActionRequest,
+    WorkOrderSchedulingQuickActionResult,
     WorkOrderResponse,
     MaterialShortageResponse,
     WorkOrderFreezeRequest,
@@ -926,6 +928,26 @@ async def batch_update_work_order_operation_stations(
         updated_by=current_user.id,
     )
     return OperationBatchUpdateStationsResult(**raw)
+
+
+@router.post(
+    "/work-orders/scheduling-quick-action",
+    response_model=WorkOrderSchedulingQuickActionResult,
+    summary="Scheduling quick actions for overdue/frozen work orders",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-scheduling:update"))],
+)
+async def scheduling_quick_action(
+    body: WorkOrderSchedulingQuickActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderSchedulingQuickActionResult:
+    """可视排产快捷处置：延期确认 / 转异常 / 解冻申请。"""
+    raw = await WorkOrderService().scheduling_quick_action(
+        tenant_id=tenant_id,
+        body=body,
+        handled_by=current_user.id,
+    )
+    return WorkOrderSchedulingQuickActionResult(**raw)
 
 
 @router.delete("/work-orders/{work_order_id:int}", summary="Delete work order")

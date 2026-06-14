@@ -111,6 +111,14 @@ export interface WorkOrderGroup {
   created_at: string;
 }
 
+export interface WorkOrderSchedulingQuickActionResult {
+  updated: number[];
+  converted_to_exception: number[];
+  unfreezed: number[];
+  skipped: number[];
+  failed: Array<{ id: number; reason: string }>;
+}
+
 export const workOrderApi = {
   list: async (params?: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'GET', params }),
   create: async (data: any) => apiRequest('/apps/kuaizhizao/work-orders', { method: 'POST', data }),
@@ -204,6 +212,16 @@ export const workOrderApi = {
       '/apps/kuaizhizao/work-orders/batch-update-operation-stations',
       { method: 'PUT', data: { updates } }
     ),
+  schedulingQuickAction: async (data: {
+    work_order_ids: number[];
+    action: 'confirm_delay' | 'to_exception' | 'apply_unfreeze';
+    reason?: string;
+    auto_move_out_of_freeze_window?: boolean;
+  }) =>
+    apiRequest<WorkOrderSchedulingQuickActionResult>('/apps/kuaizhizao/work-orders/scheduling-quick-action', {
+      method: 'POST',
+      data,
+    }),
   merge: async (data: { work_order_ids: number[]; remarks?: string }) =>
     apiRequest('/apps/kuaizhizao/work-orders/merge', { method: 'POST', data }),
   mergeIntoGroup: async (data: {

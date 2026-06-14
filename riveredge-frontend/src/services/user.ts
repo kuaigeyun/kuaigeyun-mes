@@ -435,9 +435,16 @@ export interface UserDisplayResolvePayload {
 export async function searchUserDisplay(
   params?: UserDisplayListParams,
 ): Promise<UserDisplayListResponse> {
+  const safeParams: UserDisplayListParams = {
+    ...(params || {}),
+    page_size:
+      params?.page_size == null
+        ? params?.page_size
+        : Math.max(1, Math.min(200, Number(params.page_size) || 50)),
+  };
   return requestDisplaySearch<UserDisplayListResponse>(
     '/core/users/display-search',
-    params || {},
+    safeParams,
     '人员展示加载失败',
   );
 }

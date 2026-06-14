@@ -241,7 +241,7 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
           <Spin />
         </div>
       ) : error ? (
-        <Alert type="error" message={error} showIcon />
+        <Alert type="error" title={error} showIcon />
       ) : src ? (
         <iframe
           ref={iframeRef}
@@ -257,7 +257,7 @@ export const UniPdfPreview: React.FC<UniPdfPreviewProps> = ({
           }}
         />
       ) : (
-        <Alert type="warning" showIcon message={emptyMessage} />
+        <Alert type="warning" showIcon title={emptyMessage} />
       )}
     </UniPreviewOverlay>
   );

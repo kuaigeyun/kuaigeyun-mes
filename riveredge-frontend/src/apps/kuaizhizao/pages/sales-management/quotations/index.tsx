@@ -931,7 +931,7 @@ const QuotationsPage: React.FC = () => {
     const loadUsers = async () => {
       setUsersLoading(true);
       try {
-        const userRes = await searchUserDisplay({ page: 1, page_size: 500, is_active: true });
+        const userRes = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
         if (!cancelled) {
           setUserList(displayItemsToUsers(userRes.items || []));
         }

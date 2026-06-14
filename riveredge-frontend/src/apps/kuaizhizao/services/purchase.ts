@@ -9,6 +9,13 @@
 
 import { apiRequest } from '../../../services/api';
 
+const PURCHASE_ORDER_LIST_LIMIT_MAX = 100;
+
+function clampPurchaseOrderListLimit(limit: unknown): number | undefined {
+  if (typeof limit !== 'number' || Number.isNaN(limit)) return undefined;
+  return Math.max(1, Math.min(PURCHASE_ORDER_LIST_LIMIT_MAX, Math.trunc(limit)));
+}
+
 /**
  * 采购订单接口定义
  */
@@ -128,9 +135,11 @@ export async function getPurchaseOrderStatistics(): Promise<PurchaseOrderStatist
  * 获取采购订单列表
  */
 export async function listPurchaseOrders(params: PurchaseOrderListParams = {}): Promise<PurchaseOrderListResponse> {
+  const limit = clampPurchaseOrderListLimit(params.limit);
+  const safeParams = limit != null ? { ...params, limit } : params;
   return apiRequest<PurchaseOrderListResponse>('/apps/kuaizhizao/purchase-orders', {
     method: 'GET',
-    params,
+    params: safeParams,
   });
 }
 

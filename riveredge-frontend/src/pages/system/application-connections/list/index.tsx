@@ -666,7 +666,7 @@ const ApplicationConnectionsListPage: React.FC = () => {
           </>
         );
       default:
-        return <Alert message={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />;
+        return <Alert title={t('pages.system.applicationConnections.noVisualForm', { type })} type="info" />;
     }
   };
 

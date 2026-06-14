@@ -282,7 +282,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
           disabled={loading}
         />
       ) : (
-        <Alert type="info" showIcon message={t('app.master-data.manufacturing.selectRouteFirst')} />
+        <Alert type="info" showIcon title={t('app.master-data.manufacturing.selectRouteFirst')} />
       )}
 
       <RouteFormModal

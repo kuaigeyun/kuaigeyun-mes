@@ -591,6 +591,31 @@ class WorkOrderBatchPriorityRequest(BaseModel):
     priority: str = Field(..., description="优先级（low/normal/high/urgent）")
 
 
+class WorkOrderSchedulingQuickActionRequest(BaseModel):
+    """可视排产快捷处置请求"""
+
+    work_order_ids: list[int] = Field(..., min_length=1, max_length=50, description="工单ID列表")
+    action: str = Field(
+        ...,
+        description="快捷处置动作（confirm_delay/to_exception/apply_unfreeze）",
+    )
+    reason: Optional[str] = Field(None, description="处置原因")
+    auto_move_out_of_freeze_window: bool = Field(
+        True,
+        description="是否自动顺延到冻结窗外（仅对延期确认/解冻申请生效）",
+    )
+
+
+class WorkOrderSchedulingQuickActionResult(BaseModel):
+    """可视排产快捷处置结果"""
+
+    updated: list[int] = Field(default_factory=list, description="已更新工单")
+    converted_to_exception: list[int] = Field(default_factory=list, description="已转异常工单")
+    unfreezed: list[int] = Field(default_factory=list, description="已解冻工单")
+    skipped: list[int] = Field(default_factory=list, description="跳过工单")
+    failed: list[dict] = Field(default_factory=list, description="失败明细")
+
+
 class WorkOrderMergeRequest(BaseModel):
     """工单合并请求Schema"""
     work_order_ids: list[int] = Field(..., min_length=2, description="要合并的工单ID列表（至少2个）")

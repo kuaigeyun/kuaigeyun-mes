@@ -2047,7 +2047,7 @@ export default {
   'app.kuaiplm.menu.group.project-center': '项目中心',
   'app.kuaiplm.menu.rd-projects': '项目管理',
   'app.kuaiplm.menu.engineering-data': '工程数据',
-  'app.kuaiplm.menu.change-management': '设计变更',
+  'app.kuaiplm.menu.change-management': '工程变更ECN',
   'app.kuaiplm.menu.knowledge-center': '知识中心',
   'app.kuaiplm.menu.knowledge-base': '知识库',
   'app.kuaiplm.menu.phase2': '研发协同',
@@ -2919,6 +2919,7 @@ export default {
   'app.kuaizhizao.menu.plan-management': '计划管理',
   'app.kuaizhizao.menu.plan-management.demand-management': '需求计划',
   'app.kuaizhizao.menu.plan-management.demand-computation': '需求计算',
+  'app.kuaizhizao.menu.plan-management.demand-change': '需求变更',
   'app.kuaizhizao.menu.plan-management.control-tower': '计划中心',
   /** 与路由 path 末段 dashboard 对应 */
   'app.kuaizhizao.menu.plan-management.dashboard': '计划中心',

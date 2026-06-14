@@ -996,6 +996,8 @@ class DemandComputationService:
         tenant_id: int,
         computation_id: int,
         operator_id: Optional[int] = None,
+        trigger: str = "manual",
+        trigger_message: Optional[str] = None,
     ) -> DemandComputationResponse:
         """
         重新计算：仅允许对「完成」或「失败」的计算重新执行。
@@ -1028,7 +1030,7 @@ class DemandComputationService:
                 tenant_id=tenant_id,
                 computation_id=computation_id,
                 snapshot_at=datetime.now(),
-                trigger="manual",
+                trigger=trigger,
                 computation_summary_snapshot=summary_snapshot,
                 items_snapshot=items_snapshot,
             )
@@ -1048,15 +1050,23 @@ class DemandComputationService:
         # 在事务外调用 execute，避免嵌套事务导致 TransactionManagementError
         try:
             result = await self.execute_computation(tenant_id=tenant_id, computation_id=computation_id)
+            diff_summary = await self._build_recompute_diff_summary(
+                tenant_id=tenant_id,
+                computation_id=computation_id,
+                before_items_snapshot=items_snapshot,
+            )
+            msg_parts = ["重算完成", diff_summary]
+            if trigger_message:
+                msg_parts.append(trigger_message)
             await DemandComputationRecalcHistory.create(
                 tenant_id=tenant_id,
                 computation_id=computation_id,
                 recalc_at=datetime.now(),
-                trigger="manual",
+                trigger=trigger,
                 operator_id=operator_id,
                 result="success",
                 snapshot_id=snapshot_id_saved,
-                message="重算完成",
+                message="；".join([m for m in msg_parts if m]),
             )
             return result
         except Exception as e:
@@ -1064,7 +1074,7 @@ class DemandComputationService:
                 tenant_id=tenant_id,
                 computation_id=computation_id,
                 recalc_at=datetime.now(),
-                trigger="manual",
+                trigger=trigger,
                 operator_id=operator_id,
                 result="failed",
                 snapshot_id=snapshot_id_saved,
@@ -1094,6 +1104,42 @@ class DemandComputationService:
             }
             for r in rows
         ]
+
+    async def _build_recompute_diff_summary(
+        self,
+        tenant_id: int,
+        computation_id: int,
+        before_items_snapshot: List[Dict[str, Any]],
+    ) -> str:
+        """构建重算前后差异摘要，用于重算审计。"""
+        after_items = await DemandComputationItem.filter(
+            tenant_id=tenant_id,
+            computation_id=computation_id,
+        ).all()
+        before_map = {str(it.get("material_code") or ""): it for it in before_items_snapshot}
+        after_map = {str(it.material_code or ""): it for it in after_items}
+        all_codes = set(before_map.keys()) | set(after_map.keys())
+        changed = 0
+        added = 0
+        removed = 0
+        for code in all_codes:
+            b = before_map.get(code)
+            a = after_map.get(code)
+            if b and not a:
+                removed += 1
+                continue
+            if a and not b:
+                added += 1
+                continue
+            if not a or not b:
+                continue
+            b_wo = float(b.get("suggested_work_order_quantity") or 0)
+            b_po = float(b.get("suggested_purchase_order_quantity") or 0)
+            a_wo = float(a.suggested_work_order_quantity or 0)
+            a_po = float(a.suggested_purchase_order_quantity or 0)
+            if abs(b_wo - a_wo) > 1e-6 or abs(b_po - a_po) > 1e-6:
+                changed += 1
+        return f"差异摘要: 变更{changed}项, 新增{added}项, 删除{removed}项"
 
     async def list_computation_snapshots(
         self, tenant_id: int, computation_id: int, limit: int = 20

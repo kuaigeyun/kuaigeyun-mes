@@ -12,7 +12,7 @@ export function WorkOrderStatusTag({ status = 'default', style, children, ...res
 
   return (
     <Tag
-      bordered={false}
+      variant="filled"
       className="hmi-status-tag"
       style={{
         background: badge.bg,

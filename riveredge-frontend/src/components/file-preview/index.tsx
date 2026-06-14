@@ -236,7 +236,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         <Suspense
           fallback={
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} />
+              <Spin tip={t('app.master-data.drawings.stepPreviewLoading')}>
+                <div style={{ minHeight: 24 }} />
+              </Spin>
             </div>
           }
         >
@@ -267,7 +269,9 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
         <Suspense
           fallback={
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin tip={t('app.master-data.drawings.dwgPreviewLoading')} />
+              <Spin tip={t('app.master-data.drawings.dwgPreviewLoading')}>
+                <div style={{ minHeight: 24 }} />
+              </Spin>
             </div>
           }
         >
@@ -339,7 +343,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
               <Spin />
             </div>
           ) : error ? (
-            <Alert type="error" message={error} showIcon />
+            <Alert type="error" title={error} showIcon />
           ) : previewUrl ? (
             <iframe
               src={previewUrl}

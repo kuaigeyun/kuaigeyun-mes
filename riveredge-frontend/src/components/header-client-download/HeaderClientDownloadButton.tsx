@@ -54,7 +54,7 @@ function DownloadQrCard({
           <Spin size="small" />
         </div>
       ) : blocked ? (
-        <Alert type="warning" showIcon message={t('ui.header.clientDownload.lanOriginFailed')} />
+        <Alert type="warning" showIcon title={t('ui.header.clientDownload.lanOriginFailed')} />
       ) : showQr ? (
         <div
           style={{
@@ -70,7 +70,7 @@ function DownloadQrCard({
           <QRCodeSVG value={downloadUrl} size={148} />
         </div>
       ) : (
-        <Alert type="error" showIcon message={t('ui.header.clientDownload.loopbackBlocked')} />
+        <Alert type="error" showIcon title={t('ui.header.clientDownload.loopbackBlocked')} />
       )}
       {showQr ? (
         <>

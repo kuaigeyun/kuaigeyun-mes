@@ -174,7 +174,7 @@ const SettlementPage: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
+        title="将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
       />
       <Row gutter={16}>
         <Col span={12}>
@@ -268,7 +268,7 @@ const SettlementPage: React.FC = () => {
         type="info"
         showIcon
         style={{ marginBottom: 16 }}
-        message="将「有余额的付款单」手动匹配到「有待付金额的应付单」。若已在应付详情登记付款并自动核销，或单据已全部结清，则此处不会显示数据。"
+        title="将「有余额的付款单」手动匹配到「有待付金额的应付单」。若已在应付详情登记付款并自动核销，或单据已全部结清，则此处不会显示数据。"
       />
       <Row gutter={16}>
         <Col span={12}>

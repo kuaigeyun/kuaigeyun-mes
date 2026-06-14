@@ -4,7 +4,7 @@
  * 当用户属于多个组织时，显示此弹窗供用户选择要进入的组织
  */
 
-import { Modal, List, Typography, Tag } from 'antd';
+import { Modal, Typography, Tag } from 'antd';
 import { CheckOutlined } from '@ant-design/icons';
 import { Building2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -101,15 +101,17 @@ export default function TenantSelectionModal({
         </Text>
       </div>
 
-      <List
-        dataSource={tenants || []}
-        renderItem={(tenant) => (
-          <List.Item
+      <div>
+        {(tenants || []).map((tenant) => (
+          <div
+            key={tenant.id}
             style={{
               cursor: 'pointer',
               padding: '12px 16px',
               borderRadius: '6px',
               transition: 'all 0.3s',
+              display: 'flex',
+              alignItems: 'center',
             }}
             onClick={() => onSelect(tenant.id)}
             onMouseEnter={(e) => {
@@ -119,41 +121,36 @@ export default function TenantSelectionModal({
               e.currentTarget.style.backgroundColor = 'transparent';
             }}
           >
-            <List.Item.Meta
-              avatar={
-                <span
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: 40,
-                    height: 40,
-                  }}
-                  aria-hidden
-                >
-                  <Building2 size={26} strokeWidth={2} color="#1677ff" />
-                </span>
-              }
-              title={
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>{tenant.name}</span>
-                  {getStatusTag(tenant.status)}
-                  {defaultTenantId === tenant.id && (
-                    <Tag color="blue" icon={<CheckOutlined />}>
-                      {t('components.tenantSelection.default')}
-                    </Tag>
-                  )}
-                </div>
-              }
-              description={
-                <Text type="secondary" style={{ fontSize: 12 }}>
-                  {t('components.tenantSelection.domainLabel')}: {tenant.domain}
-                </Text>
-              }
-            />
-          </List.Item>
-        )}
-      />
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 40,
+                height: 40,
+                marginRight: 12,
+              }}
+              aria-hidden
+            >
+              <Building2 size={26} strokeWidth={2} color="#1677ff" />
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{tenant.name}</span>
+                {getStatusTag(tenant.status)}
+                {defaultTenantId === tenant.id && (
+                  <Tag color="blue" icon={<CheckOutlined />}>
+                    {t('components.tenantSelection.default')}
+                  </Tag>
+                )}
+              </div>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('components.tenantSelection.domainLabel')}: {tenant.domain}
+              </Text>
+            </div>
+          </div>
+        ))}
+      </div>
     </Modal>
   );
 }

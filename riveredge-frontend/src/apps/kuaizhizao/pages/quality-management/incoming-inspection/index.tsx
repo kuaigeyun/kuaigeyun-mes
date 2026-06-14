@@ -37,7 +37,7 @@ import {
   theme as AntdTheme,
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -210,7 +210,12 @@ const IncomingInspectionPage: React.FC = () => {
     const load = async () => {
       setDisposalLoading(true);
       try {
-        const dict = await getDataDictionaryByCode('DISPOSAL_METHOD');
+        const dictList = await getDataDictionaryList({ code: 'DISPOSAL_METHOD', page: 1, page_size: 1 });
+        const dict = dictList.items?.[0];
+        if (!dict) {
+          setDisposalOptions(DISPOSAL_METHOD_FALLBACK);
+          return;
+        }
         const items = await getDictionaryItemList(dict.uuid, true);
         setDisposalOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {

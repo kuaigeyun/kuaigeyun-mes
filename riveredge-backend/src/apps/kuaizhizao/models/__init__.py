@@ -132,6 +132,9 @@ from .demand_snapshot import DemandSnapshot
 from .demand_recalc_history import DemandRecalcHistory
 from .demand_computation_snapshot import DemandComputationSnapshot
 from .demand_computation_recalc_history import DemandComputationRecalcHistory
+from .demand_change_event import DemandChangeEvent
+from .demand_impact_record import DemandImpactRecord
+from .demand_replan_task import DemandReplanTask
 
 # BOM管理模块
 # BOM管理已移至master_data APP，不再需要BillOfMaterials模型
@@ -281,6 +284,9 @@ __all__ = [
     'DemandRecalcHistory',
     'DemandComputationSnapshot',
     'DemandComputationRecalcHistory',
+    'DemandChangeEvent',
+    'DemandImpactRecord',
+    'DemandReplanTask',
 
     # BOM管理模块
     # BillOfMaterials和BillOfMaterialsItem已移除，BOM管理在master_data APP中

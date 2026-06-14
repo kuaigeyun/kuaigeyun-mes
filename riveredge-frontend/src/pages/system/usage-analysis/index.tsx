@@ -255,7 +255,7 @@ const UsageAnalysisPage: React.FC = () => {
                     )}
                   />
                 ) : (
-                  <Alert message="暂无优化建议" type="info" showIcon />
+                  <Alert title="暂无优化建议" type="info" showIcon />
                 )}
               </Card>
             ),

@@ -353,6 +353,7 @@ const getCardGradient = (code: string, isActive: boolean, token: GlobalToken, is
  * 帮助视图内容组件 (Wiki 左右分栏样式)
  */
 const ApplicationHelpView: React.FC = () => {
+  const { t } = useTranslation();
   const wikiItems: WikiItem[] = [
     {
       key: '1',
@@ -364,7 +365,7 @@ const ApplicationHelpView: React.FC = () => {
           <Paragraph>
             <Text strong>应用中心</Text>是系统管理员集中管理组织内所有系统模块和业务插件的核心控制台。通过应用中心，管理员可以轻松完成应用的发现、安装、卸载、授权、启停控制以及菜单清单的同步，实现企业数字化底座的灵活扩展与生命周期管理。
           </Paragraph>
-          <Alert message="仅具有系统管理员权限的用户可访问和操作应用中心。" type="info" showIcon />
+          <Alert title="仅具有系统管理员权限的用户可访问和操作应用中心。" type="info" showIcon />
         </>
       )
     },
@@ -395,7 +396,7 @@ const ApplicationHelpView: React.FC = () => {
             <li style={{ marginBottom: 12 }}><Text strong>安装应用</Text>：在应用列表中找到处于“未安装”状态的应用，点击卡片上的 <b>[安装]</b> 按钮（或下载图标）。安装成功后，应用将注册到您的系统中。</li>
             <li><Text strong>卸载应用</Text>：对于不再需要的已安装应用，点击卡片上的 <b>[更多操作]</b> -{'>'} <b>[卸载]</b>。</li>
           </ul>
-          <Alert message="注意：卸载应用可能会导致关联的业务数据不可见。此外，“系统应用”的卸载按钮为禁用状态，无法卸载。" type="warning" showIcon style={{ marginTop: 24 }} />
+          <Alert title="注意：卸载应用可能会导致关联的业务数据不可见。此外，“系统应用”的卸载按钮为禁用状态，无法卸载。" type="warning" showIcon style={{ marginTop: 24 }} />
         </>
       )
     },
@@ -425,7 +426,7 @@ const ApplicationHelpView: React.FC = () => {
             <li style={{ marginBottom: 8 }}>点击页面顶部的 <b>[扫描应用]</b> 按钮。</li>
             <li>系统会自动扫描发现新应用并将其基础信息注册到应用中心。</li>
           </ol>
-          <Alert message="“扫描应用”仅更新了应用的基础清单数据库。扫描完成后，请务必执行 [一键同步菜单] 操作，否则左侧导航菜单不会更新。" type="info" showIcon style={{ marginTop: 24 }} />
+          <Alert title="“扫描应用”仅更新了应用的基础清单数据库。扫描完成后，请务必执行 [一键同步菜单] 操作，否则左侧导航菜单不会更新。" type="info" showIcon style={{ marginTop: 24 }} />
         </>
       )
     },
@@ -455,7 +456,7 @@ const ApplicationHelpView: React.FC = () => {
             <li style={{ marginBottom: 12 }}><Text strong>应用配置</Text>：点击 <b>[更多操作]</b> -{'>'} <b>[应用配置]</b>，可修改该应用在系统中的显示名称、显示排序等基本参数。</li>
             <li><Text strong>重置数据</Text>：针对特定应用（如快制造 kuaizhizao），在 <b>[更多操作]</b> 中提供了 <b>[重置数据]</b> 功能。</li>
           </ul>
-          <Alert message={t('pages.system.applications.resetHighRiskWarning', { defaultValue: '高危操作警告：“重置数据”将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。' })} type="error" showIcon style={{ marginTop: 24 }} />
+          <Alert title={t('pages.system.applications.resetHighRiskWarning', { defaultValue: '高危操作警告：“重置数据”将清空或初始化该应用的核心业务数据，请在执行前务必确认或联系技术支持。' })} type="error" showIcon style={{ marginTop: 24 }} />
         </>
       )
     },
@@ -2406,7 +2407,7 @@ const ApplicationListPage: React.FC = () => {
         width={720}
         destroyOnHidden
       >
-        <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t('pages.system.applications.dedicatedBindingHint')} />
+        <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t('pages.system.applications.dedicatedBindingHint')} />
         <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('pages.system.applications.dedicatedBindingBoundList')}</div>
         <Table<DedicatedBindingRow>
           size="small"

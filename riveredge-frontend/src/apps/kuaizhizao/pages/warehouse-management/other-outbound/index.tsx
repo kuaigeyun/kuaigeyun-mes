@@ -30,7 +30,7 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import CodeField from '../../../../../components/code-field';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { warehouseApi } from '../../../services/production';
 import { getOtherOutboundLifecycle } from '../../../utils/otherOutboundLifecycle';
@@ -165,7 +165,16 @@ const OtherOutboundPage: React.FC = () => {
     const loadReasonType = async () => {
       setReasonTypeLoading(true);
       try {
-        const dict = await getDataDictionaryByCode('OUTBOUND_REASON_TYPE');
+        const dictList = await getDataDictionaryList({
+          code: 'OUTBOUND_REASON_TYPE',
+          page: 1,
+          page_size: 1,
+        });
+        const dict = dictList.items?.[0];
+        if (!dict) {
+          setReasonTypeOptions(REASON_TYPES_FALLBACK);
+          return;
+        }
         const items = await getDictionaryItemList(dict.uuid, true);
         setReasonTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
@@ -235,17 +244,33 @@ const OtherOutboundPage: React.FC = () => {
       title: '操作',
       width: 180,
       fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
-          {record.status === '待出库' && (
-            <>
-              <Button type="link" size="small" icon={<CheckCircleOutlined />} onClick={() => handleConfirm(record)} style={{ color: '#52c41a' }}>确认出库</Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
-            </>
-          )}
-        </Space>
-      ),
+      render: (_, record) => {
+        const actions: React.ReactNode[] = [
+          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            详情
+          </Button>,
+        ];
+        if (record.status === '待出库') {
+          actions.push(
+            <Button
+              key="confirm"
+              type="link"
+              size="small"
+              icon={<CheckCircleOutlined />}
+              onClick={() => handleConfirm(record)}
+              style={{ color: '#52c41a' }}
+            >
+              确认出库
+            </Button>,
+          );
+          actions.push(
+            <Button key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              删除
+            </Button>,
+          );
+        }
+        return <Space>{actions}</Space>;
+      },
     },
   ];
 

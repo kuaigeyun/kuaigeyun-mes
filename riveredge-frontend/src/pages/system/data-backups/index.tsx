@@ -57,7 +57,7 @@ function formatBytes(bytes?: number): string {
 const DataBackupsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const { token } = useToken();
+  const { token } = theme.useToken();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = React.useRef<ActionType>(null);
 

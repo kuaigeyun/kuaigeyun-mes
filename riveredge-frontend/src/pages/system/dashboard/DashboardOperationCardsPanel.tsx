@@ -3,8 +3,8 @@
  */
 
 import React from 'react';
-import { Button, Empty, Space } from 'antd';
-import { RightOutlined } from '@ant-design/icons';
+import { Button, Empty, Grid, Space } from 'antd';
+import { DownOutlined, RightOutlined, UpOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { getProcessProgress } from '../../../services/dashboard';
@@ -26,6 +26,8 @@ export function DashboardOperationCardsPanel({
   t,
   onNavigate,
 }: DashboardOperationCardsPanelProps) {
+  const { useBreakpoint } = Grid;
+  const screens = useBreakpoint();
   const { data: items, isLoading, isFetching } = useQuery({
     queryKey: ['dashboard-wip-operation-cards'],
     queryFn: () => getProcessProgress(false),
@@ -35,6 +37,26 @@ export function DashboardOperationCardsPanel({
   });
 
   const workOrdersPath = '/apps/kuaizhizao/production-execution/work-orders?status=in_progress';
+  const columnCount = React.useMemo(() => {
+    if (screens.xl) return 4;
+    if (screens.lg) return 3;
+    if (screens.sm) return 2;
+    return 1;
+  }, [screens]);
+  const initialVisibleCount = columnCount * 2;
+  const totalCount = items?.length ?? 0;
+  const [visibleCount, setVisibleCount] = React.useState(initialVisibleCount);
+
+  React.useEffect(() => {
+    setVisibleCount(initialVisibleCount);
+  }, [initialVisibleCount, totalCount]);
+
+  const visibleItems = React.useMemo(
+    () => (items ?? []).slice(0, visibleCount),
+    [items, visibleCount],
+  );
+  const hasMoreItems = totalCount > visibleItems.length;
+  const canCollapse = totalCount > initialVisibleCount && visibleCount > initialVisibleCount;
 
   return (
     <DashboardSectionCard
@@ -68,18 +90,43 @@ export function DashboardOperationCardsPanel({
           description={t('pages.dashboard.operationCardsEmpty')}
         />
       ) : (
-        <div className="dashboard-operation-cards-panel__track">
-          {items.map((item, index) => (
-            <WipOperationCardView
-              key={`${item.process_id}-${item.process_name}`}
-              item={item}
-              colorIndex={index}
-              isDark={isDark}
-              t={t}
-              onClick={() => onNavigate(workOrdersPath)}
-            />
-          ))}
-        </div>
+        <>
+          <div className="dashboard-operation-cards-panel__track">
+            {visibleItems.map((item, index) => (
+              <WipOperationCardView
+                key={`${item.process_id}-${item.process_name}`}
+                item={item}
+                colorIndex={index}
+                isDark={isDark}
+                t={t}
+                onClick={() => onNavigate(workOrdersPath)}
+              />
+            ))}
+          </div>
+          {hasMoreItems || canCollapse ? (
+            <div className="dashboard-operation-cards-panel__load-more-wrap">
+              <Button
+                size="small"
+                shape="circle"
+                type="text"
+                className="dashboard-operation-cards-panel__load-more-btn"
+                icon={hasMoreItems ? <DownOutlined /> : <UpOutlined />}
+                aria-label={
+                  hasMoreItems
+                    ? t('common.loadMore', { defaultValue: '加载更多' })
+                    : t('common.collapse', { defaultValue: '收起' })
+                }
+                onClick={() => {
+                  if (hasMoreItems) {
+                    setVisibleCount((prev) => Math.min(totalCount, prev + columnCount));
+                  } else {
+                    setVisibleCount(initialVisibleCount);
+                  }
+                }}
+              />
+            </div>
+          ) : null}
+        </>
       )}
     </DashboardSectionCard>
   );

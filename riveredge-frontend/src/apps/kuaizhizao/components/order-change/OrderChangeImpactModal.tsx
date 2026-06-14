@@ -52,7 +52,7 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
       destroyOnHidden
     >
       {blocking.length > 0 && (
-        <Alert type="error" showIcon message="存在阻断项" description={blocking.join('；')} style={{ marginBottom: 16 }} />
+        <Alert type="error" showIcon title="存在阻断项" description={blocking.join('；')} style={{ marginBottom: 16 }} />
       )}
       {(impact?.recommended_actions?.length ?? 0) > 0 && (
         <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
@@ -67,7 +67,7 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
       {renderList('受影响工单', impact?.affected_work_orders)}
       {renderList('受影响收货通知', impact?.affected_receipt_notices)}
       {renderList('受影响入库单', impact?.affected_inbounds)}
-      {!impact && !loading && <Alert type="info" message="暂无影响数据" />}
+      {!impact && !loading && <Alert type="info" title="暂无影响数据" />}
     </Modal>
   );
 };

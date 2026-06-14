@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { App, Modal, Progress, Typography, List, Spin } from 'antd';
+import { App, Modal, Progress, Typography, Spin } from 'antd';
 import {
   CheckCircleOutlined,
   CloseCircleOutlined,
@@ -162,10 +162,8 @@ const TenantBootstrapModal: React.FC = () => {
         style={{ marginBottom: 16 }}
       />
 
-      <List
-        size="small"
-        dataSource={steps}
-        renderItem={(step) => {
+      <div>
+        {steps.map((step) => {
           const state = stepStatus[step.key] ?? 'pending';
           let icon = <ClockCircleOutlined style={{ color: 'var(--ant-color-text-quaternary)' }} />;
           if (state === 'running') {
@@ -177,16 +175,18 @@ const TenantBootstrapModal: React.FC = () => {
           }
 
           return (
-            <List.Item>
-              <List.Item.Meta
-                avatar={icon}
-                title={stepLabel(t, step)}
-                description={step.description}
-              />
-            </List.Item>
+            <div key={step.key} style={{ display: 'flex', alignItems: 'center', padding: '8px 0' }}>
+              <div style={{ marginRight: 8 }}>{icon}</div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div>{stepLabel(t, step)}</div>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {step.description}
+                </Typography.Text>
+              </div>
+            </div>
           );
-        }}
-      />
+        })}
+      </div>
 
       {running && !finished ? (
         <div style={{ textAlign: 'center', marginTop: 8 }}>

@@ -205,7 +205,7 @@ export const DocumentTrackingTimelineBody: React.FC<{
 
     return {
       dot: icon,
-      children: (
+      content: (
         <div>
           {mainRow}
           {fieldChanges ? (

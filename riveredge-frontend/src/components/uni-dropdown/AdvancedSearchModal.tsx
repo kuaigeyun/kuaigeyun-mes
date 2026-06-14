@@ -5,7 +5,7 @@
  */
 
 import React, { useState } from 'react';
-import { Modal, Form, Input, InputNumber, DatePicker, Button, List, theme } from 'antd';
+import { Modal, Form, Input, InputNumber, DatePicker, Button, theme } from 'antd';
 import { SearchOutlined } from '@ant-design/icons';
 import type { AdvancedSearchField } from './types';
 import dayjs from 'dayjs';
@@ -115,13 +115,11 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
           {results.length === 0 ? (
             <div style={{ color: token.colorTextSecondary, padding: '12px 0' }}>暂无结果</div>
           ) : (
-            <List
-              size="small"
-              dataSource={results}
-              style={{ maxHeight: 260, overflow: 'auto' }}
-              renderItem={(item) => (
-                <List.Item
-                  style={{ cursor: 'pointer' }}
+            <div style={{ maxHeight: 260, overflow: 'auto' }}>
+              {results.map((item, index) => (
+                <div
+                  key={`${item.value}-${index}`}
+                  style={{ cursor: 'pointer', padding: '6px 0' }}
                   onClick={() => handleSelect(item)}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = token.colorFillTertiary;
@@ -131,9 +129,9 @@ export const AdvancedSearchModal: React.FC<AdvancedSearchModalProps> = ({
                   }}
                 >
                   {item.label}
-                </List.Item>
-              )}
-            />
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

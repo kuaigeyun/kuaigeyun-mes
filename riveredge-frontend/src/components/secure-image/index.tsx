@@ -249,8 +249,8 @@ export const SecureImage: React.FC<SecureImageProps> = ({
       return {
         src: resolvedPreviewSrc,
         destroyOnHidden: true,
-        visible: previewVisible,
-        onVisibleChange: handlePreviewOpenChange,
+        open: previewVisible,
+        onOpenChange: handlePreviewOpenChange,
         actionsRender: tieredActions,
       };
     }
@@ -258,8 +258,8 @@ export const SecureImage: React.FC<SecureImageProps> = ({
       ...preview,
       src: preview.src || resolvedPreviewSrc,
       destroyOnHidden: true,
-      visible: previewVisible,
-      onVisibleChange: handlePreviewOpenChange,
+      open: previewVisible,
+      onOpenChange: handlePreviewOpenChange,
       actionsRender: tieredActions,
     };
   }, [

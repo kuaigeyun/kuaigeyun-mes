@@ -495,88 +495,99 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
+        const actions: React.ReactNode[] = [];
         const st = record.status === 'picking' ? 'processing' : record.status;
         if (record.task_type === 'proactive_prep') {
-          return (
-            <Button type="link" size="small" onClick={() => handleProactivePrep(record)}>
+          actions.push(
+            <Button key="create-batching" type="link" size="small" onClick={() => handleProactivePrep(record)}>
               生成配料单
-            </Button>
+            </Button>,
           );
+          return <Space>{actions}</Space>;
         }
         if (record.task_type === 'material_call') {
-          return (
-            <Space>
-              {st === 'pending' && (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<ClockCircleOutlined />}
-                  onClick={() => handleMaterialCallUpdate(record.task_id, 'processing')}
-                >
-                  开始配料
-                </Button>
-              )}
-              {(st === 'processing' || st === 'partial') && (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<CheckCircleOutlined />}
-                  style={{ color: '#52c41a' }}
-                  onClick={() => openMaterialCallComplete(record)}
-                >
-                  完成
-                </Button>
-              )}
-              {['pending', 'processing', 'partial', 'picking'].includes(record.status ?? '') && (
-                <Button
-                  type="link"
-                  size="small"
-                  danger
-                  icon={<CloseCircleOutlined />}
-                  onClick={() => {
-                    Modal.confirm({
-                      title: '确认取消',
-                      content: '确认要取消该叫料请求吗？',
-                      onOk: () => handleMaterialCallUpdate(record.task_id, 'cancelled'),
-                    });
-                  }}
-                >
-                  取消
-                </Button>
-              )}
-            </Space>
-          );
+          if (st === 'pending') {
+            actions.push(
+              <Button
+                key="start-picking"
+                type="link"
+                size="small"
+                icon={<ClockCircleOutlined />}
+                onClick={() => handleMaterialCallUpdate(record.task_id, 'processing')}
+              >
+                开始配料
+              </Button>,
+            );
+          }
+          if (st === 'processing' || st === 'partial') {
+            actions.push(
+              <Button
+                key="complete-call"
+                type="link"
+                size="small"
+                icon={<CheckCircleOutlined />}
+                style={{ color: '#52c41a' }}
+                onClick={() => openMaterialCallComplete(record)}
+              >
+                完成
+              </Button>,
+            );
+          }
+          if (['pending', 'processing', 'partial', 'picking'].includes(record.status ?? '')) {
+            actions.push(
+              <Button
+                key="cancel-call"
+                type="link"
+                size="small"
+                danger
+                icon={<CloseCircleOutlined />}
+                onClick={() => {
+                  Modal.confirm({
+                    title: '确认取消',
+                    content: '确认要取消该叫料请求吗？',
+                    onOk: () => handleMaterialCallUpdate(record.task_id, 'cancelled'),
+                  });
+                }}
+              >
+                取消
+              </Button>,
+            );
+          }
+          return actions.length ? <Space>{actions}</Space> : null;
         }
         if (record.task_type === 'batching_draft') {
-          return (
-            <Space>
-              <Button type="link" size="small" onClick={() => onOpenBatchingDetail?.(record.task_id)}>
-                详情
-              </Button>
-              {['draft', 'picking'].includes(record.status ?? '') && (
-                <>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ReloadOutlined />}
-                    onClick={() => handleSyncBatchingDraft(record)}
-                  >
-                    刷新缺料
-                  </Button>
-                  <Button type="link" size="small" onClick={() => openBatchingConfirm(record)}>
-                    {record.status === 'picking' ? '继续配料' : '确认配料'}
-                  </Button>
-                </>
-              )}
-            </Space>
+          actions.push(
+            <Button key="batching-detail" type="link" size="small" onClick={() => onOpenBatchingDetail?.(record.task_id)}>
+              详情
+            </Button>,
           );
+          if (['draft', 'picking'].includes(record.status ?? '')) {
+            actions.push(
+              <Button
+                key="refresh-shortage"
+                type="link"
+                size="small"
+                icon={<ReloadOutlined />}
+                onClick={() => handleSyncBatchingDraft(record)}
+              >
+                刷新缺料
+              </Button>,
+            );
+            actions.push(
+              <Button key="confirm-batching" type="link" size="small" onClick={() => openBatchingConfirm(record)}>
+                {record.status === 'picking' ? '继续配料' : '确认配料'}
+              </Button>,
+            );
+          }
+          return <Space>{actions}</Space>;
         }
         if (record.task_type === 'backflush_alert') {
-          return (
-            <Button type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleBackflushRetry(record)}>
+          actions.push(
+            <Button key="retry-backflush" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleBackflushRetry(record)}>
               重试倒冲
-            </Button>
+            </Button>,
           );
+          return <Space>{actions}</Space>;
         }
         return null;
       },

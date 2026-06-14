@@ -432,19 +432,19 @@ const InitialDataImportPage: React.FC = () => {
   const steps = [
     {
       title: t('app.kuaizhizao.initialData.stepInventory'),
-      description: t('app.kuaizhizao.initialData.stepInventoryDesc'),
+      content: t('app.kuaizhizao.initialData.stepInventoryDesc'),
     },
     {
       title: t('app.kuaizhizao.initialData.stepWip'),
-      description: t('app.kuaizhizao.initialData.stepWipDesc'),
+      content: t('app.kuaizhizao.initialData.stepWipDesc'),
     },
     {
       title: t('app.kuaizhizao.initialData.stepAr'),
-      description: t('app.kuaizhizao.initialData.stepArDesc'),
+      content: t('app.kuaizhizao.initialData.stepArDesc'),
     },
     {
       title: t('app.kuaizhizao.initialData.stepDone'),
-      description: t('app.kuaizhizao.initialData.stepDoneDesc'),
+      content: t('app.kuaizhizao.initialData.stepDoneDesc'),
     },
   ];
 
@@ -488,7 +488,7 @@ const InitialDataImportPage: React.FC = () => {
           ) : null}
 
           {snapshotAfterLaunch ? (
-            <Alert type="warning" showIcon message={t('app.kuaizhizao.initialData.snapshotAfterLaunch')} />
+            <Alert type="warning" showIcon title={t('app.kuaizhizao.initialData.snapshotAfterLaunch')} />
           ) : null}
 
           <Card size="small" styles={{ body: { padding: 48 } }}>
@@ -558,7 +558,7 @@ const InitialDataImportPage: React.FC = () => {
                   </Button>
                 </Space>
                 {inventoryGatePassed ? (
-                  <Alert style={{ marginTop: 16 }} type="success" showIcon message={t('app.kuaizhizao.initialData.inventoryDone')} />
+                  <Alert style={{ marginTop: 16 }} type="success" showIcon title={t('app.kuaizhizao.initialData.inventoryDone')} />
                 ) : null}
               </div>
             </Space>
@@ -587,10 +587,10 @@ const InitialDataImportPage: React.FC = () => {
             </Button>
           </Space>
           {wipDone ? (
-            <Alert type="success" showIcon message={t('app.kuaizhizao.initialData.wipImported')} />
+            <Alert type="success" showIcon title={t('app.kuaizhizao.initialData.wipImported')} />
           ) : null}
           {wipSkipped ? (
-            <Alert type="info" showIcon message={t('app.kuaizhizao.initialData.wipSkippedBanner')} />
+            <Alert type="info" showIcon title={t('app.kuaizhizao.initialData.wipSkippedBanner')} />
           ) : null}
         </Space>
       );
@@ -616,10 +616,10 @@ const InitialDataImportPage: React.FC = () => {
             </Button>
           </Space>
           {arDone ? (
-            <Alert type="success" showIcon message={t('app.kuaizhizao.initialData.arImported')} />
+            <Alert type="success" showIcon title={t('app.kuaizhizao.initialData.arImported')} />
           ) : null}
           {arSkipped ? (
-            <Alert type="info" showIcon message={t('app.kuaizhizao.initialData.arSkippedBanner')} />
+            <Alert type="info" showIcon title={t('app.kuaizhizao.initialData.arSkippedBanner')} />
           ) : null}
         </Space>
       );

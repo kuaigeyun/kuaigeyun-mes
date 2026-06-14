@@ -101,7 +101,9 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
           background: 'var(--ant-color-fill-quaternary, #f5f5f5)',
         }}
       >
-        <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} size="large" />
+        <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} size="large">
+          <div style={{ minHeight: 24 }} />
+        </Spin>
       </div>
     );
   }
@@ -109,7 +111,7 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
   if (error) {
     return (
       <div style={{ height, minHeight: 200, padding: 16, boxSizing: 'border-box' }}>
-        <Alert type="error" message={error} showIcon />
+        <Alert type="error" title={error} showIcon />
       </div>
     );
   }
@@ -117,7 +119,7 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
   if (!meshes?.length) {
     return (
       <div style={{ height, minHeight: 200, padding: 16, boxSizing: 'border-box' }}>
-        <Alert type="warning" showIcon message={t('app.master-data.drawings.stepPreviewEmpty')} />
+        <Alert type="warning" showIcon title={t('app.master-data.drawings.stepPreviewEmpty')} />
       </div>
     );
   }

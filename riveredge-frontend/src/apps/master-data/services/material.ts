@@ -84,6 +84,13 @@ function optionalNumberId(value: unknown): number | null {
   return null;
 }
 
+const MATERIAL_LIST_LIMIT_MAX = 2000;
+
+function clampMaterialListLimit(limit: unknown): number | undefined {
+  if (typeof limit !== 'number' || Number.isNaN(limit)) return undefined;
+  return Math.max(1, Math.min(MATERIAL_LIST_LIMIT_MAX, Math.trunc(limit)));
+}
+
 /**
  * 后端 BOM 响应为 snake_case，统一转为前端 camelCase
  */
@@ -248,7 +255,9 @@ export const materialApi = {
       return unwrap(await api.get('/apps/master-data/materials'));
     }
     const { sortBy, sortOrder, treeView, mastersOnly, ...rest } = params;
-    const backendParams: Record<string, unknown> = { ...rest };
+    const limit = clampMaterialListLimit((rest as Record<string, unknown>).limit);
+    const backendParams: Record<string, unknown> =
+      limit != null ? { ...rest, limit } : { ...rest };
     if (sortBy != null && sortBy !== '') backendParams.sort_by = sortBy;
     if (sortOrder != null && sortOrder !== '') backendParams.sort_order = sortOrder;
     if (treeView) backendParams.treeView = true;

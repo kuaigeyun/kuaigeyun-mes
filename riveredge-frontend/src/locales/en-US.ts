@@ -2037,7 +2037,7 @@ export default {
   'app.kuaiplm.menu.group.project-center': 'Projects',
   'app.kuaiplm.menu.rd-projects': 'Project Management',
   'app.kuaiplm.menu.engineering-data': 'Engineering',
-  'app.kuaiplm.menu.change-management': 'Design Change',
+  'app.kuaiplm.menu.change-management': 'Engineering Change ECN',
   'app.kuaiplm.menu.knowledge-center': 'Knowledge Hub',
   'app.kuaiplm.menu.knowledge-base': 'Knowledge Base',
   'app.kuaiplm.menu.phase2': 'Collaboration',
@@ -2913,6 +2913,7 @@ export default {
   'app.kuaizhizao.menu.plan-management.demand-management': 'Demand Plan Management',
   'app.kuaizhizao.menu.plan-management.unified-demand-management': 'Unified Demand Plan',
   'app.kuaizhizao.menu.plan-management.demand-computation': 'Demand Computation',
+  'app.kuaizhizao.menu.plan-management.demand-change': 'Demand Change',
   'app.kuaizhizao.menu.plan-management.control-tower': 'Planning Center',
   'app.kuaizhizao.menu.plan-management.dashboard': 'Planning Center',
   /** Route segment is production-control-tower; path-derived i18n key must match */

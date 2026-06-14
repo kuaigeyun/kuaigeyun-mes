@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Drawer, Input, List, Card, Typography, Space, Empty, Spin } from 'antd';
+import { Drawer, Input, Card, Typography, Space, Empty, Spin } from 'antd';
 import { QuestionCircleOutlined, SearchOutlined, BookOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { listHelpDocuments, getHelpDocument, type HelpDocument } from '../../services/helpDocument';
@@ -168,25 +168,28 @@ const HelpCenter: React.FC<HelpCenterProps> = ({
     }
 
     return (
-      <List
-        dataSource={filteredDocuments}
-        renderItem={(doc) => (
-          <List.Item
-            style={{ cursor: 'pointer', padding: '12px 16px' }}
+      <div>
+        {filteredDocuments.map((doc) => (
+          <div
+            key={doc.key}
+            style={{
+              cursor: 'pointer',
+              padding: '12px 16px',
+              display: 'flex',
+              alignItems: 'center',
+            }}
             onClick={() => handleSelectDocument(doc.key)}
           >
-            <List.Item.Meta
-              avatar={<BookOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
-              title={doc.title}
-              description={
-                <Text type="secondary" ellipsis>
-                  {doc.sections[0]?.content || '暂无描述'}
-                </Text>
-              }
-            />
-          </List.Item>
-        )}
-      />
+            <BookOutlined style={{ fontSize: 20, color: '#1890ff', marginRight: 12 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div>{doc.title}</div>
+              <Text type="secondary" ellipsis>
+                {doc.sections[0]?.content || '暂无描述'}
+              </Text>
+            </div>
+          </div>
+        ))}
+      </div>
     );
   };
 

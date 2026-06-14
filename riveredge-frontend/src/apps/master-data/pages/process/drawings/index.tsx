@@ -177,13 +177,17 @@ const InlinePreviewPane = React.memo(function InlinePreviewPane({
               pointerEvents: 'none',
             }}
           >
-            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
           </div>
         )}
         <Suspense
           fallback={
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+              <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
+                <div style={{ minHeight: 24 }} />
+              </Spin>
             </div>
           }
         >

@@ -318,6 +318,25 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
         # 只要有关联需求，预测任意保存都同步需求内容，使需求管理动态随上游变化
         demand_synced = await self._sync_demand_if_exists(tenant_id, forecast_id, updated_by)
+        try:
+            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+            await DemandChangeEventService().create_event(
+                tenant_id=tenant_id,
+                event_type="order",
+                source_type="sales_forecast",
+                source_id=forecast_id,
+                source_code=updated_forecast.forecast_code,
+                source_name=updated_forecast.forecast_name or updated_forecast.forecast_code,
+                changed_fields=["sales_forecast_updated"],
+                payload={"forecast_id": forecast_id},
+                effective_at=datetime.now(),
+                trigger_reason="sales_forecast_updated",
+                requested_by=updated_by,
+                correlation_id=f"sales_forecast:{forecast_id}:{int(datetime.now().timestamp())}",
+                auto_create_task=True,
+            )
+        except Exception:
+            pass
         out = updated_forecast.model_dump()
         out["demand_synced"] = demand_synced
         return SalesForecastResponse(**out)

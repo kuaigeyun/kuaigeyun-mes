@@ -23,6 +23,15 @@ import type {
   StorageLocationListResponse,
 } from '../types/warehouse';
 
+const MASTER_DATA_API_LIMIT_MAX = 1000;
+
+function clampMasterDataLimit<T extends { limit?: number } | undefined>(params: T): T {
+  if (!params || params.limit == null) return params;
+  const n = Number(params.limit);
+  const safe = Number.isFinite(n) ? Math.max(1, Math.min(MASTER_DATA_API_LIMIT_MAX, n)) : MASTER_DATA_API_LIMIT_MAX;
+  return { ...params, limit: safe } as T;
+}
+
 /**
  * 仓库 API 服务
  */
@@ -38,7 +47,9 @@ export const warehouseApi = {
    * 获取仓库列表
    */
   list: async (params?: WarehouseListParams): Promise<WarehouseListResponse> => {
-    return api.get('/apps/master-data/warehouse/warehouses', { params });
+    return api.get('/apps/master-data/warehouse/warehouses', {
+      params: clampMasterDataLimit(params),
+    });
   },
 
   /**
@@ -124,7 +135,9 @@ export const storageAreaApi = {
    * 获取库区列表
    */
   list: async (params?: StorageAreaListParams): Promise<StorageAreaListResponse> => {
-    return api.get('/apps/master-data/warehouse/storage-areas', { params });
+    return api.get('/apps/master-data/warehouse/storage-areas', {
+      params: clampMasterDataLimit(params),
+    });
   },
 
   /**
@@ -183,7 +196,9 @@ export const storageLocationApi = {
    * 获取库位列表
    */
   list: async (params?: StorageLocationListParams): Promise<StorageLocationListResponse> => {
-    return api.get('/apps/master-data/warehouse/storage-locations', { params });
+    return api.get('/apps/master-data/warehouse/storage-locations', {
+      params: clampMasterDataLimit(params),
+    });
   },
 
   /**

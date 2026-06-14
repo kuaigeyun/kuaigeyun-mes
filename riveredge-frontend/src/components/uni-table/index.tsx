@@ -1284,6 +1284,8 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   /** 父组件常写内联 request，避免其引用每帧变化触发 ProTable 重复拉数 */
   const requestRef = useRef(request)
   requestRef.current = request
+  const staticDataSourceRef = useRef<T[] | undefined>(Array.isArray(restProps.dataSource) ? (restProps.dataSource as T[]) : undefined)
+  staticDataSourceRef.current = Array.isArray(restProps.dataSource) ? (restProps.dataSource as T[]) : undefined
   const onTableDataChangeRef = useRef(onTableDataChange)
   onTableDataChangeRef.current = onTableDataChange
 
@@ -1900,7 +1902,21 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
       const reqPageSize = params.pageSize ?? liveDefaultPageSize
       setCurrentPageSize((prev) => (prev === reqPageSize ? prev : reqPageSize))
 
-      const runRequest = () => requestRef.current(params, sort, filter, searchFormValues)
+      const runRequest = () => {
+        if (typeof requestRef.current === 'function') {
+          return requestRef.current(params, sort, filter, searchFormValues)
+        }
+        const rows = staticDataSourceRef.current ?? []
+        const current = Number(params?.current ?? 1)
+        const fallbackPageSize = rows.length > 0 ? rows.length : liveDefaultPageSize
+        const pageSize = Number(params?.pageSize ?? fallbackPageSize)
+        const start = Math.max(0, (current - 1) * pageSize)
+        return Promise.resolve({
+          data: rows.slice(start, start + pageSize),
+          success: true,
+          total: rows.length,
+        })
+      }
       let result: Awaited<ReturnType<typeof runRequest>>
       const forceFresh = forceFreshNextRequestRef.current
       if (forceFresh) {

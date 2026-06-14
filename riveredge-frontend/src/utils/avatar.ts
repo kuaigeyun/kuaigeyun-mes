@@ -11,6 +11,41 @@ import type { CSSProperties } from 'react';
 import { getFilePreview } from '../services/file';
 
 const AVATAR_CACHE_PREFIX = 'avatarUrlCache_';
+const MISSING_AVATAR_UUIDS_STORAGE_KEY = 'missing_avatar_uuids';
+const missingAvatarUuids = new Set<string>();
+
+try {
+  const raw = localStorage.getItem(MISSING_AVATAR_UUIDS_STORAGE_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      parsed.forEach((it) => {
+        if (typeof it === 'string' && it.trim()) {
+          missingAvatarUuids.add(it.trim());
+        }
+      });
+    }
+  }
+} catch {
+  // ignore
+}
+
+function persistMissingAvatarUuids(): void {
+  try {
+    localStorage.setItem(MISSING_AVATAR_UUIDS_STORAGE_KEY, JSON.stringify(Array.from(missingAvatarUuids)));
+  } catch {
+    // ignore
+  }
+}
+
+function isHttp404(error: unknown): boolean {
+  return Boolean(
+    error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      (error as { response?: { status?: number } }).response?.status === 404,
+  );
+}
 
 /** 将 127.0.0.1/localhost 绝对 URL 转为相对路径，便于局域网访问（导出供 LOGO 等复用） */
 export function toRelativeIfLocalhost(url: string): string {
@@ -34,6 +69,10 @@ function getAvatarCacheKey(avatarUuid: string): string {
 /** 从缓存读取头像 URL（含 TTL 校验），自动将 localhost 绝对 URL 转为相对路径 */
 export function getCachedAvatarUrl(avatarUuid: string | undefined | null): string | undefined {
   if (!avatarUuid || typeof window === 'undefined') return undefined;
+  if (missingAvatarUuids.has(avatarUuid)) {
+    setCachedAvatarUrl(avatarUuid, undefined);
+    return undefined;
+  }
   try {
     const raw = localStorage.getItem(getAvatarCacheKey(avatarUuid));
     if (!raw) return undefined;
@@ -71,6 +110,7 @@ const inFlightMap = new Map<string, Promise<string | undefined>>();
  */
 export async function getAvatarUrl(avatarUuid: string | undefined): Promise<string | undefined> {
   if (!avatarUuid) return undefined;
+  if (missingAvatarUuids.has(avatarUuid)) return undefined;
 
   const cached = getCachedAvatarUrl(avatarUuid);
   if (cached) return cached;
@@ -88,7 +128,10 @@ export async function getAvatarUrl(avatarUuid: string | undefined): Promise<stri
         }
         return undefined;
       } catch (error) {
-        console.error('获取头像预览 URL 失败:', error);
+        if (isHttp404(error)) {
+          missingAvatarUuids.add(avatarUuid);
+          persistMissingAvatarUuids();
+        }
         setCachedAvatarUrl(avatarUuid, undefined);
         return undefined;
       } finally {

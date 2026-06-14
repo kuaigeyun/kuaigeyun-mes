@@ -1777,16 +1777,22 @@ const BOMPage: React.FC = () => {
           if (!versions?.length) return '-';
           const defaultTagText = t('app.master-data.bom.defaultTag');
           const obsoleteTagText = t('app.master-data.bom.obsoleteTag');
+          const versionMetaByGroupKey: Record<
+            string,
+            { version: string; isDefault: boolean; isObsolete: boolean }
+          > = {};
           const versionOptions = versions.map((v) => {
             const isDefault = v.firstItem?.isDefault ?? v.items?.some((i) => i.isDefault);
             const isObsolete = v.firstItem?.isObsolete ?? v.items?.some((i: any) => i.isObsolete);
             const label = [v.version, isDefault ? `(${defaultTagText})` : null, isObsolete ? `(${obsoleteTagText})` : null].filter(Boolean).join(' ');
-            return {
-              value: v.groupKey,
-              label,
+            versionMetaByGroupKey[v.groupKey] = {
               version: v.version,
               isDefault: !!isDefault,
               isObsolete: !!isObsolete,
+            };
+            return {
+              value: v.groupKey,
+              label,
             };
           });
           return (
@@ -1797,15 +1803,16 @@ const BOMPage: React.FC = () => {
               options={versionOptions}
               optionRender={(option, info) => {
                 const groupKey = (option as { value?: string })?.value ?? versionOptions[info?.index ?? 0]?.value;
-                const verRow = versions.find((v) => v.groupKey === groupKey);
-                const ver = verRow?.version ?? (option as { version?: string })?.version ?? '';
-                const isDef = verRow?.firstItem?.isDefault ?? (option as { isDefault?: boolean })?.isDefault ?? false;
-                const isObs = verRow?.firstItem?.isObsolete ?? (option as { isObsolete?: boolean })?.isObsolete ?? false;
+                const meta = (groupKey ? versionMetaByGroupKey[groupKey] : undefined) ?? {
+                  version: '',
+                  isDefault: false,
+                  isObsolete: false,
+                };
                 return (
                   <Space size={4}>
-                    <span>{ver}</span>
-                    {isDef && <Tag color="gold">{defaultTagText}</Tag>}
-                    {isObs && <Tag color="default">{obsoleteTagText}</Tag>}
+                    <span>{meta.version}</span>
+                    {meta.isDefault && <Tag color="gold">{defaultTagText}</Tag>}
+                    {meta.isObsolete && <Tag color="default">{obsoleteTagText}</Tag>}
                   </Space>
                 );
               }}

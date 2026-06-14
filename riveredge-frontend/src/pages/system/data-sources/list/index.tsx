@@ -1402,7 +1402,7 @@ const DataSourceListPage: React.FC = () => {
               }
 
               return (
-                <Alert message={t('pages.system.dataSources.typeFormNotSupported', { type })} type="info" />
+                <Alert title={t('pages.system.dataSources.typeFormNotSupported', { type })} type="info" />
               );
             }}
           </ProFormDependency>

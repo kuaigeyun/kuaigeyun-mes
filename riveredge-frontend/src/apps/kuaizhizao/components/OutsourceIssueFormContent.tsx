@@ -134,7 +134,7 @@ const OutsourceIssueFormContent: React.FC<OutsourceIssueFormContentProps> = ({
 
       <Divider style={{ margin: '12px 0' }}>待发物料明细（来自 BOM）</Divider>
       {previewMessage && (
-        <Alert type="warning" showIcon message={previewMessage} style={{ marginBottom: 12 }} />
+        <Alert type="warning" showIcon title={previewMessage} style={{ marginBottom: 12 }} />
       )}
       <Spin spinning={!!loading}>
         <Table<OutsourceIssueLine>

@@ -5,7 +5,7 @@ import { rowActionKind } from '../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Card, Col, List, Row, Typography } from 'antd';
+import { App, Button, Card, Col, Row, Typography } from 'antd';
 import { PlusOutlined, EditOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -79,16 +79,19 @@ const KnowledgeBasePage: React.FC = () => {
       <Row gutter={16}>
         <Col xs={24} md={6}>
           <Card title="知识空间" size="small">
-            <List
-              size="small"
-              dataSource={[{ id: undefined, space_name: '全部' } as KbSpace, ...spaces]}
-              renderItem={(item) => (
-                <List.Item
+            <div>
+              {[{ id: undefined, space_name: '全部' } as KbSpace, ...spaces].map((item) => (
+                <div
+                  key={item.id ?? 'all'}
                   style={{
                     cursor: 'pointer',
                     background: selectedSpaceId === item.id ? 'var(--ant-color-fill-secondary)' : undefined,
                     padding: '8px 12px',
                     borderRadius: 6,
+                    marginBottom: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
                   }}
                   onClick={() => {
                     setSelectedSpaceId(item.id);
@@ -103,9 +106,9 @@ const KnowledgeBasePage: React.FC = () => {
                       ({item.article_count})
                     </Typography.Text>
                   ) : null}
-                </List.Item>
-              )}
-            />
+                </div>
+              ))}
+            </div>
           </Card>
         </Col>
         <Col xs={24} md={18}>

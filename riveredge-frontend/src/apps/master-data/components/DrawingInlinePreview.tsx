@@ -164,7 +164,9 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   if (metaLoading) {
     return wrapPreview(
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+        <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
+          <div style={{ minHeight: 24 }} />
+        </Spin>
       </div>,
     );
   }
@@ -174,7 +176,9 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
       <Suspense
         fallback={
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')} />
+            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
           </div>
         }
       >
@@ -193,7 +197,9 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
       <Suspense
         fallback={
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip={t('app.master-data.drawings.dwgPreviewLoading')} />
+            <Spin size="large" tip={t('app.master-data.drawings.dwgPreviewLoading')}>
+              <div style={{ minHeight: 24 }} />
+            </Spin>
           </div>
         }
       >
@@ -218,7 +224,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   if (error) {
     return wrapPreview(
       <div style={{ padding: 16 }}>
-        <Alert type="error" message={error} showIcon />
+        <Alert type="error" title={error} showIcon />
       </div>,
     );
   }
@@ -254,7 +260,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
       />
     ) : (
       <div style={{ padding: 16 }}>
-        <Alert type="warning" showIcon message={t('app.master-data.drawings.previewUnsupported')} />
+        <Alert type="warning" showIcon title={t('app.master-data.drawings.previewUnsupported')} />
       </div>
     ),
   );

@@ -213,6 +213,30 @@ class BOMChangeService:
         change.status = "executed"
         change.applied_at = datetime.utcnow()
         await change.save()
+        try:
+            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+            await DemandChangeEventService().create_event(
+                tenant_id=tenant_id,
+                event_type="design",
+                source_type="bom_change",
+                source_id=change.id,
+                source_code=change.bom_code,
+                source_name=(change.material.name if change.material else change.bom_code),
+                changed_fields=["bom_change_executed"],
+                payload={
+                    "bom_change_id": change.id,
+                    "material_id": change.material_id,
+                    "from_version": change.from_version,
+                    "to_version": change.to_version,
+                },
+                effective_at=change.applied_at,
+                trigger_reason="bom_change_executed",
+                requested_by=executor_id,
+                correlation_id=f"bom_change:{change.id}",
+                auto_create_task=True,
+            )
+        except Exception as e:
+            logger.warning("create demand change event for bom change failed: %s", e)
 
         response = BOMChangeResponse.model_validate(change)
         if change.material:

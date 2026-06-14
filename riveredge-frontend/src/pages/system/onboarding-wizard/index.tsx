@@ -1292,7 +1292,7 @@ const OnboardingWizardPage: React.FC = () => {
                                       {item.name}
                                     </Text>
                                     {item.required && !isCompleted && (
-                                      <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
+                                      <Tag variant="filled" color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
                                     )}
                                   </div>
                                   <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 500 }}>{item.description}</Text>
@@ -1636,7 +1636,7 @@ const OnboardingWizardPage: React.FC = () => {
                                       {item.name}
                                     </Text>
                                     {item.required && !isCompleted && (
-                                      <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
+                                      <Tag variant="filled" color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>
                                     )}
                                   </div>
                                   <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 500 }}>{item.description}</Text>
@@ -2020,14 +2020,14 @@ const OnboardingWizardPage: React.FC = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                               <Text strong={item.required} style={{ fontSize: 16 }}>{item.name}</Text>
-                              {item.required && <Tag bordered={false} color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>}
+                              {item.required && <Tag variant="filled" color="error" style={{ fontSize: 10, borderRadius: 4, paddingInline: 6 }}>核心必办</Tag>}
                               {isCompleted && wizIcon(CheckCircle2, 16, { color: token.colorSuccess })}
                             </div>
                             <Text type="secondary" style={{ fontSize: 13, lineHeight: '1.6', maxWidth: 600 }}>
                               {item.description}
                             </Text>
                             <div style={{ marginTop: 4, opacity: 0.8 }}>
-                              <Tag bordered={false} style={{ fontSize: 11, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
+                              <Tag variant="filled" style={{ fontSize: 11, background: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)' }}>
                                 业务准则：确保数据录入的完整性与及时性
                               </Tag>
                             </div>
@@ -2269,7 +2269,7 @@ const OnboardingWizardPage: React.FC = () => {
                         {item.description}
                       </Text>
                       <div style={{ marginTop: 8, fontSize: 12, opacity: 0.8 }}>
-                        <Tag bordered={false} style={{ fontSize: 11 }}>业务准则：确保数据录入的完整性与及时性</Tag>
+                        <Tag variant="filled" style={{ fontSize: 11 }}>业务准则：确保数据录入的完整性与及时性</Tag>
                       </div>
                     </div>
                   </Space>
@@ -2478,11 +2478,11 @@ const OnboardingWizardPage: React.FC = () => {
                 align: 'center',
                 render: (required) =>
                   required ? (
-                    <Tag color="error" bordered={false} style={{ fontSize: 11 }}>
+                    <Tag color="error" variant="filled" style={{ fontSize: 11 }}>
                       必填
                     </Tag>
                   ) : (
-                    <Tag color="default" bordered={false} style={{ fontSize: 11 }}>
+                    <Tag color="default" variant="filled" style={{ fontSize: 11 }}>
                       可选
                     </Tag>
                   ),

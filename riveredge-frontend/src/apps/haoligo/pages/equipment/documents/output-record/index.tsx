@@ -654,7 +654,7 @@ const OutputRecordDocumentsPage: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Alert type="info" showIcon message={t('app.haoligo.equipment.documents.outputDatasetBindingHintTitle')} description={t('app.haoligo.equipment.settings.outputDatasetIntro')} />
+          <Alert type="info" showIcon title={t('app.haoligo.equipment.documents.outputDatasetBindingHintTitle')} description={t('app.haoligo.equipment.settings.outputDatasetIntro')} />
         </Form>
       </Modal>
 

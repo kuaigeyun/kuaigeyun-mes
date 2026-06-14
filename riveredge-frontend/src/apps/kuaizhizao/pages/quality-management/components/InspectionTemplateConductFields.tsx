@@ -76,7 +76,7 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
         质量标准{planName ? `（${planName}）` : ''}
       </Divider>
       {criteria ? (
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`合格标准：${criteria}`} />
+        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`合格标准：${criteria}`} />
       ) : null}
       {standardItems ? (
         <div style={{ marginBottom: 12 }}>

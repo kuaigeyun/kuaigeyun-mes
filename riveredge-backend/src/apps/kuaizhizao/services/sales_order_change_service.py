@@ -624,6 +624,25 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
             await DocumentRelationService().apply_upstream_change_impact(tenant_id, "sales_order", order.id)
         except Exception:
             pass
+        try:
+            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+            await DemandChangeEventService().create_event(
+                tenant_id=tenant_id,
+                event_type="order",
+                source_type="sales_order",
+                source_id=order.id,
+                source_code=order.order_code,
+                source_name=order.order_code,
+                changed_fields=["sales_order_change_applied"],
+                payload={"change_order_id": doc.id, "change_code": doc.change_code},
+                effective_at=datetime.now(),
+                trigger_reason="sales_order_change_applied",
+                requested_by=operator_id,
+                correlation_id=f"sales_order_change:{doc.id}",
+                auto_create_task=True,
+            )
+        except Exception:
+            pass
 
         try:
             from apps.kuaizhizao.schemas.document_relation import DocumentRelationCreate

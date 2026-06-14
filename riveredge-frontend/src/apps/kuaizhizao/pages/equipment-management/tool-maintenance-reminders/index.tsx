@@ -91,8 +91,10 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         headerTitle="工装保养校准提醒"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders"
         actionRef={actionRef}
-        rowKey={(record, index) =>
-          [record.tool_uuid, record.reminder_type, record.due_date, index].filter(Boolean).join(':') || `reminder-${index}`
+        rowKey={(record) =>
+          [record.tool_uuid, record.tool_code, record.reminder_type, record.due_type, record.due_date]
+            .filter(Boolean)
+            .join(':') || 'reminder-unknown'
         }
         columns={columns}
         request={async (params) => {

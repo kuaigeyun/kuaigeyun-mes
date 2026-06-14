@@ -77,6 +77,9 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
+  const onCloseRef = useRef(onClose);
+  const tRef = useRef(t);
+  const messageApiRef = useRef(messageApi);
   const [formLoading, setFormLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [formInitialValues, setFormInitialValues] = useState<Record<string, any> | undefined>(undefined);
@@ -89,6 +92,18 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
   const [supplierOptions, setSupplierOptions] = useState<UserFormSelectOption[]>([]);
 
   const isEdit = Boolean(editUuid);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    tRef.current = t;
+  }, [t]);
+
+  useEffect(() => {
+    messageApiRef.current = messageApi;
+  }, [messageApi]);
 
   const selectedExternalPartnerTypes = useMemo(() => {
     const types = new Set<string>();
@@ -194,8 +209,8 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         applyFormValues(formRef, scopePatch);
       } catch (error: any) {
         if (cancelled) return;
-        messageApi.error(error.message || t('field.user.fetchDetailFailed'));
-        onClose();
+        messageApiRef.current.error(error.message || tRef.current('field.user.fetchDetailFailed'));
+        onCloseRef.current();
       } finally {
         if (!cancelled) {
           setDetailLoading(false);
@@ -206,7 +221,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, editUuid, messageApi, onClose, t]);
+  }, [open, editUuid]);
 
   useEffect(() => {
     if (!open) return;

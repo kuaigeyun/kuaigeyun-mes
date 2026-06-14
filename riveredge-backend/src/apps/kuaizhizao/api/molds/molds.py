@@ -236,78 +236,6 @@ async def create_mold_calibration(
         )
 
 
-@router.get("/{uuid}", response_model=MoldResponse)
-async def get_mold(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    获取模具详情
-    
-    根据UUID获取模具详情。
-    """
-    try:
-        mold = await MoldService.get_mold_by_uuid(tenant_id, uuid)
-        return MoldResponse.model_validate(mold)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.put("/{uuid}", response_model=MoldResponse)
-async def update_mold(
-    uuid: str,
-    data: MoldUpdate,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    更新模具
-    
-    更新模具信息。
-    """
-    try:
-        mold = await MoldService.update_mold(
-            tenant_id=tenant_id,
-            uuid=uuid,
-            data=data
-        )
-        return MoldResponse.model_validate(mold)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e)
-        )
-
-
-@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_mold(
-    uuid: str,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    删除模具
-    
-    软删除模具（标记为已删除，不实际删除数据）。
-    """
-    try:
-        await MoldService.delete_mold(tenant_id, uuid)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
 # ========== 模具使用记录相关端点 ==========
 
 @router.post("/usages", response_model=MoldUsageResponse, status_code=status.HTTP_201_CREATED)
@@ -431,6 +359,78 @@ async def delete_mold_usage(
     """
     try:
         await MoldUsageService.delete_mold_usage(tenant_id, uuid)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.get("/{uuid}", response_model=MoldResponse)
+async def get_mold(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    获取模具详情
+    
+    根据UUID获取模具详情。
+    """
+    try:
+        mold = await MoldService.get_mold_by_uuid(tenant_id, uuid)
+        return MoldResponse.model_validate(mold)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+
+@router.put("/{uuid}", response_model=MoldResponse)
+async def update_mold(
+    uuid: str,
+    data: MoldUpdate,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    更新模具
+    
+    更新模具信息。
+    """
+    try:
+        mold = await MoldService.update_mold(
+            tenant_id=tenant_id,
+            uuid=uuid,
+            data=data
+        )
+        return MoldResponse.model_validate(mold)
+    except NotFoundError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e)
+        )
+
+
+@router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_mold(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    删除模具
+    
+    软删除模具（标记为已删除，不实际删除数据）。
+    """
+    try:
+        await MoldService.delete_mold(tenant_id, uuid)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

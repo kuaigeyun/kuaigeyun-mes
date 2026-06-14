@@ -809,7 +809,9 @@ export function MoldMaintenanceSheetPage({
                 padding: 24,
               }}
             >
-              <Spin tip="加载选项中…" />
+              <Spin tip="加载选项中…">
+                <div style={{ minHeight: 24 }} />
+              </Spin>
             </div>
           ) : (
             <ProForm

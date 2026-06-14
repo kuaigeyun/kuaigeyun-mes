@@ -3377,7 +3377,7 @@ const MoldTrialSheetsPage: React.FC = () => {
             </Button>
           </Space>
           {bindingTestResult ? (
-            <Alert type="info" message={bindingTestResult} style={{ marginTop: 12 }} />
+            <Alert type="info" title={bindingTestResult} style={{ marginTop: 12 }} />
           ) : null}
         </Form>
       </Modal>

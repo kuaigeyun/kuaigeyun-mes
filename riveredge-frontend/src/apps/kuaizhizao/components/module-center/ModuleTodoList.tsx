@@ -1,5 +1,5 @@
 import React from 'react';
-import { Empty, List, Tag, Typography } from 'antd';
+import { Empty, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { useThemeStore } from '../../../../stores/themeStore';
@@ -30,48 +30,41 @@ export function ModuleTodoList({
   }
 
   return (
-    <List
-      size="small"
-      dataSource={items}
-      renderItem={(item) => (
-        <List.Item
+    <div>
+      {items.map((item) => (
+        <div
+          key={item.id}
           style={{ cursor: item.link ? 'pointer' : 'default', padding: '8px 4px' }}
           onClick={() => item.link && navigate(item.link)}
         >
-          <List.Item.Meta
-            title={
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                <Text strong style={{ fontSize: 13 }}>
-                  {item.title}
-                </Text>
-                <Tag
-                  color={plain ? 'default' : (PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default')}
-                  bordered={false}
-                >
-                  {item.priority === 'high' || item.priority === 'critical' ? '紧急' : '待办'}
-                </Tag>
-              </span>
-            }
-            description={
+          <span style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <Text strong style={{ fontSize: 13 }}>
+              {item.title}
+            </Text>
+            <Tag
+              color={plain ? 'default' : (PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default')}
+              variant="filled"
+            >
+              {item.priority === 'high' || item.priority === 'critical' ? '紧急' : '待办'}
+            </Tag>
+          </span>
+          <div>
+            {item.description ? (
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {item.description}
+              </Text>
+            ) : null}
+            {item.due_date ? (
               <div>
-                {item.description ? (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {item.description}
-                  </Text>
-                ) : null}
-                {item.due_date ? (
-                  <div>
-                    <Text type="secondary" style={{ fontSize: 11 }}>
-                      截止 {dayjs(item.due_date).format('MM-DD')}
-                    </Text>
-                  </div>
-                ) : null}
+                <Text type="secondary" style={{ fontSize: 11 }}>
+                  截止 {dayjs(item.due_date).format('MM-DD')}
+                </Text>
               </div>
-            }
-          />
-        </List.Item>
-      )}
-    />
+            ) : null}
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

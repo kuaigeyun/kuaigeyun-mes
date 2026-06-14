@@ -819,7 +819,7 @@ const DepartmentListPage: React.FC = () => {
       >
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
           <div>{t('field.department.syncIntroBody')}</div>
-          <Alert type="warning" showIcon message={t('field.department.syncIntroWarning')} />
+          <Alert type="warning" showIcon title={t('field.department.syncIntroWarning')} />
         </Space>
       </Modal>
 
@@ -932,7 +932,7 @@ const DepartmentListPage: React.FC = () => {
               </Form.Item>
             </Col>
           </Row>
-          <Alert type="info" showIcon message={t('field.department.datasetBindingInfo')} />
+          <Alert type="info" showIcon title={t('field.department.datasetBindingInfo')} />
         </Form>
       </Modal>
 

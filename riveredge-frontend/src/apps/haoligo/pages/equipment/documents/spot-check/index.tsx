@@ -673,7 +673,7 @@ const SpotCheckDocumentsPage: React.FC = () => {
             {row.param_code}
           </Typography.Text>
           {row.is_required ? (
-            <Tag color="red" bordered={false} style={{ margin: 0 }}>
+            <Tag color="red" variant="filled" style={{ margin: 0 }}>
               {t('app.haoligo.equipment.documents.colRequiredShort')}
             </Tag>
           ) : null}

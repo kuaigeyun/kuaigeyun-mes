@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
-import { Modal, Button, Space, Typography, Collapse, List, Tag, Spin, message } from 'antd';
+import { Modal, Button, Space, Typography, Collapse, Tag, Spin, message } from 'antd';
 import { CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined, LinkOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -96,51 +96,30 @@ export const GoLiveAssistantContent: React.FC<GoLiveAssistantContentProps> = ({
       item.id === 'blueprint_config' || item.id === 'initial_data_verified';
 
     return (
-      <List.Item
+      <div
         key={item.id}
-        actions={
-          item.jump_path
-            ? [
-                <Button
-                  key="jump"
-                  type="link"
-                  size="small"
-                  icon={<LinkOutlined />}
-                  onClick={() => handleJump(item.jump_path)}
-                >
-                  {t('goLiveAssistant.jump') || '跳转'}
-                </Button>,
-              ]
-            : undefined
-        }
+        style={{ display: 'flex', alignItems: 'flex-start', padding: '8px 0', columnGap: 12 }}
       >
-        <List.Item.Meta
-          avatar={
-            completed ? (
-              <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
-            ) : (
-              <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
-            )
-          }
-          title={
-            <Space>
-              <span>{item.name}</span>
-              {!item.required && (
-                <Tag color="default">{t('goLiveAssistant.optional') || '可选'}</Tag>
-              )}
-            </Space>
-          }
-          description={
-            <Space orientation="vertical" size={0}>
+        <div style={{ paddingTop: 2 }}>
+          {completed ? (
+            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+          ) : (
+            <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 20 }} />
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Space>
+            <span>{item.name}</span>
+            {!item.required && <Tag color="default">{t('goLiveAssistant.optional') || '可选'}</Tag>}
+          </Space>
+          <Space orientation="vertical" size={0}>
             <span>{item.description}</span>
             {isManualConfirm && !completed && (
               <Button
                 type="primary"
                 size="small"
                 onClick={
-                  item.id === 'blueprint_config'
-                    ? handleConfirmBlueprint
-                    : handleConfirmInitialData
+                  item.id === 'blueprint_config' ? handleConfirmBlueprint : handleConfirmInitialData
                 }
                 loading={
                   item.id === 'blueprint_config'
@@ -153,10 +132,20 @@ export const GoLiveAssistantContent: React.FC<GoLiveAssistantContentProps> = ({
                   : (t('goLiveAssistant.confirmInitialData') || '确认核对完成')}
               </Button>
             )}
-            </Space>
-          }
-        />
-      </List.Item>
+          </Space>
+        </div>
+        {item.jump_path ? (
+          <Button
+            key="jump"
+            type="link"
+            size="small"
+            icon={<LinkOutlined />}
+            onClick={() => handleJump(item.jump_path)}
+          >
+            {t('goLiveAssistant.jump') || '跳转'}
+          </Button>
+        ) : null}
+      </div>
     );
   };
 
@@ -207,14 +196,7 @@ export const GoLiveAssistantContent: React.FC<GoLiveAssistantContentProps> = ({
                   </span>
                 </Space>
               ),
-              children: (
-                <List
-                  dataSource={phase.items}
-                  renderItem={renderItem}
-                  size="small"
-                  bordered={false}
-                />
-              ),
+              children: <div>{phase.items.map((item) => renderItem(item))}</div>,
             };
           })}
         />

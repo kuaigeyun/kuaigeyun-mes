@@ -245,7 +245,7 @@ const PremiumTerminalTemplate: React.FC<PremiumTerminalTemplateProps> = ({
                     <span className="header-operator-name">{displayOperatorName}</span>
                     {operatorRole && (
                         <Tag 
-                            bordered={false} 
+                            variant="filled" 
                             style={{ 
                                 margin: 0, 
                                 background: isAdminRoleBadge(operatorRole) ? 'linear-gradient(135deg, #FF9000 0%, #F56A00 100%)' : 'rgba(255,255,255,0.15)',

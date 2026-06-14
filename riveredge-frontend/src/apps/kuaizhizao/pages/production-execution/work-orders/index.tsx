@@ -6398,7 +6398,7 @@ const WorkOrdersPage: React.FC = () => {
         <>
           {!!quickReportingLastInboundHint && (
             <Col span={24} style={{ marginBottom: 12 }}>
-              <Alert type="info" showIcon message={quickReportingLastInboundHint} />
+              <Alert type="info" showIcon title={quickReportingLastInboundHint} />
             </Col>
           )}
         {quickReportingOperation?.reporting_type === 'status' ? (

@@ -50,7 +50,9 @@ const WorkOrderKittingPanel: React.FC<{ workOrderId?: number }> = ({ workOrderId
   if (isLoading)
     return (
       <div style={{ padding: '40px 0', textAlign: 'center' }}>
-        <Spin tip="计算齐套性中..." />
+        <Spin tip="计算齐套性中...">
+          <div style={{ minHeight: 24 }} />
+        </Spin>
       </div>
     )
   if (!kittingData) return <Empty description="暂无齐套数据" />

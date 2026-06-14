@@ -22,7 +22,7 @@ import {
   ProFormSwitch,
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { App, Button, Tag, Space, Card, Table, Modal, Row, Col, Descriptions, Typography, Empty } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -128,7 +128,12 @@ const InspectionPlansPage: React.FC = () => {
     const load = async () => {
       setPlanTypeLoading(true);
       try {
-        const dict = await getDataDictionaryByCode('INSPECTION_PLAN_TYPE');
+        const dictList = await getDataDictionaryList({ code: 'INSPECTION_PLAN_TYPE', page: 1, page_size: 1 });
+        const dict = dictList.items?.[0];
+        if (!dict) {
+          setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+          return;
+        }
         const items = await getDictionaryItemList(dict.uuid, true);
         setPlanTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {

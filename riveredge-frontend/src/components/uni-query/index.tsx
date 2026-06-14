@@ -4,12 +4,12 @@
  * 用于接管 ProTable 的搜索栏，将搜索条件在弹窗中展示
  */
 
-import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, forwardRef } from 'react';
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo, forwardRef, type CSSProperties, type MouseEventHandler, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { ActionType, ProFormInstance, ProColumns } from '@ant-design/pro-components';
 import SafeProFormSelect from '../safe-pro-form-select';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormDateRangePicker } from '@ant-design/pro-components';
-import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, List, Typography, Dropdown, theme, Tabs, Tag, Divider } from 'antd';
+import { Button, Modal, Row, Col, AutoComplete, Input, Space, App, Typography, Dropdown, theme, Tabs, Tag, Divider } from 'antd';
 import { SaveOutlined, DeleteOutlined, DownOutlined, EditOutlined, PushpinOutlined, PushpinFilled, MoreOutlined, ReloadOutlined, SearchOutlined, ShareAltOutlined, HolderOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import type { AutoCompleteProps } from 'antd';
 import { filterByPinyinInitials } from '../../utils/pinyin';
@@ -78,6 +78,64 @@ const SortableListItem: React.FC<SortableListItemProps> = ({ id, children }) => 
     </div>
   );
 };
+
+type SimpleListProps<T> = {
+  dataSource: T[];
+  renderItem: (item: T, index: number) => ReactNode;
+  size?: 'small' | 'middle' | 'large';
+};
+
+type SimpleListItemProps = {
+  children?: ReactNode;
+  actions?: ReactNode[];
+  style?: CSSProperties;
+  onMouseEnter?: MouseEventHandler<HTMLDivElement>;
+  onMouseLeave?: MouseEventHandler<HTMLDivElement>;
+};
+
+type SimpleListItemMetaProps = {
+  avatar?: ReactNode;
+  title?: ReactNode;
+  description?: ReactNode;
+  style?: CSSProperties;
+};
+
+const SimpleListBase = <T,>({ dataSource, renderItem }: SimpleListProps<T>) => (
+  <div>
+    {dataSource.map((item, index) => (
+      <div key={(item as any)?.id ?? index}>{renderItem(item, index)}</div>
+    ))}
+  </div>
+);
+
+const SimpleListItem = ({ children, actions, style, onMouseEnter, onMouseLeave }: SimpleListItemProps) => (
+  <div style={style} onMouseEnter={onMouseEnter} onMouseLeave={onMouseLeave}>
+    <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
+    {actions?.length ? (
+      <div style={{ display: 'flex', alignItems: 'center', columnGap: 4 }}>{actions}</div>
+    ) : null}
+  </div>
+);
+
+const SimpleListItemMeta = ({ avatar, title, description, style }: SimpleListItemMetaProps) => (
+  <div style={{ display: 'flex', alignItems: 'center', width: '100%', ...style }}>
+    {avatar ? <div style={{ marginRight: 8 }}>{avatar}</div> : null}
+    <div style={{ flex: 1, minWidth: 0 }}>
+      {title ? <div>{title}</div> : null}
+      {description ? (
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {description}
+        </Typography.Text>
+      ) : null}
+    </div>
+  </div>
+);
+
+const List = Object.assign(SimpleListBase, {
+  Item: Object.assign(SimpleListItem, {
+    Meta: SimpleListItemMeta,
+  }),
+});
 
 /**
  * 自动完成输入框组件属性

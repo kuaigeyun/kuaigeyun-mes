@@ -278,7 +278,7 @@ function MoldUpkeepRecordFieldsInner({
       ) : null}
       {loadError ? (
         <Col span={24}>
-          <Alert type="error" message={loadError} showIcon />
+          <Alert type="error" title={loadError} showIcon />
         </Col>
       ) : null}
       {!loading && !loadError && schemeLines.length > 0 ? (

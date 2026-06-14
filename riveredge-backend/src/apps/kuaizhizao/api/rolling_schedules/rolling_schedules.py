@@ -41,17 +41,15 @@ async def get_next_workday(
 
 @router.get(
     "/by-date/{plan_date}",
-    response_model=RollingSchedulePlanResponse,
+    response_model=Optional[RollingSchedulePlanResponse],
     summary="Get rolling schedule plan by plan date",
     dependencies=[Depends(require_permission_codes("kuaizhizao:plan-management-rolling-scheduling:read"))],
 )
 async def get_plan_by_date(
     plan_date: date = Path(..., description="计划工作日"),
     tenant_id: int = Depends(get_current_tenant),
-) -> RollingSchedulePlanResponse:
+) -> Optional[RollingSchedulePlanResponse]:
     plan = await _service.get_plan_by_date(tenant_id, plan_date)
-    if not plan:
-        raise NotFoundError(f"计划日 {plan_date} 无滚动计划")
     return plan
 
 

@@ -646,3 +646,123 @@ export async function getPushRecords(computationId: number): Promise<PushRecords
     { method: 'GET' }
   );
 }
+
+export interface DemandReplanDashboard {
+  pending_events: number;
+  running_tasks: number;
+  failed_tasks: number;
+  pending_approval_tasks: number;
+  latest_tasks: Array<{
+    id: number;
+    task_code: string;
+    mode: 'net_change' | 'full_regen' | 'what_if';
+    status: string;
+    approval_status: string;
+    created_at?: string;
+  }>;
+}
+
+export interface DemandChangeEventItem {
+  id: number;
+  event_code: string;
+  event_type: string;
+  source_type: string;
+  source_id: number;
+  source_code?: string;
+  event_status: string;
+  created_at?: string;
+}
+
+export interface DemandReplanTaskItem {
+  id: number;
+  task_code: string;
+  event_id: number;
+  mode: 'net_change' | 'full_regen' | 'what_if';
+  status: string;
+  risk_level: 'low' | 'medium' | 'high';
+  approval_status: 'not_required' | 'pending' | 'approved' | 'rejected';
+  impact_metrics?: Record<string, any>;
+  result_summary?: Record<string, any>;
+  created_at?: string;
+  started_at?: string;
+  finished_at?: string;
+}
+
+export interface DemandChangeImpactDetail {
+  event: {
+    id: number;
+    event_code: string;
+    event_type: string;
+    source_type: string;
+    source_id: number;
+    source_code?: string;
+    event_status: string;
+    trigger_reason?: string;
+    created_at?: string;
+  };
+  impacts: Array<{
+    id: number;
+    impact_type: string;
+    impact_id: number;
+    impact_code?: string;
+    impact_scope: string;
+    impact_reason: string;
+    risk_level: string;
+    needs_approval: boolean;
+    frozen_horizon_hit: boolean;
+    impact_payload?: Record<string, any>;
+  }>;
+  tasks: DemandReplanTaskItem[];
+}
+
+export interface ExecuteReplanTaskRequest {
+  force?: boolean;
+  approval_comment?: string;
+}
+
+export interface ExecuteReplanTaskResponse {
+  task_id: number;
+  status: string;
+  result_summary?: Record<string, any>;
+}
+
+/** 需求重算看板汇总 */
+export async function getDemandReplanDashboard(): Promise<DemandReplanDashboard> {
+  return apiRequest<DemandReplanDashboard>('/apps/kuaizhizao/demand-computations/replan-dashboard', {
+    method: 'GET',
+  });
+}
+
+/** 待处理变更事件 */
+export async function listPendingDemandChangeEvents(limit: number = 200): Promise<DemandChangeEventItem[]> {
+  return apiRequest<DemandChangeEventItem[]>('/apps/kuaizhizao/demand-computations/change-events/pending', {
+    method: 'GET',
+    params: { limit },
+  });
+}
+
+/** 变更事件影响详情 */
+export async function getDemandChangeImpact(eventId: number): Promise<DemandChangeImpactDetail> {
+  return apiRequest<DemandChangeImpactDetail>(`/apps/kuaizhizao/demand-computations/change-events/${eventId}/impact`, {
+    method: 'GET',
+  });
+}
+
+/** 重算任务列表 */
+export async function listDemandReplanTasks(limit: number = 200): Promise<DemandReplanTaskItem[]> {
+  return apiRequest<DemandReplanTaskItem[]>('/apps/kuaizhizao/demand-computations/replan-tasks', {
+    method: 'GET',
+    params: { limit },
+  });
+}
+
+/** 执行重算任务 */
+export async function executeDemandReplanTask(
+  taskId: number,
+  data?: ExecuteReplanTaskRequest,
+): Promise<ExecuteReplanTaskResponse> {
+  return apiRequest<ExecuteReplanTaskResponse>(`/apps/kuaizhizao/demand-computations/replan-tasks/${taskId}/execute`, {
+    method: 'POST',
+    data: data || {},
+  });
+}

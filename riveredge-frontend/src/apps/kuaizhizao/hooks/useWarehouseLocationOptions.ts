@@ -6,6 +6,8 @@ type LocationOption = {
   value: string;
 };
 
+const MASTER_DATA_LIST_LIMIT = 1000;
+
 function toWarehouseId(value: unknown): number | null {
   if (value == null || value === '') return null;
   const n = Number(value);
@@ -22,8 +24,8 @@ export function useWarehouseLocationOptions() {
     (async () => {
       try {
         const [areas, locations] = await Promise.all([
-          storageAreaApi.list({ limit: 10000, is_active: true }),
-          storageLocationApi.list({ limit: 10000, is_active: true }),
+          storageAreaApi.list({ limit: MASTER_DATA_LIST_LIMIT, is_active: true }),
+          storageLocationApi.list({ limit: MASTER_DATA_LIST_LIMIT, is_active: true }),
         ]);
         if (cancelled) return;
         setStorageAreaList(areas?.items || []);

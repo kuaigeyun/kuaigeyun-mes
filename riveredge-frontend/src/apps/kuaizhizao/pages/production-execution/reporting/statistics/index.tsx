@@ -309,7 +309,6 @@ const ReportingStatisticsPage: React.FC = () => {
                   yField="reported_quantity"
                   height={300}
                   label={{
-                    position: 'middle',
                     style: { fill: '#FFFFFF', opacity: 0.6 },
                   }}
                 />
@@ -323,7 +322,6 @@ const ReportingStatisticsPage: React.FC = () => {
                   yField="reported_quantity"
                   height={300}
                   label={{
-                    position: 'middle',
                     style: { fill: '#FFFFFF', opacity: 0.6 },
                   }}
                 />

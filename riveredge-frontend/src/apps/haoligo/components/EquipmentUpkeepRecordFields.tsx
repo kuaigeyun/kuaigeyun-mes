@@ -222,7 +222,7 @@ function EquipmentUpkeepRecordFieldsInner({
   if (equipmentId == null || !Number.isFinite(equipmentId)) {
     return (
       <Col span={24}>
-        <Alert type="info" showIcon message="请先选择来源维保单（含设备）后再填写保养记录" />
+        <Alert type="info" showIcon title="请先选择来源维保单（含设备）后再填写保养记录" />
       </Col>
     );
   }
@@ -264,7 +264,7 @@ function EquipmentUpkeepRecordFieldsInner({
       ) : null}
       {loadError ? (
         <Col span={24}>
-          <Alert type="error" message={loadError} showIcon />
+          <Alert type="error" title={loadError} showIcon />
         </Col>
       ) : null}
       {!loading && !loadError && schemeLines.length > 0 ? (

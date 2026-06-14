@@ -1674,7 +1674,15 @@ const DemandComputationPage: React.FC = () => {
             ),
           ]
         }}
-        toolBarActionsAfterDelete={[<MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />]}
+        toolBarActionsAfterDelete={[
+          <MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />,
+          <Button
+            key="open-replan-dashboard"
+            onClick={() => navigate('/apps/kuaizhizao/plan-management/demand-replan-dashboard')}
+          >
+            需求重算看板
+          </Button>,
+        ]}
       />
 
       <Modal

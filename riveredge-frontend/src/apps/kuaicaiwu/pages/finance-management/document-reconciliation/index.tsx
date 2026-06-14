@@ -333,7 +333,7 @@ const DocumentReconciliationPage: React.FC = () => {
         </Card>
       ) : null}
       <Steps
-        direction="vertical"
+        orientation="vertical"
         items={chainSteps.map((step) => ({
           title: step.step_label,
           description: (

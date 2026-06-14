@@ -90,7 +90,7 @@ const SalesTrendAnalysis: React.FC = () => {
               xField="month"
               yField="quantity"
               label={{
-                position: 'middle',
+                position: 'center',
                 style: {
                   fill: '#FFFFFF',
                   opacity: 0.6,

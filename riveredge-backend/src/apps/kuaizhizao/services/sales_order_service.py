@@ -1865,6 +1865,26 @@ class SalesOrderService:
             await doc_svc.apply_upstream_change_impact(tenant_id, "sales_order", sales_order_id)
         except Exception as e:
             logger.warning("apply_upstream_change_impact failed: %s", e)
+        # 订单变更事件：统一进入需求重算编排链路
+        try:
+            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+            await DemandChangeEventService().create_event(
+                tenant_id=tenant_id,
+                event_type="order",
+                source_type="sales_order",
+                source_id=sales_order_id,
+                source_code=order.order_code,
+                source_name=order.order_code,
+                changed_fields=[str(x) for x in changed_fields] if changed_fields else [],
+                payload={"field_changes": field_changes or []},
+                effective_at=datetime.now(),
+                trigger_reason="sales_order_updated",
+                requested_by=updated_by,
+                correlation_id=f"sales_order:{sales_order_id}:{int(datetime.now().timestamp())}",
+                auto_create_task=True,
+            )
+        except Exception as e:
+            logger.warning("create demand change event failed: %s", e)
         delivery_changed = any(
             fc.get("field") == "delivery_date"
             for fc in (field_changes if changed_fields else [])

@@ -530,7 +530,9 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
   if (listLoading && !activeItems.length) {
     return (
       <div style={{ textAlign: 'center', padding: 48 }}>
-        <Spin tip="加载协调数据..." />
+        <Spin tip="加载协调数据...">
+          <div style={{ minHeight: 24 }} />
+        </Spin>
       </div>
     );
   }
@@ -618,7 +620,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                   <Space size={4} wrap style={{ marginTop: 6 }}>
                     {item.bom_status && item.bom_status !== 'done' && item.bom_status !== 'skipped' && (
                       <Tag
-                        bordered={false}
+                        variant="filled"
                         color={
                           item.bom_status === 'blocked'
                             ? 'error'
@@ -632,15 +634,15 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                       </Tag>
                     )}
                     {pending > 0 ? (
-                      <Tag bordered={false} color="processing" style={{ margin: 0, fontSize: 12 }}>
+                      <Tag variant="filled" color="processing" style={{ margin: 0, fontSize: 12 }}>
                         {pending} 单在制
                       </Tag>
                     ) : !item.computation_id ? (
-                      <Tag bordered={false} color="orange" style={{ margin: 0, fontSize: 12 }}>
+                      <Tag variant="filled" color="orange" style={{ margin: 0, fontSize: 12 }}>
                         待MRP
                       </Tag>
                     ) : (
-                      <Tag bordered={false} color="cyan" style={{ margin: 0, fontSize: 12 }}>
+                      <Tag variant="filled" color="cyan" style={{ margin: 0, fontSize: 12 }}>
                         协调中
                       </Tag>
                     )}

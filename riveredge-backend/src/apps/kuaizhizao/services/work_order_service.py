@@ -21,6 +21,7 @@ from infra.exceptions.exceptions import NotFoundError, ValidationError, Business
 from apps.common.base_service import AppBaseService
 from apps.kuaizhizao.models.work_order import WorkOrder
 from apps.kuaizhizao.models.work_order_operation import WorkOrderOperation
+from apps.kuaizhizao.models.delivery_delay_exception import DeliveryDelayException
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.schemas.work_order import (
     WorkOrderCreate,
@@ -37,6 +38,7 @@ from apps.kuaizhizao.schemas.work_order import (
     WorkOrderUnfreezeRequest,
     WorkOrderPriorityRequest,
     WorkOrderBatchPriorityRequest,
+    WorkOrderSchedulingQuickActionRequest,
     WorkOrderMergeRequest,
     WorkOrderMergeResponse,
     WorkOrderOperationDispatch,
@@ -1920,6 +1922,171 @@ class WorkOrderService(AppBaseService[WorkOrder]):
                 wo.updated_by = updated_by
                 await wo.save(update_fields=["updated_by", "updated_at"])
                 result["updated"].append(int(op_id))
+        return result
+
+    async def _upsert_delivery_delay_exception(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        *,
+        delay_days: int,
+        reason: str,
+        suggested_action: str,
+        status: str,
+        handled_by: int,
+    ) -> None:
+        existing = await DeliveryDelayException.filter(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            status__in=["pending", "processing"],
+        ).first()
+        user_info = await self.get_user_info(handled_by)
+        if existing:
+            existing.delay_days = delay_days
+            existing.delay_reason = reason
+            existing.suggested_action = suggested_action
+            existing.status = status
+            existing.handled_by = handled_by
+            existing.handled_by_name = user_info["name"]
+            existing.handled_at = datetime.now()
+            await existing.save()
+            return
+        await DeliveryDelayException.create(
+            tenant_id=tenant_id,
+            work_order_id=work_order.id,
+            work_order_code=work_order.code or str(work_order.id),
+            planned_end_date=work_order.planned_end_date or datetime.now(),
+            actual_end_date=work_order.actual_end_date,
+            delay_days=max(0, int(delay_days)),
+            delay_reason=reason,
+            alert_level=(
+                "critical"
+                if delay_days >= 7
+                else "high"
+                if delay_days >= 3
+                else "medium"
+                if delay_days >= 1
+                else "low"
+            ),
+            status=status,
+            suggested_action=suggested_action,
+            handled_by=handled_by,
+            handled_by_name=user_info["name"],
+            handled_at=datetime.now(),
+        )
+
+    async def _move_work_order_out_of_freeze_window(
+        self,
+        tenant_id: int,
+        work_order: WorkOrder,
+        *,
+        updated_by: int,
+    ) -> bool:
+        from apps.kuaizhizao.services.visual_scheduling_service import VisualSchedulingService
+        from apps.kuaizhizao.services.scheduling_freeze import (
+            freeze_anchor_datetime,
+            is_planned_start_in_freeze_window,
+        )
+
+        constraints = await VisualSchedulingService()._load_constraints(tenant_id)
+        freeze_days = int(constraints.get("freeze_horizon_days", 0))
+        start = work_order.planned_start_date
+        end = work_order.planned_end_date
+        if not start or not end:
+            return False
+        if not is_planned_start_in_freeze_window(start, freeze_days):
+            return False
+        anchor = freeze_anchor_datetime(freeze_days)
+        duration = max(end - start, timedelta(hours=1))
+        new_start = anchor + timedelta(seconds=1)
+        new_end = new_start + duration
+        work_order.planned_start_date = new_start
+        work_order.planned_end_date = new_end
+        work_order.updated_by = updated_by
+        await work_order.save()
+        return True
+
+    async def scheduling_quick_action(
+        self,
+        tenant_id: int,
+        body: WorkOrderSchedulingQuickActionRequest,
+        handled_by: int,
+    ) -> Dict[str, Any]:
+        action = str(body.action or "").strip()
+        if action not in {"confirm_delay", "to_exception", "apply_unfreeze"}:
+            raise ValidationError("不支持的快捷处置动作")
+        result: Dict[str, Any] = {
+            "updated": [],
+            "converted_to_exception": [],
+            "unfreezed": [],
+            "skipped": [],
+            "failed": [],
+        }
+        now = datetime.now()
+        ids = [int(i) for i in body.work_order_ids[:50] if int(i) > 0]
+        if not ids:
+            return result
+        work_orders = await WorkOrder.filter(
+            tenant_id=tenant_id,
+            id__in=ids,
+            deleted_at__isnull=True,
+        ).all()
+        by_id = {int(wo.id): wo for wo in work_orders}
+        for wo_id in ids:
+            wo = by_id.get(int(wo_id))
+            if not wo:
+                result["failed"].append({"id": int(wo_id), "reason": "工单不存在"})
+                continue
+            if wo.status not in {"released", "in_progress"}:
+                result["skipped"].append(int(wo.id))
+                continue
+            planned_end = wo.planned_end_date
+            delay_days = (now - planned_end).days if planned_end and planned_end < now else 0
+            reason = body.reason or "可视排产快捷处置"
+            try:
+                if action == "to_exception":
+                    await self._upsert_delivery_delay_exception(
+                        tenant_id,
+                        wo,
+                        delay_days=delay_days,
+                        reason=reason,
+                        suggested_action="expedite",
+                        status="processing",
+                        handled_by=handled_by,
+                    )
+                    result["converted_to_exception"].append(int(wo.id))
+                    continue
+                if action == "apply_unfreeze":
+                    if wo.is_frozen:
+                        wo.is_frozen = False
+                        wo.updated_by = handled_by
+                        await wo.save(update_fields=["is_frozen", "updated_by", "updated_at"])
+                        result["unfreezed"].append(int(wo.id))
+                    else:
+                        result["skipped"].append(int(wo.id))
+                        continue
+                await self._upsert_delivery_delay_exception(
+                    tenant_id,
+                    wo,
+                    delay_days=delay_days,
+                    reason=reason,
+                    suggested_action="adjust_plan",
+                    status="processing",
+                    handled_by=handled_by,
+                )
+                moved = False
+                if body.auto_move_out_of_freeze_window and not wo.is_frozen:
+                    moved = await self._move_work_order_out_of_freeze_window(
+                        tenant_id,
+                        wo,
+                        updated_by=handled_by,
+                    )
+                if moved:
+                    result["updated"].append(int(wo.id))
+                else:
+                    result["skipped"].append(int(wo.id))
+            except Exception as exc:
+                result["failed"].append({"id": int(wo.id), "reason": str(exc)})
         return result
 
     async def delete_work_order(

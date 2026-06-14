@@ -14,7 +14,7 @@ const TaskiqBackgroundTasksPage: React.FC = () => {
       <Title level={4}>{t('pages.system.inngest.title')}</Title>
       <Card>
         <Paragraph>{t('pages.system.inngest.intro')}</Paragraph>
-        <Alert type="info" showIcon message={t('pages.system.inngest.noIframe')} />
+        <Alert type="info" showIcon title={t('pages.system.inngest.noIframe')} />
       </Card>
     </div>
   );

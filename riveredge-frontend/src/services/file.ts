@@ -271,6 +271,40 @@ function previewCacheKey(fileUuid: string, options?: FilePreviewOptions): string
 // 全局文件预览 URL 缓存，减少重复请求（每会话单次请求即可）
 const previewUrlCache = new Map<string, FilePreviewResponse>();
 const missingSiteLogoKeys = new Set<string>();
+const unavailablePreviewUrls = new Set<string>();
+const MISSING_SITE_LOGO_UUIDS_STORAGE_KEY = 'missing_site_logo_uuids';
+const missingSiteLogoUuids = new Set<string>();
+
+try {
+  const raw = localStorage.getItem(MISSING_SITE_LOGO_UUIDS_STORAGE_KEY);
+  if (raw) {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      parsed.forEach((it) => {
+        if (typeof it === 'string' && it.trim()) {
+          missingSiteLogoUuids.add(it.trim());
+        }
+      });
+    }
+  }
+} catch {
+  // ignore
+}
+
+function persistMissingSiteLogoUuids(): void {
+  try {
+    localStorage.setItem(
+      MISSING_SITE_LOGO_UUIDS_STORAGE_KEY,
+      JSON.stringify(Array.from(missingSiteLogoUuids)),
+    );
+  } catch {
+    // ignore
+  }
+}
+
+export function isSiteLogoUuidKnownMissing(fileUuid: string): boolean {
+  return missingSiteLogoUuids.has(fileUuid);
+}
 
 const SITE_LOGO_FILE_CATEGORIES = ['site-logo', 'platform-logo'] as const;
 
@@ -283,6 +317,25 @@ function isHttp404(error: unknown): boolean {
   );
 }
 
+async function isPreviewUrlReachable(url: string): Promise<boolean> {
+  if (!url) return false;
+  if (unavailablePreviewUrls.has(url)) return false;
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      cache: 'no-store',
+    });
+    if (!res.ok) {
+      unavailablePreviewUrls.add(url);
+      return false;
+    }
+    return true;
+  } catch {
+    unavailablePreviewUrls.add(url);
+    return false;
+  }
+}
+
 /**
  * 站点/平台 Logo 预览（公开分类接口，支持跨租户 logo 文件与缩略图）。
  * 文件不存在时返回 null，由调用方回退默认 Logo。
@@ -291,6 +344,9 @@ export async function getSiteLogoPreview(
   fileUuid: string,
   options?: FilePreviewOptions,
 ): Promise<FilePreviewResponse | null> {
+  if (isSiteLogoUuidKnownMissing(fileUuid)) {
+    return null;
+  }
   const cacheKey = `site-logo:${previewCacheKey(fileUuid, options)}`;
   if (missingSiteLogoKeys.has(cacheKey)) {
     return null;
@@ -310,6 +366,9 @@ export async function getSiteLogoPreview(
       const result = await apiRequest<FilePreviewResponse>(
         `/core/files/${fileUuid}/preview/public?${params.toString()}`,
       );
+      if (!result?.preview_url || !(await isPreviewUrlReachable(result.preview_url))) {
+        continue;
+      }
       previewUrlCache.set(cacheKey, result);
       return result;
     } catch (error) {
@@ -320,6 +379,8 @@ export async function getSiteLogoPreview(
   }
 
   missingSiteLogoKeys.add(cacheKey);
+  missingSiteLogoUuids.add(fileUuid);
+  persistMissingSiteLogoUuids();
   return null;
 }
 
@@ -335,6 +396,15 @@ export function invalidateSiteLogoPreviewCache(fileUuid?: string): void {
   for (const key of previewUrlCache.keys()) {
     if (shouldPurge(key)) {
       previewUrlCache.delete(key);
+    }
+  }
+  if (!fileUuid) {
+    unavailablePreviewUrls.clear();
+    missingSiteLogoUuids.clear();
+    persistMissingSiteLogoUuids();
+  } else {
+    if (missingSiteLogoUuids.delete(fileUuid)) {
+      persistMissingSiteLogoUuids();
     }
   }
 }

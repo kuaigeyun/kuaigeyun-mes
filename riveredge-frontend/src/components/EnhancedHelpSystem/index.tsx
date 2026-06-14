@@ -8,7 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Drawer, Button, Space, Typography, List, Card, Tag, Input, Empty } from 'antd';
+import { Drawer, Button, Space, Typography, Card, Tag, Input, Empty, Spin } from 'antd';
 import {
   QuestionCircleOutlined,
   BookOutlined,
@@ -197,28 +197,29 @@ const EnhancedHelpSystem: React.FC<EnhancedHelpSystemProps> = ({
         />
         {filteredDocuments.length === 0 ? (
           <Empty description="暂无帮助文档" />
+        ) : loading ? (
+          <div style={{ textAlign: 'center', padding: '24px 0' }}>
+            <Spin />
+          </div>
         ) : (
-          <List
-            dataSource={filteredDocuments}
-            loading={loading}
-            renderItem={(doc) => (
-              <List.Item
-                style={{ cursor: 'pointer' }}
+          <div>
+            {filteredDocuments.map((doc) => (
+              <div
+                key={doc.key}
+                style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '10px 0' }}
                 onClick={() => handleSelectDocument(doc)}
               >
-                <List.Item.Meta
-                  avatar={<BookOutlined style={{ fontSize: 24, color: '#1890ff' }} />}
-                  title={
-                    <Space>
-                      {doc.title}
-                      {doc.category && <Tag>{doc.category}</Tag>}
-                    </Space>
-                  }
-                  description={doc.description}
-                />
-              </List.Item>
-            )}
-          />
+                <BookOutlined style={{ fontSize: 24, color: '#1890ff', marginRight: 12 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <Space>
+                    {doc.title}
+                    {doc.category && <Tag>{doc.category}</Tag>}
+                  </Space>
+                  <div style={{ color: 'var(--ant-color-text-secondary)' }}>{doc.description}</div>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     );

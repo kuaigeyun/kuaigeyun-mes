@@ -186,7 +186,6 @@ const EquipmentDashboard: React.FC = () => {
                 colorField="type"
                 radius={0.8}
                 height={240}
-                label={{ type: 'outer' }}
               />
             </Suspense>
           </ModuleChartPanel>

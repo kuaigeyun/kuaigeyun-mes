@@ -136,7 +136,7 @@ export function ClientReleaseDetailDrawer({ open, release, clientLabel, onClose 
       onClose={onClose}
       width={DRAWER_CONFIG.STANDARD_WIDTH}
       banner={
-        <Alert type="info" showIcon message={t('pages.infra.clientReleases.detailActivateHint')} />
+        <Alert type="info" showIcon title={t('pages.infra.clientReleases.detailActivateHint')} />
       }
       footer={
         packageUrl ? (

@@ -88,7 +88,9 @@ const DashboardView: React.FC = () => {
     if (loading) {
         return (
             <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050a0f' }}>
-                <Spin size="large" tip="加载大屏中..." />
+                <Spin size="large" tip="加载大屏中...">
+                  <div style={{ minHeight: 24 }} />
+                </Spin>
             </div>
         );
     }

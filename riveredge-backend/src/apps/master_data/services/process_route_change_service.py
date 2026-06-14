@@ -316,6 +316,29 @@ class ProcessRouteChangeService:
         change.status = "executed"
         change.applied_at = datetime.utcnow()
         await change.save()
+        try:
+            from apps.kuaizhizao.services.demand_change_event_service import DemandChangeEventService
+            await DemandChangeEventService().create_event(
+                tenant_id=tenant_id,
+                event_type="route",
+                source_type="process_route_change",
+                source_id=change.id,
+                source_code=(change.process_route.code if change.process_route else None),
+                source_name=(change.process_route.name if change.process_route else None),
+                changed_fields=["process_route_change_executed"],
+                payload={
+                    "process_route_change_id": change.id,
+                    "process_route_id": change.process_route_id,
+                    "change_type": change.change_type,
+                },
+                effective_at=change.applied_at,
+                trigger_reason="process_route_change_executed",
+                requested_by=executor_id,
+                correlation_id=f"process_route_change:{change.id}",
+                auto_create_task=True,
+            )
+        except Exception as e:
+            logger.warning("create demand change event for process route failed: %s", e)
         
         response = ProcessRouteChangeResponse.model_validate(change)
         if change.process_route:

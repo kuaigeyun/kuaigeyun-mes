@@ -233,9 +233,18 @@
             "permission": "kuaizhizao:plan-management-demand-computation:read"
           },
           {
+            "title": "app.kuaizhizao.menu.plan-management.demand-change",
+            "path": "/apps/kuaizhizao/plan-management/demand-change",
+            "sort_order": 4,
+            "meta": {
+              "module": "demand"
+            },
+            "permission": "kuaizhizao:plan-management-demand-computation:read"
+          },
+          {
             "title": "app.kuaizhizao.menu.plan-management.scheduling",
             "path": "/apps/kuaizhizao/plan-management/scheduling",
-            "sort_order": 4,
+            "sort_order": 6,
             "meta": {
               "module": "plan-management-scheduling"
             },
@@ -253,7 +262,7 @@
           {
             "title": "app.kuaizhizao.menu.plan-management.reports",
             "icon": "fileText",
-            "sort_order": 6,
+            "sort_order": 7,
             "children": [
               {
                 "title": "app.kuaizhizao.menu.reports.demand-plan-detail",

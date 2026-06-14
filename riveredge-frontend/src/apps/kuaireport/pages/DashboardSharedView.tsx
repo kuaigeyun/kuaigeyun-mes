@@ -61,7 +61,14 @@ const DashboardSharedView: React.FC = () => {
     };
 
     if (!token) return <div style={{ padding: 60, textAlign: 'center' }}>分享链接无效</div>;
-    if (loading) return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050a0f' }}><Spin size="large" tip="加载大屏中..." /></div>;
+    if (loading)
+      return (
+        <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#050a0f' }}>
+          <Spin size="large" tip="加载大屏中...">
+            <div style={{ minHeight: 24 }} />
+          </Spin>
+        </div>
+      );
 
     return (
         <div style={{ width: '100vw', height: '100vh', background: '#050a0f', overflow: 'auto', position: 'relative', color: '#fff' }}>

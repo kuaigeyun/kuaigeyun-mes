@@ -72,12 +72,19 @@ const ReportSharedView: React.FC = () => {
     const yField = config.fields?.find((f: any) => f.y_axis)?.field;
 
     const renderChart = () => {
-        if (dataLoading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="加载数据中..." /></div>;
+        if (dataLoading)
+          return (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin tip="加载数据中...">
+                <div style={{ minHeight: 24 }} />
+              </Spin>
+            </div>
+          );
         if (reportData.length === 0) return <Empty description="暂无数据" />;
 
         switch (chartType) {
             case 'bar':
-                return <Column data={reportData} xField={xField} yField={yField} label={{ position: 'middle', style: { fill: '#FFFFFF', opacity: 0.6 } }} />;
+                return <Column data={reportData} xField={xField} yField={yField} label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }} />;
             case 'line':
                 return <Line data={reportData} xField={xField} yField={yField} point={{ size: 5, shape: 'diamond' }} />;
             case 'pie':

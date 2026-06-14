@@ -30,7 +30,7 @@ import {
   PlayCircleOutlined,
   SendOutlined,
 } from '@ant-design/icons';
-import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, List, Typography, Empty, Divider, Modal, Grid, Skeleton } from 'antd';
+import { message, Button, Tooltip, Badge, Avatar, Dropdown, Space, Breadcrumb, Typography, Empty, Divider, Modal, Grid, Skeleton } from 'antd';
 import type { MenuProps } from 'antd';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -103,7 +103,7 @@ import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
-import { getSiteLogoPreview } from '../services/file';
+import { getSiteLogoPreview, isSiteLogoUuidKnownMissing } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
 import OnboardingGuide from '../components/onboarding-guide';
@@ -977,8 +977,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
     if (logoValue) {
       if (isUUID(logoValue)) {
-        const cached = getCachedSiteLogoUrl(logoValue);
-        if (cached) return cached;
+        if (isSiteLogoUuidKnownMissing(logoValue)) {
+          return DEFAULT_SITE_LOGO_URL;
+        }
         // 预览 URL 未就绪时先用极小 SVG，避免先拉 34KB 默认 PNG 再切换
         return SITE_LOGO_FALLBACK_SVG_URL;
       } else {
@@ -992,23 +993,32 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
   // 处理LOGO URL（UUID 需通过 getFilePreview 获取，带 TTL 缓存并转为相对路径）
   useEffect(() => {
     const loadSiteLogo = async () => {
-      if (!siteLogoValue) {
-        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
-        return;
-      }
-
-      if (isUUID(siteLogoValue)) {
-        const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
-        if (!previewInfo?.preview_url) {
-          clearCachedSiteLogoUrl(siteLogoValue);
+      try {
+        if (!siteLogoValue) {
           setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
           return;
         }
-        const newUrl = toRelativeIfLocalhost(previewInfo.preview_url);
-        setSiteLogoUrl(newUrl);
-        setCachedSiteLogoUrl(siteLogoValue, newUrl);
-      } else {
-        setSiteLogoUrl(siteLogoValue);
+
+        if (isUUID(siteLogoValue)) {
+          if (isSiteLogoUuidKnownMissing(siteLogoValue)) {
+            clearCachedSiteLogoUrl(siteLogoValue);
+            setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
+            return;
+          }
+          const previewInfo = await getSiteLogoPreview(siteLogoValue, { forAvatar: true });
+          if (!previewInfo?.preview_url) {
+            clearCachedSiteLogoUrl(siteLogoValue);
+            setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
+            return;
+          }
+          const newUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+          setSiteLogoUrl(newUrl);
+          setCachedSiteLogoUrl(siteLogoValue, newUrl);
+        } else {
+          setSiteLogoUrl(siteLogoValue);
+        }
+      } catch {
+        setSiteLogoUrl(DEFAULT_SITE_LOGO_URL);
       }
     };
 
@@ -5086,24 +5096,24 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                           <Spin />
                         </div>
                       ) : messages.length > 0 ? (
-                        <List
-                          dataSource={messages}
-                          renderItem={(item: UserMessage) => {
+                        <div>
+                          {messages.map((item: UserMessage) => {
                             const unread = isUnread(item);
                             return (
-                              <List.Item
+                              <div
+                                key={item.uuid}
                                 style={{
                                   padding: '12px 16px',
                                   cursor: 'pointer',
                                   backgroundColor: unread ? token.colorFillAlter : 'transparent',
                                   borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                                  display: 'flex',
+                                  alignItems: 'flex-start',
+                                  gap: 12,
                                 }}
                                 onClick={async () => {
-                                  // 点击消息，跳转到消息详情页面
                                   setMessageDropdownOpen(false);
                                   navigate('/personal/messages');
-
-                                  // 如果是未读消息，自动标记为已读
                                   if (unread) {
                                     try {
                                       await markMessagesRead({
@@ -5117,53 +5127,41 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                                   }
                                 }}
                               >
-                                <List.Item.Meta
-                                  avatar={
-                                    <Badge dot={unread}>
-                                      <Avatar
-                                        size={40}
-                                        style={{
-                                          backgroundColor: unread ? token.colorPrimary : token.colorFillTertiary,
-                                        }}
-                                        icon={<BellOutlined />}
-                                      />
-                                    </Badge>
-                                  }
-                                  title={
-                                    <Space>
-                                      <Typography.Text strong={unread} ellipsis style={{ maxWidth: 250 }}>
-                                        {item.subject || t('common.noSubject')}
-                                      </Typography.Text>
-                                    </Space>
-                                  }
-                                  description={
-                                    <div>
-                                      <Typography.Paragraph
-                                        ellipsis={{ rows: 2 }}
-                                        style={{
-                                          marginBottom: 4,
-                                          fontSize: 12,
-                                          color: token.colorTextSecondary,
-                                          whiteSpace: 'pre-wrap',
-                                        }}
-                                      >
-                                        {item.content}
-                                      </Typography.Paragraph>
-                                      <Typography.Text
-                                        type="secondary"
-                                        style={{ fontSize: 11 }}
-                                      >
-                                        {item.sent_at
-                                          ? dayjs(item.sent_at).format('YYYY-MM-DD HH:mm')
-                                          : dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
-                                      </Typography.Text>
-                                    </div>
-                                  }
-                                />
-                              </List.Item>
+                                <Badge dot={unread}>
+                                  <Avatar
+                                    size={40}
+                                    style={{
+                                      backgroundColor: unread ? token.colorPrimary : token.colorFillTertiary,
+                                    }}
+                                    icon={<BellOutlined />}
+                                  />
+                                </Badge>
+                                <div style={{ minWidth: 0, flex: 1 }}>
+                                  <Typography.Text strong={unread} ellipsis style={{ maxWidth: 250 }}>
+                                    {item.subject || t('common.noSubject')}
+                                  </Typography.Text>
+                                  <Typography.Paragraph
+                                    ellipsis={{ rows: 2 }}
+                                    style={{
+                                      marginBottom: 4,
+                                      marginTop: 2,
+                                      fontSize: 12,
+                                      color: token.colorTextSecondary,
+                                      whiteSpace: 'pre-wrap',
+                                    }}
+                                  >
+                                    {item.content}
+                                  </Typography.Paragraph>
+                                  <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+                                    {item.sent_at
+                                      ? dayjs(item.sent_at).format('YYYY-MM-DD HH:mm')
+                                      : dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}
+                                  </Typography.Text>
+                                </div>
+                              </div>
                             );
-                          }}
-                        />
+                          })}
+                        </div>
                       ) : (
                         <Empty
                           description={t('common.noMessages')}
@@ -5792,16 +5790,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
           {t('common.shortcutHelpIntro')}
         </Typography.Paragraph>
-        <List
-          size="small"
-          dataSource={[
-            { keys: '/', desc: t('common.shortcutSearch') },
-            { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
-            { keys: 'Alt + N', desc: t('common.shortcutNew') },
-            { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
-            { keys: '?', desc: t('common.shortcutHelp') },
-          ]}
-          renderItem={({ keys, desc }) => {
+        {[
+          { keys: '/', desc: t('common.shortcutSearch') },
+          { keys: 'Ctrl + K', desc: t('common.shortcutSearch') },
+          { keys: 'Alt + N', desc: t('common.shortcutNew') },
+          { keys: 'Ctrl + S', desc: t('common.shortcutSubmit') },
+          { keys: '?', desc: t('common.shortcutHelp') },
+        ].map(({ keys, desc }) => {
             const keyParts = keys.split(/\s*\+\s*/).map((s: string) => s.trim());
             const keyStyle: React.CSSProperties = {
               display: 'inline-flex',
@@ -5818,7 +5813,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
               color: isDarkMode ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.65)',
             };
             return (
-              <List.Item>
+              <div key={keys} style={{ padding: '6px 0' }}>
                 <Space align="center">
                   <Space size={4}>
                     {keyParts.map((part, i) => (
@@ -5829,10 +5824,9 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                   </Space>
                   <span>{desc}</span>
                 </Space>
-              </List.Item>
+              </div>
             );
-          }}
-        />
+          })}
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {t('common.shortcutHelpHint')}
         </Typography.Text>

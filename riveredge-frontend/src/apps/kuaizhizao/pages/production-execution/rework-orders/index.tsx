@@ -21,7 +21,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { DetailDrawerActions, DetailDrawerSection, DetailDrawerTemplate, DRAWER_CONFIG, FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import CodeField from '../../../../../components/code-field';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
@@ -95,7 +95,14 @@ const ReworkOrdersPage: React.FC = () => {
     const load = async () => {
       setReworkTypeLoading(true);
       try {
-        const dict = await getDataDictionaryByCode('REWORK_TYPE');
+        // REWORK_TYPE 在部分租户未预置时，按 code 直查会返回 404；
+        // 先走列表查询，无匹配即静默回退默认项，避免控制台噪音。
+        const dictList = await getDataDictionaryList({ code: 'REWORK_TYPE', page: 1, page_size: 1 });
+        const dict = dictList.items?.[0];
+        if (!dict) {
+          setReworkTypeOptions(REWORK_TYPE_FALLBACK);
+          return;
+        }
         const items = await getDictionaryItemList(dict.uuid, true);
         setReworkTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {

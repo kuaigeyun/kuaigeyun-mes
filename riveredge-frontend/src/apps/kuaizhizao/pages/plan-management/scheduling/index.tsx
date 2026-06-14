@@ -192,6 +192,7 @@ const SchedulingPage: React.FC = () => {
   const [lastBlockedTaskId, setLastBlockedTaskId] = useState<string>('');
   const [shiftDays, setShiftDays] = useState(1);
   const [batchActionLoading, setBatchActionLoading] = useState(false);
+  const [quickActionLoading, setQuickActionLoading] = useState(false);
   const [boardScan, setBoardScan] = useState<VisualSchedulingBoardScan | null>(null);
   const [focusTaskId, setFocusTaskId] = useState<string | null>(null);
   const [scrollToTodayToken, setScrollToTodayToken] = useState(0);
@@ -436,6 +437,11 @@ const SchedulingPage: React.FC = () => {
       count += (wo.operations || []).filter((o) => o.id != null).length;
     });
     return count;
+  }, [ganttWorkOrders, selectedWorkOrderIds]);
+
+  const selectedWorkOrders = useMemo(() => {
+    const idSet = new Set(selectedWorkOrderIds);
+    return ganttWorkOrders.filter((wo) => idSet.has(wo.id));
   }, [ganttWorkOrders, selectedWorkOrderIds]);
 
   const nonDraggableTaskIds = useMemo(() => {
@@ -729,6 +735,75 @@ const SchedulingPage: React.FC = () => {
     },
     [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt]
   );
+
+  const handleSchedulingQuickAction = useCallback(
+    async (
+      action: 'confirm_delay' | 'to_exception' | 'apply_unfreeze',
+      title: string,
+      reason: string,
+      successPrefix: string,
+    ) => {
+      if (!canScheduleUpdate || selectedWorkOrderIds.length === 0) return;
+      const ids = selectedWorkOrderIds.slice(0, 50);
+      const overdueCount = selectedWorkOrders.filter(
+        (wo) => wo.planned_end_date && dayjs(wo.planned_end_date).isBefore(dayjs())
+      ).length;
+      await new Promise<void>((resolve, reject) => {
+        modal.confirm({
+          title,
+          content:
+            overdueCount > 0
+              ? `已选 ${ids.length} 张工单，其中 ${overdueCount} 张已逾期。是否继续？`
+              : `已选 ${ids.length} 张工单，是否继续？`,
+          okText: '确认',
+          cancelText: '取消',
+          onOk: () => resolve(),
+          onCancel: () => reject(new Error('cancelled')),
+        });
+      });
+      setQuickActionLoading(true);
+      try {
+        const result = await workOrderApi.schedulingQuickAction({
+          work_order_ids: ids,
+          action,
+          reason,
+          auto_move_out_of_freeze_window: action !== 'to_exception',
+        });
+        const failCount = result.failed?.length ?? 0;
+        const skippedCount = result.skipped?.length ?? 0;
+        const updatedCount = result.updated?.length ?? 0;
+        const convertedCount = result.converted_to_exception?.length ?? 0;
+        const unfreezedCount = result.unfreezed?.length ?? 0;
+        messageApi.success(
+          `${successPrefix}：顺延 ${updatedCount}，转异常 ${convertedCount}，解冻 ${unfreezedCount}，跳过 ${skippedCount}${
+            failCount > 0 ? `，失败 ${failCount}` : ''
+          }`
+        );
+        refreshGantt();
+        refreshBoardScan();
+        actionRef.current?.reload();
+      } catch (e: any) {
+        if (e?.message !== 'cancelled') {
+          messageApi.error(e?.message || '快捷处置失败');
+        }
+      } finally {
+        setQuickActionLoading(false);
+      }
+    },
+    [canScheduleUpdate, messageApi, modal, refreshBoardScan, refreshGantt, selectedWorkOrderIds, selectedWorkOrders]
+  );
+
+  const handleConfirmDelay = useCallback(async () => {
+    await handleSchedulingQuickAction('confirm_delay', '延期确认', '可视排产延期确认', '已完成延期确认');
+  }, [handleSchedulingQuickAction]);
+
+  const handleToException = useCallback(async () => {
+    await handleSchedulingQuickAction('to_exception', '转异常工单', '可视排产转异常', '已转入异常池');
+  }, [handleSchedulingQuickAction]);
+
+  const handleApplyUnfreeze = useCallback(async () => {
+    await handleSchedulingQuickAction('apply_unfreeze', '解冻申请', '可视排产解冻申请', '已处理解冻申请');
+  }, [handleSchedulingQuickAction]);
 
   const persistOperationScheduling = useCallback(
     async (
@@ -1084,6 +1159,16 @@ const SchedulingPage: React.FC = () => {
     { title: '计划开始时间', dataIndex: 'planned_start_date', valueType: 'dateTime', width: 148 },
     { title: '计划结束时间', dataIndex: 'planned_end_date', valueType: 'dateTime', width: 148 },
     {
+      title: '逾期',
+      width: 72,
+      align: 'center',
+      render: (_: unknown, record) => {
+        if (!record.planned_end_date) return <Typography.Text type="secondary">—</Typography.Text>;
+        const overdue = dayjs(record.planned_end_date).isBefore(dayjs());
+        return overdue ? <Tag color="error">逾期</Tag> : <Typography.Text type="secondary">—</Typography.Text>;
+      },
+    },
+    {
       title: '排产问题',
       width: 180,
       ellipsis: true,
@@ -1217,7 +1302,7 @@ const SchedulingPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          message={`已从协调中心带入 ${filterWorkOrderIds.length} 个工单进行可视排产`}
+          title={`已从协调中心带入 ${filterWorkOrderIds.length} 个工单进行可视排产`}
           action={
             <Button size="small" onClick={() => navigate('/apps/kuaizhizao/plan-management/dashboard')}>
               返回协调中心
@@ -1231,7 +1316,7 @@ const SchedulingPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          message={`已按滚动计划日 ${filterPlanDate} 过滤待排池`}
+          title={`已按滚动计划日 ${filterPlanDate} 过滤待排池`}
           action={
             <Button
               size="small"
@@ -1247,7 +1332,7 @@ const SchedulingPage: React.FC = () => {
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          message={`甘特图仅展示前 ${GANTT_WORK_ORDER_LIMIT} 条工单，请用筛选或深链缩小范围`}
+          title={`甘特图仅展示前 ${GANTT_WORK_ORDER_LIMIT} 条工单，请用筛选或深链缩小范围`}
         />
       ) : null}
       <div className="aps-main-layout">
@@ -1328,10 +1413,16 @@ const SchedulingPage: React.FC = () => {
                     <SchedulingPoolToolbar
                       keyword={poolKeyword}
                       statusFilter={poolStatusFilter}
+                      selectedCount={selectedWorkOrderIds.length}
+                      canUpdate={canScheduleUpdate}
+                      actionLoading={quickActionLoading}
                       onKeywordChange={setPoolKeyword}
                       onStatusFilterChange={setPoolStatusFilter}
                       onSearch={handlePoolSearch}
                       onReset={handlePoolReset}
+                      onConfirmDelay={handleConfirmDelay}
+                      onToException={handleToException}
+                      onApplyUnfreeze={handleApplyUnfreeze}
                     />
                   }
                   request={async (params: any) => {

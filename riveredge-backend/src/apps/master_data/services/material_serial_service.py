@@ -31,6 +31,14 @@ class MaterialSerialService:
     """
     
     @staticmethod
+    def _to_response(serial: MaterialSerial) -> MaterialSerialResponse:
+        response = MaterialSerialResponse.model_validate(serial)
+        if serial.material:
+            response.material_name = serial.material.name
+            response.material_uuid = serial.material.uuid
+        return response
+
+    @staticmethod
     async def create_serial(
         tenant_id: int,
         data: MaterialSerialCreate
@@ -84,9 +92,7 @@ class MaterialSerialService:
         # 加载关联数据
         await serial.fetch_related("material")
         
-        response = MaterialSerialResponse.model_validate(serial)
-        response.material_name = material.name
-        return response
+        return MaterialSerialService._to_response(serial)
     
     @staticmethod
     async def get_serial_by_uuid(
@@ -115,10 +121,7 @@ class MaterialSerialService:
         if not serial:
             raise NotFoundError("物料序列号", serial_uuid)
         
-        response = MaterialSerialResponse.model_validate(serial)
-        if serial.material:
-            response.material_name = serial.material.name
-        return response
+        return MaterialSerialService._to_response(serial)
     
     @staticmethod
     async def list_serials(
@@ -199,10 +202,7 @@ class MaterialSerialService:
         
         items = []
         for serial in serials:
-            response = MaterialSerialResponse.model_validate(serial)
-            if serial.material:
-                response.material_name = serial.material.name
-            items.append(response)
+            items.append(MaterialSerialService._to_response(serial))
         
         return MaterialSerialListResponse(items=items, total=total)
     
@@ -242,10 +242,7 @@ class MaterialSerialService:
         
         await serial.save()
         
-        response = MaterialSerialResponse.model_validate(serial)
-        if serial.material:
-            response.material_name = serial.material.name
-        return response
+        return MaterialSerialService._to_response(serial)
     
     @staticmethod
     async def delete_serial(
@@ -380,7 +377,7 @@ class MaterialSerialService:
         # 5. 售后记录（售后单、退货单）
         
         trace_info = {
-            "serial": MaterialSerialResponse.model_validate(serial).dict(),
+            "serial": MaterialSerialService._to_response(serial).dict(),
             "production_records": [],  # 生产记录
             "inbound_records": [],  # 入库记录
             "outbound_records": [],  # 出库记录

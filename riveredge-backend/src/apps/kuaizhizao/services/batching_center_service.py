@@ -12,6 +12,7 @@ from decimal import Decimal
 from typing import Dict, List, Optional, Tuple
 
 from core.utils.timezone_utils import make_aware, now_utc
+from loguru import logger
 
 from apps.kuaizhizao.models.batching_order import BatchingOrder, BatchingOrderItem
 from apps.kuaizhizao.models.backflush_record import BackflushRecord
@@ -303,39 +304,48 @@ class BatchingCenterService:
         for wo in work_orders:
             if wo.id in open_batch_wo_ids:
                 continue
-            kitting_rate, batching_shortages, status = await self._analyze_wo_batching_shortages(
-                tenant_id, wo
-            )
-            if status in ("fully_kitted", "no_bom") or not batching_shortages:
-                continue
-
-            summary = "、".join(
-                f"{x.material_name}(缺{float(x.shortage_quantity):g})" for x in batching_shortages[:3]
-            )
-            if len(batching_shortages) > 3:
-                summary += f" 等{len(batching_shortages)}项"
-
-            score_detail = score_detail_map.get(wo.id)
-            tasks.append(
-                BatchingCenterTaskItem(
-                    task_type="proactive_prep",
-                    task_id=wo.id,
-                    doc_code=wo.code,
-                    work_order_id=wo.id,
-                    work_order_code=wo.code,
-                    product_name=wo.product_name,
-                    picking_score=score_detail.composite_score if score_detail else None,
-                    picking_rank_band=score_detail.rank_band if score_detail else None,
-                    kitting_rate=kitting_rate,
-                    shortage_summary=summary,
-                    priority=wo.priority or "normal",
-                    status="pending_prep",
-                    created_at=wo.planned_start_date,
-                    score_breakdown=score_detail.breakdown if score_detail else None,
-                    suggested_warehouse_id=None,
-                    suggested_warehouse_name=None,
+            try:
+                kitting_rate, batching_shortages, status = await self._analyze_wo_batching_shortages(
+                    tenant_id, wo
                 )
-            )
+                if status in ("fully_kitted", "no_bom") or not batching_shortages:
+                    continue
+
+                summary = "、".join(
+                    f"{x.material_name}(缺{float(x.shortage_quantity):g})" for x in batching_shortages[:3]
+                )
+                if len(batching_shortages) > 3:
+                    summary += f" 等{len(batching_shortages)}项"
+
+                score_detail = score_detail_map.get(wo.id)
+                tasks.append(
+                    BatchingCenterTaskItem(
+                        task_type="proactive_prep",
+                        task_id=wo.id,
+                        doc_code=wo.code,
+                        work_order_id=wo.id,
+                        work_order_code=wo.code,
+                        product_name=wo.product_name,
+                        picking_score=score_detail.composite_score if score_detail else None,
+                        picking_rank_band=score_detail.rank_band if score_detail else None,
+                        kitting_rate=kitting_rate,
+                        shortage_summary=summary,
+                        priority=wo.priority or "normal",
+                        status="pending_prep",
+                        created_at=wo.planned_start_date,
+                        score_breakdown=score_detail.breakdown if score_detail else None,
+                        suggested_warehouse_id=None,
+                        suggested_warehouse_name=None,
+                    )
+                )
+            except Exception as exc:
+                logger.exception(
+                    "构建主动备料任务失败: tenant_id={}, work_order_id={}, error={}",
+                    tenant_id,
+                    getattr(wo, "id", None),
+                    exc,
+                )
+                continue
         self._sort_tasks(tasks)
         total = len(tasks)
         return tasks[skip : skip + limit], total

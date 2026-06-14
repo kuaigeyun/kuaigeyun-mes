@@ -470,7 +470,7 @@ export default function OperationsDashboard() {
                     data={planChartData}
                     xField="name"
                     yField="value"
-                    label={{ position: 'middle', style: { fill: '#FFFFFF', opacity: 0.6 } }}
+                    label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }}
                   />
                 ) : <Empty />}
               </div>

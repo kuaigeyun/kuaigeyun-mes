@@ -191,7 +191,9 @@ const SyncFromDatasetModal: React.FC<SyncFromDatasetModalProps> = ({
 
       {executing && (
         <div style={{ textAlign: 'center', padding: 40 }}>
-          <Spin tip="正在执行查询..." />
+          <Spin tip="正在执行查询...">
+            <div style={{ minHeight: 24 }} />
+          </Spin>
         </div>
       )}
 

@@ -67,7 +67,14 @@ const ReportViewer: React.FC = () => {
     const yField = config.fields?.find((f: any) => f.y_axis)?.field;
 
     const renderChart = () => {
-        if (dataLoading) return <div style={{ textAlign: 'center', padding: 40 }}><Spin tip="加载数据中..." /></div>;
+        if (dataLoading)
+          return (
+            <div style={{ textAlign: 'center', padding: 40 }}>
+              <Spin tip="加载数据中...">
+                <div style={{ minHeight: 24 }} />
+              </Spin>
+            </div>
+          );
         if (reportData.length === 0) return <Empty description="暂无数据" />;
 
         switch (chartType) {
@@ -77,7 +84,7 @@ const ReportViewer: React.FC = () => {
                         data={reportData}
                         xField={xField}
                         yField={yField}
-                        label={{ position: 'middle', style: { fill: '#FFFFFF', opacity: 0.6 } }}
+                        label={{ position: 'center', style: { fill: '#FFFFFF', opacity: 0.6 } }}
                     />
                 );
             case 'line':

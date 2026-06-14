@@ -6,10 +6,16 @@ import type { PoolStatusFilter } from '../schedulingPoolUtils';
 interface SchedulingPoolToolbarProps {
   keyword: string;
   statusFilter: PoolStatusFilter;
+  selectedCount?: number;
+  canUpdate?: boolean;
+  actionLoading?: boolean;
   onKeywordChange: (value: string) => void;
   onStatusFilterChange: (value: PoolStatusFilter) => void;
   onSearch: () => void;
   onReset: () => void;
+  onConfirmDelay?: () => void;
+  onToException?: () => void;
+  onApplyUnfreeze?: () => void;
 }
 
 const STATUS_OPTIONS: Array<{ label: string; value: PoolStatusFilter }> = [
@@ -22,10 +28,16 @@ const STATUS_OPTIONS: Array<{ label: string; value: PoolStatusFilter }> = [
 const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
   keyword,
   statusFilter,
+  selectedCount = 0,
+  canUpdate = false,
+  actionLoading = false,
   onKeywordChange,
   onStatusFilterChange,
   onSearch,
   onReset,
+  onConfirmDelay,
+  onToException,
+  onApplyUnfreeze,
 }) => (
   <Space size={8} wrap={false} className="scheduling-pool-toolbar">
     <Segmented
@@ -50,6 +62,19 @@ const SchedulingPoolToolbar: React.FC<SchedulingPoolToolbarProps> = ({
     <Button size="small" icon={<ReloadOutlined />} onClick={onReset}>
       重置
     </Button>
+    {canUpdate ? (
+      <>
+        <Button size="small" disabled={selectedCount === 0} loading={actionLoading} onClick={onConfirmDelay}>
+          延期确认
+        </Button>
+        <Button size="small" disabled={selectedCount === 0} loading={actionLoading} onClick={onToException}>
+          转异常
+        </Button>
+        <Button size="small" disabled={selectedCount === 0} loading={actionLoading} onClick={onApplyUnfreeze}>
+          解冻申请
+        </Button>
+      </>
+    ) : null}
   </Space>
 );
 

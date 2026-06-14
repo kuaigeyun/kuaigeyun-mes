@@ -203,7 +203,9 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
             <Empty description="工单ID缺失，无法预览" style={{ paddingTop: 100 }} />
           ) : printLoading && !previewHtml ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
-              <Spin tip="加载预览中..." />
+              <Spin tip="加载预览中...">
+                <div style={{ minHeight: 24 }} />
+              </Spin>
             </div>
           ) : previewHtml ? (
             <div dangerouslySetInnerHTML={{ __html: previewHtml }} style={{ height: '100%', overflow: 'auto', padding: 16 }} />

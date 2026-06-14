@@ -76,7 +76,7 @@ const SalespersonPerformance: React.FC = () => {
           seriesField="salesman_name"
           legend={false}
           label={{
-            position: 'middle',
+            position: 'center',
             style: {
               fill: '#FFFFFF',
               opacity: 0.6,

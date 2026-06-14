@@ -177,7 +177,7 @@ const ProductProcessPage: React.FC = () => {
               <div className="product-process-material-list__row">
                 <span className="product-process-material-list__code">{m.code}</span>
                 <Tag
-                  bordered={false}
+                  variant="filled"
                   color={hasRoute ? 'processing' : 'default'}
                   className="product-process-material-list__tag"
                 >

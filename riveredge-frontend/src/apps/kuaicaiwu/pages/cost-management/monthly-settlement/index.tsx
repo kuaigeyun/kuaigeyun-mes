@@ -123,7 +123,7 @@ const MonthlySettlementPage: React.FC = () => {
       title: '选择期间',
       content: (
         <DetailDrawerSection title="核算期间选择">
-          <Alert message="通常在次月初对上月的成本进行结转核算。" type="info" showIcon style={{ marginBottom: 24 }} />
+          <Alert title="通常在次月初对上月的成本进行结转核算。" type="info" showIcon style={{ marginBottom: 24 }} />
           <ProForm submitter={false}>
             <ProFormDatePicker
               name="period"
@@ -175,7 +175,7 @@ const MonthlySettlementPage: React.FC = () => {
           <Space style={{ marginBottom: 16 }}>
             <Button onClick={handleImportPayrollFromPerformance}>从绩效导入薪资总额</Button>
           </Space>
-          {payrollImportHint ? <Alert type="info" message={payrollImportHint} showIcon style={{ marginBottom: 16 }} /> : null}
+          {payrollImportHint ? <Alert type="info" title={payrollImportHint} showIcon style={{ marginBottom: 16 }} /> : null}
           <Form form={form} layout="vertical" initialValues={settlementData.indirectCosts}>
             <ProFormMoney name="payroll" label="当期生产人员薪资总额" placeholder="请输入薪资总额" rules={[{ required: true }]} />
             <ProFormMoney name="electricity" label="当期电费/动力费" placeholder="请输入电量费用" />
