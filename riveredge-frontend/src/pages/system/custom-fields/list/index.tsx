@@ -12,15 +12,29 @@
 import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
-import type { TFunction } from 'i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormItem, ProFormDependency } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, Tooltip, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
+import { CustomFieldFormulaConfigEditor } from '../../../../components/custom-fields/CustomFieldFormulaConfigEditor';
 import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
+import {
+  buildSourceFieldKeyFromConfig,
+  parseSourceFieldKey,
+} from '../../../../components/custom-fields/customFieldSourceFieldUtils';
+import {
+  buildSourceFieldSelectOptions,
+  createSourceFieldSelectRenderers,
+} from '../../../../components/custom-fields/CustomFieldSourceFieldOption';
+import { AssociatedTableModelFieldSelect } from '../../../../components/custom-fields/AssociatedTableModelFieldSelect';
+import { AssociatedDisplayModeSegmented } from '../../../../components/custom-fields/AssociatedDisplayModeSegmented';
+import {
+  getAssociatedDisplayModeDefault,
+  type AssociatedDisplayMode,
+} from '../../../../components/custom-fields/customFieldAssociatedDisplayMode';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getCustomFieldList,
@@ -29,7 +43,10 @@ import {
   updateCustomField,
   deleteCustomField,
   getCustomFieldPages,
+  getCustomFieldsByTable,
+  getSystemSourceFields,
   CustomField,
+  type CustomFieldSystemSourceField,
   CreateCustomFieldData,
   UpdateCustomFieldData,
   CustomFieldPageConfig,
@@ -61,38 +78,6 @@ const getTableNameOptions = (pageConfigs: CustomFieldPageConfig[]) => {
 };
 
 /**
- * 获取表的常用字段选项（用于关联字段名选择框）
- *
- * @param tableName - 表名（可选，如果提供则尝试从配置中获取特定字段）
- * @param t - 国际化函数，用于选项文案
- * @returns 字段选项列表
- */
-const getTableFieldOptions = (tableName?: string, t?: TFunction): { label: string; value: string }[] => {
-  if (!tableName) {
-    return [];
-  }
-  if (!t) {
-    return [
-      { label: 'ID (id)', value: 'id' },
-      { label: 'Name (name)', value: 'name' },
-      { label: 'Code (code)', value: 'code' },
-      { label: 'Title (title)', value: 'title' },
-      { label: 'Label (label)', value: 'label' },
-      { label: 'Description (description)', value: 'description' },
-    ];
-  }
-  return [
-    { label: t('field.customField.optionId'), value: 'id' },
-    { label: t('field.customField.optionName'), value: 'name' },
-    { label: t('field.customField.optionCode'), value: 'code' },
-    { label: t('field.customField.optionTitle'), value: 'title' },
-    { label: t('field.customField.optionLabel'), value: 'label' },
-    { label: t('field.customField.optionDescription'), value: 'description' },
-  ];
-};
-
-
-/**
  * 自定义字段管理列表页面组件
  */
 const CustomFieldListPage: React.FC = () => {
@@ -113,8 +98,11 @@ const CustomFieldListPage: React.FC = () => {
   const [isEdit, setIsEdit] = useState(false);
   const [currentFieldUuid, setCurrentFieldUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
-  const [fieldType, setFieldType] = useState<'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json'>('text');
+  const [fieldType, setFieldType] = useState<'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'associated_attribute' | 'formula' | 'json'>('text');
   const [jsonEditorMode, setJsonEditorMode] = useState<CustomFieldJsonEditorMode>('kv');
+  const [sameTableFields, setSameTableFields] = useState<CustomField[]>([]);
+  const [systemSourceFields, setSystemSourceFields] = useState<CustomFieldSystemSourceField[]>([]);
+  const editingFieldConfigRef = useRef<Record<string, unknown> | null>(null);
 
 
   // Drawer 相关状态（详情查看）
@@ -217,6 +205,25 @@ const CustomFieldListPage: React.FC = () => {
     loadPageConfigs();
   }, []);
 
+  useEffect(() => {
+    if (!modalVisible) {
+      setSameTableFields([]);
+      return;
+    }
+    const tableName = displayPageConfigs.find((page) => page.pageCode === selectedPageCode)?.tableName;
+    if (!tableName) {
+      setSameTableFields([]);
+      setSystemSourceFields([]);
+      editingFieldConfigRef.current = null;
+      return;
+    }
+    getCustomFieldsByTable(tableName, true)
+      .then((fields) => setSameTableFields(fields.filter((field) => field.uuid !== currentFieldUuid)))
+      .catch(() => setSameTableFields([]));
+    getSystemSourceFields(tableName)
+      .then(setSystemSourceFields)
+      .catch(() => setSystemSourceFields([]));
+  }, [modalVisible, selectedPageCode, displayPageConfigs, currentFieldUuid]);
 
   /**
    * 处理新建字段
@@ -224,6 +231,7 @@ const CustomFieldListPage: React.FC = () => {
   const handleCreate = () => {
     setIsEdit(false);
     setCurrentFieldUuid(null);
+    editingFieldConfigRef.current = null;
     setFieldType('text');
     setJsonEditorMode('kv');
     setModalVisible(true);
@@ -252,6 +260,7 @@ const CustomFieldListPage: React.FC = () => {
 
       // 获取字段详情
       const detail = await getCustomFieldByUuid(record.uuid);
+      editingFieldConfigRef.current = detail.config ?? null;
       if (detail.field_type === 'json') {
         setJsonEditorMode(
           detail.config?.default != null && !isFlatJsonObject(detail.config.default) ? 'source' : 'kv',
@@ -293,6 +302,14 @@ const CustomFieldListPage: React.FC = () => {
         file_allowed_types: detail.config?.allowedTypes ? detail.config.allowedTypes.join(',') : '',
         associated_table: detail.config?.associatedTable || '',
         associated_field: detail.config?.associatedField || '',
+        source_field: buildSourceFieldKeyFromConfig({
+          sourceField: detail.config?.sourceField,
+          sourceFieldType: detail.config?.sourceFieldType,
+        }) || '',
+        match_field: detail.config?.matchField || 'code',
+        return_field: detail.config?.returnField || 'id',
+        attribute_field: detail.config?.attributeField || 'name',
+        display_mode: detail.config?.displayMode || '',
         formula_expression: detail.config?.expression || '',
       });
     } catch (error: any) {
@@ -434,7 +451,28 @@ const CustomFieldListPage: React.FC = () => {
         if (values.file_allowed_types) config.allowedTypes = values.file_allowed_types.split(',').map((t: string) => t.trim());
       } else if (fieldType === 'associated_object') {
         if (values.associated_table) config.associatedTable = values.associated_table;
-        if (values.associated_field) config.associatedField = values.associated_field;
+        if (values.display_mode) config.displayMode = values.display_mode;
+        if (values.source_field) {
+          const parsed = parseSourceFieldKey(values.source_field);
+          if (parsed) {
+            config.sourceField = parsed.name;
+            config.sourceFieldType = parsed.scope;
+          }
+          if (values.match_field) config.matchField = values.match_field;
+          if (values.return_field) config.returnField = values.return_field;
+        } else if (values.associated_field) {
+          config.associatedField = values.associated_field;
+        }
+      } else if (fieldType === 'associated_attribute') {
+        if (values.associated_table) config.associatedTable = values.associated_table;
+        if (values.display_mode) config.displayMode = values.display_mode;
+        if (values.attribute_field) config.attributeField = values.attribute_field;
+        const legacy = editingFieldConfigRef.current;
+        if (legacy?.linkField) {
+          config.linkField = legacy.linkField;
+          if (legacy.linkFieldType) config.linkFieldType = legacy.linkFieldType;
+          if (legacy.linkMatchField) config.linkMatchField = legacy.linkMatchField;
+        }
       } else if (fieldType === 'formula') {
         if (values.formula_expression) config.expression = values.formula_expression;
       } else if (fieldType === 'textarea') {
@@ -454,7 +492,8 @@ const CustomFieldListPage: React.FC = () => {
         textarea_rows, select_options, select_options_list,
         image_max_size, image_allowed_types,
         file_max_size, file_allowed_types,
-        associated_table, associated_field,
+        associated_table, associated_field, source_field, match_field, return_field,
+        attribute_field, display_mode,
         formula_expression,
         ...fieldData
       } = values;
@@ -487,6 +526,40 @@ const CustomFieldListPage: React.FC = () => {
   /**
    * 根据字段类型渲染配置表单
    */
+  const sourceFieldOptions = useMemo(
+    () =>
+      buildSourceFieldSelectOptions(
+        systemSourceFields,
+        sameTableFields.filter((field) => field.field_type === 'text' || field.field_type === 'number'),
+      ),
+    [sameTableFields, systemSourceFields],
+  );
+
+  const sourceFieldSelectRenderers = useMemo(
+    () => createSourceFieldSelectRenderers(sourceFieldOptions),
+    [sourceFieldOptions],
+  );
+
+  const renderDisplayModeSegmented = (
+    fieldKind: 'associated_object' | 'associated_attribute',
+    hasSourceField: boolean,
+  ) => (
+    <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+      <ProFormItem
+        name="display_mode"
+        label={t('field.customField.displayMode')}
+        initialValue={getAssociatedDisplayModeDefault(fieldKind, hasSourceField)}
+        extra={
+          fieldKind === 'associated_object'
+            ? t('field.customField.displayModeAssociatedObjectExtra')
+            : t('field.customField.displayModeAssociatedAttributeExtra')
+        }
+      >
+        <AssociatedDisplayModeSegmented fieldKind={fieldKind} hasSourceField={hasSourceField} />
+      </ProFormItem>
+    </div>
+  );
+
   const renderConfigFields = () => {
     switch (fieldType) {
       case 'text':
@@ -695,16 +768,19 @@ const CustomFieldListPage: React.FC = () => {
           <>
             <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <SafeProFormSelect
-                name="associated_table"
-                label={t('field.customField.associatedTable')}
-                rules={[{ required: true, message: t('field.customField.associatedTableRequired') }]}
-                options={getTableNameOptions(displayPageConfigs)}
-                placeholder={t('field.customField.associatedTablePlaceholder')}
-                extra={t('field.customField.associatedTableExtra')}
+                name="source_field"
+                label={t('field.customField.sourceField')}
+                options={sourceFieldOptions}
+                placeholder={t('field.customField.sourceFieldPlaceholder')}
+                extra={t('field.customField.sourceFieldExtra')}
                 fieldProps={{
-                  onChange: (_value: string) => {
+                  allowClear: true,
+                  optionRender: sourceFieldSelectRenderers.optionRender,
+                  labelRender: sourceFieldSelectRenderers.labelRender,
+                  onChange: () => {
                     formRef.current?.setFieldsValue({
-                      associated_field: undefined,
+                      match_field: 'code',
+                      return_field: 'id',
                     });
                   },
                 }}
@@ -712,33 +788,103 @@ const CustomFieldListPage: React.FC = () => {
             </div>
             <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
               <SafeProFormSelect
-                name="associated_field"
-                label={t('field.customField.associatedField')}
-                rules={[{ required: true, message: t('field.customField.associatedFieldRequired') }]}
-                dependencies={['associated_table']}
-                options={({ associated_table }: any) => {
-                  if (!associated_table) {
-                    return [];
-                  }
-                  return getTableFieldOptions(associated_table, t);
+                name="associated_table"
+                label={t('field.customField.associatedTable')}
+                rules={[{ required: true, message: t('field.customField.associatedTableRequired') }]}
+                options={getTableNameOptions(displayPageConfigs)}
+                placeholder={t('field.customField.associatedTablePlaceholder')}
+                extra={t('field.customField.associatedTableExtra')}
+                fieldProps={{
+                  onChange: () => {
+                    formRef.current?.setFieldsValue({
+                      associated_field: undefined,
+                      match_field: 'code',
+                      attribute_field: 'name',
+                    });
+                  },
                 }}
-                placeholder={t('field.customField.associatedFieldPlaceholder')}
-                extra={t('field.customField.associatedFieldExtra')}
               />
             </div>
+            <ProFormDependency name={['source_field', 'associated_table']}>
+              {({ source_field, associated_table }) => (
+                <>
+                  {source_field ? (
+                  <>
+                    <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+                      <AssociatedTableModelFieldSelect
+                        name="match_field"
+                        label={t('field.customField.matchField')}
+                        tableName={associated_table as string | undefined}
+                        rules={[{ required: true, message: t('field.customField.matchFieldRequired') }]}
+                        placeholder={t('field.customField.matchFieldPlaceholder')}
+                        extra={t('field.customField.matchFieldExtra')}
+                      />
+                    </div>
+                    <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+                      <AssociatedTableModelFieldSelect
+                        name="return_field"
+                        label={t('field.customField.returnField')}
+                        tableName={associated_table as string | undefined}
+                        rules={[{ required: true, message: t('field.customField.returnFieldRequired') }]}
+                        placeholder={t('field.customField.returnFieldPlaceholder')}
+                        extra={t('field.customField.returnFieldExtra')}
+                        initialValue="id"
+                      />
+                    </div>
+                  </>
+                  ) : (
+                  <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+                    <AssociatedTableModelFieldSelect
+                      name="associated_field"
+                      label={t('field.customField.associatedField')}
+                      tableName={associated_table as string | undefined}
+                      rules={[{ required: true, message: t('field.customField.associatedFieldRequired') }]}
+                      placeholder={t('field.customField.associatedFieldPlaceholder')}
+                      extra={t('field.customField.associatedFieldDropdownExtra')}
+                    />
+                  </div>
+                  )}
+                  {renderDisplayModeSegmented('associated_object', Boolean(source_field))}
+                </>
+              )}
+            </ProFormDependency>
           </>
         );
-      case 'formula':
+      case 'associated_attribute':
         return (
           <>
             <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
-              <ProFormTextArea
-                name="formula_expression"
-                label={t('field.customField.formulaExpression')}
-                placeholder={t('field.customField.formulaExpressionPlaceholder')}
-                fieldProps={{ rows: 4 }}
-                extra={t('field.customField.formulaExpressionExtra')}
+              <SafeProFormSelect
+                name="associated_table"
+                label={t('field.customField.associatedTable')}
+                rules={[{ required: true, message: t('field.customField.associatedTableRequired') }]}
+                options={getTableNameOptions(displayPageConfigs)}
+                placeholder={t('field.customField.associatedTablePlaceholder')}
+                extra={t('field.customField.associatedAttributeTableExtra')}
+                fieldProps={{
+                  onChange: () => {
+                    formRef.current?.setFieldsValue({ attribute_field: 'name' });
+                  },
+                }}
               />
+            </div>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+              <ProFormDependency name={['associated_table']}>
+                {({ associated_table }) => (
+                  <AssociatedTableModelFieldSelect
+                    name="attribute_field"
+                    label={t('field.customField.attributeField')}
+                    tableName={associated_table as string | undefined}
+                    rules={[{ required: true, message: t('field.customField.attributeFieldRequired') }]}
+                    placeholder={t('field.customField.attributeFieldPlaceholder')}
+                    extra={t('field.customField.attributeFieldExtra')}
+                    initialValue="name"
+                  />
+                )}
+              </ProFormDependency>
+            </div>
+            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+              {renderDisplayModeSegmented('associated_attribute', false)}
             </div>
           </>
         );
@@ -819,6 +965,7 @@ const CustomFieldListPage: React.FC = () => {
         select: { text: t('field.customField.typeSelect'), status: 'Warning' },
         multiselect: { text: t('field.customField.typeMultiselect'), status: 'Warning' },
         associated_object: { text: t('field.customField.typeAssociatedObject'), status: 'Processing' },
+        associated_attribute: { text: t('field.customField.typeAssociatedAttribute'), status: 'Processing' },
         formula: { text: t('field.customField.typeFormula'), status: 'Error' },
         textarea: { text: t('field.customField.typeTextarea'), status: 'Error' },
         json: { text: t('field.customField.typeJson'), status: 'Default' },
@@ -835,6 +982,7 @@ const CustomFieldListPage: React.FC = () => {
           select: { color: 'orange', textKey: 'field.customField.typeSelect' },
           multiselect: { color: 'purple', textKey: 'field.customField.typeMultiselect' },
           associated_object: { color: 'geekblue', textKey: 'field.customField.typeAssociatedObject' },
+          associated_attribute: { color: 'purple', textKey: 'field.customField.typeAssociatedAttribute' },
           formula: { color: 'red', textKey: 'field.customField.typeFormula' },
           textarea: { color: 'red', textKey: 'field.customField.typeTextarea' },
           json: { color: 'purple', textKey: 'field.customField.typeJson' },
@@ -1317,9 +1465,15 @@ const CustomFieldListPage: React.FC = () => {
         onFinish={handleSubmit}
         isEdit={isEdit}
         loading={formLoading}
-        width={MODAL_CONFIG.STANDARD_WIDTH}
+        width={fieldType === 'formula' ? MODAL_CONFIG.LARGE_WIDTH : MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         grid
+        onValuesChange={(changed) => {
+          if ('field_type' in changed && changed.field_type) {
+            setFieldType(changed.field_type);
+            if (changed.field_type === 'json') setJsonEditorMode('kv');
+          }
+        }}
       >
           <ProFormText
             name="code"
@@ -1361,6 +1515,7 @@ const CustomFieldListPage: React.FC = () => {
               { label: t('field.customField.typeSelect'), value: 'select' },
               { label: t('field.customField.typeMultiselect'), value: 'multiselect' },
               { label: t('field.customField.typeAssociatedObject'), value: 'associated_object' },
+              { label: t('field.customField.typeAssociatedAttribute'), value: 'associated_attribute' },
               { label: t('field.customField.typeFormula'), value: 'formula' },
               { label: t('field.customField.typeTextarea'), value: 'textarea' },
               { label: t('field.customField.typeJson'), value: 'json' },
@@ -1415,11 +1570,36 @@ const CustomFieldListPage: React.FC = () => {
                     </Col>
                   </Row>
                 ) : (
-                  <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
+                  <>
+                    <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
+                    {fieldType === 'associated_object' ? (
+                      <div style={{ marginBottom: 12, color: token.colorTextSecondary, fontSize: 13 }}>
+                        {t('field.customField.typeAssociatedObjectDesc')}
+                      </div>
+                    ) : null}
+                    {fieldType === 'associated_attribute' ? (
+                      <div style={{ marginBottom: 12, color: token.colorTextSecondary, fontSize: 13 }}>
+                        {t('field.customField.typeAssociatedAttributeDesc')}
+                      </div>
+                    ) : null}
+                  </>
                 )}
-                <Row gutter={[16, 16]}>
-                  <Col span={24}>{renderConfigFields()}</Col>
-                </Row>
+                {fieldType === 'formula' ? (
+                  <ProFormDependency name={['table_name', 'code']}>
+                    {({ table_name, code }) => (
+                      <ProFormItem name="formula_expression" style={{ marginBottom: 0 }}>
+                        <CustomFieldFormulaConfigEditor
+                          tableName={(table_name as string) || selectedPage?.tableName || ''}
+                          excludeFieldCode={code as string | undefined}
+                        />
+                      </ProFormItem>
+                    )}
+                  </ProFormDependency>
+                ) : (
+                  <Row gutter={[16, 16]}>
+                    <Col span={24}>{renderConfigFields()}</Col>
+                  </Row>
+                )}
               </div>
             </Col>
           </Row>

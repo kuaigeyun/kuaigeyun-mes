@@ -321,7 +321,7 @@ class CustomFieldService:
                 record_id=record_id
             )
         
-        field_value.set_value(value, field.field_type)
+        field_value.set_value(value, field.field_type, field.get_config())
         await field_value.save()
         
         return field_value

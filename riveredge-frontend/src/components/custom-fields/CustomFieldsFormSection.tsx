@@ -2,7 +2,7 @@
  * 自定义字段表单区块
  *
  * 在 ProForm 内渲染自定义字段，与 useCustomFields hook 配合使用。
- * 支持 text、number、date、select、textarea、json、image、file、associated_object 等类型。
+ * 支持 text、number、date、select、textarea、json、image、file、associated_object、associated_attribute、formula 等类型。
  */
 
 import React from 'react';
@@ -17,7 +17,8 @@ import {
 } from '@ant-design/pro-components';
 import { App, Col, Upload } from 'antd';
 import SafeProFormSelect from '../safe-pro-form-select';
-import { AssociatedObjectSelect } from './AssociatedObjectSelect';
+import { AssociatedObjectField } from './AssociatedObjectField';
+import { AssociatedAttributeField } from './AssociatedAttributeField';
 import type { CustomField } from '../../services/customField';
 import { uploadMultipleFiles } from '../../services/file';
 import {
@@ -26,6 +27,7 @@ import {
   normalizeUploadFileList,
 } from './customFieldFileUtils';
 import { CustomFieldJsonFormItem } from './CustomFieldJsonFormItem';
+import { CustomFieldFormulaFormItem } from './CustomFieldFormulaFormItem';
 import { CustomFieldFormLabel } from './CustomFieldFormLabel';
 
 const CUSTOM_PREFIX = 'custom_';
@@ -184,7 +186,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
         );
       case 'associated_object':
         return (
-          <AssociatedObjectSelect
+          <AssociatedObjectField
             field={field}
             name={fieldName}
             label={labelNode}
@@ -193,6 +195,16 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             required={field.is_required}
             initialValue={initialVal}
             colProps={{ span: colSpan }}
+          />
+        );
+      case 'associated_attribute':
+        return (
+          <AssociatedAttributeField
+            field={field}
+            name={fieldName}
+            label={labelNode}
+            colProps={{ span: colSpan }}
+            initialValue={initialVal}
           />
         );
       case 'image':
@@ -270,6 +282,16 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             placeholder={field.placeholder || `例如：{"key": "value"}`}
             initialValue={initialVal}
             required={field.is_required}
+          />
+        );
+      case 'formula':
+        return (
+          <CustomFieldFormulaFormItem
+            name={fieldName}
+            label={labelNode}
+            expression={field.config?.expression}
+            initialValue={typeof initialVal === 'number' ? initialVal : Number(initialVal) || undefined}
+            colProps={{ span: colSpan }}
           />
         );
       default:

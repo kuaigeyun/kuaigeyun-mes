@@ -16,4 +16,6 @@ CUSTOM_FIELD_TYPES = (
     "image",
     "file",
     "associated_object",
+    "associated_attribute",
+    "formula",
 )

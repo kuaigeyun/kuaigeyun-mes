@@ -3043,11 +3043,13 @@ class SalesOrderService:
         if not deletable:
             raise BusinessLogicError(f"只能删除草稿或待审核状态的订单，当前: {order.status}")
 
+        demand = await self._get_linked_demand(tenant_id, sales_order_id)
+        if demand:
+            from apps.kuaizhizao.services.demand_service import DemandService
+
+            await DemandService().delete_demand_cascade_from_upstream(tenant_id, demand.id)
+
         async with in_transaction():
-            demand = await self._get_linked_demand(tenant_id, sales_order_id)
-            if demand:
-                from apps.kuaizhizao.services.demand_service import DemandService
-                await DemandService().delete_demand(tenant_id, demand.id)
             from apps.kuaizhizao.services.sales_contract_service import SalesContractService
 
             await SalesContractService().rollback_release_for_sales_order(

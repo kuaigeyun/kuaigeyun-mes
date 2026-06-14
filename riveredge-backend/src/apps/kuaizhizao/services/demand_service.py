@@ -1126,6 +1126,34 @@ class DemandService(AppBaseService[Demand]):
             # 更新需求总数量和总金额
             await self._update_demand_totals(tenant_id, demand_id)
 
+    async def delete_demand_cascade_from_upstream(
+        self,
+        tenant_id: int,
+        demand_id: int,
+    ) -> None:
+        """
+        上游单据（销售订单/销售预测）删除时级联清理关联需求（物理删除）。
+
+        绕过 delete_demand 对手动删除同步需求的限制；若已下推需求计算则先撤回。
+        """
+        demand = await Demand.get_or_none(
+            tenant_id=tenant_id, id=demand_id, deleted_at__isnull=True
+        )
+        if not demand:
+            return
+
+        source_type = (getattr(demand, "source_type", None) or "").strip()
+        if source_type not in ("sales_order", "sales_forecast"):
+            raise BusinessLogicError(
+                f"仅可级联删除来源为销售订单/销售预测的需求，当前 source_type: {source_type or '-'}"
+            )
+
+        if demand.pushed_to_computation:
+            await self.withdraw_from_computation(tenant_id, demand_id)
+
+        await DemandItem.filter(tenant_id=tenant_id, demand_id=demand_id).delete()
+        await Demand.filter(tenant_id=tenant_id, id=demand_id).delete()
+
     async def delete_demand(
         self,
         tenant_id: int,

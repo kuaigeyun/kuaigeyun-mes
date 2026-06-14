@@ -1257,6 +1257,21 @@ const WorkOrdersPage: React.FC = () => {
     [selectedRowKeys, workOrderListRowIndexVersion]
   )
 
+  const {
+    customFields: workOrderListCustomFields,
+    generateCustomFieldColumns: generateWorkOrderCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichWorkOrderRecordsWithCustomFields,
+    customFieldValues: workOrderDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadWorkOrderFieldValuesForDetail,
+    resetDetailFieldValues: resetWorkOrderDetailFieldValues,
+  } = useCustomFieldsForList<WorkOrder>({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE })
+
+  useEffect(() => {
+    if (workOrderListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200)
+    }
+  }, [workOrderListCustomFields.length])
+
   const handleWorkOrderTableRequest = useCallback(
     async (params: any, sort: any, _filter: any, searchFormValues: any) => {
       try {
@@ -1582,21 +1597,6 @@ const WorkOrdersPage: React.FC = () => {
     saveCustomFieldValues: saveWorkOrderCustomFieldValues,
     resetFieldValues: resetWorkOrderFormFieldValues,
   } = useCustomFields({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE, loadWhenOpen: true, open: modalVisible })
-
-  const {
-    customFields: workOrderListCustomFields,
-    generateCustomFieldColumns: generateWorkOrderCustomFieldColumns,
-    enrichRecordsWithCustomFields: enrichWorkOrderRecordsWithCustomFields,
-    customFieldValues: workOrderDetailCustomFieldValues,
-    loadFieldValuesForDetail: loadWorkOrderFieldValuesForDetail,
-    resetDetailFieldValues: resetWorkOrderDetailFieldValues,
-  } = useCustomFieldsForList<WorkOrder>({ tableName: WORK_ORDER_CUSTOM_FIELD_TABLE })
-
-  useEffect(() => {
-    if (workOrderListCustomFields.length > 0 && actionRef.current) {
-      setTimeout(() => actionRef.current?.reload(), 200)
-    }
-  }, [workOrderListCustomFields.length])
 
   // 从加载来源填充表单：当 productSourceData 有 items 且新建工单弹窗打开时，自动填充产品与数量
   useEffect(() => {

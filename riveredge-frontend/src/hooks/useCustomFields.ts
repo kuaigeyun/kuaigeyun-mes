@@ -134,6 +134,12 @@ export function useCustomFields({
                 value = value.format(format);
               }
             }
+          } else if (field.field_type === 'formula') {
+            if (value == null || value === '') {
+              return null;
+            }
+            const num = Number(value);
+            value = Number.isFinite(num) ? num : null;
           }
           return { field_uuid: field.uuid, value };
         })

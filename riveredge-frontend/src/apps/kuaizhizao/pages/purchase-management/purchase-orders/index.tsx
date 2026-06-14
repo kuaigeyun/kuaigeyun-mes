@@ -120,6 +120,7 @@ import { SupplierSelectDropdown } from '../../../../master-data/components/Suppl
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
 const PO_WORKFLOW_DRAFT_STATUSES = ['草稿', 'draft', 'DRAFT', DocumentStatus.DRAFT];
@@ -282,7 +283,7 @@ function computePurchaseOrderFormTotals(
   priceType: string | undefined,
 ) {
   const pt = priceType ?? 'tax_exclusive';
-  const rows = Array.isArray(items) ? items : [];
+  const rows = normalizeFormListItems<any>(items);
   let goodsExcl = 0;
   let taxAmount = 0;
   let goodsIncl = 0;
@@ -306,7 +307,7 @@ function computePurchaseOrderFormTotals(
 
   let otherSideFees = 0;
   let ourSideFees = 0;
-  for (const fee of feeDetails || []) {
+  for (const fee of normalizeFormListItems<any>(feeDetails)) {
     const amt = Number(fee?.amount) || 0;
     if (fee?.bearer === 'other_side') otherSideFees += amt;
     else ourSideFees += amt;
@@ -709,7 +710,7 @@ const PurchaseOrdersPage: React.FC = () => {
         }
       }
 
-      const current = formRef.current?.getFieldValue('items') ?? [];
+      const current = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
       const newRows = selected.map((m) => {
         const resolved = resolveMap.get(m.id);
         const taxR = resolved?.taxRate != null ? Number(resolved.taxRate) : getMaterialDefaultTaxRate(m);
@@ -782,7 +783,7 @@ const PurchaseOrdersPage: React.FC = () => {
         return;
       }
 
-      const currentItems = formRef.current?.getFieldValue('items') || [];
+      const currentItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
       formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
       messageApi.success(`成功导入 ${newItems.length} 条明细`);
       setImportModalVisible(false);
@@ -2264,7 +2265,7 @@ const PurchaseOrdersPage: React.FC = () => {
                               ? mainDelivery
                               : dayjs(mainDelivery)
                             : dayjs();
-                        const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                        const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
                         items.push({
                           ...defaultOrderItem,
                           tax_rate: 0,
@@ -2292,7 +2293,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index] !== curr?.items?.[index]}>
                         {({ getFieldValue }: any) => {
-                          const row = getFieldValue('items')?.[index];
+                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                           const mid = row?.material_id ? Number(row.material_id) : null;
                           const fallback = mid && (row?.material_code || row?.material_name)
                             ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
@@ -2377,8 +2378,7 @@ const PurchaseOrdersPage: React.FC = () => {
                         }
                       >
                         {({ getFieldValue }: any) => {
-                          const items = getFieldValue('items') ?? [];
-                          const row = items[index];
+                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                           return (
                             <AntForm.Item name={[index, 'unit_price']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0, message: '≥0' }]} style={{ margin: 0 }}>
                               <InputNumber
@@ -2403,8 +2403,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
-                                const items = getFieldValue('items') ?? [];
-                                const row = items[index];
+                                const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                                 const qty = Number(row?.ordered_quantity) || 0;
                                 const price = Number(row?.unit_price) || 0;
                                 const taxRate = Number(row?.tax_rate) || 0;
@@ -2423,7 +2422,7 @@ const PurchaseOrdersPage: React.FC = () => {
                                 size="small"
                                 style={{ padding: '0 4px', height: 'auto' }}
                                 onClick={() => {
-                                  const items = formRef.current?.getFieldValue('items') ?? [];
+                                  const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                                   if (items.length === 0) return;
                                   const rate = prompt('批量设置税率', '13');
                                   if (rate != null && rate !== '') {
@@ -2444,8 +2443,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items?.[index]?.tax_rate !== curr?.items?.[index]?.tax_rate}>
                               {({ getFieldValue }: any) => {
-                                const items = getFieldValue('items') ?? [];
-                                const row = items[index];
+                                const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                                 return (
                                   <AntForm.Item name={[index, 'tax_rate']} initialValue={0} style={{ margin: 0 }}>
                                     <InputNumber
@@ -2469,8 +2467,7 @@ const PurchaseOrdersPage: React.FC = () => {
                           render: (_: any, __: any, index: number) => (
                             <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                               {({ getFieldValue }: any) => {
-                                const items = getFieldValue('items') ?? [];
-                                const row = items[index];
+                                const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                                 const qty = Number(row?.ordered_quantity) || 0;
                                 const price = Number(row?.unit_price) || 0;
                                 const taxRate = Number(row?.tax_rate) || 0;
@@ -2489,8 +2486,7 @@ const PurchaseOrdersPage: React.FC = () => {
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                         {({ getFieldValue }: any) => {
-                          const items = getFieldValue('items') ?? [];
-                          const row = items[index];
+                          const row = normalizeFormListItems<any>(getFieldValue('items'))[index];
                           const qty = Number(row?.ordered_quantity) || 0;
                           const price = Number(row?.unit_price) || 0;
                           const taxRate = Number(row?.tax_rate) || 0;

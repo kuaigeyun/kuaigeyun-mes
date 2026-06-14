@@ -12,6 +12,7 @@ import type { CustomField } from '../../services/customField';
 import { CustomFieldFileDetail } from './CustomFieldFileDetail';
 import { normalizeCustomFieldFileUuids } from './customFieldFileUtils';
 import { formatJsonText, isEmptyJsonValue } from './customFieldJsonUtils';
+import { formatAssociatedDetailValue } from './customFieldAssociatedDisplayMode';
 
 export interface CustomFieldsDetailSectionProps {
   customFields: CustomField[];
@@ -85,6 +86,10 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
         }
         if (value === null || value === undefined || value === '') {
           return <Typography.Text type="secondary">-</Typography.Text>;
+        }
+        if (field.field_type === 'associated_object' || field.field_type === 'associated_attribute') {
+          const text = formatAssociatedDetailValue(value);
+          return text ? text : <Typography.Text type="secondary">-</Typography.Text>;
         }
         if (typeof value === 'object') {
           const display = value.label ?? value.name ?? value.title ?? value.code ?? (value.id != null ? String(value.id) : null);

@@ -15,7 +15,7 @@ export interface CustomField {
   name: string;
   code: string;
   table_name: string;
-  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json';
+  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'associated_attribute' | 'formula' | 'json';
   config?: Record<string, any>;
   label?: string;
   placeholder?: string;
@@ -54,7 +54,7 @@ export interface CreateCustomFieldData {
   name: string;
   code: string;
   table_name: string;
-  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json';
+  field_type: 'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'associated_attribute' | 'formula' | 'json';
   config?: Record<string, any>;
   label?: string;
   placeholder?: string;
@@ -228,6 +228,105 @@ export async function getAssociatedTableOptions(
     '/core/custom-fields/associated-options',
     {
       params: { table: tableName, display_field: displayField, limit },
+    },
+  );
+  return Array.isArray(result) ? result : [];
+}
+
+export interface CustomFieldSystemSourceField {
+  name: string;
+  modelField: string;
+  label: string;
+  scope: 'system';
+}
+
+/**
+ * 获取指定表可用于 VLOOKUP 源字段的系统字段列表。
+ */
+export async function getSystemSourceFields(tableName: string): Promise<CustomFieldSystemSourceField[]> {
+  return apiRequest<CustomFieldSystemSourceField[]>(`/core/custom-fields/system-fields/${tableName}`);
+}
+
+/**
+ * 获取指定表可用于关联属性「关联对象字段」的系统字段列表（多为外键 ID）。
+ */
+export async function getSystemLinkFields(tableName: string): Promise<CustomFieldSystemSourceField[]> {
+  return apiRequest<CustomFieldSystemSourceField[]>(`/core/custom-fields/system-link-fields/${tableName}`);
+}
+
+export interface AssociatedTableModelField {
+  field: string;
+  label: string;
+}
+
+/**
+ * 获取关联表真实模型字段（匹配 / 返回 / 属性字段配置）。
+ */
+export async function getAssociatedTableModelFields(
+  tableName: string,
+): Promise<AssociatedTableModelField[]> {
+  return apiRequest<AssociatedTableModelField[]>(`/core/custom-fields/table-model-fields/${tableName}`);
+}
+
+export interface AssociatedLookupResult {
+  value: number | string | null;
+  recordId?: number | null;
+  label?: string;
+}
+
+/**
+ * 关联对象 VLOOKUP：用表单字段值在关联表查找对应记录字段值。
+ */
+export async function lookupAssociatedValue(params: {
+  table: string;
+  matchField: string;
+  matchValue: string | number;
+  returnField?: string;
+}): Promise<AssociatedLookupResult> {
+  return apiRequest<AssociatedLookupResult>('/core/custom-fields/associated-lookup', {
+    params: {
+      table: params.table,
+      match_field: params.matchField,
+      match_value: String(params.matchValue),
+      return_field: params.returnField || 'id',
+    },
+  });
+}
+
+export interface AssociatedAttributeResult {
+  value: number | string | null;
+  label?: string;
+}
+
+/**
+ * 关联属性：按关联记录 ID 读取关联表指定字段值。
+ */
+export async function getAssociatedAttributeValue(params: {
+  table: string;
+  recordId: number | string;
+  attributeField: string;
+}): Promise<AssociatedAttributeResult> {
+  return apiRequest<AssociatedAttributeResult>('/core/custom-fields/associated-attribute', {
+    params: {
+      table: params.table,
+      record_id: params.recordId,
+      attribute_field: params.attributeField,
+    },
+  });
+}
+
+/**
+ * 关联属性（无关联对象字段时）：列出关联表指定属性字段的全部可选值。
+ */
+export async function getAssociatedAttributeOptions(
+  tableName: string,
+  attributeField: string = 'name',
+  limit: number = 500,
+): Promise<Array<{ value: number | string; label: string }>> {
+  const result = await apiRequest<Array<{ value: number | string; label: string }>>(
+    '/core/custom-fields/associated-attribute-options',
+    {
+      params: { table: tableName, attribute_field: attributeField, limit },
     },
   );
   return Array.isArray(result) ? result : [];

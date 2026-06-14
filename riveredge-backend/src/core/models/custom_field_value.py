@@ -80,13 +80,14 @@ class CustomFieldValue(BaseModel):
             return self.value_json
         return None
     
-    def set_value(self, value: Any, field_type: str) -> None:
+    def set_value(self, value: Any, field_type: str, field_config: Optional[dict] = None) -> None:
         """
         根据字段类型设置值
         
         Args:
             value: 字段值
             field_type: 字段类型
+            field_config: 字段配置（含 displayMode 等）
         """
         # 清空所有值字段
         self.value_text = None
@@ -96,13 +97,32 @@ class CustomFieldValue(BaseModel):
         
         if value is None:
             return
+
+        config = field_config or {}
+        display_mode = config.get("displayMode")
+
+        if (
+            field_type in ("associated_object", "associated_attribute")
+            and display_mode == "multiselect"
+        ):
+            if isinstance(value, list):
+                self.value_json = [item for item in value if item is not None and str(item).strip() != ""]
+            else:
+                self.value_json = [value]
+            return
         
         if field_type in ("text", "textarea", "select", "multiselect"):
             self.value_text = str(value)
-        elif field_type in ("number", "associated_object"):
-            # associated_object 存储关联记录的 ID（数值）
+        elif field_type in ("number", "associated_object", "formula"):
+            # associated_object 存储 VLOOKUP 结果（多为 id）；formula 存储计算结果
             self.value_number = Decimal(str(value))
-            self.value_number = Decimal(str(value))
+        elif field_type == "associated_attribute":
+            if value is None:
+                return
+            if isinstance(value, (int, float, Decimal)):
+                self.value_number = Decimal(str(value))
+            else:
+                self.value_text = str(value)
         elif field_type == "date":
             if isinstance(value, date):
                 self.value_date = value

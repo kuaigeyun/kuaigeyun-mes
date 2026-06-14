@@ -169,3 +169,139 @@ async def get_associated_options(
         return result
     except Exception:
         return []
+
+
+async def get_associated_attribute_options(
+    table_name: str,
+    attribute_field: str,
+    tenant_id: int,
+    limit: int = 500,
+) -> List[Dict[str, Any]]:
+    """
+    关联属性（无关联对象字段时）：列出关联表 attribute_field 列的全部可选值。
+    """
+    attribute_field = _resolve_model_field_name(table_name, attribute_field, "name")
+
+    model = _get_model(table_name)
+    if not model:
+        return []
+
+    try:
+        query = model.all()
+        if hasattr(model, "tenant_id"):
+            query = query.filter(tenant_id=tenant_id)
+        if hasattr(model, "deleted_at"):
+            query = query.filter(deleted_at__isnull=True)
+
+        rows = await query.limit(limit).values_list(attribute_field)
+
+        result: List[Dict[str, Any]] = []
+        seen_values: set[str] = set()
+        for row in rows:
+            value = row[0]
+            if value is None:
+                continue
+            key = str(value)
+            if key in seen_values:
+                continue
+            seen_values.add(key)
+            result.append({"value": value, "label": key})
+        return result
+    except Exception:
+        return []
+
+
+def _resolve_model_field_name(table_name: str, field_name: str, default: str) -> str:
+    name = (field_name or "").strip()
+    if not name:
+        return default
+    from core.config.custom_field_system_fields import is_valid_model_field
+
+    if is_valid_model_field(table_name, name):
+        return name
+    return default
+
+
+async def lookup_associated_record(
+    table_name: str,
+    match_field: str,
+    match_value: Any,
+    return_field: str,
+    tenant_id: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    VLOOKUP：用 match_value 在关联表 match_field 列匹配，返回 return_field 值。
+    """
+    if match_value is None or str(match_value).strip() == "":
+        return None
+
+    match_field = _resolve_model_field_name(table_name, match_field, "code")
+    return_field = _resolve_model_field_name(table_name, return_field, "id")
+
+    model = _get_model(table_name)
+    if not model:
+        return None
+
+    try:
+        query = model.all()
+        if hasattr(model, "tenant_id"):
+            query = query.filter(tenant_id=tenant_id)
+        if hasattr(model, "deleted_at"):
+            query = query.filter(deleted_at__isnull=True)
+
+        row = await query.filter(**{match_field: match_value}).first()
+        if not row:
+            return None
+
+        return_value = getattr(row, return_field, None)
+        record_id = getattr(row, "id", None)
+        return {
+            "value": return_value,
+            "recordId": record_id,
+            "label": str(return_value) if return_value is not None else "",
+        }
+    except Exception:
+        return None
+
+
+async def get_associated_attribute_value(
+    table_name: str,
+    record_id: Any,
+    attribute_field: str,
+    tenant_id: int,
+) -> Optional[Dict[str, Any]]:
+    """
+    关联属性：按 record_id 读取关联表 attribute_field 列的值。
+    """
+    if record_id is None or str(record_id).strip() == "":
+        return None
+
+    try:
+        record_id_int = int(record_id)
+    except (TypeError, ValueError):
+        return None
+
+    attribute_field = _resolve_model_field_name(table_name, attribute_field, "name")
+
+    model = _get_model(table_name)
+    if not model:
+        return None
+
+    try:
+        query = model.all()
+        if hasattr(model, "tenant_id"):
+            query = query.filter(tenant_id=tenant_id)
+        if hasattr(model, "deleted_at"):
+            query = query.filter(deleted_at__isnull=True)
+
+        row = await query.filter(id=record_id_int).first()
+        if not row:
+            return None
+
+        value = getattr(row, attribute_field, None)
+        return {
+            "value": value,
+            "label": str(value) if value is not None else "",
+        }
+    except Exception:
+        return None

@@ -152,6 +152,108 @@ async def get_associated_options(
     )
 
 
+@router.get("/associated-lookup", response_model=Dict[str, Any])
+async def lookup_associated_value(
+    table: str = Query(..., description="关联表名"),
+    match_field: str = Query("code", description="匹配字段"),
+    match_value: str = Query(..., description="匹配值（来自当前表单字段）"),
+    return_field: str = Query("id", description="返回字段"),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
+):
+    """
+    关联对象 VLOOKUP：用当前表单字段值在关联表中查找并返回指定字段值。
+    """
+    from core.config.associated_table_registry import lookup_associated_record
+
+    result = await lookup_associated_record(
+        table_name=table,
+        match_field=match_field,
+        match_value=match_value,
+        return_field=return_field,
+        tenant_id=tenant_id,
+    )
+    if result is None:
+        return {"value": None, "recordId": None, "label": ""}
+    return result
+
+
+@router.get("/associated-attribute", response_model=Dict[str, Any])
+async def get_associated_attribute(
+    table: str = Query(..., description="关联表名"),
+    record_id: int = Query(..., description="关联记录 ID（来自关联对象字段）"),
+    attribute_field: str = Query("name", description="读取的属性字段"),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
+):
+    """
+    关联属性：按关联记录 ID 读取关联表指定字段的值。
+    """
+    from core.config.associated_table_registry import get_associated_attribute_value
+
+    result = await get_associated_attribute_value(
+        table_name=table,
+        record_id=record_id,
+        attribute_field=attribute_field,
+        tenant_id=tenant_id,
+    )
+    if result is None:
+        return {"value": None, "label": ""}
+    return result
+
+
+@router.get("/system-link-fields/{table_name}", response_model=List[Dict[str, Any]])
+async def list_system_link_fields(
+    table_name: str,
+    _auth: object = Depends(require_custom_field_read),
+):
+    """获取指定表可用于关联属性「关联对象字段」的系统字段列表（多为外键 ID）。"""
+    from core.config.custom_field_system_fields import get_system_link_fields
+
+    return get_system_link_fields(table_name)
+
+
+@router.get("/associated-attribute-options", response_model=List[Dict[str, Any]])
+async def get_associated_attribute_options(
+    table: str = Query(..., description="关联表名"),
+    attribute_field: str = Query("name", description="属性字段（模型列名）"),
+    limit: int = Query(500, ge=1, le=1000, description="最大返回数量"),
+    tenant_id: int = Depends(get_current_tenant),
+    _auth: object = Depends(require_custom_field_read),
+):
+    """关联属性（无关联对象字段时）：列出关联表指定属性字段的全部可选值。"""
+    from core.config.associated_table_registry import get_associated_attribute_options as fetch_options
+
+    return await fetch_options(
+        table_name=table,
+        attribute_field=attribute_field,
+        tenant_id=tenant_id,
+        limit=limit,
+    )
+
+
+@router.get("/system-fields/{table_name}", response_model=List[Dict[str, Any]])
+async def list_system_source_fields(
+    table_name: str,
+    _auth: object = Depends(require_custom_field_read),
+):
+    """获取指定表可用于关联对象源字段的系统字段列表。"""
+    from core.config.custom_field_system_fields import get_system_source_fields
+
+    return get_system_source_fields(table_name)
+
+
+@router.get("/table-model-fields/{table_name}", response_model=List[Dict[str, Any]])
+async def list_associated_table_model_fields(
+    table_name: str,
+    _auth: object = Depends(require_custom_field_read),
+):
+    """获取关联表真实模型字段，用于匹配字段 / 返回字段 / 属性字段配置。"""
+    from core.config.custom_field_system_fields import get_associated_table_model_fields
+
+    return get_associated_table_model_fields(table_name)
+
+
 @router.get("/pages", response_model=List[CustomFieldPageConfigResponse])
 async def list_custom_field_pages(
     tenant_id: int = Depends(get_current_tenant),

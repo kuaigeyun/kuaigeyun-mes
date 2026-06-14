@@ -18,10 +18,15 @@ import { ProFormSelect } from '@ant-design/pro-components';
  * 安全处理 options 的工具函数
  * 处理各种可能的错误情况：undefined、null、非数组等
  */
-const safeOptions = (options: any, componentName: string = 'ProFormSelect'): any[] => {
+const safeOptions = (options: any, componentName: string = 'ProFormSelect'): any => {
   // 如果 options 是 undefined 或 null，返回空数组
   if (options == null) {
     return [];
+  }
+
+  // ProFormSelect 支持 options 为依赖表单值的函数，须原样透传
+  if (typeof options === 'function') {
+    return options;
   }
 
   // 如果已经是数组，直接返回
