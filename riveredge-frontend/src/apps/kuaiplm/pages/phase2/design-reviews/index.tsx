@@ -27,6 +27,7 @@ const DesignReviewsPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
@@ -85,6 +86,9 @@ const DesignReviewsPage: React.FC = () => {
       <UniTable<RdDesignReview>
         headerTitle="设计评审"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.design-reviews"
         request={async (params) => {

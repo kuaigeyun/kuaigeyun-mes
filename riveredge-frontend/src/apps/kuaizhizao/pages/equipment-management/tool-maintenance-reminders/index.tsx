@@ -4,7 +4,7 @@
  * 基于 next_maintenance_date、next_calibration_date 展示即将到期/已过期的工装保养、校准提醒。
  */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,6 +26,7 @@ interface ToolMaintenanceReminder {
 
 const ToolMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const columns: ProColumns<ToolMaintenanceReminder>[] = [
     {
@@ -91,6 +92,9 @@ const ToolMaintenanceRemindersPage: React.FC = () => {
         headerTitle="工装保养校准提醒"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenance-reminders"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey={(record) =>
           [record.tool_uuid, record.tool_code, record.reminder_type, record.due_type, record.due_date]
             .filter(Boolean)

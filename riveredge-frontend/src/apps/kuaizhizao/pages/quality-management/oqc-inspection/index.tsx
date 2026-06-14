@@ -38,6 +38,7 @@ const OQCInspectionPage: React.FC = () => {
   const [deliveryOptions, setDeliveryOptions] = useState<{ label: string; value: number }[]>([]);
   const [selectedDeliveryId, setSelectedDeliveryId] = useState<number | undefined>();
   const [creatingFromDelivery, setCreatingFromDelivery] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const openFromNoticeModal = async () => {
     try {
@@ -178,6 +179,9 @@ const OQCInspectionPage: React.FC = () => {
           headerTitle="出货检验 (OQC)"
           actionRef={actionRef}
           rowKey="id"
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           permissionResource={OQC_RESOURCE}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.oqc-inspection"

@@ -501,6 +501,7 @@ const SalesInvoicesPage: React.FC = () => {
       <UniTable<SalesInvoice>
         headerTitle="销售发票"
         actionRef={actionRef}
+        enableRowSelection
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices"
         scroll={{ x: 1800 }}

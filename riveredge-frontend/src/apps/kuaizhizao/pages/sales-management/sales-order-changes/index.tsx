@@ -69,6 +69,7 @@ const SalesOrderChangesPage: React.FC = () => {
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewSalesOrderChangeImpact>> | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const openCreate = useCallback(() => {
     setSelectedSourceOrder(null);
@@ -257,11 +258,40 @@ const SalesOrderChangesPage: React.FC = () => {
     return { data: list, success: true, total: list.length };
   }, []);
 
+  const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      message.warning('请先选择需要删除的记录');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await deleteSalesOrderChange(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已删除 ${success} 条销售变更单`);
+    if (failed > 0) message.warning(`${failed} 条删除失败（仅草稿可删除）`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, [message]);
+
   return (
     <ListPageTemplate>
       <UniTable<SalesOrderChange>
         actionRef={actionRef}
         rowKey="id"
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         request={request}
         columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-order-changes"
@@ -277,6 +307,9 @@ const SalesOrderChangesPage: React.FC = () => {
             {'选单创建' + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售变更单？`}
       />
 
       <Modal

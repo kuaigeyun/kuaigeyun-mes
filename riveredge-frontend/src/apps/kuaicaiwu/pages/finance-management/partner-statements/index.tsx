@@ -255,6 +255,7 @@ const PartnerStatementsPage: React.FC = () => {
     <UniTable<PartnerStatement>
       headerTitle="客户对账"
       actionRef={customerActionRef}
+      enableRowSelection
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer"
       scroll={{ x: 1200 }}
@@ -284,6 +285,7 @@ const PartnerStatementsPage: React.FC = () => {
     <UniTable<PartnerStatement>
       headerTitle="供应商对账"
       actionRef={supplierActionRef}
+      enableRowSelection
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier"
       scroll={{ x: 1200 }}

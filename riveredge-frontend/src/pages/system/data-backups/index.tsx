@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import dayjs from 'dayjs';
 import { rowActionKind } from '../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import {
@@ -42,7 +43,7 @@ import {
 import { useGlobalStore } from '../../../stores';
 import { getTenantId } from '../../../utils/auth';
 
-function formatBytes(bytes?: number): string {
+function formatFileSize(bytes?: number): string {
   if (!bytes) return '-';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(2)} KB`;
@@ -58,6 +59,7 @@ const DataBackupsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = theme.useToken();
+  const { Text } = Typography;
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = React.useRef<ActionType>(null);
 

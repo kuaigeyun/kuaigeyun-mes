@@ -34,6 +34,7 @@ const EightDReportsPage: React.FC = () => {
   const [createVisible, setCreateVisible] = useState(false);
   const [transitionVisible, setTransitionVisible] = useState(false);
   const [currentRow, setCurrentRow] = useState<Quality8DReport | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { canCreate, canUpdate } = useResourcePermissions(EIGHT_D_RESOURCE);
   const canClose = hasModulePermission(currentUser ?? undefined, EIGHT_D_RESOURCE, 'close');
 
@@ -93,6 +94,9 @@ const EightDReportsPage: React.FC = () => {
           headerTitle="8D 管理"
           actionRef={actionRef}
           rowKey="id"
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports"
           toolBarRender={() =>

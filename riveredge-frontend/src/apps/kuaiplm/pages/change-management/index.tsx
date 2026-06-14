@@ -36,6 +36,7 @@ const ChangeManagementPage: React.FC = () => {
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const handleCreateBomChange = useCallback(() => {
     window.open(buildBomChangeCreateUrl(), '_blank');
@@ -151,6 +152,9 @@ const ChangeManagementPage: React.FC = () => {
       <UniTable<UnifiedChangeRow>
         headerTitle="设计变更"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
         scroll={{ x: 1200 }}

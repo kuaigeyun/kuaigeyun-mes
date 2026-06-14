@@ -281,6 +281,7 @@ const DocumentReconciliationPage: React.FC = () => {
   const gapPanel = (
     <UniTable<GapRow>
       actionRef={actionRef}
+      enableRowSelection
       headerActions={gapHeaderActions}
       request={gapRequest}
       tanstackQuery={{ enabled: false }}

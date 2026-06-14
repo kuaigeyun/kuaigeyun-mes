@@ -28,6 +28,7 @@ const RequirementsPage: React.FC = () => {
   const projectIdFilter = searchParams.get('project_id');
   const filterProjectId = projectIdFilter ? Number(projectIdFilter) : undefined;
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
@@ -107,6 +108,9 @@ const RequirementsPage: React.FC = () => {
       <UniTable<RdRequirement>
         headerTitle="研发需求"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.requirements"
         request={async (params) => {

@@ -69,6 +69,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewPurchaseOrderChangeImpact>> | null>(null);
   const [pendingSubmitId, setPendingSubmitId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const openCreate = useCallback(() => {
     setSelectedSourceOrder(null);
@@ -266,6 +267,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
       <UniTable<PurchaseOrderChange>
         actionRef={actionRef}
         rowKey="id"
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         request={request}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes"

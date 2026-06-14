@@ -3311,29 +3311,23 @@ const QuotationsPage: React.FC = () => {
                       },
                     ]
                   : []),
+                {
+                  key: 'revision',
+                  label: t('app.kuaizhizao.quotation.saveAsRevision'),
+                  icon: <BranchesOutlined />,
+                  disabled: selectedRowKeys.length !== 1,
+                  onClick: (keys: React.Key[]) => void handleToolbarRevision(keys),
+                },
+                {
+                  key: 'print',
+                  label: t('app.kuaizhizao.quotation.formalPrint'),
+                  icon: <PrinterOutlined />,
+                  disabled: selectedRowKeys.length !== 1,
+                  onClick: (keys: React.Key[]) => void handleToolbarPrint(keys),
+                },
               ]}
               toolBarButtonSize="middle"
             />,
-          ]}
-          toolBarActionsAfterBatch={[
-            <Button {...rowActionKind('create')}
-              key="quotation-revision"
-              icon={<BranchesOutlined />}
-              size="middle"
-              disabled={selectedRowKeys.length !== 1}
-              onClick={() => void handleToolbarRevision(selectedRowKeys)}
-            >
-              {t('app.kuaizhizao.quotation.saveAsRevision')}
-            </Button>,
-            <Button {...rowActionKind('print')}
-              key="quotation-print"
-              icon={<PrinterOutlined />}
-              size="middle"
-              disabled={selectedRowKeys.length !== 1}
-              onClick={() => void handleToolbarPrint(selectedRowKeys)}
-            >
-              {t('app.kuaizhizao.quotation.formalPrint')}
-            </Button>,
           ]}
           showImportButton={true}
           onImport={handleListImport}

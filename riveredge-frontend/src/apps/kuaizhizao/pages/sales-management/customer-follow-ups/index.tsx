@@ -272,24 +272,18 @@ const CustomerFollowUpsPage: React.FC = () => {
     });
   };
 
-  const handleBatchDelete = (keys: React.Key[]) => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: keys.length }),
-      onOk: async () => {
-        try {
-          for (const key of keys) {
-            await customerFollowUpApi.delete(Number(key));
-          }
-          message.success(t('common.deleteSuccess'));
-          setSelectedRowKeys([]);
-          reloadTable();
-        } catch (error: any) {
-          message.error(error?.message || t('common.deleteFailed'));
-        }
-      },
-    });
+    try {
+      for (const key of keys) {
+        await customerFollowUpApi.delete(Number(key));
+      }
+      message.success(t('common.deleteSuccess'));
+      setSelectedRowKeys([]);
+      reloadTable();
+    } catch (error: any) {
+      message.error(error?.message || t('common.deleteFailed'));
+    }
   };
 
   useNewShortcut(openCreate);
@@ -442,16 +436,10 @@ const CustomerFollowUpsPage: React.FC = () => {
             <Button {...rowActionKind('create')} key="new" type="primary" onClick={openCreate}>
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,
-            <Button {...rowActionKind('delete')}
-              key="batchDelete"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={() => handleBatchDelete(selectedRowKeys)}
-            >
-              {t('common.batchDelete')}
-            </Button>,
           ]}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           request={async (params, _sort, _filter, searchFormValues) => {
             const keyword =
               typeof searchFormValues?.keyword === 'string'

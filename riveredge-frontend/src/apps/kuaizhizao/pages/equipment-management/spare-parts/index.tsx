@@ -27,6 +27,7 @@ interface SpareInventoryRow {
 
 const SparePartsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const [selectedRowKeys, setSelectedRowKeys] = React.useState<React.Key[]>([]);
 
   const columns: ProColumns<SpareInventoryRow>[] = useMemo(
     () => [
@@ -103,6 +104,9 @@ const SparePartsPage: React.FC = () => {
       <UniTable<SpareInventoryRow>
         headerTitle="备件库存列表"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts"
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey={(r) => String(r.id ?? r.part_no ?? Math.random())}
         columns={columns}
         showAdvancedSearch

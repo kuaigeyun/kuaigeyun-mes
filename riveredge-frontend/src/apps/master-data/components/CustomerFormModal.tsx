@@ -299,7 +299,6 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         loading={formLoading}
         width={MODAL_CONFIG.LARGE_WIDTH}
         formRef={formRef as React.RefObject<ProFormInstance>}
-        initialValues={{ isActive: true, isPublic: true }}
         layout="vertical"
         grid
         zIndex={zIndex}
@@ -315,7 +314,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
          */}
         <Col span={24}>
           <Tabs
-            destroyInactiveTabPane={false}
+            destroyOnHidden={false}
             style={{ width: '100%' }}
             items={[
               {

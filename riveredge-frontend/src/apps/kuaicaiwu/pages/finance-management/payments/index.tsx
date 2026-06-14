@@ -390,6 +390,7 @@ const PaymentsPage: React.FC = () => {
       <UniTable<PaymentVoucher>
         headerTitle="付款单管理"
         actionRef={actionRef}
+        enableRowSelection
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments"
         scroll={{ x: 1680 }}

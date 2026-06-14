@@ -159,6 +159,7 @@ const PrepaymentsPage: React.FC = () => {
               <>
                 <UniTable<PrepaymentRow>
                   headerTitle="客户预收"
+                  enableRowSelection
                   rowKey={(r) => `c-${r.partner_id}`}
                   columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
                   columns={balanceColumns}
@@ -170,6 +171,7 @@ const PrepaymentsPage: React.FC = () => {
                 <UniTable<PrepaymentRow>
                   headerTitle="供应商预付"
                   style={{ marginTop: 24 }}
+                  enableRowSelection
                   rowKey={(r) => `s-${r.partner_id}`}
                   columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
                   columns={balanceColumns}
@@ -187,6 +189,7 @@ const PrepaymentsPage: React.FC = () => {
             children: (
               <UniTable<PrepaymentRow>
                 actionRef={receiptRef}
+                enableRowSelection
                 rowKey="id"
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
                 columns={receiptColumns}
@@ -210,6 +213,7 @@ const PrepaymentsPage: React.FC = () => {
             children: (
               <UniTable<PrepaymentRow>
                 actionRef={paymentRef}
+                enableRowSelection
                 rowKey="id"
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
                 columns={paymentColumns}

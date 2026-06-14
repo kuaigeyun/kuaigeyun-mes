@@ -181,6 +181,7 @@ const SettlementPage: React.FC = () => {
           <UniTable
             headerTitle="待核销应收单"
             actionRef={receivableActionRef}
+            enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement"
@@ -208,6 +209,7 @@ const SettlementPage: React.FC = () => {
           <UniTable
             headerTitle="可用收款单"
             actionRef={receiptActionRef}
+            enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:2"
@@ -275,6 +277,7 @@ const SettlementPage: React.FC = () => {
           <UniTable
             headerTitle="待核销应付单"
             actionRef={payableActionRef}
+            enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payable"
@@ -302,6 +305,7 @@ const SettlementPage: React.FC = () => {
           <UniTable
             headerTitle="可用付款单"
             actionRef={paymentActionRef}
+            enableRowSelection
             rowKey="id"
             viewTypes={[...tableOnlyViewTypes]}
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.settlement:payment"

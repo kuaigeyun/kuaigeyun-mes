@@ -3578,7 +3578,15 @@ const SalesOrdersPage: React.FC = () => {
                   const text = first?.errors?.filter(Boolean)[0];
                   messageApi.error(text || t('components.layoutTemplates.formModal.checkFormHint'));
                 }}
-                initialValues={isCreatePage ? { price_type: 'tax_exclusive', order_date: dayjs() } : undefined}
+                initialValues={
+                  isCreatePage
+                    ? {
+                        price_type: 'tax_exclusive',
+                        order_date: dayjs(),
+                        items: [{ ...defaultOrderItem }],
+                      }
+                    : undefined
+                }
               >
                 {salesOrderFormItemContent}
               </ProForm>

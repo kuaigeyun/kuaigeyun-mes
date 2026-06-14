@@ -370,23 +370,16 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条发货通知单吗？`,
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await shipmentNoticeApi.delete(String(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条发货通知单`);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
-        }
-      },
-    });
+    try {
+      for (const k of keys) {
+        await shipmentNoticeApi.delete(String(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条发货通知单`);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
   };
 
   const handleCreate = async () => {

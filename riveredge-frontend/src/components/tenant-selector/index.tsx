@@ -88,6 +88,12 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   }, [isInfraSuperAdmin, currentTenantId, tenantOptions, t]);
 
   const canSwitch = isInfraSuperAdmin || tenantOptions.length > 1;
+  const stableFontSize = 16;
+  const stableTenantTextStyle: React.CSSProperties = {
+    fontSize: stableFontSize,
+    fontWeight: 500,
+    lineHeight: '24px',
+  };
 
   if (canSwitch) {
     return (
@@ -106,6 +112,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
               maxWidth: 240,
               height: 32,
               padding: '0 12px',
+              fontSize: stableFontSize,
             }}
             size="small"
             className="tenant-selector-select"
@@ -115,7 +122,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
           >
             {tenantOptions.map((tenant) => (
               <Option key={tenant.id} value={String(tenant.id)}>
-                {tenant.name}
+                <span style={stableTenantTextStyle}>{tenant.name}</span>
               </Option>
             ))}
           </Select>
@@ -142,7 +149,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         borderRadius: '16px',
         backgroundColor: token.colorFillTertiary,
         color: spanColor,
-        fontSize: token.fontSize,
+        fontSize: stableFontSize,
         fontWeight: 500,
         height: 32,
         lineHeight: '24px',

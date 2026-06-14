@@ -407,6 +407,7 @@ const PurchaseInvoiceList: React.FC = () => {
             <UniTable<PurchaseInvoice>
                 headerTitle="采购发票"
                 actionRef={actionRef}
+                enableRowSelection
                 columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
                 scroll={{ x: 1600 }}

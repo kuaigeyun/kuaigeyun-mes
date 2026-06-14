@@ -84,6 +84,7 @@ const BankAccountsPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<BankAccount>
         actionRef={actionRef}
+        enableRowSelection
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts"
         columns={columns}
@@ -105,6 +106,7 @@ const BankAccountsPage: React.FC = () => {
         plainBody={
           <UniTable<BankTx>
             actionRef={txRef}
+            enableRowSelection
             rowKey="id"
             columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts.transactions"
             columns={txColumns}

@@ -21,7 +21,7 @@ import { UniTable } from '../../../../../components/uni-table';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { rowActionKind } from '../../../../../components/uni-action';
-import { getUserOptions } from '../../../../master-data/services/supply-chain';
+import { customerApi, getUserOptions } from '../../../../master-data/services/supply-chain';
 import { CustomerFormModal } from '../../../../master-data/components/CustomerFormModal';
 import { CustomerDetailDrawer } from '../../../../master-data/components/CustomerDetailDrawer';
 import { CustomerFollowUpFormModal } from '../../../components/CustomerFollowUpFormModal';
@@ -34,6 +34,8 @@ const CustomerPoolPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>(null);
   const [scope, setScope] = useState<'pool' | 'mine' | 'all'>('all');
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<CustomerPoolItem[]>([]);
   const scopeRef = useRef(scope);
   scopeRef.current = scope;
 
@@ -50,7 +52,7 @@ const CustomerPoolPage: React.FC = () => {
     canRecycle,
     canUpdateRules,
   } = useCustomerPoolPermissions();
-  const { canCreate: canCreateCustomer, canUpdate: canUpdateCustomer } =
+  const { canCreate: canCreateCustomer, canUpdate: canUpdateCustomer, canDelete: canDeleteCustomer } =
     useResourcePermissions('master-data:supply-chain:customer');
   const [followUpOpen, setFollowUpOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -379,12 +381,42 @@ const CustomerPoolPage: React.FC = () => {
     [canAssign, canClaim, canRecycle, canRelease, canUpdateCustomer, confirmReleaseCustomer, navigate, poolStatusValueEnum, salesmanOptions, salesmanValueEnum, scope, t],
   );
 
+  const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      message.warning('请先选择需要删除的客户');
+      return;
+    }
+    const rowMap = new Map(tableRowsRef.current.map((row) => [String(row.id), row]));
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const row = rowMap.get(String(key));
+      if (!row?.uuid) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await customerApi.delete(row.uuid);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已删除 ${success} 个客户`);
+    if (failed > 0) message.warning(`${failed} 个客户删除失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, [message]);
+
   return (
     <>
       <ListPageTemplate style={{ padding: 0 }}>
         <UniTable<CustomerPoolItem>
           actionRef={actionRef}
           rowKey="id"
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           headerTitle="客户池"
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
@@ -437,12 +469,17 @@ const CustomerPoolPage: React.FC = () => {
                 salesmanId: Number.isFinite(salesmanId) && salesmanId! > 0 ? salesmanId : undefined,
                 poolStatus,
               });
+              tableRowsRef.current = res.items || [];
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {
               message.error('加载客户池失败');
+              tableRowsRef.current = [];
               return { data: [], total: 0, success: false };
             }
           }}
+          showDeleteButton={canDeleteCustomer}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 个客户？`}
         />
       </ListPageTemplate>
 

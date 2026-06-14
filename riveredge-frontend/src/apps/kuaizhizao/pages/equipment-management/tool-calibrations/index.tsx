@@ -33,6 +33,7 @@ interface ToolCalibration {
 const ToolCalibrationsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [toolOptions, setToolOptions] = useState<{ label: string; value: string }[]>([]);
@@ -134,6 +135,9 @@ const ToolCalibrationsPage: React.FC = () => {
         headerTitle="工装校准记录"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-calibrations"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
         request={async (params) => {

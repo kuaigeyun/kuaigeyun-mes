@@ -33,6 +33,7 @@ interface ToolMaintenance {
 const ToolMaintenancesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [toolOptions, setToolOptions] = useState<{ label: string; value: string }[]>([]);
@@ -117,6 +118,9 @@ const ToolMaintenancesPage: React.FC = () => {
         headerTitle="工装维保记录"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-maintenances"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
         request={async (params) => {

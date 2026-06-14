@@ -389,6 +389,7 @@ const ReceiptsPage: React.FC = () => {
       <UniTable<ReceiptVoucher>
         headerTitle="收款单管理"
         actionRef={actionRef}
+        enableRowSelection
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts"
         scroll={{ x: 1680 }}

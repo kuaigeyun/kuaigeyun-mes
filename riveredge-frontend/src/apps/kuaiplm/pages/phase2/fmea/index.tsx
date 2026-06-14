@@ -33,6 +33,7 @@ const FmeaPage: React.FC = () => {
     ? Number(searchParams.get('project_id'))
     : undefined;
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
@@ -98,6 +99,9 @@ const FmeaPage: React.FC = () => {
       <UniTable<RdFmeaRecord>
         headerTitle="FMEA"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.phase2.fmea"
         request={async (params) => {

@@ -10,7 +10,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
-import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Dropdown, Descriptions, Tooltip, Card } from 'antd'
+import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card } from 'antd'
 import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -41,6 +41,7 @@ import {
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache'
 import { UniTable } from '../../../../../components/uni-table'
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -629,7 +630,7 @@ export default function SalesForecastsPage() {
     }
   }
 
-  const handleDelete = async (keys: React.Key[]) => {
+  const executeDeleteByKeys = async (keys: React.Key[]) => {
     if (keys.length === 0) {
       messageApi.warning(t('common.selectToDelete'))
       return
@@ -655,30 +656,45 @@ export default function SalesForecastsPage() {
       return;
     }
 
+    try {
+      for (const id of finalIds) {
+        await deleteSalesForecast(id);
+      }
+      messageApi.success(t('common.deleteSuccess', { count: deleteCount }))
+      invalidateForecastCache();
+      actionRef.current?.reload()
+      setSelectedRowKeys([])
+      if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
+      if (drawerVisible && currentForecast?.id && finalIds.includes(currentForecast.id)) {
+        setDrawerVisible(false);
+        setCurrentForecast(null);
+      }
+    } catch (e: any) {
+      messageApi.error(t('common.deleteFailed') + ': ' + (e.message || ''))
+    }
+  }
+
+  const handleDelete = async (keys: React.Key[]) => {
+    const orderIds = [
+      ...new Set(
+        keys
+          .map((k) => {
+            const mappedId = rowKeyToOrderIdRef.current.get(String(k));
+            if (mappedId != null) return mappedId;
+            const numericId = Number(k);
+            return Number.isFinite(numericId) ? numericId : undefined;
+          })
+          .filter((id): id is number => id != null)
+      ),
+    ];
+    const deleteCount = dataViewMode === 'order' ? keys.length : orderIds.length;
     modalApi.confirm({
       title: t('common.confirmDelete'),
       content: t('app.kuaizhizao.salesForecast.deleteConfirmContent', { count: deleteCount }),
       okText: t('common.delete'),
       okButtonProps: { danger: true },
       cancelText: t('common.cancel'),
-      onOk: async () => {
-        try {
-          for (const id of finalIds) {
-            await deleteSalesForecast(id);
-          }
-          messageApi.success(t('common.deleteSuccess', { count: deleteCount }))
-          invalidateForecastCache();
-          actionRef.current?.reload()
-          setSelectedRowKeys([])
-          if (actionRef.current?.clearSelected) actionRef.current.clearSelected();
-          if (drawerVisible && currentForecast?.id && finalIds.includes(currentForecast.id)) {
-            setDrawerVisible(false);
-            setCurrentForecast(null);
-          }
-        } catch (e: any) {
-          messageApi.error(t('common.deleteFailed') + ': ' + (e.message || ''))
-        }
-      },
+      onOk: () => executeDeleteByKeys(keys),
     })
   }
 
@@ -1737,54 +1753,45 @@ export default function SalesForecastsPage() {
           showCreateButton={salesNodesEnabled.sales_forecast}
           createButtonText={t('app.kuaizhizao.salesForecast.create')}
           onCreate={handleCreate}
-          toolBarRender={() => [
-            <Space.Compact key={`batch-btn-${selectedRowKeys.length}`}>
-              <Button
-                disabled={selectedRowKeys.length === 0}
-                danger
-                onClick={() => handleDelete(selectedRowKeys)}
-              >
-                <DeleteOutlined /> {t('common.batchDelete')}
-              </Button>
-              <Dropdown {...rowActionKind('skip')}
-                disabled={selectedRowKeys.length === 0}
-                trigger={['click']}
-                menu={{
-                  items: [
-                    {
-                      key: 'submit',
-                      label: '批量提交',
-                      onClick: async () => {
-                        if (selectedRowKeys.length === 0) return;
-                        let success = 0;
-                        let failed = 0;
-                        for (const k of selectedRowKeys) {
-                          const raw = rowKeyToOrderIdRef.current.get(String(k));
-                          const id = raw ?? Number(k);
-                          if (!Number.isFinite(id) || id <= 0) {
-                            failed += 1;
-                            continue;
-                          }
-                          try {
-                            await submitSalesForecast(id);
-                            success += 1;
-                          } catch {
-                            failed += 1;
-                          }
-                        }
-                        if (success > 0) messageApi.success(`已提交 ${success} 条`);
-                        if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
-                        setSelectedRowKeys([]);
-                        invalidateForecastCache();
-                        actionRef.current?.reload();
-                      },
-                    },
-                  ],
-                }}
-              >
-                <Button danger icon={<ArrowDownOutlined />} />
-              </Dropdown>
-            </Space.Compact>,
+          showDeleteButton
+          onDelete={executeDeleteByKeys}
+          deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="sales-forecast-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: '批量提交',
+                  onClick: async () => {
+                    if (selectedRowKeys.length === 0) return;
+                    let success = 0;
+                    let failed = 0;
+                    for (const k of selectedRowKeys) {
+                      const raw = rowKeyToOrderIdRef.current.get(String(k));
+                      const id = raw ?? Number(k);
+                      if (!Number.isFinite(id) || id <= 0) {
+                        failed += 1;
+                        continue;
+                      }
+                      try {
+                        await submitSalesForecast(id);
+                        success += 1;
+                      } catch {
+                        failed += 1;
+                      }
+                    }
+                    if (success > 0) messageApi.success(`已提交 ${success} 条`);
+                    if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
+                    setSelectedRowKeys([]);
+                    invalidateForecastCache();
+                    actionRef.current?.reload();
+                  },
+                },
+              ]}
+              toolBarButtonSize="middle"
+            />,
           ]}
           showImportButton={true}
           onImport={() => setImportModalVisible(true)}

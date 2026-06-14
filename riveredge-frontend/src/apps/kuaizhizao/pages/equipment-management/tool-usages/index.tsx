@@ -35,6 +35,7 @@ interface ToolUsage {
 const ToolUsagesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [toolOptions, setToolOptions] = useState<{ label: string; value: string }[]>([]);
@@ -180,6 +181,9 @@ const ToolUsagesPage: React.FC = () => {
         headerTitle="工装领用归还"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-usages"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
         request={async (params) => {

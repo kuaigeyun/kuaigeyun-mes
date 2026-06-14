@@ -483,23 +483,17 @@ const SalesReturnsPage: React.FC = () => {
 
   // 处理批量删除
   const handleDelete = async (keys: React.Key[]) => {
-    Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${keys.length} 条销售退货单吗？`,
-      onOk: async () => {
-        try {
-          for (const id of keys) {
-            await warehouseApi.salesReturn.delete(String(id));
-          }
-          messageApi.success(`成功删除 ${keys.length} 条记录`);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
-        }
-      },
-    });
+    if (!keys || keys.length === 0) return;
+    try {
+      for (const id of keys) {
+        await warehouseApi.salesReturn.delete(String(id));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
   };
 
   // 表单提交处理

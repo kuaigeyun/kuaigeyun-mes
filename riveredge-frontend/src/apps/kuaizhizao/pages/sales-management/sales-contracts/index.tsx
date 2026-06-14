@@ -138,6 +138,7 @@ import {
 } from '../../../../../components/layout-templates';
 
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
@@ -1972,6 +1973,32 @@ const SalesContractsPage: React.FC = () => {
     }
   };
 
+  const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择需要删除的记录');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await salesContractApi.remove(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已删除 ${success} 条销售合同`);
+    if (failed > 0) messageApi.warning(`${failed} 条删除失败（仅草稿可删除）`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  }, [messageApi]);
+
   const handleCloseContract = async () => {
 
     if (!detail?.id) return;
@@ -2838,17 +2865,29 @@ const SalesContractsPage: React.FC = () => {
           </Button>,
         ]}
 
-        toolBarActionsAfterBatch={contractPerms.canPrint ? [
-          <Button {...rowActionKind('print')}
-            key="contract-print"
-            icon={<PrinterOutlined />}
-            size="middle"
-            disabled={selectedRowKeys.length !== 1}
-            onClick={() => void handleToolbarPrint(selectedRowKeys)}
-          >
-            打印合同
-          </Button>,
-        ] : undefined}
+        showDeleteButton={contractPerms.canDelete}
+        onDelete={handleBatchDeleteDrafts}
+        deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售合同？`}
+        toolBarActionsAfterDelete={
+          contractPerms.canPrint
+            ? [
+                <UniBatchMenuButton
+                  key="sales-contract-batch-menu"
+                  selectedRowKeys={selectedRowKeys}
+                  menuItems={[
+                    {
+                      key: 'print',
+                      label: '打印合同',
+                      icon: <PrinterOutlined />,
+                      disabled: selectedRowKeys.length !== 1,
+                      onClick: (keys: React.Key[]) => void handleToolbarPrint(keys),
+                    },
+                  ]}
+                  toolBarButtonSize="middle"
+                />,
+              ]
+            : undefined
+        }
 
         showExportButton={contractPerms.canExport}
 

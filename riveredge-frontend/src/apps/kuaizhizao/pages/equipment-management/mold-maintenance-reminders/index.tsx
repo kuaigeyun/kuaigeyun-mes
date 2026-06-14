@@ -4,7 +4,7 @@
  * 基于使用次数（maintenance_interval）展示即将到期/已过期的模具保养提醒。
  */
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -26,6 +26,7 @@ interface MoldMaintenanceReminder {
 
 const MoldMaintenanceRemindersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const columns: ProColumns<MoldMaintenanceReminder>[] = [
     {
@@ -82,6 +83,9 @@ const MoldMaintenanceRemindersPage: React.FC = () => {
         headerTitle="模具保养提醒"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="mold_uuid"
         columns={columns}
         request={async (params) => {

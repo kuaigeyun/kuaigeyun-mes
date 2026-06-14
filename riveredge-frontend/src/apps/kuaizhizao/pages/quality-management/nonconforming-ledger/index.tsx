@@ -49,6 +49,7 @@ const NonconformingLedgerPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [currentRow, setCurrentRow] = useState<DefectLedgerItem | null>(null);
   const [open, setOpen] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { canUpdate } = useResourcePermissions(NC_RESOURCE);
   const { canCreate: canStart8d } = useResourcePermissions(EIGHT_D_RESOURCE);
 
@@ -182,6 +183,9 @@ const NonconformingLedgerPage: React.FC = () => {
           headerTitle="不合格品台账"
           actionRef={actionRef}
           rowKey="id"
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.nonconforming-ledger"
           request={async (params) => {

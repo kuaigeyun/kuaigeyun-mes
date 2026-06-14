@@ -9,7 +9,7 @@
 
 import React, { useState, useEffect, useMemo, useCallback, forwardRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Form, App, Button, Space } from 'antd';
+import { Input, Form, App, Button, Space, Col } from 'antd';
 import { ProForm, ProFormSelect } from '@ant-design/pro-components';
 import { UniDropdown, QuickCreateAnchorPopover } from '../uni-dropdown';
 import { useProFormReadonlyMode } from '../../utils/proFormReadonly';
@@ -270,8 +270,6 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     return baseRules;
   }, [required, label, rules]);
 
-  const effectiveColProps = colProps ?? { span: 12 };
-
   if (isReadonlyMode && noStyle) {
     const strVal = value != null && value !== '' ? String(value) : '';
     const displayLabel = options.find((o) => o.value === strVal)?.label ?? strVal;
@@ -285,7 +283,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
         label={label}
         rules={mergedRules}
         initialValue={initialValue}
-        colProps={effectiveColProps}
+        colProps={colProps}
         className="dictionary-select-form-item"
         readonly
         options={options}
@@ -433,18 +431,21 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
     );
   }
 
+  const itemNode = (
+    <ProForm.Item
+      name={name}
+      label={label}
+      rules={mergedRules}
+      initialValue={initialValue}
+      className="dictionary-select-form-item"
+    >
+      {dropdown}
+    </ProForm.Item>
+  );
+
   return (
     <>
-      <ProForm.Item
-        name={name}
-        label={label}
-        rules={mergedRules}
-        initialValue={initialValue}
-        colProps={effectiveColProps}
-        className="dictionary-select-form-item"
-      >
-        {dropdown}
-      </ProForm.Item>
+      {colProps ? <Col {...colProps}>{itemNode}</Col> : itemNode}
       {createPopover}
     </>
   );

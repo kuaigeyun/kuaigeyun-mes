@@ -37,6 +37,7 @@ interface MoldUsage {
 const MoldUsagesPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const formRef = useRef<any>(null);
   const [moldOptions, setMoldOptions] = useState<{ label: string; value: string }[]>([]);
@@ -144,6 +145,9 @@ const MoldUsagesPage: React.FC = () => {
         headerTitle="模具使用记录"
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-usages"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="uuid"
         columns={columns}
         request={async (params) => {

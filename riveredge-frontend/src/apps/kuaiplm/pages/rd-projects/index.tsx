@@ -40,6 +40,7 @@ const RdProjectsListPage: React.FC = () => {
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createProjectType, setCreateProjectType] = useState<ProjectType>('RD');
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const createFormRef = useRef<any>(null);
@@ -196,6 +197,9 @@ const RdProjectsListPage: React.FC = () => {
       <UniTable<RdProject>
         headerTitle="项目管理"
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
         scroll={{ x: 1400 }}

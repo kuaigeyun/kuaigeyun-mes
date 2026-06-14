@@ -27,6 +27,7 @@ const KnowledgeBasePage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [spaces, setSpaces] = useState<KbSpace[]>([]);
   const [selectedSpaceId, setSelectedSpaceId] = useState<number | undefined>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
@@ -115,6 +116,9 @@ const KnowledgeBasePage: React.FC = () => {
           <UniTable<KbArticle>
             headerTitle="知识文章"
             actionRef={actionRef}
+            enableRowSelection
+            selectedRowKeys={selectedRowKeys}
+            onRowSelectionChange={setSelectedRowKeys}
             columns={columns}
             columnPersistenceId="apps.kuaiplm.pages.knowledge-base"
             search={false}
