@@ -16,6 +16,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { EditOutlined, DeleteOutlined, PlusOutlined, MinusCircleOutlined, CheckCircleOutlined, CloseCircleOutlined, ClockCircleOutlined, UploadOutlined, DiffOutlined, HistoryOutlined, CalculatorOutlined, HighlightOutlined, MoreOutlined, UndoOutlined, StarOutlined, ProductOutlined, UnorderedListOutlined, ClusterOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -762,14 +763,15 @@ const BOMPage: React.FC = () => {
   /**
    * 处理批量删除BOM（支持分组行：groupKey 解析为该组所有 uuid 并删除）
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
     const toDelete: string[] = [];
-    for (const key of selectedRowKeys) {
+    for (const key of targetKeys) {
       const k = String(key);
       if (k.startsWith('group:')) {
         const uuids = groupKeyToUuidsRef.current.get(k);
@@ -784,35 +786,32 @@ const BOMPage: React.FC = () => {
       return;
     }
 
-    Modal.confirm({
-      title: t('app.master-data.bom.batchDeleteConfirmTitle'),
-      content: t('app.master-data.bom.batchDeleteConfirmContent', { count }),
-      okText: t('app.master-data.bom.ok'),
-      cancelText: t('app.master-data.bom.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+      for (const uuid of toDelete) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-          for (const uuid of toDelete) {
-            try {
-              await bomApi.delete(uuid);
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('app.master-data.bom.deleteFailed'));
-            }
-          }
-          if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
-          if (failCount > 0) messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length ? '：' + errors.join('; ') : '' }));
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await bomApi.delete(uuid);
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('common.batchDeleteFailed'));
+          failCount++;
+          errors.push(error.message || t('app.master-data.bom.deleteFailed'));
         }
-      },
-    });
+      }
+      if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      if (failCount > 0)
+        messageApi.error(
+          t('common.batchDeletePartial', {
+            count: failCount,
+            errors: errors.length ? '：' + errors.join('; ') : '',
+          }),
+        );
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error((error as any).message || t('common.batchDeleteFailed'));
+    }
   };
 
 
@@ -822,14 +821,15 @@ const BOMPage: React.FC = () => {
   /**
    * 处理批量审核BOM
    */
-  const handleBatchApprove = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchApprove = (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('app.master-data.bom.selectToApprove'));
       return;
     }
 
     const toProcess: string[] = [];
-    for (const key of selectedRowKeys) {
+    for (const key of targetKeys) {
       const k = String(key);
       if (k.startsWith('group:')) {
         const uuids = groupKeyToUuidsRef.current.get(k);
@@ -878,14 +878,15 @@ const BOMPage: React.FC = () => {
   /**
    * 处理批量反审核BOM
    */
-  const handleBatchUnapprove = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchUnapprove = (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('app.master-data.bom.selectToOperate'));
       return;
     }
 
     const toProcess: string[] = [];
-    for (const key of selectedRowKeys) {
+    for (const key of targetKeys) {
         const k = String(key);
         if (k.startsWith('group:')) {
             const uuids = groupKeyToUuidsRef.current.get(k);
@@ -2597,39 +2598,36 @@ const BOMPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        headerActions={
-          <Space>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              {'新建BOM' + NEW_SHORTCUT_HINT}
-            </Button>
-            <Button
-              disabled={selectedRowKeys.length === 0}
-              icon={<CheckCircleOutlined />}
-              onClick={handleBatchApprove}
-            >
-              批量审核
-            </Button>
-            <Button
-              disabled={selectedRowKeys.length === 0}
-              icon={<UndoOutlined />}
-              onClick={handleBatchUnapprove}
-            >
-              {t('app.master-data.bom.batchUnapproveBtn')}
-            </Button>
-            <Button
-              danger
-              disabled={selectedRowKeys.length === 0}
-              icon={<DeleteOutlined />}
-              onClick={handleBatchDelete}
-            >
-              {t('common.batchDelete')}
-            </Button>
-          </Space>
+        showCreateButton
+        createButtonText={'新建BOM' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('app.master-data.bom.batchDeleteConfirmTitle')}
+        deleteConfirmDescription={(count) =>
+          t('app.master-data.bom.batchDeleteConfirmContent', { count })
         }
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="bom-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-approve',
+                label: '批量审核',
+                onClick: handleBatchApprove,
+                icon: <CheckCircleOutlined />,
+              },
+              {
+                key: 'batch-unapprove',
+                label: t('app.master-data.bom.batchUnapproveBtn'),
+                onClick: handleBatchUnapprove,
+                icon: <UndoOutlined />,
+              },
+            ]}
+          />,
+        ]}
         showImportButton={true}
         onImport={handleBatchImportConfirm}
         importHeaders={bomImportTemplate.importHeaders}
@@ -2665,9 +2663,10 @@ const BOMPage: React.FC = () => {
             messageApi.error(error?.message || t('app.master-data.exportFailed'));
           }
         }}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
           getCheckboxProps: (record: any) => ({
             disabled: isBomItemRow(record),
           }),

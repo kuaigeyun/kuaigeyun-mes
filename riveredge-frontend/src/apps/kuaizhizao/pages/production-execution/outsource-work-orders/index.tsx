@@ -626,30 +626,23 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       messageApi.warning('请选择要删除的工单委外');
       return;
     }
-    Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${keys.length} 条工单委外吗？`,
-      onOk: async () => {
-        try {
-          const ids = keys.map((k) => Number(k));
-          for (const id of keys) {
-            await outsourceWorkOrderApi.delete(String(id));
-          }
-          messageApi.success(`成功删除 ${keys.length} 条记录`);
-          setSelectedRowKeys([]);
-          if (workOrderDetail?.id != null && ids.includes(workOrderDetail.id)) {
-            setDrawerVisible(false);
-            setWorkOrderDetail(null);
-          }
-          setStatsVersion((v) => v + 1);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
-        }
-      },
-    });
+    try {
+      const ids = keys.map((k) => Number(k));
+      for (const id of keys) {
+        await outsourceWorkOrderApi.delete(String(id));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      setSelectedRowKeys([]);
+      if (workOrderDetail?.id != null && ids.includes(workOrderDetail.id)) {
+        setDrawerVisible(false);
+        setWorkOrderDetail(null);
+      }
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
   };
 
   /**
@@ -1284,12 +1277,14 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           showAdvancedSearch={true}
           request={handleWorkOrderListRequest}
           enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showCreateButton={true}
           createButtonText="新建工单委外"
           onCreate={handleCreate}
           showDeleteButton={true}
           onDelete={handleDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条工单委外吗？`}
           scroll={{ x: 2000 }}
           onRow={(record) => ({
             onClick: () => void handleDetail(record),

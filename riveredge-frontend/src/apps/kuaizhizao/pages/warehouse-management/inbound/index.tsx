@@ -1821,38 +1821,32 @@ const InboundPage: React.FC = () => {
         enableRowSelection={true}
         showDeleteButton={true}
         onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 条入库单吗？`,
-            onOk: async () => {
-              try {
-                for (const key of keys) {
-                  const [type, id] = String(key).split('::');
-                  if (type === 'purchase') {
-                    await warehouseApi.purchaseReceipt.delete(id);
-                  } else if (type === 'finished_goods') {
-                    await warehouseApi.finishedGoodsReceipt.delete(id);
-                  } else if (type === 'semi_finished_goods') {
-                    await warehouseApi.semiFinishedGoodsReceipt.delete(id);
-                  } else if (type === 'production_return') {
-                    await warehouseApi.productionReturn.delete(id);
-                  }
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                invalidateMenuBadgeCounts();
-
-                actionRef.current?.reload();
-              } catch (error: any) {
-                const msg =
-                  error?.response?.data?.detail ??
-                  error?.response?.data?.message ??
-                  error?.message ??
-                  '删除失败';
-                messageApi.error(typeof msg === 'string' ? msg : '删除失败');
+          try {
+            for (const key of keys) {
+              const [type, id] = String(key).split('::');
+              if (type === 'purchase') {
+                await warehouseApi.purchaseReceipt.delete(id);
+              } else if (type === 'finished_goods') {
+                await warehouseApi.finishedGoodsReceipt.delete(id);
+              } else if (type === 'semi_finished_goods') {
+                await warehouseApi.semiFinishedGoodsReceipt.delete(id);
+              } else if (type === 'production_return') {
+                await warehouseApi.productionReturn.delete(id);
               }
-            },
-          });
+            }
+            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            invalidateMenuBadgeCounts();
+            actionRef.current?.reload();
+          } catch (error: any) {
+            const msg =
+              error?.response?.data?.detail ??
+              error?.response?.data?.message ??
+              error?.message ??
+              '删除失败';
+            messageApi.error(typeof msg === 'string' ? msg : '删除失败');
+          }
         }}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条入库单吗？`}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-inbound-with-pull"

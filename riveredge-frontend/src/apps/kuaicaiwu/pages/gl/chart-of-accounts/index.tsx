@@ -1,8 +1,7 @@
 import React, { useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Tag } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
+import { App, Tag } from 'antd';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { glService, type ChartOfAccount } from '../../../services/gl';
@@ -33,16 +32,10 @@ const ChartOfAccountsPage: React.FC = () => {
   ];
 
   return (
-    <ListPageTemplate
-      title="会计科目"
-      extra={
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalVisible(true)}>
-          新建科目
-        </Button>
-      }
-    >
+    <ListPageTemplate title="会计科目">
       <UniTable<ChartOfAccount>
         actionRef={actionRef}
+        enableRowSelection
         rowKey="id"
         columns={columns}
         request={async () => {
@@ -50,6 +43,9 @@ const ChartOfAccountsPage: React.FC = () => {
           return { data: list, success: true, total: list.length };
         }}
         search={false}
+        showCreateButton
+        createButtonText="新建科目"
+        onCreate={() => setModalVisible(true)}
       />
 
       <FormModalTemplate

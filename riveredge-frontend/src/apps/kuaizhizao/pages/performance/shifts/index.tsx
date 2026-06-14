@@ -4,7 +4,7 @@
 
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Popconfirm, Space, Tag, Typography } from 'antd';
+import { App, Button, Popconfirm, Space, Tag, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -18,6 +18,24 @@ const ShiftsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [editUuid, setEditUuid] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) {
+      messageApi.warning('请先选择班次');
+      return;
+    }
+    try {
+      for (const key of keys) {
+        await shiftApi.delete(String(key));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.message || '删除失败');
+    }
+  };
 
   const columns: ProColumns<Shift>[] = [
     {
@@ -101,6 +119,12 @@ const ShiftsPage: React.FC = () => {
         showCreateButton
         createButtonText="新建班次"
         onCreate={() => { setEditUuid(null); setModalVisible(true); }}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条班次吗？`}
         request={async () => {
           try {
             const data = await shiftApi.list({ limit: 500 });

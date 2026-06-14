@@ -247,48 +247,45 @@ const VariantAttributesPage: React.FC = () => {
   /**
    * 处理批量删除
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
-    Modal.confirm({
-      title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const key of targetKeys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await variantAttributeApi.delete(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('common.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await variantAttributeApi.delete(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('common.batchDeleteFailed'));
+          failCount++;
+          errors.push(error.message || t('common.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(
+          t('common.batchDeletePartial', {
+            count: failCount,
+            errors: errors.length > 0 ? '：' + errors.join('; ') : '',
+          }),
+        );
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -382,18 +379,11 @@ const VariantAttributesPage: React.FC = () => {
             }
           }}
           rowKey="uuid"
-          enableRowSelection={true}
-          onRowSelectionChange={setSelectedRowKeys}
-          headerActions={
-            <Space>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleCreate}
-              >
-                {'新建属性定义' + NEW_SHORTCUT_HINT}
-              </Button>
-              {trialRunMode && (
+          showCreateButton
+          createButtonText={'新建属性定义' + NEW_SHORTCUT_HINT}
+          onCreate={handleCreate}
+          toolBarActionsAfterCreate={[
+            trialRunMode ? (
               <Button {...rowActionKind('import')}
                 key="loadPreset"
                 loading={loadPresetLoading}
@@ -413,17 +403,15 @@ const VariantAttributesPage: React.FC = () => {
               >
                 {t('app.master-data.variantAttributes.loadPreset')}
               </Button>
-              )}
-              <Button
-                danger
-                disabled={selectedRowKeys.length === 0}
-                icon={<DeleteOutlined />}
-                onClick={handleBatchDelete}
-              >
-                批量删除
-              </Button>
-            </Space>
-          }
+            ) : null,
+          ].filter(Boolean)}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={t('common.confirmBatchDelete')}
+          deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+          enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           search={{
             labelWidth: 'auto',
           }}

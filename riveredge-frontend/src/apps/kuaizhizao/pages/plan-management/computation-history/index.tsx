@@ -12,12 +12,14 @@ import { ActionType, ProColumns, ProFormDatePicker } from '@ant-design/pro-compo
 import { App, Button, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } from 'antd';
 import { EyeOutlined, DiffOutlined, DownloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { 
   listComputationHistory, 
   getDemandComputation,
   compareComputations,
+  deleteDemandComputation,
   DemandComputation,
   ComputationCompareResult
 } from '../../../services/demand-computation';
@@ -94,6 +96,29 @@ const ComputationHistoryPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error?.message || '导出失败');
     }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (keys.length === 0) return;
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (Number.isNaN(id)) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await deleteDemandComputation(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已删除 ${success} 条记录`);
+    if (failed > 0) messageApi.warning(`${failed} 条删除失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
   };
 
   /**
@@ -310,24 +335,33 @@ const ComputationHistoryPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
-          toolBarActions={[
-            <Button
-              key="compare"
-              icon={<DiffOutlined />}
-              onClick={() => handleCompare(selectedRowKeys)}
-              disabled={selectedRowKeys.length !== 2}
-            >
-              对比选中记录
-            </Button>,
-            <Button
-              key="export"
-              icon={<DownloadOutlined />}
-              onClick={() => handleExport(selectedRowKeys)}
-              disabled={selectedRowKeys.length === 0}
-            >
-              导出选中记录
-            </Button>,
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条计算记录吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="computation-history-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'compare',
+                  label: '对比选中记录',
+                  icon: <DiffOutlined />,
+                  disabled: selectedRowKeys.length !== 2,
+                  onClick: (keys) => void handleCompare(keys),
+                },
+                {
+                  key: 'export',
+                  label: '导出选中记录',
+                  icon: <DownloadOutlined />,
+                  disabled: selectedRowKeys.length === 0,
+                  onClick: (keys) => void handleExport(keys),
+                },
+              ]}
+              toolBarButtonSize="middle"
+            />,
           ]}
         />
       </ListPageTemplate>

@@ -37,6 +37,7 @@ import {
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SendOutlined, AppstoreAddOutlined, ImportOutlined, DownOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -539,25 +540,72 @@ const ReceiptNoticesPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条收货通知单吗？`,
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await receiptNoticeApi.delete(String(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条收货通知单`);
-          setSelectedRowKeys([]);
-          setStatsVersion((v) => v + 1);
-          invalidateMenuBadgeCounts();
+    try {
+      for (const k of keys) {
+        await receiptNoticeApi.delete(String(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条收货通知单`);
+      setSelectedRowKeys([]);
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
 
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
-        }
-      },
-    });
+  const handleBatchNotify = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择收货通知单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await receiptNoticeApi.notify(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已通知 ${success} 条收货通知单`);
+    if (failed > 0) messageApi.warning(`${failed} 条通知失败（仅待收货状态可通知）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择收货通知单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await receiptNoticeApi.withdraw(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已撤回 ${success} 条收货通知单`);
+    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已通知状态可撤回）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
   };
 
   const handleCreate = async () => {
@@ -1128,9 +1176,31 @@ const ReceiptNoticesPage: React.FC = () => {
             />,
           ]}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条收货通知单吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="receipt-notice-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'notify',
+                  label: '批量通知仓库',
+                  icon: <SendOutlined />,
+                  onClick: handleBatchNotify,
+                },
+                {
+                  key: 'withdraw',
+                  label: '批量撤回通知',
+                  icon: <AppstoreAddOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+              ]}
+            />,
+          ]}
           request={async (params) => {
             try {
               const response = await receiptNoticeApi.list({

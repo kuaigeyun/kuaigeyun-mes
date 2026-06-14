@@ -46,6 +46,12 @@ export const customerMaterialRegistrationApi = {
     });
   },
 
+  delete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/${id}`, {
+      method: 'DELETE',
+    });
+  },
+
   process: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/${id}/process`, {
       method: 'POST',
@@ -61,6 +67,34 @@ export const customerMaterialRegistrationApi = {
   cancel: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/inventory/customer-material-registration/${id}/cancel`, {
       method: 'POST',
+    });
+  },
+
+  batchProcess: async (ids: Array<string | number>) => {
+    return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/batch-process', {
+      method: 'POST',
+      data: { ids: ids.map((id) => Number(id)) },
+    });
+  },
+
+  batchWithdraw: async (ids: Array<string | number>) => {
+    return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/batch-withdraw', {
+      method: 'POST',
+      data: { ids: ids.map((id) => Number(id)) },
+    });
+  },
+
+  batchCancel: async (ids: Array<string | number>) => {
+    return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/batch-cancel', {
+      method: 'POST',
+      data: { ids: ids.map((id) => Number(id)) },
+    });
+  },
+
+  batchDelete: async (ids: Array<string | number>) => {
+    return apiRequest('/apps/kuaizhizao/inventory/customer-material-registration/batch-delete', {
+      method: 'POST',
+      data: { ids: ids.map((id) => Number(id)) },
     });
   },
 };

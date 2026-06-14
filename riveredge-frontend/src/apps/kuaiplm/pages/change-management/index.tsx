@@ -6,15 +6,19 @@ import { rowActionKind } from '../../../../components/uni-action';
 import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Tag } from 'antd';
-import { PlusOutlined, CheckOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { CheckOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { ListPageTemplate } from '../../../../components/layout-templates';
 import {
   listBomChanges,
   listRouteChanges,
   listUnifiedChanges,
   approveChange,
+  batchApproveChanges,
+  batchDeleteChanges,
+  batchExecuteChanges,
   executeChange,
   type UnifiedChangeRow,
   type ChangeDeskCategory,
@@ -37,6 +41,7 @@ const ChangeManagementPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const [rowsByUuid, setRowsByUuid] = useState<Record<string, UnifiedChangeRow>>({});
 
   const handleCreateBomChange = useCallback(() => {
     window.open(buildBomChangeCreateUrl(), '_blank');
@@ -80,6 +85,69 @@ const ChangeManagementPage: React.FC = () => {
         actionRef.current?.reload();
       },
     });
+  };
+
+  const selectedBatchItems = selectedRowKeys
+    .map((key) => rowsByUuid[String(key)])
+    .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
+    .map((row) => ({
+      change_uuid: String(row.uuid),
+      change_type: row.change_category === 'route' ? 'process_route' : 'bom',
+    }));
+
+  const handleBatchApprove = async () => {
+    if (!selectedBatchItems.length) {
+      messageApi.warning('请先选择变更记录');
+      return;
+    }
+    const result = await batchApproveChanges(selectedBatchItems, true);
+    const successCount = Number(result?.success_count || 0);
+    if (successCount > 0) {
+      messageApi.success(`已审批 ${successCount} 条变更`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量审批失败');
+  };
+
+  const handleBatchExecute = async () => {
+    if (!selectedBatchItems.length) {
+      messageApi.warning('请先选择变更记录');
+      return;
+    }
+    const result = await batchExecuteChanges(selectedBatchItems);
+    const successCount = Number(result?.success_count || 0);
+    if (successCount > 0) {
+      messageApi.success(`已执行 ${successCount} 条变更`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量执行失败');
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const items = keys
+      .map((key) => rowsByUuid[String(key)])
+      .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
+      .map((row) => ({
+        change_uuid: String(row.uuid),
+        change_type: row.change_category === 'route' ? 'process_route' : 'bom',
+      }));
+    if (!items.length) {
+      messageApi.warning('请先选择变更记录');
+      return;
+    }
+    const result = await batchDeleteChanges(items);
+    const successCount = Number(result?.success_count || 0);
+    if (successCount > 0) {
+      messageApi.success(`已删除 ${successCount} 条变更`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
   };
 
   const columns: ProColumns<UnifiedChangeRow>[] = [
@@ -152,12 +220,46 @@ const ChangeManagementPage: React.FC = () => {
       <UniTable<UnifiedChangeRow>
         headerTitle="设计变更"
         actionRef={actionRef}
+        rowKey="uuid"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
         scroll={{ x: 1200 }}
+        showCreateButton
+        createButtonText={'在主数据新建 BOM 变更' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreateBomChange}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条变更记录吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="change-desk-batch-actions"
+            buttonText="批量操作"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={[
+              {
+                key: 'batch-approve',
+                label: '批量审批',
+                requireConfirm: true,
+                confirmTitle: (count) => `确定审批选中的 ${count} 条变更吗？`,
+                onClick: () => {
+                  void handleBatchApprove();
+                },
+              },
+              {
+                key: 'batch-execute',
+                label: '批量执行',
+                requireConfirm: true,
+                confirmTitle: (count) => `确定执行选中的 ${count} 条变更吗？`,
+                onClick: () => {
+                  void handleBatchExecute();
+                },
+              },
+            ]}
+          />,
+        ]}
         params={{ tab: activeTab }}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
@@ -166,6 +268,11 @@ const ChangeManagementPage: React.FC = () => {
               activeTab,
               searchFormValues?.status as string | undefined,
             );
+            const map: Record<string, UnifiedChangeRow> = {};
+            for (const row of res.items) {
+              if (row.uuid) map[String(row.uuid)] = row;
+            }
+            setRowsByUuid(map);
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
             messageApi.error(e?.message || '加载失败');
@@ -183,15 +290,13 @@ const ChangeManagementPage: React.FC = () => {
             ],
             onChange: (key) => {
               setActiveTab((key as TabKey) || 'all');
+              setSelectedRowKeys([]);
               actionRef.current?.reload();
             },
           },
         }}
         toolBarRender={() => [
           <Space key="create">
-            <Button icon={<PlusOutlined />} onClick={handleCreateBomChange}>
-              {'在主数据新建 BOM 变更' + NEW_SHORTCUT_HINT}
-            </Button>
             <Button onClick={() => window.open(buildRouteChangeCreateUrl(), '_blank')}>
               在主数据新建工艺变更
             </Button>

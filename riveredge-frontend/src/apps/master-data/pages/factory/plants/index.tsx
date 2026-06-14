@@ -157,14 +157,15 @@ const PlantsPage: React.FC = () => {
   /**
    * 处理批量删除厂区
    */
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
     try {
-      const uuids = selectedRowKeys.map(key => String(key));
+      const uuids = targetKeys.map(key => String(key));
       const result = await plantApi.batchDelete(uuids);
       
       if (result.success) {
@@ -635,38 +636,19 @@ const PlantsPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Button {...rowActionKind('create')}
-              key="create"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={handleCreate}
-            >
-              {t('app.master-data.plants.create') + NEW_SHORTCUT_HINT}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
-              key="batchDelete"
-              title={t('app.master-data.plants.batchDeleteTitle')}
-              description={t('app.master-data.plants.batchDeleteDescription', { count: selectedRowKeys.length })}
-              onConfirm={handleBatchDelete}
-              okText={t('common.confirm')}
-              cancelText={t('common.cancel')}
-              disabled={selectedRowKeys.length === 0}
-            >
-              <Button
-                type="default"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={selectedRowKeys.length === 0}
-              >
-                {t('app.master-data.plants.batchDelete')}
-              </Button>
-            </Popconfirm>,
-          ]}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
+          showCreateButton
+          createButtonText={t('app.master-data.plants.create') + NEW_SHORTCUT_HINT}
+          onCreate={handleCreate}
+          showDeleteButton
+          deleteButtonText={t('app.master-data.plants.batchDelete')}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={t('app.master-data.plants.batchDeleteTitle')}
+          deleteConfirmDescription={(count) =>
+            t('app.master-data.plants.batchDeleteDescription', { count })
+          }
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showImportButton={true}
           onImport={handleImport}
           importHeaders={plantImportTemplate.importHeaders}

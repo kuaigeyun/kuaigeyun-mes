@@ -30,6 +30,7 @@ const SerialsPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const handleCreate = () => {
     setIsEdit(false);
@@ -108,6 +109,15 @@ const SerialsPage: React.FC = () => {
     } catch (e: any) {
       messageApi.error(e?.message || t('common.deleteFailed'));
     }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    for (const key of keys) {
+      await materialSerialApi.delete(String(key));
+    }
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
   };
 
   const serialSortFieldMap: Record<string, string> = {
@@ -212,11 +222,16 @@ const SerialsPage: React.FC = () => {
         search={{
           labelWidth: 'auto',
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('pages.system.create')}
-          </Button>,
-        ]}
+        showCreateButton
+        createButtonText={t('pages.system.create')}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
       />
 
       <FormModalTemplate

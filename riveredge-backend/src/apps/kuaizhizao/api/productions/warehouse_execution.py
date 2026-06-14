@@ -144,6 +144,8 @@ from apps.kuaizhizao.schemas.customer_material_registration import (
     BarcodeMappingRuleCreate,
     BarcodeMappingRuleResponse,
     BarcodeMappingRuleListResponse,
+    CustomerMaterialRegistrationBatchActionRequest,
+    CustomerMaterialRegistrationBatchActionResponse,
     CustomerMaterialRegistrationCreate,
     CustomerMaterialRegistrationUpdate,
     CustomerMaterialRegistrationResponse,
@@ -2748,6 +2750,136 @@ async def get_customer_material_registration(
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.delete(
+    "/inventory/customer-material-registration/{registration_id}",
+    summary="Delete customer material registration",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def delete_customer_material_registration(
+    registration_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> Dict[str, Any]:
+    """删除代工来料单（仅待入库状态）"""
+    try:
+        await customer_material_registration_service.delete_registration(
+            tenant_id=tenant_id,
+            registration_id=registration_id,
+            deleted_by=current_user.id,
+        )
+        return {"message": "删除成功"}
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+    except BusinessLogicError as e:
+        raise _http_exception_with_trace(400, str(e), "/inventory/customer-material-registration/{registration_id}", tenant_id)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-process",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch process customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:execute"
+            )
+        )
+    ],
+)
+async def batch_process_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_process_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        processed_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-withdraw",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch withdraw customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:revoke"
+            )
+        )
+    ],
+)
+async def batch_withdraw_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_withdraw_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        withdrawn_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-cancel",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch cancel customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def batch_cancel_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_cancel_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        cancelled_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
+
+
+@router.post(
+    "/inventory/customer-material-registration/batch-delete",
+    response_model=CustomerMaterialRegistrationBatchActionResponse,
+    summary="Batch delete customer material registrations",
+    dependencies=[
+        Depends(
+            require_permission_codes(
+                "kuaizhizao:warehouse-management-customer-material-registration:delete"
+            )
+        )
+    ],
+)
+async def batch_delete_customer_material_registration(
+    body: CustomerMaterialRegistrationBatchActionRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> CustomerMaterialRegistrationBatchActionResponse:
+    result = await customer_material_registration_service.batch_delete_registrations(
+        tenant_id=tenant_id,
+        registration_ids=body.ids,
+        deleted_by=current_user.id,
+    )
+    return CustomerMaterialRegistrationBatchActionResponse(**result)
 
 
 @router.post("/inventory/customer-material-registration/{registration_id}/process", response_model=CustomerMaterialRegistrationResponse, summary="Process customer material registration")

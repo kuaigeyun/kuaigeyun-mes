@@ -343,24 +343,17 @@ const DeliveryNotesPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条发货通知吗？`,
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await deliveryNoticeApi.delete(String(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条发货通知`);
-          setSelectedRowKeys([]);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
-        }
-      },
-    });
+    try {
+      for (const k of keys) {
+        await deliveryNoticeApi.delete(String(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条发货通知`);
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
   };
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
@@ -935,6 +928,7 @@ const DeliveryNotesPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条发货通知吗？`}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {

@@ -145,14 +145,15 @@ const ProductionLinesPage: React.FC = () => {
   /**
    * 处理批量删除产线
    */
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
     try {
-      const uuids = selectedRowKeys.map(key => String(key));
+      const uuids = targetKeys.map(key => String(key));
       const result = await productionLineApi.batchDelete(uuids);
       
       if (result.success) {
@@ -749,38 +750,18 @@ const ProductionLinesPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')}
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {t('app.master-data.productionLines.create') + NEW_SHORTCUT_HINT}
-          </Button>,
-          <Popconfirm {...rowActionKind('delete')}
-            key="batchDelete"
-            title={t('app.master-data.productionLines.batchDeleteTitle')}
-            description={t('app.master-data.productionLines.batchDeleteDescription', { count: selectedRowKeys.length })}
-            onConfirm={handleBatchDelete}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-            disabled={selectedRowKeys.length === 0}
-          >
-            <Button
-              type="default"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-            >
-              {t('common.batchDelete')}
-            </Button>
-          </Popconfirm>,
-        ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
+        showCreateButton
+        createButtonText={t('app.master-data.productionLines.create') + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('app.master-data.productionLines.batchDeleteTitle')}
+        deleteConfirmDescription={(count) =>
+          t('app.master-data.productionLines.batchDeleteDescription', { count })
+        }
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
       />
       </ListPageTemplate>
 

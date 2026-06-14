@@ -45,6 +45,7 @@ import {
 import { EyeOutlined, CheckCircleOutlined, EditOutlined, PlusOutlined, AppstoreAddOutlined, ImportOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -823,6 +824,82 @@ const PurchaseReturnsPage: React.FC = () => {
     ];
   }, [prStats, token]);
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) return;
+    try {
+      for (const id of keys) {
+        await warehouseApi.purchaseReturn.delete(String(id));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      setSelectedRowKeys([]);
+      invalidatePurchaseReturnStatistics();
+      if (returnDetail?.id != null && keys.includes(returnDetail.id)) {
+        setReturnDetail(null);
+        setDetailDrawerVisible(false);
+      }
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  const handleBatchConfirm = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购退货单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await warehouseApi.purchaseReturn.confirm(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已确认 ${success} 条采购退货单`);
+    if (failed > 0) messageApi.warning(`${failed} 条确认失败（仅待退货状态可确认）`);
+    setSelectedRowKeys([]);
+    invalidatePurchaseReturnStatistics();
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购退货单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await warehouseApi.purchaseReturn.withdraw(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已撤回 ${success} 条采购退货单`);
+    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已退货状态可撤回）`);
+    setSelectedRowKeys([]);
+    invalidatePurchaseReturnStatistics();
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  };
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
@@ -866,31 +943,28 @@ const PurchaseReturnsPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
-          onDelete={async (keys) => {
-            Modal.confirm({
-              title: '确认批量删除',
-              content: `确定要删除选中的 ${keys.length} 条采购退货单吗？`,
-              onOk: async () => {
-                try {
-                  for (const id of keys) {
-                    await warehouseApi.purchaseReturn.delete(String(id));
-                  }
-                  messageApi.success(`成功删除 ${keys.length} 条记录`);
-                  setSelectedRowKeys([]);
-                  invalidatePurchaseReturnStatistics();
-                  if (returnDetail?.id != null && keys.includes(returnDetail.id)) {
-                    setReturnDetail(null);
-                    setDetailDrawerVisible(false);
-                  }
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                } catch (error: any) {
-                  messageApi.error(error.message || '删除失败');
-                }
-              },
-            });
-          }}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条采购退货单吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="purchase-return-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'confirm',
+                  label: '批量确认退货',
+                  icon: <CheckCircleOutlined />,
+                  onClick: handleBatchConfirm,
+                },
+                {
+                  key: 'withdraw',
+                  label: '批量撤回确认',
+                  icon: <EditOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+              ]}
+            />,
+          ]}
           scroll={{ x: 1500 }}
           onRow={(record) => ({
             onClick: () => handleDetail(record),

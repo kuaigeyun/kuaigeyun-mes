@@ -39,6 +39,7 @@ import {
 } from 'antd';
 import { EyeOutlined, EditOutlined, DeleteOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -723,21 +724,29 @@ const PackingBindingPage: React.FC = () => {
           showAdvancedSearch={true}
           request={handleRequest}
           enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条装箱绑定记录吗？`}
           scroll={{ x: 1900 }}
-          toolBarRender={() => [
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="packing-binding-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'batch-qrcode',
+                  label: '批量生成二维码',
+                  icon: <QrcodeOutlined />,
+                  onClick: () => void handleBatchGenerateQRCode(),
+                },
+              ]}
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
             <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
               待装箱任务池
-            </Button>,
-            <Button {...rowActionKind('read')}
-              key="batch-qrcode"
-              icon={<QrcodeOutlined />}
-              disabled={selectedRowKeys.length === 0}
-              onClick={() => void handleBatchGenerateQRCode()}
-            >
-              批量生成二维码
             </Button>,
           ]}
           onRow={(record) => ({

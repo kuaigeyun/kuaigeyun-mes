@@ -13,9 +13,10 @@ import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidate
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { EyeOutlined, PlayCircleOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlayCircleOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLifecycle';
@@ -67,6 +68,7 @@ const ExceptionProcessPage: React.FC = () => {
   const [assignModalVisible, setAssignModalVisible] = useState(false);
   const [stepTransitionModalVisible, setStepTransitionModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   // 用户列表交由 UniUserSelect 内置管理
   const [exceptionList, setExceptionList] = useState<any[]>([]);
 
@@ -459,26 +461,61 @@ const ExceptionProcessPage: React.FC = () => {
           createButtonText="新建异常处理"
           onCreate={() => openStartModal()}
           enableRowSelection={true}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
           onDelete={async (keys) => {
-            Modal.confirm({
-              title: '确认批量取消',
-              content: `确定要取消选中的 ${keys.length} 条异常处理流程吗？`,
-              onOk: async () => {
-                try {
-                  for (const id of keys) {
-                    await exceptionApi.process.cancel(String(id));
-                  }
-                  messageApi.success(`成功取消 ${keys.length} 条记录`);
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                } catch (error: any) {
-                  messageApi.error(error?.message || '取消失败');
-                }
-              },
-            });
+            try {
+              for (const id of keys) {
+                await exceptionApi.process.cancel(String(id));
+              }
+              messageApi.success(`成功取消 ${keys.length} 条记录`);
+              invalidateMenuBadgeCounts();
+              actionRef.current?.reload();
+            } catch (error: any) {
+              messageApi.error(error?.message || '取消失败');
+            }
           }}
+          deleteConfirmTitle={(count) => `确定要取消选中的 ${count} 条异常处理流程吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="exception-process-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'cancel',
+                  label: '批量取消流程',
+                  icon: <RollbackOutlined />,
+                  onClick: async (keys) => {
+                    if (!keys || keys.length === 0) {
+                      messageApi.warning('请先选择异常处理流程');
+                      return;
+                    }
+                    let success = 0;
+                    let failed = 0;
+                    for (const key of keys) {
+                      const id = Number(key);
+                      if (!Number.isFinite(id) || id <= 0) {
+                        failed += 1;
+                        continue;
+                      }
+                      try {
+                        await exceptionApi.process.cancel(String(id));
+                        success += 1;
+                      } catch {
+                        failed += 1;
+                      }
+                    }
+                    if (success > 0) messageApi.success(`成功取消 ${success} 条流程`);
+                    if (failed > 0) messageApi.warning(`${failed} 条取消失败`);
+                    setSelectedRowKeys([]);
+                    invalidateMenuBadgeCounts();
+                    actionRef.current?.reload();
+                  },
+                },
+              ]}
+            />,
+          ]}
           searchFormItems={[
             {
               name: 'exception_type',

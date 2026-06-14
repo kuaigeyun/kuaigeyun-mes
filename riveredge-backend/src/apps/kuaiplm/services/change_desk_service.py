@@ -9,6 +9,8 @@ from typing import Optional
 
 from apps.kuaiplm.schemas.change_desk import (
     ChangeApproveRequest,
+    ChangeBatchActionResponse,
+    ChangeBatchItem,
     ChangeDeskItem,
     ChangeDeskListResponse,
     ChangeExecuteRequest,
@@ -96,3 +98,102 @@ class ChangeDeskService:
         if data.change_type == "process_route":
             return await ProcessRouteChangeService.execute_change(tenant_id, change_uuid, user_id)
         raise ValueError(f"未知变更类型: {data.change_type}")
+
+    async def delete_change(
+        self, tenant_id: int, change_uuid: str, change_type: str
+    ) -> None:
+        if change_type == "bom":
+            await BOMChangeService.delete_change(tenant_id, change_uuid)
+            return
+        if change_type == "process_route":
+            await ProcessRouteChangeService.delete_change(tenant_id, change_uuid)
+            return
+        raise ValueError(f"未知变更类型: {change_type}")
+
+    async def batch_approve_changes(
+        self,
+        tenant_id: int,
+        items: list[ChangeBatchItem],
+        approved: bool,
+        approval_comment: Optional[str],
+        user_id: int,
+    ) -> ChangeBatchActionResponse:
+        success_count = 0
+        failed_items: list[ChangeBatchItem] = []
+        errors: list[str] = []
+        for item in items:
+            try:
+                await self.approve_change(
+                    tenant_id=tenant_id,
+                    change_uuid=item.change_uuid,
+                    data=ChangeApproveRequest(
+                        change_type=item.change_type,
+                        approved=approved,
+                        approval_comment=approval_comment,
+                    ),
+                    user_id=user_id,
+                )
+                success_count += 1
+            except ValueError as e:
+                failed_items.append(item)
+                errors.append(str(e))
+        return ChangeBatchActionResponse(
+            success_count=success_count,
+            failed_count=len(failed_items),
+            failed_items=failed_items,
+            errors=errors,
+        )
+
+    async def batch_execute_changes(
+        self,
+        tenant_id: int,
+        items: list[ChangeBatchItem],
+        user_id: int,
+    ) -> ChangeBatchActionResponse:
+        success_count = 0
+        failed_items: list[ChangeBatchItem] = []
+        errors: list[str] = []
+        for item in items:
+            try:
+                await self.execute_change(
+                    tenant_id=tenant_id,
+                    change_uuid=item.change_uuid,
+                    data=ChangeExecuteRequest(change_type=item.change_type),
+                    user_id=user_id,
+                )
+                success_count += 1
+            except ValueError as e:
+                failed_items.append(item)
+                errors.append(str(e))
+        return ChangeBatchActionResponse(
+            success_count=success_count,
+            failed_count=len(failed_items),
+            failed_items=failed_items,
+            errors=errors,
+        )
+
+    async def batch_delete_changes(
+        self,
+        tenant_id: int,
+        items: list[ChangeBatchItem],
+    ) -> ChangeBatchActionResponse:
+        success_count = 0
+        failed_items: list[ChangeBatchItem] = []
+        errors: list[str] = []
+        for item in items:
+            try:
+                await self.delete_change(
+                    tenant_id=tenant_id,
+                    change_uuid=item.change_uuid,
+                    change_type=item.change_type,
+                )
+                success_count += 1
+            except ValueError as e:
+                failed_items.append(item)
+                errors.append(str(e))
+        return ChangeBatchActionResponse(
+            success_count=success_count,
+            failed_count=len(failed_items),
+            failed_items=failed_items,
+            errors=errors,
+        )

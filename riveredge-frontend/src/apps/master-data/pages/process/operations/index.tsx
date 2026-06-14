@@ -12,6 +12,7 @@ import { App, Popconfirm, Button, Tag, Space, Modal, Table, theme, Descriptions,
 import { useSearchParams } from 'react-router-dom';
 import { EditOutlined, DeleteOutlined, PlusOutlined, QrcodeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { useTrialRunMode } from '../../../../../hooks/useTrialRunMode';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -242,48 +243,45 @@ const OperationsPage: React.FC = () => {
   /**
    * 处理批量删除工序
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
-    Modal.confirm({
-      title: t('common.confirmBatchDelete'),
-      content: t('app.master-data.operations.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const key of targetKeys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await operationApi.delete(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('common.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await operationApi.delete(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('common.batchDeleteFailed'));
+          failCount++;
+          errors.push(error.message || t('common.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(
+          t('common.batchDeletePartial', {
+            count: failCount,
+            errors: errors.length > 0 ? '：' + errors.join('; ') : '',
+          }),
+        );
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
+    }
   };
 
   const handleImport = async (data: any[][]) => {
@@ -702,61 +700,58 @@ const OperationsPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')}
-            key="create"
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleCreate}
-          >
-            {'新建工序' + NEW_SHORTCUT_HINT}
-          </Button>,
-          trialRunMode && (
-          <Button {...rowActionKind('import')}
-            key="loadPreset"
-            loading={loadPresetLoading}
-            onClick={async () => {
-              try {
-                setLoadPresetLoading(true);
-                const catalog = await operationApi.getPresetPreview();
-                setPresetCatalog(catalog);
-                const first = catalog.industries?.[0];
-                const iid = first?.id ?? '';
-                setPresetIndustryId(iid);
-                setSelectedPresetKeys((first?.operations ?? []).map((o) => o.presetKey));
-                setPresetModalVisible(true);
-              } catch (e: any) {
-                messageApi.error(e?.message || t('common.operationFailed'));
-              } finally {
-                setLoadPresetLoading(false);
-              }
-            }}
-          >
-            {t('field.operation.loadPreset')}
-          </Button>
-          ),
-          <Button {...rowActionKind('read')}
-            key="batch-qrcode"
-            icon={<QrcodeOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={handleBatchGenerateQRCode}
-          >
-            批量生成二维码
-          </Button>,
-          <Button {...rowActionKind('delete')}
-            key="batch-delete"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={handleBatchDelete}
-          >
-            批量删除
-          </Button>,
+        showCreateButton
+        createButtonText={'新建工序' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        toolBarActionsAfterCreate={[
+          trialRunMode ? (
+            <Button {...rowActionKind('import')}
+              key="loadPreset"
+              loading={loadPresetLoading}
+              onClick={async () => {
+                try {
+                  setLoadPresetLoading(true);
+                  const catalog = await operationApi.getPresetPreview();
+                  setPresetCatalog(catalog);
+                  const first = catalog.industries?.[0];
+                  const iid = first?.id ?? '';
+                  setPresetIndustryId(iid);
+                  setSelectedPresetKeys((first?.operations ?? []).map((o) => o.presetKey));
+                  setPresetModalVisible(true);
+                } catch (e: any) {
+                  messageApi.error(e?.message || t('common.operationFailed'));
+                } finally {
+                  setLoadPresetLoading(false);
+                }
+              }}
+            >
+              {t('field.operation.loadPreset')}
+            </Button>
+          ) : null,
+        ].filter(Boolean)}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) =>
+          t('app.master-data.operations.confirmBatchDeleteContent', { count })
+        }
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="operation-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-generate-qrcode',
+                label: '批量生成二维码',
+                onClick: handleBatchGenerateQRCode,
+              },
+            ]}
+          />,
         ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         showImportButton
         onImport={handleImport}
         importHeaders={operationImportTemplate.importHeaders}

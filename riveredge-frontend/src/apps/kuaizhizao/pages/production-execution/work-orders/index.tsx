@@ -3496,19 +3496,15 @@ const WorkOrdersPage: React.FC = () => {
       messageApi.warning('未找到可删除的工单')
       return
     }
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除 ${workOrderIds.length} 个工单吗？`,
-      onOk: async () => {
-        try {
-          await Promise.all(workOrderIds.map((id) => workOrderApi.delete(String(id))))
-          messageApi.success('删除成功')
-          invalidateStatistics(); actionRef.current?.reload()
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败')
-        }
-      },
-    })
+    try {
+      await Promise.all(workOrderIds.map((id) => workOrderApi.delete(String(id))))
+      messageApi.success('删除成功')
+      setSelectedRowKeys([])
+      invalidateStatistics()
+      actionRef.current?.reload()
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败')
+    }
   }
 
   /**
@@ -6152,6 +6148,9 @@ const WorkOrdersPage: React.FC = () => {
                 },
               ])}
             />,
+          ]}
+          toolBarActionsAfterDelete={workOrderToolBarActionsAfterDelete}
+          toolBarActionsAfterBatch={[
             <Button {...rowActionKind('release')}
               key="smartRelease"
               size="middle"
@@ -6162,8 +6161,8 @@ const WorkOrdersPage: React.FC = () => {
               齐套自动下达
             </Button>,
           ]}
-          toolBarActionsAfterDelete={workOrderToolBarActionsAfterDelete}
           onDelete={handleDelete}
+          deleteConfirmTitle={(count) => `确定要删除 ${count} 个工单吗？`}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
           customViews={[
             { key: 'productTree', label: '在制产品', icon: ShoppingOutlined, render: renderProductTree },

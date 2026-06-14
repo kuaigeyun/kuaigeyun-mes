@@ -17,10 +17,11 @@ import {
   Descriptions,
   Divider,
 } from 'antd';
-import { EyeOutlined, PlusOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs, { Dayjs } from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import {
   partnerStatementService,
@@ -37,6 +38,8 @@ const PartnerStatementsPage: React.FC = () => {
   const customerActionRef = useRef<ActionType>();
   const supplierActionRef = useRef<ActionType>();
   const [activeTab, setActiveTab] = useState<'Customer' | 'Supplier'>('Customer');
+  const [customerSelectedRowKeys, setCustomerSelectedRowKeys] = useState<React.Key[]>([]);
+  const [supplierSelectedRowKeys, setSupplierSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -143,6 +146,42 @@ const PartnerStatementsPage: React.FC = () => {
         else supplierActionRef.current?.reload();
       },
     });
+  };
+
+  const handleBatchDelete = async (keys: React.Key[], type: 'Customer' | 'Supplier') => {
+    try {
+      for (const id of keys) {
+        await partnerStatementService.delete(Number(id));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条对账单`);
+      if (type === 'Customer') {
+        setCustomerSelectedRowKeys([]);
+        customerActionRef.current?.reload();
+      } else {
+        setSupplierSelectedRowKeys([]);
+        supplierActionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
+
+  const handleBatchConfirm = async (keys: React.Key[], type: 'Customer' | 'Supplier') => {
+    try {
+      for (const id of keys) {
+        await partnerStatementService.confirm(Number(id));
+      }
+      messageApi.success(`成功确认 ${keys.length} 条对账单`);
+      if (type === 'Customer') {
+        setCustomerSelectedRowKeys([]);
+        customerActionRef.current?.reload();
+      } else {
+        setSupplierSelectedRowKeys([]);
+        supplierActionRef.current?.reload();
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量确认失败');
+    }
   };
 
   const buildColumns = (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
@@ -256,25 +295,40 @@ const PartnerStatementsPage: React.FC = () => {
       headerTitle="客户对账"
       actionRef={customerActionRef}
       enableRowSelection
+      selectedRowKeys={customerSelectedRowKeys}
+      onRowSelectionChange={setCustomerSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Customer"
       scroll={{ x: 1200 }}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
-      showCreateButton={false}
-      toolBarRender={() => [
-        <Button {...rowActionKind('create')}
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setActiveTab('Customer');
-            resetCreate();
-            setCreateOpen(true);
-          }}
-        >
-          新建对账单
-        </Button>,
+      showCreateButton
+      createButtonText="新建对账单"
+      onCreate={() => {
+        setActiveTab('Customer');
+        resetCreate();
+        setCreateOpen(true);
+      }}
+      showDeleteButton
+      onDelete={(keys) => handleBatchDelete(keys, 'Customer')}
+      deleteConfirmTitle="确认批量删除"
+      deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条客户对账单吗？仅草稿可删除。`}
+      toolBarActionsAfterDelete={[
+        <UniBatchMenuButton
+          key="customer-partner-statement-batch-actions"
+          selectedRowKeys={customerSelectedRowKeys}
+          buttonText="批量操作"
+          menuItems={[
+            {
+              key: 'batch-confirm',
+              label: '批量确认',
+              requireConfirm: true,
+              confirmTitle: (count) => `确认批量确认 ${count} 条对账单`,
+              confirmDescription: '仅草稿对账单可确认，不满足条件的记录会由后端拒绝。',
+              onClick: (keys) => handleBatchConfirm(keys, 'Customer'),
+            },
+          ]}
+        />,
       ]}
       request={tableRequest('Customer')}
       columns={buildColumns('Customer')}
@@ -286,25 +340,40 @@ const PartnerStatementsPage: React.FC = () => {
       headerTitle="供应商对账"
       actionRef={supplierActionRef}
       enableRowSelection
+      selectedRowKeys={supplierSelectedRowKeys}
+      onRowSelectionChange={setSupplierSelectedRowKeys}
       rowKey="id"
       columnPersistenceId="apps.kuaicaiwu.pages.finance-management.partner-statements.Supplier"
       scroll={{ x: 1200 }}
       showAdvancedSearch
       search={{ labelWidth: 100 }}
-      showCreateButton={false}
-      toolBarRender={() => [
-        <Button {...rowActionKind('create')}
-          key="create"
-          type="primary"
-          icon={<PlusOutlined />}
-          onClick={() => {
-            setActiveTab('Supplier');
-            resetCreate();
-            setCreateOpen(true);
-          }}
-        >
-          新建对账单
-        </Button>,
+      showCreateButton
+      createButtonText="新建对账单"
+      onCreate={() => {
+        setActiveTab('Supplier');
+        resetCreate();
+        setCreateOpen(true);
+      }}
+      showDeleteButton
+      onDelete={(keys) => handleBatchDelete(keys, 'Supplier')}
+      deleteConfirmTitle="确认批量删除"
+      deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条供应商对账单吗？仅草稿可删除。`}
+      toolBarActionsAfterDelete={[
+        <UniBatchMenuButton
+          key="supplier-partner-statement-batch-actions"
+          selectedRowKeys={supplierSelectedRowKeys}
+          buttonText="批量操作"
+          menuItems={[
+            {
+              key: 'batch-confirm',
+              label: '批量确认',
+              requireConfirm: true,
+              confirmTitle: (count) => `确认批量确认 ${count} 条对账单`,
+              confirmDescription: '仅草稿对账单可确认，不满足条件的记录会由后端拒绝。',
+              onClick: (keys) => handleBatchConfirm(keys, 'Supplier'),
+            },
+          ]}
+        />,
       ]}
       request={tableRequest('Supplier')}
       columns={buildColumns('Supplier')}

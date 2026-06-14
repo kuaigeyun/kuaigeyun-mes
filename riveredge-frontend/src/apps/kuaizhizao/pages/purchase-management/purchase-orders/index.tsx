@@ -29,6 +29,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import SyncFromDatasetModal from '../../../../../components/sync-from-dataset-modal';
 import {
   ListPageTemplate,
@@ -1325,26 +1326,96 @@ const PurchaseOrdersPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条采购订单吗？`,
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await deletePurchaseOrder(Number(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条采购订单`);
-          setSelectedRowKeys([]);
-          invalidateStatistics();
-          invalidateMenuBadgeCounts();
+    try {
+      for (const k of keys) {
+        await deletePurchaseOrder(Number(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条采购订单`);
+      setSelectedRowKeys([]);
+      invalidateStatistics();
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
 
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.message || '批量删除失败');
-        }
-      },
-    });
+  const handleBatchSubmit = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购订单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await submitPurchaseOrder(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已提交 ${success} 条采购订单`);
+    if (failed > 0) messageApi.warning(`${failed} 条提交失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchApprove = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购订单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await approvePurchaseOrder(id, { approved: true, review_remarks: '' });
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已审核 ${success} 条采购订单`);
+    if (failed > 0) messageApi.warning(`${failed} 条审核失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchPushToReceiptNotice = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购订单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await pushPurchaseOrderToReceiptNotice(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已下推 ${success} 条采购订单到收货通知`);
+    if (failed > 0) messageApi.warning(`${failed} 条下推失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
   };
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
@@ -2711,6 +2782,37 @@ const PurchaseOrdersPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条采购订单吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="purchase-order-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: '批量提交',
+                  icon: <SendOutlined />,
+                  onClick: handleBatchSubmit,
+                },
+                ...(purchaseOrderAuditEnabled
+                  ? [
+                      {
+                        key: 'approve',
+                        label: '批量审核通过',
+                        icon: <CheckCircleOutlined />,
+                        onClick: handleBatchApprove,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'push-receipt-notice',
+                  label: '批量下推收货通知',
+                  icon: <FileTextOutlined />,
+                  onClick: handleBatchPushToReceiptNotice,
+                },
+              ]}
+            />,
+          ]}
           showImportButton={true}
           onImport={handleListImport}
           importHeaders={purchaseOrderImportTemplate.importHeaders}

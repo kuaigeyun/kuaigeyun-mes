@@ -9,7 +9,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Popconfirm, Typography } from 'antd';
+import { App, Button, Popconfirm, Typography } from 'antd';
 import { FileTextOutlined, AccountBookOutlined, PayCircleOutlined, EyeOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { invoiceService } from '../../../services/finance/invoice';
@@ -30,6 +30,7 @@ import dayjs from 'dayjs';
 
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const { message: messageApi } = App.useApp();
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
@@ -220,6 +221,20 @@ const InvoiceList: React.FC = () => {
     },
   ];
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      for (const code of keys) {
+        await invoiceService.deleteInvoice(String(code));
+      }
+      messageApi.success(`成功删除 ${keys.length} 张发票`);
+      setSelectedRowKeys([]);
+      invalidateInvoiceStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '删除失败');
+    }
+  };
+
   const statCards: StatCard[] = useMemo(() => {
     const s = invoiceStatistics;
     if (!s) {
@@ -270,26 +285,13 @@ const InvoiceList: React.FC = () => {
         createButtonText="新建发票"
         onCreate={() => navigate('/apps/kuaicaiwu/finance-management/invoices/new')}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         deleteButtonText="批量删除"
-        onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 张发票吗？`,
-            onOk: async () => {
-              try {
-                for (const code of keys) {
-                  await invoiceService.deleteInvoice(String(code));
-                }
-                messageApi.success(`成功删除 ${keys.length} 张发票`);
-                invalidateInvoiceStatistics();
-                actionRef.current?.reload();
-              } catch (error: any) {
-                messageApi.error(error?.message || '删除失败');
-              }
-            },
-          });
-        }}
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定要删除选中的 ${count} 张发票吗？`}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;
           const res = await invoiceService.listInvoices({

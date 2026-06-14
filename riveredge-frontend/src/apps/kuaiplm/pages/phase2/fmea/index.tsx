@@ -7,14 +7,15 @@ import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Tag, Alert } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import {
   listFmeaRecords,
   createFmeaRecord,
   deleteFmeaRecord,
+  updateFmeaRecord,
   type RdFmeaRecord,
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -38,6 +39,56 @@ const FmeaPage: React.FC = () => {
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  const toFmeaIds = (keys: React.Key[]) =>
+    keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = toFmeaIds(keys);
+    if (!ids.length) {
+      messageApi.warning('请先选择 FMEA 记录');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteFmeaRecord(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已删除 ${successCount} 条 FMEA`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
+  };
+
+  const handleBatchSetStatus = async (status: string, label: string) => {
+    const ids = toFmeaIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择 FMEA 记录');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await updateFmeaRecord(id, { status });
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已将 ${successCount} 条 FMEA 设置为${label}`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量更新状态失败');
+  };
 
   const columns: ProColumns<RdFmeaRecord>[] = [
     { title: 'FMEA 编号', dataIndex: 'fmea_code', width: 140 },
@@ -99,6 +150,7 @@ const FmeaPage: React.FC = () => {
       <UniTable<RdFmeaRecord>
         headerTitle="FMEA"
         actionRef={actionRef}
+        rowKey="id"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
@@ -118,10 +170,34 @@ const FmeaPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-            {'新建 FMEA' + NEW_SHORTCUT_HINT}
-          </Button>,
+        showCreateButton
+        createButtonText={'新建 FMEA' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条 FMEA 吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="fmea-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-set-in-review',
+                label: '批量设为评审中',
+                onClick: () => {
+                  void handleBatchSetStatus('IN_REVIEW', '评审中');
+                },
+              },
+              {
+                key: 'batch-set-closed',
+                label: '批量设为已关闭',
+                onClick: () => {
+                  void handleBatchSetStatus('CLOSED', '已关闭');
+                },
+              },
+            ]}
+          />,
         ]}
       />
 

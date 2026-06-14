@@ -171,6 +171,17 @@ class CustomerMaterialRegistrationListResponse(CustomerMaterialRegistrationRespo
     pass
 
 
+class CustomerMaterialRegistrationBatchActionRequest(BaseModel):
+    ids: List[int] = Field(..., min_length=1, description="批量操作的代工来料单ID列表")
+
+
+class CustomerMaterialRegistrationBatchActionResponse(BaseModel):
+    success_count: int = Field(..., description="成功数量")
+    failed_count: int = Field(..., description="失败数量")
+    failed_ids: List[int] = Field(default_factory=list, description="失败的ID列表")
+    errors: List[str] = Field(default_factory=list, description="失败原因")
+
+
 class CustomerMaterialStartProductionResponse(BaseModel):
     """客供料入库并直接发料开工"""
 

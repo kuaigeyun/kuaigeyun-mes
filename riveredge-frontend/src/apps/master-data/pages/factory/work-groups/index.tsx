@@ -95,14 +95,15 @@ const WorkGroupsPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectAtLeastOne'));
       return;
     }
 
     try {
-      const uuids = selectedRowKeys.map((key) => String(key));
+      const uuids = targetKeys.map((key) => String(key));
       const result = await workGroupApi.batchDelete(uuids);
 
       if (result.success) {
@@ -575,35 +576,18 @@ const WorkGroupsPage: React.FC = () => {
             defaultPageSize: 20,
             showSizeChanger: true,
           }}
-          toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-              {t('field.workGroup.createTitle') + NEW_SHORTCUT_HINT}
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
-              key="batchDelete"
-              title={t('app.master-data.workGroups.batchDeleteConfirm')}
-              description={t('app.master-data.workGroups.batchDeleteDescription', {
-                count: selectedRowKeys.length,
-              })}
-              onConfirm={handleBatchDelete}
-              okText={t('common.confirm')}
-              cancelText={t('common.cancel')}
-              disabled={selectedRowKeys.length === 0}
-            >
-              <Button
-                type="default"
-                danger
-                icon={<DeleteOutlined />}
-                disabled={selectedRowKeys.length === 0}
-              >
-                {t('common.batchDelete')}
-              </Button>
-            </Popconfirm>,
-          ]}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
+          showCreateButton
+          createButtonText={t('field.workGroup.createTitle') + NEW_SHORTCUT_HINT}
+          onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={t('app.master-data.workGroups.batchDeleteConfirm')}
+          deleteConfirmDescription={(count) =>
+            t('app.master-data.workGroups.batchDeleteDescription', { count })
+          }
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showImportButton={true}
           onImport={handleImport}
           importHeaders={workGroupImportTemplate.importHeaders}

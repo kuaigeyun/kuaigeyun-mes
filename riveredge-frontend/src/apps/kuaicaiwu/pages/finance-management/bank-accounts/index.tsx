@@ -11,6 +11,7 @@ import {
   MODAL_CONFIG,
 } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { CURRENCY_SELECT_OPTIONS, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
 
@@ -24,6 +25,7 @@ const BankAccountsPage: React.FC = () => {
   const [editing, setEditing] = useState<BankAccount | null>(null);
   const [txDrawerOpen, setTxDrawerOpen] = useState(false);
   const [txAccount, setTxAccount] = useState<BankAccount | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [importOpen, setImportOpen] = useState(false);
   const [importAccount, setImportAccount] = useState<BankAccount | null>(null);
 
@@ -80,11 +82,31 @@ const BankAccountsPage: React.FC = () => {
     { title: '摘要', dataIndex: 'summary', ellipsis: true },
   ];
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    for (const key of keys) {
+      await bankAccountService.delete(Number(key));
+    }
+    messageApi.success(`已删除 ${keys.length} 个银行账户`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
+    for (const key of keys) {
+      await bankAccountService.update(Number(key), { is_active: isActive });
+    }
+    messageApi.success(`已将 ${keys.length} 个银行账户设为${isActive ? '启用' : '停用'}`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
   return (
     <ListPageTemplate>
       <UniTable<BankAccount>
         actionRef={actionRef}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.bank-accounts"
         columns={columns}
@@ -96,6 +118,29 @@ const BankAccountsPage: React.FC = () => {
         showCreateButton
         createButtonText="新建账户"
         onCreate={() => { setEditing(null); setModalVisible(true); }}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 个银行账户吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="bank-account-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-enable',
+                label: '批量启用',
+                onClick: (keys) => handleBatchSetActive(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: '批量停用',
+                onClick: (keys) => handleBatchSetActive(keys, false),
+              },
+            ]}
+          />,
+        ]}
       />
 
       <DetailDrawerTemplate

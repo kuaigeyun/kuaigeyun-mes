@@ -2859,12 +2859,6 @@ const SalesContractsPage: React.FC = () => {
 
         onCreate={handleCreate}
 
-        toolBarActionsAfterCreate={[
-          <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
-            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
-          </Button>,
-        ]}
-
         showDeleteButton={contractPerms.canDelete}
         onDelete={handleBatchDeleteDrafts}
         deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售合同？`}
@@ -2888,6 +2882,11 @@ const SalesContractsPage: React.FC = () => {
               ]
             : undefined
         }
+        toolBarActionsAfterBatch={[
+          <Button {...rowActionKind('update')} key="terms-manage" onClick={() => setTermsManageOpen(true)}>
+            {t('app.kuaizhizao.salesContract.terms.manageBtn')}
+          </Button>,
+        ]}
 
         showExportButton={contractPerms.canExport}
 

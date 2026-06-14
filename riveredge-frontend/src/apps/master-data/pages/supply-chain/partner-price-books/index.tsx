@@ -428,11 +428,9 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
           rowKey="uuid"
           columns={columns}
           headerTitle={pageTitle}
-          toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-              {createButtonLabel + NEW_SHORTCUT_HINT}
-            </Button>,
-          ]}
+          showCreateButton
+          createButtonText={createButtonLabel + NEW_SHORTCUT_HINT}
+          onCreate={handleCreate}
           request={async (params) => {
             const res = await priceBookApi.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),

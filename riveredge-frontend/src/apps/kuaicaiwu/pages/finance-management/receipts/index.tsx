@@ -12,6 +12,7 @@ import { EyeOutlined, CheckOutlined, StopOutlined, PlusOutlined, DownOutlined, D
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -69,6 +70,7 @@ const ReceiptsPage: React.FC = () => {
   const [pullKeyword, setPullKeyword] = useState('');
   const [pullCandidates, setPullCandidates] = useState<PullReceivableCandidate[]>([]);
   const [selectedPullReceivableId, setSelectedPullReceivableId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [detailOpen, setDetailOpen] = useState(false);
@@ -260,6 +262,45 @@ const ReceiptsPage: React.FC = () => {
     });
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await receiptService.deleteReceipt(Number(key));
+      }
+      messageApi.success(`已删除 ${keys.length} 条收款单`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
+
+  const handleBatchConfirm = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await apiRequest(`/apps/kuaicaiwu/receipts/${key}/confirm`, { method: 'POST' });
+      }
+      messageApi.success(`已确认 ${keys.length} 条收款单`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量确认失败');
+    }
+  };
+
+  const handleBatchCancel = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await receiptService.cancelReceipt(Number(key));
+      }
+      messageApi.success(`已作废 ${keys.length} 条收款单`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量作废失败');
+    }
+  };
+
   const columns: ProColumns<ReceiptVoucher>[] = [
     {
       title: '收款单号',
@@ -390,6 +431,8 @@ const ReceiptsPage: React.FC = () => {
         headerTitle="收款单管理"
         actionRef={actionRef}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receipts"
         scroll={{ x: 1680 }}
@@ -398,6 +441,35 @@ const ReceiptsPage: React.FC = () => {
         showCreateButton={false}
         createButtonText="新建收款单"
         onCreate={() => setCreateModalVisible(true)}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条收款单吗？已确认单据不能删除，请使用作废。`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="receipt-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-confirm',
+                label: '批量确认',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认批量确认 ${count} 条收款单`,
+                confirmDescription: '仅草稿收款单可确认，不满足条件的记录会由后端拒绝。',
+                onClick: handleBatchConfirm,
+              },
+              {
+                key: 'batch-cancel',
+                label: '批量作废',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认批量作废 ${count} 条收款单`,
+                confirmDescription: '已核销的收款单不能作废，不满足条件的记录会由后端拒绝。',
+                onClick: handleBatchCancel,
+              },
+            ]}
+          />,
+        ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-receipt-with-pull"

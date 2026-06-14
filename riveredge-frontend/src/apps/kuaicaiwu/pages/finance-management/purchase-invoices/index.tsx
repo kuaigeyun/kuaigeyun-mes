@@ -11,6 +11,7 @@ import { purchaseInvoiceService } from '../../../services/finance/purchase-invoi
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -56,6 +57,7 @@ const PurchaseInvoiceList: React.FC = () => {
     const [pullSourceType, setPullSourceType] = useState<'purchase_order' | 'purchase_receipt'>('purchase_order');
     const [pullCandidates, setPullCandidates] = useState<PullPurchaseInvoiceCandidate[]>([]);
     const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [pullFormVisible, setPullFormVisible] = useState(false);
     const [pullSelectedSource, setPullSelectedSource] = useState<PullPurchaseInvoiceCandidate | null>(null);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
@@ -284,6 +286,19 @@ const PurchaseInvoiceList: React.FC = () => {
         }
     };
 
+    const handleBatchApprove = async (keys: React.Key[]) => {
+        try {
+            for (const id of keys) {
+                await purchaseInvoiceService.approve(Number(id));
+            }
+            messageApi.success(`已审核 ${keys.length} 张采购发票`);
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+        } catch (error: any) {
+            messageApi.error(error?.message || '批量审核失败');
+        }
+    };
+
     const columns: ProColumns<PurchaseInvoice>[] = [
         {
             title: '发票编号',
@@ -408,6 +423,8 @@ const PurchaseInvoiceList: React.FC = () => {
                 headerTitle="采购发票"
                 actionRef={actionRef}
                 enableRowSelection
+                selectedRowKeys={selectedRowKeys}
+                onRowSelectionChange={setSelectedRowKeys}
                 columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.purchase-invoices"
                 scroll={{ x: 1600 }}
@@ -434,6 +451,23 @@ const PurchaseInvoiceList: React.FC = () => {
                 showCreateButton={false}
                 createButtonText="登记采购发票"
                 onCreate={() => setCreateModalVisible(true)}
+                toolBarActionsAfterBatch={[
+                    <UniBatchMenuButton
+                        key="purchase-invoice-batch-actions"
+                        selectedRowKeys={selectedRowKeys}
+                        buttonText="批量操作"
+                        menuItems={[
+                            {
+                                key: 'batch-approve',
+                                label: '批量审核',
+                                requireConfirm: true,
+                                confirmTitle: (count) => `确认审核 ${count} 张采购发票`,
+                                confirmDescription: '仅待审核发票会审核通过，不满足条件的记录会由后端拒绝。',
+                                onClick: handleBatchApprove,
+                            },
+                        ]}
+                    />,
+                ]}
                 toolBarRender={() => [
                     <UniPullCreateToolbar
                         compactKey="create-purchase-invoice-with-pull"

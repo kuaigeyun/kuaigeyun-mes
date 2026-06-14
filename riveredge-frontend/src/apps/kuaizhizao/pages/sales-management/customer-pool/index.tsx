@@ -14,7 +14,6 @@ import {
 import { useCustomerPoolPermissions } from '../../../hooks/useCustomerPoolPermissions';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import dayjs from 'dayjs';
 
 import { UniTable } from '../../../../../components/uni-table';
@@ -433,24 +432,9 @@ const CustomerPoolPage: React.FC = () => {
               ]}
             />
           }
-          toolBarRender={() => {
-            const buttons: React.ReactNode[] = [];
-            if (canCreateCustomer) {
-              buttons.push(
-                <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreateCustomer}>
-                  {t('app.master-data.customers.create') + NEW_SHORTCUT_HINT}
-                </Button>,
-              );
-            }
-            if (canUpdateRules) {
-              buttons.push(
-                <Button {...rowActionKind('update')} key="rules" onClick={openRules}>
-                  回收规则
-                </Button>,
-              );
-            }
-            return buttons;
-          }}
+          showCreateButton={canCreateCustomer}
+          createButtonText={t('app.master-data.customers.create')}
+          onCreate={openCreateCustomer}
           request={async (params, _sort, _filter, searchValues) => {
             try {
               const salesmanRaw = searchValues?.salesmanId;
@@ -480,6 +464,15 @@ const CustomerPoolPage: React.FC = () => {
           showDeleteButton={canDeleteCustomer}
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => `确认删除选中的 ${count} 个客户？`}
+          toolBarActionsAfterBatch={
+            canUpdateRules
+              ? [
+                  <Button {...rowActionKind('update')} key="rules" onClick={openRules}>
+                    回收规则
+                  </Button>,
+                ]
+              : undefined
+          }
         />
       </ListPageTemplate>
 

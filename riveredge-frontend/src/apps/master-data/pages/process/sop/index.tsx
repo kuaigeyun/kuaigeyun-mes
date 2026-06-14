@@ -257,48 +257,45 @@ const SOPPage: React.FC = () => {
   /**
    * 处理批量删除SOP
    */
-  const handleBatchDelete = () => {
-    if (selectedRowKeys.length === 0) {
+  const handleBatchDelete = async (keys?: React.Key[]) => {
+    const targetKeys = keys ?? selectedRowKeys;
+    if (targetKeys.length === 0) {
       messageApi.warning(t('common.selectToDelete'));
       return;
     }
 
-    Modal.confirm({
-      title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: selectedRowKeys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      const errors: string[] = [];
+
+      for (const key of targetKeys) {
         try {
-          let successCount = 0;
-          let failCount = 0;
-          const errors: string[] = [];
-
-          for (const key of selectedRowKeys) {
-            try {
-              await sopApi.delete(key.toString());
-              successCount++;
-            } catch (error: any) {
-              failCount++;
-              errors.push(error.message || t('common.deleteFailed'));
-            }
-          }
-
-          if (successCount > 0) {
-            messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
-          }
-          if (failCount > 0) {
-            messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
-          }
-
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
+          await sopApi.delete(key.toString());
+          successCount++;
         } catch (error: any) {
-          messageApi.error(error.message || t('common.batchDeleteFailed'));
+          failCount++;
+          errors.push(error.message || t('common.deleteFailed'));
         }
-      },
-    });
+      }
+
+      if (successCount > 0) {
+        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failCount > 0) {
+        messageApi.error(
+          t('common.batchDeletePartial', {
+            count: failCount,
+            errors: errors.length > 0 ? '：' + errors.join('; ') : '',
+          }),
+        );
+      }
+
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
+    }
   };
 
   /**
@@ -996,27 +993,21 @@ const SOPPage: React.FC = () => {
           defaultPageSize: 20,
           showSizeChanger: true,
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleSelectSingleCreate}>
-            {'新建SOP' + NEW_SHORTCUT_HINT}
-          </Button>,
+        showCreateButton
+        createButtonText={'新建SOP' + NEW_SHORTCUT_HINT}
+        onCreate={handleSelectSingleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterBatch={[
           <Button {...rowActionKind('create')} key="batch-create" type="default" onClick={() => setCreateModalVisible(true)}>
             按工艺路线批量创建
           </Button>,
-          <Button {...rowActionKind('delete')}
-            key="batch-delete"
-            danger
-            icon={<DeleteOutlined />}
-            disabled={selectedRowKeys.length === 0}
-            onClick={handleBatchDelete}
-          >
-            批量删除
-          </Button>,
         ]}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         showImportButton={true}
         onImport={handleImport}
         importHeaders={sopImportTemplate.importHeaders}

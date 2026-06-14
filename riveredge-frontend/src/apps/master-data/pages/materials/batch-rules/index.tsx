@@ -12,6 +12,7 @@ import { ProForm, ProFormText, ProFormTextArea, ProFormSelect, ProFormDigit, Pro
 import { App, Popconfirm, Button, Tag, Space } from 'antd';
 import { EditOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { extractProTableSort } from '../../../../../utils/tableQueryKey';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -37,6 +38,7 @@ const BatchRulesPage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentUuid, setCurrentUuid] = useState<string | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [ruleComponents, setRuleComponents] = useState<CodeRuleComponent[]>([]);
 
   const handleCreate = () => {
@@ -125,6 +127,24 @@ const BatchRulesPage: React.FC = () => {
     }
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    for (const key of keys) {
+      await batchRuleApi.delete(String(key));
+    }
+    messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
+    for (const key of keys) {
+      await batchRuleApi.update(String(key), { isActive });
+    }
+    messageApi.success(`已将 ${keys.length} 条批号规则设为${isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
   const columns: ProColumns<BatchRule>[] = [
     {
       title: t('app.master-data.seqRules.ruleName'),
@@ -208,11 +228,35 @@ const BatchRulesPage: React.FC = () => {
           });
           return { data: res.items, success: true, total: res.total };
         }}
-        toolBarRender={() => [
-          <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {t('app.master-data.batchRules.createTitle') + NEW_SHORTCUT_HINT}
-          </Button>,
+        showCreateButton
+        createButtonText={t('app.master-data.batchRules.createTitle') + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="batch-rule-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-enable',
+                label: t('app.master-data.seqRules.enabled'),
+                onClick: (keys) => handleBatchSetActive(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: t('app.master-data.seqRules.disabled'),
+                onClick: (keys) => handleBatchSetActive(keys, false),
+              },
+            ]}
+          />,
         ]}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
       />
 
       <FormModalTemplate

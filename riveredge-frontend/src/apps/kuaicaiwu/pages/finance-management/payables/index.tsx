@@ -4,7 +4,7 @@
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { EyeOutlined, DollarOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
@@ -18,6 +18,7 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -27,6 +28,7 @@ import dayjs from 'dayjs';
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
     const [createModalVisible, setCreateModalVisible] = useState(false);
+    const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
@@ -99,6 +101,32 @@ const PayableList: React.FC = () => {
         messageApi.success('创建成功');
         setCreateModalVisible(false);
         actionRef.current?.reload();
+    };
+
+    const handleBatchDelete = async (keys: React.Key[]) => {
+        try {
+            for (const id of keys) {
+                await payableService.deletePayable(Number(id));
+            }
+            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+        } catch (error: any) {
+            messageApi.error(error?.message || '删除失败');
+        }
+    };
+
+    const handleBatchApprove = async (keys: React.Key[]) => {
+        try {
+            for (const id of keys) {
+                await payableService.approvePayable(Number(id));
+            }
+            messageApi.success(`成功审核 ${keys.length} 条应付单`);
+            setSelectedRowKeys([]);
+            actionRef.current?.reload();
+        } catch (error: any) {
+            messageApi.error(error?.message || '批量审核失败');
+        }
     };
 
     const columns: ProColumns<Payable>[] = [
@@ -265,25 +293,30 @@ const PayableList: React.FC = () => {
                 createButtonText="新建应付单"
                 onCreate={() => setCreateModalVisible(true)}
                 enableRowSelection
+                selectedRowKeys={selectedRowKeys}
+                onRowSelectionChange={setSelectedRowKeys}
                 showDeleteButton
                 deleteButtonText="批量删除"
-                onDelete={async (keys) => {
-                    Modal.confirm({
-                        title: '确认批量删除',
-                        content: `确定要删除选中的 ${keys.length} 条应付单吗？仅待审核且无付款记录的应付单可删除。`,
-                        onOk: async () => {
-                            try {
-                                for (const id of keys) {
-                                    await payableService.deletePayable(Number(id));
-                                }
-                                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                                actionRef.current?.reload();
-                            } catch (error: any) {
-                                messageApi.error(error?.message || '删除失败');
-                            }
-                        },
-                    });
-                }}
+                onDelete={handleBatchDelete}
+                deleteConfirmTitle="确认批量删除"
+                deleteConfirmDescription={(count) => `确定要删除选中的 ${count} 条应付单吗？仅待审核且无付款记录的应付单可删除。`}
+                toolBarActionsAfterDelete={[
+                    <UniBatchMenuButton
+                        key="payable-batch-actions"
+                        selectedRowKeys={selectedRowKeys}
+                        buttonText="批量操作"
+                        menuItems={[
+                            {
+                                key: 'batch-approve',
+                                label: '批量审核',
+                                requireConfirm: true,
+                                confirmTitle: (count) => `确认审核 ${count} 条应付单`,
+                                confirmDescription: '仅待审核单据会审核通过，不满足条件的单据会在后端返回错误。',
+                                onClick: handleBatchApprove,
+                            },
+                        ]}
+                    />,
+                ]}
                 request={async (params) => {
                     const { current, pageSize, ...rest } = params;
                     const res = await payableService.listPayables({

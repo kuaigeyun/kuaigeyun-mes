@@ -7,15 +7,17 @@ import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Alert } from 'antd';
-import { PlusOutlined, LinkOutlined } from '@ant-design/icons';
+import { LinkOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useSearchParams } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import {
   listRequirements,
   createRequirement,
   deleteRequirement,
+  updateRequirement,
   type RdRequirement,
 } from '../../../services/phase2';
 import { buildPurchaseInquiryUrl } from '../../../services/master-data-links';
@@ -33,6 +35,56 @@ const RequirementsPage: React.FC = () => {
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  const toRequirementIds = (keys: React.Key[]) =>
+    keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = toRequirementIds(keys);
+    if (!ids.length) {
+      messageApi.warning('请先选择研发需求');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteRequirement(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已删除 ${successCount} 条需求`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
+  };
+
+  const handleBatchSetStatus = async (status: string, label: string) => {
+    const ids = toRequirementIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择研发需求');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await updateRequirement(id, { status });
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已将 ${successCount} 条需求设置为${label}`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量更新状态失败');
+  };
 
   const columns: ProColumns<RdRequirement>[] = [
     { title: '需求编号', dataIndex: 'requirement_code', width: 140 },
@@ -108,6 +160,7 @@ const RequirementsPage: React.FC = () => {
       <UniTable<RdRequirement>
         headerTitle="研发需求"
         actionRef={actionRef}
+        rowKey="id"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
@@ -127,10 +180,34 @@ const RequirementsPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-            {'新建需求' + NEW_SHORTCUT_HINT}
-          </Button>,
+        showCreateButton
+        createButtonText={'新建需求' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条研发需求吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="requirements-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-set-in-progress',
+                label: '批量设为进行中',
+                onClick: () => {
+                  void handleBatchSetStatus('IN_PROGRESS', '进行中');
+                },
+              },
+              {
+                key: 'batch-set-done',
+                label: '批量设为已完成',
+                onClick: () => {
+                  void handleBatchSetStatus('DONE', '已完成');
+                },
+              },
+            ]}
+          />,
         ]}
       />
 

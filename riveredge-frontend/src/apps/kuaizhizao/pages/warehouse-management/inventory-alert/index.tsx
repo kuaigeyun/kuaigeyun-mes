@@ -19,6 +19,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { getInventoryAlertLifecycle } from '../../../utils/inventoryAlertLifecycle';
@@ -266,6 +267,51 @@ const InventoryAlertPage: React.FC = () => {
       messageApi.error(error.message || '处理预警失败');
       throw error;
     }
+  };
+
+  const handleBatchHandleAlerts = async (status: 'resolved' | 'ignored') => {
+    if (!selectedRowKeys.length) {
+      messageApi.warning('请先选择预警记录');
+      return;
+    }
+    let successCount = 0;
+    for (const key of selectedRowKeys) {
+      try {
+        await inventoryAlertApi.handle(String(key), { status });
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`批量处理成功 ${successCount} 条`);
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      loadStatistics();
+      return;
+    }
+    messageApi.error('批量处理失败');
+  };
+
+  const handleBatchDeleteRules = async (keys: React.Key[]) => {
+    let successCount = 0;
+    for (const key of keys) {
+      try {
+        await inventoryAlertApi.deleteRule(String(key));
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`批量删除成功 ${successCount} 条规则`);
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
   };
 
   /**
@@ -558,6 +604,44 @@ const InventoryAlertPage: React.FC = () => {
         showCreateButton={activeTab === 'rules'}
         createButtonText="新建库存预警规则"
         onCreate={activeTab === 'rules' ? handleCreateRule : undefined}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton={activeTab === 'rules'}
+        onDelete={activeTab === 'rules' ? handleBatchDeleteRules : undefined}
+        deleteConfirmTitle={(count) =>
+          activeTab === 'rules'
+            ? `确定要删除选中的 ${count} 条预警规则吗？`
+            : `确定要删除选中的 ${count} 条记录吗？`
+        }
+        toolBarActionsAfterBatch={
+          activeTab === 'alerts'
+            ? [
+                <UniBatchMenuButton
+                  key="inventory-alert-batch-actions"
+                  selectedRowKeys={selectedRowKeys}
+                  label="批量操作"
+                  disabled={selectedRowKeys.length === 0}
+                  menuItems={[
+                    {
+                      key: 'batch-resolved',
+                      label: '批量标记已解决',
+                      onClick: () => {
+                        void handleBatchHandleAlerts('resolved');
+                      },
+                    },
+                    {
+                      key: 'batch-ignored',
+                      label: '批量标记忽略',
+                      onClick: () => {
+                        void handleBatchHandleAlerts('ignored');
+                      },
+                    },
+                  ]}
+                />,
+              ]
+            : []
+        }
         request={async (params) => {
           try {
             const pageSize = params.pageSize || 20;
@@ -593,16 +677,13 @@ const InventoryAlertPage: React.FC = () => {
             };
           }
         }}
-        rowSelection={{
-          selectedRowKeys,
-          onChange: setSelectedRowKeys,
-        }}
         toolBarRender={() => [
           <Button
             key="alerts"
             type={activeTab === 'alerts' ? 'primary' : 'default'}
             onClick={() => {
               setActiveTab('alerts');
+              setSelectedRowKeys([]);
               invalidateMenuBadgeCounts();
 
               actionRef.current?.reload();
@@ -615,6 +696,7 @@ const InventoryAlertPage: React.FC = () => {
             type={activeTab === 'rules' ? 'primary' : 'default'}
             onClick={() => {
               setActiveTab('rules');
+              setSelectedRowKeys([]);
               invalidateMenuBadgeCounts();
 
               actionRef.current?.reload();

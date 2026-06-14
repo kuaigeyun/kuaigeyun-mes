@@ -6,10 +6,11 @@ import { rowActionKind } from '../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Tag, Typography } from 'antd';
-import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../components/uni-lifecycle';
@@ -18,6 +19,10 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../utils/codeRu
 import {
   listRdProjects,
   createRdProject,
+  deleteRdProject,
+  spawnDeliveryProject,
+  pushTrialWorkOrder,
+  updateRdProject,
   buildProjectStatusValueEnum,
   PROJECT_TYPE_LABELS,
   type ProjectType,
@@ -72,6 +77,102 @@ const RdProjectsListPage: React.FC = () => {
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  const toProjectIds = (keys: React.Key[]) =>
+    keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = toProjectIds(keys);
+    if (!ids.length) {
+      messageApi.warning('请先选择项目');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteRdProject(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`成功删除 ${successCount} 个项目`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
+  };
+
+  const handleBatchSpawnDelivery = async () => {
+    const ids = toProjectIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择项目');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await spawnDeliveryProject(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`成功下推 ${successCount} 个交付项目`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量下推交付项目失败');
+  };
+
+  const handleBatchPushTrialWorkOrder = async () => {
+    const ids = toProjectIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择项目');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await pushTrialWorkOrder(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`成功下推 ${successCount} 个试制工单`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量下推试制工单失败');
+  };
+
+  const handleBatchUpdateStatus = async (status: string, label: string) => {
+    const ids = toProjectIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择项目');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await updateRdProject(id, { status });
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已将 ${successCount} 个项目设置为${label}`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量更新状态失败');
+  };
 
   const columns: ProColumns<RdProject>[] = [
     {
@@ -197,12 +298,76 @@ const RdProjectsListPage: React.FC = () => {
       <UniTable<RdProject>
         headerTitle="项目管理"
         actionRef={actionRef}
+        rowKey="id"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         columns={columns}
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
         scroll={{ x: 1400 }}
+        showCreateButton
+        createButtonText={'新建项目' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        toolBarActionsAfterCreate={[
+          <UniBatchMenuButton
+            key="rd-project-push-actions"
+            buttonText="下推"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={[
+              {
+                key: 'batch-spawn-delivery',
+                label: '批量下推交付项目',
+                requireConfirm: true,
+                confirmTitle: (count) => `确定下推选中的 ${count} 个项目为交付项目吗？`,
+                onClick: () => {
+                  void handleBatchSpawnDelivery();
+                },
+              },
+              {
+                key: 'batch-push-trial-work-order',
+                label: '批量下推试制工单',
+                requireConfirm: true,
+                confirmTitle: (count) => `确定为选中的 ${count} 个项目下推试制工单吗？`,
+                onClick: () => {
+                  void handleBatchPushTrialWorkOrder();
+                },
+              },
+            ]}
+          />,
+        ]}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 个项目吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="rd-project-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-set-in-progress',
+                label: '批量设为进行中',
+                onClick: () => {
+                  void handleBatchUpdateStatus('IN_PROGRESS', '进行中');
+                },
+              },
+              {
+                key: 'batch-set-on-hold',
+                label: '批量设为已暂停',
+                onClick: () => {
+                  void handleBatchUpdateStatus('ON_HOLD', '已暂停');
+                },
+              },
+              {
+                key: 'batch-set-completed',
+                label: '批量设为已结案',
+                onClick: () => {
+                  void handleBatchUpdateStatus('COMPLETED', '已结案');
+                },
+              },
+            ]}
+          />,
+        ]}
         request={async (params, _sort, _filter, searchFormValues) => {
           const { current, pageSize } = params;
           const lifecycleParams = resolveRdProjectListLifecycleParams(searchFormValues, params);
@@ -220,11 +385,6 @@ const RdProjectsListPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-            {'新建项目' + NEW_SHORTCUT_HINT}
-          </Button>,
-        ]}
       />
 
       <FormModalTemplate

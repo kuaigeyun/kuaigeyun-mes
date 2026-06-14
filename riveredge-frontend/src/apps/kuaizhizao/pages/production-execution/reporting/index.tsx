@@ -46,6 +46,7 @@ import {
   EyeOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -1095,74 +1096,71 @@ const ReportingPage: React.FC = () => {
           }
         }}
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
         createButtonText="新建报工记录"
         onCreate={handleNewReporting}
         showDeleteButton={true}
         onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 条报工记录吗？`,
-            onOk: async () => {
-              try {
-                for (const id of keys) {
-                  await reportingApi.delete(String(id));
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                setSelectedRowKeys([]);
-                if (reportingDetail?.id != null && keys.includes(reportingDetail.id)) {
-                  setDetailDrawerVisible(false);
-                  setReportingDetail(null);
-                }
-                invalidateMenuBadgeCounts();
-
-                actionRef.current?.reload();
-                invalidateStatistics();
-              } catch (error: any) {
-                messageApi.error(error.message || '删除失败');
-              }
-            },
-          });
+          try {
+            for (const id of keys) {
+              await reportingApi.delete(String(id));
+            }
+            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            setSelectedRowKeys([]);
+            if (reportingDetail?.id != null && keys.includes(reportingDetail.id)) {
+              setDetailDrawerVisible(false);
+              setReportingDetail(null);
+            }
+            invalidateMenuBadgeCounts();
+            actionRef.current?.reload();
+            invalidateStatistics();
+          } catch (error: any) {
+            messageApi.error(error.message || '删除失败');
+          }
         }}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条报工记录吗？`}
         scroll={{ x: 1700 }}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
           style: { cursor: 'pointer' },
         })}
-        toolBarRender={(_, { selectedRowKeys }) => [
-          selectedRowKeys && selectedRowKeys.length > 0 && (
-            <Button {...rowActionKind('revoke')}
-              key="batch-revoke"
-              icon={<RollbackOutlined />}
-              onClick={() => {
-                Modal.confirm({
-                  title: '确认批量撤回审核',
-                  content: `确定要撤回选中的 ${selectedRowKeys.length} 条报工记录的审核吗？只有"已审核"状态的记录会被执行。`,
-                  onOk: async () => {
-                    try {
-                      const res = await reportingApi.batchRevoke(selectedRowKeys.map(String));
-                      if (res.success > 0) {
-                        messageApi.success(`成功撤回 ${res.success} 条记录审核`);
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="reporting-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={[
+              {
+                key: 'batch-revoke',
+                label: '批量撤回审核',
+                icon: <RollbackOutlined />,
+                onClick: (keys) => {
+                  Modal.confirm({
+                    title: '确认批量撤回审核',
+                    content: `确定要撤回选中的 ${keys.length} 条报工记录的审核吗？只有"已审核"状态的记录会被执行。`,
+                    onOk: async () => {
+                      try {
+                        const res = await reportingApi.batchRevoke(keys.map(String));
+                        if (res.success > 0) {
+                          messageApi.success(`成功撤回 ${res.success} 条记录审核`);
+                        }
+                        if (res.failed > 0) {
+                          messageApi.warning(`${res.failed} 条记录操作失败`);
+                        }
+                        invalidateMenuBadgeCounts();
+                        actionRef.current?.reload();
+                        invalidateStatistics();
+                        setSelectedRowKeys([]);
+                      } catch (error: any) {
+                        messageApi.error(error.message || '批量撤回失败');
                       }
-                      if (res.failed > 0) {
-                        messageApi.warning(`${res.failed} 条记录操作失败`);
-                      }
-                      invalidateMenuBadgeCounts();
-
-                      actionRef.current?.reload();
-                      invalidateStatistics();
-                      setSelectedRowKeys([]);
-                    } catch (error: any) {
-                      messageApi.error(error.message || '批量撤回失败');
-                    }
-                  },
-                });
-              }}
-            >
-              批量撤回审核
-            </Button>
-          ),
+                    },
+                  });
+                },
+              },
+            ]}
+          />,
         ]}
       />
 

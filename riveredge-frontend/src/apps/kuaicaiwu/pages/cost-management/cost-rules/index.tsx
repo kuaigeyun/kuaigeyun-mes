@@ -11,8 +11,9 @@
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Descriptions, Typography, Timeline } from 'antd';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -59,6 +60,7 @@ const CostRulePage: React.FC = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [currentCostRule, setCurrentCostRule] = useState<CostRule | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const formRef = useRef<any>(null);
 
   // Drawer 相关状态（详情查看）
@@ -152,6 +154,32 @@ const CostRulePage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
+    }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await costRuleApi.delete(String(key));
+      }
+      messageApi.success(`已删除 ${keys.length} 条规则`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
+
+  const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
+    try {
+      for (const key of keys) {
+        await costRuleApi.update(String(key), { is_active: isActive });
+      }
+      messageApi.success(`已将 ${keys.length} 条规则设为${isActive ? '启用' : '禁用'}`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量更新失败');
     }
   };
 
@@ -402,22 +430,13 @@ const CostRulePage: React.FC = () => {
     (d) => !['calculation_formula', 'rule_parameters'].includes(String((d as { dataIndex?: string }).dataIndex)),
   );
 
-  const ruleToolbarActions = (
-    <Space wrap size="middle">
-      <Button type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-        新建成本核算规则
-      </Button>
-      <Button type="primary" ghost onClick={handleInitPresets}>
-        初始化推荐规则
-      </Button>
-    </Space>
-  );
-
   return (
     <ListPageTemplate>
       <UniTable<CostRule>
         actionRef={actionRef}
-        headerActions={ruleToolbarActions}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         columnPersistenceId="apps.kuaicaiwu.pages.cost-management.cost-rules"
         scroll={{ x: 'max-content' }}
         request={async (params: any) => {
@@ -444,6 +463,37 @@ const CostRulePage: React.FC = () => {
         }}
         columns={columns}
         rowKey="uuid"
+        showCreateButton
+        createButtonText="新建成本核算规则"
+        onCreate={handleCreate}
+        toolBarActionsAfterCreate={[
+          <Button key="init-presets" type="default" onClick={handleInitPresets}>
+            初始化推荐规则
+          </Button>,
+        ]}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条成本核算规则吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="cost-rule-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-enable',
+                label: '批量启用',
+                onClick: (keys) => handleBatchSetActive(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: '批量禁用',
+                onClick: (keys) => handleBatchSetActive(keys, false),
+              },
+            ]}
+          />,
+        ]}
         search={{
           labelWidth: 'auto',
         }}

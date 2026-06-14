@@ -12,6 +12,7 @@ import { ModalForm, ProFormDatePicker, ProFormDigit, ProFormSelect, ProFormText,
 import { CheckCircleOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -84,6 +85,7 @@ const SalesInvoicesPage: React.FC = () => {
   const [pullSourceType, setPullSourceType] = useState<'sales_order' | 'sales_delivery'>('sales_order');
   const [pullCandidates, setPullCandidates] = useState<PullInvoiceCandidate[]>([]);
   const [selectedPullSourceId, setSelectedPullSourceId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pullFormVisible, setPullFormVisible] = useState(false);
   const [pullSelectedSource, setPullSelectedSource] = useState<PullInvoiceCandidate | null>(null);
   const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
@@ -310,6 +312,32 @@ const SalesInvoicesPage: React.FC = () => {
     });
   };
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await apiRequest(`/apps/kuaicaiwu/sales-invoices/${id}`, { method: 'DELETE' });
+      }
+      messageApi.success(`已删除 ${keys.length} 张销售发票`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
+
+  const handleBatchApprove = async (keys: React.Key[]) => {
+    try {
+      for (const id of keys) {
+        await apiRequest(`/apps/kuaicaiwu/sales-invoices/${id}/approve`, { method: 'POST' });
+      }
+      messageApi.success(`已审核 ${keys.length} 张销售发票`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量审核失败');
+    }
+  };
+
   const openEditModal = (record: SalesInvoice) => {
     setEditingRecord(record);
     setEditVisible(true);
@@ -502,6 +530,8 @@ const SalesInvoicesPage: React.FC = () => {
         headerTitle="销售发票"
         actionRef={actionRef}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.sales-invoices"
         scroll={{ x: 1800 }}
@@ -510,6 +540,27 @@ const SalesInvoicesPage: React.FC = () => {
         showCreateButton={false}
         createButtonText="新建销售发票"
         onCreate={() => setCreateModalVisible(true)}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 张销售发票吗？已审核的发票不能删除。`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="sales-invoice-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-approve',
+                label: '批量审核',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认审核 ${count} 张销售发票`,
+                confirmDescription: '仅待审核发票会审核通过，不满足条件的发票会由后端拒绝。',
+                onClick: handleBatchApprove,
+              },
+            ]}
+          />,
+        ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-sales-invoice-with-pull"

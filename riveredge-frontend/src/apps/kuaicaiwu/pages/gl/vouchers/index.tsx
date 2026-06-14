@@ -3,6 +3,7 @@ import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Drawer, Table, Tag } from 'antd';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { glService, type Voucher, type VoucherLine } from '../../../services/gl';
 
 const statusColor: Record<string, string> = {
@@ -18,12 +19,26 @@ const VouchersPage: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [lines, setLines] = useState<VoucherLine[]>([]);
   const [current, setCurrent] = useState<Voucher | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   const openLines = async (record: Voucher) => {
     setCurrent(record);
     const data = await glService.listVoucherLines(record.id);
     setLines(data);
     setDrawerOpen(true);
+  };
+
+  const handleBatchPost = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await glService.postVoucher(Number(key));
+      }
+      messageApi.success(`已过账 ${keys.length} 张凭证`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量过账失败');
+    }
   };
 
   const columns: ProColumns<Voucher>[] = [
@@ -69,6 +84,9 @@ const VouchersPage: React.FC = () => {
     <ListPageTemplate title="会计凭证">
       <UniTable<Voucher>
         actionRef={actionRef}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columns={columns}
         request={async (params) => {
@@ -79,6 +97,23 @@ const VouchersPage: React.FC = () => {
           return { data: list, success: true, total: list.length };
         }}
         search={false}
+        toolBarActionsAfterBatch={[
+          <UniBatchMenuButton
+            key="voucher-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-post',
+                label: '批量过账',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认过账 ${count} 张凭证`,
+                confirmDescription: '仅未过账凭证会执行成功，已过账或不满足条件的记录会由后端拒绝。',
+                onClick: handleBatchPost,
+              },
+            ]}
+          />,
+        ]}
       />
 
       <Drawer

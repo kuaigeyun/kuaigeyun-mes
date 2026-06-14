@@ -208,22 +208,19 @@ const OQCInspectionPage: React.FC = () => {
           }}
           showDeleteButton
           onDelete={async (keys) => {
-            Modal.confirm({
-              title: '确认删除',
-              content: `确定删除选中的 ${keys.length} 张出货检验单？仅「待检验」状态可删除。`,
-              onOk: async () => {
-                try {
-                  for (const key of keys) {
-                    await qualityImprovementApi.oqc.delete(Number(key));
-                  }
-                  messageApi.success(`已删除 ${keys.length} 条记录`);
-                  actionRef.current?.reload();
-                } catch (e: any) {
-                  messageApi.error(e?.message || '删除失败');
-                }
-              },
-            });
+            try {
+              for (const key of keys) {
+                await qualityImprovementApi.oqc.delete(Number(key));
+              }
+              messageApi.success(`已删除 ${keys.length} 条记录`);
+              setSelectedRowKeys([]);
+              actionRef.current?.reload();
+            } catch (e: any) {
+              messageApi.error(e?.message || '删除失败');
+            }
           }}
+          deleteConfirmTitle={(count) => `确定删除选中的 ${count} 张出货检验单？`}
+          deleteConfirmDescription="仅「待检验」状态可删除。"
           toolBarRender={() =>
             canCreate
               ? [

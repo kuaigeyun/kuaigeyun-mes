@@ -22,6 +22,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 const LazyUniImport = lazy(() =>
@@ -153,6 +154,7 @@ const ShipmentNoticesPage: React.FC = () => {
   const [previewCode, setPreviewCode] = useState<string | null>(null);
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [importVisible, setImportVisible] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -380,6 +382,60 @@ const ShipmentNoticesPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error?.message || '批量删除失败');
     }
+  };
+
+  const handleBatchNotify = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择发货通知单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await shipmentNoticeApi.notify(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已通知 ${success} 条发货通知单`);
+    if (failed > 0) messageApi.warning(`${failed} 条通知失败（仅待发货状态可通知）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择发货通知单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await shipmentNoticeApi.withdraw(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已撤回 ${success} 条发货通知单`);
+    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已通知状态可撤回）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
   };
 
   const handleCreate = async () => {
@@ -1007,8 +1063,31 @@ const ShipmentNoticesPage: React.FC = () => {
             />,
           ]}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条发货通知单？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="shipment-notice-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'notify',
+                  label: '批量通知仓库',
+                  icon: <SendOutlined />,
+                  onClick: handleBatchNotify,
+                },
+                {
+                  key: 'withdraw',
+                  label: '批量撤回通知',
+                  icon: <AppstoreAddOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+              ]}
+            />,
+          ]}
           importHeaders={noticeItemImportTemplate.importHeaders}
           importExampleRow={noticeItemImportTemplate.importExampleRow}
           importFieldMap={noticeItemImportTemplate.importHeaderMap}

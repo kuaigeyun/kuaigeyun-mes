@@ -13,6 +13,10 @@ from loguru import logger
 
 from apps.kuaiplm.schemas.change_desk import (
     ChangeApproveRequest,
+    ChangeBatchActionResponse,
+    ChangeBatchApproveRequest,
+    ChangeBatchDeleteRequest,
+    ChangeBatchExecuteRequest,
     ChangeDeskListResponse,
     ChangeExecuteRequest,
 )
@@ -74,3 +78,59 @@ async def execute_change(
         return {"success": True, "data": result}
     except ValueError as e:
         raise _err(400, str(e), f"/changes/{change_uuid}/execute")
+
+
+@router.delete("/{change_uuid}", summary="Delete change")
+async def delete_change(
+    change_uuid: str = Path(...),
+    change_type: str = Query(..., description="bom | process_route"),
+    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await service.delete_change(tenant_id, change_uuid, change_type)
+        return {"success": True}
+    except ValueError as e:
+        raise _err(400, str(e), f"/changes/{change_uuid}")
+
+
+@router.post("/batch/approve", response_model=ChangeBatchActionResponse, summary="Batch approve changes")
+async def batch_approve_changes(
+    data: ChangeBatchApproveRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await service.batch_approve_changes(
+        tenant_id=tenant_id,
+        items=data.items,
+        approved=data.approved,
+        approval_comment=data.approval_comment,
+        user_id=current_user.id,
+    )
+
+
+@router.post("/batch/execute", response_model=ChangeBatchActionResponse, summary="Batch execute changes")
+async def batch_execute_changes(
+    data: ChangeBatchExecuteRequest,
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await service.batch_execute_changes(
+        tenant_id=tenant_id,
+        items=data.items,
+        user_id=current_user.id,
+    )
+
+
+@router.post("/batch/delete", response_model=ChangeBatchActionResponse, summary="Batch delete changes")
+async def batch_delete_changes(
+    data: ChangeBatchDeleteRequest,
+    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    return await service.batch_delete_changes(
+        tenant_id=tenant_id,
+        items=data.items,
+    )

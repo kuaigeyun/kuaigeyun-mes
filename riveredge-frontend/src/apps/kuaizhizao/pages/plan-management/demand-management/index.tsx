@@ -60,6 +60,7 @@ import {
   QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -356,33 +357,27 @@ const DemandManagementPage: React.FC = () => {
       if (skipped === 0) messageApi.warning('没有符合删除条件的手工需求计划');
       return;
     }
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除选中的 ${allowedKeys.length} 个手工需求计划吗？仅草稿或待审核可删除。`,
-      onOk: async () => {
-        let successCount = 0;
-        const errors: string[] = [];
-        for (const k of allowedKeys) {
-          const id = Number(k);
-          if (isNaN(id)) continue;
-          try {
-            await deleteDemand(id);
-            successCount += 1;
-          } catch (e) {
-            errors.push(`ID ${id}: ${getApiErrorMessage(e)}`);
-          }
-        }
-        if (successCount > 0) {
-          messageApi.success(`成功删除 ${successCount} 个需求`);
-          invalidateStatistics();
-          actionRef.current?.reload();
-          setSelectedRowKeys((prev) => prev.filter((pk) => !allowedKeys.includes(pk)));
-        }
-        if (errors.length > 0) {
-          messageApi.error(errors.slice(0, 3).join('；') + (errors.length > 3 ? ` 等${errors.length}条` : ''));
-        }
-      },
-    });
+    let successCount = 0;
+    const errors: string[] = [];
+    for (const k of allowedKeys) {
+      const id = Number(k);
+      if (isNaN(id)) continue;
+      try {
+        await deleteDemand(id);
+        successCount += 1;
+      } catch (e) {
+        errors.push(`ID ${id}: ${getApiErrorMessage(e)}`);
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`成功删除 ${successCount} 个需求`);
+      invalidateStatistics();
+      actionRef.current?.reload();
+      setSelectedRowKeys((prev) => prev.filter((pk) => !allowedKeys.includes(pk)));
+    }
+    if (errors.length > 0) {
+      messageApi.error(errors.slice(0, 3).join('；') + (errors.length > 3 ? ` 等${errors.length}条` : ''));
+    }
   };
 
   const handleMergeComputation = async () => {
@@ -754,7 +749,10 @@ const DemandManagementPage: React.FC = () => {
           }}
           rowKey="id"
           showAdvancedSearch={true}
-          showCreateButton={false}
+          selectedRowKeys={selectedRowKeys}
+          showCreateButton
+          createButtonText="新建需求计划"
+          onCreate={() => setCreatePlanModalVisible(true)}
           showEditButton={false}
           showDeleteButton={true}
           onDelete={handleDelete}
@@ -787,28 +785,27 @@ const DemandManagementPage: React.FC = () => {
           }}
           enableRowSelection={true}
           onRowSelectionChange={setSelectedRowKeys}
-          toolBarActions={[
-            <Button {...rowActionKind('create')}
-              key="create-plan"
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setCreatePlanModalVisible(true)}
-            >
-              新建需求计划
-            </Button>,
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="demand-plan-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              toolBarButtonSize="middle"
+              menuItems={[
+                {
+                  key: 'merge-computation',
+                  label: '合并计算',
+                  icon: <MergeCellsOutlined />,
+                  onClick: () => void handleMergeComputation(),
+                },
+              ]}
+            />,
+          ]}
+          toolBarActionsAfterBatch={[
             <Tooltip {...rowActionKind('skip')}
-              key="merge-computation-tooltip"
+              key="merge-computation-tip"
               title="合并选中需求进入统一需求计算，随后在计算单中下推半成品工单等下游单据"
             >
-              <Button {...rowActionKind('execute')}
-                key="merge-computation"
-                type="primary"
-                icon={<MergeCellsOutlined />}
-                disabled={selectedRowKeys.length === 0}
-                onClick={handleMergeComputation}
-              >
-                合并计算
-              </Button>
+              <QuestionCircleOutlined style={{ color: 'var(--ant-color-text-tertiary)' }} />
             </Tooltip>,
           ]}
         />

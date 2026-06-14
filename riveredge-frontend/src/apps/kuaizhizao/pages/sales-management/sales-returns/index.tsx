@@ -21,6 +21,8 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, FormModalTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 const LazyUniImport = lazy(() =>
   import('../../../../../components/uni-import').then((m) => ({ default: m.UniImport })),
@@ -38,6 +40,7 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import dayjs from 'dayjs';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
+import { listSalesOrders } from '../../../services/sales-order';
 import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import {
   DocumentTrackingTimelineBody,
@@ -107,6 +110,15 @@ interface SalesReturnItem {
   notes?: string;
 }
 
+interface PullSalesOrderCandidate {
+  id: number;
+  order_code?: string;
+  customer_name?: string;
+  status?: string;
+  delivery_date?: string;
+  updated_at?: string;
+}
+
 /** 与后端 `system_dictionaries.py` 一致，租户未同步字典时的下拉兜底 */
 const FALLBACK_RETURN_REASON: { label: string; value: string }[] = [
   { label: '质量问题', value: 'QUALITY_ISSUE' },
@@ -171,7 +183,16 @@ const SalesReturnsPage: React.FC = () => {
   const [editingDetail, setEditingDetail] = useState<SalesReturnDetail | null>(null);
   const [pendingFormValues, setPendingFormValues] = useState<Record<string, any> | null>(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [pullFromSalesOrderVisible, setPullFromSalesOrderVisible] = useState(false);
+  const [pullSalesOrderLoading, setPullSalesOrderLoading] = useState(false);
+  const [pullSalesOrderSubmitting, setPullSalesOrderSubmitting] = useState(false);
+  const [pullSalesOrderKeyword, setPullSalesOrderKeyword] = useState('');
+  const [pullSalesOrderCandidates, setPullSalesOrderCandidates] = useState<PullSalesOrderCandidate[]>([]);
+  const [selectedPullSalesOrderId, setSelectedPullSalesOrderId] = useState<number | null>(null);
+  const [pullWarehouseId, setPullWarehouseId] = useState<number | undefined>(undefined);
+  const [pullWarehouseName, setPullWarehouseName] = useState('');
   const formRef = useRef<ProFormInstance>(null);
 
   const {
@@ -396,6 +417,70 @@ const SalesReturnsPage: React.FC = () => {
     setModalVisible(true);
   };
 
+  const loadPullSalesOrderCandidates = async (keyword: string = '') => {
+    setPullSalesOrderLoading(true);
+    try {
+      const res = await listSalesOrders({
+        skip: 0,
+        limit: 200,
+        keyword: keyword.trim() || undefined,
+      });
+      const orders = Array.isArray((res as any)?.data) ? (res as any).data : [];
+      setPullSalesOrderCandidates(
+        orders.map((order: any) => ({
+          id: Number(order.id),
+          order_code: order.order_code,
+          customer_name: order.customer_name,
+          status: order.status,
+          delivery_date: order.delivery_date,
+          updated_at: order.updated_at,
+        })),
+      );
+    } catch {
+      setPullSalesOrderCandidates([]);
+      messageApi.error('加载销售订单失败');
+    } finally {
+      setPullSalesOrderLoading(false);
+    }
+  };
+
+  const openPullFromSalesOrder = () => {
+    setPullFromSalesOrderVisible(true);
+    setPullSalesOrderKeyword('');
+    setSelectedPullSalesOrderId(null);
+    setPullWarehouseId(undefined);
+    setPullWarehouseName('');
+    void loadPullSalesOrderCandidates('');
+  };
+
+  const handlePullFromSalesOrderConfirm = async () => {
+    if (!selectedPullSalesOrderId) {
+      messageApi.warning('请选择销售订单');
+      return;
+    }
+    if (!pullWarehouseId || pullWarehouseId <= 0) {
+      messageApi.warning('请选择退入仓库');
+      return;
+    }
+    setPullSalesOrderSubmitting(true);
+    try {
+      await warehouseApi.salesReturn.pullFromSalesOrder({
+        sales_order_id: selectedPullSalesOrderId,
+        warehouse_id: pullWarehouseId,
+        warehouse_name: pullWarehouseName || undefined,
+      });
+      messageApi.success('下推成功，已生成销售退货单');
+      invalidateMenuBadgeCounts();
+      setPullFromSalesOrderVisible(false);
+      setSelectedPullSalesOrderId(null);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '下推失败');
+    } finally {
+      setPullSalesOrderSubmitting(false);
+    }
+  };
+
   const handleEdit = async (record: SalesReturn) => {
     if (record.status !== '待退货' && record.status !== '草稿') {
       messageApi.warning('仅「待退货」或「草稿」状态可编辑');
@@ -494,6 +579,60 @@ const SalesReturnsPage: React.FC = () => {
     } catch (error: any) {
       messageApi.error(error.message || '删除失败');
     }
+  };
+
+  const handleBatchConfirm = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择销售退货单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await warehouseApi.salesReturn.confirm(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已确认 ${success} 条销售退货单`);
+    if (failed > 0) messageApi.warning(`${failed} 条确认失败（仅待退货状态可确认）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择销售退货单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await warehouseApi.salesReturn.withdraw(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已撤回 ${success} 条销售退货单`);
+    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已退货状态可撤回）`);
+    setSelectedRowKeys([]);
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
   };
 
   // 表单提交处理
@@ -666,10 +805,27 @@ const SalesReturnsPage: React.FC = () => {
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           showAdvancedSearch={true}
-          showCreateButton={true}
+          showCreateButton={false}
           createButtonText="新建销售退货单"
           onCreate={handleCreate}
+          toolBarRender={() => [
+            <UniPullCreateToolbar
+              compactKey="create-sales-return-with-pull"
+              createIcon={<PlusOutlined />}
+              createLabel="新建销售退货单"
+              onCreate={handleCreate}
+              menuItems={[
+                {
+                  key: 'pull-from-sales-order',
+                  label: '下推销售订单',
+                  onClick: openPullFromSalesOrder,
+                },
+              ]}
+            />,
+          ]}
           request={async (params) => {
             try {
               const response = await warehouseApi.salesReturn.list({
@@ -698,6 +854,27 @@ const SalesReturnsPage: React.FC = () => {
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={handleDelete}
+          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售退货单？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="sales-return-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'confirm',
+                  label: '批量确认退货',
+                  icon: <CheckCircleOutlined />,
+                  onClick: handleBatchConfirm,
+                },
+                {
+                  key: 'withdraw',
+                  label: '批量撤回确认',
+                  icon: <CopyOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+              ]}
+            />,
+          ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
@@ -938,6 +1115,74 @@ const SalesReturnsPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendItemsFromMaterials}
       />
+
+      <Modal
+        title="从销售订单下推"
+        open={pullFromSalesOrderVisible}
+        onCancel={() => {
+          if (pullSalesOrderSubmitting) return;
+          setPullFromSalesOrderVisible(false);
+          setSelectedPullSalesOrderId(null);
+        }}
+        onOk={() => {
+          void handlePullFromSalesOrderConfirm();
+        }}
+        okText="创建销售退货单"
+        confirmLoading={pullSalesOrderSubmitting}
+        destroyOnHidden
+      >
+        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            placeholder="按销售订单号/客户搜索"
+            value={pullSalesOrderKeyword}
+            onChange={(e) => setPullSalesOrderKeyword(e.target.value)}
+            onSearch={(value) => {
+              setPullSalesOrderKeyword(value);
+              void loadPullSalesOrderCandidates(value);
+            }}
+            enterButton="搜索"
+          />
+          <UniWarehouseSelect
+            label="退入仓库"
+            placeholder="请选择退入仓库"
+            value={pullWarehouseId}
+            onChange={(value, warehouse) => {
+              const nextId = Number(value);
+              setPullWarehouseId(Number.isFinite(nextId) && nextId > 0 ? nextId : undefined);
+              setPullWarehouseName((warehouse as any)?.name ?? '');
+            }}
+          />
+          <Table<PullSalesOrderCandidate>
+            rowKey="id"
+            loading={pullSalesOrderLoading}
+            dataSource={pullSalesOrderCandidates}
+            pagination={false}
+            scroll={{ x: 900, y: 340 }}
+            rowSelection={{
+              type: 'radio',
+              selectedRowKeys: selectedPullSalesOrderId ? [selectedPullSalesOrderId] : [],
+              onChange: (keys) => {
+                const next = Number(keys?.[0]);
+                if (Number.isFinite(next)) setSelectedPullSalesOrderId(next);
+                else setSelectedPullSalesOrderId(null);
+              },
+            }}
+            onRow={(record) => ({
+              onClick: () => {
+                setSelectedPullSalesOrderId(record.id);
+              },
+            })}
+            columns={[
+              { title: '销售订单号', dataIndex: 'order_code', width: 180, ellipsis: true },
+              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: '订单状态', dataIndex: 'status', width: 130, align: 'center' },
+              { title: '交期', dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+            ]}
+          />
+        </Space>
+      </Modal>
 
       <Suspense fallback={null}>
         <LazyUniImport

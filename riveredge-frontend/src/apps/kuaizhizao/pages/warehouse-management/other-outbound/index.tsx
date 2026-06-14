@@ -453,24 +453,18 @@ const OtherOutboundPage: React.FC = () => {
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
-            Modal.confirm({
-              title: '确认批量删除',
-              content: `确定要删除选中的 ${keys.length} 条其他出库单吗？`,
-              onOk: async () => {
-                try {
-                  for (const id of keys) {
-                    await warehouseApi.otherOutbound.delete(String(id));
-                  }
-                  messageApi.success(`成功删除 ${keys.length} 条记录`);
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                } catch (error: any) {
-                  messageApi.error(error.message || '删除失败');
-                }
-              },
-            });
+            try {
+              for (const id of keys) {
+                await warehouseApi.otherOutbound.delete(String(id));
+              }
+              messageApi.success(`成功删除 ${keys.length} 条记录`);
+              invalidateMenuBadgeCounts();
+              actionRef.current?.reload();
+            } catch (error: any) {
+              messageApi.error(error.message || '删除失败');
+            }
           }}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条其他出库单吗？`}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>

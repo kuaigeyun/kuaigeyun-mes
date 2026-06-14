@@ -337,29 +337,20 @@ export const OutsourceOrdersTable: React.FC = () => {
     }
 
     const ids = keys.map((k) => Number(k));
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除选中的 ${ids.length} 条工序委外吗？`,
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          await Promise.all(ids.map((id) => outsourceOrderApi.delete(id.toString())));
-          messageApi.success('删除成功');
-          setSelectedRowKeys([]);
-          if (outsourceOrderDetail?.id != null && ids.includes(outsourceOrderDetail.id)) {
-            setDetailDrawerVisible(false);
-            setOutsourceOrderDetail(null);
-          }
-          setStatsVersion((v) => v + 1);
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
-        }
-      },
-    });
+    try {
+      await Promise.all(ids.map((id) => outsourceOrderApi.delete(id.toString())));
+      messageApi.success('删除成功');
+      setSelectedRowKeys([]);
+      if (outsourceOrderDetail?.id != null && ids.includes(outsourceOrderDetail.id)) {
+        setDetailDrawerVisible(false);
+        setOutsourceOrderDetail(null);
+      }
+      setStatsVersion((v) => v + 1);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
   };
 
   /**
@@ -715,12 +706,14 @@ export const OutsourceOrdersTable: React.FC = () => {
         request={handleRequest}
         rowKey="id"
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
         createButtonText="新建工序委外单"
         onCreate={handleCreate}
         showDeleteButton={true}
         onDelete={handleDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条工序委外吗？`}
         showAdvancedSearch={true}
         scroll={{ x: 1800 }}
         onRow={(record) => ({

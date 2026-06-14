@@ -21,6 +21,7 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { warehouseApi } from '../../../services/production';
 import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 
@@ -281,6 +282,30 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     });
   };
 
+  const handleBatchProcess = async (status: 'processed' | 'ignored') => {
+    if (!selectedRowKeys.length) {
+      messageApi.warning('请先选择补货建议');
+      return;
+    }
+    let successCount = 0;
+    for (const key of selectedRowKeys) {
+      try {
+        await warehouseApi.replenishmentSuggestion.process(String(key), { status });
+        successCount += 1;
+      } catch {
+        // keep processing remaining items
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`批量处理成功 ${successCount} 条`);
+      setSelectedRowKeys([]);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量处理失败');
+  };
+
   // 详情列定义
   const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = [
     {
@@ -427,10 +452,33 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               };
             }
           }}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-          }}
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
+          toolBarActionsAfterBatch={[
+            <UniBatchMenuButton
+              key="replenishment-batch-actions"
+              selectedRowKeys={selectedRowKeys}
+              label="批量操作"
+              disabled={selectedRowKeys.length === 0}
+              menuItems={[
+                {
+                  key: 'batch-processed',
+                  label: '批量标记已处理',
+                  onClick: () => {
+                    void handleBatchProcess('processed');
+                  },
+                },
+                {
+                  key: 'batch-ignored',
+                  label: '批量标记忽略',
+                  onClick: () => {
+                    void handleBatchProcess('ignored');
+                  },
+                },
+              ]}
+            />,
+          ]}
           toolBarRender={() => [
             <Button
               key="generate"

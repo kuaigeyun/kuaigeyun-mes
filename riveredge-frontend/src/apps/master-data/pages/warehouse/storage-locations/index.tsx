@@ -746,7 +746,13 @@ const StorageLocationsPage: React.FC = () => {
         showCreateButton
         createButtonText={t('app.master-data.storageLocations.create')}
         onCreate={handleCreate}
-        toolBarRender={() => [
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={t('app.master-data.storageLocations.batchDeleteTitle')}
+        deleteConfirmDescription={(count) =>
+          t('app.master-data.storageLocations.batchDeleteDescription', { count })
+        }
+        toolBarActionsAfterBatch={[
           <Button {...rowActionKind('create')}
             key="batchCreate"
             icon={<PlusOutlined />}
@@ -754,27 +760,9 @@ const StorageLocationsPage: React.FC = () => {
           >
             {t('app.master-data.storageLocations.batchCreate')}
           </Button>,
-          <Popconfirm {...rowActionKind('delete')}
-            key="batchDelete"
-            title={t('app.master-data.storageLocations.batchDeleteTitle')}
-            description={t('app.master-data.storageLocations.batchDeleteDescription', { count: selectedRowKeys.length })}
-            onConfirm={() => handleBatchDelete()}
-            okText={t('common.confirm')}
-            cancelText={t('common.cancel')}
-            okButtonProps={{ danger: true }}
-            disabled={selectedRowKeys.length === 0}
-          >
-            <Button
-              type="default"
-              danger
-              icon={<DeleteOutlined />}
-              disabled={selectedRowKeys.length === 0}
-            >
-              {t('common.batchDelete')}
-            </Button>
-          </Popconfirm>,
         ]}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         pagination={{
           defaultPageSize: 20,

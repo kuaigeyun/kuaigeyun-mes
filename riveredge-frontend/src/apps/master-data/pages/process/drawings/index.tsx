@@ -826,11 +826,9 @@ const DrawingsPage: React.FC = () => {
               />
             </Tooltip>
           }
-          toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-              {t('common.create') + NEW_SHORTCUT_HINT}
-            </Button>,
-          ]}
+          showCreateButton
+          createButtonText={t('common.create') + NEW_SHORTCUT_HINT}
+          onCreate={handleCreate}
           request={async (params) => {
             try {
               const tf = treeFilterRef.current;

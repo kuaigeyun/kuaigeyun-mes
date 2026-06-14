@@ -12,6 +12,7 @@ import { CheckOutlined, EyeOutlined, StopOutlined, PlusOutlined, DownOutlined } 
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
@@ -70,6 +71,7 @@ const PaymentsPage: React.FC = () => {
   const [pullKeyword, setPullKeyword] = useState('');
   const [pullCandidates, setPullCandidates] = useState<PullPayableCandidate[]>([]);
   const [selectedPullPayableId, setSelectedPullPayableId] = useState<number | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [pullFormVisible, setPullFormVisible] = useState(false);
   const [pullSelectedPayable, setPullSelectedPayable] = useState<PullPayableCandidate | null>(null);
   const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
@@ -266,6 +268,32 @@ const PaymentsPage: React.FC = () => {
     });
   };
 
+  const handleBatchConfirm = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await apiRequest(`/apps/kuaicaiwu/payments/${key}/confirm`, { method: 'POST' });
+      }
+      messageApi.success(`已确认 ${keys.length} 条付款单`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量确认失败');
+    }
+  };
+
+  const handleBatchCancel = async (keys: React.Key[]) => {
+    try {
+      for (const key of keys) {
+        await apiRequest(`/apps/kuaicaiwu/payments/${key}/cancel`, { method: 'POST' });
+      }
+      messageApi.success(`已作废 ${keys.length} 条付款单`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量作废失败');
+    }
+  };
+
   const columns: ProColumns<PaymentVoucher>[] = [
     {
       title: '付款单号',
@@ -391,6 +419,8 @@ const PaymentsPage: React.FC = () => {
         headerTitle="付款单管理"
         actionRef={actionRef}
         enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
         rowKey="id"
         columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payments"
         scroll={{ x: 1680 }}
@@ -399,6 +429,31 @@ const PaymentsPage: React.FC = () => {
         showCreateButton={false}
         createButtonText="新建付款单"
         onCreate={() => setCreateModalVisible(true)}
+        toolBarActionsAfterBatch={[
+          <UniBatchMenuButton
+            key="payment-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-confirm',
+                label: '批量确认',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认批量确认 ${count} 条付款单`,
+                confirmDescription: '仅草稿付款单可确认，不满足条件的记录会由后端拒绝。',
+                onClick: handleBatchConfirm,
+              },
+              {
+                key: 'batch-cancel',
+                label: '批量作废',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认批量作废 ${count} 条付款单`,
+                confirmDescription: '已核销的付款单不能作废，不满足条件的记录会由后端拒绝。',
+                onClick: handleBatchCancel,
+              },
+            ]}
+          />,
+        ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-payment-with-pull"

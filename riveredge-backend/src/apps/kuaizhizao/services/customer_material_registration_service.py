@@ -580,6 +580,128 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
             items = await self._load_items(tenant_id, registration_id)
             return self._to_response(registration, items)
 
+    async def delete_registration(
+        self,
+        tenant_id: int,
+        registration_id: int,
+        deleted_by: int,
+    ) -> None:
+        async with in_transaction():
+            registration = await CustomerMaterialRegistration.get_or_none(
+                id=registration_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not registration:
+                raise NotFoundError(f"代工来料单不存在: {registration_id}")
+            if registration.status != "pending":
+                raise BusinessLogicError("仅待入库状态的代工来料单可删除")
+
+            now = datetime.now()
+            user_name = await self.get_user_name(deleted_by)
+            registration.deleted_at = now
+            registration.updated_by = deleted_by
+            registration.updated_by_name = user_name
+            await registration.save()
+            await CustomerMaterialRegistrationItem.filter(
+                tenant_id=tenant_id,
+                registration_id=registration_id,
+                deleted_at__isnull=True,
+            ).update(
+                deleted_at=now,
+                updated_by=deleted_by,
+                updated_by_name=user_name,
+            )
+
+    async def _batch_apply(
+        self,
+        registration_ids: List[int],
+        action: str,
+        apply_fn,
+    ) -> Dict[str, Any]:
+        success_count = 0
+        failed_ids: List[int] = []
+        errors: List[str] = []
+        seen: set[int] = set()
+        for registration_id in registration_ids:
+            if registration_id in seen:
+                continue
+            seen.add(registration_id)
+            try:
+                await apply_fn(registration_id)
+                success_count += 1
+            except (NotFoundError, ValidationError, BusinessLogicError) as exc:
+                failed_ids.append(registration_id)
+                errors.append(f"{action}失败({registration_id}): {exc}")
+        return {
+            "success_count": success_count,
+            "failed_count": len(failed_ids),
+            "failed_ids": failed_ids,
+            "errors": errors,
+        }
+
+    async def batch_process_registrations(
+        self,
+        tenant_id: int,
+        registration_ids: List[int],
+        processed_by: int,
+    ) -> Dict[str, Any]:
+        return await self._batch_apply(
+            registration_ids=registration_ids,
+            action="确认入库",
+            apply_fn=lambda registration_id: self.process_registration(
+                tenant_id=tenant_id,
+                registration_id=registration_id,
+                processed_by=processed_by,
+            ),
+        )
+
+    async def batch_withdraw_registrations(
+        self,
+        tenant_id: int,
+        registration_ids: List[int],
+        withdrawn_by: int,
+    ) -> Dict[str, Any]:
+        return await self._batch_apply(
+            registration_ids=registration_ids,
+            action="撤回入库",
+            apply_fn=lambda registration_id: self.withdraw_registration(
+                tenant_id=tenant_id,
+                registration_id=registration_id,
+                withdrawn_by=withdrawn_by,
+            ),
+        )
+
+    async def batch_cancel_registrations(
+        self,
+        tenant_id: int,
+        registration_ids: List[int],
+        cancelled_by: int,
+    ) -> Dict[str, Any]:
+        return await self._batch_apply(
+            registration_ids=registration_ids,
+            action="取消",
+            apply_fn=lambda registration_id: self.cancel_registration(
+                tenant_id=tenant_id,
+                registration_id=registration_id,
+                cancelled_by=cancelled_by,
+            ),
+        )
+
+    async def batch_delete_registrations(
+        self,
+        tenant_id: int,
+        registration_ids: List[int],
+        deleted_by: int,
+    ) -> Dict[str, Any]:
+        return await self._batch_apply(
+            registration_ids=registration_ids,
+            action="删除",
+            apply_fn=lambda registration_id: self.delete_registration(
+                tenant_id=tenant_id,
+                registration_id=registration_id,
+                deleted_by=deleted_by,
+            ),
+        )
+
     async def create_and_start_production(
         self,
         tenant_id: int,

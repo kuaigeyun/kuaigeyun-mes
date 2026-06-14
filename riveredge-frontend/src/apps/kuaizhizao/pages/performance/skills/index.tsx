@@ -7,7 +7,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Space, Modal, Typography, Descriptions, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Popconfirm, Button, Space, Typography, Descriptions, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
@@ -84,28 +84,19 @@ const SkillsPage: React.FC = () => {
     }
   };
 
-  const handleBatchDelete = (keys: React.Key[]) => {
+  const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) { messageApi.warning(t('common.selectToDelete')); return; }
-    Modal.confirm({
-      title: t('common.confirmBatchDelete'),
-      content: t('common.confirmBatchDeleteContent', { count: keys.length }),
-      okText: t('common.confirm'),
-      cancelText: t('common.cancel'),
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          let successCount = 0, failCount = 0;
-          const errors: string[] = [];
-          for (const key of keys) {
-            try { await skillApi.delete(key.toString()); successCount++; } catch (error: any) { failCount++; errors.push(error.message || t('common.deleteFailed')); }
-          }
-          if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
-          if (failCount > 0) messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) { messageApi.error(error.message || t('common.batchDeleteFailed')); }
-      },
-    });
+    try {
+      let successCount = 0, failCount = 0;
+      const errors: string[] = [];
+      for (const key of keys) {
+        try { await skillApi.delete(key.toString()); successCount++; } catch (error: any) { failCount++; errors.push(error.message || t('common.deleteFailed')); }
+      }
+      if (successCount > 0) messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      if (failCount > 0) messageApi.error(t('common.batchDeletePartial', { count: failCount, errors: errors.length > 0 ? '：' + errors.join('; ') : '' }));
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) { messageApi.error(error.message || t('common.batchDeleteFailed')); }
   };
 
   const handleOpenDetail = async (record: Skill) => {
@@ -241,9 +232,11 @@ const SkillsPage: React.FC = () => {
           createButtonText="新建技能"
           onCreate={handleCreate}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
           deleteButtonText="批量删除"
         />
       </ListPageTemplate>

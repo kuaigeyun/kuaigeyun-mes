@@ -922,29 +922,24 @@ const IncomingInspectionPage: React.FC = () => {
         onExport={handleExport}
         showDeleteButton={true}
         onDelete={async (keys) => {
-          Modal.confirm({
-            title: '确认批量删除',
-            content: `确定要删除选中的 ${keys.length} 条来料检验单吗？`,
-            onOk: async () => {
-              try {
-                const ids = keys.map(Number);
-                for (const id of keys) {
-                  await qualityApi.incomingInspection.delete(String(id));
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
-                setSelectedRowKeys([]);
-                if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
-                  setDetailVisible(false);
-                  setInspectionDetail(null);
-                }
-                invalidateStats();
-                actionRef.current?.reload();
-              } catch (error: any) {
-                messageApi.error(error.message || '删除失败');
-              }
-            },
-          });
+          try {
+            const ids = keys.map(Number);
+            for (const id of keys) {
+              await qualityApi.incomingInspection.delete(String(id));
+            }
+            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            setSelectedRowKeys([]);
+            if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
+              setDetailVisible(false);
+              setInspectionDetail(null);
+            }
+            invalidateStats();
+            actionRef.current?.reload();
+          } catch (error: any) {
+            messageApi.error(error.message || '删除失败');
+          }
         }}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条来料检验单吗？`}
         scroll={{ x: 1800 }}
       />
 

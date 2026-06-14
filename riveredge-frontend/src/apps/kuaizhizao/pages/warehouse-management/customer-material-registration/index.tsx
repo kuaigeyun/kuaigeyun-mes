@@ -31,6 +31,7 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import dayjs from 'dayjs';
 import { coerceFormDate } from '../../../../../utils/formDate';
 
@@ -300,6 +301,86 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
+  const handleBatchProcess = async () => {
+    if (!selectedRowKeys.length) {
+      messageApi.warning('请先选择代工来料记录');
+      return;
+    }
+    try {
+      const result = await customerMaterialRegistrationApi.batchProcess(selectedRowKeys);
+      const successCount = Number(result?.success_count || 0);
+      if (successCount > 0) {
+        messageApi.success(`已确认入库 ${successCount} 条记录`);
+        invalidateMenuBadgeCounts();
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error('批量确认入库失败');
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量确认入库失败');
+    }
+  };
+
+  const handleBatchWithdraw = async () => {
+    if (!selectedRowKeys.length) {
+      messageApi.warning('请先选择代工来料记录');
+      return;
+    }
+    try {
+      const result = await customerMaterialRegistrationApi.batchWithdraw(selectedRowKeys);
+      const successCount = Number(result?.success_count || 0);
+      if (successCount > 0) {
+        messageApi.success(`已撤回入库 ${successCount} 条记录`);
+        invalidateMenuBadgeCounts();
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error('批量撤回失败');
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量撤回失败');
+    }
+  };
+
+  const handleBatchCancel = async () => {
+    if (!selectedRowKeys.length) {
+      messageApi.warning('请先选择代工来料记录');
+      return;
+    }
+    try {
+      const result = await customerMaterialRegistrationApi.batchCancel(selectedRowKeys);
+      const successCount = Number(result?.success_count || 0);
+      if (successCount > 0) {
+        messageApi.success(`已取消 ${successCount} 条记录`);
+        invalidateMenuBadgeCounts();
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error('批量取消失败');
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量取消失败');
+    }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      const result = await customerMaterialRegistrationApi.batchDelete(keys);
+      const successCount = Number(result?.success_count || 0);
+      if (successCount > 0) {
+        messageApi.success(`已删除 ${successCount} 条记录`);
+        invalidateMenuBadgeCounts();
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error('批量删除失败');
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量删除失败');
+    }
+  };
+
   const columns: ProColumns<CustomerMaterialRegistration>[] = [
     {
       title: '单号',
@@ -406,6 +487,43 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         showCreateButton
         createButtonText="客供料入库"
         onCreate={handleCreate}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条代工来料吗？`}
+        toolBarActionsAfterBatch={[
+          <UniBatchMenuButton
+            key="customer-material-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            label="批量操作"
+            disabled={selectedRowKeys.length === 0}
+            menuItems={[
+              {
+                key: 'batch-process',
+                label: '批量确认入库',
+                onClick: () => {
+                  void handleBatchProcess();
+                },
+              },
+              {
+                key: 'batch-withdraw',
+                label: '批量撤回入库',
+                onClick: () => {
+                  void handleBatchWithdraw();
+                },
+              },
+              {
+                key: 'batch-cancel',
+                label: '批量取消',
+                onClick: () => {
+                  void handleBatchCancel();
+                },
+              },
+            ]}
+          />,
+        ]}
         request={async (params: any) => {
           const pageSize = params.pageSize || 20;
           const skip = (params.current! - 1) * pageSize;
@@ -420,7 +538,6 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           return { data: rows, success: true, total };
         }}
         scroll={{ x: 1500 }}
-        rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
       />
 
       <FormModalTemplate

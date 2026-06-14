@@ -10,12 +10,14 @@ import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFor
 import { App, Button, Tag, Space, Table, Form as AntForm, Input, InputNumber, Select, Dropdown, Row, Col, Checkbox, Descriptions, Empty, Spin, Typography, DatePicker, Modal, Card, theme } from 'antd';
 import {
   EyeOutlined,
+  CheckOutlined,
   EditOutlined,
   SwapOutlined,
   FileSearchOutlined,
   DeleteOutlined,
   CopyOutlined,
   PlusOutlined,
+  SendOutlined,
   AppstoreAddOutlined,
   DownOutlined,
   ArrowLeftOutlined,
@@ -27,6 +29,7 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DetailDrawerActions, MODAL_CONFIG, DRAWER_CONFIG, DocumentFormPageLayout, DOCUMENT_DETAIL_PAGE_TITLE_STYLE, PAGE_SPACING } from '../../../../../components/layout-templates';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
@@ -948,6 +951,98 @@ const PurchaseRequisitionsPage: React.FC = () => {
     ? canPushPurchaseRequisition(selectedRequisitionForToolbar)
     : false;
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) return;
+    try {
+      for (const id of keys) {
+        await deletePurchaseRequisition(Number(id));
+      }
+      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+    } catch (e: any) {
+      messageApi.error(e?.response?.data?.detail || '删除失败');
+    }
+  };
+
+  const handleBatchSubmit = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购申请');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await submitPurchaseRequisition(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已提交 ${success} 条采购申请`);
+    if (failed > 0) messageApi.warning(`${failed} 条提交失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchApprove = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购申请');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await approvePurchaseRequisition(id, { approved: true, review_remarks: '' });
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已审核 ${success} 条采购申请`);
+    if (failed > 0) messageApi.warning(`${failed} 条审核失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择采购申请');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await withdrawPurchaseRequisition(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已撤回 ${success} 条采购申请审核`);
+    if (failed > 0) messageApi.warning(`${failed} 条撤回失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
   const handleConvert = async (record: PurchaseRequisition) => {
     try {
       const suppliers = await ensureSupplierList();
@@ -1612,25 +1707,38 @@ const PurchaseRequisitionsPage: React.FC = () => {
           ]}
           enableRowSelection={true}
           showDeleteButton={true}
-          onDelete={async (keys) => {
-            modalApi.confirm({
-              title: '确认批量删除',
-              content: `确定要删除选中的 ${keys.length} 条采购申请吗？`,
-              onOk: async () => {
-                try {
-                  for (const id of keys) {
-                    await deletePurchaseRequisition(Number(id));
-                  }
-                  messageApi.success(`成功删除 ${keys.length} 条记录`);
-                  invalidateMenuBadgeCounts();
-
-                  actionRef.current?.reload();
-                } catch (e: any) {
-                  messageApi.error(e?.response?.data?.detail || '删除失败');
-                }
-              },
-            });
-          }}
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条采购申请吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="purchase-requisition-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: '批量提交',
+                  icon: <SendOutlined />,
+                  onClick: handleBatchSubmit,
+                },
+                ...(purchaseRequestAuditEnabled
+                  ? [
+                      {
+                        key: 'approve',
+                        label: '批量审核通过',
+                        icon: <CheckOutlined />,
+                        onClick: handleBatchApprove,
+                      },
+                    ]
+                  : []),
+                {
+                  key: 'withdraw',
+                  label: '批量撤回审核',
+                  icon: <EditOutlined />,
+                  onClick: handleBatchWithdraw,
+                },
+              ]}
+            />,
+          ]}
           showExportButton
           onExport={async (type, keys, pageData) => {
             try {

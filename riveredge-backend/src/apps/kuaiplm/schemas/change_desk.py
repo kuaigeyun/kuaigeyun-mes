@@ -39,6 +39,32 @@ class ChangeExecuteRequest(BaseModel):
     change_type: str = Field(..., description="bom | process_route")
 
 
+class ChangeBatchItem(BaseModel):
+    change_uuid: str = Field(..., description="变更UUID")
+    change_type: str = Field(..., description="bom | process_route")
+
+
+class ChangeBatchApproveRequest(BaseModel):
+    items: List[ChangeBatchItem] = Field(default_factory=list, min_length=1)
+    approved: bool = True
+    approval_comment: Optional[str] = None
+
+
+class ChangeBatchExecuteRequest(BaseModel):
+    items: List[ChangeBatchItem] = Field(default_factory=list, min_length=1)
+
+
+class ChangeBatchDeleteRequest(BaseModel):
+    items: List[ChangeBatchItem] = Field(default_factory=list, min_length=1)
+
+
+class ChangeBatchActionResponse(BaseModel):
+    success_count: int = 0
+    failed_count: int = 0
+    failed_items: List[ChangeBatchItem] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+
+
 class DashboardSummaryResponse(BaseModel):
     project_total: int = 0
     project_rd_total: int = 0

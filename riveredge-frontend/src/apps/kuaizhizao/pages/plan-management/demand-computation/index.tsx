@@ -57,6 +57,7 @@ import {
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { UniTable } from '../../../../../components/uni-table'
+import { UniBatchMenuButton } from '../../../../../components/uni-batch'
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn'
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
 import {
@@ -1520,6 +1521,67 @@ const DemandComputationPage: React.FC = () => {
     [selectedComputationForToolbar, canUseToolbarPush, handleOpenPushPanel, t],
   )
 
+  const handleBatchExecute = useCallback(async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择需求计算');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      const row = lastComputationsCacheRef.current.find((item) => item.id === id);
+      if (!Number.isFinite(id) || id <= 0 || !row || !canExecuteComputation(row.computation_status)) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await executeDemandComputation(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已触发 ${success} 条需求计算执行`);
+    if (failed > 0) messageApi.warning(`${failed} 条执行失败（仅进行中/待执行状态可操作）`);
+    setSelectedRowKeys([]);
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [messageApi, invalidateStatistics]);
+
+  const handleBatchRecompute = useCallback(async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择需求计算');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      const row = lastComputationsCacheRef.current.find((item) => item.id === id);
+      if (!Number.isFinite(id) || id <= 0 || !row) {
+        failed += 1;
+        continue;
+      }
+      const canRecompute = isComputationCompleted(row.computation_status) || isComputationFailed(row.computation_status);
+      if (!canRecompute) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await recomputeDemandComputation(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已触发 ${success} 条需求计算重算`);
+    if (failed > 0) messageApi.warning(`${failed} 条重算失败（仅已完成/失败状态可操作）`);
+    setSelectedRowKeys([]);
+    invalidateStatistics();
+    actionRef.current?.reload();
+  }, [messageApi, invalidateStatistics]);
+
   const statCards: StatCard[] = statistics
     ? [
         { title: '总计算数', value: statistics.total_count },
@@ -1614,25 +1676,19 @@ const DemandComputationPage: React.FC = () => {
         enableRowSelection={true}
         showDeleteButton={true}
         onDelete={async (keys) => {
-          modalApi.confirm({
-            title: '批量删除需求计算',
-            content: `确定要删除选中的 ${keys.length} 条需求计算吗？仅当尚未下推工单/采购单等下游单据时可删除。`,
-            okText: '删除',
-            okType: 'danger',
-            onOk: async () => {
-              try {
-                for (const id of keys) {
-                  await deleteDemandComputation(Number(id))
-                }
-                messageApi.success(`成功删除 ${keys.length} 条记录`)
-                invalidateStatistics()
-                actionRef.current?.reload()
-              } catch (error: any) {
-                messageApi.error(error?.response?.data?.detail || '删除失败')
-              }
-            },
-          })
+          try {
+            for (const id of keys) {
+              await deleteDemandComputation(Number(id))
+            }
+            messageApi.success(`成功删除 ${keys.length} 条记录`)
+            invalidateStatistics()
+            actionRef.current?.reload()
+          } catch (error: any) {
+            messageApi.error(error?.response?.data?.detail || '删除失败')
+          }
         }}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条需求计算吗？`}
+        deleteConfirmDescription="仅当尚未下推工单/采购单等下游单据时可删除。"
         search={{
           labelWidth: 'auto',
         }}
@@ -1675,6 +1731,27 @@ const DemandComputationPage: React.FC = () => {
           ]
         }}
         toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="demand-computation-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={[
+              {
+                key: 'execute',
+                label: '批量执行计算',
+                icon: <PlayCircleOutlined />,
+                onClick: handleBatchExecute,
+              },
+              {
+                key: 'recompute',
+                label: '批量重新计算',
+                icon: <ReloadOutlined />,
+                onClick: handleBatchRecompute,
+              },
+            ]}
+            toolBarButtonSize="middle"
+          />,
+        ]}
+        toolBarActionsAfterBatch={[
           <MrpParametersCustomerGuideTrigger key="mrp-params-guide" size="small" />,
           <Button
             key="open-replan-dashboard"

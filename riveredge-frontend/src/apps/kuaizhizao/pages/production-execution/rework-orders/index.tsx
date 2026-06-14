@@ -672,26 +672,17 @@ const ReworkOrdersPage: React.FC = () => {
       messageApi.warning('请选择要删除的返工单');
       return;
     }
-
-    Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除选中的 ${keys.length} 个返工单吗？`,
-      okText: '确认',
-      cancelText: '取消',
-      onOk: async () => {
-        try {
-          for (const key of keys) {
-            await reworkOrderApi.delete(key.toString());
-          }
-          messageApi.success('删除成功');
-          invalidateMenuBadgeCounts();
-          setSelectedRowKeys([]);
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
-        }
-      },
-    });
+    try {
+      for (const key of keys) {
+        await reworkOrderApi.delete(key.toString());
+      }
+      messageApi.success('删除成功');
+      invalidateMenuBadgeCounts();
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error.message || '删除失败');
+    }
   };
 
   return (
@@ -704,6 +695,7 @@ const ReworkOrdersPage: React.FC = () => {
         request={handleRequest}
         rowKey="id"
         enableRowSelection={true}
+        selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
         createButtonText="新建返工工单"
@@ -712,6 +704,7 @@ const ReworkOrdersPage: React.FC = () => {
         onEdit={handleEditFromSelection}
         showDeleteButton={true}
         onDelete={handleDeleteFromSelection}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 个返工单吗？`}
         showAdvancedSearch={true}
       />
       {/* 表单Modal */}

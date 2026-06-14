@@ -4,7 +4,7 @@
 
 import React, { useRef, useState, useEffect } from 'react';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
-import { App, Popconfirm, Button, Tag, Space, Modal, Typography } from 'antd';
+import { App, Popconfirm, Button, Tag, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { ProFormSelect, ProFormDigit, ProFormRadio, ProFormSwitch, ProFormDatePicker } from '@ant-design/pro-components';
@@ -194,22 +194,17 @@ const EmployeeConfigsPage: React.FC = () => {
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={async (keys) => {
-            Modal.confirm({
-              title: '确认批量删除',
-              content: `确定要删除选中的 ${keys.length} 条员工配置吗？`,
-              onOk: async () => {
-                try {
-                  for (const id of keys) {
-                    await employeePerformanceApi.deleteConfig(Number(id));
-                  }
-                  messageApi.success(`成功删除 ${keys.length} 条记录`);
-                  actionRef.current?.reload();
-                } catch (error: any) {
-                  messageApi.error(error?.message || '删除失败');
-                }
-              },
-            });
+            try {
+              for (const id of keys) {
+                await employeePerformanceApi.deleteConfig(Number(id));
+              }
+              messageApi.success(`成功删除 ${keys.length} 条记录`);
+              actionRef.current?.reload();
+            } catch (error: any) {
+              messageApi.error(error?.message || '删除失败');
+            }
           }}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条员工配置吗？`}
           showCreateButton
           createButtonText="新建员工绩效配置"
           onCreate={handleCreate}

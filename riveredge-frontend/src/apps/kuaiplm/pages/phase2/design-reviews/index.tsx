@@ -7,14 +7,15 @@ import React, { useRef, useState, useCallback } from 'react';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
-import { PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
 import {
   listDesignReviews,
   createDesignReview,
   deleteDesignReview,
+  updateDesignReview,
   type RdDesignReview,
 } from '../../../services/phase2';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
@@ -32,6 +33,56 @@ const DesignReviewsPage: React.FC = () => {
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
+
+  const toReviewIds = (keys: React.Key[]) =>
+    keys.map((key) => Number(key)).filter((id) => Number.isFinite(id) && id > 0);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    const ids = toReviewIds(keys);
+    if (!ids.length) {
+      messageApi.warning('请先选择评审记录');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await deleteDesignReview(id);
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已删除 ${successCount} 条评审记录`);
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量删除失败');
+  };
+
+  const handleBatchSetStatus = async (status: string, label: string) => {
+    const ids = toReviewIds(selectedRowKeys);
+    if (!ids.length) {
+      messageApi.warning('请先选择评审记录');
+      return;
+    }
+    let successCount = 0;
+    for (const id of ids) {
+      try {
+        await updateDesignReview(id, { status });
+        successCount += 1;
+      } catch {
+        // continue processing remaining rows
+      }
+    }
+    if (successCount > 0) {
+      messageApi.success(`已将 ${successCount} 条评审设为${label}`);
+      actionRef.current?.reload();
+      return;
+    }
+    messageApi.error('批量更新状态失败');
+  };
 
   const columns: ProColumns<RdDesignReview>[] = [
     { title: '评审编号', dataIndex: 'review_code', width: 140 },
@@ -86,6 +137,7 @@ const DesignReviewsPage: React.FC = () => {
       <UniTable<RdDesignReview>
         headerTitle="设计评审"
         actionRef={actionRef}
+        rowKey="id"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
@@ -105,10 +157,34 @@ const DesignReviewsPage: React.FC = () => {
             return { data: [], total: 0, success: false };
           }
         }}
-        toolBarRender={() => [
-          <Button {...rowActionKind('create')} key="create" type="primary" onClick={handleCreate}>
-            {'新建评审' + NEW_SHORTCUT_HINT}
-          </Button>,
+        showCreateButton
+        createButtonText={'新建评审' + NEW_SHORTCUT_HINT}
+        onCreate={handleCreate}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条设计评审吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="design-review-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-set-in-progress',
+                label: '批量设为进行中',
+                onClick: () => {
+                  void handleBatchSetStatus('IN_PROGRESS', '进行中');
+                },
+              },
+              {
+                key: 'batch-set-completed',
+                label: '批量设为已完成',
+                onClick: () => {
+                  void handleBatchSetStatus('COMPLETED', '已完成');
+                },
+              },
+            ]}
+          />,
         ]}
       />
 

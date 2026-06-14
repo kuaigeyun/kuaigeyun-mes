@@ -19,6 +19,7 @@ import {
   EditOutlined,
   DeleteOutlined,
   PlayCircleOutlined,
+  SendOutlined,
   ShoppingOutlined,
   AppstoreOutlined,
   ClockCircleOutlined,
@@ -26,6 +27,7 @@ import {
   ExclamationCircleOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -538,24 +540,125 @@ const ProductionPlansPage: React.FC = () => {
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) return;
-    Modal.confirm({
-      title: '批量删除',
-      content: `确定要删除选中的 ${keys.length} 条生产计划吗？`,
-      okType: 'danger',
-      onOk: async () => {
-        try {
-          for (const k of keys) {
-            await planningApi.productionPlan.delete(String(k));
-          }
-          messageApi.success(`已删除 ${keys.length} 条生产计划`);
-          setSelectedRowKeys([]);
-          invalidatePlanStatistics();
-          actionRef.current?.reload();
-        } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || '批量删除失败');
-        }
-      },
-    });
+    try {
+      for (const k of keys) {
+        await planningApi.productionPlan.delete(String(k));
+      }
+      messageApi.success(`已删除 ${keys.length} 条生产计划`);
+      setSelectedRowKeys([]);
+      invalidatePlanStatistics();
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.response?.data?.detail || '批量删除失败');
+    }
+  };
+
+  const handleBatchSubmit = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择生产计划');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await planningApi.productionPlan.submit(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已提交 ${success} 条生产计划`);
+    if (failed > 0) messageApi.warning(`${failed} 条提交失败（仅草稿可提交）`);
+    setSelectedRowKeys([]);
+    invalidatePlanStatistics();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchApprove = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择生产计划');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await planningApi.productionPlan.approve(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已审核 ${success} 条生产计划`);
+    if (failed > 0) messageApi.warning(`${failed} 条审核失败（仅待审核可操作）`);
+    setSelectedRowKeys([]);
+    invalidatePlanStatistics();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchExecute = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择生产计划');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await planningApi.productionPlan.execute(String(id));
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已执行 ${success} 条生产计划`);
+    if (failed > 0) messageApi.warning(`${failed} 条执行失败（仅已审核可执行）`);
+    setSelectedRowKeys([]);
+    invalidatePlanStatistics();
+    actionRef.current?.reload();
+  };
+
+  const handleBatchPushToWorkOrders = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      messageApi.warning('请先选择生产计划');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await planningApi.productionPlan.pushToWorkOrders(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) messageApi.success(`已下推 ${success} 条生产计划到工单`);
+    if (failed > 0) messageApi.warning(`${failed} 条下推失败`);
+    setSelectedRowKeys([]);
+    invalidatePlanStatistics();
+    actionRef.current?.reload();
   };
 
   const handleListImport = async (data: any[][]) => {
@@ -683,9 +786,44 @@ const ProductionPlansPage: React.FC = () => {
             setCreateModalVisible(true);
           }}
           enableRowSelection
+          selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条生产计划吗？`}
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key="production-plan-batch-menu"
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'submit',
+                  label: '批量提交',
+                  icon: <SendOutlined />,
+                  onClick: handleBatchSubmit,
+                },
+                {
+                  key: 'approve',
+                  label: '批量审核',
+                  icon: <CheckCircleOutlined />,
+                  onClick: handleBatchApprove,
+                },
+                {
+                  key: 'execute',
+                  label: '批量执行',
+                  icon: <PlayCircleOutlined />,
+                  onClick: handleBatchExecute,
+                },
+                {
+                  key: 'push-to-work-orders',
+                  label: '批量下推工单',
+                  icon: <AppstoreOutlined />,
+                  onClick: handleBatchPushToWorkOrders,
+                },
+              ]}
+              toolBarButtonSize="middle"
+            />,
+          ]}
           showImportButton
           onImport={handleListImport}
           importHeaders={productionPlanImportTemplate.importHeaders}

@@ -130,3 +130,54 @@ export async function executeChangeViaDesk(
     data: { change_type: changeType },
   });
 }
+
+export async function deleteChangeViaDesk(
+  changeUuid: string,
+  changeType: 'bom' | 'process_route',
+) {
+  return apiRequest(`${KUAIPLM_CHANGES}/${changeUuid}`, {
+    method: 'DELETE',
+    params: { change_type: changeType },
+  });
+}
+
+export async function batchApproveChanges(
+  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+  approved = true,
+  approval_comment?: string,
+) {
+  return apiRequest<{
+    success_count: number;
+    failed_count: number;
+    errors?: string[];
+  }>(`${KUAIPLM_CHANGES}/batch/approve`, {
+    method: 'POST',
+    data: { items, approved, approval_comment },
+  });
+}
+
+export async function batchExecuteChanges(
+  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+) {
+  return apiRequest<{
+    success_count: number;
+    failed_count: number;
+    errors?: string[];
+  }>(`${KUAIPLM_CHANGES}/batch/execute`, {
+    method: 'POST',
+    data: { items },
+  });
+}
+
+export async function batchDeleteChanges(
+  items: Array<{ change_uuid: string; change_type: 'bom' | 'process_route' }>,
+) {
+  return apiRequest<{
+    success_count: number;
+    failed_count: number;
+    errors?: string[];
+  }>(`${KUAIPLM_CHANGES}/batch/delete`, {
+    method: 'POST',
+    data: { items },
+  });
+}

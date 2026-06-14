@@ -10,6 +10,7 @@ import { App, Button, Col, DatePicker, Descriptions, Empty, Form, Input, InputNu
 import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, FormOutlined, PlusOutlined, SwapOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -412,6 +413,107 @@ const PurchaseInquiriesPage: React.FC = () => {
     return lastInquiriesCacheRef.current.find((row) => row.id === id) ?? null;
   }, [selectedRowKeys]);
 
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) return;
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await deletePurchaseInquiry(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已删除 ${success} 条询价单`);
+    if (failed > 0) message.warning(`${failed} 条删除失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchSubmit = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      message.warning('请先选择询价单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await submitPurchaseInquiry(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已提交 ${success} 条询价单`);
+    if (failed > 0) message.warning(`${failed} 条提交失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchApprove = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      message.warning('请先选择询价单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await approvePurchaseInquiry(id, true);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已审核 ${success} 条询价单`);
+    if (failed > 0) message.warning(`${failed} 条审核失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchWithdraw = async (keys: React.Key[]) => {
+    if (!keys || keys.length === 0) {
+      message.warning('请先选择询价单');
+      return;
+    }
+    let success = 0;
+    let failed = 0;
+    for (const key of keys) {
+      const id = Number(key);
+      if (!Number.isFinite(id) || id <= 0) {
+        failed += 1;
+        continue;
+      }
+      try {
+        await withdrawPurchaseInquiryApproval(id);
+        success += 1;
+      } catch {
+        failed += 1;
+      }
+    }
+    if (success > 0) message.success(`已撤回 ${success} 条询价单审核`);
+    if (failed > 0) message.warning(`${failed} 条撤回失败`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
   const canUseToolbarPush = selectedInquiryForToolbar ? isInquiryAwarded(selectedInquiryForToolbar) : false;
 
   const toolbarPushMenuItems = useMemo(
@@ -571,6 +673,39 @@ const PurchaseInquiriesPage: React.FC = () => {
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条询价单吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="purchase-inquiry-batch-menu"
+            selectedRowKeys={selectedRowKeys}
+            menuItems={[
+              {
+                key: 'submit',
+                label: '批量提交',
+                icon: <ThunderboltOutlined />,
+                onClick: handleBatchSubmit,
+              },
+              ...(auditEnabled
+                ? [
+                    {
+                      key: 'approve',
+                      label: '批量审核通过',
+                      icon: <CheckOutlined />,
+                      onClick: handleBatchApprove,
+                    },
+                  ]
+                : []),
+              {
+                key: 'withdraw',
+                label: '批量撤回审核',
+                icon: <EditOutlined />,
+                onClick: handleBatchWithdraw,
+              },
+            ]}
+          />,
+        ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             key="create-purchase-inquiry-with-pull"

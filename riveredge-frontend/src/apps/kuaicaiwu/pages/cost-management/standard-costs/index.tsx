@@ -12,6 +12,7 @@ import {
 import { App, Popconfirm, Tag } from 'antd';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { standardCostService, type StandardCost } from '../../../services/cost/standard-cost';
 import { formatCostItemType, formatTargetType } from '../../../utils/financeUiLabels';
 
@@ -20,6 +21,25 @@ const StandardCostsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState<StandardCost | null>(null);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    for (const key of keys) {
+      await standardCostService.delete(Number(key));
+    }
+    messageApi.success(`已删除 ${keys.length} 条标准成本`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
+
+  const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
+    for (const key of keys) {
+      await standardCostService.update(Number(key), { is_active: isActive });
+    }
+    messageApi.success(`已将 ${keys.length} 条标准成本设为${isActive ? '启用' : '停用'}`);
+    setSelectedRowKeys([]);
+    actionRef.current?.reload();
+  };
 
   const columns: ProColumns<StandardCost>[] = [
     { title: '核算对象', dataIndex: 'target_type', width: 100, render: (_, r) => formatTargetType(r.target_type) },
@@ -74,6 +94,32 @@ const StandardCostsPage: React.FC = () => {
         showCreateButton
         createButtonText="新建标准成本"
         onCreate={() => { setEditing(null); setModalVisible(true); }}
+        enableRowSelection
+        selectedRowKeys={selectedRowKeys}
+        onRowSelectionChange={setSelectedRowKeys}
+        showDeleteButton
+        onDelete={handleBatchDelete}
+        deleteConfirmTitle="确认批量删除"
+        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条标准成本吗？`}
+        toolBarActionsAfterDelete={[
+          <UniBatchMenuButton
+            key="standard-cost-batch-actions"
+            selectedRowKeys={selectedRowKeys}
+            buttonText="批量操作"
+            menuItems={[
+              {
+                key: 'batch-enable',
+                label: '批量启用',
+                onClick: (keys) => handleBatchSetActive(keys, true),
+              },
+              {
+                key: 'batch-disable',
+                label: '批量停用',
+                onClick: (keys) => handleBatchSetActive(keys, false),
+              },
+            ]}
+          />,
+        ]}
       />
 
       <FormModalTemplate
