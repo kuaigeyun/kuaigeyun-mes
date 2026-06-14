@@ -59,6 +59,15 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
+import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
+import {
+  CustomFieldsFormSection,
+  CustomFieldsDetailSection,
+  hasCustomFieldsDetailContent,
+} from '../../../../../components/custom-fields';
+
+const PRODUCTION_PLAN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_plans';
 
 // 生产计划接口定义
 interface ProductionPlan {
@@ -241,6 +250,36 @@ const ProductionPlansPage: React.FC = () => {
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const createPlanFormRef = useRef<ProFormInstance>(null);
 
+  const {
+    customFields: productionPlanFormCustomFields,
+    customFieldValues: productionPlanFormCustomFieldValues,
+    extractFormValues: extractProductionPlanFormValues,
+    saveCustomFieldValues: saveProductionPlanCustomFieldValues,
+    loadFieldValues: loadProductionPlanFormFieldValues,
+    resetFieldValues: resetProductionPlanFormFieldValues,
+  } = useCustomFields({
+    tableName: PRODUCTION_PLAN_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: createModalVisible,
+  });
+
+  const {
+    customFields: productionPlanListCustomFields,
+    generateCustomFieldColumns: generateProductionPlanCustomFieldColumns,
+    enrichRecordsWithCustomFields: enrichProductionPlanRecordsWithCustomFields,
+    customFieldValues: productionPlanDetailCustomFieldValues,
+    loadFieldValuesForDetail: loadProductionPlanFieldValuesForDetail,
+    resetDetailFieldValues: resetProductionPlanDetailFieldValues,
+  } = useCustomFieldsForList<ProductionPlan>({ tableName: PRODUCTION_PLAN_CUSTOM_FIELD_TABLE });
+
+  useEffect(() => {
+    if (productionPlanListCustomFields.length > 0 && actionRef.current) {
+      setTimeout(() => actionRef.current?.reload(), 200);
+    }
+  }, [productionPlanListCustomFields.length]);
+
+  const productionPlanCustomFieldColumns = generateProductionPlanCustomFieldColumns();
+
   const appendProductionPlanItemsFromMaterials = useCallback(
     (selected: Material[]) => {
       const current = createPlanFormRef.current?.getFieldValue('items') ?? [];
@@ -332,6 +371,7 @@ const ProductionPlansPage: React.FC = () => {
       valueType: 'dateTime',
       width: 160,
     },
+    ...productionPlanCustomFieldColumns,
     {
       title: '操作',
       width: 260,
@@ -415,6 +455,9 @@ const ProductionPlansPage: React.FC = () => {
       const planItems = await planningApi.productionPlan.getItems(record.id!.toString());
       setCurrentPlan({ ...planDetail, items: planItems });
       setDetailDrawerVisible(true);
+      if (record.id != null) {
+        await loadProductionPlanFieldValuesForDetail(record.id);
+      }
     } catch (error) {
       messageApi.error('获取生产计划详情失败');
     }
@@ -450,8 +493,8 @@ const ProductionPlansPage: React.FC = () => {
       setEditingPlanId(record.id!);
       setEditingPlanSnapshot({ ...planDetail, items: planItems });
       setCreateModalVisible(true);
-      setTimeout(() => {
-        createPlanFormRef.current?.setFieldsValue({
+      setTimeout(async () => {
+        const baseValues = {
           plan_name: planDetail.plan_name,
           plan_type: planDetail.plan_type,
           dateRange: [dayjs(planDetail.plan_start_date), dayjs(planDetail.plan_end_date)],
@@ -461,7 +504,13 @@ const ProductionPlansPage: React.FC = () => {
             planned_quantity: it.planned_quantity,
             planned_date: it.planned_date ? dayjs(it.planned_date) : undefined,
           })),
-        });
+        };
+        if (record.id != null) {
+          const customFormValues = await loadProductionPlanFormFieldValues(record.id);
+          createPlanFormRef.current?.setFieldsValue({ ...baseValues, ...customFormValues });
+        } else {
+          createPlanFormRef.current?.setFieldsValue(baseValues);
+        }
       }, 0);
     } catch {
       messageApi.error('加载生产计划失败');
@@ -678,7 +727,8 @@ const ProductionPlansPage: React.FC = () => {
               status: params.status,
               plan_code: params.plan_code,
             });
-            const data = Array.isArray(list) ? list : ((list as any)?.data || []);
+            const raw = Array.isArray(list) ? list : ((list as any)?.data || []);
+            const data = await enrichProductionPlanRecordsWithCustomFields(raw);
             const total = (list as any)?.total ?? (Array.isArray(list) && list.length >= params.pageSize! ? (params.current! * params.pageSize! + 1) : (params.current! - 1) * params.pageSize! + data.length);
             return { data, success: true, total };
           }}
@@ -692,6 +742,7 @@ const ProductionPlansPage: React.FC = () => {
           if (!open) {
             setEditingPlanId(null);
             setEditingPlanSnapshot(null);
+            resetProductionPlanFormFieldValues();
           }
           setCreateModalVisible(open);
         }}
@@ -699,14 +750,15 @@ const ProductionPlansPage: React.FC = () => {
         width={MODAL_CONFIG.LARGE_WIDTH}
         onFinish={async (values) => {
           try {
-            const [start, end] = values.dateRange || [];
+            const { standardValues, customData } = extractProductionPlanFormValues(values);
+            const [start, end] = standardValues.dateRange || [];
             const plan_start_date = start?.format ? start.format('YYYY-MM-DD') : start;
             const plan_end_date = end?.format ? end.format('YYYY-MM-DD') : end;
             if (editingPlanId != null && editingPlanSnapshot) {
               const snap = editingPlanSnapshot;
               await planningApi.productionPlan.update(editingPlanId.toString(), {
-                plan_name: values.plan_name,
-                plan_type: values.plan_type ?? snap.plan_type,
+                plan_name: standardValues.plan_name,
+                plan_type: standardValues.plan_type ?? snap.plan_type,
                 plan_start_date,
                 plan_end_date,
                 source_type: snap.source_type ?? 'Manual',
@@ -726,22 +778,30 @@ const ProductionPlansPage: React.FC = () => {
                 review_remarks: snap.review_remarks ?? undefined,
                 notes: snap.notes ?? undefined,
               });
+              if (Object.keys(customData).length > 0) {
+                await saveProductionPlanCustomFieldValues(editingPlanId, customData);
+              }
               messageApi.success('生产计划已更新（明细行请在下游工单或需求计算中调整）');
             } else {
               const payload = {
-                ...values,
+                ...standardValues,
                 plan_start_date,
                 plan_end_date,
                 source_type: 'Manual',
                 items:
-                  values.items?.map((item: any) => ({
+                  standardValues.items?.map((item: any) => ({
                     ...item,
                     suggested_action: '生产',
                   })) || [],
               };
-              await planningApi.productionPlan.create(payload);
+              const created = await planningApi.productionPlan.create(payload);
+              const recordId = Number((created as { id?: number })?.id ?? 0);
+              if (recordId > 0 && Object.keys(customData).length > 0) {
+                await saveProductionPlanCustomFieldValues(recordId, customData);
+              }
               messageApi.success('创建生产计划成功');
             }
+            resetProductionPlanFormFieldValues();
             invalidatePlanStatistics();
             actionRef.current?.reload();
             return true;
@@ -765,7 +825,11 @@ const ProductionPlansPage: React.FC = () => {
           </ProFormItem>
           <ProFormDateRangePicker name="dateRange" label="计划期间" rules={[{ required: true }]} />
         </ProFormGroup>
-        
+        <CustomFieldsFormSection
+          customFields={productionPlanFormCustomFields}
+          customFieldValues={productionPlanFormCustomFieldValues}
+          gridColumns={2}
+        />
         <div className="uni-table-detail">
           <UniTableDetailHeader title="计划明细" />
           <ProFormList
@@ -799,7 +863,11 @@ const ProductionPlansPage: React.FC = () => {
       <DetailDrawerTemplate
         title={`生产计划详情 - ${currentPlan?.plan_code || ''}`}
         open={detailDrawerVisible}
-        onClose={() => setDetailDrawerVisible(false)}
+        onClose={() => {
+          setDetailDrawerVisible(false);
+          setCurrentPlan(null);
+          resetProductionPlanDetailFieldValues();
+        }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         extra={
@@ -829,7 +897,13 @@ const ProductionPlansPage: React.FC = () => {
                   invalidatePlanStatistics();
                   actionRef.current?.reload();
                   if (currentPlan?.id) {
-                    planningApi.productionPlan.get(currentPlan.id.toString()).then(setCurrentPlan).catch(() => {});
+                    planningApi.productionPlan
+                      .get(currentPlan.id.toString())
+                      .then(async (plan) => {
+                        setCurrentPlan(plan);
+                        await loadProductionPlanFieldValuesForDetail(currentPlan.id!);
+                      })
+                      .catch(() => {});
                   }
                 }}
               />
@@ -880,6 +954,24 @@ const ProductionPlansPage: React.FC = () => {
                     <strong>创建时间：</strong>{currentPlan.created_at}
                   </Col>
                 </Row>
+                {hasCustomFieldsDetailContent(
+                  productionPlanListCustomFields,
+                  productionPlanDetailCustomFieldValues,
+                ) ? (
+                  <div style={{ marginTop: 16 }}>
+                    <CustomFieldsDetailSection
+                      customFields={productionPlanListCustomFields}
+                      customFieldValues={productionPlanDetailCustomFieldValues}
+                    />
+                  </div>
+                ) : null}
+                {currentPlan.notes ? (
+                  <Row gutter={16} style={{ marginTop: 8 }}>
+                    <Col span={24}>
+                      <strong>备注：</strong>{currentPlan.notes}
+                    </Col>
+                  </Row>
+                ) : null}
               </DetailDrawerSection>
 
               {/* 生命周期 */}

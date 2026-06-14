@@ -6,8 +6,14 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import dayjs from 'dayjs';
 import { getCustomFieldsByTable, getFieldValues, batchSetFieldValues } from '../services/customField';
 import type { CustomField } from '../services/customField';
+import {
+  customFieldFileValueToUploadFiles,
+  uploadFileListToCustomFieldValue,
+} from '../components/custom-fields/customFieldFileUtils';
+import { normalizeJsonFieldValue } from '../components/custom-fields/customFieldJsonUtils';
 
 const CUSTOM_PREFIX = 'custom_';
 
@@ -63,11 +69,28 @@ export function useCustomFields({
     async (recordId: number) => {
       try {
         const values = await getFieldValues(tableName, recordId);
-        setCustomFieldValues(values);
+        let fields = customFields;
+        if (fields.length === 0) {
+          fields = await getCustomFieldsByTable(tableName, true).catch(() => []);
+          if (fields.length > 0) setCustomFields(fields);
+        }
         const formValues: Record<string, any> = {};
-        Object.keys(values).forEach((code) => {
-          formValues[`${CUSTOM_PREFIX}${code}`] = values[code];
-        });
+        const displayValues: Record<string, any> = {};
+        for (const field of fields) {
+          const val = values[field.code];
+          if (val === undefined) continue;
+          if (field.field_type === 'image' || field.field_type === 'file') {
+            const files = await customFieldFileValueToUploadFiles(val, {
+              image: field.field_type === 'image',
+            });
+            formValues[`${CUSTOM_PREFIX}${field.code}`] = files;
+            displayValues[field.code] = files;
+          } else {
+            formValues[`${CUSTOM_PREFIX}${field.code}`] = val;
+            displayValues[field.code] = val;
+          }
+        }
+        setCustomFieldValues(displayValues);
         return formValues;
       } catch (e) {
         console.error('加载自定义字段值失败:', e);
@@ -75,7 +98,7 @@ export function useCustomFields({
         return {};
       }
     },
-    [tableName]
+    [tableName, customFields]
   );
 
   const extractFormValues = useCallback((formValues: Record<string, any>) => {
@@ -97,7 +120,22 @@ export function useCustomFields({
       const fieldValues = Object.keys(customData)
         .map((fieldCode) => {
           const field = customFields.find((f) => f.code === fieldCode);
-          return field ? { field_uuid: field.uuid, value: customData[fieldCode] } : null;
+          if (!field) return null;
+          let value = customData[fieldCode];
+          if (field.field_type === 'image' || field.field_type === 'file') {
+            value = uploadFileListToCustomFieldValue(value, field.field_type);
+          } else if (field.field_type === 'json') {
+            value = normalizeJsonFieldValue(value);
+          } else if (field.field_type === 'time' || field.field_type === 'datetime') {
+            if (value != null && value !== '') {
+              const format = field.config?.format
+                || (field.field_type === 'time' ? 'HH:mm:ss' : 'YYYY-MM-DD HH:mm:ss');
+              if (dayjs.isDayjs(value)) {
+                value = value.format(format);
+              }
+            }
+          }
+          return { field_uuid: field.uuid, value };
         })
         .filter(Boolean);
       if (fieldValues.length > 0) {

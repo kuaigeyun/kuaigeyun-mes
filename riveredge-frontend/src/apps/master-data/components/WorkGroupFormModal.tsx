@@ -16,11 +16,8 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../utils/codeRuleP
 import type { WorkGroup, WorkGroupCreate, WorkGroupUpdate, WorkGroupMemberItem } from '../types/factory';
 import { SchemaFormRenderer } from '../../../components/schema-form';
 import { workGroupFormSchemaBasic, workGroupFormSchemaRest } from '../schemas/workGroup';
-import { useCustomFields } from '../../../hooks/useCustomFields';
-import { CustomFieldsFormSection } from '../../../components/custom-fields';
 
 const PAGE_CODE = 'master-data-factory-work-group';
-const CUSTOM_FIELD_TABLE = 'master_data_factory_work_groups';
 
 export interface WorkGroupFormModalProps {
   open: boolean;
@@ -43,15 +40,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
   const [effectiveRuleCode, setEffectiveRuleCode] = useState<string | null>(null);
   const [employees, setEmployees] = useState<{ id: number; full_name: string }[]>([]);
 
-  const {
-    customFields,
-    customFieldValues,
-    loadFieldValues,
-    extractFormValues,
-    saveCustomFieldValues,
-    resetFieldValues,
-  } = useCustomFields({ tableName: CUSTOM_FIELD_TABLE, loadWhenOpen: true, open });
-
   const isEdit = Boolean(editUuid);
   const currentUser = useGlobalStore((s) => s.currentUser);
 
@@ -67,7 +55,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
     if (!open) return;
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({ isActive: true, members: [] });
-    resetFieldValues();
     if (!editUuid) {
       (async () => {
         let ruleCode = getPageRuleCode(PAGE_CODE);
@@ -102,7 +89,7 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
     setEffectiveRuleCode(null);
     workGroupApi
       .get(editUuid)
-      .then(async (detail) => {
+      .then((detail) => {
         const members = (detail.members ?? []).map((m: any) => ({
           employeeId: m.employeeId ?? m.employee_id,
           employeeName: m.employeeName ?? m.employee_name,
@@ -116,8 +103,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
           members,
           isActive: detail.isActive ?? true,
         });
-        const fieldFormValues = await loadFieldValues(detail.id);
-        formRef.current?.setFieldsValue(fieldFormValues);
       })
       .catch((err: any) => {
         messageApi.error(err?.message || t('app.master-data.workGroups.getDetailFailed'));
@@ -127,9 +112,8 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      const { customData, standardValues } = extractFormValues(values);
 
-      const members: WorkGroupMemberItem[] = (standardValues.members ?? []).map((m: any, i: number) => ({
+      const members: WorkGroupMemberItem[] = (values.members ?? []).map((m: any, i: number) => ({
         employeeId: m.employeeId ?? m.employee_id,
         employeeName: employees.find((e) => e.id === (m.employeeId ?? m.employee_id))?.full_name,
         performanceWeight: Number(m.performanceWeight ?? m.performance_weight ?? 1),
@@ -137,10 +121,10 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
       })).filter((m: WorkGroupMemberItem) => m.employeeId);
 
       const payload = {
-        code: standardValues.code,
-        name: standardValues.name,
-        description: standardValues.description,
-        isActive: standardValues.isActive ?? true,
+        code: values.code,
+        name: values.name,
+        description: values.description,
+        isActive: values.isActive ?? true,
         members,
       };
 
@@ -148,14 +132,13 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
         await workGroupApi.update(editUuid, payload as WorkGroupUpdate);
         messageApi.success(t('common.updateSuccess'));
         const updated = await workGroupApi.get(editUuid);
-        await saveCustomFieldValues(updated.id, customData);
         onSuccess(updated);
       } else {
         const ruleCodeToUse = effectiveRuleCode || getPageRuleCode(PAGE_CODE);
         if (
           ruleCodeToUse &&
           (isAutoGenerateEnabled(PAGE_CODE) || effectiveRuleCode) &&
-          (standardValues.code === previewCode || !standardValues.code)
+          (values.code === previewCode || !values.code)
         ) {
           try {
             const codeResponse = await generateCode({ rule_code: ruleCodeToUse });
@@ -163,7 +146,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
           } catch {}
         }
         const created = await workGroupApi.create(payload as WorkGroupCreate);
-        await saveCustomFieldValues(created.id, customData);
         messageApi.success(t('common.createSuccess'));
         onSuccess(created);
       }
@@ -171,7 +153,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
       formRef.current?.resetFields();
       setPreviewCode(null);
       setEffectiveRuleCode(null);
-      resetFieldValues();
     } catch (error: any) {
       messageApi.error(error?.message || (isEdit ? t('common.updateFailed') : t('common.createFailed')));
     } finally {
@@ -184,7 +165,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
     formRef.current?.resetFields();
     setPreviewCode(null);
     setEffectiveRuleCode(null);
-    resetFieldValues();
   };
 
   return (
@@ -260,7 +240,6 @@ export const WorkGroupFormModal: React.FC<WorkGroupFormModalProps> = ({
       </div>
       <SchemaFormRenderer
         schema={workGroupFormSchemaRest}
-        slots={{ customFields: <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} /> }}
         codeField="code"
         codeAutoGenerated={isAutoGenerateEnabled(PAGE_CODE)}
         codeAutoGeneratedKey="field.workGroup.codeAutoGenerated"

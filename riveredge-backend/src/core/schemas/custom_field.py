@@ -10,6 +10,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from core.config.custom_field_type_spec import CUSTOM_FIELD_TYPES
+
 
 class CustomFieldBase(BaseModel):
     """
@@ -20,7 +22,7 @@ class CustomFieldBase(BaseModel):
     name: str = Field(..., min_length=1, max_length=100, description="字段名称")
     code: str = Field(..., min_length=1, max_length=50, description="字段代码（唯一，用于程序识别）")
     table_name: str = Field(..., min_length=1, max_length=50, description="关联表名")
-    field_type: str = Field(..., description="字段类型：text、number、date、select、textarea、json")
+    field_type: str = Field(..., description="字段类型")
     config: Optional[Dict[str, Any]] = Field(None, description="字段配置（JSON，存储默认值、验证规则、选项等）")
     label: Optional[str] = Field(None, max_length=100, description="字段标签（显示名称）")
     placeholder: Optional[str] = Field(None, max_length=200, description="占位符")
@@ -45,9 +47,8 @@ class CustomFieldBase(BaseModel):
         Raises:
             ValueError: 如果字段类型不合法
         """
-        valid_types = ("text", "number", "date", "select", "textarea", "json")
-        if v not in valid_types:
-            raise ValueError(f"字段类型必须是 {valid_types} 之一")
+        if v not in CUSTOM_FIELD_TYPES:
+            raise ValueError(f"字段类型必须是 {CUSTOM_FIELD_TYPES} 之一")
         return v
 
 
@@ -92,10 +93,8 @@ class CustomFieldUpdate(BaseModel):
         Raises:
             ValueError: 如果字段类型不合法
         """
-        if v is not None:
-            valid_types = ("text", "number", "date", "select", "textarea", "json")
-            if v not in valid_types:
-                raise ValueError(f"字段类型必须是 {valid_types} 之一")
+        if v is not None and v not in CUSTOM_FIELD_TYPES:
+            raise ValueError(f"字段类型必须是 {CUSTOM_FIELD_TYPES} 之一")
         return v
 
 

@@ -1,12 +1,11 @@
 /**
  * 自定义字段 Hook（列表页场景）
  *
- * 用于列表页：表格列、详情 Drawer、请求数据合并自定义字段值。
+ * 用于列表页：详情 Drawer 展示自定义字段；列表表格不展示自定义列（避免列过多、列宽不可控）。
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import { Typography } from 'antd';
 import { getCustomFieldsByTable, getFieldValues } from '../services/customField';
 import type { CustomField } from '../services/customField';
 
@@ -24,9 +23,9 @@ export interface UseCustomFieldsForListResult<T = any> {
   customFieldsLoaded: boolean;
   /** 当前详情记录的字段值 */
   customFieldValues: Record<string, any>;
-  /** 生成表格自定义列 */
+  /** 生成表格自定义列（列表不展示，恒返回空数组） */
   generateCustomFieldColumns: () => ProColumns<T>[];
-  /** 将记录列表与自定义字段值合并 */
+  /** 列表数据合并自定义字段值（列表不展示，原样返回） */
   enrichRecordsWithCustomFields: (records: T[]) => Promise<T[]>;
   /** 加载单条记录的字段值（用于详情 Drawer） */
   loadFieldValuesForDetail: (recordId: number) => Promise<void>;
@@ -77,66 +76,13 @@ export function useCustomFieldsForList<T extends Record<string, any>>({
     setCustomFieldValues({});
   }, []);
 
-  const generateCustomFieldColumns = useCallback((): ProColumns<T>[] => {
-    return customFields
-      .filter((f) => f.is_active)
-      .sort((a, b) => a.sort_order - b.sort_order)
-      .map((field) => ({
-        title: field.label || field.name,
-        dataIndex: `custom_${field.code}`,
-        width: 150,
-        hideInSearch: !field.is_searchable,
-        sorter: field.is_sortable,
-        render: (value: any) => {
-          if (value === null || value === undefined || value === '') {
-            return <Typography.Text type="secondary">-</Typography.Text>;
-          }
-          if (typeof value === 'object') {
-            const display = value.label ?? value.name ?? value.title ?? value.code ?? (value.id != null ? String(value.id) : null);
-            return display != null ? String(display) : <Typography.Text type="secondary">-</Typography.Text>;
-          }
-          if (field.field_type === 'date' && value) {
-            return new Date(value).toLocaleDateString('zh-CN');
-          }
-          if (field.field_type === 'datetime' && value) {
-            return new Date(value).toLocaleString('zh-CN');
-          }
-          if (field.field_type === 'select' && field.config?.options && Array.isArray(field.config.options)) {
-            const opt = field.config.options.find((o: any) => (o.value ?? o.id) === value);
-            return opt ? (opt.label ?? opt.name ?? String(value)) : String(value);
-          }
-          return String(value);
-        },
-      }));
-  }, [customFields]);
+  /** 列表不展示自定义字段列，避免列宽不可控 */
+  const generateCustomFieldColumns = useCallback((): ProColumns<T>[] => [], []);
 
+  /** 列表不展示自定义字段，跳过逐行拉取字段值 */
   const enrichRecordsWithCustomFields = useCallback(
-    async (records: T[]): Promise<T[]> => {
-      if (customFields.length === 0 || records.length === 0) return records;
-      try {
-        return await Promise.all(
-          records.map(async (record) => {
-            const recordId = record[recordIdField];
-            if (recordId == null) return record;
-            try {
-              const values = await getFieldValues(tableName, recordId);
-              const enriched = { ...record } as any;
-              Object.keys(values).forEach((code) => {
-                enriched[`custom_${code}`] = values[code];
-              });
-              return enriched as T;
-            } catch (e) {
-              console.error(`加载记录 ${recordId} 的自定义字段值失败:`, e);
-              return record;
-            }
-          })
-        );
-      } catch (e) {
-        console.error('批量加载自定义字段值失败:', e);
-        return records;
-      }
-    },
-    [tableName, customFields, recordIdField]
+    async (records: T[]): Promise<T[]> => records,
+    [],
   );
 
   return {

@@ -84,6 +84,8 @@ export const FORM_LAYOUT = {
   DEFAULT_COL_SPAN: 12,
   /** 表单项全宽（24列） */
   FULL_COL_SPAN: 24,
+  /** 表单项底部间距（与 Ant Design Form itemMarginBottom 一致） */
+  ITEM_MARGIN_BOTTOM: 16,
 } as const;
 
 /**

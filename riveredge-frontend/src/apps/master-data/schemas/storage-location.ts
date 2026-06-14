@@ -34,7 +34,7 @@ export const storageLocationFormSchema: FieldConfig[] = [
     colSpan: 12,
     rules: [{ required: true, messageKey: 'field.storageLocation.storageAreaIdRequired' }],
   },
-  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {
     name: 'description',
     type: 'textarea',

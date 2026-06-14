@@ -1505,6 +1505,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         <CustomFieldsFormSection
           customFields={owoFormCustomFields}
           customFieldValues={owoFormCustomFieldValues}
+          gridColumns={2}
         />
 
         <ProFormTextArea

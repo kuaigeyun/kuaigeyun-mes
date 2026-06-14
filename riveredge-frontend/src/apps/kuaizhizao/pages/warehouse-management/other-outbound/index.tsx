@@ -574,6 +574,7 @@ const OtherOutboundPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={otherOutboundFormCustomFields}
           customFieldValues={otherOutboundFormCustomFieldValues}
+          gridColumns={2}
         />
         <div className="uni-table-detail" style={{ width: '100%' }}>
           <UniTableDetailHeader title="明细" required />

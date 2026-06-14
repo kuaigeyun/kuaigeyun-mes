@@ -991,6 +991,7 @@ const MoldsPage: React.FC = () => {
             <CustomFieldsFormSection
               customFields={moldFormCustomFields}
               customFieldValues={moldFormCustomFieldValues}
+              gridColumns={2}
             />
           </Col>
           <Col span={24}>

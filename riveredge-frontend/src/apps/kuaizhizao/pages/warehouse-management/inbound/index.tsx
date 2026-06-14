@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormItem, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Table, Row, Col, Form as AntForm, InputNumber, Input, Typography, Select, Spin, Descriptions, Empty, theme as AntdTheme, Dropdown } from 'antd';
 import {
   PlusOutlined,
@@ -426,8 +426,37 @@ const InboundPage: React.FC = () => {
 
   // 批量入库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
-  const [batchForm] = AntForm.useForm();
+  const batchFormRef = useRef<ProFormInstance>();
   const [batchInboundType, setBatchInboundType] = useState<'finished_goods' | 'purchase'>('finished_goods');
+
+  const {
+    customFields: finishedGoodsReceiptFormCustomFields,
+    customFieldValues: finishedGoodsReceiptFormCustomFieldValues,
+    extractFormValues: extractFinishedGoodsReceiptFormValues,
+    saveCustomFieldValues: saveFinishedGoodsReceiptCustomFieldValues,
+    resetFieldValues: resetFinishedGoodsReceiptFormFieldValues,
+  } = useCustomFields({
+    tableName: FINISHED_GOODS_RECEIPT_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: batchModalVisible && batchInboundType === 'finished_goods',
+  });
+
+  const productionReturnConfirmFormRef = useRef<ProFormInstance>();
+  const {
+    customFields: productionReturnFormCustomFields,
+    customFieldValues: productionReturnFormCustomFieldValues,
+    extractFormValues: extractProductionReturnFormValues,
+    saveCustomFieldValues: saveProductionReturnCustomFieldValues,
+    loadFieldValues: loadProductionReturnFormFieldValues,
+    resetFieldValues: resetProductionReturnFormFieldValues,
+  } = useCustomFields({
+    tableName: PRODUCTION_RETURN_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open:
+      purchaseConfirmPreviewOpen &&
+      purchaseConfirmPreviewDetail?.receipt_type === 'production_return',
+  });
+
   const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [purchaseOrderOptions, setPurchaseOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
@@ -678,10 +707,20 @@ const InboundPage: React.FC = () => {
     load();
   }, [batchModalVisible]);
 
+  const resetBatchInboundModal = () => {
+    setBatchModalVisible(false);
+    batchFormRef.current?.resetFields();
+    resetFinishedGoodsReceiptFormFieldValues();
+  };
+
   /** 批量入库提交 */
   const handleBatchSubmit = async () => {
     try {
-      const values = await batchForm.validateFields();
+      const values = await batchFormRef.current?.validateFieldsReturnFormatValue?.();
+      if (!values) {
+        await batchFormRef.current?.validateFields();
+        return;
+      }
       const type = values.batch_inbound_type || batchInboundType;
       setBatchSubmitting(true);
 
@@ -713,20 +752,29 @@ const InboundPage: React.FC = () => {
           messageApi.warning('请选择入库仓库');
           return;
         }
+        const { customData } = extractFinishedGoodsReceiptFormValues(values);
         const result = await warehouseApi.finishedGoodsReceipt.batchReceipt({
           work_order_ids: workOrderIds,
           warehouse_id: warehouseId,
           warehouse_name: wh?.name,
         });
         const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
+        if (Object.keys(customData).length > 0) {
+          const finishedGoodsIds = list
+            .filter((row: { inbound_doc_kind?: string; id?: number }) => row?.inbound_doc_kind !== 'semi_finished_goods')
+            .map((row: { id?: number }) => Number(row?.id ?? 0))
+            .filter((id: number) => id > 0);
+          for (const recordId of finishedGoodsIds) {
+            await saveFinishedGoodsReceiptCustomFieldValues(recordId, customData);
+          }
+        }
         const semiN = list.filter((r: any) => r?.inbound_doc_kind === 'semi_finished_goods').length;
         const fgN = list.length - semiN;
         messageApi.success(
           `批量生产入库成功，共 ${list.length} 张（成品 ${fgN}、半成品 ${semiN}，按 BOM 子件角色自动分流）`
         );
       }
-      setBatchModalVisible(false);
-      batchForm.resetFields();
+      resetBatchInboundModal();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -940,6 +988,8 @@ const InboundPage: React.FC = () => {
     setPurchaseConfirmLineLoc({});
     setPurchaseConfirmLineLocCode({});
     setLocOptionsByWarehouse({});
+    productionReturnConfirmFormRef.current?.resetFields();
+    resetProductionReturnFormFieldValues();
   };
 
   /** 打开采购入库确认预览（加载最新详情，合并抽屉内未保存的实际数量） */
@@ -1025,6 +1075,10 @@ const InboundPage: React.FC = () => {
           setLocOptionsByWarehouse((prev) => ({ ...prev, [wid]: opts }));
         })
       );
+      if (record.receipt_type === 'production_return' && record.id != null) {
+        const fieldFormValues = await loadProductionReturnFormFieldValues(record.id);
+        productionReturnConfirmFormRef.current?.setFieldsValue(fieldFormValues);
+      }
     } catch {
       messageApi.error('加载入库单详情失败');
       resetPurchaseConfirmPreview();
@@ -1041,6 +1095,17 @@ const InboundPage: React.FC = () => {
       messageApi.warning('暂无可入库明细');
       return;
     }
+
+    let productionReturnCustomData: Record<string, any> = {};
+    if (order.receipt_type === 'production_return') {
+      const cfValues = await productionReturnConfirmFormRef.current?.validateFieldsReturnFormatValue?.();
+      if (!cfValues) {
+        await productionReturnConfirmFormRef.current?.validateFields();
+        return;
+      }
+      productionReturnCustomData = extractProductionReturnFormValues(cfValues).customData;
+    }
+
     let mappedItems: any[];
     try {
       mappedItems = items
@@ -1213,8 +1278,13 @@ const InboundPage: React.FC = () => {
            warehouse_name: headerWhName,
            items: mappedItems,
         });
+        if (Object.keys(productionReturnCustomData).length > 0) {
+          await saveProductionReturnCustomFieldValues(order.id, productionReturnCustomData);
+        }
       }
-      messageApi.success('入库确认成功，库存已更新');
+      messageApi.success(
+        order.receipt_type === 'production_return' ? '退料确认成功，库存已更新' : '入库确认成功，库存已更新',
+      );
       resetPurchaseConfirmPreview();
       invalidateMenuBadgeCounts();
 
@@ -1794,7 +1864,8 @@ const InboundPage: React.FC = () => {
                 key: 'pull-from-purchase-order',
                 actionKey: 'inbound.pull_from_purchase_order',
                 onClick: () => {
-                  batchForm.resetFields();
+                  batchFormRef.current?.resetFields();
+                  resetFinishedGoodsReceiptFormFieldValues();
                   setBatchInboundType('purchase');
                   setBatchModalVisible(true);
                 },
@@ -1810,7 +1881,8 @@ const InboundPage: React.FC = () => {
                 key: 'pull-from-work-order',
                 actionKey: 'inbound.pull_from_work_order',
                 onClick: () => {
-                  batchForm.resetFields();
+                  batchFormRef.current?.resetFields();
+                  resetFinishedGoodsReceiptFormFieldValues();
                   setBatchInboundType('finished_goods');
                   setBatchModalVisible(true);
                 },
@@ -1821,7 +1893,8 @@ const InboundPage: React.FC = () => {
             key="batch"
             icon={<InboxOutlined />}
             onClick={() => {
-              batchForm.resetFields();
+              batchFormRef.current?.resetFields();
+              resetFinishedGoodsReceiptFormFieldValues();
               setBatchInboundType('finished_goods');
               setBatchModalVisible(true);
             }}
@@ -1955,6 +2028,7 @@ const InboundPage: React.FC = () => {
             <CustomFieldsFormSection
               customFields={purchaseReceiptFormCustomFields}
               customFieldValues={purchaseReceiptFormCustomFieldValues}
+              gridColumns={2}
             />
             <div className="uni-table-detail" style={{ width: '100%' }}>
               <UniTableDetailHeader title="入库明细" required />
@@ -2133,7 +2207,7 @@ const InboundPage: React.FC = () => {
       <Modal
         title="批量入库"
         open={batchModalVisible}
-        onCancel={() => setBatchModalVisible(false)}
+        onCancel={resetBatchInboundModal}
         onOk={handleBatchSubmit}
         confirmLoading={batchSubmitting}
         width={520}
@@ -2142,64 +2216,62 @@ const InboundPage: React.FC = () => {
         <p style={{ marginBottom: 16, color: '#666' }}>
           根据上游单据批量创建入库单。生产入库：从工单下推（按 BOM 子件角色自动分为成品/半成品入库单）；采购入库：从采购订单下推。
         </p>
-        <AntForm form={batchForm} layout="vertical" initialValues={{ batch_inbound_type: 'finished_goods' }}>
-          <AntForm.Item
+        <ProForm
+          formRef={batchFormRef}
+          submitter={false}
+          layout="vertical"
+          initialValues={{ batch_inbound_type: 'finished_goods' }}
+        >
+          <ProFormSelect
             name="batch_inbound_type"
             label="入库类型"
             rules={[{ required: true }]}
-          >
-            <ProFormSelect
-              options={[
-                { label: '生产入库（从工单，成品/半成品自动分流）', value: 'finished_goods' },
-                { label: '采购入库（从采购订单）', value: 'purchase' },
-              ]}
-              fieldProps={{
-                onChange: (v: string) => setBatchInboundType(v as 'finished_goods' | 'purchase'),
-              }}
-            />
-          </AntForm.Item>
+            options={[
+              { label: '生产入库（从工单，成品/半成品自动分流）', value: 'finished_goods' },
+              { label: '采购入库（从采购订单）', value: 'purchase' },
+            ]}
+            fieldProps={{
+              onChange: (v: string) => setBatchInboundType(v as 'finished_goods' | 'purchase'),
+            }}
+          />
           {batchInboundType === 'finished_goods' && (
             <>
-              <AntForm.Item
+              <ProFormSelect
                 name="work_order_ids"
                 label="选择工单"
                 rules={[{ required: true, message: '请选择至少一个工单' }]}
-              >
-                <ProFormSelect
-                  mode="multiple"
-                  placeholder="请选择工单（进行中/已完成且有报工）"
-                  options={workOrderOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </AntForm.Item>
-              <AntForm.Item
+                mode="multiple"
+                placeholder="请选择工单（进行中/已完成且有报工）"
+                options={workOrderOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <ProFormSelect
                 name="warehouse_id"
                 label="入库仓库"
                 rules={[{ required: true, message: '请选择入库仓库' }]}
-              >
-                <ProFormSelect
-                  placeholder="请选择仓库"
-                  options={warehouseOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </AntForm.Item>
+                placeholder="请选择仓库"
+                options={warehouseOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <CustomFieldsFormSection
+                customFields={finishedGoodsReceiptFormCustomFields}
+                customFieldValues={finishedGoodsReceiptFormCustomFieldValues}
+                gridColumns={1}
+              />
             </>
           )}
           {batchInboundType === 'purchase' && (
-            <AntForm.Item
+            <ProFormSelect
               name="purchase_order_ids"
               label="选择采购订单"
               rules={[{ required: true, message: '请选择至少一个采购订单' }]}
-            >
-              <ProFormSelect
-                mode="multiple"
-                placeholder="请选择采购订单（已审核/已确认且有未入库数量）"
-                options={purchaseOrderOptions}
-                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-              />
-            </AntForm.Item>
+              mode="multiple"
+              placeholder="请选择采购订单（已审核/已确认且有未入库数量）"
+              options={purchaseOrderOptions}
+              fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+            />
           )}
-        </AntForm>
+        </ProForm>
       </Modal>
 
       <Modal
@@ -2277,7 +2349,11 @@ const InboundPage: React.FC = () => {
       </Modal>
 
       <Modal
-        title="确认入库预览"
+        title={
+          purchaseConfirmPreviewDetail?.receipt_type === 'production_return'
+            ? '确认退料预览'
+            : '确认入库预览'
+        }
         open={purchaseConfirmPreviewOpen}
         onCancel={() => {
           if (!purchaseConfirmPreviewSubmitting) resetPurchaseConfirmPreview();
@@ -2285,7 +2361,9 @@ const InboundPage: React.FC = () => {
         onOk={submitConfirmPreview}
         confirmLoading={purchaseConfirmPreviewSubmitting}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
-        okText="确认入库"
+        okText={
+          purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? '确认退料' : '确认入库'
+        }
         destroyOnHidden
       >
         <Spin spinning={purchaseConfirmPreviewLoading}>
@@ -2438,6 +2516,20 @@ const InboundPage: React.FC = () => {
               },
             ]}
           />
+          {purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? (
+            <ProForm
+              formRef={productionReturnConfirmFormRef}
+              submitter={false}
+              layout="vertical"
+              style={{ marginTop: 16 }}
+            >
+              <CustomFieldsFormSection
+                customFields={productionReturnFormCustomFields}
+                customFieldValues={productionReturnFormCustomFieldValues}
+                gridColumns={1}
+              />
+            </ProForm>
+          ) : null}
         </Spin>
       </Modal>
 

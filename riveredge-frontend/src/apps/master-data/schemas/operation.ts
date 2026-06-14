@@ -97,7 +97,7 @@ export const operationFormSchema: FieldConfig[] = [
     extraKey: 'field.operation.overReportValueExtra',
     extraAsTooltip: true,
   },
-  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {
     name: 'description',
     type: 'textarea',

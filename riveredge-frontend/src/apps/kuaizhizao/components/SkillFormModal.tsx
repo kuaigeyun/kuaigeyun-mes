@@ -125,7 +125,7 @@ export const SkillFormModal: React.FC<SkillFormModalProps> = ({
         isEdit={isEdit}
         slots={{
           customFields: (
-            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
+            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
           ),
         }}
       />

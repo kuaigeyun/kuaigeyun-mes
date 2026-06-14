@@ -23,6 +23,7 @@ import { getToken, clearAuth, getUserInfo, setUserInfo, setTenantId, getTenantId
 import { buildRestoredUserFromStorage } from './utils/restoredUser';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
+import { FORM_LAYOUT } from './components/layout-templates/constants';
 import { useGlobalStore } from './stores';
 import { loadUserLanguage } from './config/i18n';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
@@ -714,6 +715,9 @@ export default function App() {
         },
         TreeSelect: {
           activeOutlineColor: 'transparent',
+        },
+        Form: {
+          itemMarginBottom: FORM_LAYOUT.ITEM_MARGIN_BOTTOM,
         },
       },
     };

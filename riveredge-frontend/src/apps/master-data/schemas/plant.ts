@@ -32,7 +32,7 @@ export const plantFormSchema: FieldConfig[] = [
     colSpan: 24,
     fieldProps: { rows: 2 },
   },
-  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {
     name: 'description',
     type: 'textarea',

@@ -1031,6 +1031,7 @@ const IncomingInspectionPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={inspectionFormCustomFields}
           customFieldValues={inspectionFormCustomFieldValues}
+          gridColumns={2}
         />
         <ProFormTextArea
           name="notes"

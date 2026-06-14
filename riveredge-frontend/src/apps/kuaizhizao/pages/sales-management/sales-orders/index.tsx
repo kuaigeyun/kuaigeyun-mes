@@ -3041,6 +3041,7 @@ const SalesOrdersPage: React.FC = () => {
           <CustomFieldsFormSection
             customFields={salesOrderFormCustomFields}
             customFieldValues={salesOrderFormCustomFieldValues}
+            gridColumns={4}
           />
 
           <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>

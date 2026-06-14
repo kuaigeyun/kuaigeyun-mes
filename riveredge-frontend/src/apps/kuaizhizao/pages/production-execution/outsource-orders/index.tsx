@@ -834,6 +834,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           <CustomFieldsFormSection
             customFields={outsourceFormCustomFields}
             customFieldValues={outsourceFormCustomFieldValues}
+            gridColumns={1}
           />
           <ProFormTextArea
             name="remarks"

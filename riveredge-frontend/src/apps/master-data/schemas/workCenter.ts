@@ -34,7 +34,7 @@ export const workCenterFormSchema: FieldConfig[] = [
     mode: 'multiple',
     fieldProps: { allowClear: true },
   },
-  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {
     name: 'description',
     type: 'textarea',

@@ -947,6 +947,7 @@ const ReworkOrdersPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={reworkFormCustomFields}
           customFieldValues={reworkFormCustomFieldValues}
+          gridColumns={2}
         />
         <ProFormTextArea
           name="remarks"

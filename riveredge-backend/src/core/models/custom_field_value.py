@@ -111,10 +111,29 @@ class CustomFieldValue(BaseModel):
                 from datetime import datetime
                 try:
                     self.value_date = datetime.fromisoformat(value.replace('Z', '+00:00')).date()
-                except:
+                except Exception:
                     pass
+        elif field_type in ("time", "datetime"):
+            self.value_text = str(value)
         elif field_type == "json":
             self.value_json = value
+        elif field_type == "image":
+            if isinstance(value, dict) and value.get("uuids"):
+                uuids = value["uuids"]
+                self.value_text = str(uuids[0]) if uuids else None
+            elif isinstance(value, list) and value:
+                self.value_text = str(value[0])
+            elif value:
+                self.value_text = str(value)
+        elif field_type == "file":
+            if isinstance(value, str):
+                self.value_json = {"uuids": [value]}
+            elif isinstance(value, list):
+                self.value_json = {"uuids": [str(item) for item in value if item]}
+            elif isinstance(value, dict) and "uuids" in value:
+                self.value_json = {
+                    "uuids": [str(item) for item in (value.get("uuids") or []) if item]
+                }
     
     def __str__(self):
         """字符串表示"""

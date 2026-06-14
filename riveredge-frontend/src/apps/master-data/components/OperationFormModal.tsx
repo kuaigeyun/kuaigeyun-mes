@@ -509,7 +509,7 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
         schema={operationFormSchema}
         slots={{
           customFields: (
-            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
+            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
           ),
           inspectionBlock: (
             <>

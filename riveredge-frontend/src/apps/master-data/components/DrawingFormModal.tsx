@@ -321,7 +321,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         rules={[{ required: true }]}
         colProps={{ span: 12 }}
       />
-      <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
+      <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
       <ProFormUploadButton
         name="mainFile"
         label={t('app.master-data.drawings.uploadMain')}

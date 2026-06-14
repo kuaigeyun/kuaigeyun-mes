@@ -815,6 +815,7 @@ const SalesReturnsPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={salesReturnFormCustomFields}
           customFieldValues={salesReturnFormCustomFieldValues}
+          gridColumns={3}
         />
 
         <UniTableDetail

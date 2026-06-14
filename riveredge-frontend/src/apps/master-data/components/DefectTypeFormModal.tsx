@@ -176,7 +176,7 @@ export const DefectTypeFormModal: React.FC<DefectTypeFormModalProps> = ({
         schema={defectTypeFormSchema}
         slots={{
           customFields: (
-            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} />
+            <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
           ),
         }}
         codeField="code"

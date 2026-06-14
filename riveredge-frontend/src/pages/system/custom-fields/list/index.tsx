@@ -13,12 +13,14 @@ import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react'
 import { rowActionKind } from '../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormText, ProFormTextArea, ProFormSwitch, ProFormDigit, ProFormInstance, ProFormItem } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../../components/safe-pro-form-select';
 import { App, Badge, Button, Col, Descriptions, Form, Input, Popconfirm, Row, Space, Spin, Tag, Tooltip, theme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined, PlusOutlined, SearchOutlined, DatabaseOutlined, MinusCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../components/uni-table';
 import { flushDrawerOpen, DRAWER_CONFIG, FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
+import { CustomFieldJsonEditor, CustomFieldJsonModeSegmented, type CustomFieldJsonEditorMode } from '../../../../components/custom-fields/CustomFieldJsonEditor';
+import { normalizeJsonFieldValue, isFlatJsonObject } from '../../../../components/custom-fields/customFieldJsonUtils';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/uni-detail';
 import {
   getCustomFieldList,
@@ -112,6 +114,7 @@ const CustomFieldListPage: React.FC = () => {
   const [currentFieldUuid, setCurrentFieldUuid] = useState<string | null>(null);
   const [formLoading, setFormLoading] = useState(false);
   const [fieldType, setFieldType] = useState<'text' | 'number' | 'date' | 'time' | 'datetime' | 'select' | 'multiselect' | 'textarea' | 'image' | 'file' | 'associated_object' | 'formula' | 'json'>('text');
+  const [jsonEditorMode, setJsonEditorMode] = useState<CustomFieldJsonEditorMode>('kv');
 
 
   // Drawer 相关状态（详情查看）
@@ -222,6 +225,7 @@ const CustomFieldListPage: React.FC = () => {
     setIsEdit(false);
     setCurrentFieldUuid(null);
     setFieldType('text');
+    setJsonEditorMode('kv');
     setModalVisible(true);
     // 重置表单并设置默认值
     formRef.current?.resetFields();
@@ -244,11 +248,17 @@ const CustomFieldListPage: React.FC = () => {
       setIsEdit(true);
       setCurrentFieldUuid(record.uuid);
       setFieldType(record.field_type);
-      setFieldType(record.field_type);
       setModalVisible(true);
 
       // 获取字段详情
       const detail = await getCustomFieldByUuid(record.uuid);
+      if (detail.field_type === 'json') {
+        setJsonEditorMode(
+          detail.config?.default != null && !isFlatJsonObject(detail.config.default) ? 'source' : 'kv',
+        );
+      } else {
+        setJsonEditorMode('kv');
+      }
       formRef.current?.setFieldsValue({
         name: detail.name,
         code: detail.code,
@@ -262,7 +272,9 @@ const CustomFieldListPage: React.FC = () => {
         sort_order: detail.sort_order,
         is_active: detail.is_active,
         // 配置字段
-        default_value: detail.config?.default || '',
+        default_value: detail.field_type === 'json'
+          ? (detail.config?.default ?? null)
+          : (detail.config?.default || ''),
         max_length: detail.config?.maxLength || '',
         min_value: detail.config?.min || '',
         max_value: detail.config?.max || '',
@@ -429,13 +441,9 @@ const CustomFieldListPage: React.FC = () => {
         if (values.default_value) config.default = values.default_value;
         if (values.textarea_rows) config.rows = parseInt(values.textarea_rows);
       } else if (fieldType === 'json') {
-        if (values.default_value) {
-          try {
-            config.default = JSON.parse(values.default_value);
-          } catch (e) {
-            messageApi.error(t('field.customField.defaultJsonInvalid'));
-            return;
-          }
+        const normalizedDefault = normalizeJsonFieldValue(values.default_value);
+        if (normalizedDefault != null) {
+          config.default = normalizedDefault;
         }
       }
 
@@ -758,17 +766,16 @@ const CustomFieldListPage: React.FC = () => {
         );
       case 'json':
         return (
-          <>
-            <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
-              <ProFormTextArea
-                name="default_value"
-                label={t('field.customField.defaultValueJson')}
+          <div style={{ gridColumn: '1 / -1', width: '100%', minWidth: 0 }}>
+            <ProFormItem name="default_value" noStyle>
+              <CustomFieldJsonEditor
                 placeholder={t('field.customField.defaultValueJsonPlaceholder')}
-                fieldProps={{ rows: 6 }}
-                extra={t('field.customField.defaultValueJsonExtra')}
+                showModeToggle={false}
+                mode={jsonEditorMode}
+                onModeChange={setJsonEditorMode}
               />
-            </div>
-          </>
+            </ProFormItem>
+          </div>
         );
       default:
         return null;
@@ -1361,6 +1368,7 @@ const CustomFieldListPage: React.FC = () => {
             fieldProps={{
               onChange: (value: any) => {
                 setFieldType(value);
+                if (value === 'json') setJsonEditorMode('kv');
               },
             }}
             disabled={isEdit}
@@ -1397,10 +1405,21 @@ const CustomFieldListPage: React.FC = () => {
                   boxSizing: 'border-box',
                 }}
               >
-                <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '16px', width: '100%', minWidth: 0 }}>
-                  {renderConfigFields()}
-                </div>
+                {fieldType === 'json' ? (
+                  <Row align="middle" gutter={16} style={{ marginBottom: 12 }}>
+                    <Col span={16}>
+                      <span style={{ fontWeight: 500 }}>{t('field.customField.config')}</span>
+                    </Col>
+                    <Col span={8} style={{ textAlign: 'right' }}>
+                      <CustomFieldJsonModeSegmented mode={jsonEditorMode} onChange={setJsonEditorMode} />
+                    </Col>
+                  </Row>
+                ) : (
+                  <div style={{ marginBottom: 12, fontWeight: 500 }}>{t('field.customField.config')}</div>
+                )}
+                <Row gutter={[16, 16]}>
+                  <Col span={24}>{renderConfigFields()}</Col>
+                </Row>
               </div>
             </Col>
           </Row>

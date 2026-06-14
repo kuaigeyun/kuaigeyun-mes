@@ -3592,6 +3592,7 @@ const MaterialsManagementPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={groupCustomFields}
           customFieldValues={groupCustomFieldValues}
+          gridColumns={1}
         />
         <ProFormTextArea
           name="description"

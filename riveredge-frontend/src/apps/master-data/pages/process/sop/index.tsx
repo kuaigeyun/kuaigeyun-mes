@@ -1175,6 +1175,7 @@ const SOPPage: React.FC = () => {
           <CustomFieldsFormSection
             customFields={sopFormCustomFields}
             customFieldValues={sopFormCustomFieldValues}
+            gridColumns={2}
           />
           <ProFormTextArea
             name="content"

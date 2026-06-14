@@ -8,7 +8,7 @@ import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Card, Table, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutlined } from '@ant-design/icons';
@@ -18,8 +18,10 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
+import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  CustomFieldsFormSection,
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -216,8 +218,33 @@ const OutboundPage: React.FC = () => {
 
   // 批量出库 Modal
   const [batchModalVisible, setBatchModalVisible] = useState(false);
-  const [batchForm] = Form.useForm();
+  const batchFormRef = useRef<ProFormInstance>();
   const [batchOutboundType, setBatchOutboundType] = useState<'production_picking' | 'sales_delivery'>('production_picking');
+
+  const {
+    customFields: productionPickingFormCustomFields,
+    customFieldValues: productionPickingFormCustomFieldValues,
+    extractFormValues: extractProductionPickingFormValues,
+    saveCustomFieldValues: saveProductionPickingCustomFieldValues,
+    resetFieldValues: resetProductionPickingFormFieldValues,
+  } = useCustomFields({
+    tableName: PRODUCTION_PICKING_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: batchModalVisible && batchOutboundType === 'production_picking',
+  });
+
+  const {
+    customFields: salesDeliveryFormCustomFields,
+    customFieldValues: salesDeliveryFormCustomFieldValues,
+    extractFormValues: extractSalesDeliveryFormValues,
+    saveCustomFieldValues: saveSalesDeliveryCustomFieldValues,
+    resetFieldValues: resetSalesDeliveryFormFieldValues,
+  } = useCustomFields({
+    tableName: SALES_DELIVERY_CUSTOM_FIELD_TABLE,
+    loadWhenOpen: true,
+    open: batchModalVisible && batchOutboundType === 'sales_delivery',
+  });
+
   const [workOrderOptions, setWorkOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [salesOrderOptions, setSalesOrderOptions] = useState<{ label: string; value: number }[]>([]);
   const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
@@ -372,12 +399,42 @@ const OutboundPage: React.FC = () => {
     load();
   }, [batchModalVisible]);
 
+  /** 关闭批量出库弹窗并重置表单 */
+  const resetBatchOutboundModal = () => {
+    setBatchModalVisible(false);
+    batchFormRef.current?.resetFields();
+    resetProductionPickingFormFieldValues();
+    resetSalesDeliveryFormFieldValues();
+  };
+
   /** 批量出库提交 */
   const handleBatchOutboundSubmit = async () => {
     try {
-      const values = await batchForm.validateFields();
-      const type = values.batch_outbound_type || batchOutboundType;
+      const values = await batchFormRef.current?.validateFieldsReturnFormatValue?.();
+      if (!values) {
+        await batchFormRef.current?.validateFields();
+        return;
+      }
+      const type = (values.batch_outbound_type || batchOutboundType) as 'production_picking' | 'sales_delivery';
       setBatchSubmitting(true);
+
+      const { customData } =
+        type === 'sales_delivery'
+          ? extractSalesDeliveryFormValues(values)
+          : extractProductionPickingFormValues(values);
+
+      const saveCustomFieldsToCreated = async (recordIds: number[]) => {
+        if (Object.keys(customData).length === 0) return;
+        const saveFn =
+          type === 'sales_delivery'
+            ? saveSalesDeliveryCustomFieldValues
+            : saveProductionPickingCustomFieldValues;
+        for (const recordId of recordIds) {
+          if (recordId > 0) {
+            await saveFn(recordId, customData);
+          }
+        }
+      };
 
       if (type === 'sales_delivery') {
         const orderIds = values.sales_order_ids as number[];
@@ -392,18 +449,22 @@ const OutboundPage: React.FC = () => {
           return;
         }
         let success = 0;
+        const createdIds: number[] = [];
         for (const id of orderIds) {
           try {
-            await warehouseApi.salesDelivery.pullFromSalesOrder({
+            const created = await warehouseApi.salesDelivery.pullFromSalesOrder({
               sales_order_id: id,
               warehouse_id: warehouseId,
               warehouse_name: wh?.name,
             });
+            const recordId = Number((created as { id?: number })?.id ?? 0);
+            if (recordId > 0) createdIds.push(recordId);
             success++;
           } catch (e: any) {
             messageApi.warning(`销售订单 ${id} 上拉失败：${e?.message || e?.response?.data?.detail || '未知错误'}`);
           }
         }
+        await saveCustomFieldsToCreated(createdIds);
         messageApi.success(`批量销售出库成功，共创建 ${success} 张销售出库单`);
       } else {
         const workOrderIds = values.work_order_ids as number[];
@@ -423,10 +484,13 @@ const OutboundPage: React.FC = () => {
           warehouse_name: wh?.name,
         });
         const list = Array.isArray(result) ? result : (result as any)?.data ?? (result as any)?.items ?? [];
+        const createdIds = list
+          .map((row: { id?: number }) => Number(row?.id ?? 0))
+          .filter((id: number) => id > 0);
+        await saveCustomFieldsToCreated(createdIds);
         messageApi.success(`批量生产领料成功，共创建 ${list.length} 张领料单`);
       }
-      setBatchModalVisible(false);
-      batchForm.resetFields();
+      resetBatchOutboundModal();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
@@ -439,7 +503,9 @@ const OutboundPage: React.FC = () => {
 
   const handleCreate = () => {
     // 生产领料必须基于工单下推创建；直接打开批量出库弹窗并默认到生产领料。
-    batchForm.resetFields();
+    batchFormRef.current?.resetFields();
+    resetProductionPickingFormFieldValues();
+    resetSalesDeliveryFormFieldValues();
     setBatchOutboundType('production_picking');
     setBatchModalVisible(true);
   };
@@ -1038,7 +1104,9 @@ const OutboundPage: React.FC = () => {
                 key: 'pull-from-work-order',
                 actionKey: 'outbound.pull_from_work_order',
                 onClick: () => {
-                  batchForm.resetFields();
+                  batchFormRef.current?.resetFields();
+                  resetProductionPickingFormFieldValues();
+                  resetSalesDeliveryFormFieldValues();
                   setBatchOutboundType('production_picking');
                   setBatchModalVisible(true);
                 },
@@ -1047,7 +1115,9 @@ const OutboundPage: React.FC = () => {
                 key: 'pull-from-sales-order',
                 actionKey: 'outbound.pull_from_sales_order',
                 onClick: () => {
-                  batchForm.resetFields();
+                  batchFormRef.current?.resetFields();
+                  resetProductionPickingFormFieldValues();
+                  resetSalesDeliveryFormFieldValues();
                   setBatchOutboundType('sales_delivery');
                   setBatchModalVisible(true);
                 },
@@ -1066,7 +1136,9 @@ const OutboundPage: React.FC = () => {
             key="batch"
             icon={<InboxOutlined />}
             onClick={() => {
-              batchForm.resetFields();
+              batchFormRef.current?.resetFields();
+              resetProductionPickingFormFieldValues();
+              resetSalesDeliveryFormFieldValues();
               setBatchOutboundType('production_picking');
               setBatchModalVisible(true);
             }}
@@ -1080,7 +1152,7 @@ const OutboundPage: React.FC = () => {
       <Modal
         title="批量出库"
         open={batchModalVisible}
-        onCancel={() => setBatchModalVisible(false)}
+        onCancel={resetBatchOutboundModal}
         onOk={handleBatchOutboundSubmit}
         confirmLoading={batchSubmitting}
         width={520}
@@ -1089,77 +1161,77 @@ const OutboundPage: React.FC = () => {
         <p style={{ marginBottom: 16, color: '#666' }}>
           根据上游单据批量创建出库单。生产领料：从工单下推；销售出库：从销售订单上拉。
         </p>
-        <Form form={batchForm} layout="vertical" initialValues={{ batch_outbound_type: 'production_picking' }}>
-          <Form.Item
+        <ProForm
+          formRef={batchFormRef}
+          submitter={false}
+          layout="vertical"
+          initialValues={{ batch_outbound_type: 'production_picking' }}
+        >
+          <ProFormSelect
             name="batch_outbound_type"
             label="出库类型"
             rules={[{ required: true }]}
-          >
-            <ProFormSelect
-              options={[
-                { label: '生产领料（从工单）', value: 'production_picking' },
-                { label: '销售出库（从销售订单）', value: 'sales_delivery' },
-              ]}
-              fieldProps={{
-                onChange: (v: string) => setBatchOutboundType(v as 'production_picking' | 'sales_delivery'),
-              }}
-            />
-          </Form.Item>
+            options={[
+              { label: '生产领料（从工单）', value: 'production_picking' },
+              { label: '销售出库（从销售订单）', value: 'sales_delivery' },
+            ]}
+            fieldProps={{
+              onChange: (v: string) => setBatchOutboundType(v as 'production_picking' | 'sales_delivery'),
+            }}
+          />
           {batchOutboundType === 'production_picking' && (
             <>
-              <Form.Item
+              <ProFormSelect
                 name="work_order_ids"
                 label="选择工单"
                 rules={[{ required: true, message: '请选择至少一个工单' }]}
-              >
-                <ProFormSelect
-                  mode="multiple"
-                  placeholder="请选择工单（已下达/进行中）"
-                  options={workOrderOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </Form.Item>
-              <Form.Item
+                mode="multiple"
+                placeholder="请选择工单（已下达/进行中）"
+                options={workOrderOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <ProFormSelect
                 name="warehouse_id"
                 label="出库仓库"
                 rules={[{ required: true, message: '请选择出库仓库' }]}
-              >
-                <ProFormSelect
-                  placeholder="请选择仓库"
-                  options={warehouseOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </Form.Item>
+                placeholder="请选择仓库"
+                options={warehouseOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <CustomFieldsFormSection
+                customFields={productionPickingFormCustomFields}
+                customFieldValues={productionPickingFormCustomFieldValues}
+                gridColumns={1}
+              />
             </>
           )}
           {batchOutboundType === 'sales_delivery' && (
             <>
-              <Form.Item
+              <ProFormSelect
                 name="sales_order_ids"
                 label="选择销售订单"
                 rules={[{ required: true, message: '请选择至少一个销售订单' }]}
-              >
-                <ProFormSelect
-                  mode="multiple"
-                  placeholder="请选择销售订单（已审核/已确认）"
-                  options={salesOrderOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </Form.Item>
-              <Form.Item
+                mode="multiple"
+                placeholder="请选择销售订单（已审核/已确认）"
+                options={salesOrderOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <ProFormSelect
                 name="warehouse_id"
                 label="出库仓库"
                 rules={[{ required: true, message: '请选择出库仓库' }]}
-              >
-                <ProFormSelect
-                  placeholder="请选择仓库"
-                  options={warehouseOptions}
-                  fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
-                />
-              </Form.Item>
+                placeholder="请选择仓库"
+                options={warehouseOptions}
+                fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
+              />
+              <CustomFieldsFormSection
+                customFields={salesDeliveryFormCustomFields}
+                customFieldValues={salesDeliveryFormCustomFieldValues}
+                gridColumns={1}
+              />
             </>
           )}
-        </Form>
+        </ProForm>
       </Modal>
 
       <Modal

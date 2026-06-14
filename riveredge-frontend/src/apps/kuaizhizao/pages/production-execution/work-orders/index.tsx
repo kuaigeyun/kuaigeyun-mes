@@ -7164,6 +7164,7 @@ const WorkOrdersPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={workOrderFormCustomFields}
           customFieldValues={workOrderFormCustomFieldValues}
+          gridColumns={4}
         />
         <ProFormUploadButton
           name="attachments"

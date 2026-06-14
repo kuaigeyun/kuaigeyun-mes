@@ -286,6 +286,7 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                       <CustomFieldsFormSection
                         customFields={customFields}
                         customFieldValues={customFieldValues}
+                        gridColumns={2}
                       />
                     </Col>
                     <Col span={24}>

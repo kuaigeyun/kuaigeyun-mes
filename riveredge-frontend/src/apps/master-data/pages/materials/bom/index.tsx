@@ -2866,6 +2866,7 @@ const BOMPage: React.FC = () => {
         <CustomFieldsFormSection
           customFields={bomFormCustomFields}
           customFieldValues={bomFormCustomFieldValues}
+          gridColumns={2}
         />
         <ProForm.Item
             label={t('app.master-data.bom.childMaterialList')}

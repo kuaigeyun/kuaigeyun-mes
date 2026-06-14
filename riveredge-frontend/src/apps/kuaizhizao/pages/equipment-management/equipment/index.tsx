@@ -958,6 +958,7 @@ const EquipmentPage: React.FC = () => {
             <CustomFieldsFormSection
               customFields={equipmentFormCustomFields}
               customFieldValues={equipmentFormCustomFieldValues}
+              gridColumns={2}
             />
           </Col>
           <Col span={24}>

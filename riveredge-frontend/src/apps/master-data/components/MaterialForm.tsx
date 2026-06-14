@@ -2019,6 +2019,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
           <CustomFieldsFormSection
             customFields={customFields}
             customFieldValues={customFieldValues}
+            gridColumns={4}
           />
         </Row>
       ) : null}

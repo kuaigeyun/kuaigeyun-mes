@@ -9,6 +9,9 @@ import React from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { Typography } from 'antd';
 import type { CustomField } from '../../services/customField';
+import { CustomFieldFileDetail } from './CustomFieldFileDetail';
+import { normalizeCustomFieldFileUuids } from './customFieldFileUtils';
+import { formatJsonText, isEmptyJsonValue } from './customFieldJsonUtils';
 
 export interface CustomFieldsDetailSectionProps {
   customFields: CustomField[];
@@ -21,7 +24,16 @@ export function hasCustomFieldsDetailContent(
   customFieldValues: Record<string, any>,
 ): boolean {
   if (customFields.length === 0 || Object.keys(customFieldValues).length === 0) return false;
-  return customFields.some((f) => f.is_active && customFieldValues[f.code] !== undefined);
+  return customFields.some((f) => {
+    if (!f.is_active || customFieldValues[f.code] === undefined) return false;
+    if (f.field_type === 'image' || f.field_type === 'file') {
+      return normalizeCustomFieldFileUuids(customFieldValues[f.code]).length > 0;
+    }
+    if (f.field_type === 'json') {
+      return !isEmptyJsonValue(customFieldValues[f.code]);
+    }
+    return true;
+  });
 }
 
 export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps> = ({
@@ -31,12 +43,46 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
   if (!hasCustomFieldsDetailContent(customFields, customFieldValues)) return null;
 
   const columns = customFields
-    .filter((f) => f.is_active && customFieldValues[f.code] !== undefined)
+    .filter((f) => {
+      if (!f.is_active || customFieldValues[f.code] === undefined) return false;
+      if (f.field_type === 'image' || f.field_type === 'file') {
+        return normalizeCustomFieldFileUuids(customFieldValues[f.code]).length > 0;
+      }
+      if (f.field_type === 'json') {
+        return !isEmptyJsonValue(customFieldValues[f.code]);
+      }
+      return true;
+    })
     .sort((a, b) => a.sort_order - b.sort_order)
     .map((field) => ({
       title: field.label || field.name,
       dataIndex: field.code,
       render: (value: any) => {
+        if (field.field_type === 'image') {
+          return <CustomFieldFileDetail value={value} image />;
+        }
+        if (field.field_type === 'file') {
+          return <CustomFieldFileDetail value={value} />;
+        }
+        if (field.field_type === 'json') {
+          if (isEmptyJsonValue(value)) {
+            return <Typography.Text type="secondary">-</Typography.Text>;
+          }
+          return (
+            <Typography.Paragraph
+              copyable
+              style={{
+                marginBottom: 0,
+                fontFamily: 'Consolas, Monaco, monospace',
+                fontSize: 12,
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-all',
+              }}
+            >
+              {formatJsonText(value)}
+            </Typography.Paragraph>
+          );
+        }
         if (value === null || value === undefined || value === '') {
           return <Typography.Text type="secondary">-</Typography.Text>;
         }

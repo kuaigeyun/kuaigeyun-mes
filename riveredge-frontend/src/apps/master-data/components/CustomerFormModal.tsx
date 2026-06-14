@@ -349,6 +349,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                       <CustomFieldsFormSection
                         customFields={customFields}
                         customFieldValues={customFieldValues}
+                        gridColumns={2}
                       />
                     </Col>
                     <Col span={24}>

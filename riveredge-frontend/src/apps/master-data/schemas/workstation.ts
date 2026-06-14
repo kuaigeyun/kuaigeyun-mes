@@ -34,7 +34,7 @@ export const workstationFormSchema: FieldConfig[] = [
     colSpan: 12,
     rules: [{ required: true, messageKey: 'field.workstation.productionLineIdRequired' }],
   },
-  { type: 'slot', name: '__customFields__', slotKey: 'customFields' },
+  { type: 'slot', name: '__customFields__', slotKey: 'customFields', colSpan: 24 },
   {
     name: 'description',
     type: 'textarea',

@@ -96,7 +96,8 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
   const renderField = (field: FieldConfig): React.ReactNode => {
         if (field.type === 'slot' && field.slotKey) {
           const slotContent = slots[field.slotKey];
-          return slotContent ? <React.Fragment key={field.name}>{slotContent}</React.Fragment> : null;
+          if (!slotContent) return null;
+          return <React.Fragment key={field.name}>{slotContent}</React.Fragment>;
         }
         const labelText = t(field.labelKey!);
         const label = buildLabel(field, labelText);
