@@ -21,8 +21,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 import { Column } from '@ant-design/charts';
-import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview';
-import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import { UniDashboard } from '../../../../../components/uni-dashboard';
@@ -58,9 +57,9 @@ const ProductionControlTower: React.FC = () => {
 
   const { data: summary, loading, refresh: refreshSummary } = useRequest(async () => {
     return apiRequest('/apps/kuaizhizao/production-control/summary');
-  }, {
+  }, dashboardRequestOptions('kz:plan-dashboard:control-tower-summary', {
     pollingInterval: 30000,
-  });
+  }));
 
   const s = summary as SummaryShape | undefined;
 
@@ -369,7 +368,6 @@ const ProductionControlTower: React.FC = () => {
               style={{ borderRadius: token.borderRadius, marginBottom: 20 }}
             />
 
-            <SimulationSchedulingScorePreview preview={simulationResult.scheduling_score_preview} />
 
             {/* 物料齐套状态 */}
             <Card 
@@ -437,9 +435,6 @@ const ProductionControlTower: React.FC = () => {
                           <Space>
                             <Tag color="red">抢占物料</Tag>
                             <Text strong>{item.work_order_code}</Text>
-                            {item.scheduling_score != null && (
-                              <WorkOrderScoreCell score={item.scheduling_score} />
-                            )}
                           </Space>
                         }
                         description={

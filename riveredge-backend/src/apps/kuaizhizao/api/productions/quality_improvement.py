@@ -15,6 +15,8 @@ from apps.kuaizhizao.schemas.quality_improvement import (
     OQCInspectionCreate,
     OQCInspectionResponse,
     Quality8DCreate,
+    Quality8DHistoryEntry,
+    Quality8DListResponse,
     Quality8DResponse,
     Quality8DTransition,
     Quality8DUpdate,
@@ -57,6 +59,13 @@ _8D_UPDATE_OR_CLOSE = Depends(
             "kuaizhizao:quality-management-eight-d-reports:update",
             "kuaizhizao:quality-management-eight-d-reports:close",
         ],
+    )
+)
+_8D_DELETE = Depends(
+    require_access(
+        "kuaizhizao.quality-management-eight-d-reports",
+        "delete",
+        required_permissions=["kuaizhizao:quality-management-eight-d-reports:delete"],
     )
 )
 _NC_READ = Depends(
@@ -131,7 +140,7 @@ _SPC_CREATE = Depends(
 )
 
 
-@router.get("/quality-8d-reports", response_model=List[Quality8DResponse], summary="List 8D reports")
+@router.get("/quality-8d-reports", response_model=Quality8DListResponse, summary="List 8D reports")
 async def list_quality_8d_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
@@ -141,7 +150,7 @@ async def list_quality_8d_reports(
     _auth= _8D_READ,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
-) -> List[Quality8DResponse]:
+) -> Quality8DListResponse:
     return await quality_8d_service.list_reports(
         tenant_id=tenant_id,
         skip=skip,
@@ -190,18 +199,57 @@ async def update_quality_8d_report(
 
 @router.post("/quality-8d-reports/{report_id}/transition", response_model=Quality8DResponse, summary="Transition 8D stage")
 async def transition_quality_8d_report(
+    request: Request,
     payload: Quality8DTransition,
     report_id: int = Path(...),
-    _auth= _8D_UPDATE_OR_CLOSE,
-    current_user: User = Depends(get_current_user),
+    auth: AuthContext = Depends(get_auth_context),
     tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> Quality8DResponse:
+    required_permission = (
+        "kuaizhizao:quality-management-eight-d-reports:close"
+        if payload.to_status == "closed"
+        else "kuaizhizao:quality-management-eight-d-reports:update"
+    )
+    await ensure_permission_codes(
+        auth,
+        tenant_id,
+        request,
+        [required_permission],
+        require_all=True,
+    )
     return await quality_8d_service.transition(
         tenant_id=tenant_id,
         report_id=report_id,
         user_id=current_user.id,
         payload=payload,
     )
+
+
+@router.get(
+    "/quality-8d-reports/{report_id}/history",
+    response_model=List[Quality8DHistoryEntry],
+    summary="Get 8D history",
+)
+async def get_quality_8d_report_history(
+    report_id: int = Path(...),
+    _auth=_8D_READ,
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[Quality8DHistoryEntry]:
+    _ = _auth
+    return await quality_8d_service.get_history(tenant_id=tenant_id, report_id=report_id)
+
+
+@router.delete("/quality-8d-reports/{report_id}", summary="Delete 8D report")
+async def delete_quality_8d_report(
+    report_id: int = Path(...),
+    _auth=_8D_DELETE,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    _ = _auth
+    await quality_8d_service.delete_report(tenant_id=tenant_id, report_id=report_id, user_id=current_user.id)
+    return {"success": True}
 
 
 @router.post("/exceptions/quality/{exception_id}/start-8d", response_model=Quality8DResponse, summary="Start 8D from quality exception")

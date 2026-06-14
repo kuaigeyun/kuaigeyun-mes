@@ -46,6 +46,64 @@ def _strip_customer_pool_managed_fields(data: Dict[str, Any]) -> None:
         data.pop(key, None)
 
 
+async def _summarize_customer_blocking_documents(
+    tenant_id: int,
+    customer_id: int,
+) -> Dict[str, Any]:
+    """
+    统计引用该客户的业务单据（未删除），用于删除守卫提示。
+    """
+    from core.services.document_tracking_service import (
+        DOCUMENT_MODEL_REGISTRY,
+        DOCUMENT_TYPE_LABEL_ZH,
+    )
+
+    items: List[Dict[str, Any]] = []
+    total = 0
+
+    for doc_type, (model, _) in DOCUMENT_MODEL_REGISTRY().items():
+        fields_map = getattr(model, "_meta", None).fields_map if getattr(model, "_meta", None) else {}
+        if "customer_id" not in fields_map:
+            continue
+        if "tenant_id" not in fields_map:
+            continue
+
+        query = model.filter(tenant_id=tenant_id, customer_id=customer_id)
+        if doc_type == "sales_invoice":
+            query = query.filter(category="OUT")
+        if "deleted_at" in fields_map:
+            query = query.filter(deleted_at__isnull=True)
+
+        count = await query.count()
+        if count <= 0:
+            continue
+
+        items.append(
+            {
+                "document_type": doc_type,
+                "label": DOCUMENT_TYPE_LABEL_ZH.get(doc_type, doc_type),
+                "count": count,
+            }
+        )
+        total += count
+
+    items.sort(key=lambda x: (-x["count"], x["label"]))
+    return {"total": total, "items": items}
+
+
+def _format_customer_delete_guard_message(customer_name: str, summary: Dict[str, Any]) -> str:
+    items = summary.get("items") or []
+    if not items:
+        return f"客户「{customer_name}」存在业务单据，无法删除"
+
+    top_items = items[:5]
+    labels = [f"{item['label']}({item['count']})" for item in top_items]
+    labels_text = "、".join(labels)
+    if len(items) > 5:
+        labels_text = f"{labels_text} 等"
+    return f"客户「{customer_name}」存在业务单据（{labels_text}），无法删除。请先处理相关单据后再删除。"
+
+
 async def _assert_can_assign_customer_ownership(user: User, tenant_id: int) -> None:
     if user.is_tenant_admin or user.is_infra_admin:
         return
@@ -387,8 +445,9 @@ class SupplyChainService:
         update_data = data.model_dump(exclude_unset=True, by_alias=False) if hasattr(data, "model_dump") else data.dict(exclude_unset=True)
         _strip_customer_pool_managed_fields(update_data)
 
-        salesman_change = update_data.pop("salesman_id", None) if "salesman_id" in update_data else None
-        salesman_changed = salesman_change is not None and salesman_change != customer.salesman_id
+        salesman_field_present = "salesman_id" in update_data
+        salesman_change = update_data.pop("salesman_id", None) if salesman_field_present else None
+        salesman_changed = salesman_field_present and salesman_change != customer.salesman_id
 
         _apply_partner_contacts_payload(update_data)
 
@@ -452,6 +511,13 @@ class SupplyChainService:
         
         if not customer:
             raise NotFoundError(f"客户 {customer_uuid} 不存在")
+
+        # 删除守卫：存在业务单据引用时禁止删除（按未删除单据统计）
+        summary = await _summarize_customer_blocking_documents(tenant_id, customer.id)
+        if summary["total"] > 0:
+            raise ValidationError(
+                _format_customer_delete_guard_message(customer.name or customer.code, summary)
+            )
         
         # 软删除
         from tortoise import timezone

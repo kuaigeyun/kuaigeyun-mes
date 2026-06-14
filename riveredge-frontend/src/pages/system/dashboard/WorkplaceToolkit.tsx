@@ -2,7 +2,7 @@
  * 工业工具组 — 欢迎条胶囊入口 + 下拉托盘
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Popover, Space, theme } from 'antd';
 import * as LucideIcons from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -142,6 +142,7 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
   const [showTray, setShowTray] = useState(false);
   const currentTheme = getDashboardTopBarTheme(isDark);
   const [activeToolPopoverKey, setActiveToolPopoverKey] = useState<string | null>(null);
+  const toolkitRootRef = useRef<HTMLDivElement | null>(null);
   const trayPopoverMountRef = useRef<HTMLDivElement | null>(null);
 
   const { token } = theme.useToken();
@@ -233,8 +234,24 @@ export const WorkplaceToolkit: React.FC<WorkplaceToolkitProps> = ({
     });
   };
 
+  useEffect(() => {
+    if (!showTray) return;
+    const handleOutsidePointerDown = (event: MouseEvent) => {
+      const root = toolkitRootRef.current;
+      const target = event.target as Node | null;
+      if (!root || !target) return;
+      if (root.contains(target)) return;
+      setShowTray(false);
+      setActiveToolPopoverKey(null);
+    };
+    document.addEventListener('mousedown', handleOutsidePointerDown);
+    return () => {
+      document.removeEventListener('mousedown', handleOutsidePointerDown);
+    };
+  }, [showTray]);
+
   return (
-    <div className="dashboard-welcome-toolkit">
+    <div ref={toolkitRootRef} className="dashboard-welcome-toolkit">
       <Space
         className="dashboard-welcome-onboarding"
         size={4}

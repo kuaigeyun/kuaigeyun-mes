@@ -1856,7 +1856,7 @@ code {
   margin-top: auto;
   padding-top: 6px;
   margin-bottom: 0;
-  color: var(--ant-color-text-quaternary, rgba(0, 0, 0, 0.25));
+  color: var(--ant-color-text-tertiary, rgba(0, 0, 0, 0.45));
 }
 .dashboard-cwc-lunar.ant-typography {
   margin-bottom: 0;
@@ -1905,6 +1905,16 @@ code {
   min-height: 0;
   height: 100%;
   overflow: hidden;
+}
+
+/* 模块看板（UniDashboard）：统一卡片标题图标为黑色；不影响系统总工作台 */
+.uni-dashboard .ant-pro-card .ant-pro-card-header .ant-pro-card-title .anticon,
+.uni-dashboard .ant-pro-card .ant-pro-card-header .ant-pro-card-title .anticon svg {
+  color: #1f1f1f !important;
+}
+.uni-dashboard .ant-card .ant-card-head .ant-card-head-title .anticon,
+.uni-dashboard .ant-card .ant-card-head .ant-card-head-title .anticon svg {
+  color: #1f1f1f !important;
 }
 .dashboard-main-body > .ant-col {
   display: flex;
@@ -2110,8 +2120,8 @@ code {
   /* 主题色横向渐变，与 Hero 欢迎横幅同构 */
   background: linear-gradient(
     135deg,
-    var(--ant-color-primary, #1677ff) 0%,
-    color-mix(in srgb, var(--ant-color-primary, #1677ff) 68%, #000) 100%
+    color-mix(in srgb, var(--ant-color-primary, #1677ff) 82%, #fff) 0%,
+    color-mix(in srgb, var(--ant-color-primary, #1677ff) 58%, #000) 100%
   );
 }
 .dashboard-usage-tips__decor {
@@ -2231,8 +2241,8 @@ code {
 [data-theme='dark'] .dashboard-usage-tips__top {
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--ant-color-primary, #1677ff) 92%, #fff) 0%,
-    color-mix(in srgb, var(--ant-color-primary, #1677ff) 58%, #000) 100%
+    color-mix(in srgb, var(--ant-color-primary, #1677ff) 88%, #fff) 0%,
+    color-mix(in srgb, var(--ant-color-primary, #1677ff) 52%, #000) 100%
   );
 }
 [data-theme='dark'] .dashboard-usage-tips__decor-circle {
@@ -2309,7 +2319,7 @@ code {
   appearance: none;
   border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
   background: var(--ant-color-bg-container, #fff);
-  border-radius: 8px;
+  border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 8px));
   width: 100%;
   min-width: 0;
   display: flex;

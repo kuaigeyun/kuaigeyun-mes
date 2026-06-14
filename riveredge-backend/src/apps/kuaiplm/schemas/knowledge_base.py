@@ -6,7 +6,7 @@ Date: 2026-05-28
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -93,11 +93,12 @@ class KbArticleResponse(BaseModel):
     uuid: str
     tenant_id: int
     space_id: int
+    space_name: Optional[str] = None
     article_code: Optional[str] = None
     title: str
     content: Optional[str] = None
     status: str
-    tags: Optional[Any] = None
+    tags: Optional[List[str]] = None
     author_id: Optional[int] = None
     author_name: Optional[str] = None
     links: List[KbArticleLinkResponse] = Field(default_factory=list)

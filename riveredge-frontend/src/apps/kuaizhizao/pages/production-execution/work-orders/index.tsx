@@ -96,7 +96,6 @@ import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn'
-import { SimulationSchedulingScorePreview } from '../../../../../components/SimulationSchedulingScorePreview'
 import { useUserPreferenceStore } from '../../../../../stores/userPreferenceStore'
 import { useConfigStore } from '../../../../../stores/configStore'
 import {
@@ -193,7 +192,6 @@ import WorkOrderCompleteTrackingModal, {
   type WorkOrderTrackingConfirmValues,
 } from './components/WorkOrderCompleteTrackingModal'
 import type { WorkOrderOperationStep } from './workOrderOperationSteps'
-import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell'
 const LazyQRCodeGenerator = lazy(() =>
   import('../../../../../components/qrcode/QRCodeGenerator').then(m => ({ default: m.QRCodeGenerator }))
 )
@@ -4707,16 +4705,6 @@ const WorkOrdersPage: React.FC = () => {
 
   const workOrderToolBarActionsAfterDelete = useMemo(
     () => [
-      <UniBatchButton
-        key="batch-release"
-        selectedRowKeys={selectedRowKeys}
-        type="primary"
-        size="middle"
-        icon={<SendOutlined />}
-        onAction={() => void handleBatchRelease()}
-      >
-        批量下达
-      </UniBatchButton>,
       ...(selectedRowKeys.length > 0
         ? [
             <UniBatchButton
@@ -4770,6 +4758,16 @@ const WorkOrdersPage: React.FC = () => {
         toolBarButtonSize="middle"
         buttonText="批量操作"
       />,
+      <UniBatchButton
+        key="batch-release"
+        selectedRowKeys={selectedRowKeys}
+        type="primary"
+        size="middle"
+        icon={<SendOutlined />}
+        onAction={() => void handleBatchRelease()}
+      >
+        批量下达
+      </UniBatchButton>,
     ],
     [
       selectedRowKeys,
@@ -5337,6 +5335,33 @@ const WorkOrdersPage: React.FC = () => {
           formatWorkOrderListQuantity(record)
         ),
     },
+    {
+      title: '投产批号 / 序列号',
+      key: 'production_batch_serial',
+      dataIndex: 'effective_batch_no',
+      width: 168,
+      uniTableKeepWidth: true,
+      hideInSearch: true,
+      render: (_, record) => {
+        if (isWorkOrderGroupListRow(record)) {
+          return <Typography.Text type="secondary">—</Typography.Text>
+        }
+        const rowKind = record.row_kind || 'work_order'
+        if (rowKind === 'rework' || rowKind === 'outsource') {
+          return <Typography.Text type="secondary">—</Typography.Text>
+        }
+        const batchNo = record.effective_batch_no || record.confirmed_batch_no || record.planned_batch_no || '-'
+        const serialNo = record.effective_serial_no || record.confirmed_serial_no || record.planned_serial_no || '-'
+        return (
+          <UniTableStackedPrimaryCell
+            primary={batchNo}
+            secondary={serialNo}
+            secondaryCopyable={serialNo !== '-'}
+            primaryExtra={null}
+          />
+        )
+      },
+    },
       {
         title: '模式',
         key: 'productionManufacturingMode',
@@ -5545,6 +5570,7 @@ const WorkOrdersPage: React.FC = () => {
       valueType: 'dateTime',
       width: 132,
       uniTableKeepWidth: true,
+      hideInTable: true,
       sorter: true,
     },
     {
@@ -8740,7 +8766,6 @@ const WorkOrdersPage: React.FC = () => {
                     </Space>
                   </div>
 
-                  <SimulationSchedulingScorePreview preview={simulationResult.scheduling_score_preview} compact />
 
                   {simulationResult.shortage_items?.length > 0 && (
                     <div style={{ marginTop: 12 }}>
@@ -8766,17 +8791,6 @@ const WorkOrdersPage: React.FC = () => {
                         pagination={false}
                         columns={[
                           { title: '工单', dataIndex: 'work_order_code' },
-                          {
-                            title: '权重分',
-                            dataIndex: 'scheduling_score',
-                            width: 88,
-                            render: (v: number, row: any) => (
-                              <WorkOrderScoreCell
-                                score={v}
-                                breakdown={row.scheduling_score_breakdown}
-                              />
-                            ),
-                          },
                           { title: '冲突类型', dataIndex: 'impact_type', render: (t) => t === 'material_conflict' ? '物料抢占' : '资源排队' },
                           { title: '可能延期', dataIndex: 'delay_days', render: (d) => d > 0 ? `${d}天` : '未知' },
                         ]}

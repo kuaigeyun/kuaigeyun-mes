@@ -261,8 +261,11 @@ const EquipmentStatusPage: React.FC = () => {
   };
 
   return (
-    <ListPageTemplate
-      toolbarExtra={
+    <ListPageTemplate>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+        <Typography.Title level={4} style={{ margin: 0 }}>
+          设备状态监控
+        </Typography.Title>
         <Space>
           <Button
             icon={autoRefresh ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
@@ -274,11 +277,7 @@ const EquipmentStatusPage: React.FC = () => {
             刷新
           </Button>
         </Space>
-      }
-    >
-      <Typography.Title level={4} style={{ marginTop: 0, marginBottom: 16 }}>
-        设备状态监控
-      </Typography.Title>
+      </div>
       {/* 统计卡片 */}
       <Row gutter={16} style={{ marginBottom: 16 }}>
         <Col xs={12} sm={8} md={6} lg={4}>

@@ -18,6 +18,7 @@ import { listPurchaseRequisitions } from '../../../services/purchase-requisition
 import { getPurchaseTop10 } from '../../../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO } from '../../../constants/fieldPermissionResources';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -45,18 +46,30 @@ const PurchaseDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [trendType, setTrendType] = useState<'amount' | 'quantity'>('amount');
 
-  const { data: summary, loading: summaryLoading } = useRequest(mesDashboardService.getPurchaseSummary);
+  const { data: summary, loading: summaryLoading } = useRequest(
+    mesDashboardService.getPurchaseSummary,
+    dashboardRequestOptions('kz:purchase-dashboard:summary'),
+  );
   const { data: todosData, loading: todosLoading } = useRequest(() =>
     mesDashboardService.getTodosByModule('purchase', 8),
+    dashboardRequestOptions('kz:purchase-dashboard:todos'),
   );
   const { data: recentOrdersData, loading: ordersLoading } = useRequest(() =>
     listPurchaseOrders({ limit: 8 }),
+    dashboardRequestOptions('kz:purchase-dashboard:recent-orders'),
   );
   const { data: recentRequisitionsData, loading: requisitionsLoading } = useRequest(() =>
     listPurchaseRequisitions({ limit: 8 }),
+    dashboardRequestOptions('kz:purchase-dashboard:recent-requisitions'),
   );
-  const { data: trendData, loading: trendLoading } = useRequest(mesDashboardService.getPurchaseTrend);
-  const { data: top10Data, loading: topLoading } = useRequest(() => getPurchaseTop10(undefined, undefined, 8));
+  const { data: trendData, loading: trendLoading } = useRequest(
+    mesDashboardService.getPurchaseTrend,
+    dashboardRequestOptions('kz:purchase-dashboard:trend'),
+  );
+  const { data: top10Data, loading: topLoading } = useRequest(
+    () => getPurchaseTop10(undefined, undefined, 8),
+    dashboardRequestOptions('kz:purchase-dashboard:top10'),
+  );
 
   const s = summary as Record<string, number> | undefined;
   const recentOrders = recentOrdersData?.data || [];
@@ -130,7 +143,13 @@ const PurchaseDashboard: React.FC = () => {
     <ModuleCenterLayout
       loading={summaryLoading && !s}
       kpiRow={<ModuleKpiRow items={kpis} />}
-      shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }} />}
+      shortcutRow={
+        <ModuleShortcutGrid
+          items={shortcuts}
+          colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }}
+          fillByItemCount
+        />
+      }
       actionRow={
         <>
           <ModuleActionPanel

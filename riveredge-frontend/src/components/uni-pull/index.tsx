@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Dropdown, Space } from 'antd';
 import { DownOutlined } from '@ant-design/icons';
+import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut';
 
 export interface UniPullMenuItem {
   key: string;
@@ -29,10 +30,13 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
   createIcon,
   compactKey = 'uni-pull-create-toolbar',
 }) => {
+  const createButtonLabel =
+    typeof createLabel === 'string' ? withSingleNewShortcutHint(createLabel) : createLabel;
+
   return (
     <Space.Compact key={compactKey}>
       <Button type="primary" icon={createIcon} onClick={onCreate}>
-        {createLabel}
+        {createButtonLabel}
       </Button>
       <Dropdown
         trigger={['click']}

@@ -8,6 +8,21 @@ import { Form, Input, Select } from 'antd';
 import { UniTableDetail } from '../../../components/uni-table-detail';
 import type { CustomerContact } from '../types/supply-chain';
 
+function isLikelyChinaPhone(value: string): boolean {
+  const raw = value.trim();
+  if (!raw) return true;
+  // 只允许常见电话字符，避免明显非电话格式（如字母/特殊符号）
+  if (!/^[\d+\-()\s#转xXextEXT.]+$/.test(raw)) return false;
+  // 兼容 "021-88886666 转123"、"138 0013 8000"、"+86-13800138000"
+  const mainPart = raw.split(/(?:#|转|ext\.?|x)/i)[0]?.trim() ?? '';
+  if (!mainPart) return false;
+  let normalized = mainPart.replace(/[\s\-()]/g, '');
+  normalized = normalized.replace(/^\+?86/, '');
+  if (!/^\d+$/.test(normalized)) return false;
+  // 宽松长度：7~12 位（覆盖常见座机与 11 位手机号）
+  return normalized.length >= 7 && normalized.length <= 12;
+}
+
 export const EMPTY_CUSTOMER_CONTACT_ROW: CustomerContact = {
   contactPerson: undefined,
   contactTitle: undefined,
@@ -89,7 +104,15 @@ export const CustomerContactsFormTable: React.FC<CustomerContactsFormTableProps>
             <Form.Item
               name={[index, 'phone']}
               style={{ margin: 0 }}
-              rules={[{ max: 20, message: t('field.customer.phoneMaxLength') }]}
+              rules={[
+                { max: 20, message: t('field.customer.phoneMaxLength') },
+                {
+                  validator: async (_, value: string | undefined) => {
+                    if (!value || isLikelyChinaPhone(value)) return;
+                    throw new Error(t('field.customer.phonePatternLoose', '请输入有效的电话号码'));
+                  },
+                },
+              ]}
             >
               <Input placeholder={t('field.customer.phonePlaceholder')} size="small" allowClear />
             </Form.Item>

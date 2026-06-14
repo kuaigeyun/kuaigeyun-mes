@@ -795,3 +795,37 @@ class PermissionPolicyService:
                 continue
             out[k] = cls._apply_single_mask(v, level)
         return out
+
+    @classmethod
+    async def apply_field_masks_to_list(
+        cls,
+        tenant_id: int,
+        user_id: int,
+        resource: str,
+        payloads: list[dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """
+        批量字段脱敏：一次加载用户有效策略与字段别名，避免列表逐行触发重复查询。
+        """
+        if not payloads:
+            return payloads
+        all_masks = await cls.get_user_effective_field_masks(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            resource=resource,
+        )
+        effective = all_masks.get(cls._normalize_resource(resource), {})
+        if not effective:
+            return payloads
+        alias_map = await cls._load_tenant_field_alias_map(tenant_id=tenant_id)
+        out_list: list[dict[str, Any]] = []
+        for payload in payloads:
+            out = dict(payload)
+            for k, v in payload.items():
+                canonical = cls._canonicalize_field_name_with_aliases(k, alias_map)
+                level = effective.get(canonical)
+                if not level:
+                    continue
+                out[k] = cls._apply_single_mask(v, level)
+            out_list.append(out)
+        return out_list

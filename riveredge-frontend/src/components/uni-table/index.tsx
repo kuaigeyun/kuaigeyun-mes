@@ -120,7 +120,7 @@ import { formatDateBySiteSetting, formatDateTimeBySiteSetting } from '../../util
 import { useNewShortcut } from '../../hooks/useNewShortcut'
 import { usePagePermissionResource } from '../../hooks/usePagePermissionResource'
 import { useResourcePermissions } from '../../hooks/useResourcePermissions'
-import { NEW_SHORTCUT_HINT } from '../../utils/globalNewShortcut'
+import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut'
 import { DictionaryLabel } from '../dictionary-label'
 import { stableJsonForQueryKey } from '../../utils/tableQueryKey'
 import { isUniTableOperationColumn, renderUniTableOperationCell } from '../uni-action'
@@ -2118,7 +2118,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     if (gatedShowCreateButton && onCreate) {
       actions.push(
         <Button key="create" type="primary" icon={<PlusOutlined />} onClick={onCreate} size={toolBarButtonSize}>
-          {(createButtonText ?? t('components.uniTable.create')) + NEW_SHORTCUT_HINT}
+          {withSingleNewShortcutHint(createButtonText ?? t('components.uniTable.create'))}
         </Button>
       )
     }

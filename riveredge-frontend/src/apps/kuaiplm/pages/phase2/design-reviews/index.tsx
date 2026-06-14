@@ -8,6 +8,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } f
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Alert } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
@@ -22,6 +23,7 @@ import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 
 const DesignReviewsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
@@ -30,6 +32,8 @@ const DesignReviewsPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<RdDesignReview | null>(null);
+  const [detailRecord, setDetailRecord] = useState<RdDesignReview | null>(null);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
@@ -40,7 +44,7 @@ const DesignReviewsPage: React.FC = () => {
   const handleBatchDelete = async (keys: React.Key[]) => {
     const ids = toReviewIds(keys);
     if (!ids.length) {
-      messageApi.warning('请先选择评审记录');
+      messageApi.warning(t('app.kuaiplm.phase2.designReviews.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -53,18 +57,20 @@ const DesignReviewsPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`已删除 ${successCount} 条评审记录`);
+      messageApi.success(
+        t('app.kuaiplm.phase2.designReviews.batchDeleteSuccess', { count: successCount }),
+      );
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量删除失败');
+    messageApi.error(t('app.kuaiplm.phase2.designReviews.batchDeleteFailed'));
   };
 
   const handleBatchSetStatus = async (status: string, label: string) => {
     const ids = toReviewIds(selectedRowKeys);
     if (!ids.length) {
-      messageApi.warning('请先选择评审记录');
+      messageApi.warning(t('app.kuaiplm.phase2.designReviews.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -77,31 +83,66 @@ const DesignReviewsPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`已将 ${successCount} 条评审设为${label}`);
+      messageApi.success(
+        t('app.kuaiplm.phase2.designReviews.batchStatusSuccess', { count: successCount, label }),
+      );
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量更新状态失败');
+    messageApi.error(t('app.kuaiplm.phase2.designReviews.batchStatusFailed'));
+  };
+
+  const reviewStatusLabelMap: Record<string, string> = {
+    DRAFT: t('app.kuaiplm.phase2.common.status.draft'),
+    IN_PROGRESS: t('app.kuaiplm.phase2.common.status.inProgress'),
+    COMPLETED: t('app.kuaiplm.phase2.common.status.completed'),
+    ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
   };
 
   const columns: ProColumns<RdDesignReview>[] = [
-    { title: '评审编号', dataIndex: 'review_code', width: 140 },
-    { title: '标题', dataIndex: 'title', ellipsis: true },
-    { title: '类型', dataIndex: 'review_type', width: 100 },
-    { title: '状态', dataIndex: 'status', width: 90 },
-    { title: '评审人', dataIndex: 'reviewer_name', width: 100, hideInSearch: true },
+    { title: t('app.kuaiplm.phase2.designReviews.columns.code'), dataIndex: 'review_code', width: 140 },
+    { title: t('app.kuaiplm.phase2.designReviews.columns.title'), dataIndex: 'title', ellipsis: true },
+    { title: t('app.kuaiplm.phase2.designReviews.columns.type'), dataIndex: 'review_type', width: 100 },
     {
-      title: '计划时间',
+      title: t('app.kuaiplm.phase2.designReviews.columns.status'),
+      dataIndex: 'status',
+      width: 90,
+      valueEnum: Object.fromEntries(
+        Object.entries(reviewStatusLabelMap).map(([value, label]) => [value, { text: label }]),
+      ),
+      render: (_, row) => reviewStatusLabelMap[row.status || ''] || row.status || '-',
+    },
+    { title: t('app.kuaiplm.phase2.designReviews.columns.reviewer'), dataIndex: 'reviewer_name', width: 100, hideInSearch: true },
+    {
+      title: t('app.kuaiplm.phase2.designReviews.columns.scheduledAt'),
       dataIndex: 'scheduled_at',
       width: 168,
       hideInSearch: true,
       render: (_, row) => (row.scheduled_at ? dayjs(row.scheduled_at).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
-      width: 80,
+      width: 180,
       render: (_, row) => [
+            <Button
+              {...rowActionKind('read')}
+              key="detail"
+              type="link"
+              size="small"
+              onClick={() => setDetailRecord(row)}
+            >
+              {t('common.detail')}
+            </Button>,
+            <Button
+              {...rowActionKind('edit')}
+              key="edit"
+              type="link"
+              size="small"
+              onClick={() => setEditingRecord(row)}
+            >
+              {t('common.edit')}
+            </Button>,
             <Button {...rowActionKind('delete')}
               key="del"
               type="link"
@@ -109,16 +150,16 @@ const DesignReviewsPage: React.FC = () => {
               danger
               onClick={() => {
                 modalApi.confirm({
-                  title: '删除该评审记录？',
+                  title: t('app.kuaiplm.phase2.designReviews.deleteOneTitle'),
                   onOk: async () => {
                     await deleteDesignReview(row.id!);
-                    messageApi.success('已删除');
+                    messageApi.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   },
                 });
               }}
             >
-              删除
+              {t('common.delete')}
             </Button>,
           ],
     },
@@ -131,11 +172,11 @@ const DesignReviewsPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`已按研发项目 #${filterProjectId} 筛选`}
+          message={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
         />
       ) : null}
       <UniTable<RdDesignReview>
-        headerTitle="设计评审"
+        headerTitle={t('app.kuaiplm.menu.phase2.design-reviews')}
         actionRef={actionRef}
         rowKey="id"
         enableRowSelection
@@ -153,34 +194,36 @@ const DesignReviewsPage: React.FC = () => {
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || '加载失败');
+            messageApi.error(e?.message || t('common.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}
         showCreateButton
-        createButtonText={'新建评审' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.kuaiplm.phase2.designReviews.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条设计评审吗？`}
+        deleteConfirmTitle={(count) =>
+          t('app.kuaiplm.phase2.designReviews.deleteConfirmTitle', { count })
+        }
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="design-review-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaiplm.phase2.common.batchActions')}
             menuItems={[
               {
                 key: 'batch-set-in-progress',
-                label: '批量设为进行中',
+                label: t('app.kuaiplm.phase2.designReviews.batchSetInProgress'),
                 onClick: () => {
-                  void handleBatchSetStatus('IN_PROGRESS', '进行中');
+                  void handleBatchSetStatus('IN_PROGRESS', t('app.kuaiplm.phase2.common.status.inProgress'));
                 },
               },
               {
                 key: 'batch-set-completed',
-                label: '批量设为已完成',
+                label: t('app.kuaiplm.phase2.designReviews.batchSetCompleted'),
                 onClick: () => {
-                  void handleBatchSetStatus('COMPLETED', '已完成');
+                  void handleBatchSetStatus('COMPLETED', t('app.kuaiplm.phase2.common.status.completed'));
                 },
               },
             ]}
@@ -189,28 +232,99 @@ const DesignReviewsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建设计评审"
+        title={t('app.kuaiplm.phase2.designReviews.createTitle')}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onFinish={async (values) => {
           await createDesignReview(values);
-          messageApi.success('创建成功');
+          messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           actionRef.current?.reload();
         }}
       >
-        <ProFormText name="title" label="标题" rules={[{ required: true }]} />
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />
         <ProFormSelect
           name="review_type"
-          label="评审类型"
+          label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
           options={[
-            { value: '初步设计', label: '初步设计' },
-            { value: '详细设计', label: '详细设计' },
-            { value: '试制评审', label: '试制评审' },
+            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
+            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
+            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
           ]}
         />
-        <ProFormText name="reviewer_name" label="评审人" />
-        <ProFormTextArea name="conclusion" label="结论" />
+        <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
+        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaiplm.phase2.designReviews.editTitle')}
+        open={!!editingRecord}
+        onClose={() => setEditingRecord(null)}
+        isEdit
+        initialValues={editingRecord || {}}
+        onFinish={async (values) => {
+          if (!editingRecord?.id) return;
+          await updateDesignReview(editingRecord.id, values);
+          messageApi.success(t('common.updateSuccess'));
+          setEditingRecord(null);
+          actionRef.current?.reload();
+        }}
+      >
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} rules={[{ required: true }]} />
+        <ProFormSelect
+          name="review_type"
+          label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
+          options={[
+            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
+            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
+            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
+          ]}
+        />
+        <ProFormSelect
+          name="status"
+          label={t('app.kuaiplm.phase2.designReviews.form.status')}
+          options={[
+            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
+            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
+            { value: 'COMPLETED', label: t('app.kuaiplm.phase2.common.status.completed') },
+            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
+          ]}
+        />
+        <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
+        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaiplm.phase2.designReviews.detailTitle')}
+        open={!!detailRecord}
+        onClose={() => setDetailRecord(null)}
+        readOnly
+        initialValues={detailRecord || {}}
+        onFinish={async () => {}}
+      >
+        <ProFormText name="review_code" label={t('app.kuaiplm.phase2.designReviews.columns.code')} />
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.designReviews.form.title')} />
+        <ProFormSelect
+          name="review_type"
+          label={t('app.kuaiplm.phase2.designReviews.form.reviewType')}
+          options={[
+            { value: '初步设计', label: t('app.kuaiplm.phase2.designReviews.type.preliminary') },
+            { value: '详细设计', label: t('app.kuaiplm.phase2.designReviews.type.detailed') },
+            { value: '试制评审', label: t('app.kuaiplm.phase2.designReviews.type.trial') },
+          ]}
+        />
+        <ProFormSelect
+          name="status"
+          label={t('app.kuaiplm.phase2.designReviews.form.status')}
+          options={[
+            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
+            { value: 'IN_PROGRESS', label: t('app.kuaiplm.phase2.common.status.inProgress') },
+            { value: 'COMPLETED', label: t('app.kuaiplm.phase2.common.status.completed') },
+            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
+          ]}
+        />
+        <ProFormText name="reviewer_name" label={t('app.kuaiplm.phase2.designReviews.form.reviewer')} />
+        <ProFormTextArea name="conclusion" label={t('app.kuaiplm.phase2.designReviews.form.conclusion')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

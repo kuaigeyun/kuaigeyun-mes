@@ -4,6 +4,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from statistics import mean, pstdev
 from typing import Any, Dict, List, Optional
@@ -15,10 +16,13 @@ from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 from apps.kuaizhizao.models.quality_8d_report import Quality8DReport
 from apps.kuaizhizao.models.spc_sample import SPCSample
 from apps.kuaizhizao.schemas.quality_improvement import (
+    Quality8DHistoryEntry,
     OQCInspectionConduct,
     OQCInspectionCreate,
     OQCInspectionResponse,
     Quality8DCreate,
+    Quality8DLifecycleStage,
+    Quality8DListResponse,
     Quality8DResponse,
     Quality8DTransition,
     Quality8DUpdate,
@@ -29,6 +33,7 @@ from apps.kuaizhizao.schemas.quality_improvement import (
 )
 from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
 from tortoise.transactions import in_transaction
+from datetime import timezone
 
 VALID_8D_STATUS_FLOW = [
     "d1_team",
@@ -41,6 +46,28 @@ VALID_8D_STATUS_FLOW = [
     "d8_team_congratulation",
     "closed",
 ]
+_8D_STAGE_LABELS: Dict[str, str] = {
+    "d1_team": "D1 组建团队",
+    "d2_problem": "D2 问题描述",
+    "d3_containment": "D3 临时遏制",
+    "d4_root_cause": "D4 根因分析",
+    "d5_corrective_action": "D5 纠正措施",
+    "d6_implement_result": "D6 实施验证",
+    "d7_prevent_recurrence": "D7 防再发",
+    "d8_team_congratulation": "D8 总结",
+    "closed": "已关闭",
+}
+_8D_STAGE_REQUIRED_FIELD: Dict[str, str] = {
+    "d1_team": "d1_team",
+    "d2_problem": "d2_problem",
+    "d3_containment": "d3_containment",
+    "d4_root_cause": "d4_root_cause",
+    "d5_corrective_action": "d5_corrective_action",
+    "d6_implement_result": "d6_implement_result",
+    "d7_prevent_recurrence": "d7_prevent_recurrence",
+    "d8_team_congratulation": "d8_team_congratulation",
+}
+_HISTORY_LINE_PATTERN = re.compile(r"^\[(?P<ts>[^\]]+)\]\s*(?P<status>[a-z0-9_]+)\s*:\s*(?P<remarks>.+)$")
 
 def _build_quick_code(prefix: str) -> str:
     now = datetime.now()
@@ -50,6 +77,151 @@ def _build_quick_code(prefix: str) -> str:
 class Quality8DService(AppBaseService[Quality8DReport]):
     def __init__(self) -> None:
         super().__init__(Quality8DReport)
+
+    @staticmethod
+    def _normalize_text(value: Optional[str]) -> str:
+        return (value or "").strip()
+
+    def _current_stage_index(self, status: str) -> int:
+        try:
+            return VALID_8D_STATUS_FLOW.index(status)
+        except ValueError as exc:
+            raise BusinessLogicError(f"非法 8D 阶段: {status}") from exc
+
+    def _next_status(self, status: str) -> Optional[str]:
+        idx = self._current_stage_index(status)
+        return VALID_8D_STATUS_FLOW[idx + 1] if idx < len(VALID_8D_STATUS_FLOW) - 1 else None
+
+    def _build_lifecycle_stages(self, status: str) -> List[Quality8DLifecycleStage]:
+        current_idx = self._current_stage_index(status)
+        stages: List[Quality8DLifecycleStage] = []
+        for idx, key in enumerate(VALID_8D_STATUS_FLOW):
+            if idx < current_idx:
+                stage_status = "done"
+            elif idx == current_idx:
+                stage_status = "active"
+            else:
+                stage_status = "pending"
+            stages.append(
+                Quality8DLifecycleStage(
+                    key=key,
+                    label=_8D_STAGE_LABELS.get(key, key),
+                    status=stage_status,
+                )
+            )
+        return stages
+
+    def _build_response(self, row: Quality8DReport) -> Quality8DResponse:
+        base = Quality8DResponse.model_validate(row)
+        next_status = self._next_status(row.status)
+        suggestions: List[str] = []
+        if next_status:
+            suggestions.append(f"推进到 {_8D_STAGE_LABELS.get(next_status, next_status)}")
+        if row.status != "closed":
+            suggestions.append("更新当前阶段内容并保存")
+        if row.status == "d8_team_congratulation":
+            suggestions.append("填写验证结果后关闭")
+        return base.model_copy(
+            update={
+                "lifecycle_stages": self._build_lifecycle_stages(row.status),
+                "next_status": next_status,
+                "next_step_suggestions": suggestions,
+            }
+        )
+
+    def _validate_stage_completion_before_transition(
+        self,
+        row: Quality8DReport,
+        to_status: str,
+        verification_result: Optional[str],
+    ) -> None:
+        if row.status == "closed":
+            raise BusinessLogicError("已关闭的 8D 报告不可再流转")
+        expected_next = self._next_status(row.status)
+        if expected_next != to_status:
+            raise BusinessLogicError(
+                f"仅允许按顺序推进到下一阶段：当前 {_8D_STAGE_LABELS.get(row.status, row.status)}，"
+                f"下一步应为 {_8D_STAGE_LABELS.get(expected_next or '', expected_next or '-')}"
+            )
+        required_field = _8D_STAGE_REQUIRED_FIELD.get(row.status)
+        if required_field and not self._normalize_text(getattr(row, required_field, None)):
+            raise BusinessLogicError(
+                f"推进前需先完善当前阶段内容：{_8D_STAGE_LABELS.get(row.status, row.status)}"
+            )
+        if to_status == "closed":
+            resolved_verification = self._normalize_text(verification_result) or self._normalize_text(
+                row.verification_result
+            )
+            if not resolved_verification:
+                raise BusinessLogicError("关闭前必须填写验证结果")
+
+    def _append_transition_history_line(self, row: Quality8DReport, payload: Quality8DTransition) -> None:
+        if not payload.remarks:
+            return
+        history = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {payload.to_status}: {payload.remarks}"
+        row.remarks = f"{row.remarks}\n{history}".strip() if row.remarks else history
+
+    def _parse_history_from_remarks(self, row: Quality8DReport) -> List[Quality8DHistoryEntry]:
+        base_tz = row.created_at.tzinfo or timezone.utc
+
+        def _normalize_ts(ts: datetime) -> datetime:
+            if ts.tzinfo is None:
+                return ts.replace(tzinfo=base_tz)
+            return ts.astimezone(base_tz)
+
+        def _sort_key(entry: Quality8DHistoryEntry) -> float:
+            ts = entry.timestamp
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=base_tz)
+            return ts.astimezone(timezone.utc).timestamp()
+
+        history: List[Quality8DHistoryEntry] = [
+            Quality8DHistoryEntry(
+                timestamp=_normalize_ts(row.created_at),
+                action="created",
+                to_status="d1_team",
+                remarks="8D 报告创建",
+            )
+        ]
+        remarks_text = row.remarks or ""
+        prev_status = "d1_team"
+        for line in remarks_text.splitlines():
+            raw = line.strip()
+            if not raw:
+                continue
+            matched = _HISTORY_LINE_PATTERN.match(raw)
+            if not matched:
+                continue
+            ts_str = matched.group("ts")
+            status = matched.group("status")
+            detail = matched.group("remarks")
+            try:
+                ts = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+            except ValueError:
+                ts = row.updated_at
+            ts = _normalize_ts(ts)
+            history.append(
+                Quality8DHistoryEntry(
+                    timestamp=ts,
+                    action="transition",
+                    from_status=prev_status,
+                    to_status=status,
+                    remarks=detail,
+                )
+            )
+            prev_status = status
+        if row.closed_at:
+            history.append(
+                Quality8DHistoryEntry(
+                    timestamp=_normalize_ts(row.closed_at),
+                    action="closed",
+                    from_status="d8_team_congratulation",
+                    to_status="closed",
+                    verification_result=row.verification_result,
+                )
+            )
+        history.sort(key=_sort_key)
+        return history
 
     async def create_report(self, tenant_id: int, user_id: int, payload: Quality8DCreate) -> Quality8DResponse:
         report_code = payload.report_code
@@ -61,7 +233,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             report_code=report_code,
             **payload.model_dump(exclude={"report_code"}),
         )
-        return Quality8DResponse.model_validate(report)
+        return self._build_response(report)
 
     async def list_reports(
         self,
@@ -71,7 +243,7 @@ class Quality8DService(AppBaseService[Quality8DReport]):
         status: Optional[str] = None,
         owner_id: Optional[int] = None,
         overdue_only: bool = False,
-    ) -> List[Quality8DResponse]:
+    ) -> Quality8DListResponse:
         query = Quality8DReport.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if status:
             query = query.filter(status=status)
@@ -79,23 +251,26 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             query = query.filter(owner_id=owner_id)
         if overdue_only:
             query = query.filter(due_date__lt=datetime.now()).exclude(status="closed")
+        total = await query.count()
         rows = await query.order_by("-created_at").offset(skip).limit(limit)
-        return [Quality8DResponse.model_validate(row) for row in rows]
+        return Quality8DListResponse(items=[self._build_response(row) for row in rows], total=total)
 
     async def get_report(self, tenant_id: int, report_id: int) -> Quality8DResponse:
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
-        return Quality8DResponse.model_validate(row)
+        return self._build_response(row)
 
     async def update_report(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DUpdate) -> Quality8DResponse:
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
         if not row:
             raise NotFoundError("8D 报告不存在")
         data = payload.model_dump(exclude_unset=True)
+        if "status" in data and data.get("status") not in (None, row.status):
+            raise BusinessLogicError("请通过“推进阶段”接口更新 8D 阶段")
         if data:
             await row.update_from_dict(data).save()
-        return Quality8DResponse.model_validate(row)
+        return self._build_response(row)
 
     async def transition(self, tenant_id: int, report_id: int, user_id: int, payload: Quality8DTransition) -> Quality8DResponse:
         row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
@@ -103,16 +278,39 @@ class Quality8DService(AppBaseService[Quality8DReport]):
             raise NotFoundError("8D 报告不存在")
         if payload.to_status not in VALID_8D_STATUS_FLOW:
             raise BusinessLogicError(f"非法 8D 阶段: {payload.to_status}")
+        self._validate_stage_completion_before_transition(row, payload.to_status, payload.verification_result)
+        old_status = row.status
         row.status = payload.to_status
         if payload.to_status == "closed":
             row.closed_at = datetime.now()
-            if payload.verification_result:
-                row.verification_result = payload.verification_result
-        if payload.remarks:
-            history = f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {payload.to_status}: {payload.remarks}"
-            row.remarks = f"{row.remarks}\n{history}".strip() if row.remarks else history
+            row.verification_result = self._normalize_text(payload.verification_result) or row.verification_result
+        self._append_transition_history_line(row, payload)
         await row.save()
-        return Quality8DResponse.model_validate(row)
+        resp = self._build_response(row)
+        return resp.model_copy(
+            update={
+                "next_step_suggestions": [
+                    f"阶段已从 {_8D_STAGE_LABELS.get(old_status, old_status)} 推进到 "
+                    f"{_8D_STAGE_LABELS.get(row.status, row.status)}"
+                ]
+                + resp.next_step_suggestions
+            }
+        )
+
+    async def delete_report(self, tenant_id: int, report_id: int, user_id: int) -> None:
+        row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not row:
+            raise NotFoundError("8D 报告不存在")
+        if row.status == "closed":
+            raise BusinessLogicError("已关闭的 8D 报告不可删除")
+        row.deleted_at = datetime.now()
+        await row.save(update_fields=["deleted_at"])
+
+    async def get_history(self, tenant_id: int, report_id: int) -> List[Quality8DHistoryEntry]:
+        row = await Quality8DReport.get_or_none(id=report_id, tenant_id=tenant_id, deleted_at__isnull=True)
+        if not row:
+            raise NotFoundError("8D 报告不存在")
+        return self._parse_history_from_remarks(row)
 
 
 class OQCInspectionService(AppBaseService[OQCInspection]):

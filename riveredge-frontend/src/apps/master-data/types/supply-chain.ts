@@ -100,7 +100,7 @@ export interface CustomerUpdate extends PartnerInvoiceAndExtendedFields {
   estimatedAnnualPurchase?: number;
   creditLimit?: number;
   revenueRecognitionOverride?: string | null;
-  salesmanId?: number;
+  salesmanId?: number | null;
   isActive?: boolean;
 }
 

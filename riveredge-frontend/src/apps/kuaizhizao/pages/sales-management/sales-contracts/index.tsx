@@ -139,6 +139,7 @@ import {
 
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 
@@ -505,6 +506,7 @@ const SalesContractsPage: React.FC = () => {
   const [termsPreview, setTermsPreview] = useState<SalesContractTermSnapshot[]>([]);
 
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
+  const tableRowsRef = useRef<SalesContract[]>([]);
   const salesContractCreateDraftKey = useMemo(
     () =>
       isCreatePage
@@ -2145,6 +2147,29 @@ const SalesContractsPage: React.FC = () => {
 
   };
 
+  const selectedContractForPush = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const selectedId = Number(selectedRowKeys[0]);
+    if (!Number.isFinite(selectedId) || selectedId <= 0) return null;
+    return tableRowsRef.current.find((row) => Number(row.id) === selectedId) ?? null;
+  }, [selectedRowKeys]);
+
+  const canUseToolbarPush =
+    !!selectedContractForPush && ['已生效', '执行中'].includes(selectedContractForPush.status || '');
+
+  const handleToolbarPushToOrder = useCallback(async () => {
+    const record = selectedContractForPush;
+    if (!record?.id) {
+      messageApi.warning('请先选择一条销售合同');
+      return;
+    }
+    if (!['已生效', '执行中'].includes(record.status || '')) {
+      messageApi.warning('仅已生效或执行中的合同可下推订单');
+      return;
+    }
+    await openReleaseModal(record);
+  }, [messageApi, openReleaseModal, selectedContractForPush]);
+
 
 
   const loadChanges = async (contractId: number) => {
@@ -2858,6 +2883,19 @@ const SalesContractsPage: React.FC = () => {
         createButtonText="新建合同"
 
         onCreate={handleCreate}
+        toolBarActionsAfterCreate={[
+          <UniPushToolbarButton
+            key={`sales-contract-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
+            disabled={selectedRowKeys.length !== 1 || !canUseToolbarPush}
+            menuItems={buildUniPushMenuItems([
+              {
+                key: 'push-to-sales-order',
+                label: '下推销售订单',
+                onClick: () => void handleToolbarPushToOrder(),
+              },
+            ])}
+          />,
+        ]}
 
         showDeleteButton={contractPerms.canDelete}
         onDelete={handleBatchDeleteDrafts}
@@ -2934,6 +2972,9 @@ const SalesContractsPage: React.FC = () => {
 
           return { data: res.items || [], success: true, total: res.total || 0 };
 
+        }}
+        onTableDataChange={(rows) => {
+          tableRowsRef.current = rows;
         }}
 
         scroll={{ x: 'max-content' }}

@@ -974,6 +974,10 @@ const CustomersPage: React.FC = () => {
           if (sortField) {
             apiParams.sortBy = sortField;
             apiParams.sortOrder = sortOrder;
+          } else {
+            // 默认按创建时间倒序（最新创建的客户优先）
+            apiParams.sortBy = 'created_at';
+            apiParams.sortOrder = 'desc';
           }
           
           try {

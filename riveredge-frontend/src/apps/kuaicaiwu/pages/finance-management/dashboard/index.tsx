@@ -13,6 +13,7 @@ import {
 import { managementReportService } from '../../../services/management-report';
 import { agingService } from '../../../services/statistics/aging';
 import { apiRequest } from '../../../../../services/api';
+import { dashboardRequestOptions } from '../../../../kuaizhizao/utils/dashboardRequestOptions';
 import FinanceAgingPanel from '../../../components/FinanceAgingPanel';
 import {
   ModuleCenterLayout,
@@ -27,10 +28,14 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../../kuaizhizao/com
 
 const FinanceCenterDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { data: financeSummary, loading: summaryLoading } = useRequest(() =>
-    apiRequest<Record<string, number>>('/apps/kuaicaiwu/management-report/finance-summary', { method: 'GET' }),
+  const { data: financeSummary, loading: summaryLoading } = useRequest(
+    () => apiRequest<Record<string, number>>('/apps/kuaicaiwu/management-report/finance-summary', { method: 'GET' }),
+    dashboardRequestOptions('kz:finance-dashboard:summary'),
   );
-  const { data: kpis, loading: kpiLoading } = useRequest(() => managementReportService.getKPIs(30));
+  const { data: kpis, loading: kpiLoading } = useRequest(
+    () => managementReportService.getKPIs(30),
+    dashboardRequestOptions('kz:finance-dashboard:kpis'),
+  );
 
   const { data: receivableAging, isLoading: loadingArAging } = useQuery({
     queryKey: ['receivableAging'],

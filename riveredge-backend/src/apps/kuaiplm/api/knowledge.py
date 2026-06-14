@@ -88,13 +88,23 @@ async def delete_space(
 async def list_articles(
     space_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None),
+    tag: Optional[str] = Query(None),
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     _auth=Depends(require_access("kuaiplm.knowledge", "read", required_permissions=["kuaiplm:knowledge:read"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
-    rows = await service.list_articles(tenant_id, space_id=space_id, status=status, skip=skip, limit=limit)
-    return {"data": rows, "total": len(rows), "success": True}
+    rows, total = await service.list_articles(
+        tenant_id,
+        space_id=space_id,
+        status=status,
+        keyword=keyword,
+        tag=tag,
+        skip=skip,
+        limit=limit,
+    )
+    return {"data": rows, "total": total, "success": True}
 
 
 @router.get("/articles/search", response_model=KbSearchResponse, summary="Search articles")

@@ -24,9 +24,8 @@ import CodeField from '../../../../../components/code-field';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { reworkOrderApi, workOrderApi } from '../../../services/production';
 import { getReworkOrderLifecycle } from '../../../utils/reworkOrderLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { formatDateTimeBySiteSetting } from '../../../../../utils/format';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import DocumentTrackingPanel from '../../../../../components/document-tracking-panel';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
@@ -310,6 +309,8 @@ const ReworkOrdersPage: React.FC = () => {
     {
       title: '生命周期',
       dataIndex: 'lifecycle_stage',
+      width: 140,
+      fixed: 'right',
       valueEnum: {
         draft: { text: '草稿', status: 'Default' },
         released: { text: '已下达', status: 'Processing' },
@@ -319,8 +320,18 @@ const ReworkOrdersPage: React.FC = () => {
       },
       render: (_, record) => {
         const lifecycle = getReworkOrderLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const activeStage = lifecycle.mainStages?.find((stage) => stage.status === 'active');
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={activeStage?.label ?? lifecycle.stageName ?? record.status ?? '草稿'}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
@@ -615,56 +626,6 @@ const ReworkOrdersPage: React.FC = () => {
   };
 
   /**
-   * 处理编辑（从选中行）
-   */
-  const handleEditFromSelection = async (keys: React.Key[]) => {
-    if (keys.length === 1) {
-      const id = Number(keys[0]);
-      try {
-        const detail = await reworkOrderApi.get(id.toString());
-        setIsEdit(true);
-        setCurrentReworkOrder(detail);
-        setModalVisible(true);
-        setTimeout(() => {
-          if (detail.original_work_order_id && detail.product_id) {
-            setWorkOrderProduct({
-              id: detail.product_id,
-              code: detail.product_code || '',
-              name: detail.product_name || '',
-            });
-          } else {
-            setWorkOrderProduct(null);
-          }
-          formRef.current?.setFieldsValue({
-            code: detail.code,
-            original_work_order_id: detail.original_work_order_id,
-            product_id: detail.product_id,
-            product_code: detail.product_code,
-            product_name: detail.product_name,
-            quantity: detail.quantity,
-            rework_reason: detail.rework_reason,
-            rework_type: detail.rework_type,
-            planned_start_date: detail.planned_start_date,
-            planned_end_date: detail.planned_end_date,
-            completed_quantity: detail.completed_quantity,
-            qualified_quantity: detail.qualified_quantity,
-            unqualified_quantity: detail.unqualified_quantity,
-            start_work_order_operation_id:
-              detail.start_work_order_operation_id
-              ?? (detail.rework_operations || []).find((o: any) => o.is_start)?.work_order_operation_id
-              ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
-            remarks: detail.remarks,
-          });
-        }, 100);
-      } catch (error) {
-        messageApi.error('获取返工单详情失败');
-      }
-    } else {
-      messageApi.warning('请选择一条返工单进行编辑');
-    }
-  };
-
-  /**
    * 处理删除（从选中行）
    */
   const handleDeleteFromSelection = async (keys: React.Key[]) => {
@@ -700,8 +661,6 @@ const ReworkOrdersPage: React.FC = () => {
         showCreateButton={true}
         createButtonText="新建返工工单"
         onCreate={handleCreate}
-        showEditButton={true}
-        onEdit={handleEditFromSelection}
         showDeleteButton={true}
         onDelete={handleDeleteFromSelection}
         deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 个返工单吗？`}

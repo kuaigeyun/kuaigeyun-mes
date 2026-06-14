@@ -36,6 +36,7 @@ import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
 import salesContractApi from '../../../services/sales-contract';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { useGlobalStore } from '../../../../../stores/globalStore';
@@ -145,17 +146,20 @@ const SalesDashboard: React.FC = () => {
   );
   
   // 1. 获取汇总数据
-  const { data: summary, loading: summaryLoading } = useRequest(mesDashboardService.getSalesSummary);
+  const { data: summary, loading: summaryLoading } = useRequest(
+    mesDashboardService.getSalesSummary,
+    dashboardRequestOptions('kz:sales-dashboard:summary'),
+  );
   
   // 2. 获取待交付订单（多取一些，前端筛选后滚动展示）
   const { data: recentOrdersData, loading: ordersLoading } = useRequest(async () => {
     return listSalesOrders({ limit: 30, order_by: 'delivery_date' });
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:recent-orders'));
   
   // 3. 获取最近跟进记录
   const { data: followUpsData, loading: followUpsLoading } = useRequest(async () => {
     return customerFollowUpApi.list({ limit: 8 });
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:follow-ups'));
 
   // 4. 获取热销产品排行
   const { data: topProductsData, loading: topProductsLoading } = useRequest(async () => {
@@ -164,7 +168,7 @@ const SalesDashboard: React.FC = () => {
     } catch {
       return [];
     }
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:top-products'));
 
   // 5. 获取月度趋势
   const { data: salesTrendRaw, loading: trendLoading } = useRequest(async () => {
@@ -174,7 +178,7 @@ const SalesDashboard: React.FC = () => {
     } catch {
       return [];
     }
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:trend'));
 
   // 6. 获取待跟进提醒
   const { data: pendingTasksData, loading: pendingTasksLoading } = useRequest(async () => {
@@ -184,7 +188,7 @@ const SalesDashboard: React.FC = () => {
     } catch {
       return [];
     }
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:pending-tasks'));
 
   const { data: contractAlerts = [], loading: contractAlertsLoading } = useRequest(async () => {
     try {
@@ -192,7 +196,7 @@ const SalesDashboard: React.FC = () => {
     } catch {
       return [];
     }
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:contract-alerts'));
 
   const { data: frameworkContracts = [], loading: frameworkLoading } = useRequest(async () => {
     try {
@@ -200,7 +204,7 @@ const SalesDashboard: React.FC = () => {
     } catch {
       return [];
     }
-  });
+  }, dashboardRequestOptions('kz:sales-dashboard:framework-contracts'));
 
   const recentOrders = recentOrdersData?.data || [];
   const pendingDeliveryOrders = useMemo(
@@ -864,7 +868,12 @@ const SalesDashboard: React.FC = () => {
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
           <Col xs={24} lg={12}>
             <ProCard
-              title="合同预警"
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ExclamationCircleOutlined />
+                  <span>合同预警</span>
+                </div>
+              }
               headerBordered
               extra={
                 <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
@@ -921,7 +930,12 @@ const SalesDashboard: React.FC = () => {
           </Col>
           <Col xs={24} lg={12}>
             <ProCard
-              title="框架合同执行"
+              title={
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <AuditOutlined />
+                  <span>框架合同执行</span>
+                </div>
+              }
               headerBordered
               style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
             >

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Col, theme } from 'antd';
 import { ProCard } from '@ant-design/pro-components';
+import { AppstoreOutlined } from '@ant-design/icons';
 
 export interface ModuleActionPanelProps {
   title: string;
@@ -20,11 +21,17 @@ export function ModuleActionPanel({
   loading,
 }: ModuleActionPanelProps) {
   const { token } = theme.useToken();
+  const titleNode = (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      <AppstoreOutlined />
+      <span>{title}</span>
+    </span>
+  );
 
   return (
     <Col xs={xs} lg={lg} style={{ minWidth: 0 }}>
       <ProCard
-        title={title}
+        title={titleNode}
         headerBordered
         loading={loading}
         style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}

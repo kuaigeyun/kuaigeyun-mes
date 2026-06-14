@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { workOrderApi } from '../../../services/work-order';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -41,18 +42,26 @@ const ManufacturingDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [trendType, setTrendType] = useState<'output' | 'qualified'>('output');
 
-  const { data: summary, loading: summaryLoading } = useRequest(mesDashboardService.getManufacturingSummary);
+  const { data: summary, loading: summaryLoading } = useRequest(
+    mesDashboardService.getManufacturingSummary,
+    dashboardRequestOptions('kz:manufacturing-dashboard:summary'),
+  );
   const { data: todosData, loading: todosLoading } = useRequest(() =>
     mesDashboardService.getTodosByModule('manufacturing', 8),
+    dashboardRequestOptions('kz:manufacturing-dashboard:todos'),
   );
   const { data: recentOrdersResult, loading: ordersLoading } = useRequest(async () => {
     const res = await workOrderApi.list({ limit: 8 });
     return Array.isArray(res) ? res : res?.items || [];
-  });
+  }, dashboardRequestOptions('kz:manufacturing-dashboard:orders'));
   const { data: broadcast, loading: broadcastLoading } = useRequest(() =>
     mesDashboardService.getProductionBroadcast(8),
+    dashboardRequestOptions('kz:manufacturing-dashboard:broadcast'),
   );
-  const { data: trendData, loading: trendLoading } = useRequest(mesDashboardService.getManufacturingTrend);
+  const { data: trendData, loading: trendLoading } = useRequest(
+    mesDashboardService.getManufacturingTrend,
+    dashboardRequestOptions('kz:manufacturing-dashboard:trend'),
+  );
 
   const s = summary as Record<string, number> | undefined;
   const recentOrders = recentOrdersResult || [];

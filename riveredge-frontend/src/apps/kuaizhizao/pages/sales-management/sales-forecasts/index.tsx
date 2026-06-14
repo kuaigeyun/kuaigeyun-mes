@@ -11,7 +11,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, ArrowDownOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -42,6 +42,7 @@ import {
 } from '../../../../../utils/documentFormDraftCache'
 import { UniTable } from '../../../../../components/uni-table'
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
+import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -166,6 +167,7 @@ export default function SalesForecastsPage() {
   const { token } = AntdTheme.useToken()
   const forecastDetailDrawerZIndex = token.zIndexPopupBase
   const rowKeyToOrderIdRef = useRef<Map<string, number>>(new Map());
+  const tableRowsRef = useRef<ForecastTableRow[]>([]);
 
   // 与 UniTable viewTypes 同步：table=单据维度；明细表格 / 帮助 走明细数据维度
   const [viewTypeState, setViewTypeState] = useState<'table' | 'detailTable' | 'help'>('table');
@@ -944,12 +946,23 @@ export default function SalesForecastsPage() {
     {
       title: t('app.kuaizhizao.salesForecast.startDate'),
       dataIndex: 'start_date',
-      valueType: 'date',
-      width: 120,
+      key: 'start_end_date_stacked',
+      width: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
       hideInSearch: true,
-      ...orderLevelCellProps((_text, record) =>
-        record.start_date ? dayjs(record.start_date).format('YYYY-MM-DD') : '-',
-      ),
+      ...orderLevelCellProps((_text, record) => {
+        const startDateText = record.start_date ? dayjs(record.start_date).format('YYYY-MM-DD') : '-';
+        const endDateText = record.end_date ? dayjs(record.end_date).format('YYYY-MM-DD') : '-';
+        return (
+          <UniTableStackedPrimaryCell
+            primary={startDateText}
+            secondary={endDateText}
+            secondaryCopyable={false}
+            uniformText
+          />
+        );
+      }),
     },
     {
       title: t('app.kuaizhizao.salesForecast.endDate'),
@@ -957,6 +970,7 @@ export default function SalesForecastsPage() {
       valueType: 'date',
       width: 120,
       hideInSearch: true,
+      hideInTable: true,
       ...orderLevelCellProps((_text, record) =>
         record.end_date ? dayjs(record.end_date).format('YYYY-MM-DD') : '-',
       ),
@@ -1106,12 +1120,6 @@ export default function SalesForecastsPage() {
         const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '');
         const canDelete = ['草稿', '待审核'].includes(lifecycle.stageName ?? '');
-        const recObj = record as Record<string, unknown>;
-        const pushUi = getSalesForecastPushComputationUiState(recObj, {
-          demandComputationEnabled: salesNodesEnabled.demand_computation,
-          auditEnabled,
-          t,
-        });
         const parts: React.ReactNode[] = [
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
             {t('common.detail')}
@@ -1164,25 +1172,6 @@ export default function SalesForecastsPage() {
             }}
           />
         );
-        if (pushUi.visible) {
-          parts.push(
-            <span {...rowActionKind('skip')} key="push-tip" data-action-priority={1} data-row-action-visible-when-disabled>
-              <Tooltip title={pushUi.clickable ? undefined : pushUi.disabledTip}>
-                <span>
-                  <Button
-                    type="link"
-                    size="small"
-                    icon={<ArrowDownOutlined />}
-                    disabled={!pushUi.clickable}
-                    onClick={() => pushUi.clickable && record.id != null && handlePushToComputation(record.id)}
-                  >
-                    {t('app.kuaizhizao.salesForecast.pushToComputation')}
-                  </Button>
-                </span>
-              </Tooltip>
-            </span>,
-          );
-        }
         parts.push(
           <Tooltip {...rowActionKind('skip')}
             key="del-tip"
@@ -1219,6 +1208,30 @@ export default function SalesForecastsPage() {
     () => alignProColumns(columns, SALES_DOC_LIST_FIELD_RANK),
     [columns],
   );
+
+  const selectedForecastForToolbar = useMemo(() => {
+    if (selectedRowKeys.length !== 1) return null;
+    const selectedKey = String(selectedRowKeys[0]);
+    return tableRowsRef.current.find((row) => String(row.id ?? row._rowKey ?? '') === selectedKey) ?? null;
+  }, [selectedRowKeys]);
+
+  const toolbarPushUiState = useMemo(
+    () =>
+      selectedForecastForToolbar
+        ? getSalesForecastPushComputationUiState(selectedForecastForToolbar as Record<string, unknown>, {
+            demandComputationEnabled: salesNodesEnabled.demand_computation,
+            auditEnabled,
+            t,
+          })
+        : { visible: false, clickable: false },
+    [auditEnabled, salesNodesEnabled.demand_computation, selectedForecastForToolbar, t],
+  );
+
+  const canUseToolbarPush =
+    selectedRowKeys.length === 1 &&
+    !!selectedForecastForToolbar?.id &&
+    !!toolbarPushUiState.visible &&
+    !!toolbarPushUiState.clickable;
 
   /** 较昨日对比：显示 +x / -x 格式 */
   const renderDOD = (today?: number, yesterday?: number) => {
@@ -1753,6 +1766,25 @@ export default function SalesForecastsPage() {
           showCreateButton={salesNodesEnabled.sales_forecast}
           createButtonText={t('app.kuaizhizao.salesForecast.create')}
           onCreate={handleCreate}
+          toolBarActionsAfterCreate={[
+            <UniPushToolbarButton
+              key={`sales-forecast-push-toolbar-${selectedRowKeys.join('-') || 'none'}`}
+              disabled={!canUseToolbarPush}
+              menuItems={buildUniPushMenuItems([
+                {
+                  key: 'push-to-computation',
+                  label: t('app.kuaizhizao.salesForecast.pushToComputation'),
+                  onClick: () => {
+                    if (!selectedForecastForToolbar?.id) {
+                      messageApi.warning('请先选择一条销售预测');
+                      return;
+                    }
+                    void handlePushToComputation(selectedForecastForToolbar.id);
+                  },
+                },
+              ])}
+            />,
+          ]}
           showDeleteButton
           onDelete={executeDeleteByKeys}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
@@ -1797,6 +1829,9 @@ export default function SalesForecastsPage() {
           onImport={() => setImportModalVisible(true)}
           showExportButton={true}
           onExport={handleExport}
+          onTableDataChange={(rows) => {
+            tableRowsRef.current = rows;
+          }}
         />
       </ListPageTemplate>
 
@@ -1812,34 +1847,7 @@ export default function SalesForecastsPage() {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[]}
         dataSource={currentForecast || {}}
-        footer={
-          currentForecast && salesNodesEnabled.demand_computation
-            ? (() => {
-                const pushSt = getSalesForecastPushComputationUiState(currentForecast as unknown as Record<string, unknown>, {
-                  demandComputationEnabled: salesNodesEnabled.demand_computation,
-                  auditEnabled,
-                  t,
-                });
-                const fid = currentForecast.id;
-                return (
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 8 }}>
-                    <Tooltip title={pushSt.clickable ? undefined : pushSt.disabledTip}>
-                      <span>
-                        <Button
-                          type="primary"
-                          icon={<ArrowDownOutlined />}
-                          disabled={!pushSt.clickable || fid == null}
-                          onClick={() => pushSt.clickable && fid != null && handlePushToComputation(fid)}
-                        >
-                          {t('app.kuaizhizao.salesForecast.pushToComputation')}
-                        </Button>
-                      </span>
-                    </Tooltip>
-                  </div>
-                );
-              })()
-            : undefined
-        }
+        footer={undefined}
         extra={
           currentForecast && (
             <Space size="small">

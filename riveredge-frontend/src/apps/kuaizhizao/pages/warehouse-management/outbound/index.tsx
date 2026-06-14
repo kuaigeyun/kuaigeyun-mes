@@ -42,7 +42,6 @@ import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
-import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 
 // 统一的出库单接口（结合生产领料和销售出库）
 interface OutboundOrder {
@@ -830,21 +829,6 @@ const OutboundPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '权重分',
-      dataIndex: 'picking_score',
-      width: 88,
-      hideInSearch: true,
-      render: (_: unknown, record: OutboundOrder) =>
-        record.outbound_type === 'production_picking' ? (
-          <WorkOrderScoreCell
-            score={record.picking_score}
-            breakdown={record.picking_score_breakdown}
-          />
-        ) : (
-          <Typography.Text type="secondary">—</Typography.Text>
-        ),
-    },
-    {
       title: '出库数量',
       dataIndex: 'total_quantity',
       width: 100,
@@ -1030,22 +1014,9 @@ const OutboundPage: React.FC = () => {
 
             let combinedData = [...pickingData, ...deliveryData, ...outsourceData];
 
-            if (typeFilter === 'production_picking') {
-              combinedData.sort((a, b) => {
-                const sa = a.picking_score;
-                const sb = b.picking_score;
-                if (sa == null && sb == null) {
-                  return new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime();
-                }
-                if (sa == null) return 1;
-                if (sb == null) return -1;
-                return sb - sa;
-              });
-            } else {
-              combinedData.sort(
-                (a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime(),
-              );
-            }
+            combinedData.sort(
+              (a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime(),
+            );
 
             const total =
               (fetchPicking && typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
@@ -1118,14 +1089,8 @@ const OutboundPage: React.FC = () => {
               },
             ])}
           />,
-          <Button
-            key="wave-picking"
-            loading={waveGenerating}
-            disabled={!selectedProductionPickingIds.length}
-            onClick={handleGenerateWave}
-          >
-            生成波次拣货单
-          </Button>,
+        ]}
+        toolBarActionsAfterDelete={[
           <Button
             key="batch"
             icon={<InboxOutlined />}
@@ -1138,6 +1103,14 @@ const OutboundPage: React.FC = () => {
             }}
           >
             批量出库
+          </Button>,
+          <Button
+            key="wave-picking"
+            loading={waveGenerating}
+            disabled={!selectedProductionPickingIds.length}
+            onClick={handleGenerateWave}
+          >
+            生成波次拣货单
           </Button>,
         ]}
         scroll={{ x: 2000 }}

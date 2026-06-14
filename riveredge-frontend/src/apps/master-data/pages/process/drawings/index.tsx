@@ -24,7 +24,6 @@ import {
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import {
   TwoColumnLayout,
   flushDrawerOpen,
@@ -827,7 +826,7 @@ const DrawingsPage: React.FC = () => {
             </Tooltip>
           }
           showCreateButton
-          createButtonText={t('common.create') + NEW_SHORTCUT_HINT}
+          createButtonText="新建图纸"
           onCreate={handleCreate}
           request={async (params) => {
             try {

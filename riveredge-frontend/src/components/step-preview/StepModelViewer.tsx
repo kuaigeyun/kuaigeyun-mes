@@ -3,6 +3,7 @@
  */
 
 import React, {
+  useCallback,
   forwardRef,
   startTransition,
   Suspense,
@@ -13,7 +14,7 @@ import React, {
 } from 'react';
 import * as THREE from 'three';
 import { Canvas } from '@react-three/fiber';
-import { Bounds, Center, GizmoHelper, GizmoViewport, OrbitControls } from '@react-three/drei';
+import { Bounds, Center, GizmoHelper, GizmoViewport, OrbitControls, useBounds } from '@react-three/drei';
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib';
 import type { OcctMesh } from '../../utils/stepFileLoader';
 import { buildStepObject3DAsync, disposeStepObject3D } from '../../utils/stepFileLoader';
@@ -64,16 +65,34 @@ const StepMeshes: React.FC<{ meshes: OcctMesh[]; showEdges: boolean }> = ({ mesh
   return <primitive object={object} />;
 };
 
+const BoundsFitBridge: React.FC<{ onFitReady: (fit: () => void) => void; children: React.ReactNode }> = ({
+  onFitReady,
+  children,
+}) => {
+  const boundsApi = useBounds();
+
+  useEffect(() => {
+    onFitReady(() => {
+      boundsApi.refresh().clip().fit();
+    });
+  }, [boundsApi, onFitReady]);
+
+  return <>{children}</>;
+};
+
 export const StepModelViewer = forwardRef<StepModelViewerRef, StepModelViewerProps>(
   function StepModelViewer({ meshes, height = '100%', showEdges = false, showGizmo = false }, ref) {
-    const boundsRef = useRef<{ refresh: () => { clip: () => { fit: () => void } } } | null>(null);
+    const fitBoundsRef = useRef<(() => void) | null>(null);
     const controlsRef = useRef<OrbitControlsImpl | null>(null);
+    const handleFitReady = useCallback((fit: () => void) => {
+      fitBoundsRef.current = fit;
+    }, []);
 
     useImperativeHandle(
       ref,
       () => ({
         resetView() {
-          boundsRef.current?.refresh().clip().fit();
+          fitBoundsRef.current?.();
           controlsRef.current?.reset();
         },
       }),
@@ -100,10 +119,12 @@ export const StepModelViewer = forwardRef<StepModelViewerRef, StepModelViewerPro
           <ambientLight intensity={0.8} />
           <directionalLight position={[120, 180, 100]} intensity={0.85} />
           <Suspense fallback={null}>
-            <Bounds ref={boundsRef} fit clip margin={1.12}>
-              <Center>
-                <StepMeshes meshes={meshes} showEdges={showEdges} />
-              </Center>
+            <Bounds fit clip margin={1.12}>
+              <BoundsFitBridge onFitReady={handleFitReady}>
+                <Center>
+                  <StepMeshes meshes={meshes} showEdges={showEdges} />
+                </Center>
+              </BoundsFitBridge>
             </Bounds>
           </Suspense>
           <OrbitControls ref={controlsRef} makeDefault enableDamping dampingFactor={0.08} />

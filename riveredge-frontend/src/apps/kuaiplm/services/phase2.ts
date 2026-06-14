@@ -12,6 +12,8 @@ export interface RdRequirement {
   title?: string;
   project_id?: number | null;
   project_name?: string | null;
+  source_type?: string | null;
+  source_id?: number | null;
   priority?: string;
   status?: string;
   owner_name?: string | null;
@@ -45,6 +47,7 @@ export interface RdFmeaRecord {
   status?: string;
   owner_name?: string | null;
   risk_level?: string | null;
+  description?: string | null;
   created_at?: string;
   updated_at?: string;
 }

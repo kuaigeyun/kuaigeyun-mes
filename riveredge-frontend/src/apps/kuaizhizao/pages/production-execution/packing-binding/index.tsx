@@ -730,6 +730,11 @@ const PackingBindingPage: React.FC = () => {
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条装箱绑定记录吗？`}
           scroll={{ x: 1900 }}
+          toolBarActionsAfterCreate={[
+            <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
+              待装箱任务池
+            </Button>,
+          ]}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="packing-binding-batch-menu"
@@ -743,11 +748,6 @@ const PackingBindingPage: React.FC = () => {
                 },
               ]}
             />,
-          ]}
-          toolBarActionsAfterBatch={[
-            <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
-              待装箱任务池
-            </Button>,
           ]}
           onRow={(record) => ({
             onClick: () => void handleDetail(record),

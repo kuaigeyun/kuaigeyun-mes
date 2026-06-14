@@ -101,9 +101,12 @@ export const StepPreviewPane: React.FC<StepPreviewPaneProps> = ({
           background: 'var(--ant-color-fill-quaternary, #f5f5f5)',
         }}
       >
-        <Spin tip={t('app.master-data.drawings.stepPreviewLoading')} size="large">
-          <div style={{ minHeight: 24 }} />
-        </Spin>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <Spin size="large" />
+          <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>
+            {t('app.master-data.drawings.stepPreviewLoading')}
+          </div>
+        </div>
       </div>
     );
   }

@@ -30,7 +30,6 @@ import { apiRequest } from '../../../../../services/api';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
-import { WorkOrderScoreCell } from '../../../components/WorkOrderScoreCell';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { BATCHING_TASK_TYPE_LABEL } from './batchingCenterTabs';
 
@@ -420,18 +419,6 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           </div>
         );
       },
-    },
-    {
-      title: '权重分',
-      dataIndex: 'picking_score',
-      width: 88,
-      hideInSearch: true,
-      render: (_, r) => (
-        <WorkOrderScoreCell
-          score={r.picking_score}
-          breakdown={r.score_breakdown}
-        />
-      ),
     },
     {
       title: '齐套率',

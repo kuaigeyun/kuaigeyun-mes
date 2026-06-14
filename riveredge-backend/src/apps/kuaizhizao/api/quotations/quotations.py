@@ -117,14 +117,14 @@ async def list_quotations(
             list_scope=list_scope,
             current_user=current_user,
         )
-        masked_rows: List[QuotationResponse] = []
-        for row in result.data:
-            masked = await _mask_quotation_payload(
-                tenant_id=tenant_id,
-                user_id=current_user.id,
-                payload=row.model_dump(),
-            )
-            masked_rows.append(QuotationResponse(**masked))
+        payloads = [row.model_dump() for row in result.data]
+        masked_payloads = await PermissionPolicyService.apply_field_masks_to_list(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            resource="kuaizhizao:quotation",
+            payloads=payloads,
+        )
+        masked_rows = [QuotationResponse(**masked) for masked in masked_payloads]
         return QuotationListResponse(
             data=masked_rows,
             total=result.total,

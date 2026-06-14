@@ -102,9 +102,12 @@ export const DwgPreviewPane: React.FC<DwgPreviewPaneProps> = ({
   if (loading) {
     return (
       <div style={{ ...paneStyle, minHeight: 280, alignItems: 'center', justifyContent: 'center', background: 'var(--ant-color-fill-quaternary, #f5f5f5)' }}>
-        <Spin tip={t('app.master-data.drawings.dwgPreviewLoading')} size="large">
-          <div style={{ minHeight: 24 }} />
-        </Spin>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+          <Spin size="large" />
+          <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>
+            {t('app.master-data.drawings.dwgPreviewLoading')}
+          </div>
+        </div>
       </div>
     );
   }

@@ -73,7 +73,7 @@ const NonconformingLedgerPage: React.FC = () => {
           `8D - ${row.product_name || row.code}`,
         );
         messageApi.success(`8D 报告已创建：${report.report_code}`);
-        navigate('/apps/kuaizhizao/quality-management/eight-d-reports');
+        navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
       },
     });
   };

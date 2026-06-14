@@ -218,9 +218,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   const presetPlainColors = [
     { color: '#1677ff', labelKey: 'components.themeEditor.presetPlainColor.businessBlue', label: '商务蓝' },
     { color: '#2f54eb', labelKey: 'components.themeEditor.presetPlainColor.indigo', label: '靛蓝' },
+    { color: '#52c41a', labelKey: 'components.themeEditor.presetPlainColor.successGreen', label: '成功绿' },
+    { color: '#f5222d', labelKey: 'components.themeEditor.presetPlainColor.dangerRed', label: '危险红' },
     { color: '#434343', labelKey: 'components.themeEditor.presetPlainColor.graphiteGray', label: '石墨灰' },
     { color: '#595959', labelKey: 'components.themeEditor.presetPlainColor.neutralGray', label: '中性灰' },
-    { color: '#006d75', labelKey: 'components.themeEditor.presetPlainColor.deepTeal', label: '深青' },
     { color: '#1d39c4', labelKey: 'components.themeEditor.presetPlainColor.navy', label: '藏青' },
   ];
 

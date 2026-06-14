@@ -10,6 +10,7 @@ import {
   FileTextOutlined,
 } from '@ant-design/icons';
 import { mesDashboardService } from '../../../services/dashboard';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -21,7 +22,10 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module
 
 const PerformanceCenterDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { data: summary, loading } = useRequest(mesDashboardService.getPerformanceSummary);
+  const { data: summary, loading } = useRequest(
+    mesDashboardService.getPerformanceSummary,
+    dashboardRequestOptions('kz:performance-dashboard:summary'),
+  );
   const s = summary as Record<string, number> | undefined;
 
   const kpis: ModuleKpiDef[] = useMemo(

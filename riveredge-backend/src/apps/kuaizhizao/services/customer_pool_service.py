@@ -271,7 +271,8 @@ class CustomerPoolService:
         )
 
         total = await query.count()
-        rows = await query.order_by("-updated_at", "-id").offset(skip).limit(limit)
+        # 客户池默认按客户编号倒序（同编号时按 ID 倒序稳定排序）
+        rows = await query.order_by("-code", "-id").offset(skip).limit(limit)
         items = [CustomerPoolItem.model_validate(r) for r in rows]
         return CustomerPoolListEnvelope(items=items, total=total)
 

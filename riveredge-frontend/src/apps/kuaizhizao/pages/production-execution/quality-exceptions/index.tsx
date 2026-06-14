@@ -325,11 +325,14 @@ const QualityExceptionsPage: React.FC = () => {
               size="small"
               onClick={async () => {
                 try {
-                  await qualityImprovementApi.eightD.startFromException(
+                  const report = await qualityImprovementApi.eightD.startFromException(
                     Number(record.id),
                     `${record.work_order_code || '质量异常'}-${record.problem_description || '8D报告'}`
                   );
                   messageApi.success('已发起 8D 报告');
+                  if (report?.id) {
+                    navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
+                  }
                 } catch (error: any) {
                   messageApi.error(error?.message || '发起8D失败');
                 }

@@ -433,7 +433,13 @@ const CustomerFollowUpsPage: React.FC = () => {
             />
           }
           toolBarRender={() => [
-            <Button {...rowActionKind('create')} key="new" type="primary" onClick={openCreate}>
+            <Button
+              {...rowActionKind('create')}
+              key="new"
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={openCreate}
+            >
               {t('app.kuaizhizao.customerFollowUp.new') + NEW_SHORTCUT_HINT}
             </Button>,
           ]}

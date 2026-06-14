@@ -3,15 +3,45 @@ import { apiRequest } from '../../../services/api';
 export interface Quality8DReport {
   id: number;
   report_code: string;
+  uuid?: string;
   title: string;
   status: string;
   severity?: string;
+  owner_id?: number;
   owner_name?: string;
   due_date?: string;
   quality_exception_id?: number;
+  defect_record_id?: number;
+  d1_team?: string;
+  d2_problem?: string;
+  d3_containment?: string;
+  d4_root_cause?: string;
+  d5_corrective_action?: string;
+  d6_implement_result?: string;
+  d7_prevent_recurrence?: string;
+  d8_team_congratulation?: string;
   verification_result?: string;
   remarks?: string;
+  closed_at?: string;
+  lifecycle_stages?: Array<{ key: string; label: string; status: 'done' | 'active' | 'pending' }>;
+  next_status?: string | null;
+  next_step_suggestions?: string[];
   created_at?: string;
+  updated_at?: string;
+}
+
+export interface Quality8DHistoryEntry {
+  timestamp: string;
+  action: 'created' | 'transition' | 'closed' | string;
+  from_status?: string | null;
+  to_status?: string | null;
+  remarks?: string | null;
+  verification_result?: string | null;
+}
+
+export interface Quality8DListResponse {
+  items: Quality8DReport[];
+  total: number;
 }
 
 export interface DefectLedgerItem {
@@ -85,13 +115,25 @@ export interface SPCChartResponse {
 export const qualityImprovementApi = {
   eightD: {
     list: async (params?: any) =>
-      apiRequest<Quality8DReport[]>('/apps/kuaizhizao/quality-8d-reports', { method: 'GET', params }),
+      apiRequest<Quality8DListResponse>('/apps/kuaizhizao/quality-8d-reports', { method: 'GET', params }),
+    getById: async (id: number) =>
+      apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}`, { method: 'GET' }),
     create: async (data: any) =>
       apiRequest<Quality8DReport>('/apps/kuaizhizao/quality-8d-reports', { method: 'POST', data }),
     update: async (id: number, data: any) =>
       apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}`, { method: 'PUT', data }),
+    delete: async (id: number) =>
+      apiRequest(`/apps/kuaizhizao/quality-8d-reports/${id}`, { method: 'DELETE' }),
     transition: async (id: number, data: { to_status: string; remarks?: string; verification_result?: string }) =>
       apiRequest<Quality8DReport>(`/apps/kuaizhizao/quality-8d-reports/${id}/transition`, { method: 'POST', data }),
+    getHistory: async (id: number) =>
+      apiRequest<Quality8DHistoryEntry[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/history`, {
+        method: 'GET',
+      }),
+    history: async (id: number) =>
+      apiRequest<Quality8DHistoryEntry[]>(`/apps/kuaizhizao/quality-8d-reports/${id}/history`, {
+        method: 'GET',
+      }),
     startFromException: async (exceptionId: number, title: string) =>
       apiRequest<Quality8DReport>(`/apps/kuaizhizao/exceptions/quality/${exceptionId}/start-8d`, {
         method: 'POST',

@@ -2,81 +2,255 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Space, Tag } from 'antd';
+import { EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { stackedPrimarySecondaryColumn } from '../components/qualityTableColumns';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { qualityImprovementApi, Quality8DReport } from '../../../services/quality-improvement';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
+import { EightDDetailDrawer } from './components/EightDDetailDrawer';
+import {
+  EIGHT_D_SEVERITY_I18N_KEY,
+  EIGHT_D_STATUS_I18N_KEY,
+  getEightDSeverityText,
+  getEightDStatusText,
+} from './components/eightDMeta';
+import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
-const statusTextMap: Record<string, string> = {
-  d1_team: 'D1 组建团队',
-  d2_problem: 'D2 问题描述',
-  d3_containment: 'D3 临时遏制',
-  d4_root_cause: 'D4 根因分析',
-  d5_corrective_action: 'D5 纠正措施',
-  d6_implement_result: 'D6 实施验证',
-  d7_prevent_recurrence: 'D7 防再发',
-  d8_team_congratulation: 'D8 总结',
-  closed: '已关闭',
-};
-
 const EightDReportsPage: React.FC = () => {
-  const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
+  const { message: messageApi, modal: modalApi } = App.useApp();
+  const [searchParams, setSearchParams] = useSearchParams();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
-  const transitionFormRef = useRef<any>(null);
   const [createVisible, setCreateVisible] = useState(false);
-  const [transitionVisible, setTransitionVisible] = useState(false);
-  const [currentRow, setCurrentRow] = useState<Quality8DReport | null>(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+  const [activeReportId, setActiveReportId] = useState<number | undefined>(undefined);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const { canCreate, canUpdate } = useResourcePermissions(EIGHT_D_RESOURCE);
+  const { canCreate, canUpdate, canDelete } = useResourcePermissions(EIGHT_D_RESOURCE);
   const canClose = hasModulePermission(currentUser ?? undefined, EIGHT_D_RESOURCE, 'close');
+  const openDetail = (row: Quality8DReport) => {
+    if (!row.id) return;
+    setActiveReportId(row.id);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('report_id', String(row.id));
+      return next;
+    });
+    setDetailVisible(true);
+  };
+  const closeDetail = () => {
+    setDetailVisible(false);
+    setActiveReportId(undefined);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('report_id');
+      return next;
+    });
+  };
+
+  React.useEffect(() => {
+    const reportId = Number(searchParams.get('report_id'));
+    if (Number.isFinite(reportId) && reportId > 0) {
+      setActiveReportId(reportId);
+      setDetailVisible(true);
+    }
+  }, [searchParams]);
 
   const columns: ProColumns<Quality8DReport>[] = [
     {
-      title: '8D编号',
+      title: t('app.kuaizhizao.eightD.columns.reportCode'),
       dataIndex: 'report_code',
       hideInTable: true,
     },
     stackedPrimarySecondaryColumn<Quality8DReport>(
-      '标题 / 编号',
+      t('app.kuaizhizao.eightD.columns.titleAndCode'),
       'eightDStacked',
       ['title'],
       ['report_code', 'reportCode'],
       { dataIndex: 'title', fixed: 'left' },
     ),
-    { title: '标题', dataIndex: 'title', hideInTable: true, ellipsis: true },
     {
-      title: '阶段',
-      dataIndex: 'status',
-      width: 160,
-      valueEnum: Object.fromEntries(Object.entries(statusTextMap).map(([k, v]) => [k, { text: v }])),
-      render: (_, row) => <Tag color={row.status === 'closed' ? 'success' : 'processing'}>{statusTextMap[row.status] || row.status}</Tag>,
+      title: t('app.kuaizhizao.eightD.columns.title'),
+      dataIndex: 'title',
+      hideInTable: true,
+      ellipsis: true,
     },
-    { title: '负责人', dataIndex: 'owner_name', width: 120 },
-    { title: '计划完成', dataIndex: 'due_date', valueType: 'dateTime', width: 180 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
     {
-      title: '操作',
-      valueType: 'option',
+      title: t('app.kuaizhizao.eightD.columns.severity'),
+      dataIndex: 'severity',
+      width: 90,
+      valueEnum: Object.fromEntries(
+        Object.entries(EIGHT_D_SEVERITY_I18N_KEY).map(([value, key]) => [value, { text: t(key) }]),
+      ),
+      render: (_, row) => <Tag>{getEightDSeverityText(t, row.severity)}</Tag>,
+    },
+    { title: t('app.kuaizhizao.eightD.columns.owner'), dataIndex: 'owner_name', width: 120 },
+    {
+      title: t('app.kuaizhizao.eightD.columns.source'),
+      key: 'source',
+      width: 160,
+      hideInSearch: true,
+      render: (_, row) => {
+        if (row.quality_exception_id) {
+          return t('app.kuaizhizao.eightD.source.qualityException', { id: row.quality_exception_id });
+        }
+        if (row.defect_record_id) {
+          return t('app.kuaizhizao.eightD.source.nonconformingLedger', { id: row.defect_record_id });
+        }
+        return '-';
+      },
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.verificationResult'),
+      dataIndex: 'verification_result',
       width: 180,
+      hideInSearch: true,
+      ellipsis: true,
+      render: (_, row) => {
+        const raw = row.verification_result;
+        const display =
+          typeof raw === 'string'
+            ? raw.trim()
+            : raw && typeof raw === 'object'
+              ? String(
+                  (raw as { message?: unknown }).message ??
+                    (raw as { detail?: unknown }).detail ??
+                    '',
+                ).trim()
+              : '';
+        if (display) {
+          return <span title={display}>{display}</span>;
+        }
+        return row.status === 'closed' ? (
+          <Tag color="warning">{t('app.kuaizhizao.eightD.notFilled')}</Tag>
+        ) : (
+          '-'
+        );
+      },
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.dueDate'),
+      dataIndex: 'due_date',
+      valueType: 'dateTime',
+      width: 180,
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.overdueFilter'),
+      dataIndex: 'overdue_only',
+      width: 80,
+      hideInSearch: false,
+      hideInTable: true,
+      valueEnum: {
+        true: { text: t('app.kuaizhizao.eightD.columns.overdueOnly') },
+      },
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.createdAt'),
+      dataIndex: 'created_at',
+      valueType: 'dateTime',
+      width: 180,
+    },
+    {
+      title: t('app.kuaizhizao.eightD.columns.stage'),
+      dataIndex: 'status',
+      width: 220,
+      fixed: 'right',
+      valueEnum: Object.fromEntries(
+        Object.entries(EIGHT_D_STATUS_I18N_KEY).map(([k, v]) => [k, { text: t(v) }]),
+      ),
+      render: (_, row) => {
+        const lifecycleStages = row.lifecycle_stages || [];
+        const activeIndex = lifecycleStages.findIndex((stage) => stage.status === 'active');
+        const doneCount = lifecycleStages.filter((stage) => stage.status === 'done').length;
+        const percent =
+          activeIndex >= 0
+            ? Math.round((activeIndex / Math.max(1, lifecycleStages.length - 1)) * 100)
+            : lifecycleStages.length
+              ? Math.round((doneCount / lifecycleStages.length) * 100)
+              : 0;
+        const stageName = getEightDStatusText(t, row.status);
+        return (
+          <UniLifecycle
+            percent={percent}
+            stageName={stageName}
+            status={row.status === 'closed' ? 'success' : 'active'}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
+      },
+    },
+    {
+      title: t('common.actions'),
+      valueType: 'option',
+      width: 260,
+      fixed: 'right',
       render: (_, row) => (
         <Space>
-          {(canUpdate || canClose) && (
-            <Button key="execute" {...rowActionKind('execute')}
+          <Button
+            key="detail"
+            {...rowActionKind('read')}
+            onClick={() => {
+              openDetail(row);
+            }}
+          >
+            {t('common.detail')}
+          </Button>
+          {canUpdate && (
+            <Button
+              key="edit"
+              {...rowActionKind('update')}
+              icon={<EditOutlined />}
               onClick={() => {
-                setCurrentRow(row);
-                setTransitionVisible(true);
-                setTimeout(() => transitionFormRef.current?.setFieldsValue({ to_status: row.status }), 50);
+                openDetail(row);
               }}
             >
-              推进阶段
+              {t('common.edit')}
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              key="delete"
+              {...rowActionKind('delete')}
+              danger
+              onClick={() => {
+                if (!row.id) return;
+                modalApi.confirm({
+                  title: t('app.kuaizhizao.eightD.deleteOneTitle', { reportCode: row.report_code }),
+                  content: t('app.kuaizhizao.eightD.deleteOneDescription'),
+                  okButtonProps: { danger: true },
+                  onOk: async () => {
+                    await qualityImprovementApi.eightD.delete(row.id!);
+                    messageApi.success(t('common.deleteSuccess'));
+                    actionRef.current?.reload();
+                  },
+                });
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          )}
+          {(canUpdate || canClose) && row.status !== 'closed' && (
+            <Button
+              key="execute"
+              {...rowActionKind('execute')}
+              onClick={() => {
+                openDetail(row);
+              }}
+            >
+              {t('app.kuaizhizao.eightD.actions.transition')}
             </Button>
           )}
         </Space>
@@ -87,23 +261,45 @@ const EightDReportsPage: React.FC = () => {
   return (
     <PermissionGuard
       permission="kuaizhizao:quality-management-eight-d-reports:read"
-      fallback={<Empty description="暂无8D查看权限" style={{ marginTop: 120 }} />}
+      fallback={<Empty description={t('app.kuaizhizao.eightD.noReadPermission')} style={{ marginTop: 120 }} />}
     >
       <ListPageTemplate>
         <UniTable<Quality8DReport>
-          headerTitle="8D 管理"
+          headerTitle={t('app.kuaizhizao.menu.quality-management.eight-d-reports')}
           actionRef={actionRef}
           rowKey="id"
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
+          permissionResource={EIGHT_D_RESOURCE}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.quality-management.eight-d-reports"
+          showDeleteButton={canDelete}
+          onDelete={async (keys) => {
+            try {
+              for (const key of keys) {
+                await qualityImprovementApi.eightD.delete(Number(key));
+              }
+              messageApi.success(t('app.kuaizhizao.eightD.batchDeleteSuccess', { count: keys.length }));
+              setSelectedRowKeys([]);
+              actionRef.current?.reload();
+            } catch (e: any) {
+              messageApi.error(e?.message || t('common.deleteFailed'));
+            }
+          }}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.eightD.deleteConfirmTitle', { count })}
+          deleteConfirmDescription={t('app.kuaizhizao.eightD.deleteConfirmDescription')}
           toolBarRender={() =>
             canCreate
               ? [
-                  <Button {...rowActionKind('create')} key="create" type="primary" onClick={() => setCreateVisible(true)}>
-                    新建8D
+                  <Button
+                    {...rowActionKind('create')}
+                    key="create"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => setCreateVisible(true)}
+                  >
+                    {withSingleNewShortcutHint(t('app.kuaizhizao.eightD.createButton'))}
                   </Button>,
                 ]
               : []
@@ -111,84 +307,106 @@ const EightDReportsPage: React.FC = () => {
           request={async (params) => {
             const pageSize = params.pageSize || 20;
             const skip = ((params.current || 1) - 1) * pageSize;
-            const rows = await qualityImprovementApi.eightD.list({
+            const result = await qualityImprovementApi.eightD.list({
               skip,
               limit: pageSize,
               status: params.status,
               owner_id: params.owner_id,
+              overdue_only: params.overdue_only === true || params.overdue_only === 'true',
             });
             return {
               success: true,
-              data: rows || [],
-              total: rows.length < pageSize ? skip + rows.length : skip + rows.length + 1,
+              data: result.items || [],
+              total: result.total || 0,
             };
           }}
         />
 
         <FormModalTemplate
-          title="新建 8D 报告"
+          title={t('app.kuaizhizao.eightD.createTitle')}
           open={createVisible}
           width={MODAL_CONFIG.LARGE_WIDTH}
+          grid
           onClose={() => {
             setCreateVisible(false);
             createFormRef.current?.resetFields();
           }}
           formRef={createFormRef}
           onFinish={async (values) => {
-            await qualityImprovementApi.eightD.create(values);
-            messageApi.success('8D 报告已创建');
+            const payload = {
+              ...values,
+              status: 'd1_team',
+              owner_id: values.owner_id ?? null,
+              owner_name: values.owner_name ?? null,
+            } as Record<string, unknown>;
+            delete payload.owner_uuid;
+            const created = await qualityImprovementApi.eightD.create(payload);
+            messageApi.success(t('app.kuaizhizao.eightD.createSuccess'));
             setCreateVisible(false);
             actionRef.current?.reload();
+            if (created.id) {
+              setActiveReportId(created.id);
+              setDetailVisible(true);
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.set('report_id', String(created.id));
+                return next;
+              });
+            }
           }}
         >
-          <ProFormText name="title" label="标题" rules={[{ required: true }]} />
+          <ProFormText
+            name="title"
+            label={t('app.kuaizhizao.eightD.columns.title')}
+            rules={[{ required: true }]}
+            colProps={{ span: 24 }}
+          />
           <ProFormSelect
             name="severity"
-            label="严重程度"
-            valueEnum={{ minor: '轻微', major: '严重', critical: '紧急' }}
+            label={t('app.kuaizhizao.eightD.columns.severity')}
+            valueEnum={{
+              minor: t('app.kuaizhizao.eightD.severity.minor'),
+              major: t('app.kuaizhizao.eightD.severity.major'),
+              critical: t('app.kuaizhizao.eightD.severity.critical'),
+            }}
             initialValue="major"
+            colProps={{ span: 8 }}
           />
-          <ProFormText name="owner_name" label="负责人" />
-          <ProFormDateTimePicker name="due_date" label="计划完成日期" />
-          <ProFormTextArea name="d2_problem" label="D2 问题描述" />
-        </FormModalTemplate>
-
-        <FormModalTemplate
-          title={`推进 8D 阶段 - ${currentRow?.report_code || ''}`}
-          open={transitionVisible}
-          width={MODAL_CONFIG.LARGE_WIDTH}
-          onClose={() => {
-            setTransitionVisible(false);
-            setCurrentRow(null);
-            transitionFormRef.current?.resetFields();
-          }}
-          formRef={transitionFormRef}
-          onFinish={async (values) => {
-            if (!currentRow?.id) return;
-            if (values.to_status === 'closed' && !canClose) {
-              messageApi.error('无关闭权限');
-              return false;
-            }
-            if (values.to_status !== 'closed' && !canUpdate) {
-              messageApi.error('无更新权限');
-              return false;
-            }
-            await qualityImprovementApi.eightD.transition(currentRow.id, values);
-            messageApi.success('阶段已更新');
-            setTransitionVisible(false);
-            setCurrentRow(null);
-            actionRef.current?.reload();
-          }}
-        >
-          <ProFormSelect
-            name="to_status"
-            label="目标阶段"
-            valueEnum={Object.fromEntries(Object.entries(statusTextMap).map(([k, v]) => [k, v]))}
-            rules={[{ required: true }]}
+          <UniUserSelect
+            name="owner_uuid"
+            label={t('app.kuaizhizao.eightD.columns.owner')}
+            colProps={{ span: 8 }}
+            onChange={(_value, user) => {
+              const picked = Array.isArray(user) ? user[0] : user;
+              createFormRef.current?.setFieldsValue?.({
+                owner_id: picked?.id ?? undefined,
+                owner_name: picked?.full_name || picked?.username || undefined,
+              });
+            }}
           />
-          <ProFormTextArea name="verification_result" label="验证结果" />
-          <ProFormTextArea name="remarks" label="备注" />
+          <ProFormDateTimePicker
+            name="due_date"
+            label={t('app.kuaizhizao.eightD.columns.dueDate')}
+            colProps={{ span: 8 }}
+            fieldProps={{ style: { width: '100%' } }}
+          />
+          <ProFormText name="owner_name" hidden />
+          <ProFormText name="owner_id" hidden />
+          <ProFormText name="status" hidden initialValue="d1_team" />
+          <ProFormTextArea
+            name="d1_team"
+            label={t('app.kuaizhizao.eightD.status.d1_team')}
+            colProps={{ span: 24 }}
+          />
         </FormModalTemplate>
+        <EightDDetailDrawer
+          open={detailVisible}
+          reportId={activeReportId}
+          canUpdate={canUpdate}
+          canClose={canClose}
+          onClose={closeDetail}
+          onReloadList={() => actionRef.current?.reload()}
+        />
       </ListPageTemplate>
     </PermissionGuard>
   );

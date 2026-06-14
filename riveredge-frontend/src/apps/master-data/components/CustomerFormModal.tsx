@@ -4,7 +4,7 @@
  * 供客户管理页、报价单/销售订单等页面的「快速新建客户」使用。
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
 import { App, Input, Tabs, Row, Col, Button, Space } from 'antd';
@@ -75,6 +75,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const [quickCreateName, setQuickCreateName] = useState('');
   const [quickCreateAnchorEl, setQuickCreateAnchorEl] = useState<HTMLElement | null>(null);
   const [quickCreateLoading, setQuickCreateLoading] = useState(false);
+  const [isPublicMode, setIsPublicMode] = useState(true);
 
   const {
     customFields,
@@ -88,6 +89,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
   const isEdit = Boolean(editUuid);
 
   const syncSalesmanWithVisibility = useCallback((isPublic: boolean | undefined) => {
+    setIsPublicMode(isPublic !== false);
     const currentUser = useGlobalStore.getState().currentUser;
     if (isPublic === true) {
       formRef.current?.setFieldsValue({ salesmanId: undefined });
@@ -139,6 +141,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       isPublic: true,
       salesmanId: undefined,
     });
+    setIsPublicMode(true);
     resetFieldValues();
     if (!editUuid) {
       (async () => {
@@ -189,6 +192,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
       .get(editUuid)
       .then(async (detail) => {
         formRef.current?.setFieldsValue(customerDetailToFormValues(detail));
+        setIsPublicMode(detail.poolStatus === 'pool' || !detail.salesmanId);
         const fieldFormValues = await loadFieldValues(detail.id);
         formRef.current?.setFieldsValue(fieldFormValues);
       })
@@ -196,6 +200,21 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         messageApi.error(err?.message || t('app.master-data.customers.getDetailFailed'));
       });
   }, [open, editUuid]);
+
+  const customerBasicTailSchema = useMemo(() => {
+    const source = isEdit ? customerFormSchemaBasicTailEdit : customerFormSchemaBasicTail;
+    return source.map((field) =>
+      field.name === 'salesmanId'
+        ? {
+            ...field,
+            fieldProps: {
+              ...(field.fieldProps || {}),
+              disabled: isPublicMode,
+            },
+          }
+        : field,
+    );
+  }, [isEdit, isPublicMode]);
 
   const handleSubmit = async (values: any) => {
     try {
@@ -208,7 +227,8 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
         contacts: normalizeCustomerContactsForSubmit(standardValues.contacts ?? values.contacts),
       };
       if (standardValues.isPublic === true) {
-        payload.salesmanId = undefined;
+        // 显式传 null，后端才能识别为“清空归属业务员”
+        payload.salesmanId = null;
       } else if (!payload.salesmanId && currentUser?.id) {
         payload.salesmanId = currentUser.id;
       }
@@ -365,7 +385,7 @@ export const CustomerFormModal: React.FC<CustomerFormModalProps> = ({
                       />
                     </Col>
                     <SchemaFormRenderer
-                      schema={isEdit ? customerFormSchemaBasicTailEdit : customerFormSchemaBasicTail}
+                      schema={customerBasicTailSchema}
                       isEdit={isEdit}
                       optionsMap={optionsMap}
                     />

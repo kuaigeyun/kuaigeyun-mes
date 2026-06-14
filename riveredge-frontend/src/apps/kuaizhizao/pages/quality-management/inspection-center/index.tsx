@@ -7,7 +7,6 @@ import {
   BarChartOutlined,
   ClockCircleOutlined,
   SafetyCertificateOutlined,
-  FileDoneOutlined,
   PartitionOutlined,
   DatabaseOutlined,
   ExportOutlined,
@@ -23,6 +22,7 @@ import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
 import { mesDashboardService } from '../../../services/dashboard';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -75,16 +75,21 @@ const InspectionCenter: React.FC = () => {
 
   const { data: summary, loading: summaryLoading } = useRequest(
     () => qualityApi.qualityStatistics.getInspectionCenterSummary(),
-    { onError: (e: any) => message.error(e?.message || '加载质检中心数据失败') },
+    dashboardRequestOptions('kz:quality-dashboard:summary', {
+      onError: (e: any) => message.error(e?.message || '加载质检中心数据失败'),
+    }),
   );
 
   const { data: anomaliesResp } = useRequest(
     () => qualityApi.qualityStatistics.getAnomalies({ limit: 12 }),
-    { onError: (e: any) => message.error(e?.message || '加载质量异常失败') },
+    dashboardRequestOptions('kz:quality-dashboard:anomalies', {
+      onError: (e: any) => message.error(e?.message || '加载质量异常失败'),
+    }),
   );
 
   const { data: todosData, loading: todosLoading } = useRequest(() =>
     mesDashboardService.getTodosByModule('quality', 8),
+    dashboardRequestOptions('kz:quality-dashboard:todos'),
   );
 
   const anomalies = anomaliesResp?.anomalies ?? [];
@@ -96,9 +101,12 @@ const InspectionCenter: React.FC = () => {
     (summary?.pending_finished || 0) +
     (summary?.pending_oqc || 0);
 
-  const { data: stageToggles } = useRequest(() => qualityApi.stageToggles.get(), {
-    onError: (e: any) => message.error(e?.message || '加载质检环节开关失败'),
-  });
+  const { data: stageToggles } = useRequest(
+    () => qualityApi.stageToggles.get(),
+    dashboardRequestOptions('kz:quality-dashboard:stage-toggles', {
+      onError: (e: any) => message.error(e?.message || '加载质检环节开关失败'),
+    }),
+  );
 
   const stageOn = (enabled?: boolean) =>
     enabled !== false
@@ -203,12 +211,6 @@ const InspectionCenter: React.FC = () => {
       title: '质量报表',
       icon: <LineChartOutlined style={{ fontSize: 20, color: '#fa541c' }} />,
       path: '/apps/kuaizhizao/quality-management/reports/incoming-inspection',
-    },
-    {
-      key: 'plans',
-      title: '质检方案',
-      icon: <FileDoneOutlined style={{ fontSize: 20, color: '#fa8c16' }} />,
-      path: '/apps/kuaizhizao/quality-management/inspection-plans',
     },
   ];
 

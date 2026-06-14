@@ -32,7 +32,6 @@ import {
   type ConfigCategory,
 } from './configTree';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
-import { WorkOrderScoreProfilesPanel } from './WorkOrderScoreProfilesPanel';
 import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
 import type { Color } from 'antd/es/color-picker';
@@ -367,7 +366,6 @@ const ConfigCenterPage: React.FC = () => {
     onSelectCat: (id: string) => void,
     icon: React.ReactNode,
     showAuditSection: boolean = false,
-    showScoreProfilesPanel: boolean = false,
   ) => {
     const currentCat = categories.find(c => c.id === selectedCatId) || categories[0];
     const auditSwitches = showAuditSection ? AUDIT_SWITCH_ITEMS.filter(it => it.categoryId === selectedCatId) : [];
@@ -475,13 +473,6 @@ const ConfigCenterPage: React.FC = () => {
                   </Form>
                 </Spin>
 
-                {showScoreProfilesPanel && selectedCatId === 'planning' && (
-                  <WorkOrderScoreProfilesPanel
-                    scoreProfiles={bizRes?.parameters?.work_order?.score_profiles}
-                    onSaved={refetchBusinessConfig}
-                  />
-                )}
-
                 <Space style={{ marginTop: 24 }}>
                   <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
                   <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
@@ -501,7 +492,7 @@ const ConfigCenterPage: React.FC = () => {
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />, false, true) },
+          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />, false) },
           { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
           { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
           { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },

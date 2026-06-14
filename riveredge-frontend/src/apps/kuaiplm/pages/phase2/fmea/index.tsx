@@ -8,6 +8,7 @@ import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } f
 import { useSearchParams } from 'react-router-dom';
 import { App, Button, Tag, Alert } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate } from '../../../../../components/layout-templates';
@@ -28,6 +29,7 @@ const RISK_COLOR: Record<string, string> = {
 };
 
 const FmeaPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const [searchParams] = useSearchParams();
   const filterProjectId = searchParams.get('project_id')
@@ -36,6 +38,8 @@ const FmeaPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<RdFmeaRecord | null>(null);
+  const [detailRecord, setDetailRecord] = useState<RdFmeaRecord | null>(null);
 
   const handleCreate = useCallback(() => setCreateOpen(true), []);
   useNewShortcut(handleCreate);
@@ -46,7 +50,7 @@ const FmeaPage: React.FC = () => {
   const handleBatchDelete = async (keys: React.Key[]) => {
     const ids = toFmeaIds(keys);
     if (!ids.length) {
-      messageApi.warning('请先选择 FMEA 记录');
+      messageApi.warning(t('app.kuaiplm.phase2.fmea.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -59,18 +63,18 @@ const FmeaPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`已删除 ${successCount} 条 FMEA`);
+      messageApi.success(t('app.kuaiplm.phase2.fmea.batchDeleteSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量删除失败');
+    messageApi.error(t('app.kuaiplm.phase2.fmea.batchDeleteFailed'));
   };
 
   const handleBatchSetStatus = async (status: string, label: string) => {
     const ids = toFmeaIds(selectedRowKeys);
     if (!ids.length) {
-      messageApi.warning('请先选择 FMEA 记录');
+      messageApi.warning(t('app.kuaiplm.phase2.fmea.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -83,38 +87,84 @@ const FmeaPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`已将 ${successCount} 条 FMEA 设置为${label}`);
+      messageApi.success(
+        t('app.kuaiplm.phase2.fmea.batchStatusSuccess', { count: successCount, label }),
+      );
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量更新状态失败');
+    messageApi.error(t('app.kuaiplm.phase2.fmea.batchStatusFailed'));
+  };
+
+  const fmeaStatusLabelMap: Record<string, string> = {
+    DRAFT: t('app.kuaiplm.phase2.common.status.draft'),
+    IN_REVIEW: t('app.kuaiplm.phase2.common.status.inReview'),
+    CLOSED: t('app.kuaiplm.phase2.common.status.closed'),
+    ARCHIVED: t('app.kuaiplm.phase2.common.status.archived'),
+  };
+  const riskLevelLabelMap: Record<string, string> = {
+    高: t('app.kuaiplm.phase2.common.risk.high'),
+    中: t('app.kuaiplm.phase2.common.risk.medium'),
+    低: t('app.kuaiplm.phase2.common.risk.low'),
   };
 
   const columns: ProColumns<RdFmeaRecord>[] = [
-    { title: 'FMEA 编号', dataIndex: 'fmea_code', width: 140 },
-    { title: '标题', dataIndex: 'title', ellipsis: true },
-    { title: '类型', dataIndex: 'fmea_type', width: 100 },
-    { title: '状态', dataIndex: 'status', width: 90 },
+    { title: t('app.kuaiplm.phase2.fmea.columns.code'), dataIndex: 'fmea_code', width: 140 },
+    { title: t('app.kuaiplm.phase2.fmea.columns.title'), dataIndex: 'title', ellipsis: true },
+    { title: t('app.kuaiplm.phase2.fmea.columns.type'), dataIndex: 'fmea_type', width: 100 },
     {
-      title: '风险等级',
+      title: t('app.kuaiplm.phase2.fmea.columns.status'),
+      dataIndex: 'status',
+      width: 90,
+      valueEnum: Object.fromEntries(
+        Object.entries(fmeaStatusLabelMap).map(([value, label]) => [value, { text: label }]),
+      ),
+      render: (_, row) => fmeaStatusLabelMap[row.status || ''] || row.status || '-',
+    },
+    {
+      title: t('app.kuaiplm.phase2.fmea.columns.riskLevel'),
       dataIndex: 'risk_level',
       width: 100,
       render: (_, row) =>
-        row.risk_level ? <Tag color={RISK_COLOR[row.risk_level] ?? 'default'}>{row.risk_level}</Tag> : '-',
+        row.risk_level ? (
+          <Tag color={RISK_COLOR[row.risk_level] ?? 'default'}>
+            {riskLevelLabelMap[row.risk_level] || row.risk_level}
+          </Tag>
+        ) : (
+          '-'
+        ),
     },
-    { title: '负责人', dataIndex: 'owner_name', width: 100, hideInSearch: true },
+    { title: t('app.kuaiplm.phase2.fmea.columns.owner'), dataIndex: 'owner_name', width: 100, hideInSearch: true },
     {
-      title: '更新时间',
+      title: t('app.kuaiplm.phase2.fmea.columns.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
       render: (_, row) => (row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
-      width: 80,
+      width: 180,
       render: (_, row) => [
+            <Button
+              {...rowActionKind('read')}
+              key="detail"
+              type="link"
+              size="small"
+              onClick={() => setDetailRecord(row)}
+            >
+              {t('common.detail')}
+            </Button>,
+            <Button
+              {...rowActionKind('edit')}
+              key="edit"
+              type="link"
+              size="small"
+              onClick={() => setEditingRecord(row)}
+            >
+              {t('common.edit')}
+            </Button>,
             <Button {...rowActionKind('delete')}
               key="del"
               type="link"
@@ -122,16 +172,16 @@ const FmeaPage: React.FC = () => {
               danger
               onClick={() => {
                 modalApi.confirm({
-                  title: '删除该 FMEA 记录？',
+                  title: t('app.kuaiplm.phase2.fmea.deleteOneTitle'),
                   onOk: async () => {
                     await deleteFmeaRecord(row.id!);
-                    messageApi.success('已删除');
+                    messageApi.success(t('common.deleteSuccess'));
                     actionRef.current?.reload();
                   },
                 });
               }}
             >
-              删除
+              {t('common.delete')}
             </Button>,
           ],
     },
@@ -144,11 +194,11 @@ const FmeaPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
-          message={`已按研发项目 #${filterProjectId} 筛选`}
+          message={t('app.kuaiplm.phase2.common.projectFilterHint', { id: filterProjectId })}
         />
       ) : null}
       <UniTable<RdFmeaRecord>
-        headerTitle="FMEA"
+        headerTitle={t('app.kuaiplm.menu.phase2.fmea')}
         actionRef={actionRef}
         rowKey="id"
         enableRowSelection
@@ -166,34 +216,34 @@ const FmeaPage: React.FC = () => {
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || '加载失败');
+            messageApi.error(e?.message || t('common.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}
         showCreateButton
-        createButtonText={'新建 FMEA' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.kuaiplm.phase2.fmea.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条 FMEA 吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaiplm.phase2.fmea.deleteConfirmTitle', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="fmea-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaiplm.phase2.common.batchActions')}
             menuItems={[
               {
                 key: 'batch-set-in-review',
-                label: '批量设为评审中',
+                label: t('app.kuaiplm.phase2.fmea.batchSetInReview'),
                 onClick: () => {
-                  void handleBatchSetStatus('IN_REVIEW', '评审中');
+                  void handleBatchSetStatus('IN_REVIEW', t('app.kuaiplm.phase2.common.status.inReview'));
                 },
               },
               {
                 key: 'batch-set-closed',
-                label: '批量设为已关闭',
+                label: t('app.kuaiplm.phase2.fmea.batchSetClosed'),
                 onClick: () => {
-                  void handleBatchSetStatus('CLOSED', '已关闭');
+                  void handleBatchSetStatus('CLOSED', t('app.kuaiplm.phase2.common.status.closed'));
                 },
               },
             ]}
@@ -202,20 +252,20 @@ const FmeaPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建 FMEA"
+        title={t('app.kuaiplm.phase2.fmea.createTitle')}
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onFinish={async (values) => {
           await createFmeaRecord(values);
-          messageApi.success('创建成功');
+          messageApi.success(t('common.createSuccess'));
           setCreateOpen(false);
           actionRef.current?.reload();
         }}
       >
-        <ProFormText name="title" label="标题" rules={[{ required: true }]} />
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} rules={[{ required: true }]} />
         <ProFormSelect
           name="fmea_type"
-          label="FMEA 类型"
+          label={t('app.kuaiplm.phase2.fmea.form.fmeaType')}
           options={[
             { value: 'DFMEA', label: 'DFMEA' },
             { value: 'PFMEA', label: 'PFMEA' },
@@ -223,15 +273,102 @@ const FmeaPage: React.FC = () => {
         />
         <ProFormSelect
           name="risk_level"
-          label="风险等级"
+          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
           options={[
-            { value: '高', label: '高' },
-            { value: '中', label: '中' },
-            { value: '低', label: '低' },
+            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
+            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
+            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
           ]}
         />
-        <ProFormText name="owner_name" label="负责人" />
-        <ProFormTextArea name="description" label="说明" />
+        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaiplm.phase2.fmea.editTitle')}
+        open={!!editingRecord}
+        onClose={() => setEditingRecord(null)}
+        isEdit
+        initialValues={editingRecord || {}}
+        onFinish={async (values) => {
+          if (!editingRecord?.id) return;
+          await updateFmeaRecord(editingRecord.id, values);
+          messageApi.success(t('common.updateSuccess'));
+          setEditingRecord(null);
+          actionRef.current?.reload();
+        }}
+      >
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} rules={[{ required: true }]} />
+        <ProFormSelect
+          name="fmea_type"
+          label={t('app.kuaiplm.phase2.fmea.form.fmeaType')}
+          options={[
+            { value: 'DFMEA', label: 'DFMEA' },
+            { value: 'PFMEA', label: 'PFMEA' },
+          ]}
+        />
+        <ProFormSelect
+          name="status"
+          label={t('app.kuaiplm.phase2.fmea.form.status')}
+          options={[
+            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
+            { value: 'IN_REVIEW', label: t('app.kuaiplm.phase2.common.status.inReview') },
+            { value: 'CLOSED', label: t('app.kuaiplm.phase2.common.status.closed') },
+            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
+          ]}
+        />
+        <ProFormSelect
+          name="risk_level"
+          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
+          options={[
+            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
+            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
+            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
+          ]}
+        />
+        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
+      </FormModalTemplate>
+
+      <FormModalTemplate
+        title={t('app.kuaiplm.phase2.fmea.detailTitle')}
+        open={!!detailRecord}
+        onClose={() => setDetailRecord(null)}
+        readOnly
+        initialValues={detailRecord || {}}
+        onFinish={async () => {}}
+      >
+        <ProFormText name="fmea_code" label={t('app.kuaiplm.phase2.fmea.columns.code')} />
+        <ProFormText name="title" label={t('app.kuaiplm.phase2.fmea.form.title')} />
+        <ProFormSelect
+          name="fmea_type"
+          label={t('app.kuaiplm.phase2.fmea.form.fmeaType')}
+          options={[
+            { value: 'DFMEA', label: 'DFMEA' },
+            { value: 'PFMEA', label: 'PFMEA' },
+          ]}
+        />
+        <ProFormSelect
+          name="status"
+          label={t('app.kuaiplm.phase2.fmea.form.status')}
+          options={[
+            { value: 'DRAFT', label: t('app.kuaiplm.phase2.common.status.draft') },
+            { value: 'IN_REVIEW', label: t('app.kuaiplm.phase2.common.status.inReview') },
+            { value: 'CLOSED', label: t('app.kuaiplm.phase2.common.status.closed') },
+            { value: 'ARCHIVED', label: t('app.kuaiplm.phase2.common.status.archived') },
+          ]}
+        />
+        <ProFormSelect
+          name="risk_level"
+          label={t('app.kuaiplm.phase2.fmea.form.riskLevel')}
+          options={[
+            { value: '高', label: t('app.kuaiplm.phase2.common.risk.high') },
+            { value: '中', label: t('app.kuaiplm.phase2.common.risk.medium') },
+            { value: '低', label: t('app.kuaiplm.phase2.common.risk.low') },
+          ]}
+        />
+        <ProFormText name="owner_name" label={t('app.kuaiplm.phase2.fmea.form.owner')} />
+        <ProFormTextArea name="description" label={t('app.kuaiplm.phase2.fmea.form.description')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

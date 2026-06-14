@@ -40,6 +40,15 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   const [error, setError] = useState('');
   const [metaLoading, setMetaLoading] = useState(false);
 
+  const renderLoadingState = (text: string) => (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <Spin size="large" />
+        <div style={{ whiteSpace: 'nowrap', writingMode: 'horizontal-tb', textAlign: 'center' }}>{text}</div>
+      </div>
+    </div>
+  );
+
   const initialSource = useMemo<FilePreviewSource>(
     () => ({ fileName, fileExtension, fileType }),
     [fileName, fileExtension, fileType],
@@ -162,24 +171,14 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
   }
 
   if (metaLoading) {
-    return wrapPreview(
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
-          <div style={{ minHeight: 24 }} />
-        </Spin>
-      </div>,
-    );
+    return wrapPreview(renderLoadingState(t('app.master-data.drawings.stepPreviewLoading')));
   }
 
   if (isStep) {
     return wrapPreview(
       <Suspense
         fallback={
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip={t('app.master-data.drawings.stepPreviewLoading')}>
-              <div style={{ minHeight: 24 }} />
-            </Spin>
-          </div>
+          renderLoadingState(t('app.master-data.drawings.stepPreviewLoading'))
         }
       >
         <StepPreviewPane
@@ -196,11 +195,7 @@ export const DrawingInlinePreview: React.FC<DrawingInlinePreviewProps> = ({
     return wrapPreview(
       <Suspense
         fallback={
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Spin size="large" tip={t('app.master-data.drawings.dwgPreviewLoading')}>
-              <div style={{ minHeight: 24 }} />
-            </Spin>
-          </div>
+          renderLoadingState(t('app.master-data.drawings.dwgPreviewLoading'))
         }
       >
         <DwgPreviewPane

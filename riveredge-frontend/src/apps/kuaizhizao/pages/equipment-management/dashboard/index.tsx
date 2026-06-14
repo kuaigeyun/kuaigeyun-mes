@@ -13,6 +13,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { mesDashboardService } from '../../../services/dashboard';
 import { equipmentFaultApi, maintenancePlanApi } from '../../../services/equipment';
+import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -39,19 +40,26 @@ const EquipmentStatusPie = lazy(async () => {
 const EquipmentDashboard: React.FC = () => {
   const navigate = useNavigate();
 
-  const { data: summary, loading: summaryLoading } = useRequest(mesDashboardService.getEquipmentSummary);
+  const { data: summary, loading: summaryLoading } = useRequest(
+    mesDashboardService.getEquipmentSummary,
+    dashboardRequestOptions('kz:equipment-dashboard:summary'),
+  );
   const { data: todosData, loading: todosLoading } = useRequest(() =>
     mesDashboardService.getTodosByModule('equipment', 8),
+    dashboardRequestOptions('kz:equipment-dashboard:todos'),
   );
   const { data: recentFaultsResult, loading: faultsLoading } = useRequest(async () => {
     const res = await equipmentFaultApi.list({ limit: 6 });
     return Array.isArray(res) ? res : res?.items || [];
-  });
+  }, dashboardRequestOptions('kz:equipment-dashboard:faults'));
   const { data: recentMaintenanceResult, loading: maintenanceLoading } = useRequest(async () => {
     const res = await maintenancePlanApi.list({ limit: 6 });
     return Array.isArray(res) ? res : res?.items || [];
-  });
-  const { data: trendData, loading: trendLoading } = useRequest(mesDashboardService.getEquipmentTrend);
+  }, dashboardRequestOptions('kz:equipment-dashboard:maintenance'));
+  const { data: trendData, loading: trendLoading } = useRequest(
+    mesDashboardService.getEquipmentTrend,
+    dashboardRequestOptions('kz:equipment-dashboard:trend'),
+  );
 
   const s = summary as Record<string, number> | undefined;
   const recentFaults = recentFaultsResult || [];

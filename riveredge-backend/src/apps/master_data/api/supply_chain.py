@@ -224,6 +224,8 @@ async def delete_customer(
         return {"message": "客户删除成功"}
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 # ==================== 供应商相关接口 ====================

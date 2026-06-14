@@ -2,6 +2,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState } from 'react';
 import { ActionType, ProColumns, ProFormDigit, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Empty, Modal, Space, Tag, Typography } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '../../../../../components/uni-table/stackedPrimaryColumn';
@@ -20,6 +21,7 @@ import {
 } from '../components/inspectionCreateSourceUtils';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 
 const OQC_RESOURCE = 'kuaizhizao:quality-management-oqc-inspection';
 
@@ -224,10 +226,21 @@ const OQCInspectionPage: React.FC = () => {
           toolBarRender={() =>
             canCreate
               ? [
-                  <Button {...rowActionKind('create')} key="from-notice" type="primary" onClick={() => void openFromNoticeModal()}>
-                    从发货通知创建
+                  <Button
+                    {...rowActionKind('create')}
+                    key="from-notice"
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => void openFromNoticeModal()}
+                  >
+                    {withSingleNewShortcutHint('从发货通知创建')}
                   </Button>,
-                  <Button {...rowActionKind('create')} key="from-delivery" onClick={() => void openFromDeliveryModal()}>
+                  <Button
+                    {...rowActionKind('create')}
+                    key="from-delivery"
+                    icon={<PlusOutlined />}
+                    onClick={() => void openFromDeliveryModal()}
+                  >
                     从销售出库创建
                   </Button>,
                 ]

@@ -60,17 +60,40 @@ class Quality8DTransition(BaseSchema):
     verification_result: Optional[str] = Field(None, description="关闭阶段验证结果")
 
 
+class Quality8DLifecycleStage(BaseSchema):
+    key: str
+    label: str
+    status: str = Field(..., description="done/active/pending")
+
+
+class Quality8DHistoryEntry(BaseSchema):
+    timestamp: datetime
+    action: str
+    from_status: Optional[str] = None
+    to_status: Optional[str] = None
+    remarks: Optional[str] = None
+    verification_result: Optional[str] = None
+
+
 class Quality8DResponse(Quality8DBase):
     id: int
     report_code: str
     uuid: str
     tenant_id: int
     closed_at: Optional[datetime] = Field(None, description="关闭时间")
+    lifecycle_stages: List[Quality8DLifecycleStage] = Field(default_factory=list)
+    next_status: Optional[str] = Field(None, description="下一合法阶段")
+    next_step_suggestions: List[str] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
+
+class Quality8DListResponse(BaseSchema):
+    items: List[Quality8DResponse]
+    total: int
 
 
 class NonconformingDispositionUpdate(BaseSchema):

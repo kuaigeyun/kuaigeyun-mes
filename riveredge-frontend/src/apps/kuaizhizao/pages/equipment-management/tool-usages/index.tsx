@@ -15,6 +15,7 @@ import { ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCheckoutUsageLifecycle } from '../../../utils/equipmentLifecycle';
 import { toolApi } from '../../../services/equipment';
+import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import dayjs from 'dayjs';
 
 interface ToolUsage {
@@ -197,8 +198,14 @@ const ToolUsagesPage: React.FC = () => {
           return { data: res.items || [], success: true, total: res.total || 0 };
         }}
         toolBarRender={() => [
-          <Button {...rowActionKind('update')} key="checkout" type="primary" onClick={handleCheckout}>
-            新建工装领用
+          <Button
+            {...rowActionKind('update')}
+            key="checkout"
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={handleCheckout}
+          >
+            {withSingleNewShortcutHint('新建工装领用')}
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}

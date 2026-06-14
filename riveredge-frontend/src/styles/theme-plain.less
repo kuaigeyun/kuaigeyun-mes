@@ -3,12 +3,12 @@
  */
 
 [data-theme-style='plain'] {
-  /* Tag：保留 default/processing（主色），其余语义 Tag 灰阶化 */
+  /* Tag：简约模式保留基础成功/危险语义色，仅弱化警告等次要色 */
   .ant-tag-success,
   .ant-tag-green {
-    color: var(--ant-color-text-secondary) !important;
-    background: var(--ant-color-fill-quaternary) !important;
-    border-color: var(--ant-color-border-secondary) !important;
+    color: var(--ant-color-success-text, var(--ant-color-success)) !important;
+    background: var(--ant-color-success-bg) !important;
+    border-color: var(--ant-color-success-border) !important;
   }
 
   .ant-tag-warning,
@@ -22,9 +22,9 @@
   .ant-tag-error,
   .ant-tag-red,
   .ant-tag-volcano {
-    color: var(--ant-color-text-secondary) !important;
-    background: var(--ant-color-fill-quaternary) !important;
-    border-color: var(--ant-color-border-secondary) !important;
+    color: var(--ant-color-error-text, var(--ant-color-error)) !important;
+    background: var(--ant-color-error-bg) !important;
+    border-color: var(--ant-color-error-border) !important;
   }
 
   /* 生命周期：完成态与警告提示灰阶 */
@@ -74,14 +74,25 @@
 
   /* WIP 操作卡语义色 */
   .dashboard-wip-operation-card__metric-value--success,
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--success {
+    color: var(--ant-color-success) !important;
+  }
+
   .dashboard-wip-operation-card__metric-value--danger,
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--danger {
+    color: var(--ant-color-error) !important;
+  }
+
   .dashboard-wip-operation-card__metric-value--primary {
     color: var(--ant-color-text) !important;
   }
 
-  .dashboard-feed-item__stat--ok,
+  .dashboard-feed-item__stat--ok {
+    color: var(--ant-color-success) !important;
+  }
+
   .dashboard-feed-item__stat--bad {
-    color: var(--ant-color-text-secondary) !important;
+    color: var(--ant-color-error) !important;
   }
 
   /* 列表页指标卡背景趋势图隐藏（数值色由 ListPageTemplate 处理） */
@@ -109,9 +120,7 @@
     opacity: 1;
   }
 
-  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--primary,
-  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--success,
-  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--danger {
+  .dashboard-wip-operation-card--plain .dashboard-wip-operation-card__metric-value--primary {
     color: var(--ant-color-text) !important;
   }
 
@@ -158,8 +167,8 @@
     color: var(--ant-color-primary) !important;
   }
 
-  .sales-module-dashboard .ant-pro-card .anticon[style*='color'],
-  .plan-module-dashboard .ant-pro-card .anticon[style*='color'] {
+  .sales-module-dashboard .ant-pro-card .ant-pro-card-body .anticon[style*='color'],
+  .plan-module-dashboard .ant-pro-card .ant-pro-card-body .anticon[style*='color'] {
     color: var(--ant-color-primary) !important;
   }
 }

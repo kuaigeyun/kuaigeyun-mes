@@ -22,11 +22,18 @@ import {
   Row,
   Col,
 } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import {
+  CheckCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  EyeOutlined,
+  PlusOutlined,
+  StopOutlined,
+} from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, flushDrawerOpen } from '../../../../../components/layout-templates';
 import { DRAWER_CONFIG } from '../../../../../components/layout-templates/constants';
 import { UniDetail, detailDrawerDescriptionItems } from '../../../../../components/uni-detail';
@@ -85,6 +92,7 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
   const [aliasPreview, setAliasPreview] = useState<{ code?: string; name?: string }>({});
   const [aliasLocked, setAliasLocked] = useState(false);
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const detailReqRef = useRef(0);
 
   useEffect(() => {
@@ -246,6 +254,65 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
       actionRef.current?.reload();
     } catch (error: any) {
       messageApi.error(error?.message || t('common.deleteFailed'));
+    }
+  };
+
+  const handleBatchDelete = async (keys: React.Key[]) => {
+    try {
+      const results = await Promise.allSettled(keys.map((key) => priceBookApi.delete(String(key))));
+      const successCount = results.filter((item) => item.status === 'fulfilled').length;
+      const failedCount = keys.length - successCount;
+      if (successCount > 0) {
+        messageApi.success(t('common.batchDeleteSuccess', { count: successCount }));
+      }
+      if (failedCount > 0) {
+        messageApi.warning(
+          t('common.batchDeletePartial', {
+            success: successCount,
+            failed: failedCount,
+          }),
+        );
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
+    }
+  };
+
+  const handleBatchSetActive = async (keys: React.Key[], isActive: boolean) => {
+    try {
+      const results = await Promise.allSettled(
+        keys.map((key) => priceBookApi.update(String(key), { isActive })),
+      );
+      const successCount = results.filter((item) => item.status === 'fulfilled').length;
+      const failedCount = keys.length - successCount;
+      if (successCount > 0) {
+        messageApi.success(
+          isActive
+            ? t('app.master-data.priceBook.batchEnableSuccess', {
+                count: successCount,
+                defaultValue: '已启用 {{count}} 条价格本',
+              })
+            : t('app.master-data.priceBook.batchDisableSuccess', {
+                count: successCount,
+                defaultValue: '已停用 {{count}} 条价格本',
+              }),
+        );
+      }
+      if (failedCount > 0) {
+        messageApi.warning(
+          t('common.batchUpdatePartial', {
+            success: successCount,
+            failed: failedCount,
+            defaultValue: '已成功 {{success}} 条，失败 {{failed}} 条',
+          }),
+        );
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || t('common.operationFailed'));
     }
   };
 
@@ -426,11 +493,40 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
         <UniTable<PartnerPriceBook>
           actionRef={actionRef}
           rowKey="uuid"
+          enableRowSelection
+          selectedRowKeys={selectedRowKeys}
+          onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
           headerTitle={pageTitle}
           showCreateButton
-          createButtonText={createButtonLabel + NEW_SHORTCUT_HINT}
+          createButtonText={createButtonLabel}
           onCreate={handleCreate}
+          showDeleteButton
+          onDelete={handleBatchDelete}
+          deleteConfirmTitle={(count) => t('common.confirmBatchDelete', { count })}
+          deleteConfirmDescription={(count) =>
+            t('common.confirmBatchDeleteContent', { count, defaultValue: `确定删除选中的 ${count} 条记录？` })
+          }
+          toolBarActionsAfterDelete={[
+            <UniBatchMenuButton
+              key={`partner-price-book-batch-actions-${partnerType}`}
+              selectedRowKeys={selectedRowKeys}
+              menuItems={[
+                {
+                  key: 'batch-enable',
+                  label: t('common.enable', '启用'),
+                  icon: <CheckCircleOutlined />,
+                  onClick: (keys) => handleBatchSetActive(keys, true),
+                },
+                {
+                  key: 'batch-disable',
+                  label: t('common.disable', '停用'),
+                  icon: <StopOutlined />,
+                  onClick: (keys) => handleBatchSetActive(keys, false),
+                },
+              ]}
+            />,
+          ]}
           request={async (params) => {
             const res = await priceBookApi.list({
               skip: ((params.current ?? 1) - 1) * (params.pageSize ?? 20),
@@ -440,10 +536,6 @@ const PartnerPriceBooksPage: React.FC<PartnerPriceBooksPageProps> = ({ partnerTy
             });
             return { data: res.data ?? [], success: true, total: res.total ?? 0 };
           }}
-          onRow={(record) => ({
-            onClick: () => openDetail(record),
-            style: { cursor: 'pointer' },
-          })}
         />
       </ListPageTemplate>
 

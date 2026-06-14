@@ -1,5 +1,6 @@
 import React from 'react';
 import { Card, Col, Segmented, Spin, theme } from 'antd';
+import { BarChartOutlined } from '@ant-design/icons';
 
 export interface ModuleChartPanelProps {
   title: React.ReactNode;
@@ -25,11 +26,20 @@ export function ModuleChartPanel({
   lg = 12,
 }: ModuleChartPanelProps) {
   const { token } = theme.useToken();
+  const titleNode =
+    typeof title === 'string' ? (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+        <BarChartOutlined />
+        <span>{title}</span>
+      </span>
+    ) : (
+      title
+    );
 
   return (
     <Col xs={24} lg={lg} style={{ display: 'flex', minWidth: 0 }}>
       <Card
-        title={title}
+        title={titleNode}
         extra={
           segmented ? (
             <Segmented

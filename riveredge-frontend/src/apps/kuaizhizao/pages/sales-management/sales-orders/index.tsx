@@ -2432,7 +2432,37 @@ const SalesOrdersPage: React.FC = () => {
       hideInSearch: false,
       fieldProps: { placeholder: t('app.kuaizhizao.salesOrder.customerName') },
     },
-    { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'date', width: 120, sorter: true, hideInSearch: true },
+    {
+      title: t('app.kuaizhizao.salesOrder.orderDate'),
+      key: 'order_date_delivery_date_stacked',
+      dataIndex: 'order_date',
+      width: 132,
+      uniTableKeepWidth: true,
+      resizable: false,
+      ellipsis: false,
+      sorter: true,
+      hideInSearch: true,
+      render: (_: unknown, record: SalesOrder) => {
+        const orderDateText = record.order_date ? dayjs(record.order_date).format('YYYY-MM-DD') : '-';
+        const deliveryDateText = record.delivery_date ? dayjs(record.delivery_date).format('YYYY-MM-DD') : '-';
+        const overdue = isSalesOrderDeliveryOverdue(record, auditEnabled);
+        return (
+          <UniTableStackedPrimaryCell
+            primary={orderDateText}
+            secondary={deliveryDateText}
+            secondaryCopyable={false}
+            uniformText
+            secondaryExtra={
+              overdue ? (
+                <Tag color="error" style={{ marginInlineEnd: 0, flexShrink: 0 }}>
+                  {t('app.kuaizhizao.salesOrder.overdueBadge')}
+                </Tag>
+              ) : null
+            }
+          />
+        );
+      },
+    },
     // 订单日期范围（仅搜索）
     { title: t('app.kuaizhizao.salesOrder.orderDate'), dataIndex: 'order_date', valueType: 'dateRange', width: 120, hideInTable: true, hideInSearch: false, fieldProps: { placeholder: [t('common.startDate') ?? '开始日期', t('common.endDate') ?? '结束日期'] } },
     {
@@ -2450,6 +2480,7 @@ const SalesOrdersPage: React.FC = () => {
       title: t('app.kuaizhizao.salesOrder.deliveryDate'),
       dataIndex: 'delivery_date',
       width: 120,
+      hideInTable: true,
       sorter: true,
       render: (_: unknown, record: SalesOrder) => {
         const raw = record.delivery_date;

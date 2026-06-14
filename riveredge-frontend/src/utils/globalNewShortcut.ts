@@ -6,6 +6,16 @@
 /** 新建按钮上的快捷键提示文案，可拼在按钮文字后 */
 export const NEW_SHORTCUT_HINT = ' (Alt+N)';
 
+/**
+ * 统一新建按钮快捷键文案：
+ * - 若未包含提示，则补一个 ` (Alt+N)`
+ * - 若重复包含（如 "(Alt+N) (Alt+N)"），收敛为一个
+ */
+export function withSingleNewShortcutHint(label: string): string {
+  const base = label.replace(/\s*\(Alt\+N\)/gi, '').trimEnd();
+  return `${base}${NEW_SHORTCUT_HINT}`;
+}
+
 let currentHandler: (() => void) | null = null;
 
 export function registerNewHandler(fn: () => void): () => void {

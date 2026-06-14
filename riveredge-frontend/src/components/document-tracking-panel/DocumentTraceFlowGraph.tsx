@@ -8,6 +8,7 @@ import {
   ReloadOutlined,
   FullscreenOutlined,
   FullscreenExitOutlined,
+  AimOutlined,
   FileTextOutlined,
   ShoppingOutlined,
   ShoppingCartOutlined,
@@ -176,7 +177,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
               ? `1px solid ${accentBase}`
               : `1px solid ${token.colorBorderSecondary}`;
   const cardShadow = selected
-    ? `0 0 0 2px ${primary}22, ${token.boxShadowSecondary}`
+    ? `0 0 0 2px ${primary}1f, ${token.boxShadowTertiary}`
     : is_deleted
       ? token.boxShadowTertiary
       : is_root
@@ -191,7 +192,7 @@ const TraceDocumentFlowNode: React.FC<TraceDocumentFlowNodeProps> = ({
         width: '100%',
         height: '100%',
         position: 'relative',
-        filter: selected ? `drop-shadow(0 0 8px ${primary}33)` : 'none',
+        filter: selected ? `drop-shadow(0 0 4px ${primary}26)` : 'none',
         transition: 'filter 0.2s ease',
         opacity: is_deleted ? 0.72 : 1,
       }}
@@ -362,6 +363,10 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
   /** 全屏包裹追溯图画布（不含外层「刷新」工具条） */
   const traceChartShellRef = useRef<HTMLDivElement | null>(null);
   const [traceChartFullscreen, setTraceChartFullscreen] = useState(false);
+  /** 防误触：默认不允许滚轮缩放，点击画板进入选中模式后才开启 */
+  const [traceCanvasActive, setTraceCanvasActive] = useState(false);
+  /** 当前画布实例：用于“定位到中心”恢复首屏自适应位置 */
+  const traceGraphRef = useRef<Graph | null>(null);
 
   useEffect(() => {
     const onFsChange = () => {
@@ -370,6 +375,18 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     document.addEventListener('fullscreenchange', onFsChange);
     return () => document.removeEventListener('fullscreenchange', onFsChange);
   }, []);
+
+  useEffect(() => {
+    if (!traceCanvasActive) return;
+    const onPointerDownOutside = (event: MouseEvent) => {
+      const shell = traceChartShellRef.current;
+      if (!shell) return;
+      if (event.target instanceof Node && shell.contains(event.target)) return;
+      setTraceCanvasActive(false);
+    };
+    document.addEventListener('mousedown', onPointerDownOutside);
+    return () => document.removeEventListener('mousedown', onPointerDownOutside);
+  }, [traceCanvasActive]);
 
   const toggleTraceChartFullscreen = useCallback(async () => {
     const el = traceChartShellRef.current;
@@ -430,8 +447,30 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
     run();
   }, [beginTraceReload, run]);
 
+  const resetTraceViewportToInitialFit = useCallback(async () => {
+    const graph = traceGraphRef.current;
+    if (!graph || graph.destroyed) return;
+    const layoutMode: 'compact' | 'normal' = compact ? 'compact' : 'normal';
+    const [nodeBaseWidth] = TRACE_FLOW_NODE_BASE_SIZE[layoutMode];
+    const singleNodeFitMaxZoom =
+      TRACE_FLOW_SINGLE_NODE_MAX_VIEW_WIDTH_PX[layoutMode] / nodeBaseWidth;
+    const nodesCount = trace ? traceResponseToFlowGraphData(trace, formatLabel).nodes.length : 0;
+    try {
+      await graph.fitView({ when: 'always', direction: 'both' }, TRACE_FLOW_VIEWPORT_FIT_ANIM);
+      if (nodesCount <= 1) {
+        const z = graph.getZoom();
+        if (z > singleNodeFitMaxZoom) {
+          await graph.zoomTo(singleNodeFitMaxZoom, TRACE_FLOW_VIEWPORT_FIT_ANIM);
+        }
+      }
+    } catch {
+      // 忽略定位失败，避免打断页面交互
+    }
+  }, [compact, formatLabel, trace]);
+
   useEffect(() => {
     if (!enabled || !documentType || documentId == null) return;
+    setTraceCanvasActive(false);
     beginTraceReload();
     run();
   }, [enabled, documentType, documentId, refreshKey, beginTraceReload, run]);
@@ -512,7 +551,9 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         nodesep: 28,
         ranksep: dagreRankSep,
       },
-      behaviors: ['drag-canvas', 'zoom-canvas', 'drag-node'],
+      behaviors: traceCanvasActive
+        ? ['drag-canvas', 'zoom-canvas', 'drag-node']
+        : ['drag-canvas', 'drag-node'],
       /** React 自定义节点（对齐 UniFlowNode 层次）；勿改为 rect，否则不走 React 挂载链路 */
       node: {
         style: {
@@ -560,6 +601,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       },
       /** G6 v5：Graphin 每次 setOptions 后会再次 onReady，先卸旧监听避免重复触发 */
       onReady: (graph: Graph) => {
+        traceGraphRef.current = graph;
         graph.off(NodeEvent.CLICK, handleTraceFlowNodeClick);
         graph.on(NodeEvent.CLICK, handleTraceFlowNodeClick);
 
@@ -592,7 +634,7 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
       flowKey,
       graphConfig: config,
     };
-  }, [trace, formatLabel, documentType, documentId, refreshKey, traceLoadSeq, compact, selectedGraphNodeId, handleTraceFlowNodeClick]);
+  }, [trace, formatLabel, documentType, documentId, refreshKey, traceLoadSeq, compact, selectedGraphNodeId, handleTraceFlowNodeClick, traceCanvasActive]);
 
   if (!enabled) {
     return <div style={{ minHeight: compact ? 0 : 400 }} />;
@@ -620,7 +662,21 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
               size="small"
               icon={traceChartFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
               onClick={() => void toggleTraceChartFullscreen()}
-            />
+            >
+              {traceChartFullscreen
+                ? t('components.documentRelationGraph.exitFullscreen', { defaultValue: '退出全屏' })
+                : t('components.documentRelationGraph.fullscreen', { defaultValue: '全屏' })}
+            </Button>
+          </Tooltip>
+          <Tooltip title={t('components.documentRelationGraph.center', { defaultValue: '定位到中心' })}>
+            <Button
+              type="default"
+              size="small"
+              icon={<AimOutlined />}
+              onClick={() => void resetTraceViewportToInitialFit()}
+            >
+              {t('components.documentRelationGraph.center', { defaultValue: '定位到中心' })}
+            </Button>
           </Tooltip>
           <Button type="default" size="small" icon={<ReloadOutlined />} loading={loading} onClick={reloadTrace}>
             {t('components.documentRelationGraph.refresh')}
@@ -635,14 +691,30 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
           ...(compact || traceChartFullscreen
             ? { flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }
             : { minHeight: 480 }),
-          border: `1px solid ${token.colorBorder}`,
+          border: traceCanvasActive
+            ? `1px solid ${token.colorPrimary}`
+            : `1px solid ${token.colorBorder}`,
+          boxShadow: traceCanvasActive
+            ? `inset 0 0 0 3px ${token.colorPrimary}40, 0 0 0 2px ${token.colorPrimary}2e`
+            : undefined,
           borderRadius: traceChartFullscreen ? 0 : token.borderRadius,
           overflow: 'hidden',
           background: token.colorBgContainer,
+          transition: 'border-color 0.2s ease, box-shadow 0.2s ease',
         }}
       >
         {hideInlineRefresh ? (
           <Space size={4} style={{ position: 'absolute', top: 8, right: 8, zIndex: 5 }}>
+            <Tooltip title={t('components.documentRelationGraph.center', { defaultValue: '定位到中心' })}>
+              <Button
+                type="default"
+                size="small"
+                icon={<AimOutlined />}
+                onClick={() => void resetTraceViewportToInitialFit()}
+              >
+                {t('components.documentRelationGraph.center', { defaultValue: '定位到中心' })}
+              </Button>
+            </Tooltip>
             <Button
               type="default"
               size="small"
@@ -664,7 +736,11 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
                 size="small"
                 icon={traceChartFullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
                 onClick={() => void toggleTraceChartFullscreen()}
-              />
+              >
+                {traceChartFullscreen
+                  ? t('components.documentRelationGraph.exitFullscreen', { defaultValue: '退出全屏' })
+                  : t('components.documentRelationGraph.fullscreen', { defaultValue: '全屏' })}
+              </Button>
             </Tooltip>
           </Space>
         ) : null}
@@ -690,6 +766,9 @@ export const DocumentTraceFlowGraph: React.FC<DocumentTraceFlowGraphProps> = ({
         )}
         {!loading && trace && graphConfig && (
           <div
+            onMouseDown={() => {
+              if (!traceCanvasActive) setTraceCanvasActive(true);
+            }}
             style={{
               flex: 1,
               minHeight: 0,

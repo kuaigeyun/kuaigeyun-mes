@@ -176,7 +176,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
           {showConfig ? (
             <div className="dashboard-section__extra">
               <Button
-                type="text"
+                type="link"
                 size="small"
                 icon={<SettingOutlined />}
                 onClick={handleOpenConfig}

@@ -34,7 +34,7 @@ class KbService(AppBaseService[KbSpace]):
         qs = KbSpace.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if not include_inactive:
             qs = qs.filter(is_active=True)
-        rows = await qs.order_by("sort_order", "id").all()
+        rows = await qs.order_by("parent_space_id", "sort_order", "id").all()
         return [KbSpaceResponse.model_validate(r) for r in rows]
 
     async def create_space(self, tenant_id: int, data: KbSpaceCreate, created_by: int) -> KbSpaceResponse:
@@ -71,10 +71,19 @@ class KbService(AppBaseService[KbSpace]):
             raise NotFoundError(f"知识空间不存在: {space_id}")
         await row.update_from_dict({"deleted_at": datetime.now(), "updated_by": deleted_by}).save()
 
-    async def _build_article_response(self, tenant_id: int, article: KbArticle) -> KbArticleResponse:
+    async def _build_article_response(
+        self, tenant_id: int, article: KbArticle, space_name: Optional[str] = None
+    ) -> KbArticleResponse:
         links = await KbArticleLink.filter(tenant_id=tenant_id, article_id=article.id).all()
+        resolved_space_name = space_name
+        if resolved_space_name is None:
+            space = await KbSpace.get_or_none(
+                tenant_id=tenant_id, id=article.space_id, deleted_at__isnull=True
+            )
+            resolved_space_name = getattr(space, "space_name", None)
         return KbArticleResponse.model_validate({
             **{k: getattr(article, k) for k in article._meta.fields_map if hasattr(article, k)},
+            "space_name": resolved_space_name,
             "links": [KbArticleLinkResponse.model_validate(l) for l in links],
         })
 
@@ -83,19 +92,34 @@ class KbService(AppBaseService[KbSpace]):
         tenant_id: int,
         space_id: Optional[int] = None,
         status: Optional[str] = None,
+        keyword: Optional[str] = None,
+        tag: Optional[str] = None,
         skip: int = 0,
         limit: int = 20,
-    ) -> List[KbArticleResponse]:
+    ) -> tuple[List[KbArticleResponse], int]:
         qs = KbArticle.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if space_id:
             qs = qs.filter(space_id=space_id)
         if status:
             qs = qs.filter(status=status)
+        if keyword:
+            qs = qs.filter(Q(title__icontains=keyword) | Q(content__icontains=keyword))
+        if tag:
+            qs = qs.filter(tags__contains=[tag])
+        total = await qs.count()
         rows = await qs.order_by("-updated_at").offset(skip).limit(limit).all()
+        space_name_map = {
+            s.id: s.space_name
+            for s in await KbSpace.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                id__in=list({row.space_id for row in rows if row.space_id is not None}),
+            )
+        }
         out: List[KbArticleResponse] = []
         for row in rows:
-            out.append(await self._build_article_response(tenant_id, row))
-        return out
+            out.append(await self._build_article_response(tenant_id, row, space_name_map.get(row.space_id)))
+        return out, total
 
     async def get_article(self, tenant_id: int, article_id: int) -> KbArticleResponse:
         row = await KbArticle.get_or_none(tenant_id=tenant_id, id=article_id, deleted_at__isnull=True)
