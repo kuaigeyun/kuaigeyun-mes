@@ -493,10 +493,10 @@ class DemandService(AppBaseService[Demand]):
                 # 启动审核流程（统一使用 ApprovalInstanceService）
                 try:
                     from core.services.approval.approval_instance_service import ApprovalInstanceService
-                    instance = await ApprovalInstanceService.start_approval(
+                    instance = await ApprovalInstanceService.start_approval_for_node(
                         tenant_id=tenant_id,
                         user_id=submitted_by,
-                        process_code="demand",
+                        node_key="demand",
                         entity_type="demand",
                         entity_id=demand_id,
                         entity_uuid=str(demand.uuid),

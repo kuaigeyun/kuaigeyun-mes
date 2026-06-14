@@ -280,10 +280,18 @@ class TenantInitDataService:
                 get_installed_application_codes,
             )
             installed = await get_installed_application_codes(tenant_id)
-            return await ApprovalProcessService.load_preset_sme(
+            only_codes = approval_process_codes_for_installed_apps(installed)
+            count = await ApprovalProcessService.load_preset_sme(
                 tenant_id,
-                only_codes=approval_process_codes_for_installed_apps(installed),
+                only_codes=only_codes,
             )
+            from core.services.approval.audit_binding_service import AuditBindingService
+
+            await AuditBindingService.seed_bindings_for_tenant(
+                tenant_id,
+                only_node_keys=only_codes,
+            )
+            return count
 
         if key == "message_template_preset":
             from core.services.messaging.message_template_service import MessageTemplateService

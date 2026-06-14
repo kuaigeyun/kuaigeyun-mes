@@ -55,7 +55,7 @@ async def approve_change(
     data: ChangeApproveRequest,
     change_uuid: str = Path(...),
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_access("kuaiplm.change", "approve", required_permissions=["kuaiplm:change:approve"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
     try:
@@ -98,7 +98,7 @@ async def delete_change(
 async def batch_approve_changes(
     data: ChangeBatchApproveRequest,
     current_user: User = Depends(get_current_user),
-    _auth=Depends(require_access("kuaiplm.change", "update", required_permissions=["kuaiplm:change:update"])),
+    _auth=Depends(require_access("kuaiplm.change", "approve", required_permissions=["kuaiplm:change:approve"])),
     tenant_id: int = Depends(get_current_tenant),
 ):
     return await service.batch_approve_changes(

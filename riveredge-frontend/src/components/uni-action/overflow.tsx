@@ -193,6 +193,9 @@ function isVisibleWhenDisabledRowAction(node: React.ReactNode): boolean {
 
 /** 不可点（disabled 或无按钮/链接）的操作默认不展示；带显式标记的可保留展示 */
 function isClickableVisibleAction(node: React.ReactNode): boolean {
+  // skip 表示组件自管交互（如 UniWorkflowActions），静态树下可能拿不到内部 Button，
+  // 不能因 findInteractiveElement 失败就误删。
+  if (readExplicitActionKind(node) === 'skip') return true
   const interactive = findInteractiveElement(node)
   if (!interactive) return false
   const p = (interactive.props || {}) as { disabled?: boolean }
@@ -296,6 +299,25 @@ export function renderRowActionsOverflow(
   }
 
   const keyedEnabled = withRowActionKeys(enabled, keyPrefix)
+
+  // 自管组件（skip 且外层无可静态识别交互）若折叠进“更多”会变成不可执行菜单项；
+  // 这类节点始终保持主行直出。
+  const hasInlineOnlySkipComponent = enabled.some((node) => {
+    if (readExplicitActionKind(node) !== 'skip') return false
+    return !findInteractiveElement(node)
+  })
+  if (hasInlineOnlySkipComponent) {
+    return (
+      <Space
+        align="center"
+        size={ROW_ACTIONS_INLINE_GAP}
+        wrap={false}
+        style={{ whiteSpace: 'nowrap' }}
+      >
+        {keyedEnabled}
+      </Space>
+    )
+  }
 
   if (enabled.length <= primarySlotsBeforeMore) {
     return (

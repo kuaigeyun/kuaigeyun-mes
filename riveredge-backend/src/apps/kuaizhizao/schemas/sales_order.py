@@ -202,6 +202,7 @@ class SalesOrderResponse(SalesOrderBase):
     shippable_quantity: float = Field(0.0, description="当前可发货数量合计（扣除已通知占用）")
     demand_synced: Optional[bool] = Field(None, description="本次操作是否已同步至关联需求")
     lifecycle: Optional[dict] = Field(None, description="生命周期（后端计算，供前端 UniLifecycleStepper 展示）")
+    audit: Optional[dict] = Field(None, description="审核相位（唯一来源：{entity_type, phase, enabled, allowed_actions}，供 uni-audit 渲染）")
 
     class Config:
         from_attributes = True

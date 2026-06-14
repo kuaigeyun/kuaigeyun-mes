@@ -57,6 +57,11 @@ def _to_response_model(approval_process: Any) -> ApprovalProcessResponse:
         "nodes": _normalize_json_object(getattr(approval_process, "nodes", None), "nodes", approval_process.uuid),
         "config": _normalize_json_object(getattr(approval_process, "config", None), "config", approval_process.uuid),
         "is_active": approval_process.is_active,
+        "version": getattr(approval_process, "version", 1) or 1,
+        "published_version": getattr(approval_process, "published_version", 1) or 1,
+        "draft_nodes": _normalize_json_object(
+            getattr(approval_process, "draft_nodes", None), "draft_nodes", approval_process.uuid
+        ) if getattr(approval_process, "draft_nodes", None) else None,
         "inngest_workflow_id": approval_process.inngest_workflow_id,
         "created_at": approval_process.created_at,
         "updated_at": approval_process.updated_at,
@@ -186,6 +191,80 @@ async def toggle_audit_switch(
         )
 
 
+@router.get("/auditable")
+async def list_auditable_documents(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    可审核单据注册表。
+
+    单据声明来自 manifest.audit；开关与流程绑定来自 AuditDocumentBinding。
+    """
+    from core.config.audit_registry import entries_grouped_by_app
+    from core.services.approval.audit_binding_service import AuditBindingService
+
+    installed = await get_installed_application_codes(tenant_id)
+    grouped = entries_grouped_by_app()
+    binding_map = await AuditBindingService.get_binding_map(tenant_id)
+
+    result: List[Dict[str, Any]] = []
+    for app_code, entries in grouped.items():
+        if app_code not in installed:
+            continue
+        items = []
+        for e in entries:
+            binding = binding_map.get(e.node_key)
+            process = binding.process if binding else None
+            enabled = bool(
+                binding
+                and binding.is_enabled
+                and process
+                and process.is_active
+                and process.deleted_at is None
+            )
+            items.append(
+                {
+                    "node_key": e.node_key,
+                    "code": e.node_key,
+                    "entity_type": e.entity_type,
+                    "resource": e.resource,
+                    "name": e.name,
+                    "template": e.template,
+                    "config_category": e.config_category,
+                    "is_active": enabled,
+                    "process_uuid": str(process.uuid) if process else None,
+                    "process_name": process.name if process else None,
+                }
+            )
+        result.append({"app": app_code, "items": items})
+    return {"apps": result}
+
+
+@router.get("/condition-fields")
+async def get_condition_fields(
+    entity_type: str = Query(..., description="实体类型"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """设计器条件分支：按 entity_type 返回可用字段。"""
+    from core.config.audit_condition_fields import condition_fields_for_entity
+
+    _ = tenant_id
+    return {"entity_type": entity_type, "fields": condition_fields_for_entity(entity_type)}
+
+
+@router.get("/editable-fields")
+async def get_editable_fields(
+    entity_type: str = Query(..., description="实体类型"),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """审核中改单：按 entity_type 返回默认可编辑字段。"""
+    from core.config.audit_editable_fields import editable_fields_for_entity
+
+    _ = tenant_id
+    spec = editable_fields_for_entity(entity_type)
+    return {"entity_type": entity_type, "fields": spec}
+
+
 @router.get("/{uuid}", response_model=ApprovalProcessResponse)
 async def get_approval_process(
     uuid: str,
@@ -256,6 +335,25 @@ async def update_approval_process(
         )
 
 
+@router.post("/{uuid}/publish", response_model=ApprovalProcessResponse)
+async def publish_approval_process(
+    uuid: str,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """发布审批流程（递增版本；进行中实例仍使用创建时钉扎的版本）。"""
+    try:
+        approval_process = await ApprovalProcessService.publish_approval_process(
+            tenant_id=tenant_id,
+            uuid=uuid,
+        )
+        return _to_response_model(approval_process)
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e))
+
+
 @router.delete("/{uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_approval_process(
     uuid: str,
@@ -301,6 +399,12 @@ async def load_preset_approval_processes(
     count = await ApprovalProcessService.load_preset_sme(
         tenant_id,
         only_codes=visible_codes,
+    )
+    from core.services.approval.audit_binding_service import AuditBindingService
+
+    await AuditBindingService.seed_bindings_for_tenant(
+        tenant_id,
+        only_node_keys=visible_codes,
     )
     return {"created": count, "message": f"成功加载 {count} 个审批流程预设"}
 

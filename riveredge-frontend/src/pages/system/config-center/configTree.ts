@@ -145,7 +145,7 @@ export const PARAMETER_CATEGORIES: ConfigCategory[] = createCategories({
   ],
 });
 
-/** 2. 审核设置（唯一源：ApprovalProcess 审批流程开关） */
+/** 2. 审核设置（唯一源：/core/audit-bindings + manifest.audit） */
 export const AUDIT_CATEGORIES: ConfigCategory[] = createCategories({});
 
 /** 3. 流程设置（设置业务之间的关系） */

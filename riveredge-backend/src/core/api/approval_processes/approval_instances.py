@@ -109,6 +109,7 @@ async def get_approval_status(
         tenant_id=tenant_id,
         entity_type=entity_type,
         entity_id=entity_id,
+        viewer_id=current_user.id,
     )
     return result
 

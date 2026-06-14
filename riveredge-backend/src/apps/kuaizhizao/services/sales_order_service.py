@@ -526,9 +526,11 @@ class SalesOrderService:
         pushed_work_order_quantity: Optional[Decimal] = None,
         remaining_push_quantity: Optional[Decimal] = None,
         work_order_push_progress: Optional[float] = None,
+        audit_enabled: bool = False,
     ) -> SalesOrderResponse:
         """将 SalesOrder 转为 SalesOrderResponse"""
         from apps.kuaizhizao.services.document_lifecycle_service import get_sales_order_lifecycle
+        from core.services.approval.audit_phase import derive_audit_phase
 
         lifecycle = get_sales_order_lifecycle(
             order,
@@ -630,6 +632,12 @@ class SalesOrderService:
                     s for s in suggestions if "可发货" not in s
                 ]
         base["lifecycle"] = lifecycle
+        base["audit"] = derive_audit_phase(
+            "sales_order",
+            order.status,
+            getattr(order, "review_status", None),
+            enabled=audit_enabled,
+        )
         fallback = material_code_fallback or {}
         mat_fallback = material_fallback or {}
 
@@ -1209,7 +1217,8 @@ class SalesOrderService:
             demand = await self._get_linked_demand(tenant_id, order.id)
             shipped_by = await self._shipped_qty_by_sales_order(tenant_id, [order.id])
             dp = self._merged_delivery_progress(order, list(items), shipped_by.get(order.id, Decimal("0")))
-            return self._order_to_response(order, items=items, demand=demand, delivery_progress=dp)
+            audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
+            return self._order_to_response(order, items=items, demand=demand, delivery_progress=dp, audit_enabled=audit_enabled)
 
     async def apply_push_default_mode_after_create(
         self,
@@ -1339,6 +1348,7 @@ class SalesOrderService:
             await self._batch_finance_progress_by_order(tenant_id, [order], order_to_deliveries)
         ).get(sales_order_id, {})
 
+        audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
         return self._order_to_response(
             order,
             items=items,
@@ -1352,6 +1362,7 @@ class SalesOrderService:
             invoice_amount_progress=finance.get("invoice_amount_progress", 0.0),
             collection_progress=finance.get("collection_progress", 0.0),
             shippable_hint=shippable_map.get(sales_order_id),
+            audit_enabled=audit_enabled,
         )
 
     async def _filter_orders_by_lifecycle_stage(
@@ -1603,6 +1614,7 @@ class SalesOrderService:
             tenant_id=tenant_id,
             sales_order_ids=order_ids,
         )
+        audit_enabled = await self.business_config_service.check_audit_required(tenant_id, "sales_order")
 
         eligible_ship_check_ids: List[int] = []
         delivery_progress_by_order: Dict[int, float] = {}
@@ -1653,6 +1665,7 @@ class SalesOrderService:
                     material_code_fallback=material_code_fallback_all.get(order.id) if include_items else None,
                     material_fallback=material_fallback_all.get(order.id) if include_items else None,
                     shippable_hint=shippable_map.get(order.id),
+                    audit_enabled=audit_enabled,
                 )
             )
         return SalesOrderListResponse(data=sales_orders, total=total, success=True)
@@ -1664,6 +1677,8 @@ class SalesOrderService:
         sales_order_data: SalesOrderUpdate,
         updated_by: int,
         current_user: Optional["User"] = None,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> SalesOrderResponse:
         """更新销售订单。支持草稿与已审核订单（含反审核后编辑）；已审核订单保存后同步关联需求。"""
         order = await SalesOrder.get_or_none(
@@ -1686,6 +1701,17 @@ class SalesOrderService:
         if order.status not in (DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW):
             raise BusinessLogicError(f"只能更新草稿或待审核的销售订单，当前状态: {order.status}")
 
+        if self._is_pending_review_status(order.status) and not approval_edit_context:
+            submitter_id = getattr(order, "created_by", None) or getattr(order, "submitted_by", None)
+            if submitter_id and int(updated_by) != int(submitter_id):
+                from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                    tenant_id, "sales_order", sales_order_id, updated_by
+                )
+                if not edit_ctx:
+                    raise BusinessLogicError("单据审核中，仅发起人或已开启改单权限的当前审批人可修改")
+
         old_values = {
             "order_date": str(order.order_date) if order.order_date else None,
             "delivery_date": str(order.delivery_date) if order.delivery_date else None,
@@ -1703,6 +1729,18 @@ class SalesOrderService:
             "notes": order.notes,
         }
         items_changed = sales_order_data.items is not None
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+            node_editable = approval_edit_context.get("editable_fields")
+            upd_preview = sales_order_data.model_dump(exclude_unset=True, exclude={"items"})
+            for k in upd_preview:
+                if k in ("updated_by",):
+                    continue
+                if not is_field_editable("sales_order", k, node_editable):
+                    raise ValidationError(f"字段「{k}」不允许在审核中修改")
+            if items_changed and not is_field_editable("sales_order", "items", node_editable):
+                raise ValidationError("字段「订单明细」不允许在审核中修改")
 
         async with in_transaction():
             self._validate_sales_order_non_negative(
@@ -1830,7 +1868,14 @@ class SalesOrderService:
             from apps.common.base_service import AppBaseService
             operator_name = await AppBaseService().get_user_name(updated_by)
             reason_extra = _json.dumps(
-                {"changed_fields": changed_fields, "field_changes": field_changes},
+                {
+                    "changed_fields": changed_fields,
+                    "field_changes": field_changes,
+                    "approval_edit": bool(approval_edit_context),
+                    "approval_instance_id": (
+                        approval_edit_context.get("approval_instance_id") if approval_edit_context else None
+                    ),
+                },
                 ensure_ascii=False,
             )
             await self._log_state_transition(
@@ -1840,6 +1885,16 @@ class SalesOrderService:
                 reason="编辑",
                 reason_extra=reason_extra,
             )
+            if approval_edit_context and field_changes:
+                from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                await ApprovalEditGuard.record_document_edit(
+                    tenant_id,
+                    approval_edit_context,
+                    updated_by,
+                    field_changes,
+                    comment=approval_edit_comment,
+                )
         # 若是自动审核配置，撤回审核后的订单（当前待审核）编辑保存后自动再次审核
         if self._is_pending_review_status(order.status):
             audit_required = await self.business_config_service.check_audit_required(
@@ -1971,10 +2026,10 @@ class SalesOrderService:
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
         from core.services.approval.approval_instance_service import ApprovalInstanceService
-        instance = await ApprovalInstanceService.start_approval(
+        instance = await ApprovalInstanceService.start_approval_for_node(
             tenant_id=tenant_id,
             user_id=submitted_by,
-            process_code="sales_order",
+            node_key="sales_order",
             entity_type="sales_order",
             entity_id=order.id,
             entity_uuid=str(order.uuid),
@@ -1997,21 +2052,10 @@ class SalesOrderService:
                 )
             return await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
-        # 审批流程不存在，设为待审核，需手动调用审核接口
-        from apps.common.base_service import AppBaseService
-        submitter_name = await AppBaseService().get_user_name(submitted_by)
-        async with in_transaction():
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                status=DemandStatus.PENDING_REVIEW,
-                review_status=ReviewStatus.PENDING,
-                updated_by=submitted_by,
-            )
-            await self._log_state_transition(
-                tenant_id, sales_order_id,
-                DemandStatus.DRAFT, DemandStatus.PENDING_REVIEW,
-                submitted_by, submitter_name, "提交",
-            )
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        # 审核已开启却未建实例 = 配置错误（缺审批流程/未激活），显式报错，不做兜底待审核。
+        raise BusinessLogicError(
+            "销售订单审核已开启但未找到可用的审批流程，请在配置中心检查 sales_order 审批流程是否已激活"
+        )
 
     async def approve_sales_order(
         self,
@@ -2041,36 +2085,48 @@ class SalesOrderService:
             order_code=order.order_code,
         )
 
-        from apps.common.base_service import AppBaseService
-        approver_name = await AppBaseService().get_user_name(approved_by)
+        from core.services.approval.uni_audit_service import UniAuditService
 
-        async with in_transaction():
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                reviewer_id=approved_by,
-                reviewer_name=approver_name,
-                review_time=datetime.now(),
-                review_status=ReviewStatus.APPROVED,
-                status=DemandStatus.AUDITED,
-                updated_by=approved_by,
+        async def _do_approve() -> SalesOrderResponse:
+            from apps.common.base_service import AppBaseService
+            approver_name = await AppBaseService().get_user_name(approved_by)
+
+            async with in_transaction():
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    reviewer_id=approved_by,
+                    reviewer_name=approver_name,
+                    review_time=datetime.now(),
+                    review_status=ReviewStatus.APPROVED,
+                    status=DemandStatus.AUDITED,
+                    updated_by=approved_by,
+                )
+                await self._log_state_transition(
+                    tenant_id, sales_order_id,
+                    DemandStatus.PENDING_REVIEW, DemandStatus.AUDITED,
+                    approved_by, approver_name, "自动审核" if is_auto_approve else "审核通过",
+                )
+                demand_synced = False
+            result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
+            auto_push_result = await self._try_auto_push_order_to_computation(
+                tenant_id=tenant_id,
+                sales_order_id=sales_order_id,
+                operator_id=approved_by,
             )
-            await self._log_state_transition(
-                tenant_id, sales_order_id,
-                DemandStatus.PENDING_REVIEW, DemandStatus.AUDITED,
-                approved_by, approver_name, "自动审核" if is_auto_approve else "审核通过",
-            )
-            # 审核通过后不再自动创建/同步 Demand。
-            demand_synced = False
-        result = await self.get_sales_order_by_id(tenant_id, sales_order_id)
-        auto_push_result = await self._try_auto_push_order_to_computation(
+            out = result.model_dump()
+            out["demand_synced"] = demand_synced
+            if auto_push_result:
+                out["auto_computation"] = auto_push_result
+            return SalesOrderResponse(**out)
+
+        result = await UniAuditService.approve_with_flow_fallback(
             tenant_id=tenant_id,
-            sales_order_id=sales_order_id,
-            operator_id=approved_by,
+            entity_type="sales_order",
+            entity_id=sales_order_id,
+            approver_id=approved_by,
+            flow_approve=_do_approve,
         )
-        out = result.model_dump()
-        out["demand_synced"] = demand_synced
-        if auto_push_result:
-            out["auto_computation"] = auto_push_result
-        return SalesOrderResponse(**out)
+        # 走流程时由完成回调写回，facade 返回 None，此处取最新单据返回。
+        return result if result is not None else await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def reject_sales_order(
         self,
@@ -2088,25 +2144,39 @@ class SalesOrderService:
         if not self._is_review_pending(order.review_status):
             raise BusinessLogicError(f"只能审核待审核状态的订单，当前: {order.review_status}")
 
-        from apps.common.base_service import AppBaseService
-        approver_name = await AppBaseService().get_user_name(approved_by)
+        from core.services.approval.uni_audit_service import UniAuditService
 
-        async with in_transaction():
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                reviewer_id=approved_by,
-                reviewer_name=approver_name,
-                review_time=datetime.now(),
-                review_status=ReviewStatus.REJECTED,
-                review_remarks=rejection_reason,
-                status=DemandStatus.REJECTED,
-                updated_by=approved_by,
-            )
-            await self._log_state_transition(
-                tenant_id, sales_order_id,
-                DemandStatus.PENDING_REVIEW, DemandStatus.REJECTED,
-                approved_by, approver_name, f"驳回: {rejection_reason}",
-            )
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        async def _do_reject(reason: Optional[str]) -> SalesOrderResponse:
+            from apps.common.base_service import AppBaseService
+            approver_name = await AppBaseService().get_user_name(approved_by)
+
+            reject_reason = reason or rejection_reason
+            async with in_transaction():
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    reviewer_id=approved_by,
+                    reviewer_name=approver_name,
+                    review_time=datetime.now(),
+                    review_status=ReviewStatus.REJECTED,
+                    review_remarks=reject_reason,
+                    status=DemandStatus.REJECTED,
+                    updated_by=approved_by,
+                )
+                await self._log_state_transition(
+                    tenant_id, sales_order_id,
+                    DemandStatus.PENDING_REVIEW, DemandStatus.REJECTED,
+                    approved_by, approver_name, f"驳回: {reject_reason}",
+                )
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+
+        result = await UniAuditService.reject_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_order",
+            entity_id=sales_order_id,
+            approver_id=approved_by,
+            reason=rejection_reason,
+            flow_reject=_do_reject,
+        )
+        return result if result is not None else await self.get_sales_order_by_id(tenant_id, sales_order_id)
 
     async def unapprove_sales_order(
         self,
@@ -2136,29 +2206,40 @@ class SalesOrderService:
             )
             order = await SalesOrder.get(tenant_id=tenant_id, id=sales_order_id)
 
-        # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
-        demand = await self._get_linked_demand(tenant_id, sales_order_id)
-        if demand and demand.pushed_to_computation:
-            await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)
+        from core.services.approval.uni_audit_service import UniAuditService
 
-        from apps.common.base_service import AppBaseService
-        unapprover_name = await AppBaseService().get_user_name(unapproved_by)
-        async with in_transaction():
-            await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
-                status=DemandStatus.PENDING_REVIEW,
-                review_status=ReviewStatus.PENDING,
-                reviewer_id=None,
-                reviewer_name=None,
-                review_time=None,
-                review_remarks=None,
-                updated_by=unapproved_by,
-            )
-            await self._log_state_transition(
-                tenant_id, sales_order_id,
-                order.status, DemandStatus.PENDING_REVIEW,
-                unapproved_by, unapprover_name, "反审核",
-            )
-        return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+        async def _do_revoke() -> SalesOrderResponse:
+            # 历史兼容：若历史订单曾产生 Demand 且已下推需求计算，则先执行撤回下推。
+            demand = await self._get_linked_demand(tenant_id, sales_order_id)
+            if demand and demand.pushed_to_computation:
+                await self.withdraw_sales_order_from_computation(tenant_id, sales_order_id)
+
+            from apps.common.base_service import AppBaseService
+            unapprover_name = await AppBaseService().get_user_name(unapproved_by)
+            async with in_transaction():
+                await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
+                    status=DemandStatus.PENDING_REVIEW,
+                    review_status=ReviewStatus.PENDING,
+                    reviewer_id=None,
+                    reviewer_name=None,
+                    review_time=None,
+                    review_remarks=None,
+                    updated_by=unapproved_by,
+                )
+                await self._log_state_transition(
+                    tenant_id, sales_order_id,
+                    order.status, DemandStatus.PENDING_REVIEW,
+                    unapproved_by, unapprover_name, "反审核",
+                )
+            return await self.get_sales_order_by_id(tenant_id, sales_order_id)
+
+        return await UniAuditService.revoke_with_flow_fallback(
+            tenant_id=tenant_id,
+            entity_type="sales_order",
+            entity_id=sales_order_id,
+            operator_id=unapproved_by,
+            flow_revoke=_do_revoke,
+        )
 
     async def push_sales_order_to_computation(
         self,
@@ -3013,6 +3094,13 @@ class SalesOrderService:
 
         prev_status = order.status
         async with in_transaction():
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="sales_order",
+                entity_id=sales_order_id,
+                operator_id=withdrawn_by,
+            )
             await SalesOrder.filter(tenant_id=tenant_id, id=sales_order_id).update(
                 status=DemandStatus.DRAFT,
                 review_status=ReviewStatus.PENDING,

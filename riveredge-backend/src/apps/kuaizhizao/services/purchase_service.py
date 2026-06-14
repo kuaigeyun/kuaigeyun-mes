@@ -509,10 +509,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         # 启动审批流程（统一使用 ApprovalInstanceService）
         try:
             from core.services.approval.approval_instance_service import ApprovalInstanceService
-            instance = await ApprovalInstanceService.start_approval(
+            instance = await ApprovalInstanceService.start_approval_for_node(
                 tenant_id=tenant_id,
                 user_id=submitted_by,
-                process_code="purchase_order",
+                node_key="purchase_order",
                 entity_type="purchase_order",
                 entity_id=order_id,
                 entity_uuid=str(order.uuid),

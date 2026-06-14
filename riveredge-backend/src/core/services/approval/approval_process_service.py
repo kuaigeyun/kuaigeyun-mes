@@ -16,6 +16,16 @@ from core.models.approval_process import ApprovalProcess
 from core.schemas.approval_process import ApprovalProcessCreate, ApprovalProcessUpdate
 from core.workflows.approval_registration import register_approval_workflow, unregister_approval_workflow
 from infra.exceptions.exceptions import NotFoundError, ValidationError
+from core.config.audit_registry import all_entries as _audit_entries
+from core.schemas.approval_flow_schema import normalize_and_validate_flow
+
+
+def _registry_canonical_names() -> Dict[str, str]:
+    """审批流程规范名映射唯一来源：manifest.audit（node_key -> name），个人任务保留为全局。"""
+    names: Dict[str, str] = {"personal_task": "个人任务"}
+    for entry in _audit_entries():
+        names[entry.node_key] = entry.name
+    return names
 
 
 class ApprovalProcessService:
@@ -25,50 +35,8 @@ class ApprovalProcessService:
     提供审批流程的 CRUD 操作与异步工作流（Taskiq）注册能力。
     """
     
-    CANONICAL_PROCESS_NAMES: Dict[str, str] = {
-        "personal_task": "个人任务",
-        "demand": "需求审核",
-        "sales_forecast": "销售预测审核",
-        "sales_order": "销售订单审核",
-        "quotation": "报价审核",
-        "production_plan": "生产计划审核",
-        "purchase_request": "采购申请审核",
-        "purchase_order": "采购订单审核",
-        "reporting_record": "报工审核",
-        "quality_inspection": "质检审核",
-        "incoming_inspection": "来料检验审核",
-        "process_inspection": "工序检验审核",
-        "finished_goods_inspection": "成品检验审核",
-        "sales_delivery": "销售发货审核",
-        "purchase_receipt": "采购收货审核",
-        "finished_goods_receipt": "成品入库审核",
-        "other_inbound": "其他入库审核",
-        "other_outbound": "其他出库审核",
-        "production_picking": "生产领料审核",
-        "production_return": "生产退料审核",
-        "material_borrow": "物料借用审核",
-        "material_return": "物料退料审核",
-        "sales_return": "销售退货审核",
-        "purchase_return": "采购退货审核",
-        # 历史别名（兼容旧 code）
-        "demand_audit": "需求审核",
-        "purchase_receipt_audit": "采购收货审核",
-        "other_outbound_audit": "其他出库审核",
-        "finished_goods_inspection_audit": "成品检验审核",
-        "process_inspection_audit": "工序检验审核",
-        "production_picking_audit": "生产领料审核",
-        "quality_inspection_audit": "质量检验审核",
-        "production_return_audit": "生产退料审核",
-        "material_return_audit": "物料退料审核",
-        "incoming_inspection_audit": "来料检验审核",
-        "purchase_return_audit": "采购退货审核",
-        "sales_delivery_audit": "销售发货审核",
-        "material_borrow_audit": "物料借用审核",
-        "finished_goods_receipt_audit": "成品入库审核",
-        "sales_return_audit": "销售退货审核",
-        "production_plan_audit": "生产计划审核",
-        "quotation_audit": "报价审核",
-    }
+    # 唯一来源：manifest.audit（见 _registry_canonical_names）。不再保留历史 `*_audit` 别名。
+    CANONICAL_PROCESS_NAMES: Dict[str, str] = _registry_canonical_names()
 
     @staticmethod
     def _normalize_name_token(value: Optional[str]) -> str:
@@ -176,11 +144,45 @@ class ApprovalProcessService:
         is_active: bool,
     ) -> ApprovalProcess:
         """
-        配置中心审核开关：按 code 启用/关闭审批流程。
+        配置中心审核开关（兼容旧 API）。
 
-        数据库中已存在（含迁移预置、默认关闭）则直接更新 is_active；
-        不存在且需要开启时，按预设节点创建。
+        可审核单据 node_key 写入 AuditDocumentBinding；非 manifest 声明的 code 仍走流程库逻辑。
         """
+        from core.config.audit_registry import is_auditable_node_key
+        from core.services.approval.audit_binding_service import AuditBindingService
+
+        if is_auditable_node_key(code):
+            preset = await AuditBindingService._default_process_for_node(tenant_id, code)
+            if not preset and is_active:
+                preset_item = next(
+                    (item for item in ApprovalProcessService.PRESET_APPROVAL_PROCESSES if item["code"] == code),
+                    None,
+                )
+                if preset_item:
+                    data = ApprovalProcessCreate(
+                        name=preset_item["name"],
+                        code=preset_item["code"],
+                        description=preset_item.get("description"),
+                        nodes=preset_item["nodes"],
+                        config=preset_item.get("config", {}),
+                        is_active=False,
+                    )
+                    preset = await ApprovalProcessService.create_approval_process(tenant_id, data)
+            await AuditBindingService.update_binding(
+                tenant_id,
+                code,
+                is_enabled=is_active,
+                process_uuid=preset.uuid if preset else None,
+            )
+            process = await AuditBindingService.resolve_process_for_node(tenant_id, code)
+            if process:
+                return process
+            if not is_active:
+                legacy = await ApprovalProcessService.get_approval_process_by_code(tenant_id, code)
+                if legacy:
+                    return legacy
+            raise NotFoundError(f"审批流程 {code} 不存在")
+
         process = await ApprovalProcessService.get_approval_process_by_code(tenant_id, code)
         if process:
             process.is_active = is_active
@@ -241,6 +243,8 @@ class ApprovalProcessService:
             )
             if canonical_name:
                 payload["name"] = canonical_name
+            if payload.get("nodes"):
+                payload["nodes"] = normalize_and_validate_flow(payload["nodes"])
             approval_process = ApprovalProcess(
                 tenant_id=tenant_id,
                 **payload
@@ -360,6 +364,20 @@ class ApprovalProcessService:
             )
             if canonical_name:
                 update_data["name"] = canonical_name
+        if "nodes" in update_data and update_data["nodes"] is not None:
+            normalized = normalize_and_validate_flow(update_data["nodes"])
+            pending_count = await ApprovalInstance.filter(
+                tenant_id=tenant_id,
+                process_id=approval_process.id,
+                status="pending",
+                deleted_at__isnull=True,
+            ).count()
+            if pending_count > 0:
+                approval_process.draft_nodes = normalized
+                update_data.pop("nodes")
+            else:
+                update_data["nodes"] = normalized
+                approval_process.draft_nodes = None
         for key, value in update_data.items():
             setattr(approval_process, key, value)
         
@@ -374,6 +392,26 @@ class ApprovalProcessService:
                 approval_process.inngest_workflow_id = workflow_id
                 await approval_process.save()
 
+        return approval_process
+    
+    @staticmethod
+    async def publish_approval_process(tenant_id: int, uuid: str) -> ApprovalProcess:
+        """发布流程草稿：将有进行中实例时写入 draft_nodes 的变更应用到 nodes，并递增版本。"""
+        approval_process = await ApprovalProcessService.get_approval_process_by_uuid(tenant_id, uuid)
+        if approval_process.draft_nodes:
+            approval_process.nodes = normalize_and_validate_flow(approval_process.draft_nodes)
+            approval_process.draft_nodes = None
+        next_ver = (approval_process.published_version or 1) + 1
+        approval_process.version = next_ver
+        approval_process.published_version = next_ver
+        await approval_process.save()
+        if approval_process.is_active:
+            if approval_process.inngest_workflow_id:
+                await unregister_approval_workflow(approval_process.inngest_workflow_id)
+            inngest_config = ApprovalProcessService.convert_proflow_to_inngest(approval_process.nodes)
+            workflow_id = await register_approval_workflow(approval_process, inngest_config)
+            approval_process.inngest_workflow_id = workflow_id
+            await approval_process.save()
         return approval_process
     
     @staticmethod
@@ -401,6 +439,7 @@ class ApprovalProcessService:
 
     @staticmethod
     def _simple_nodes(label: str) -> Dict[str, Any]:
+        """预置流程唯一节点模板：开始 → 单级审批 → 结束。"""
         return {
             "nodes": [
                 {
@@ -415,7 +454,8 @@ class ApprovalProcessService:
                     "position": {"x": 250, "y": 200},
                     "data": {
                         "label": label,
-                        "approver_type": "user",
+                        "approverType": "user",
+                        "approvalType": "OR",
                         "layoutDirection": "vertical",
                     },
                 },
@@ -432,32 +472,60 @@ class ApprovalProcessService:
             ],
         }
 
-    # 中国中小制造业常见单据审核开关（全部默认关闭，按需开启）
-    PRESET_APPROVAL_PROCESSES = [
-        {"name": "需求审核", "code": "demand", "description": "需求单据审核", "nodes": _simple_nodes.__func__("计划主管审核"), "config": {}, "is_active": False},
-        {"name": "销售预测审核", "code": "sales_forecast", "description": "销售预测审核", "nodes": _simple_nodes.__func__("销售主管审核"), "config": {}, "is_active": False},
-        {"name": "销售订单审核", "code": "sales_order", "description": "销售订单审核", "nodes": _simple_nodes.__func__("销售经理审核"), "config": {}, "is_active": False},
-        {"name": "报价单审核", "code": "quotation", "description": "报价单审核", "nodes": _simple_nodes.__func__("商务负责人审核"), "config": {}, "is_active": False},
-        {"name": "生产计划审核", "code": "production_plan", "description": "生产计划审核", "nodes": _simple_nodes.__func__("计划主管审核"), "config": {}, "is_active": False},
-        {"name": "采购申请审核", "code": "purchase_request", "description": "采购申请审核", "nodes": _simple_nodes.__func__("采购主管审核"), "config": {}, "is_active": False},
-        {"name": "采购订单审核", "code": "purchase_order", "description": "采购订单审核", "nodes": _simple_nodes.__func__("采购经理审核"), "config": {}, "is_active": False},
-        {"name": "报工审核", "code": "reporting_record", "description": "报工记录审核", "nodes": _simple_nodes.__func__("生产主管审核"), "config": {}, "is_active": False},
-        {"name": "质检审核", "code": "quality_inspection", "description": "来料/过程/成品质检审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
-        {"name": "来料检验审核", "code": "incoming_inspection", "description": "来料检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
-        {"name": "过程检验审核", "code": "process_inspection", "description": "过程检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
-        {"name": "成品检验审核", "code": "finished_goods_inspection", "description": "成品检验单审核", "nodes": _simple_nodes.__func__("质量负责人审核"), "config": {}, "is_active": False},
-        {"name": "销售出库审核", "code": "sales_delivery", "description": "销售出库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "采购收货审核", "code": "purchase_receipt", "description": "采购收货审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "成品入库审核", "code": "finished_goods_receipt", "description": "成品入库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "其他入库审核", "code": "other_inbound", "description": "其他入库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "其他出库审核", "code": "other_outbound", "description": "其他出库审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "生产领料审核", "code": "production_picking", "description": "生产领料审核", "nodes": _simple_nodes.__func__("车间主管审核"), "config": {}, "is_active": False},
-        {"name": "生产退料审核", "code": "production_return", "description": "生产退料审核", "nodes": _simple_nodes.__func__("车间主管审核"), "config": {}, "is_active": False},
-        {"name": "借料审核", "code": "material_borrow", "description": "借料审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "还料审核", "code": "material_return", "description": "还料审核", "nodes": _simple_nodes.__func__("仓储负责人审核"), "config": {}, "is_active": False},
-        {"name": "销售退货审核", "code": "sales_return", "description": "销售退货审核", "nodes": _simple_nodes.__func__("售后负责人审核"), "config": {}, "is_active": False},
-        {"name": "采购退货审核", "code": "purchase_return", "description": "采购退货审核", "nodes": _simple_nodes.__func__("采购主管审核"), "config": {}, "is_active": False},
-    ]
+    @staticmethod
+    def _sme_standard_nodes(label: str) -> Dict[str, Any]:
+        """SME 模板：部门主管 → 金额条件分支 → 财务 / 直接结束。"""
+        return {
+            "nodes": [
+                {"id": "start", "type": "start", "position": {"x": 250, "y": 50}, "data": {"label": "开始"}},
+                {
+                    "id": "approval_dept",
+                    "type": "approval",
+                    "position": {"x": 250, "y": 170},
+                    "data": {
+                        "label": f"{label}·部门主管",
+                        "approverType": "department",
+                        "approvalType": "OR",
+                        "allowEditDuringApproval": False,
+                    },
+                },
+                {
+                    "id": "condition_amount",
+                    "type": "condition",
+                    "position": {"x": 250, "y": 290},
+                    "data": {
+                        "label": "金额条件",
+                        "conditions": [
+                            {"field": "total_amount", "operator": ">=", "value": 10000, "label": "金额≥1万"},
+                            {"field": "total_amount", "operator": "<", "value": 10000, "label": "其他"},
+                        ],
+                    },
+                },
+                {
+                    "id": "approval_finance",
+                    "type": "approval",
+                    "position": {"x": 100, "y": 410},
+                    "data": {
+                        "label": "财务审批",
+                        "approverType": "manager",
+                        "approvalType": "OR",
+                        "allowEditDuringApproval": True,
+                    },
+                },
+                {"id": "end", "type": "end", "position": {"x": 250, "y": 530}, "data": {"label": "结束"}},
+            ],
+            "edges": [
+                {"source": "start", "target": "approval_dept"},
+                {"source": "approval_dept", "target": "condition_amount"},
+                {"source": "condition_amount", "target": "approval_finance"},
+                {"source": "condition_amount", "target": "end"},
+                {"source": "approval_finance", "target": "end"},
+            ],
+        }
+
+    # 单据审核预设：唯一来源为 manifest.audit（见类定义后的 _build_preset_processes）。
+    # 全部默认关闭（is_active=False），按需在配置中心开启；节点由 template 生成。
+    PRESET_APPROVAL_PROCESSES: List[Dict[str, Any]] = []
 
     @staticmethod
     async def load_preset_sme(
@@ -466,7 +534,7 @@ class ApprovalProcessService:
         only_codes: Optional[Set[str]] = None,
     ) -> int:
         """
-        加载中国中小制造业极简审批流程预设数据。
+        加载审批流程预设数据（开始 → 单级审批 → 结束）。
         仅创建不存在的流程（按 code 去重）。
         """
         created = 0
@@ -496,4 +564,29 @@ class ApprovalProcessService:
                 except Exception as e:
                     logger.warning(f"创建审批流程 {item['code']} 失败: {e}")
         return created
+
+
+def _build_preset_processes() -> List[Dict[str, Any]]:
+    """由 manifest.audit 派生审批流程预设；template=sme 使用多级模板。"""
+    presets: List[Dict[str, Any]] = []
+    for entry in _audit_entries():
+        nodes = (
+            ApprovalProcessService._sme_standard_nodes(entry.name)
+            if entry.template == "sme"
+            else ApprovalProcessService._simple_nodes(entry.name)
+        )
+        presets.append(
+            {
+                "name": entry.name,
+                "code": entry.node_key,
+                "description": entry.name,
+                "nodes": nodes,
+                "config": {},
+                "is_active": False,
+            }
+        )
+    return presets
+
+
+ApprovalProcessService.PRESET_APPROVAL_PROCESSES = _build_preset_processes()
 

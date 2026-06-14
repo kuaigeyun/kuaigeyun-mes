@@ -13,17 +13,11 @@ import { SaveOutlined, ReloadOutlined, SettingOutlined, AuditOutlined, ControlOu
 import { useSearchParams } from 'react-router-dom';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import { NotificationRulesPanel } from '../../../components/business-notification-rules/NotificationRulesPanel';
-import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../stores/listPageRefreshStore';
 import {
   getBusinessConfig,
   getBusinessConfigSchema,
   batchUpdateProcessParameters,
 } from '../../../services/businessConfig';
-import {
-  getApprovalProcessList,
-  setAuditSwitchActive,
-  type ApprovalProcess,
-} from '../../../services/approvalProcess';
 import {
   PARAMETER_CATEGORIES,
   AUDIT_CATEGORIES,
@@ -31,6 +25,7 @@ import {
   AUTOMATION_CATEGORIES,
   type ConfigCategory,
 } from './configTree';
+import AuditSettingsPanel from './AuditSettingsPanel';
 import { TRIAL_RUN_MODE_QUERY_KEY } from '../../../hooks/useTrialRunMode';
 import { qualityApi } from '../../../apps/kuaizhizao/services/quality-execution';
 
@@ -126,40 +121,12 @@ function toBusinessParams(flat: Record<string, any>, bizParamKeys: string[]): Re
 
 const BUSINESS_CONFIG_QUERY_KEY = ['businessConfig'] as const;
 const BUSINESS_CONFIG_SCHEMA_QUERY_KEY = ['businessConfigSchema'] as const;
-const APPROVAL_PROCESS_LIST_QUERY_KEY = ['approvalProcessListForConfigCenter'] as const;
-
-/** 审核开关定义：与后端识别的 code 对应，并关联到具体业务模块 ID */
-const AUDIT_SWITCH_ITEMS: Array<{ code: string; labelKey: string; descKey: string; categoryId: string }> = [
-  { code: 'sales_forecast', labelKey: 'pages.system.configCenter.auditSwitch.sales_forecast.label', descKey: 'pages.system.configCenter.auditSwitch.sales_forecast.desc', categoryId: 'sales' },
-  { code: 'sales_order', labelKey: 'pages.system.configCenter.auditSwitch.sales_order.label', descKey: 'pages.system.configCenter.auditSwitch.sales_order.desc', categoryId: 'sales' },
-  { code: 'quotation', labelKey: 'pages.system.configCenter.auditSwitch.quotation.label', descKey: 'pages.system.configCenter.auditSwitch.quotation.desc', categoryId: 'sales' },
-  { code: 'sales_delivery', labelKey: 'pages.system.configCenter.auditSwitch.sales_delivery.label', descKey: 'pages.system.configCenter.auditSwitch.sales_delivery.desc', categoryId: 'sales' },
-  { code: 'sales_return', labelKey: 'pages.system.configCenter.auditSwitch.sales_return.label', descKey: 'pages.system.configCenter.auditSwitch.sales_return.desc', categoryId: 'sales' },
-  { code: 'purchase_request', labelKey: 'pages.system.configCenter.auditSwitch.purchase_request.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_request.desc', categoryId: 'procurement' },
-  { code: 'purchase_order', labelKey: 'pages.system.configCenter.auditSwitch.purchase_order.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_order.desc', categoryId: 'procurement' },
-  { code: 'purchase_return', labelKey: 'pages.system.configCenter.auditSwitch.purchase_return.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_return.desc', categoryId: 'procurement' },
-  { code: 'demand', labelKey: 'pages.system.configCenter.auditSwitch.demand.label', descKey: 'pages.system.configCenter.auditSwitch.demand.desc', categoryId: 'planning' },
-  { code: 'production_plan', labelKey: 'pages.system.configCenter.auditSwitch.production_plan.label', descKey: 'pages.system.configCenter.auditSwitch.production_plan.desc', categoryId: 'planning' },
-  { code: 'incoming_inspection', labelKey: 'pages.system.configCenter.auditSwitch.incoming_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.incoming_inspection.desc', categoryId: 'quality' },
-  { code: 'process_inspection', labelKey: 'pages.system.configCenter.auditSwitch.process_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.process_inspection.desc', categoryId: 'quality' },
-  { code: 'finished_goods_inspection', labelKey: 'pages.system.configCenter.auditSwitch.finished_goods_inspection.label', descKey: 'pages.system.configCenter.auditSwitch.finished_goods_inspection.desc', categoryId: 'quality' },
-  { code: 'production_picking', labelKey: 'pages.system.configCenter.auditSwitch.production_picking.label', descKey: 'pages.system.configCenter.auditSwitch.production_picking.desc', categoryId: 'production' },
-  { code: 'production_return', labelKey: 'pages.system.configCenter.auditSwitch.production_return.label', descKey: 'pages.system.configCenter.auditSwitch.production_return.desc', categoryId: 'production' },
-  { code: 'reporting_record', labelKey: 'pages.system.configCenter.auditSwitch.reporting_record.label', descKey: 'pages.system.configCenter.auditSwitch.reporting_record.desc', categoryId: 'production' },
-  { code: 'purchase_receipt', labelKey: 'pages.system.configCenter.auditSwitch.purchase_receipt.label', descKey: 'pages.system.configCenter.auditSwitch.purchase_receipt.desc', categoryId: 'warehouse' },
-  { code: 'finished_goods_receipt', labelKey: 'pages.system.configCenter.auditSwitch.finished_goods_receipt.label', descKey: 'pages.system.configCenter.auditSwitch.finished_goods_receipt.desc', categoryId: 'warehouse' },
-  { code: 'other_inbound', labelKey: 'pages.system.configCenter.auditSwitch.other_inbound.label', descKey: 'pages.system.configCenter.auditSwitch.other_inbound.desc', categoryId: 'warehouse' },
-  { code: 'other_outbound', labelKey: 'pages.system.configCenter.auditSwitch.other_outbound.label', descKey: 'pages.system.configCenter.auditSwitch.other_outbound.desc', categoryId: 'warehouse' },
-  { code: 'material_borrow', labelKey: 'pages.system.configCenter.auditSwitch.material_borrow.label', descKey: 'pages.system.configCenter.auditSwitch.material_borrow.desc', categoryId: 'warehouse' },
-  { code: 'material_return', labelKey: 'pages.system.configCenter.auditSwitch.material_return.label', descKey: 'pages.system.configCenter.auditSwitch.material_return.desc', categoryId: 'warehouse' },
-];
 
 const ConfigCenterPage: React.FC = () => {
   const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { token } = useToken();
   const queryClient = useQueryClient();
-  const bumpListRefresh = useListPageRefreshStore((s) => s.bump);
   const [searchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   const validTabs = useMemo(() => ['parameters', 'audit', 'automation', 'notification'], []);
@@ -189,21 +156,7 @@ const ConfigCenterPage: React.FC = () => {
     queryFn: getBusinessConfigSchema,
     staleTime: 300_000,
   });
-
-  const { data: approvalProcessList, refetch: refetchApprovalProcessList } = useQuery({
-    queryKey: APPROVAL_PROCESS_LIST_QUERY_KEY,
-    queryFn: () => getApprovalProcessList({ limit: 500, for_audit_config: true }),
-    staleTime: 30_000,
-  });
   const loading = configLoading && !bizRes;
-
-  const approvalProcessByCode = useMemo(() => {
-    const m = new Map<string, ApprovalProcess>();
-    for (const p of approvalProcessList || []) {
-      if (p.code) m.set(p.code, p);
-    }
-    return m;
-  }, [approvalProcessList]);
 
   const parameterImplementation = schemaRes?.parameterImplementation || {};
   const isImplementedParam = (sourcePath: string): boolean => {
@@ -343,32 +296,13 @@ const ConfigCenterPage: React.FC = () => {
     }
   };
 
-  const handleToggleAuditProcess = async (code: string, checked: boolean) => {
-    try {
-      await setAuditSwitchActive(code, checked);
-      await refetchApprovalProcessList();
-      await queryClient.invalidateQueries({ queryKey: ['businessConfigAuditRequiredMap'] });
-      if (code === 'sales_order') {
-        bumpListRefresh(LIST_PAGE_REFRESH_KEYS.salesOrders);
-      }
-      messageApi.success(t('pages.system.configCenter.auditSwitch.updateSuccess'));
-    } catch (error: any) {
-      messageApi.error(error?.message || t('pages.system.configCenter.auditSwitch.updateFailed'));
-    }
-  };
-
-  const renderNotificationTab = () => <NotificationRulesPanel showPageHeader={false} />;
-
-  // 通用 Tab 内容渲染器
   const renderTabContent = (
     categories: ConfigCategory[],
     selectedCatId: string,
     onSelectCat: (id: string) => void,
     icon: React.ReactNode,
-    showAuditSection: boolean = false,
   ) => {
     const currentCat = categories.find(c => c.id === selectedCatId) || categories[0];
-    const auditSwitches = showAuditSection ? AUDIT_SWITCH_ITEMS.filter(it => it.categoryId === selectedCatId) : [];
 
     return (
       <Layout style={{ minHeight: 400, height: '100%', minWidth: 0, background: 'transparent' }}>
@@ -395,27 +329,7 @@ const ConfigCenterPage: React.FC = () => {
               {currentCat.descriptionKey && <Paragraph type="secondary" style={{ marginTop: 4 }}>{renderText(currentCat.descriptionKey, '')}</Paragraph>}
             </div>
 
-            {showAuditSection && (
-              <Card size="small" style={{ marginBottom: 16 }}>
-                <Text strong>{t('pages.system.configCenter.auditSwitch.sectionTitle')}</Text>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(420px, 1fr))', gap: 12, marginTop: 12 }}>
-                  {auditSwitches.map(item => (
-                    <Card key={item.code} size="small" styles={{ body: {display: 'flex', justifyContent: 'space-between' } }}>
-                      <div style={{ flex: 1, marginRight: 16 }}>
-                        <Text strong>{renderText(item.labelKey, item.code)}</Text>
-                        <Paragraph type="secondary" style={{ fontSize: 12, margin: 0 }}>{renderText(item.descKey, '')}</Paragraph>
-                      </div>
-                      <Switch checked={!!approvalProcessByCode.get(item.code)?.is_active} onChange={v => handleToggleAuditProcess(item.code, v)} />
-                    </Card>
-                  ))}
-                  {auditSwitches.length === 0 && <Text type="secondary">{t('pages.system.configCenter.auditSwitch.empty')}</Text>}
-                </div>
-              </Card>
-            )}
-
-            {!showAuditSection && (
-              <>
-                <Spin spinning={loading}>
+            <Spin spinning={loading}>
                   <Form
                     form={form}
                     layout="vertical"
@@ -473,17 +387,17 @@ const ConfigCenterPage: React.FC = () => {
                   </Form>
                 </Spin>
 
-                <Space style={{ marginTop: 24 }}>
-                  <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
-                  <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
-                </Space>
-              </>
-            )}
+            <Space style={{ marginTop: 24 }}>
+              <Button icon={<ReloadOutlined />} onClick={() => refetchBusinessConfig()} loading={isFetching}>{t('pages.system.configCenter.refresh')}</Button>
+              <Button type="primary" icon={<SaveOutlined />} onClick={() => handleSave(categories)} loading={saving}>{t('pages.system.configCenter.save')}</Button>
+            </Space>
           </div>
         </Content>
       </Layout>
     );
   };
+
+  const renderNotificationTab = () => <NotificationRulesPanel showPageHeader={false} />;
 
   return (
     <div className="config-center-page" ref={containerRef} style={{ height: containerHeight, minHeight: 400, borderRadius: 8, overflow: 'hidden' }}>
@@ -492,8 +406,8 @@ const ConfigCenterPage: React.FC = () => {
         activeTabKey={activeMainTab}
         onTabChange={setActiveMainTab}
         tabs={[
-          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />, false) },
-          { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: renderTabContent(AUDIT_CATEGORIES, selectedAuditCat, setSelectedAuditCat, <AuditOutlined />, true) },
+          { key: 'parameters', label: <Space><SettingOutlined />{t('pages.system.configCenter.tabParameters')}</Space>, children: renderTabContent(mergedParameterCategories, selectedParamCat, setSelectedParamCat, <SettingOutlined />) },
+          { key: 'audit', label: <Space><AuditOutlined />{t('pages.system.configCenter.tabAudit')}</Space>, children: <AuditSettingsPanel selectedCatId={selectedAuditCat} onSelectCat={setSelectedAuditCat} /> },
           { key: 'automation', label: <Space><ControlOutlined />{t('pages.system.configCenter.tabAutomation')}</Space>, children: renderTabContent(AUTOMATION_CATEGORIES, selectedAutoCat, setSelectedAutoCat, <ControlOutlined />) },
           { key: 'notification', label: <Space><BellOutlined />{t('pages.system.configCenter.notification.title')}</Space>, children: renderNotificationTab() },
         ]}

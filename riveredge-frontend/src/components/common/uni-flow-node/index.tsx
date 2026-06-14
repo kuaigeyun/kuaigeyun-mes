@@ -63,6 +63,25 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
     }
   }, [type, token, t]);
 
+  const summary = useMemo(() => {
+    if (type !== 'approval' && type !== 'cc' && type !== 'condition') return data.description || '';
+    const parts: string[] = [];
+    if (type === 'approval') {
+      parts.push(data.approvalType === 'AND' ? '会签' : '或签');
+      if (data.allowEditDuringApproval) parts.push('可改单');
+      if (data.approverType === 'department') parts.push('部门负责人');
+      else if (data.approverType === 'manager') parts.push('直属主管');
+      else if (data.approverType === 'role') parts.push(`角色×${(data.approverIds as string[] | undefined)?.length || 0}`);
+      else if (data.approverType === 'user') parts.push(`指定×${(data.approverIds as string[] | undefined)?.length || 0}`);
+    }
+    if (type === 'cc') parts.push(`抄送×${(data.approverIds as string[] | undefined)?.length || 0}`);
+    if (type === 'condition') {
+      const n = (data.conditions as unknown[] | undefined)?.length || 0;
+      parts.push(n > 0 ? `${n}条分支` : '条件分支');
+    }
+    return parts.join(' · ') || data.description || '';
+  }, [type, data]);
+
   const isWide = type !== 'start' && type !== 'end';
 
   return (
@@ -128,8 +147,8 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
         
         {/* Body - 描述区域 */}
         {isWide && (
-          <div style={{ padding: '8px 12px', minHeight: data.description ? 40 : 0 }}>
-            {data.description ? (
+          <div style={{ padding: '8px 12px', minHeight: summary ? 40 : 0 }}>
+            {summary ? (
               <div style={{ 
                 fontSize: 12, 
                 color: token.colorTextDescription,
@@ -139,7 +158,7 @@ const UniFlowNode: React.FC<UniFlowNodeProps> = ({ type, data, selected }) => {
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden'
               }}>
-                {data.description}
+                {summary}
               </div>
             ) : (
               <div style={{ fontSize: 11, color: token.colorTextPlaceholder, fontStyle: 'italic' }}>

@@ -48,6 +48,7 @@ class ApprovalInstance(BaseModel):
     submitter_id = fields.IntField(description="提交人ID")
     submitted_at = fields.DatetimeField(description="提交时间")
     completed_at = fields.DatetimeField(null=True, description="完成时间")
+    process_version = fields.IntField(null=True, description="创建时钉扎的流程版本")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

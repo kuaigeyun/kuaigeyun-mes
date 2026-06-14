@@ -15,6 +15,7 @@ export {
 export { renderUniTableOperationCell } from './renderCell'
 export { collectOperationActions } from './collect'
 export { normalizeActionTree } from './normalize'
+export { prepareRowActionButton } from './prepareRowActionButton'
 export { RowActionButton } from './RowActionButton'
 export {
   rowActionLabel,

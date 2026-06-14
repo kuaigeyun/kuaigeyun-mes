@@ -35,6 +35,10 @@ class ApprovalProcess(BaseModel):
     
     # 流程状态
     is_active = fields.BooleanField(default=True, description="是否启用")
+
+    version = fields.IntField(default=1, description="流程版本（发布后递增）")
+    published_version = fields.IntField(default=1, description="已发布版本号")
+    draft_nodes = fields.JSONField(null=True, description="草稿节点（未发布编辑）")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

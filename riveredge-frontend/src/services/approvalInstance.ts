@@ -58,11 +58,70 @@ export interface ApprovalInstanceActionData {
 /**
  * 按 entity 获取审批状态（统一入口，供 UniApprovalPanel 等使用）
  */
+export interface ApprovalProcessGraph {
+  nodes?: Array<{
+    id: string;
+    type?: string;
+    position?: { x: number; y: number };
+    data?: Record<string, unknown>;
+  }>;
+  edges?: Array<{ id?: string; source: string; target: string }>;
+}
+
+export interface ApprovalProcessBrief {
+  uuid: string;
+  name: string;
+  code: string;
+  nodes: ApprovalProcessGraph;
+}
+
+export interface ApprovalInstanceBrief {
+  uuid: string;
+  submitter_id: number;
+  submitter_name: string;
+  submitted_at?: string | null;
+  title?: string;
+}
+
+export interface ApprovalNodeExecution {
+  action?: string;
+  action_label?: string;
+  action_by?: number;
+  action_by_name?: string;
+  action_at?: string | null;
+  comment?: string | null;
+  from_node?: string | null;
+  to_node?: string | null;
+  source?: string;
+  field_changes?: Array<{ field?: string; label?: string; from?: string; to?: string }>;
+}
+
+export interface ApprovalNodeOverview {
+  node_id: string;
+  label: string;
+  node_type: string;
+  is_current: boolean;
+  status: 'pending' | 'approved' | 'rejected' | 'waiting' | 'skipped' | string;
+  eligible_approvers: Array<{ user_id: number; name: string }>;
+  executions: ApprovalNodeExecution[];
+}
+
 export interface ApprovalStatusResponse {
   has_flow: boolean;
+  has_instance?: boolean;
   status?: string;
   current_node?: string;
   current_approver_id?: number;
+  process?: ApprovalProcessBrief | null;
+  instance?: ApprovalInstanceBrief | null;
+  nodes_overview?: ApprovalNodeOverview[];
+  can_edit_during_approval?: boolean;
+  editable_fields?: string[] | '*';
+  node_capabilities?: {
+    allow_transfer?: boolean;
+    allow_add_sign?: boolean;
+    allow_edit_during_approval?: boolean;
+  };
   tasks?: Array<{
     uuid: string;
     node_id?: string;
@@ -74,8 +133,11 @@ export interface ApprovalStatusResponse {
   history?: Array<{
     action?: string;
     action_by?: number;
+    action_by_name?: string;
     action_at?: string;
     comment?: string;
+    from_node?: string;
+    to_node?: string;
   }>;
 }
 

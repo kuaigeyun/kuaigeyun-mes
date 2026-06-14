@@ -95,6 +95,8 @@ from core.api.messages.message_templates import router as message_templates_rout
 from core.api.messages.messages import router as messages_router
 from core.api.scheduled_tasks.scheduled_tasks import router as scheduled_tasks_router
 from core.api.approval_processes import approval_processes_router, approval_instances_router
+from core.api.uni_audit import uni_audit_router
+from core.api.audit_bindings import audit_bindings_router
 from core.api.tenant_init.tenant_init import router as tenant_init_router
 from core.api.scripts.scripts import router as scripts_router
 from core.api.print_templates.print_templates import router as print_templates_router
@@ -300,6 +302,23 @@ async def lifespan(app: FastAPI):
     app.state._cache_purge_task = asyncio.create_task(_cache_purge_loop())
     logger.info("✅ Cache 过期清理任务已启动（10 分钟/次）")
 
+    async def _approval_timeout_loop():
+        from core.services.approval.approval_timeout_service import ApprovalTimeoutService
+
+        while True:
+            try:
+                await asyncio.sleep(300)
+                n = await ApprovalTimeoutService.scan_and_escalate()
+                if n:
+                    logger.info("⏱ 审批超时扫描处理 {} 条", n)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.warning("审批超时扫描异常: {}", e)
+
+    app.state._approval_timeout_task = asyncio.create_task(_approval_timeout_loop())
+    logger.info("✅ 审批超时扫描任务已启动（5 分钟/次）")
+
     # Taskiq：API 进程仅启动 broker（供 kiq 投递），实际消费由独立 worker 进程完成
     try:
         from core.tasks.taskiq_app import broker as taskiq_broker
@@ -343,6 +362,14 @@ async def lifespan(app: FastAPI):
         purge_task.cancel()
         try:
             await purge_task
+        except (asyncio.CancelledError, Exception):
+            pass
+
+    timeout_task = getattr(app.state, "_approval_timeout_task", None)
+    if timeout_task is not None:
+        timeout_task.cancel()
+        try:
+            await timeout_task
         except (asyncio.CancelledError, Exception):
             pass
 
@@ -835,7 +862,9 @@ app.include_router(message_templates_router, prefix="/api/v1/core")
 app.include_router(messages_router, prefix="/api/v1/core")
 app.include_router(scheduled_tasks_router, prefix="/api/v1/core")
 app.include_router(approval_processes_router, prefix="/api/v1/core")
+app.include_router(audit_bindings_router, prefix="/api/v1/core")
 app.include_router(approval_instances_router, prefix="/api/v1/core")
+app.include_router(uni_audit_router, prefix="/api/v1/core")
 app.include_router(tenant_init_router, prefix="/api/v1/core")
 app.include_router(scripts_router, prefix="/api/v1/core")
 app.include_router(print_templates_router, prefix="/api/v1/core")

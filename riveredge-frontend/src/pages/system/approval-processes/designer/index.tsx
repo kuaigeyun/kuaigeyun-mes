@@ -12,14 +12,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { ProForm, ProFormText, ProFormSelect, ProFormDependency } from '@ant-design/pro-components';
+import { ProForm, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Form, Space, theme, Typography } from 'antd';
 import { 
   SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, 
 } from '@ant-design/icons';
-import { searchUserDisplay } from '../../../../services/user';
-import { formatUserDisplayLabel } from '../../../../utils/userDisplay';
-import { getRoleList } from '../../../../services/role';
 import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge } from '@ant-design/pro-flow';
 import {
@@ -35,11 +32,25 @@ import 'reactflow/dist/style.css';
 import {
   getApprovalProcessByUuid,
   updateApprovalProcess,
+  publishApprovalProcess,
+  getConditionFields,
   ApprovalProcess,
 } from '../../../../services/approvalProcess';
 import { CanvasPageTemplate } from '../../../../components/layout-templates/CanvasPageTemplate';
 import UniFlowNode from '../../../../components/common/uni-flow-node';
 import { CANVAS_GRID_REACTFLOW } from '../../../../components/layout-templates/constants';
+import {
+  normalizeFlowGraph,
+  normalizeNodeData,
+  nodeDataToFormValues,
+  validateFlowGraph,
+} from '../../../../types/approvalFlowSchema';
+import {
+  ApprovalNodeForm,
+  CcNodeForm,
+  ConditionNodeForm,
+  mergeFormToNodeData,
+} from './properties/NodePropertyForms';
 
 const { useToken } = theme;
 
@@ -163,6 +174,19 @@ const ApprovalProcessDesignerPage: React.FC = () => {
   const [selectedNode, setSelectedNode] = useState<Node | null>(null);
   const [nodeConfigForm] = Form.useForm();
   const [selectedEdge, setSelectedEdge] = useState<Edge | null>(null);
+  const [conditionFieldOptions, setConditionFieldOptions] = useState<{ label: string; value: string }[]>([]);
+
+  useEffect(() => {
+    const code = processData?.code;
+    if (!code) return;
+    getConditionFields(code)
+      .then((res) => {
+        setConditionFieldOptions(
+          (res.fields || []).map((f) => ({ label: f.label || f.field, value: f.field })),
+        );
+      })
+      .catch(() => setConditionFieldOptions([]));
+  }, [processData?.code]);
 
   const loadProcessData = useCallback(async () => {
     if (!processUuid) return;
@@ -172,9 +196,13 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       setProcessData(data);
       let nodesData: Node[] = [];
       let edgesData: Edge[] = [];
-      if (data.nodes && typeof data.nodes === 'object') {
-        nodesData = (data.nodes as any).nodes ?? [];
-        edgesData = (data.nodes as any).edges ?? [];
+      const graphSource = (data as ApprovalProcess & { draft_nodes?: { nodes?: Node[]; edges?: Edge[] } }).draft_nodes
+        && (data as ApprovalProcess & { draft_nodes?: { nodes?: Node[] } }).draft_nodes?.nodes?.length
+        ? (data as ApprovalProcess & { draft_nodes: { nodes: Node[]; edges?: Edge[] } }).draft_nodes
+        : data.nodes;
+      if (graphSource && typeof graphSource === 'object') {
+        nodesData = (graphSource as any).nodes ?? [];
+        edgesData = (graphSource as any).edges ?? [];
       }
       if (nodesData.length === 0) {
         nodesData = [
@@ -186,7 +214,8 @@ const ApprovalProcessDesignerPage: React.FC = () => {
       
       const initialDataMap: Record<string, any> = {};
       nodesData.forEach(node => {
-        initialDataMap[node.id] = { ...node.data };
+        const normalized = normalizeNodeData(String(node.type), { ...(node.data as object) });
+        initialDataMap[node.id] = nodeDataToFormValues(normalized);
       });
       setNodeDataMap(initialDataMap);
 
@@ -265,11 +294,28 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     if (!processUuid || !processData) return;
     try {
       setSaving(true);
-      const strippedNodes = nodes.map((node) => ({
-        id: node.id, type: node.type, position: node.position,
-        data: { ...node.data, ...nodeDataMap[node.id] }
-      }));
-      await updateApprovalProcess(processUuid, { ...processData, nodes: { nodes: strippedNodes, edges } });
+      const strippedNodes = nodes.map((node) => {
+        const merged = mergeFormToNodeData(String(node.type), {
+          ...node.data,
+          ...nodeDataMap[node.id],
+        });
+        const data = normalizeNodeData(String(node.type), merged);
+        return {
+          id: node.id,
+          type: node.type,
+          position: node.position,
+          data,
+        };
+      });
+      const graph = normalizeFlowGraph({ nodes: strippedNodes, edges });
+      const validationErrors = validateFlowGraph(graph);
+      if (validationErrors.length > 0) {
+        messageApi.error(validationErrors.join('；'));
+        return;
+      }
+      await updateApprovalProcess(processUuid, { ...processData, nodes: graph });
+      const refreshed = await getApprovalProcessByUuid(processUuid);
+      setProcessData(refreshed);
       messageApi.success(t('pages.approval.designer.saveSuccess'));
     } catch (error: any) {
       messageApi.error(error.message || t('pages.approval.designer.saveFailed'));
@@ -355,6 +401,25 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         )}
       </Space>
       <Space>
+        {processData?.draft_nodes && (
+          <Button
+            onClick={async () => {
+              if (!processUuid) return;
+              try {
+                setSaving(true);
+                await publishApprovalProcess(processUuid);
+                await loadProcessData();
+                messageApi.success(t('pages.approval.designer.publishSuccess'));
+              } catch (e: any) {
+                messageApi.error(e.message || t('pages.approval.designer.publishFailed'));
+              } finally {
+                setSaving(false);
+              }
+            }}
+          >
+            {t('pages.approval.designer.publishDraft')}
+          </Button>
+        )}
         <Button icon={<CloseOutlined />} onClick={() => navigate('/system/approval-processes')}>{t('common.close')}</Button>
         <Button type="primary" icon={<SaveOutlined />} loading={saving} onClick={handleSave}>{t('common.save')}</Button>
       </Space>
@@ -372,7 +437,9 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
           setSelectedNode(node); setSelectedEdge(null);
-          nodeConfigForm.setFieldsValue({ label: nodeDataMap[node.id]?.label || node.data?.label || '', ...nodeDataMap[node.id] });
+          const raw = nodeDataMap[node.id] || node.data || {};
+          const formValues = nodeDataToFormValues(normalizeNodeData(String(node.type), raw));
+          nodeConfigForm.setFieldsValue({ label: formValues.label || node.id, ...formValues });
         }}
         onEdgeClick={(_, edge) => { setSelectedEdge(edge); setSelectedNode(null); }}
         onPaneClick={() => { setSelectedNode(null); setSelectedEdge(null); }}
@@ -390,42 +457,25 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     </div>
   );
 
+  const conditionBranchCount = selectedNode?.type === 'condition'
+    ? edges.filter((e) => e.source === selectedNode.id).length
+    : 0;
+
   const rightPanel = selectedNode && (selectedNode.type === 'approval' || selectedNode.type === 'cc' || selectedNode.type === 'condition') ? {
     title: t('pages.approval.designer.nodeConfig'),
     children: (
       <ProForm form={nodeConfigForm} submitter={false} onValuesChange={(_, values) => {
         if (selectedNode) {
-          setNodeDataMap(prev => ({ ...prev, [selectedNode.id]: { ...prev[selectedNode.id], ...values } }));
-          setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...values } } : n));
+          const merged = mergeFormToNodeData(String(selectedNode.type), values as Record<string, unknown>);
+          setNodeDataMap(prev => ({ ...prev, [selectedNode.id]: { ...prev[selectedNode.id], ...merged } }));
+          setNodes(nodes.map(n => n.id === selectedNode.id ? { ...n, data: { ...n.data, ...merged } } : n));
         }
       }}>
         <ProFormText name="label" label={t('pages.approval.designer.nodeLabel')} rules={[{ required: true }]} />
-        {selectedNode.type === 'approval' && (
-          <>
-            <ProFormSelect name="approvalType" label={t('pages.approval.designer.approvalType')} options={[{ label: t('pages.approval.designer.approvalTypeAnd'), value: 'AND' }, { label: t('pages.approval.designer.approvalTypeOr'), value: 'OR' }]} initialValue="OR" />
-            <ProFormSelect name="approverType" label={t('pages.approval.designer.approverType')} options={[{ label: t('pages.approval.designer.approverTypeUser'), value: 'user' }, { label: t('pages.approval.designer.approverTypeRole'), value: 'role' }, { label: t('pages.approval.designer.approverTypeManager'), value: 'manager' }]} initialValue="user" />
-            <ProFormDependency name={['approverType']}>
-              {({ approverType }) => {
-                if (approverType === 'user')
-                  return (
-                    <ProFormSelect
-                      name="approvers"
-                      label={t('pages.approval.designer.selectUser')}
-                      request={async () => {
-                        const res = await searchUserDisplay({ page: 1, page_size: 200, is_active: true });
-                        return (res.items || []).map((u) => ({
-                          label: formatUserDisplayLabel(u),
-                          value: u.uuid,
-                        }));
-                      }}
-                      mode="multiple"
-                    />
-                  );
-                if (approverType === 'role') return <ProFormSelect name="roles" label={t('pages.approval.designer.selectRole')} request={async () => (await getRoleList({})).items.map((r) => ({ label: r.name, value: r.uuid }))} mode="multiple" />;
-                return null;
-              }}
-            </ProFormDependency>
-          </>
+        {selectedNode.type === 'approval' && <ApprovalNodeForm />}
+        {selectedNode.type === 'cc' && <CcNodeForm />}
+        {selectedNode.type === 'condition' && (
+          <ConditionNodeForm branchCount={conditionBranchCount} fieldOptions={conditionFieldOptions} />
         )}
       </ProForm>
     )

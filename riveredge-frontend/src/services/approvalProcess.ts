@@ -15,6 +15,9 @@ export interface ApprovalProcess {
   description?: string;
   nodes: Record<string, any>;
   config: Record<string, any>;
+  draft_nodes?: Record<string, any> | null;
+  version?: number;
+  published_version?: number;
   inngest_workflow_id?: string;
   is_active: boolean;
   created_at: string;
@@ -72,6 +75,10 @@ export async function createApprovalProcess(data: CreateApprovalProcessData): Pr
   });
 }
 
+export async function getConditionFields(entityType: string): Promise<{ fields: Array<{ field: string; label: string; type: string; operators: string[] }> }> {
+  return apiRequest(`/core/approval-processes/condition-fields`, { params: { entity_type: entityType } });
+}
+
 /**
  * 更新审批流程
  */
@@ -79,6 +86,12 @@ export async function updateApprovalProcess(approvalProcessUuid: string, data: U
   return apiRequest<ApprovalProcess>(`/core/approval-processes/${approvalProcessUuid}`, {
     method: 'PUT',
     data,
+  });
+}
+
+export async function publishApprovalProcess(approvalProcessUuid: string): Promise<ApprovalProcess> {
+  return apiRequest<ApprovalProcess>(`/core/approval-processes/${approvalProcessUuid}/publish`, {
+    method: 'POST',
   });
 }
 

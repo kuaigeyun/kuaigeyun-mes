@@ -51,6 +51,10 @@ class ApprovalTask(BaseModel):
     action_at = fields.DatetimeField(null=True, description="操作时间")
     comment = fields.TextField(null=True, description="审批意见")
     read_at = fields.DatetimeField(null=True, description="阅读时间")
+    delegated_from_user_id = fields.IntField(null=True, description="委托来源用户ID")
+    sign_type = fields.CharField(max_length=20, null=True, description="加签类型 before/after")
+    due_at = fields.DatetimeField(null=True, description="任务截止时间")
+    parent_task_id = fields.IntField(null=True, description="父任务ID（加签关联）")
     
     def __str__(self):
         return f"Task {self.id} - {self.status}"

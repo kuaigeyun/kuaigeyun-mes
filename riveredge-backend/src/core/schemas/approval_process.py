@@ -59,8 +59,16 @@ class ApprovalProcessResponse(ApprovalProcessBase):
     uuid: UUID = Field(..., description="审批流程UUID")
     tenant_id: int = Field(..., description="组织ID")
     inngest_workflow_id: Optional[str] = Field(None, description="Inngest 工作流ID")
+    version: int = Field(1, description="流程版本")
+    published_version: int = Field(1, description="已发布版本")
+    draft_nodes: Optional[Dict[str, Any]] = Field(None, description="草稿节点")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
+
+    @field_validator("draft_nodes", mode="before")
+    @classmethod
+    def _coerce_draft_nodes(cls, v: Any) -> Any:
+        return normalize_optional_json_object_field(v)
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -7,9 +7,9 @@
 - 业务是否启用：由「菜单管理（is_active）」控制，不再落在本服务；
   历史 `check_node_enabled` 签名保留，内部恒返回 True，避免改动
   20+ 个业务 Service 的调用点；后续可逐步删除调用并移除此方法。
-- 是否需要审核：由「流程设置（core.models.approval_process.ApprovalProcess）」决定；
-  `check_audit_required` 直接查 ApprovalProcess，不再做 tenant.settings 兜底，
-  也不再对 import 失败做静默降级。
+- 是否需要审核：由「审核设置（core.models.audit_document_binding）」决定；
+  `check_audit_required` 查 AuditDocumentBinding（开关 + 流程绑定），
+  不再用 ApprovalProcess.code=node_key 的 is_active 充当开关。
 - 运行模式 / 节点 / 模块 / 模板等蓝图时代的概念全部移除，不再提供相关常量与方法。
 
 Author: Luigi Lu
@@ -46,6 +46,7 @@ def coerce_finance_parameter_dict(finance: Dict[str, Any]) -> Dict[str, Any]:
 from infra.models.tenant import Tenant
 from infra.exceptions.exceptions import NotFoundError
 from core.models.approval_process import ApprovalProcess
+from core.config.audit_registry import audit_node_keys
 
 
 # ============================================================
@@ -661,32 +662,9 @@ class BusinessConfigService:
         },
     }
     PRO_PLANS = ["professional", "enterprise"]
-    # 默认按单据类型独立开关；流程设置启用后才进入人工审核
-    AUDIT_NODE_KEYS = [
-        "demand",
-        "sales_forecast",
-        "sales_order",
-        "quotation",
-        "production_plan",
-        "purchase_request",
-        "purchase_order",
-        "reporting_record",
-        "quality_inspection",
-        "incoming_inspection",
-        "process_inspection",
-        "finished_goods_inspection",
-        "sales_delivery",
-        "purchase_receipt",
-        "finished_goods_receipt",
-        "other_inbound",
-        "other_outbound",
-        "production_picking",
-        "production_return",
-        "material_borrow",
-        "material_return",
-        "sales_return",
-        "purchase_return",
-    ]
+    # 可审核单据节点（= manifest.audit.node_key）唯一来源：audit_registry。
+    # 是否审核、绑定哪条流程：AuditDocumentBinding（配置中心审核设置）。
+    AUDIT_NODE_KEYS = audit_node_keys()
 
     # ========================================================
     # 功能开关 / 审核判定
@@ -701,20 +679,11 @@ class BusinessConfigService:
 
     async def check_audit_required(self, tenant_id: int, node_key: str) -> bool:
         """
-        是否需要人工审核：当租户存在 code=node_key 且 is_active=True 的 ApprovalProcess 时返回 True。
-
-        node_key 约定与 ApprovalProcess.code 一致（sales_order、purchase_order、
-        quotation、quality_inspection 等）。
+        是否需要人工审核：租户在审核设置中启用 node_key 且已绑定可用审批流程。
         """
-        if not node_key:
-            return False
-        exists = await ApprovalProcess.filter(
-            tenant_id=tenant_id,
-            code=node_key,
-            is_active=True,
-            deleted_at__isnull=True,
-        ).exists()
-        return bool(exists)
+        from core.services.approval.audit_binding_service import AuditBindingService
+
+        return await AuditBindingService.is_audit_enabled(tenant_id, node_key)
 
     async def get_audit_required_map(
         self,
@@ -722,21 +691,11 @@ class BusinessConfigService:
         node_keys: List[str] | None = None,
     ) -> Dict[str, bool]:
         """
-        批量返回单据节点是否需要审核。
-
-        默认返回 AUDIT_NODE_KEYS 中所有节点；仅依据 ApprovalProcess.is_active 判断。
+        批量返回单据节点是否需要审核（来自 AuditDocumentBinding）。
         """
-        keys = [k for k in (node_keys or self.AUDIT_NODE_KEYS) if k]
-        if not keys:
-            return {}
-        active_rows = await ApprovalProcess.filter(
-            tenant_id=tenant_id,
-            code__in=keys,
-            is_active=True,
-            deleted_at__isnull=True,
-        ).values_list("code", flat=True)
-        active_codes = {str(code) for code in active_rows}
-        return {key: key in active_codes for key in keys}
+        from core.services.approval.audit_binding_service import AuditBindingService
+
+        return await AuditBindingService.get_audit_required_map(tenant_id, node_keys)
 
     # ========================================================
     # 参数读取

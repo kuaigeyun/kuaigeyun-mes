@@ -8,6 +8,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
@@ -377,8 +378,6 @@ const STATUS_COLOR: Record<string, string> = {
 
 
 
-type ReviewAction = 'approve' | 'reject';
-
 type ReleaseRow = {
 
   item_id: number;
@@ -472,16 +471,6 @@ const SalesContractsPage: React.FC = () => {
   const [releaseRows, setReleaseRows] = useState<ReleaseRow[]>([]);
 
   const [releaseSubmitting, setReleaseSubmitting] = useState(false);
-
-
-
-  const [reviewModalOpen, setReviewModalOpen] = useState(false);
-
-  const [reviewAction, setReviewAction] = useState<ReviewAction>('approve');
-
-  const [reviewTarget, setReviewTarget] = useState<SalesContract | null>(null);
-
-  const [reviewRemarks, setReviewRemarks] = useState('');
 
 
 
@@ -1821,89 +1810,7 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const openReviewModal = (record: SalesContract, action: ReviewAction) => {
-
-    setReviewTarget(record);
-
-    setReviewAction(action);
-
-    setReviewRemarks('');
-
-    setReviewModalOpen(true);
-
-  };
-
-
-
-  const submitReview = async () => {
-
-    if (!reviewTarget?.id) return;
-
-    try {
-
-      if (reviewAction === 'approve') {
-
-        await salesContractApi.approve(reviewTarget.id, reviewRemarks.trim() || undefined);
-
-        messageApi.success('合同已生效');
-
-      } else {
-
-        await salesContractApi.reject(reviewTarget.id, reviewRemarks.trim() || undefined);
-
-        messageApi.success('已驳回');
-
-      }
-
-      setReviewModalOpen(false);
-
-      setReviewTarget(null);
-
-      await refreshDetail(reviewTarget.id);
-
-    } catch (e: any) {
-
-      messageApi.error(e?.message || '操作失败');
-
-    }
-
-  };
-
-
-
-  const handleWithdraw = (record: SalesContract) => {
-    Modal.confirm({
-      title: '撤回提交',
-      content: `确定撤回合同「${record.contract_code || record.id}」？撤回后可继续编辑。`,
-      onOk: async () => {
-        try {
-          await salesContractApi.withdraw(record.id!);
-          messageApi.success('已撤回');
-          if (detail?.id === record.id) await refreshDetail(record.id!);
-          else reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '撤回失败');
-        }
-      },
-    });
-  };
-
-  const handleRevokeReview = (record: SalesContract) => {
-    Modal.confirm({
-      title: '撤回审核',
-      content: `确定撤回合同「${record.contract_code || record.id}」的审核？将回到待审核状态。`,
-      onOk: async () => {
-        try {
-          await salesContractApi.revokeReview(record.id!);
-          messageApi.success('已撤回审核');
-          if (detail?.id === record.id) await refreshDetail(record.id!);
-          else reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '撤回审核失败');
-        }
-      },
-    });
-  };
+  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
 
   const handlePrint = async (record: SalesContract) => {
     try {
@@ -2456,55 +2363,40 @@ const SalesContractsPage: React.FC = () => {
 
               ) : null,
 
-              record.status === '草稿' && canSubmitContract ? (
-
-                <Button {...rowActionKind('submit')} key="submit" onClick={() => handleSubmit(record)}>
-
-                  提交
-
-                </Button>
-
-              ) : null,
-
-              canWithdrawContract(record) && canRevokeContract ? (
-
-                <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record)}>
-
-                  撤回
-
-                </Button>
-
-              ) : null,
-
-              canApproveContract(record) && canReviewContract ? (
-
-                <Button {...rowActionKind('audit')} key="approve" onClick={() => openReviewModal(record, 'approve')}>
-
-                  审核
-
-                </Button>
-
-              ) : null,
-
-              canRejectContract(record) && canReviewContract ? (
-
-                <Button {...rowActionKind('reject')} key="reject" onClick={() => openReviewModal(record, 'reject')}>
-
-                  驳回
-
-                </Button>
-
-              ) : null,
-
-              canRevokeContractApproval(record) && canRevokeContract ? (
-
-                <Button {...rowActionKind('revoke')} key="revoke-review" onClick={() => handleRevokeReview(record)}>
-
-                  撤回审核
-
-                </Button>
-
-              ) : null,
+              <UniWorkflowActions
+                key="contract-workflow"
+                {...rowActionKind('skip')}
+                record={record}
+                entityName="销售合同"
+                auditNodeKey="sales_contract"
+                resourcePrefix="kuaizhizao:sales-contract"
+                statusField="status"
+                reviewStatusField="review_status"
+                pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
+                approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
+                rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+                actions={{
+                  submit: () => handleSubmit(record),
+                  withdraw: () => new Promise((resolve, reject) => {
+                    Modal.confirm({
+                      title: '撤回销售合同',
+                      content: `确认将合同 ${record.contract_code || ''} 撤回到草稿吗？`,
+                      onOk: async () => {
+                        try {
+                          await salesContractApi.withdraw(record.id!);
+                          await reloadListAndDetail(record.id);
+                          resolve(null);
+                        } catch (error) {
+                          reject(error);
+                        }
+                      },
+                    });
+                  }),
+                  approve: () => salesContractApi.approve(record.id!),
+                  reject: (_id, reason) => salesContractApi.reject(record.id!, reason),
+                  revoke: () => salesContractApi.revokeReview(record.id!),
+                }}
+              />,
 
               canPrintContract(record) && contractPerms.canPrint ? (
 
@@ -3029,21 +2921,40 @@ const SalesContractsPage: React.FC = () => {
 
               )}
 
-              {canWithdrawContract(detail) && canRevokeContract ? (
-                <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(detail)}>撤回</Button>
-              ) : null}
-
-              {canApproveContract(detail) && canReviewContract ? (
-                <Button icon={<CheckOutlined />} onClick={() => openReviewModal(detail, 'approve')}>审核通过</Button>
-              ) : null}
-
-              {canRejectContract(detail) && canReviewContract ? (
-                <Button icon={<CloseOutlined />} onClick={() => openReviewModal(detail, 'reject')}>驳回</Button>
-              ) : null}
-
-              {canRevokeContractApproval(detail) && canRevokeContract ? (
-                <Button icon={<RollbackOutlined />} onClick={() => handleRevokeReview(detail)}>撤回审核</Button>
-              ) : null}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={detail}
+                entityName="销售合同"
+                theme="default"
+                auditNodeKey="sales_contract"
+                resourcePrefix="kuaizhizao:sales-contract"
+                statusField="status"
+                reviewStatusField="review_status"
+                pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
+                approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
+                rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+                actions={{
+                  submit: () => handleSubmit(detail),
+                  withdraw: () => new Promise((resolve, reject) => {
+                    Modal.confirm({
+                      title: '撤回销售合同',
+                      content: `确认将合同 ${detail.contract_code || ''} 撤回到草稿吗？`,
+                      onOk: async () => {
+                        try {
+                          await salesContractApi.withdraw(detail.id!);
+                          await reloadListAndDetail(detail.id);
+                          resolve(null);
+                        } catch (error) {
+                          reject(error);
+                        }
+                      },
+                    });
+                  }),
+                  approve: () => salesContractApi.approve(detail.id!),
+                  reject: (_id, reason) => salesContractApi.reject(detail.id!, reason),
+                  revoke: () => salesContractApi.revokeReview(detail.id!),
+                }}
+              />
 
               {canPrintContract(detail) && contractPerms.canPrint ? (
                 <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>打印</Button>
@@ -3551,58 +3462,6 @@ const SalesContractsPage: React.FC = () => {
             { title: '单位', dataIndex: 'material_unit', width: 60 },
 
           ]}
-
-        />
-
-      </Modal>
-
-
-
-      <Modal
-
-        title={reviewAction === 'approve' ? '审核通过' : '驳回合同'}
-
-        open={reviewModalOpen}
-
-        okText={reviewAction === 'approve' ? '确认通过' : '确认驳回'}
-
-        okButtonProps={reviewAction === 'reject' ? { danger: true } : undefined}
-
-        onOk={submitReview}
-
-        onCancel={() => {
-
-          setReviewModalOpen(false);
-
-          setReviewTarget(null);
-
-          setReviewRemarks('');
-
-        }}
-
-        destroyOnHidden
-
-      >
-
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-
-          合同：{reviewTarget?.contract_code ?? reviewTarget?.id ?? '-'}
-
-        </Typography.Paragraph>
-
-        <Input.TextArea
-
-          rows={3}
-
-          value={reviewRemarks}
-
-          onChange={(e) => setReviewRemarks(e.target.value)}
-
-          placeholder={reviewAction === 'approve' ? '可选：审核意见' : '可选：驳回原因'}
-
-          maxLength={500}
-
-          showCount
 
         />
 

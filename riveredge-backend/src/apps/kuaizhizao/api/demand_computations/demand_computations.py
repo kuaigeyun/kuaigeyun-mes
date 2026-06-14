@@ -718,10 +718,10 @@ async def list_computation_history(
     支持按需求ID、计算类型、时间范围筛选。
     """
     try:
-        from datetime import datetime
-        from tortoise.expressions import Q
+        from datetime import datetime, timedelta
         
-        query = DemandComputation.filter(tenant_id=tenant_id, deleted_at__isnull=True)
+        # DemandComputation 模型不包含 deleted_at，不能按软删除字段过滤
+        query = DemandComputation.filter(tenant_id=tenant_id)
         
         if demand_id:
             query = query.filter(demand_id=demand_id)
@@ -737,6 +737,8 @@ async def list_computation_history(
             query = query.filter(computation_start_time__gte=start_dt)
         if end_date:
             end_dt = datetime.strptime(end_date, "%Y-%m-%d")
+            # 结束日期按整天包含（23:59:59）
+            end_dt = end_dt + timedelta(days=1) - timedelta(seconds=1)
             query = query.filter(computation_start_time__lte=end_dt)
         
         total = await query.count()
@@ -755,8 +757,8 @@ async def list_computation_history(
             "total": total,
             "success": True
         }
-    except Exception as e:
-        logger.error(f"查询需求计算历史记录失败: {e}")
+    except Exception:
+        logger.exception("查询需求计算历史记录失败")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询需求计算历史记录失败")
 
 

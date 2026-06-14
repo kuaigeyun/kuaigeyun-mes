@@ -2857,6 +2857,136 @@
     "kuaizhizao:work-order:assign",
     "kuaizhizao:work-order:confirm_adjustment"
   ],
+  "audit": [
+    {
+      "node_key": "sales_order",
+      "entity_type": "sales_order",
+      "resource": "kuaizhizao:sales-order",
+      "name": "销售订单审核",
+      "template": "sme",
+      "config_category": "sales"
+    },
+    {
+      "node_key": "sales_order_change",
+      "entity_type": "sales_order_change",
+      "resource": "kuaizhizao:sales-order-change",
+      "name": "销售订单变更审核",
+      "template": "simple",
+      "config_category": "sales"
+    },
+    {
+      "node_key": "sales_forecast",
+      "entity_type": "sales_forecast",
+      "resource": "kuaizhizao:sales-forecast",
+      "name": "销售预测审核",
+      "template": "simple",
+      "config_category": "sales"
+    },
+    {
+      "node_key": "sales_contract",
+      "entity_type": "sales_contract",
+      "resource": "kuaizhizao:sales-contract",
+      "name": "销售合同审核",
+      "template": "simple",
+      "config_category": "sales"
+    },
+    {
+      "node_key": "quotation",
+      "entity_type": "quotation",
+      "resource": "kuaizhizao:quotation",
+      "name": "报价单审核",
+      "template": "simple",
+      "config_category": "sales"
+    },
+    {
+      "node_key": "demand",
+      "entity_type": "demand",
+      "resource": "kuaizhizao:demand",
+      "name": "需求审核",
+      "template": "simple",
+      "config_category": "planning"
+    },
+    {
+      "node_key": "production_plan",
+      "entity_type": "production_plan",
+      "resource": "kuaizhizao:production-plan",
+      "name": "生产计划审核",
+      "template": "simple",
+      "config_category": "planning"
+    },
+    {
+      "node_key": "purchase_order",
+      "entity_type": "purchase_order",
+      "resource": "kuaizhizao:purchase-order",
+      "name": "采购订单审核",
+      "template": "sme",
+      "config_category": "procurement"
+    },
+    {
+      "node_key": "purchase_order_change",
+      "entity_type": "purchase_order_change",
+      "resource": "kuaizhizao:purchase-order-change",
+      "name": "采购订单变更审核",
+      "template": "simple",
+      "config_category": "procurement"
+    },
+    {
+      "node_key": "purchase_request",
+      "entity_type": "purchase_request",
+      "resource": "kuaizhizao:purchase-request",
+      "name": "采购申请审核",
+      "template": "simple",
+      "config_category": "procurement"
+    },
+    {
+      "node_key": "purchase_inquiry",
+      "entity_type": "purchase_inquiry",
+      "resource": "kuaizhizao:purchase-inquiry",
+      "name": "采购询价审核",
+      "template": "simple",
+      "config_category": "procurement"
+    },
+    {
+      "node_key": "reporting_record",
+      "entity_type": "reporting_record",
+      "resource": "kuaizhizao:reporting-record",
+      "name": "报工审核",
+      "template": "simple",
+      "config_category": "production"
+    },
+    {
+      "node_key": "incoming_inspection",
+      "entity_type": "incoming_inspection",
+      "resource": "kuaizhizao:incoming-inspection",
+      "name": "来料检验审核",
+      "template": "simple",
+      "config_category": "quality"
+    },
+    {
+      "node_key": "process_inspection",
+      "entity_type": "process_inspection",
+      "resource": "kuaizhizao:process-inspection",
+      "name": "工序检验审核",
+      "template": "simple",
+      "config_category": "quality"
+    },
+    {
+      "node_key": "finished_goods_inspection",
+      "entity_type": "finished_goods_inspection",
+      "resource": "kuaizhizao:finished-goods-inspection",
+      "name": "成品检验审核",
+      "template": "simple",
+      "config_category": "quality"
+    },
+    {
+      "node_key": "oqc_inspection",
+      "entity_type": "oqc_inspection",
+      "resource": "kuaizhizao:oqc-inspection",
+      "name": "出货检验审核",
+      "template": "simple",
+      "config_category": "quality"
+    }
+  ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"

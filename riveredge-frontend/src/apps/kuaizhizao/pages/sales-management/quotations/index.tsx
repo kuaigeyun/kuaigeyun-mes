@@ -19,6 +19,7 @@ import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import {
   UniTableStackedPrimaryCell,
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -866,9 +867,6 @@ const QuotationsPage: React.FC = () => {
   const [linkedSalesOrderDrawerOpen, setLinkedSalesOrderDrawerOpen] = useState(false);
   const [linkedSalesOrder, setLinkedSalesOrder] = useState<SalesOrder | null>(null);
   const [linkedSalesOrderLoading, setLinkedSalesOrderLoading] = useState(false);
-  const [rejectModalOpen, setRejectModalOpen] = useState(false);
-  const [rejectingRecord, setRejectingRecord] = useState<Quotation | null>(null);
-  const [rejectRemarks, setRejectRemarks] = useState('');
   const quotationCreateDraftKey = useMemo(
     () =>
       isCreatePage
@@ -1189,41 +1187,34 @@ const QuotationsPage: React.FC = () => {
             删除
           </Button>
         );
-        if (record.status === '草稿' && canSubmitQuotation) {
-          parts.push(
-            <Button {...rowActionKind('submit')} key="sub" onClick={() => handleSubmit(record)}>
-              提交
-            </Button>
-          );
-        }
-        if (canWithdrawQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
-          parts.push(
-            <Button {...rowActionKind('skip')} key="w" onClick={() => handleWithdraw(record)}>
-              撤回
-            </Button>
-          );
-        }
-        if (canApproveQuotation(record, quotationAuditRequired) && canReviewQuotation) {
-          parts.push(
-            <Button {...rowActionKind('audit')} key="ap" onClick={() => handleApprove(record)}>
-              审核通过
-            </Button>
-          );
-        }
-        if (canRejectQuotation(record, quotationAuditRequired) && canReviewQuotation) {
-          parts.push(
-            <Button {...rowActionKind('reject')} key="rj" onClick={() => openRejectModal(record)}>
-              驳回
-            </Button>
-          );
-        }
-        if (canRevokeReviewQuotation(record, quotationAuditRequired) && canRevokeQuotation) {
-          parts.push(
-            <Button {...rowActionKind('revoke')} key="rv" onClick={() => handleRevokeReview(record)}>
-              撤回审核
-            </Button>
-          );
-        }
+        parts.push(
+          <UniWorkflowActions
+            key="quotation-workflow"
+            {...rowActionKind('skip')}
+            record={record}
+            entityName="报价单"
+            auditNodeKey="quotation"
+            resourcePrefix="kuaizhizao:quotation"
+            statusField="status"
+            reviewStatusField="review_status"
+            pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
+            approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
+            rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+            actions={{
+              submit: () => submitQuotation(record.id!),
+              withdraw: () => withdrawQuotation(record.id!),
+              approve: () => approveQuotation(record.id!, {}),
+              reject: (_id, reason) => rejectQuotation(record.id!, { review_remarks: reason }),
+              revoke: () => revokeReviewQuotation(record.id!),
+            }}
+            onSuccess={() => {
+              actionRef.current?.reload();
+              if (quotationDetail?.id === record.id) {
+                void loadQuotationDetail(record.id!);
+              }
+            }}
+          />
+        );
         if (canReopenQuotation(record)) {
           parts.push(
             <Button {...rowActionKind('read')} key="ro" onClick={() => handleReopen(record)}>
@@ -1679,108 +1670,7 @@ const QuotationsPage: React.FC = () => {
     });
   };
 
-  const handleSubmit = (record: Quotation) => {
-    Modal.confirm({
-      title: '提交报价单',
-      content: quotationAuditRequired
-        ? `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已报价」；若业务蓝图要求审核，将进入待审核。`
-        : `确定提交报价单「${record.quotation_code || record.id}」？提交后状态将变为「已报价」。`,
-      onOk: async () => {
-        try {
-          const updated = await submitQuotation(record.id!);
-          messageApi.success('提交成功');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (error: any) {
-          messageApi.error(error?.message || error?.detail || '提交失败');
-        }
-      },
-    });
-  };
-
-  const handleWithdraw = (record: Quotation) => {
-    Modal.confirm({
-      title: '撤回报价单',
-      content: `确定撤回「${record.quotation_code || record.id}」？将恢复为草稿，可继续编辑或删除。`,
-      onOk: async () => {
-        try {
-          const updated = await withdrawQuotation(record.id!);
-          messageApi.success('已撤回');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (error: any) {
-          messageApi.error(error?.message || error?.detail || '撤回失败');
-        }
-      },
-    });
-  };
-
-  const openRejectModal = (record: Quotation) => {
-    setRejectingRecord(record);
-    setRejectRemarks('');
-    setRejectModalOpen(true);
-  };
-
-  const submitReject = async () => {
-    if (!rejectingRecord?.id) return;
-    try {
-      const updated = await rejectQuotation(rejectingRecord.id, {
-        review_remarks: rejectRemarks.trim() || undefined,
-      });
-      messageApi.success('已驳回');
-      setRejectModalOpen(false);
-      setRejectingRecord(null);
-      setRejectRemarks('');
-      invalidateMenuBadgeCounts();
-
-      actionRef.current?.reload();
-      setQuotationDetail((prev) => (prev?.id === rejectingRecord.id ? updated : prev));
-    } catch (e: any) {
-      messageApi.error(e?.message || e?.detail || '驳回失败');
-    }
-  };
-
-  const handleApprove = (record: Quotation) => {
-    Modal.confirm({
-      title: '审核通过',
-      content: `确定审核通过报价单「${record.quotation_code || record.id}」？`,
-      onOk: async () => {
-        try {
-          const updated = await approveQuotation(record.id!);
-          messageApi.success('审核已通过');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
-        }
-      },
-    });
-  };
-
-  const handleRevokeReview = (record: Quotation) => {
-    Modal.confirm({
-      title: '撤回审核',
-      content: '确定撤回审核？将回到待审核，需重新审核。',
-      onOk: async () => {
-        try {
-          const updated = await revokeReviewQuotation(record.id!);
-          messageApi.success('已撤回审核');
-          invalidateMenuBadgeCounts();
-
-          actionRef.current?.reload();
-          setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
-        } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
-        }
-      },
-    });
-  };
+  // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
 
   const handleConfirmCustomer = (record: Quotation) => {
     Modal.confirm({
@@ -3425,21 +3315,29 @@ const QuotationsPage: React.FC = () => {
               {canDeleteQuotation(quotationDetail) && quotationPerms.canDelete && (
                 <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
               )}
-              {quotationDetail.status === '草稿' && canSubmitQuotation && (
-                <Button icon={<SendOutlined />} onClick={() => handleSubmit(quotationDetail)}>提交</Button>
-              )}
-              {canWithdrawQuotation(quotationDetail, quotationAuditRequired) && canRevokeQuotation && (
-                <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(quotationDetail)}>撤回</Button>
-              )}
-              {canApproveQuotation(quotationDetail, quotationAuditRequired) && canReviewQuotation && (
-                <Button icon={<CheckOutlined />} onClick={() => handleApprove(quotationDetail)}>审核通过</Button>
-              )}
-              {canRejectQuotation(quotationDetail, quotationAuditRequired) && canReviewQuotation && (
-                <Button icon={<CloseCircleOutlined />} onClick={() => openRejectModal(quotationDetail)}>驳回</Button>
-              )}
-              {canRevokeReviewQuotation(quotationDetail, quotationAuditRequired) && canRevokeQuotation && (
-                <Button icon={<UndoOutlined />} onClick={() => handleRevokeReview(quotationDetail)}>撤回审核</Button>
-              )}
+              <UniWorkflowActions
+                {...rowActionKind('skip')}
+                record={quotationDetail}
+                entityName="报价单"
+                auditNodeKey="quotation"
+                resourcePrefix="kuaizhizao:quotation"
+                statusField="status"
+                reviewStatusField="review_status"
+                pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
+                approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
+                rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
+                actions={{
+                  submit: () => submitQuotation(quotationDetail.id!),
+                  withdraw: () => withdrawQuotation(quotationDetail.id!),
+                  approve: () => approveQuotation(quotationDetail.id!, {}),
+                  reject: (_id, reason) => rejectQuotation(quotationDetail.id!, { review_remarks: reason }),
+                  revoke: () => revokeReviewQuotation(quotationDetail.id!),
+                }}
+                onSuccess={() => {
+                  actionRef.current?.reload();
+                  void loadQuotationDetail(quotationDetail.id!);
+                }}
+              />
               {canConfirmCustomerQuotation(quotationDetail, quotationAuditRequired) && (
                 <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>客户确认</Button>
               )}
@@ -3732,33 +3630,6 @@ const QuotationsPage: React.FC = () => {
           setFollowUpPreset(null);
         }}
       />
-
-      <Modal
-        title="驳回报价单"
-        open={rejectModalOpen}
-        zIndex={quotationElevatedModalZIndex}
-        okText="确认驳回"
-        okButtonProps={{ danger: true }}
-        onOk={submitReject}
-        onCancel={() => {
-          setRejectModalOpen(false);
-          setRejectingRecord(null);
-          setRejectRemarks('');
-        }}
-        destroyOnHidden
-      >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-          报价单：{rejectingRecord?.quotation_code ?? rejectingRecord?.id ?? '-'}
-        </Typography.Paragraph>
-        <Input.TextArea
-          rows={3}
-          value={rejectRemarks}
-          onChange={(e) => setRejectRemarks(e.target.value)}
-          placeholder="可选：驳回原因"
-          maxLength={500}
-          showCount
-        />
-      </Modal>
 
       <Modal
         open={printModalVisible}

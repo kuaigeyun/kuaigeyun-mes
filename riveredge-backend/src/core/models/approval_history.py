@@ -62,6 +62,8 @@ class ApprovalHistory(BaseModel):
     to_node = fields.CharField(max_length=100, null=True, description="目标节点")
     from_approver_id = fields.IntField(null=True, description="原审批人ID")
     to_approver_id = fields.IntField(null=True, description="新审批人ID")
+
+    change_payload = fields.JSONField(null=True, description="审核中改单等变更明细（field_changes）")
     
     def __str__(self):
         """字符串表示"""

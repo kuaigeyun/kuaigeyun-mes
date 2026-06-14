@@ -347,6 +347,32 @@
     "kuaicaiwu:standard-cost:reject",
     "kuaicaiwu:standard-cost:print"
   ],
+  "audit": [
+    {
+      "node_key": "receivable",
+      "entity_type": "receivable",
+      "resource": "kuaicaiwu:receivable",
+      "name": "应收单审核",
+      "template": "simple",
+      "config_category": "finance"
+    },
+    {
+      "node_key": "payable",
+      "entity_type": "payable",
+      "resource": "kuaicaiwu:payable",
+      "name": "应付单审核",
+      "template": "simple",
+      "config_category": "finance"
+    },
+    {
+      "node_key": "purchase_invoice",
+      "entity_type": "purchase_invoice",
+      "resource": "kuaicaiwu:purchase-invoice",
+      "name": "进项发票审核",
+      "template": "simple",
+      "config_category": "finance"
+    }
+  ],
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"

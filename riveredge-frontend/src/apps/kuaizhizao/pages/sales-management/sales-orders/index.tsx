@@ -2560,38 +2560,9 @@ const SalesOrdersPage: React.FC = () => {
         const lifecycle = getSalesOrderLifecycle(record, auditEnabled);
         const canEdit = ['草稿', '待审核', '已驳回'].includes(lifecycle.stageName ?? '') && !isSalesOrderClosed(record);
         const canDelete = (['草稿', '待审核'].includes(lifecycle.stageName ?? '') || record.status === SalesOrderStatus.DRAFT || record.status === 'PENDING_REVIEW') && !isSalesOrderClosed(record);
-        const isDraft = record.status === SalesOrderStatus.DRAFT;
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail([record.id!])} />,
         ];
-        if (isDraft) {
-          parts.push(
-            <Button
-              {...rowActionKind('submit')}
-              key="submit"
-              onClick={() => {
-                Modal.confirm({
-                  title: t('app.kuaizhizao.salesOrder.submitOrder'),
-                  content: auditEnabled
-                    ? t('app.kuaizhizao.salesOrder.submitConfirmAudit')
-                    : t('app.kuaizhizao.salesOrder.submitConfirmAuto'),
-                  onOk: async () => {
-                    try {
-                      await submitSalesOrder(record.id!);
-                      messageApi.success(t('app.kuaizhizao.salesOrder.submitted'));
-                      invalidateOrdersCache();
-                      invalidateMenuBadge();
-                      invalidateStatistics();
-                      actionRef.current?.reload();
-                    } catch (e: any) {
-                      messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.submitFailed'));
-                    }
-                  },
-                });
-              }}
-            />,
-          );
-        }
         if (canEdit) {
           parts.push(<Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit([record.id!])} />);
         }
@@ -2603,18 +2574,12 @@ const SalesOrdersPage: React.FC = () => {
             key="workflow-actions"
             record={record}
             entityName={t('app.kuaizhizao.salesOrder.entityName')}
-            statusField="status"
-            reviewStatusField="review_status"
-            draftStatuses={[SalesOrderStatus.DRAFT]}
-            pendingStatuses={[SalesOrderStatus.PENDING_REVIEW, ReviewStatus.PENDING, '待审核']}
-            approvedStatuses={[...APPROVED_STATUS_VALUES]}
-            rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
+            entityType="sales_order"
+            unifiedAudit
             autoApproveWhenSubmit={!auditEnabled}
-            workflowAuditEnabled={auditEnabled}
             resourcePrefix="kuaizhizao:sales-order"
             theme="link"
             size="small"
-            actions={{ submit: async (id) => submitSalesOrder(id), approve: approveSalesOrder, reject: rejectSalesOrder, revoke: unapproveSalesOrder }}
             onSuccess={() => { invalidateOrdersCache(); invalidateMenuBadge(); invalidateStatistics(); actionRef.current?.reload(); }}
             confirmMessages={{ submit: auditEnabled ? t('app.kuaizhizao.salesOrder.submitConfirmAudit') : t('app.kuaizhizao.salesOrder.submitConfirmAuto') }}
           />
@@ -4071,22 +4036,11 @@ const SalesOrdersPage: React.FC = () => {
                 <UniWorkflowActions {...rowActionKind('skip')}
                   record={currentSalesOrder}
                   entityName={t('app.kuaizhizao.salesOrder.entityName')}
-                  statusField="status"
-                  reviewStatusField="review_status"
-                  draftStatuses={[SalesOrderStatus.DRAFT]}
-                  pendingStatuses={[SalesOrderStatus.PENDING_REVIEW, ReviewStatus.PENDING, '待审核']}
-                  approvedStatuses={[...APPROVED_STATUS_VALUES]}
-                  rejectedStatuses={['已驳回', SalesOrderStatus.REJECTED]}
+                  entityType="sales_order"
+                  unifiedAudit
                   autoApproveWhenSubmit={!auditEnabled}
-                  workflowAuditEnabled={auditEnabled}
                   resourcePrefix="kuaizhizao:sales-order"
                   theme="default"
-                  actions={{
-                    submit: async (id) => submitSalesOrder(id),
-                    approve: approveSalesOrder,
-                    reject: rejectSalesOrder,
-                    revoke: unapproveSalesOrder,
-                  }}
                   onSuccess={() => {
                     invalidateMenuBadge();
                     invalidateStatistics();

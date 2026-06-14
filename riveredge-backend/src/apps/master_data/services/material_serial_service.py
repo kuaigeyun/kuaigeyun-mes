@@ -32,11 +32,26 @@ class MaterialSerialService:
     
     @staticmethod
     def _to_response(serial: MaterialSerial) -> MaterialSerialResponse:
-        response = MaterialSerialResponse.model_validate(serial)
-        if serial.material:
-            response.material_name = serial.material.name
-            response.material_uuid = serial.material.uuid
-        return response
+        material = getattr(serial, "material", None)
+        material_uuid = getattr(material, "uuid", "") if material else ""
+        material_name = getattr(material, "name", None) if material else None
+        return MaterialSerialResponse(
+            id=serial.id,
+            uuid=serial.uuid,
+            tenant_id=serial.tenant_id,
+            material_id=serial.material_id,
+            material_uuid=material_uuid,
+            material_name=material_name,
+            serial_no=serial.serial_no,
+            production_date=serial.production_date,
+            factory_date=serial.factory_date,
+            supplier_serial_no=serial.supplier_serial_no,
+            status=serial.status,
+            remark=serial.remark,
+            created_at=serial.created_at,
+            updated_at=serial.updated_at,
+            deleted_at=serial.deleted_at,
+        )
 
     @staticmethod
     async def create_serial(
@@ -202,7 +217,15 @@ class MaterialSerialService:
         
         items = []
         for serial in serials:
-            items.append(MaterialSerialService._to_response(serial))
+            try:
+                # 处理历史孤立数据：若关联物料已不存在，跳过该序列号，避免整页报错
+                if not serial.material:
+                    logger.warning(f"跳过孤立的物料序列号: id={serial.id}, material_id={serial.material_id} (物料不存在)")
+                    continue
+                items.append(MaterialSerialService._to_response(serial))
+            except Exception as e:
+                logger.error(f"序列化物料序列号 {serial.id} 失败: {str(e)}")
+                continue
         
         return MaterialSerialListResponse(items=items, total=total)
     

@@ -209,6 +209,7 @@ TORTOISE_ORM = {
                 "core.models.message_log",
                 "core.models.scheduled_task",
                 "core.models.approval_process",
+                "core.models.audit_document_binding",
                 "core.models.approval_instance",
                 "core.models.approval_task",
                 "core.models.data_backup",

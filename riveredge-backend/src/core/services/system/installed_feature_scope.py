@@ -12,6 +12,7 @@ from typing import Dict, FrozenSet, List, Optional, Set
 
 from tortoise.expressions import Q
 
+from core.config.audit_registry import node_keys_for_app
 from core.services.application.application_service import ApplicationService
 
 # 与后端 src/apps/*/manifest.json 的 code 对齐（用于表名前缀与路由 /apps/{code}/）
@@ -123,50 +124,10 @@ _SYSTEM_DICTIONARY_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {
 
 _SYSTEM_DICTIONARY_ALWAYS_VISIBLE: FrozenSet[str] = frozenset({"CURRENCY", "TIMEZONE"})
 
-# 与 ApprovalProcessService.CANONICAL_PROCESS_NAMES 中「快制造」域一致；个人任务保留为全局
+# 「快制造」域审批流程 code 集合：唯一来源为 kuaizhizao manifest.audit（node_key == ApprovalProcess.code）。
+# 个人任务保留为全局，不在此集合内。
 KUAIZHIZAO_APPROVAL_PROCESS_CODES: FrozenSet[str] = frozenset(
-    {
-        "demand",
-        "sales_forecast",
-        "sales_order",
-        "quotation",
-        "production_plan",
-        "purchase_request",
-        "purchase_order",
-        "reporting_record",
-        "quality_inspection",
-        "incoming_inspection",
-        "process_inspection",
-        "finished_goods_inspection",
-        "sales_delivery",
-        "purchase_receipt",
-        "finished_goods_receipt",
-        "other_inbound",
-        "other_outbound",
-        "production_picking",
-        "production_return",
-        "material_borrow",
-        "material_return",
-        "sales_return",
-        "purchase_return",
-        "demand_audit",
-        "purchase_receipt_audit",
-        "other_outbound_audit",
-        "finished_goods_inspection_audit",
-        "process_inspection_audit",
-        "production_picking_audit",
-        "quality_inspection_audit",
-        "production_return_audit",
-        "material_return_audit",
-        "incoming_inspection_audit",
-        "purchase_return_audit",
-        "sales_delivery_audit",
-        "material_borrow_audit",
-        "finished_goods_receipt_audit",
-        "sales_return_audit",
-        "production_plan_audit",
-        "quotation_audit",
-    }
+    node_keys_for_app("kuaizhizao")
 )
 
 _MESSAGE_TEMPLATE_REQUIRES_APPS: Dict[str, FrozenSet[str]] = {

@@ -148,6 +148,8 @@
     "kuaiplm:project:export",
     "kuaiplm:change:read",
     "kuaiplm:change:update",
+    "kuaiplm:change:approve",
+    "kuaiplm:change:reject",
     "kuaiplm:knowledge:read",
     "kuaiplm:knowledge:create",
     "kuaiplm:knowledge:delete",
