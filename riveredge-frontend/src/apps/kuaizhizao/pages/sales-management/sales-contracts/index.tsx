@@ -2370,32 +2370,12 @@ const SalesContractsPage: React.FC = () => {
                 entityName="销售合同"
                 auditNodeKey="sales_contract"
                 resourcePrefix="kuaizhizao:sales-contract"
+                unifiedAudit
                 statusField="status"
                 reviewStatusField="review_status"
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
                 approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-                actions={{
-                  submit: () => handleSubmit(record),
-                  withdraw: () => new Promise((resolve, reject) => {
-                    Modal.confirm({
-                      title: '撤回销售合同',
-                      content: `确认将合同 ${record.contract_code || ''} 撤回到草稿吗？`,
-                      onOk: async () => {
-                        try {
-                          await salesContractApi.withdraw(record.id!);
-                          await reloadListAndDetail(record.id);
-                          resolve(null);
-                        } catch (error) {
-                          reject(error);
-                        }
-                      },
-                    });
-                  }),
-                  approve: () => salesContractApi.approve(record.id!),
-                  reject: (_id, reason) => salesContractApi.reject(record.id!, reason),
-                  revoke: () => salesContractApi.revokeReview(record.id!),
-                }}
               />,
 
               canPrintContract(record) && contractPerms.canPrint ? (
@@ -2928,32 +2908,12 @@ const SalesContractsPage: React.FC = () => {
                 theme="default"
                 auditNodeKey="sales_contract"
                 resourcePrefix="kuaizhizao:sales-contract"
+                unifiedAudit
                 statusField="status"
                 reviewStatusField="review_status"
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
                 approvedStatuses={['已审核', '已确认', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-                actions={{
-                  submit: () => handleSubmit(detail),
-                  withdraw: () => new Promise((resolve, reject) => {
-                    Modal.confirm({
-                      title: '撤回销售合同',
-                      content: `确认将合同 ${detail.contract_code || ''} 撤回到草稿吗？`,
-                      onOk: async () => {
-                        try {
-                          await salesContractApi.withdraw(detail.id!);
-                          await reloadListAndDetail(detail.id);
-                          resolve(null);
-                        } catch (error) {
-                          reject(error);
-                        }
-                      },
-                    });
-                  }),
-                  approve: () => salesContractApi.approve(detail.id!),
-                  reject: (_id, reason) => salesContractApi.reject(detail.id!, reason),
-                  revoke: () => salesContractApi.revokeReview(detail.id!),
-                }}
               />
 
               {canPrintContract(detail) && contractPerms.canPrint ? (

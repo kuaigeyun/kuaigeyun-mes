@@ -1195,18 +1195,12 @@ const QuotationsPage: React.FC = () => {
             entityName="报价单"
             auditNodeKey="quotation"
             resourcePrefix="kuaizhizao:quotation"
+            unifiedAudit
             statusField="status"
             reviewStatusField="review_status"
             pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
             approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
             rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-            actions={{
-              submit: () => submitQuotation(record.id!),
-              withdraw: () => withdrawQuotation(record.id!),
-              approve: () => approveQuotation(record.id!, {}),
-              reject: (_id, reason) => rejectQuotation(record.id!, { review_remarks: reason }),
-              revoke: () => revokeReviewQuotation(record.id!),
-            }}
             onSuccess={() => {
               actionRef.current?.reload();
               if (quotationDetail?.id === record.id) {
@@ -3321,18 +3315,12 @@ const QuotationsPage: React.FC = () => {
                 entityName="报价单"
                 auditNodeKey="quotation"
                 resourcePrefix="kuaizhizao:quotation"
+                unifiedAudit
                 statusField="status"
                 reviewStatusField="review_status"
                 pendingStatuses={['待审核', 'pending_review', 'PENDING_REVIEW', '已发送', 'sent']}
                 approvedStatuses={['已审核', '审核通过', 'approved', 'APPROVED']}
                 rejectedStatuses={['已驳回', 'rejected', 'REJECTED']}
-                actions={{
-                  submit: () => submitQuotation(quotationDetail.id!),
-                  withdraw: () => withdrawQuotation(quotationDetail.id!),
-                  approve: () => approveQuotation(quotationDetail.id!, {}),
-                  reject: (_id, reason) => rejectQuotation(quotationDetail.id!, { review_remarks: reason }),
-                  revoke: () => revokeReviewQuotation(quotationDetail.id!),
-                }}
                 onSuccess={() => {
                   actionRef.current?.reload();
                   void loadQuotationDetail(quotationDetail.id!);

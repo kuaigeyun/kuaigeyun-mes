@@ -13,7 +13,8 @@ from __future__ import annotations
 
 from typing import Any, Optional, Dict
 
-from core.config.audit_registry import entry_by_entity_type
+from core.config.audit_registry import all_entries, entry_by_entity_type
+from core.services.approval.uni_audit_handlers import HANDLERS
 from infra.exceptions.exceptions import ValidationError
 
 UNI_AUDIT_ACTIONS = ("submit", "approve", "reject", "revoke", "withdraw", "transfer", "add_sign", "delegate", "urge")
@@ -38,32 +39,6 @@ def action_permission_for(action: str) -> str:
     if act not in _ACTION_PERMISSION:
         raise ValidationError(f"不支持的审核动作: {action}")
     return _ACTION_PERMISSION[act]
-
-
-async def _dispatch_sales_order(
-    action: str,
-    *,
-    tenant_id: int,
-    entity_id: int,
-    user_id: int,
-    reason: Optional[str],
-) -> Any:
-    from apps.kuaizhizao.services.sales_order_service import SalesOrderService
-
-    svc = SalesOrderService()
-    if action == "submit":
-        return await svc.submit_sales_order(tenant_id, entity_id, user_id)
-    if action == "approve":
-        return await svc.approve_sales_order(tenant_id, entity_id, user_id)
-    if action == "reject":
-        return await svc.reject_sales_order(
-            tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
-        )
-    if action == "revoke":
-        return await svc.unapprove_sales_order(tenant_id, entity_id, user_id)
-    if action == "withdraw":
-        return await svc.withdraw_sales_order(tenant_id, entity_id, user_id)
-    raise ValidationError(f"销售订单不支持的审核动作: {action}")
 
 
 async def _edit_sales_order(
@@ -128,10 +103,18 @@ async def execute_uni_audit_edit(
     )
 
 
-# entity_type -> 分发函数。后续实体逐个接入即在此登记（与 manifest.audit 对齐）。
-_DISPATCH = {
-    "sales_order": _dispatch_sales_order,
-}
+def _assert_handlers_complete() -> None:
+    """manifest 声明的 entity_type 均须在 HANDLERS 中登记。"""
+    declared = {e.entity_type for e in all_entries()}
+    registered = set(HANDLERS.keys())
+    missing = declared - registered
+    if missing:
+        raise RuntimeError(f"uni_audit HANDLERS 未覆盖 manifest.audit 实体: {sorted(missing)}")
+
+
+_assert_handlers_complete()
+
+_DISPATCH = HANDLERS
 
 
 async def execute_uni_audit(
@@ -190,9 +173,6 @@ async def _dispatch_advanced(
     payload: Dict[str, Any],
 ) -> Any:
     from core.services.approval.approval_advanced_actions import ApprovalAdvancedActions
-
-    if entity_type != "sales_order":
-        raise ValidationError(f"实体 {entity_type} 尚未接入高级审核动作")
 
     if action == "transfer":
         target = payload.get("transfer_to_user_id") or payload.get("transfer_to")

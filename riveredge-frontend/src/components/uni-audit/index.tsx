@@ -46,6 +46,7 @@ export interface UniAuditActionsProps {
 
 function inferAuditNodeKey(apiPrefix?: string): string {
   const prefix = (apiPrefix ?? '').toLowerCase();
+  if (prefix.includes('/sales/contracts')) return 'sales_contract';
   if (prefix.includes('/sales/orders')) return 'sales_order';
   if (prefix.includes('/sales/forecasts')) return 'sales_forecast';
   if (prefix.includes('/purchase/orders')) return 'purchase_order';
@@ -67,6 +68,7 @@ function inferAuditNodeKey(apiPrefix?: string): string {
 function inferResourcePrefix(apiPrefix?: string): string {
   const prefix = (apiPrefix ?? '').toLowerCase();
   if (!prefix) return '';
+  if (prefix.includes('/apps/kuaizhizao/sales/contracts')) return 'kuaizhizao:sales-contract';
   if (prefix.includes('/apps/kuaizhizao/sales/orders')) return 'kuaizhizao:sales-order';
   if (prefix.includes('/apps/kuaizhizao/sales/forecasts')) return 'kuaizhizao:sales-forecast';
   if (prefix.includes('/apps/kuaizhizao/sales/order-changes')) return 'kuaizhizao:sales-order-change';
@@ -91,6 +93,7 @@ function inferResourceByNodeKey(nodeKey?: string): string {
   const node = (nodeKey || '').trim().toLowerCase();
   if (!node) return '';
   const map: Record<string, string> = {
+    sales_contract: 'kuaizhizao:sales-contract',
     sales_order: 'kuaizhizao:sales-order',
     sales_forecast: 'kuaizhizao:sales-forecast',
     sales_order_change: 'kuaizhizao:sales-order-change',
@@ -122,6 +125,20 @@ function matchesAnyStatus(value: unknown, candidates: string[]): boolean {
   const current = normalizeStatusValue(value);
   if (!current) return false;
   return candidates.some((candidate) => normalizeStatusValue(candidate) === current);
+}
+
+function usesUnifiedAuditForAction(
+  action: UniAuditAction,
+  opts: {
+    unifiedAudit: boolean;
+    resolvedEntityType: string;
+    actions: UniAuditActionsMap;
+    apiPrefix?: string;
+  },
+): boolean {
+  if (opts.unifiedAudit) return true;
+  if (!opts.resolvedEntityType || opts.apiPrefix) return false;
+  return !opts.actions[action];
 }
 
 export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
@@ -191,31 +208,42 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const canShowAuditSemanticActions =
     effectiveAuditEnabled || isPending || !hideAuditActionsWhenDisabled;
 
-  const useAuthoritativeActions = unifiedAudit ? true : auditAuthoritative;
+  const unifiedOpts = {
+    unifiedAudit,
+    resolvedEntityType,
+    actions,
+    apiPrefix,
+  };
+  const routeViaUnified = (action: UniAuditAction) =>
+    usesUnifiedAuditForAction(action, unifiedOpts);
+  const anyUnifiedAudit =
+    unifiedAudit || (Boolean(resolvedEntityType) && !apiPrefix && Object.keys(actions).length === 0);
+
+  const useAuthoritativeActions = anyUnifiedAudit && auditAuthoritative;
   const showSubmit = useAuthoritativeActions
-    ? (auditAuthoritative && allowedActions.includes('submit'))
+    ? allowedActions.includes('submit')
     : isDraft || isRejected;
   const showWithdraw = useAuthoritativeActions
-    ? (auditAuthoritative && allowedActions.includes('withdraw'))
+    ? allowedActions.includes('withdraw')
     : isPending;
   const showApprove = useAuthoritativeActions
-    ? (auditAuthoritative && allowedActions.includes('approve'))
+    ? allowedActions.includes('approve')
     : canShowAuditSemanticActions && isPending;
   const showReject = useAuthoritativeActions
-    ? (auditAuthoritative && allowedActions.includes('reject'))
+    ? allowedActions.includes('reject')
     : canShowAuditSemanticActions && isPending;
   const showRevoke = useAuthoritativeActions
-    ? (auditAuthoritative && allowedActions.includes('revoke'))
+    ? allowedActions.includes('revoke')
     : canShowAuditSemanticActions && isApproved;
 
   const showAuditHub = showWithdraw || showApprove || showReject;
 
   const channelByAction: Record<UniAuditAction, boolean> = {
-    submit: unifiedAudit || Boolean(actions.submit) || Boolean(apiPrefix),
-    withdraw: unifiedAudit || Boolean(actions.withdraw) || Boolean(endpointMap?.withdraw),
-    approve: unifiedAudit || Boolean(actions.approve) || Boolean(apiPrefix),
-    reject: unifiedAudit || Boolean(actions.reject) || Boolean(apiPrefix),
-    revoke: unifiedAudit || Boolean(actions.revoke) || Boolean(apiPrefix),
+    submit: routeViaUnified('submit') || Boolean(actions.submit) || Boolean(apiPrefix),
+    withdraw: routeViaUnified('withdraw') || Boolean(actions.withdraw) || Boolean(endpointMap?.withdraw),
+    approve: routeViaUnified('approve') || Boolean(actions.approve) || Boolean(apiPrefix),
+    reject: routeViaUnified('reject') || Boolean(actions.reject) || Boolean(apiPrefix),
+    revoke: routeViaUnified('revoke') || Boolean(actions.revoke) || Boolean(apiPrefix),
   };
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
@@ -277,9 +305,9 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     reason?: string,
     payload?: Record<string, unknown>,
   ) => {
-    if (unifiedAudit) {
+    if (routeViaUnified(actionType)) {
       if (!resolvedEntityType) {
-        throw new Error('统一执行入口需要 entityType');
+        throw new Error('统一执行入口需要 entityType 或 auditNodeKey');
       }
       const data = { ...(payload || {}), ...(reason ? { reason } : {}) };
       return apiRequest(`/core/uni-audit/${resolvedEntityType}/${recordId}/${actionType}`, {
