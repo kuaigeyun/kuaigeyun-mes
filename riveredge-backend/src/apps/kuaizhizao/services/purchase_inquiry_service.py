@@ -51,7 +51,7 @@ from apps.kuaizhizao.schemas.purchase_inquiry import (
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.utils.material_source_helper import get_material_source_config
 from apps.master_data.models import Supplier
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 from loguru import logger
 
@@ -109,7 +109,10 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        return await self._build_response(tenant_id, inquiry)
+        resp = await self._build_response(tenant_id, inquiry)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "purchase_inquiry", resp)
 
     async def list_inquiries(
         self,
@@ -145,7 +148,9 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
                     continue
             resp = await self._build_response(tenant_id, inquiry)
             out.append(resp)
-        return out
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        return await enrich_items(tenant_id, "purchase_inquiry", out)
 
     async def create_inquiry(
         self, tenant_id: int, data: PurchaseInquiryCreate, created_by: int
@@ -200,7 +205,13 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             return await self.get_inquiry_by_id(tenant_id, inquiry.id)
 
     async def update_inquiry(
-        self, tenant_id: int, inquiry_id: int, data: PurchaseInquiryUpdate, updated_by: int
+        self,
+        tenant_id: int,
+        inquiry_id: int,
+        data: PurchaseInquiryUpdate,
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> PurchaseInquiryResponse:
         await self._ensure_module_enabled(tenant_id)
         inquiry = await PurchaseInquiry.get_or_none(
@@ -208,8 +219,43 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
         )
         if not inquiry:
             raise NotFoundError(f"询价单不存在: {inquiry_id}")
-        if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
+        is_draft = inquiry.status == PurchaseInquiryStatus.DRAFT.value
+        if not is_draft:
             raise BusinessLogicError("只有草稿状态的询价单可编辑")
+
+        from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+        pending_instance = await ApprovalInstanceService.get_instance_by_entity(
+            tenant_id=tenant_id,
+            entity_type="purchase_inquiry",
+            entity_id=inquiry_id,
+        )
+        in_approval = bool(pending_instance and pending_instance.status == "pending")
+        if in_approval and not approval_edit_context:
+            from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+            edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                tenant_id, "purchase_inquiry", inquiry_id, updated_by
+            )
+            if not edit_ctx:
+                raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+            approval_edit_context = edit_ctx
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            for field in ("inquiry_name", "inquiry_date", "quote_deadline", "notes"):
+                val = getattr(data, field, None)
+                if val is None:
+                    continue
+                if not is_field_editable("purchase_inquiry", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if data.items is not None and not is_field_editable("purchase_inquiry", "items", node_editable):
+                raise ValidationError("字段「询价明细」不允许在审核中修改")
+            if data.vendors is not None and not is_field_editable("purchase_inquiry", "vendors", node_editable):
+                raise ValidationError("字段「供应商」不允许在审核中修改")
+
         async with in_transaction():
             update_fields = {"updated_by": updated_by}
             for field in ("inquiry_name", "inquiry_date", "quote_deadline", "notes"):
@@ -796,9 +842,46 @@ class PurchaseInquiryService(AppBaseService[PurchaseInquiry]):
             }).save()
         else:
             await inquiry.update_from_dict({
-                "review_status": ReviewStatus.PENDING.value,
+                "review_status": DocumentStatus.PENDING_REVIEW.value,
                 "updated_by": user_id,
             }).save()
+        return await self.get_inquiry_by_id(tenant_id, inquiry_id)
+
+    async def withdraw_inquiry(
+        self, tenant_id: int, inquiry_id: int, user_id: int
+    ) -> PurchaseInquiryResponse:
+        """撤回提交：草稿 + 待审核 → 草稿（重置审核状态，非反审核）"""
+        inquiry = await PurchaseInquiry.get_or_none(
+            tenant_id=tenant_id, id=inquiry_id, deleted_at__isnull=True
+        )
+        if not inquiry:
+            raise NotFoundError(f"询价单不存在: {inquiry_id}")
+        if inquiry.status != PurchaseInquiryStatus.DRAFT.value:
+            raise BusinessLogicError("只有草稿状态的询价单可撤回提交")
+        rs = normalize_status(inquiry.review_status or "")
+        if rs not in (DocumentStatus.PENDING_REVIEW.value, "待审核"):
+            raise BusinessLogicError("只有已提交待审核的询价单可撤回")
+
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="purchase_inquiry",
+                entity_id=inquiry_id,
+                operator_id=user_id,
+            )
+        except Exception as e:
+            logger.warning("取消询价单审批流程失败或无需取消: {}", e)
+
+        await inquiry.update_from_dict({
+            "review_status": ReviewStatus.PENDING.value,
+            "reviewer_id": None,
+            "reviewer_name": None,
+            "review_time": None,
+            "review_remarks": None,
+            "updated_by": user_id,
+        }).save()
         return await self.get_inquiry_by_id(tenant_id, inquiry_id)
 
     async def approve_inquiry(

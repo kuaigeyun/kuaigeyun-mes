@@ -138,7 +138,9 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             invoice_progress=0.0,
             items=None,
         )
-        return resp
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "sales_forecast", resp)
 
     async def list_sales_forecasts(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取销售预测列表"""
@@ -196,7 +198,11 @@ class SalesForecastService(AppBaseService[SalesForecast]):
                 f_items = items_by_forecast.get(forecast.id, [])
                 resp.items = [SalesForecastItemResponse.model_validate(it) for it in f_items]
             result.append(resp.model_dump())
-        return {"data": result, "total": total, "success": True}
+        from core.services.approval.audit_record_enricher import enrich_data_payload
+
+        return await enrich_data_payload(tenant_id, "sales_forecast", {
+            "data": result, "total": total, "success": True
+        })
         
     async def get_forecast_statistics(self, tenant_id: int) -> Dict[str, Any]:
         """获取销售预测统计（列表页指标卡，字段与销售订单 statistics 对齐）"""
@@ -295,8 +301,50 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             "trend_pending_review": trend_pending_review,
         }
 
-    async def update_sales_forecast(self, tenant_id: int, forecast_id: int, forecast_data: SalesForecastUpdate, updated_by: int) -> SalesForecastResponse:
+    async def update_sales_forecast(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        forecast_data: SalesForecastUpdate,
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
+    ) -> SalesForecastResponse:
         """更新销售预测；若提供 items 则先删后增，覆盖全部明细。已审核预测更新后同步关联需求。"""
+        from apps.kuaizhizao.constants import DocumentStatus, is_draft_status, normalize_status
+
+        forecast_row = await SalesForecast.get_or_none(
+            tenant_id=tenant_id, id=forecast_id, deleted_at__isnull=True
+        )
+        if not forecast_row:
+            raise NotFoundError(f"销售预测不存在: {forecast_id}")
+        is_pending = normalize_status(forecast_row.status or "") == DocumentStatus.PENDING_REVIEW.value
+        if is_pending and not approval_edit_context:
+            from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+            edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                tenant_id, "sales_forecast", forecast_id, updated_by
+            )
+            if not edit_ctx:
+                raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+            approval_edit_context = edit_ctx
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+            from infra.exceptions.exceptions import ValidationError
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = forecast_data.model_dump(exclude_unset=True, exclude={"items"})
+            for field in preview:
+                if field in ("updated_by", "status", "review_status"):
+                    continue
+                if not is_field_editable("sales_forecast", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if forecast_data.items is not None and not is_field_editable(
+                "sales_forecast", "items", node_editable
+            ):
+                raise ValidationError("字段「预测明细」不允许在审核中修改")
+
         forecast_before = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
         async with in_transaction():
             dumped = forecast_data.model_dump(exclude_unset=True, exclude={'updated_by'})
@@ -625,6 +673,44 @@ class SalesForecastService(AppBaseService[SalesForecast]):
             
             updated_forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
             return updated_forecast
+
+    async def withdraw_forecast(
+        self,
+        tenant_id: int,
+        forecast_id: int,
+        withdrawn_by: int,
+    ) -> SalesForecastResponse:
+        """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
+        from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, is_pending_review_status
+
+        forecast = await self.get_sales_forecast_by_id(tenant_id, forecast_id)
+        if not is_pending_review_status(forecast.status):
+            raise BusinessLogicError(
+                f"只有待审核状态的销售预测可撤回提交，当前状态：{forecast.status}"
+            )
+
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="sales_forecast",
+                entity_id=forecast_id,
+                operator_id=withdrawn_by,
+            )
+        except Exception as e:
+            logger.warning("取消销售预测审批流程失败或无需取消: {}", e)
+
+        await SalesForecast.filter(tenant_id=tenant_id, id=forecast_id).update(
+            status=DocumentStatus.DRAFT.value,
+            review_status=ReviewStatus.PENDING.value,
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=withdrawn_by,
+        )
+        return await self.get_sales_forecast_by_id(tenant_id, forecast_id)
 
     async def import_from_data(
         self,

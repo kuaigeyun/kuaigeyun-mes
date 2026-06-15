@@ -258,10 +258,6 @@ const ReceivableList: React.FC = () => {
                             rejectedStatuses={['已驳回', '驳回']}
                             theme="link"
                             size="small"
-                            actions={{
-                                approve: (id) => receivableService.approveReceivable(id),
-                                reject: (id, reason) => receivableService.approveReceivable(id, reason),
-                            }}
                             onSuccess={() => actionRef.current?.reload()}
                         />,
                         record.remaining_amount > 0 ? (

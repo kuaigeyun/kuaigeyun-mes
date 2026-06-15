@@ -71,10 +71,6 @@ const PurchaseInvoiceDetail: React.FC = () => {
           rejectedStatuses={['已驳回', '驳回']}
           theme="default"
           size="small"
-          actions={{
-            approve: (pid) => purchaseInvoiceService.approve(pid),
-            reject: (pid, reason) => purchaseInvoiceService.approve(pid, reason),
-          }}
           onSuccess={loadData}
         />
       )}

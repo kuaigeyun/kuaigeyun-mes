@@ -1028,10 +1028,6 @@ const PurchaseInquiriesPage: React.FC = () => {
                 rejectedStatuses={['REJECTED', '已驳回']}
                 autoApproveWhenSubmit={!auditEnabled}
                 workflowAuditEnabled={auditEnabled}
-                actions={{
-                  approve: (id, approved, reason) => approvePurchaseInquiry(id, approved, reason),
-                  revoke: withdrawPurchaseInquiryApproval,
-                }}
                 onSuccess={async () => {
                   actionRef.current?.reload();
                   if (detail.id) setDetail(await getPurchaseInquiry(detail.id));

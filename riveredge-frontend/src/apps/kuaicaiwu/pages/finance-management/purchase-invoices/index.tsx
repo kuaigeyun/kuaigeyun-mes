@@ -406,10 +406,6 @@ const PurchaseInvoiceList: React.FC = () => {
                                 rejectedStatuses={['已驳回', '驳回']}
                                 theme="link"
                                 size="small"
-                                actions={{
-                                    approve: (id) => purchaseInvoiceService.approve(id),
-                                    reject: (id, reason) => purchaseInvoiceService.approve(id, reason),
-                                }}
                                 onSuccess={() => actionRef.current?.reload()}
                             />
                         ) : null,

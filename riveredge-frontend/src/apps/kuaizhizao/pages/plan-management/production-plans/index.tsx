@@ -399,15 +399,6 @@ const ProductionPlansPage: React.FC = () => {
             rejectedStatuses={['已驳回']}
             theme="link"
             size="small"
-            actions={{
-              submit: (id) => planningApi.productionPlan.submit(id.toString()),
-              approve: (id) => planningApi.productionPlan.approve(id.toString()),
-              reject: (id, reason) =>
-                apiRequest(`/apps/kuaizhizao/production-plans/${id}/approve`, {
-                  method: 'POST',
-                  params: reason ? { rejection_reason: reason } : undefined,
-                }),
-            }}
             onSuccess={() => {
               invalidatePlanStatistics();
               actionRef.current?.reload();
@@ -1022,15 +1013,6 @@ const ProductionPlansPage: React.FC = () => {
                 rejectedStatuses={['已驳回']}
                 theme="default"
                 size="small"
-                actions={{
-                  submit: (id) => planningApi.productionPlan.submit(id.toString()),
-                  approve: (id) => planningApi.productionPlan.approve(id.toString()),
-                  reject: (id, reason) =>
-                    apiRequest(`/apps/kuaizhizao/production-plans/${id}/approve`, {
-                      method: 'POST',
-                      params: reason ? { rejection_reason: reason } : undefined,
-                    }),
-                }}
                 onSuccess={() => {
                   invalidatePlanStatistics();
                   actionRef.current?.reload();

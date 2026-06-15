@@ -8351,6 +8351,8 @@ export default {
   'pages.system.files.category.platform-favicon': '平台图标',
   'pages.system.files.category.dashboard_hero': '经营看板主图',
   'pages.system.files.category.avatar': '用户头像',
+  'pages.system.files.category.custom_field_file': '自定义字段附件',
+  'pages.system.files.category.custom_field_image': '自定义字段图片',
   'pages.system.files.category.engineering_drawing': '图纸文件',
   'pages.system.files.category.material_images': '物料数据附件',
   'pages.system.files.category.engineering_bom_attachments': '物料清单附件',

@@ -420,7 +420,10 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         
         milestones = await get_document_milestones(tenant_id, "incoming_inspection", inspection_id)
         resp = IncomingInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection, milestones=milestones)})
+        resp = resp.model_copy(update={"lifecycle": get_incoming_inspection_lifecycle(inspection, milestones=milestones)})
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "incoming_inspection", resp)
 
     async def list_incoming_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> Dict[str, Any]:
         """获取来料检验单列表"""
@@ -447,11 +450,13 @@ class IncomingInspectionService(AppBaseService[IncomingInspection]):
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
         
         # 返回前端期望的格式
-        return {
+        from core.services.approval.audit_record_enricher import enrich_data_payload
+
+        return await enrich_data_payload(tenant_id, "incoming_inspection", {
             "data": [IncomingInspectionListResponse.model_validate(inspection).model_dump() for inspection in inspections],
             "total": total,
             "success": True
-        }
+        })
 
     async def update_incoming_inspection(self, tenant_id: int, inspection_id: int, inspection_data: IncomingInspectionUpdate, updated_by: int) -> IncomingInspectionResponse:
         """更新来料检验单"""
@@ -1140,7 +1145,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
         
         milestones = await get_document_milestones(tenant_id, "process_inspection", inspection_id)
         resp = ProcessInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection, milestones=milestones)})
+        resp = resp.model_copy(update={"lifecycle": get_process_inspection_lifecycle(inspection, milestones=milestones)})
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "process_inspection", resp)
 
     async def list_process_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[ProcessInspectionListResponse]:
         """获取过程检验单列表"""
@@ -1159,7 +1167,10 @@ class ProcessInspectionService(AppBaseService[ProcessInspection]):
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [ProcessInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [ProcessInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        return await enrich_items(tenant_id, "process_inspection", rows)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> ProcessInspectionResponse:
         """执行过程检验"""
@@ -1705,7 +1716,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
         
         milestones = await get_document_milestones(tenant_id, "finished_goods_inspection", inspection_id)
         resp = FinishedGoodsInspectionResponse.model_validate(inspection)
-        return resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection, milestones=milestones)})
+        resp = resp.model_copy(update={"lifecycle": get_finished_goods_inspection_lifecycle(inspection, milestones=milestones)})
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "finished_goods_inspection", resp)
 
     async def list_finished_goods_inspections(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[FinishedGoodsInspectionListResponse]:
         """获取成品检验单列表"""
@@ -1724,7 +1738,10 @@ class FinishedGoodsInspectionService(AppBaseService[FinishedGoodsInspection]):
             query = query.filter(work_order_id__in=filters["scoped_work_order_ids"])
 
         inspections = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [FinishedGoodsInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [FinishedGoodsInspectionListResponse.model_validate(inspection) for inspection in inspections]
+        return await enrich_items(tenant_id, "finished_goods_inspection", rows)
 
     async def conduct_inspection(self, tenant_id: int, inspection_id: int, inspection_data: dict, inspected_by: int) -> FinishedGoodsInspectionResponse:
         """执行成品检验"""

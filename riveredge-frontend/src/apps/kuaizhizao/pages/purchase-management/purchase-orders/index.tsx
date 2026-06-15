@@ -937,10 +937,6 @@ const PurchaseOrdersPage: React.FC = () => {
             submitActionLabel="提交审核"
             theme="link"
             size="small"
-            actions={{
-              approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
-              reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
-            }}
             onSuccess={() => {
               invalidateStatistics();
               invalidateMenuBadgeCounts();
@@ -3057,10 +3053,6 @@ const PurchaseOrdersPage: React.FC = () => {
                       submitActionLabel="提交审核"
                       theme="link"
                       size="small"
-                      actions={{
-                        approve: (id) => approvePurchaseOrder(id, { approved: true, review_remarks: '' }),
-                        reject: (id, reason) => approvePurchaseOrder(id, { approved: false, review_remarks: reason || '' }),
-                      }}
                       onSuccess={() => {
                         invalidateStatistics();
                         actionRef.current?.reload();

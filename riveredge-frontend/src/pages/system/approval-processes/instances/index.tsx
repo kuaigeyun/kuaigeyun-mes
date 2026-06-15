@@ -21,6 +21,7 @@ import {
   getApprovalInstanceByUuid,
   createApprovalInstance,
   performApprovalAction,
+  batchPerformApprovalActions,
   ApprovalInstance,
   CreateApprovalInstanceData,
   ApprovalInstanceActionData,
@@ -56,6 +57,8 @@ const ApprovalInstanceListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<ApprovalInstance | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedRowKeys, setSelectedRowKeys] = useState<string[]>([]);
+  const [batchLoading, setBatchLoading] = useState(false);
 
   /**
    * 处理提交审批
@@ -99,9 +102,6 @@ const ApprovalInstanceListPage: React.FC = () => {
     setActionModalVisible(true);
   };
 
-  /**
-   * 处理审批操作表单提交
-   */
   const handleActionForm = async (values: any): Promise<void> => {
     if (!currentInstanceUuid) return;
     
@@ -123,6 +123,33 @@ const ApprovalInstanceListPage: React.FC = () => {
       throw error;
     } finally {
       setActionFormLoading(false);
+    }
+  };
+
+  const handleBatchApproval = async (action: 'approve' | 'reject') => {
+    if (selectedRowKeys.length === 0) {
+      messageApi.warning('请先选择待审批事项');
+      return;
+    }
+    try {
+      setBatchLoading(true);
+      const result = await batchPerformApprovalActions({
+        instance_uuids: selectedRowKeys,
+        action,
+      });
+      if (result.failure_count > 0) {
+        messageApi.warning(
+          `批量${action === 'approve' ? '通过' : '驳回'}完成：成功 ${result.success_count} 条，失败 ${result.failure_count} 条`,
+        );
+      } else {
+        messageApi.success(`批量${action === 'approve' ? '通过' : '驳回'}成功 ${result.success_count} 条`);
+      }
+      setSelectedRowKeys([]);
+      actionRef.current?.reload();
+    } catch (error: any) {
+      messageApi.error(error?.message || '批量审批失败');
+    } finally {
+      setBatchLoading(false);
     }
   };
 
@@ -495,8 +522,38 @@ const ApprovalInstanceListPage: React.FC = () => {
             };
           }}
           rowKey="uuid"
+          rowSelection={{
+            selectedRowKeys,
+            onChange: (keys) => setSelectedRowKeys(keys as string[]),
+            getCheckboxProps: (record) => ({
+              disabled: record.status !== 'pending',
+            }),
+          }}
           showAdvancedSearch={true}
-          toolBarRender={() => []}
+          toolBarRender={() =>
+            selectedRowKeys.length > 0
+              ? [
+                  <Button
+                    key="batch-approve"
+                    type="primary"
+                    icon={<CheckOutlined />}
+                    loading={batchLoading}
+                    onClick={() => void handleBatchApproval('approve')}
+                  >
+                    批量通过 ({selectedRowKeys.length})
+                  </Button>,
+                  <Button
+                    key="batch-reject"
+                    danger
+                    icon={<CloseOutlined />}
+                    loading={batchLoading}
+                    onClick={() => void handleBatchApproval('reject')}
+                  >
+                    批量驳回 ({selectedRowKeys.length})
+                  </Button>,
+                ]
+              : []
+          }
           search={{
             labelWidth: 'auto',
           }}

@@ -159,11 +159,6 @@ const OQCInspectionPage: React.FC = () => {
             theme="link"
             size="small"
             resourcePrefix={OQC_RESOURCE}
-            actions={{
-              approve: (id) => qualityImprovementApi.oqc.approve(id, true),
-              reject: (id) => qualityImprovementApi.oqc.approve(id, false),
-              revoke: (id) => qualityImprovementApi.oqc.revoke(id),
-            }}
             onSuccess={() => actionRef.current?.reload()}
           />
         </Space>

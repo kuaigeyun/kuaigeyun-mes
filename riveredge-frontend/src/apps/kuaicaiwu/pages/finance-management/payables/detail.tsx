@@ -95,10 +95,6 @@ const PayableDetail: React.FC = () => {
         rejectedStatuses={['已驳回', '驳回']}
         theme="default"
         size="small"
-        actions={{
-          approve: (pid) => payableService.approvePayable(pid),
-          reject: (pid, reason) => payableService.approvePayable(pid, reason),
-        }}
         onSuccess={loadData}
       />
       {data.status !== '已结清' && (

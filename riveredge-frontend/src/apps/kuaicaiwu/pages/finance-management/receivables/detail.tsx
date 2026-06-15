@@ -95,10 +95,6 @@ const ReceivableDetail: React.FC = () => {
         rejectedStatuses={['已驳回', '驳回']}
         theme="default"
         size="small"
-        actions={{
-          approve: (rid) => receivableService.approveReceivable(rid),
-          reject: (rid, reason) => receivableService.approveReceivable(rid, reason),
-        }}
         onSuccess={loadData}
       />
       {data.status !== '已结清' && (

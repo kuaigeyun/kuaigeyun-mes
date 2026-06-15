@@ -516,10 +516,6 @@ const SalesOrderChangesPage: React.FC = () => {
                 rejectedStatuses={['REJECTED', '已驳回']}
                 autoApproveWhenSubmit={!auditEnabled}
                 workflowAuditEnabled={auditEnabled}
-                actions={{
-                  approve: (id, approved, reason) => approveSalesOrderChange(id, approved, reason),
-                  revoke: withdrawSalesOrderChange,
-                }}
                 onSuccess={async () => {
                   actionRef.current?.reload();
                   if (detail.id) setDetail(await getSalesOrderChange(detail.id));

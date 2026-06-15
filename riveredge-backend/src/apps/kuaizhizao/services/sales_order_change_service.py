@@ -29,7 +29,7 @@ from apps.kuaizhizao.services.order_change.helpers import (
     line_amount,
     resolve_sales_line_change,
 )
-from infra.exceptions.exceptions import BusinessLogicError, NotFoundError
+from infra.exceptions.exceptions import BusinessLogicError, NotFoundError, ValidationError
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -315,13 +315,43 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
         return await self._to_detail(doc)
 
     async def update_change_order(
-        self, tenant_id: int, change_id: int, data: SalesOrderChangeUpdate, updated_by: int
+        self,
+        tenant_id: int,
+        change_id: int,
+        data: SalesOrderChangeUpdate,
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        if not is_draft_status(doc.status):
-            raise BusinessLogicError("仅草稿状态可编辑变更单")
+        is_draft = is_draft_status(doc.status)
+        is_pending = normalize_status(doc.status) == DocumentStatus.PENDING_REVIEW.value
+        if not is_draft:
+            if not (is_pending and approval_edit_context):
+                if is_pending and not approval_edit_context:
+                    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                    edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                        tenant_id, "sales_order_change", change_id, updated_by
+                    )
+                    if not edit_ctx:
+                        raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+                    approval_edit_context = edit_ctx
+                else:
+                    raise BusinessLogicError("仅草稿状态可编辑变更单")
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = data.model_dump(exclude_unset=True, exclude={"items"})
+            for field in preview:
+                if not is_field_editable("sales_order_change", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if data.items is not None and not is_field_editable("sales_order_change", "items", node_editable):
+                raise ValidationError("字段「变更明细」不允许在审核中修改")
 
         order = await SalesOrder.get_or_none(tenant_id=tenant_id, id=doc.source_order_id)
         if not order:
@@ -393,13 +423,18 @@ class SalesOrderChangeService(AppBaseService[SalesOrderChangeOrder]):
                     partner_name=doc.customer_name,
                 )
             )
-        return result
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        return await enrich_items(tenant_id, "sales_order_change", result)
 
     async def get_by_id(self, tenant_id: int, change_id: int) -> SalesOrderChangeWithItemsResponse:
         doc = await SalesOrderChangeOrder.get_or_none(tenant_id=tenant_id, id=change_id, deleted_at__isnull=True)
         if not doc:
             raise NotFoundError(f"销售变更单不存在: {change_id}")
-        return await self._to_detail(doc)
+        resp = await self._to_detail(doc)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "sales_order_change", resp)
 
     async def list_by_order(self, tenant_id: int, order_id: int) -> List[SalesOrderChangeListResponse]:
         return await self.list_change_orders(tenant_id, skip=0, limit=100, source_order_id=order_id)

@@ -12,6 +12,8 @@ from core.schemas.approval_instance import (
     ApprovalInstanceCreate,
     ApprovalInstanceUpdate,
     ApprovalInstanceAction,
+    ApprovalInstanceBatchAction,
+    ApprovalInstanceBatchResult,
     ApprovalInstanceResponse,
 )
 from core.api.deps.deps import get_current_tenant
@@ -93,6 +95,29 @@ async def list_approval_instances(
         current_approver_id=current_approver_id
     )
     return [ApprovalInstanceResponse.model_validate(ai) for ai in approval_instances]
+
+
+@router.post("/batch-action", response_model=ApprovalInstanceBatchResult)
+async def batch_perform_approval_actions(
+    body: ApprovalInstanceBatchAction,
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """批量审批（通过/驳回）。"""
+    try:
+        result = await ApprovalInstanceService.batch_perform_approval_actions(
+            tenant_id=tenant_id,
+            user_id=current_user.id,
+            instance_uuids=body.instance_uuids,
+            action=body.action,
+            comment=body.comment,
+        )
+        return ApprovalInstanceBatchResult(**result)
+    except ValidationError as e:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=str(e),
+        )
 
 
 @router.get("/status")

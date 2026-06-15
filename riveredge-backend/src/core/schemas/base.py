@@ -6,8 +6,8 @@
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from typing import Any
-from pydantic import BaseModel, ConfigDict, field_serializer
+from typing import Any, Dict, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 from infra.config.infra_config import infra_settings
 
 
@@ -26,6 +26,11 @@ class BaseSchema(BaseModel):
         from_attributes=True,  # 支持从ORM模型转换
         validate_assignment=True,  # 赋值时验证
         arbitrary_types_allowed=True,  # 允许任意类型
+    )
+
+    audit: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="审核相位（列表/详情由 derive_audit_phase 派生，供 uni-audit 渲染）",
     )
 
     @field_serializer('*', when_used='json')

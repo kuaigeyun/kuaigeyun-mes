@@ -15,7 +15,7 @@ import {
   ProFormDateTimePicker,
   ProFormUploadButton,
 } from '@ant-design/pro-components';
-import { App, Col, Upload } from 'antd';
+import { App, Col, Row, Upload } from 'antd';
 import SafeProFormSelect from '../safe-pro-form-select';
 import { AssociatedObjectField } from './AssociatedObjectField';
 import { AssociatedAttributeField } from './AssociatedAttributeField';
@@ -89,7 +89,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
 
   const renderLabel = (text: string) => <CustomFieldFormLabel text={text} />;
 
-  const renderFieldControl = (field: CustomField, colSpan: number) => {
+  const renderFieldControl = (field: CustomField) => {
     const fieldName = `${CUSTOM_PREFIX}${field.code}`;
     const label = field.label || field.name;
     const labelNode = renderLabel(label);
@@ -106,7 +106,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={{ span: colSpan }}
             fieldProps={{ maxLength: field.config?.maxLength, style: { width: '100%' } }}
             initialValue={initialVal}
           />
@@ -118,7 +117,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={{ span: colSpan }}
             fieldProps={{ min: field.config?.min, max: field.config?.max, style: { width: '100%' } }}
             initialValue={initialVal}
           />
@@ -129,7 +127,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={{ span: colSpan }}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
             fieldProps={{ format: field.config?.format || 'YYYY-MM-DD', style: { width: '100%' } }}
             initialValue={initialVal}
@@ -141,7 +138,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={{ span: colSpan }}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
             fieldProps={{ format: field.config?.format || 'HH:mm:ss', style: { width: '100%' } }}
             initialValue={initialVal}
@@ -153,7 +149,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             placeholder={placeholder}
-            colProps={{ span: colSpan }}
             rules={field.is_required ? [{ required: true, message: `请选择${label}` }] : []}
             fieldProps={{ format: field.config?.format || 'YYYY-MM-DD HH:mm:ss', style: { width: '100%' } }}
             initialValue={initialVal}
@@ -166,7 +161,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={{ span: colSpan }}
             options={safeOptions(field.config?.options)}
             initialValue={initialVal}
             fieldProps={{ style: { width: '100%' } }}
@@ -179,7 +173,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={{ span: colSpan }}
             fieldProps={{ rows: field.config?.rows || 4, style: { width: '100%' } }}
             initialValue={initialVal}
           />
@@ -194,7 +187,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             placeholder={placeholder}
             required={field.is_required}
             initialValue={initialVal}
-            colProps={{ span: colSpan }}
+            colProps={{ span: 24 }}
           />
         );
       case 'associated_attribute':
@@ -203,8 +196,8 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             field={field}
             name={fieldName}
             label={labelNode}
-            colProps={{ span: colSpan }}
             initialValue={initialVal}
+            colProps={{ span: 24 }}
           />
         );
       case 'image':
@@ -213,7 +206,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             max={1}
-            colProps={{ span: colSpan }}
             rules={field.is_required ? [{ required: true, message: `请上传${label}` }] : []}
             initialValue={uploadInitialVal}
             fieldProps={{
@@ -246,7 +238,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             name={fieldName}
             label={labelNode}
             max={10}
-            colProps={{ span: colSpan }}
             rules={field.is_required ? [{ required: true, message: `请上传${label}` }] : []}
             initialValue={uploadInitialVal}
             fieldProps={{
@@ -291,7 +282,7 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             expression={field.config?.expression}
             initialValue={typeof initialVal === 'number' ? initialVal : Number(initialVal) || undefined}
-            colProps={{ span: colSpan }}
+            colProps={{ span: 24 }}
           />
         );
       default:
@@ -301,7 +292,6 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
             label={labelNode}
             placeholder={placeholder}
             rules={rules}
-            colProps={{ span: colSpan }}
             fieldProps={{ style: { width: '100%' } }}
             initialValue={initialVal}
           />
@@ -310,20 +300,15 @@ export const CustomFieldsFormSection: React.FC<CustomFieldsFormSectionProps> = (
   };
 
   return (
-    <>
+    <Row gutter={16}>
       {sortedFields.map((field) => {
         const colSpan = resolveFieldColSpan(field.field_type, gridColumns);
-        const control = renderFieldControl(field, colSpan);
-        // ProFormItem（JSON）不参与 ProForm 格栅，需外层 Col 保证全宽与左对齐
-        if (field.field_type === 'json') {
-          return (
-            <Col key={field.uuid} span={FULL_ROW_COL_SPAN}>
-              {control}
-            </Col>
-          );
-        }
-        return <React.Fragment key={field.uuid}>{control}</React.Fragment>;
+        return (
+          <Col key={field.uuid} span={colSpan}>
+            {renderFieldControl(field)}
+          </Col>
+        );
       })}
-    </>
+    </Row>
   );
 };

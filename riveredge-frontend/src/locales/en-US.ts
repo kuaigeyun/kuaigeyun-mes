@@ -8304,6 +8304,8 @@ export default {
   'pages.system.files.category.platform-favicon': 'Platform favicon',
   'pages.system.files.category.dashboard_hero': 'Dashboard hero image',
   'pages.system.files.category.avatar': 'User avatar',
+  'pages.system.files.category.custom_field_file': 'Custom field attachments',
+  'pages.system.files.category.custom_field_image': 'Custom field images',
   'pages.system.files.category.engineering_drawing': 'Drawing files',
   'pages.system.files.category.material_images': 'Material master attachments',
   'pages.system.files.category.engineering_bom_attachments': 'BOM attachments',

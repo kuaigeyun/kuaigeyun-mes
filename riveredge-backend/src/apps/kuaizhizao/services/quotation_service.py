@@ -8,7 +8,7 @@ Author: RiverEdge Team
 Date: 2026-02-19
 """
 
-from typing import List, Optional, Set
+from typing import List, Optional, Set, Dict, Any
 from datetime import datetime, date
 from decimal import Decimal, ROUND_HALF_UP
 from tortoise.transactions import in_transaction
@@ -849,12 +849,15 @@ class QuotationService:
             milestones=milestones,
             converted_sales_order_missing=conv_missing,
         )
-        return resp.model_copy(
+        result = resp.model_copy(
             update={
                 "lifecycle": lifecycle,
                 "conversion_downstream_missing": conv_missing,
             }
         )
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "quotation", result)
 
     @staticmethod
     async def _apply_quotation_list_scope(query, tenant_id: int, current_user: Optional[User], list_scope: Optional[str] = None):
@@ -936,6 +939,9 @@ class QuotationService:
                     }
                 )
             )
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        data = await enrich_items(tenant_id, "quotation", data)
         return QuotationListResponse(data=data, total=total, success=True)
 
     async def update_quotation(
@@ -945,6 +951,8 @@ class QuotationService:
         quotation_data: QuotationUpdate,
         updated_by: int,
         current_user: Optional[User] = None,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> QuotationResponse:
         """更新报价单"""
         quotation = await Quotation.get_or_none(
@@ -959,10 +967,42 @@ class QuotationService:
                 user=current_user,
                 resource="kuaizhizao:quotation",
             )
-        if quotation.status != "草稿":
-            raise BusinessLogicError(
-                f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
-            )
+        rs = (quotation.review_status or "").strip()
+        is_draft = quotation.status == "草稿"
+        is_pending_audit = quotation.status == "已发送" and (
+            rs in LEGACY_PENDING_VALUES or rs == ""
+        )
+        if not is_draft:
+            if not (approval_edit_context and is_pending_audit):
+                if is_pending_audit and not approval_edit_context:
+                    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                    edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                        tenant_id, "quotation", quotation_id, updated_by
+                    )
+                    if not edit_ctx:
+                        raise BusinessLogicError(
+                            f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
+                        )
+                else:
+                    raise BusinessLogicError(
+                        f"只能更新草稿状态的报价单，当前状态: {quotation.status}"
+                    )
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = quotation_data.model_dump(exclude_unset=True, exclude={"items"})
+            for field in preview:
+                if field in ("updated_by",):
+                    continue
+                if not is_field_editable("quotation", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if quotation_data.items is not None and not is_field_editable(
+                "quotation", "items", node_editable
+            ):
+                raise ValidationError("字段「报价明细」不允许在审核中修改")
 
         async with in_transaction():
             self._validate_quotation_non_negative(

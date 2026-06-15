@@ -686,11 +686,6 @@ const ReportingPage: React.FC = () => {
             pendingStatuses={REPORTING_PENDING_STATUSES}
             approvedStatuses={REPORTING_APPROVED_STATUSES}
             rejectedStatuses={REPORTING_REJECTED_STATUSES}
-            actions={{
-              approve: (id) => reportingApi.approve(id.toString(), {}),
-              reject: (id, reason) =>
-                reportingApi.approve(id.toString(), {}, { rejection_reason: reason || undefined }),
-            }}
             onSuccess={() => {
               invalidateMenuBadgeCounts();
 

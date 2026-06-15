@@ -13,8 +13,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 _DRAFT = {"draft", "草稿"}
-_PENDING = {"pending_review", "pending_approval", "待审核", "已提交"}
-_AUDITED_STRICT = {"audited", "已审核"}
+_PENDING = {"pending_review", "pending_approval", "待审核", "已提交", "pending"}
+_SENT_AWAITING_REVIEW = {"已发送", "sent"}
+_AUDITED_STRICT = {"audited", "已审核", "approved"}
 _APPROVED_ONGOING = {
     "confirmed", "已确认", "已生效", "effective",
     "executing", "执行中", "in_progress",
@@ -59,8 +60,12 @@ def derive_audit_phase(
     if s in _REJECTED_STATUS or r in _REVIEW_REJECTED:
         phase = "rejected"
     elif s in _DRAFT:
-        phase = "draft"
-    elif s in _PENDING and r not in _REVIEW_APPROVED:
+        # 主状态仍为草稿但已提交待审（如采购询价单 status=DRAFT + review_status=待审核）
+        if r in {_norm("待审核"), _norm("pending_review"), _norm("pending_approval"), _norm("已提交")}:
+            phase = "pending"
+        else:
+            phase = "draft"
+    elif (s in _PENDING or s in _SENT_AWAITING_REVIEW) and r not in _REVIEW_APPROVED:
         phase = "pending"
     elif s in _AUDITED_STRICT or s in _APPROVED_ONGOING or r in _REVIEW_APPROVED:
         phase = "approved"

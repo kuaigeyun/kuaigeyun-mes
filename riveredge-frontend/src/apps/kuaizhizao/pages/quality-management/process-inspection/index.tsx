@@ -669,14 +669,6 @@ const ProcessInspectionPage: React.FC = () => {
         rejectedStatuses={['已驳回']}
         theme="link"
         size="small"
-        actions={{
-          approve: (id) => apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, { method: 'POST' }),
-          reject: (id, reason) =>
-            apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, {
-              method: 'POST',
-              params: reason ? { rejection_reason: reason } : undefined,
-            }),
-        }}
         onSuccess={() => {
           actionRef.current?.reload();
           if (inspectionDetail?.id === record.id) {
@@ -1128,14 +1120,6 @@ const ProcessInspectionPage: React.FC = () => {
               rejectedStatuses={['已驳回']}
               theme="default"
               size="small"
-              actions={{
-                approve: (id) => apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, { method: 'POST' }),
-                reject: (id, reason) =>
-                  apiRequest(`/apps/kuaizhizao/process-inspections/${id}/approve`, {
-                    method: 'POST',
-                    params: reason ? { rejection_reason: reason } : undefined,
-                  }),
-              }}
               onSuccess={() => {
                 actionRef.current?.reload();
                 if (inspectionDetail?.id) {

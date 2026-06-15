@@ -173,12 +173,20 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const adminOpen = isAdminBypass(currentUser);
 
   const inferredNodeKey = useMemo(() => auditNodeKey || inferAuditNodeKey(apiPrefix), [auditNodeKey, apiPrefix]);
-  const inferredAuditEnabled = useAuditRequired(inferredNodeKey, false);
-  const effectiveAuditEnabled = workflowAuditEnabled ?? (inferredNodeKey ? inferredAuditEnabled : false);
+
+  const auditState =
+    record?.audit && typeof record.audit === 'object' && typeof record.audit.phase === 'string'
+      ? (record.audit as { phase: string; enabled?: boolean; allowed_actions?: string[]; entity_type?: string })
+      : null;
+  const auditEntityType = (auditState?.entity_type || '').trim();
+  const resolvedEntityType = entityType || inferredNodeKey || auditEntityType;
+
+  const inferredAuditEnabled = useAuditRequired(inferredNodeKey || auditEntityType, false);
+  const effectiveAuditEnabled = workflowAuditEnabled ?? (resolvedEntityType ? inferredAuditEnabled : false);
   const resolvedResource = (
     resourcePrefix
     || inferResourcePrefix(apiPrefix)
-    || inferResourceByNodeKey(inferredNodeKey)
+    || inferResourceByNodeKey(resolvedEntityType)
   ).trim();
   const hasActionResource = Boolean(resolvedResource);
 
@@ -186,16 +194,10 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const canReview = adminOpen || (hasActionResource && hasReviewPermission(currentUser ?? undefined, resolvedResource));
   const canRevoke = adminOpen || (hasActionResource && hasModulePermission(currentUser ?? undefined, resolvedResource, 'revoke'));
 
-  if (!record || !record[rowKey]) return null;
-  const status = record[statusField] as WorkflowStatus;
-  const reviewStatus = record[reviewStatusField] as WorkflowStatus;
-  const recordId = record[rowKey] as number;
-  const resolvedEntityType = entityType || inferredNodeKey;
+  const status = (record?.[statusField] ?? undefined) as WorkflowStatus;
+  const reviewStatus = (record?.[reviewStatusField] ?? undefined) as WorkflowStatus;
+  const recordId = (record?.[rowKey] ?? 0) as number;
 
-  const auditState =
-    record.audit && typeof record.audit === 'object' && typeof record.audit.phase === 'string'
-      ? (record.audit as { phase: string; enabled?: boolean; allowed_actions?: string[] })
-      : null;
   const auditAuthoritative = Boolean(auditState);
   const allowedActions: string[] = Array.isArray(auditState?.allowed_actions)
     ? (auditState!.allowed_actions as string[])
@@ -219,7 +221,7 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const anyUnifiedAudit =
     unifiedAudit || (Boolean(resolvedEntityType) && !apiPrefix && Object.keys(actions).length === 0);
 
-  const useAuthoritativeActions = anyUnifiedAudit && auditAuthoritative;
+  const useAuthoritativeActions = auditAuthoritative;
   const showSubmit = useAuthoritativeActions
     ? allowedActions.includes('submit')
     : isDraft || isRejected;
@@ -239,11 +241,31 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
   const showAuditHub = showWithdraw || showApprove || showReject;
 
   const channelByAction: Record<UniAuditAction, boolean> = {
-    submit: routeViaUnified('submit') || Boolean(actions.submit) || Boolean(apiPrefix),
-    withdraw: routeViaUnified('withdraw') || Boolean(actions.withdraw) || Boolean(endpointMap?.withdraw),
-    approve: routeViaUnified('approve') || Boolean(actions.approve) || Boolean(apiPrefix),
-    reject: routeViaUnified('reject') || Boolean(actions.reject) || Boolean(apiPrefix),
-    revoke: routeViaUnified('revoke') || Boolean(actions.revoke) || Boolean(apiPrefix),
+    submit:
+      routeViaUnified('submit')
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+      || Boolean(actions.submit)
+      || Boolean(apiPrefix),
+    withdraw:
+      routeViaUnified('withdraw')
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+      || Boolean(actions.withdraw)
+      || Boolean(endpointMap?.withdraw),
+    approve:
+      routeViaUnified('approve')
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+      || Boolean(actions.approve)
+      || Boolean(apiPrefix),
+    reject:
+      routeViaUnified('reject')
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+      || Boolean(actions.reject)
+      || Boolean(apiPrefix),
+    revoke:
+      routeViaUnified('revoke')
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+      || Boolean(actions.revoke)
+      || Boolean(apiPrefix),
   };
   const canExecuteByAction: Record<UniAuditAction, boolean> = {
     submit: canSubmit,
@@ -305,7 +327,10 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
     reason?: string,
     payload?: Record<string, unknown>,
   ) => {
-    if (routeViaUnified(actionType)) {
+    if (
+      routeViaUnified(actionType)
+      || (auditAuthoritative && Boolean(resolvedEntityType))
+    ) {
       if (!resolvedEntityType) {
         throw new Error('统一执行入口需要 entityType 或 auditNodeKey');
       }
@@ -395,6 +420,8 @@ export const UniAuditActions: React.FC<UniAuditActionsProps> = ({
 
   const isBusy = !!loadingAction;
   const submitUsesCustomLabel = effectiveSubmitLabel !== '提交';
+
+  if (!record || !record[rowKey]) return null;
 
   const inlineButtons: React.ReactNode[] = [];
 

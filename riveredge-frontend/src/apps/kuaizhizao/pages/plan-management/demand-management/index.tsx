@@ -614,14 +614,6 @@ const DemandManagementPage: React.FC = () => {
             rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
             theme="link"
             size="small"
-            actions={{
-              submit: submitDemand,
-              approve: approveDemand,
-              reject: async (id, reason) => {
-                if (!reason?.trim()) throw new Error('请输入驳回原因');
-                return rejectDemand(id, reason.trim());
-              },
-            }}
             onSuccess={() => {
               invalidateStatistics();
               actionRef.current?.reload();
@@ -1170,14 +1162,6 @@ const DemandManagementPage: React.FC = () => {
                 rejectedStatuses={[DemandStatus.REJECTED, '已驳回', ReviewStatus.REJECTED, '审核驳回', '驳回']}
                 theme="default"
                 size="middle"
-                actions={{
-                  submit: submitDemand,
-                  approve: approveDemand,
-                  reject: async (id, reason) => {
-                    if (!reason?.trim()) throw new Error('请输入驳回原因');
-                    return rejectDemand(id, reason.trim());
-                  },
-                }}
                 onSuccess={async () => {
                   invalidateStatistics();
                   actionRef.current?.reload();

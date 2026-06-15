@@ -140,7 +140,10 @@ class PayableService(AppBaseService[Payable]):
         payable = await Payable.get_or_none(tenant_id=tenant_id, id=payable_id)
         if not payable:
             raise NotFoundError(f"应付单不存在: {payable_id}")
-        return PayableResponse.model_validate(payable)
+        resp = PayableResponse.model_validate(payable)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "payable", resp)
 
     async def list_payables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[PayableResponse], int]:
         """获取应付单列表"""
@@ -158,7 +161,10 @@ class PayableService(AppBaseService[Payable]):
 
         total = await query.count()
         payables = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [PayableResponse.model_validate(payable) for payable in payables], total
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [PayableResponse.model_validate(payable) for payable in payables]
+        return await enrich_items(tenant_id, "payable", rows), total
 
     async def update_payable(self, tenant_id: int, payable_id: int, payable_data: PayableUpdate, updated_by: int) -> PayableResponse:
         """更新应付单"""
@@ -451,7 +457,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
         invoice = await PurchaseInvoice.get_or_none(tenant_id=tenant_id, id=invoice_id)
         if not invoice:
             raise NotFoundError(f"采购发票不存在: {invoice_id}")
-        return PurchaseInvoiceResponse.model_validate(invoice)
+        resp = PurchaseInvoiceResponse.model_validate(invoice)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "purchase_invoice", resp)
 
     async def list_purchase_invoices(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> List[PurchaseInvoiceResponse]:
         """获取采购发票列表"""
@@ -464,7 +473,10 @@ class PurchaseInvoiceService(AppBaseService[PurchaseInvoice]):
             query = query.filter(purchase_order_id=filters['purchase_order_id'])
 
         invoices = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [PurchaseInvoiceResponse.model_validate(invoice) for invoice in invoices]
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [PurchaseInvoiceResponse.model_validate(invoice) for invoice in invoices]
+        return await enrich_items(tenant_id, "purchase_invoice", rows)
 
     async def approve_invoice(self, tenant_id: int, invoice_id: int, approved_by: int, rejection_reason: Optional[str] = None) -> PurchaseInvoiceResponse:
         """审核采购发票"""
@@ -587,7 +599,10 @@ class ReceivableService(AppBaseService[Receivable]):
         receivable = await Receivable.get_or_none(tenant_id=tenant_id, id=receivable_id)
         if not receivable:
             raise NotFoundError(f"应收单不存在: {receivable_id}")
-        return ReceivableResponse.model_validate(receivable)
+        resp = ReceivableResponse.model_validate(receivable)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "receivable", resp)
 
     async def list_receivables(self, tenant_id: int, skip: int = 0, limit: int = 20, **filters) -> tuple[List[ReceivableResponse], int]:
         """获取应收单列表"""
@@ -605,7 +620,10 @@ class ReceivableService(AppBaseService[Receivable]):
 
         total = await query.count()
         receivables = await query.offset(skip).limit(limit).order_by('-created_at')
-        return [ReceivableResponse.model_validate(receivable) for receivable in receivables], total
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [ReceivableResponse.model_validate(receivable) for receivable in receivables]
+        return await enrich_items(tenant_id, "receivable", rows), total
 
     async def record_receipt(self, tenant_id: int, receivable_id: int, receipt_data: ReceiptRecordCreate, recorded_by: int) -> ReceivableResponse:
         """登记收款：创建收款单并核销至当前应收单"""

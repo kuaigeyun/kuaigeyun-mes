@@ -32,7 +32,7 @@ from apps.kuaizhizao.schemas.purchase import (
     ExpediteResponse,
     PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem
 )
-from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status
+from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -255,7 +255,9 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle, get_document_milestones
         milestones = await get_document_milestones(order.tenant_id, "purchase_order", order.id)
         response.lifecycle = get_purchase_order_lifecycle(order, milestones=milestones)
-        return response
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "purchase_order", response)
 
     async def list_purchase_orders(
         self,
@@ -333,18 +335,22 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             result.append(resp)
 
         # 返回前端期望的格式 { data, total, success }
-        return {
+        from core.services.approval.audit_record_enricher import enrich_data_payload
+
+        return await enrich_data_payload(tenant_id, "purchase_order", {
             "data": [item.model_dump() for item in result],
             "total": total,
             "success": True
-        }
+        })
 
     async def update_purchase_order(
         self,
         tenant_id: int,
         order_id: int,
         order_data: PurchaseOrderUpdate,
-        updated_by: int
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> PurchaseOrderResponse:
         """
         更新采购订单
@@ -362,6 +368,35 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
             if not order:
                 raise NotFoundError(f"采购订单不存在: {order_id}")
+
+            from apps.kuaizhizao.constants import DocumentStatus, normalize_status
+
+            if (
+                normalize_status(order.status) == DocumentStatus.PENDING_REVIEW.value
+                and not approval_edit_context
+            ):
+                from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                    tenant_id, "purchase_order", order_id, updated_by
+                )
+                if not edit_ctx:
+                    raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+
+            if approval_edit_context:
+                from core.config.audit_editable_fields import is_field_editable
+
+                node_editable = approval_edit_context.get("editable_fields")
+                upd_preview = order_data.model_dump(exclude_unset=True, exclude={"items", "change_reason"})
+                for field in upd_preview:
+                    if field in ("updated_by",):
+                        continue
+                    if not is_field_editable("purchase_order", field, node_editable):
+                        raise ValidationError(f"字段「{field}」不允许在审核中修改")
+                if order_data.items is not None and not is_field_editable(
+                    "purchase_order", "items", node_editable
+                ):
+                    raise ValidationError("字段「订单明细」不允许在审核中修改")
 
             from apps.kuaizhizao.services.order_change.helpers import is_source_order_locked_for_direct_edit
             if is_source_order_locked_for_direct_edit(order.status, order.review_status):
@@ -528,6 +563,42 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             'status': status,
             'review_status': ReviewStatus.PENDING.value,
             'updated_by': submitted_by
+        }).save()
+
+        return await self.get_purchase_order_by_id(tenant_id, order_id)
+
+    async def withdraw_purchase_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        withdrawn_by: int,
+    ) -> PurchaseOrderResponse:
+        """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
+        order = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=order_id)
+        if not order:
+            raise NotFoundError(f"采购订单不存在: {order_id}")
+        if not is_pending_review_status(order.status):
+            raise BusinessLogicError("只有待审核状态的采购订单可撤回提交")
+
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="purchase_order",
+                entity_id=order_id,
+                operator_id=withdrawn_by,
+            )
+        except Exception as e:
+            logger.warning("取消采购订单审批流程失败或无需取消: {}", e)
+
+        await order.update_from_dict({
+            "status": DocumentStatus.DRAFT.value,
+            "review_status": ReviewStatus.PENDING.value,
+            "reviewer_id": None,
+            "review_time": None,
+            "review_remarks": None,
+            "updated_by": withdrawn_by,
         }).save()
 
         return await self.get_purchase_order_by_id(tenant_id, order_id)

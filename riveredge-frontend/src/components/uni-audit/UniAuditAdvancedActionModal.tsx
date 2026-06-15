@@ -79,7 +79,7 @@ const UniAuditAdvancedActionModal: React.FC<Props> = ({ state, onClose, onConfir
       onCancel={onClose}
       onOk={handleOk}
       confirmLoading={loading}
-      destroyOnClose
+      destroyOnHidden
     >
       {state.action === 'add_sign' && (
         <>

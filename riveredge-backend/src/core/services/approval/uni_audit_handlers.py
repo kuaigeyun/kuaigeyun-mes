@@ -96,7 +96,7 @@ async def _dispatch_sales_forecast(
     if action == "revoke":
         return await svc.withdraw_forecast_approval(tenant_id, entity_id, user_id)
     if action == "withdraw":
-        _unsupported("sales_forecast", action)
+        return await svc.withdraw_forecast(tenant_id, entity_id, user_id)
     _unsupported("sales_forecast", action)
 
 
@@ -216,7 +216,9 @@ async def _dispatch_production_plan(
         return await svc.approve_production_plan(
             tenant_id, entity_id, user_id, rejection_reason=reason or "审批驳回"
         )
-    if action in ("withdraw", "revoke"):
+    if action == "withdraw":
+        return await svc.withdraw_production_plan(tenant_id, entity_id, user_id)
+    if action == "revoke":
         _unsupported("production_plan", action)
     _unsupported("production_plan", action)
 
@@ -249,7 +251,9 @@ async def _dispatch_purchase_order(
             PurchaseOrderApprove(approved=False, review_remarks=reason or "审批驳回"),
             user_id,
         )
-    if action in ("withdraw", "revoke"):
+    if action == "withdraw":
+        return await svc.withdraw_purchase_order(tenant_id, entity_id, user_id)
+    if action == "revoke":
         _unsupported("purchase_order", action)
     _unsupported("purchase_order", action)
 
@@ -310,7 +314,7 @@ async def _dispatch_purchase_request(
     if action == "revoke":
         return await svc.withdraw_approval(tenant_id, entity_id, operator_id=user_id)
     if action == "withdraw":
-        _unsupported("purchase_request", action)
+        return await svc.withdraw_requisition(tenant_id, entity_id, user_id)
     _unsupported("purchase_request", action)
 
 
@@ -336,7 +340,7 @@ async def _dispatch_purchase_inquiry(
     if action == "revoke":
         return await svc.withdraw_approval(tenant_id, entity_id, user_id)
     if action == "withdraw":
-        _unsupported("purchase_inquiry", action)
+        return await svc.withdraw_inquiry(tenant_id, entity_id, user_id)
     _unsupported("purchase_inquiry", action)
 
 

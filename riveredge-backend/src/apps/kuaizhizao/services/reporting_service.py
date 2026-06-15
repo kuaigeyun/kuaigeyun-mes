@@ -700,7 +700,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
         if not record:
             raise NotFoundError("报工记录", str(record_id))
 
-        return ReportingRecordResponse.model_validate(record)
+        resp = ReportingRecordResponse.model_validate(record)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "reporting_record", resp)
 
     async def list_reporting_records(
         self,
@@ -752,7 +755,10 @@ class ReportingService(AppBaseService[ReportingRecord]):
             query = query.filter(reported_at__lte=reported_at_end)
 
         records = await query.offset(skip).limit(limit).order_by("-reported_at").all()
-        return [ReportingRecordListResponse.model_validate(record) for record in records]
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        rows = [ReportingRecordListResponse.model_validate(record) for record in records]
+        return await enrich_items(tenant_id, "reporting_record", rows)
 
     async def approve_reporting_record(
         self,

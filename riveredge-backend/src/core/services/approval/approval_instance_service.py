@@ -1469,6 +1469,41 @@ class ApprovalInstanceService:
         return approval_instance
 
     @staticmethod
+    async def batch_perform_approval_actions(
+        tenant_id: int,
+        user_id: int,
+        *,
+        instance_uuids: List[str],
+        action: str,
+        comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """批量执行审批操作（逐条处理，失败不中断）。"""
+        from core.schemas.approval_instance import ApprovalInstanceAction
+
+        successes = 0
+        failures: List[Dict[str, Any]] = []
+        for uuid in instance_uuids:
+            uid = str(uuid or "").strip()
+            if not uid:
+                failures.append({"uuid": uuid, "error": "UUID 为空"})
+                continue
+            try:
+                await ApprovalInstanceService.perform_approval_action(
+                    tenant_id=tenant_id,
+                    uuid=uid,
+                    user_id=user_id,
+                    action=ApprovalInstanceAction(action=action, comment=comment),
+                )
+                successes += 1
+            except Exception as exc:
+                failures.append({"uuid": uid, "error": str(exc)})
+        return {
+            "success_count": successes,
+            "failure_count": len(failures),
+            "failures": failures,
+        }
+
+    @staticmethod
     async def _send_cc_notification(
         tenant_id: int,
         instance: ApprovalInstance,

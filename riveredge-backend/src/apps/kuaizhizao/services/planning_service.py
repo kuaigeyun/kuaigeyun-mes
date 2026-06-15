@@ -21,7 +21,7 @@ from apps.kuaizhizao.schemas.planning import (
 )
 
 from core.services.base import BaseService
-from infra.exceptions.exceptions import NotFoundError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, BusinessLogicError, ValidationError
 
 
 class ProductionPlanningService(BaseService):
@@ -68,7 +68,9 @@ class ProductionPlanningService(BaseService):
         resp = ProductionPlanResponse.model_validate(plan)
         from apps.kuaizhizao.services.document_lifecycle_service import get_production_plan_lifecycle
         resp.lifecycle = get_production_plan_lifecycle(plan)
-        return resp
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "production_plan", resp)
 
     async def approve_production_plan(
         self, tenant_id: int, plan_id: int, approved_by: int, rejection_reason: Optional[str] = None
@@ -124,21 +126,89 @@ class ProductionPlanningService(BaseService):
         )
         return await self.get_production_plan_by_id(tenant_id, plan_id)
 
-    async def update_production_plan(self, tenant_id: int, plan_id: int, plan_data: Any, updated_by: int) -> ProductionPlanResponse:
+    async def withdraw_production_plan(
+        self, tenant_id: int, plan_id: int, withdrawn_by: int
+    ) -> ProductionPlanResponse:
+        """撤回提交：待审核 → 草稿（提交人撤回）"""
+        plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
+        if not plan:
+            raise NotFoundError(f"生产计划不存在: {plan_id}")
+        if (plan.status or "").strip() != "待审核":
+            raise BusinessLogicError("只有待审核状态的生产计划可撤回提交")
+        if plan.execution_status == "已执行":
+            raise BusinessLogicError("已执行的生产计划不允许撤回")
+
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="production_plan",
+                entity_id=plan_id,
+                operator_id=withdrawn_by,
+            )
+        except Exception as e:
+            logger.warning("取消生产计划审批流程失败或无需取消: {}", e)
+
+        await ProductionPlan.filter(tenant_id=tenant_id, id=plan_id).update(
+            status="草稿",
+            review_status="待审核",
+            reviewer_id=None,
+            reviewer_name=None,
+            review_time=None,
+            review_remarks=None,
+            updated_by=withdrawn_by,
+        )
+        return await self.get_production_plan_by_id(tenant_id, plan_id)
+
+    async def update_production_plan(
+        self,
+        tenant_id: int,
+        plan_id: int,
+        plan_data: Any,
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
+    ) -> ProductionPlanResponse:
         """更新生产计划"""
         plan = await ProductionPlan.get_or_none(tenant_id=tenant_id, id=plan_id, deleted_at__isnull=True)
         if not plan:
             raise NotFoundError(f"生产计划不存在: {plan_id}")
-        
-        # 仅允许更新非执行状态的计划
+
         if plan.execution_status == "已执行":
             raise BusinessLogicError("已执行的生产计划不允许修改")
 
+        is_pending = (plan.status or "").strip() == "待审核"
+        if is_pending and not approval_edit_context:
+            from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+            edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                tenant_id, "production_plan", plan_id, updated_by
+            )
+            if not edit_ctx:
+                raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+            approval_edit_context = edit_ctx
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = plan_data.model_dump(exclude_unset=True) if hasattr(plan_data, "model_dump") else {}
+            locked = {"status", "review_status", "execution_status", "updated_by"}
+            for field in preview:
+                if field in locked:
+                    continue
+                if not is_field_editable("production_plan", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+
         update_data = plan_data.model_dump(exclude_unset=True) if hasattr(plan_data, 'model_dump') else plan_data
+        if approval_edit_context and isinstance(update_data, dict):
+            for key in ("status", "review_status", "execution_status"):
+                update_data.pop(key, None)
         await plan.update_from_dict(update_data)
         plan.updated_by = updated_by
         await plan.save()
-        return ProductionPlanResponse.model_validate(plan)
+        return await self.get_production_plan_by_id(tenant_id, plan_id)
 
     async def delete_production_plan(self, tenant_id: int, plan_id: int, updated_by: int):
         """删除生产计划（软删除）"""
@@ -167,12 +237,13 @@ class ProductionPlanningService(BaseService):
 
         plans = await query.offset(skip).limit(limit).order_by('-created_at')
         from apps.kuaizhizao.services.document_lifecycle_service import get_production_plan_lifecycle
+        from core.services.approval.audit_record_enricher import enrich_items
         result = []
         for plan in plans:
             resp = ProductionPlanListResponse.model_validate(plan)
             resp.lifecycle = get_production_plan_lifecycle(plan)
             result.append(resp)
-        return result
+        return await enrich_items(tenant_id, "production_plan", result)
 
     async def get_production_plan_count(self, tenant_id: int, **filters) -> int:
         """获取生产计划总数"""

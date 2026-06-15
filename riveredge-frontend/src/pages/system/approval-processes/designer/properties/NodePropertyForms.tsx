@@ -7,11 +7,12 @@ import {
   ProFormList,
   ProFormText,
 } from '@ant-design/pro-components';
+import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { searchUserDisplay } from '../../../../services/user';
-import { formatUserDisplayLabel } from '../../../../utils/userDisplay';
-import { getRoleList } from '../../../../services/role';
-import type { ConditionItem } from '../../../../types/approvalFlowSchema';
+import { searchUserDisplay } from '../../../../../services/user';
+import { formatUserDisplayLabel } from '../../../../../utils/userDisplay';
+import { getRoleList } from '../../../../../services/role';
+import type { ConditionItem } from '../../../../../types/approvalFlowSchema';
 
 const APPROVER_OPTIONS = (t: (k: string) => string) => [
   { label: t('pages.approval.designer.approverTypeUser'), value: 'user' },
@@ -151,6 +152,7 @@ interface ConditionNodeFormProps {
 
 export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCount, fieldOptions }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const opOptions = [
     { label: t('pages.approval.designer.opEqual'), value: '==' },
     { label: t('pages.approval.designer.opNotEqual'), value: '!=' },
@@ -159,26 +161,65 @@ export const ConditionNodeForm: React.FC<ConditionNodeFormProps> = ({ branchCoun
     { label: t('pages.approval.designer.opContains'), value: 'contains' },
   ];
   return (
-    <ProFormList
-      name="conditions"
-      label={t('pages.approval.designer.conditions')}
-      creatorButtonProps={{ creatorButtonText: t('pages.approval.designer.addConditionRule') }}
-      min={branchCount > 1 ? branchCount : 0}
-      max={Math.max(branchCount, 1)}
-      initialValue={Array.from({ length: Math.max(branchCount, 1) }, (_, i) => ({
-        label: t('pages.approval.designer.branchLabel', { index: i + 1 }),
-        operator: '>=',
-      }))}
-    >
-      {() => (
-        <>
-          <ProFormText name="label" label={t('pages.approval.designer.branchName')} />
-          <ProFormSelect name="field" label={t('pages.approval.designer.field')} options={fieldOptions} />
-          <ProFormSelect name="operator" label={t('pages.approval.designer.operator')} options={opOptions} />
-          <ProFormDigit name="value" label={t('pages.approval.designer.value')} fieldProps={{ style: { width: '100%' } }} />
-        </>
-      )}
-    </ProFormList>
+    <>
+      <style>{`
+        .approval-condition-rule-card .ant-form-item {
+          margin-bottom: 12px;
+        }
+        .approval-condition-rule-card .ant-form-item:last-child {
+          margin-bottom: 0;
+        }
+        .approval-condition-rule-card .ant-pro-form-list-action {
+          margin: 0;
+        }
+      `}</style>
+      <ProFormList
+        name="conditions"
+        label={t('pages.approval.designer.conditions')}
+        creatorButtonProps={{ creatorButtonText: t('pages.approval.designer.addConditionRule') }}
+        copyIconProps={false}
+        min={branchCount > 1 ? branchCount : 0}
+        max={Math.max(branchCount, 1)}
+        initialValue={Array.from({ length: Math.max(branchCount, 1) }, (_, i) => ({
+          label: t('pages.approval.designer.branchLabel', { index: i + 1 }),
+          operator: '>=',
+        }))}
+        itemRender={({ listDom, action }, { index }) => (
+          <div
+            className="approval-condition-rule-card"
+            key={index}
+            style={{
+              position: 'relative',
+              padding: token.paddingSM,
+              marginBottom: token.marginSM,
+              backgroundColor: token.colorFillQuaternary,
+              borderRadius: token.borderRadiusLG,
+              border: `1px solid ${token.colorBorderSecondary}`,
+            }}
+          >
+            {action ? (
+              <div style={{ position: 'absolute', top: token.paddingXS, right: token.paddingXS, zIndex: 1 }}>
+                {action}
+              </div>
+            ) : null}
+            <div style={{ paddingRight: action ? 28 : 0 }}>{listDom}</div>
+          </div>
+        )}
+      >
+        {() => (
+          <>
+            <ProFormText name="label" label={t('pages.approval.designer.branchName')} />
+            <ProFormSelect name="field" label={t('pages.approval.designer.field')} options={fieldOptions} />
+            <ProFormSelect name="operator" label={t('pages.approval.designer.operator')} options={opOptions} />
+            <ProFormDigit
+              name="value"
+              label={t('pages.approval.designer.value')}
+              fieldProps={{ style: { width: '100%' } }}
+            />
+          </>
+        )}
+      </ProFormList>
+    </>
   );
 };
 

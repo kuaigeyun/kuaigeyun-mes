@@ -273,8 +273,14 @@ class DemandService(AppBaseService[Demand]):
             if demand.submit_time and demand.review_time:
                 duration_info["submit_to_review"] = (demand.review_time - demand.submit_time).total_seconds()
             response.duration_info = duration_info
-            
-        return response
+
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(
+            tenant_id,
+            "demand",
+            response,
+        )
 
     async def list_demands(
         self, 
@@ -356,19 +362,23 @@ class DemandService(AppBaseService[Demand]):
             })()
             item.lifecycle = get_demand_lifecycle(demand_view, items=None)
             data.append(item.model_dump())
-        
-        return {
+
+        from core.services.approval.audit_record_enricher import enrich_data_payload
+
+        return await enrich_data_payload(tenant_id, "demand", {
             "data": data,
             "total": total,
             "success": True
-        }
+        })
 
     async def update_demand(
         self, 
         tenant_id: int, 
         demand_id: int, 
         demand_data: DemandUpdate, 
-        updated_by: int
+        updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> DemandResponse:
         """
         更新需求
@@ -398,16 +408,29 @@ class DemandService(AppBaseService[Demand]):
 
             # 判断是否草稿（兼容 DRAFT / 草稿）
             is_draft = (demand.status or "").strip() in (DemandStatus.DRAFT, "DRAFT", "草稿")
+            is_pending = (demand.status or "").strip() in (
+                DemandStatus.PENDING_REVIEW, "待审核", "已提交"
+            )
 
-            # 非草稿状态：仅允许更新优先级、备注（与上游同步无关，用于排产等）
+            # 非草稿：审核中改单 或 仅允许优先级/备注
             if not is_draft:
-                allowed_keys = {'priority', 'notes'}
-                update_data = {k: v for k, v in update_data.items() if k in allowed_keys}
-                if not update_data:
-                    raise BusinessLogicError(
-                        f"需求状态与上游同步，仅支持修改优先级和备注。当前状态: {demand.status}"
-                    )
-                update_data['updated_by'] = updated_by
+                if approval_edit_context and is_pending:
+                    from core.config.audit_editable_fields import is_field_editable
+
+                    node_editable = approval_edit_context.get("editable_fields")
+                    for field in update_data:
+                        if field in ("updated_by",):
+                            continue
+                        if not is_field_editable("demand", field, node_editable):
+                            raise ValidationError(f"字段「{field}」不允许在审核中修改")
+                else:
+                    allowed_keys = {'priority', 'notes'}
+                    update_data = {k: v for k, v in update_data.items() if k in allowed_keys}
+                    if not update_data:
+                        raise BusinessLogicError(
+                            f"需求状态与上游同步，仅支持修改优先级和备注。当前状态: {demand.status}"
+                        )
+                    update_data['updated_by'] = updated_by
             
             # 更新需求
             if update_data:

@@ -516,11 +516,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
               confirmMessages={{ revoke: '撤回后状态将变为待审核，可重新提交审核。' }}
               workflowAuditEnabled={purchaseRequestAuditEnabled}
               hideAuditActionsWhenDisabled={true}
-              actions={{
-                approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
-                reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
-                revoke: (id) => withdrawPurchaseRequisition(id),
-              }}
               onSuccess={() => actionRef.current?.reload()}
             />
           </span>
@@ -1911,11 +1906,6 @@ const PurchaseRequisitionsPage: React.FC = () => {
                     theme="default"
                     size="small"
                     confirmMessages={{ revoke: '撤回后状态将变为待审核，可重新提交审核。' }}
-                    actions={{
-                      approve: (id) => approvePurchaseRequisition(id, { approved: true, review_remarks: '' }),
-                      reject: (id, reason) => approvePurchaseRequisition(id, { approved: false, review_remarks: reason || '' }),
-                      revoke: (id) => withdrawPurchaseRequisition(id),
-                    }}
                     workflowAuditEnabled={purchaseRequestAuditEnabled}
                     hideAuditActionsWhenDisabled={true}
                     onSuccess={async () => {

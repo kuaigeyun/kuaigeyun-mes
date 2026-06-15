@@ -340,10 +340,13 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
             query = query.filter(source_type="sales_delivery", source_id=sales_delivery_id)
         total = await query.count()
         rows = await query.order_by("-created_at").offset(skip).limit(limit)
-        return {
+        from core.services.approval.audit_record_enricher import enrich_items_payload
+
+        payload = {
             "items": [OQCInspectionResponse.model_validate(row) for row in rows],
             "total": total,
         }
+        return await enrich_items_payload(tenant_id, "oqc_inspection", payload)
 
     async def conduct(self, tenant_id: int, inspection_id: int, user_id: int, payload: OQCInspectionConduct) -> OQCInspectionResponse:
         from apps.kuaizhizao.services.quality_service import (

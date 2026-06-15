@@ -300,7 +300,9 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_requisition_lifecycle
         audit_required = await self.business_config_service.check_audit_required(tenant_id, "purchase_request")
         resp.lifecycle = get_purchase_requisition_lifecycle(req, audit_required=audit_required)
-        return resp
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "purchase_request", resp)
 
     async def _batch_requisition_items_count(
         self, tenant_id: int, requisition_ids: List[int]
@@ -430,7 +432,11 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
                 req, milestones=None, audit_required=audit_required
             )
             result.append(resp.model_dump())
-        return {"data": result, "total": total, "success": True}
+        from core.services.approval.audit_record_enricher import enrich_data_payload
+
+        return await enrich_data_payload(tenant_id, "purchase_request", {
+            "data": result, "total": total, "success": True
+        })
 
     async def _recalc_conversion_status(
         self, tenant_id: int, req: PurchaseRequisition
@@ -584,15 +590,43 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         requisition_id: int,
         data: PurchaseRequisitionUpdate,
         updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> PurchaseRequisitionResponse:
-        """更新采购申请（仅草稿可改）"""
+        """更新采购申请（草稿可改；审核中须当前审批人且节点开启改单）"""
         req = await PurchaseRequisition.get_or_none(
             tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
         )
         if not req:
             raise NotFoundError(f"采购申请不存在: {requisition_id}")
-        if not is_draft_status(req.status):
-            raise BusinessLogicError("只有草稿状态的采购申请可修改")
+        is_draft = is_draft_status(req.status)
+        is_pending = is_pending_review_status(req.status)
+        if not is_draft:
+            if not (is_pending and approval_edit_context):
+                if is_pending and not approval_edit_context:
+                    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                    edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                        tenant_id, "purchase_request", requisition_id, updated_by
+                    )
+                    if not edit_ctx:
+                        raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+                    approval_edit_context = edit_ctx
+                else:
+                    raise BusinessLogicError("只有草稿状态的采购申请可修改")
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = data.model_dump(exclude_unset=True, exclude={"items"})
+            for field in preview:
+                if field in ("updated_by",):
+                    continue
+                if not is_field_editable("purchase_request", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if data.items is not None and not is_field_editable("purchase_request", "items", node_editable):
+                raise ValidationError("字段「申请明细」不允许在审核中修改")
 
         update_data = data.model_dump(exclude_unset=True, exclude={"items"})
         if update_data:
@@ -685,6 +719,44 @@ class PurchaseRequisitionService(AppBaseService[PurchaseRequisition]):
         req.review_time = datetime.now()
         req.review_remarks = review_remarks
         req.updated_by = approved_by
+        await req.save()
+
+        return await self.get_requisition_by_id(tenant_id, requisition_id)
+
+    async def withdraw_requisition(
+        self,
+        tenant_id: int,
+        requisition_id: int,
+        withdrawn_by: int,
+    ) -> PurchaseRequisitionResponse:
+        """撤回提交：待审核 → 草稿（提交人撤回，非反审核）"""
+        req = await PurchaseRequisition.get_or_none(
+            tenant_id=tenant_id, id=requisition_id, deleted_at__isnull=True
+        )
+        if not req:
+            raise NotFoundError(f"采购申请不存在: {requisition_id}")
+        if not is_pending_review_status(req.status):
+            raise BusinessLogicError("只有待审核状态的采购申请可撤回提交")
+
+        try:
+            from core.services.approval.approval_instance_service import ApprovalInstanceService
+
+            await ApprovalInstanceService.cancel_approval(
+                tenant_id=tenant_id,
+                entity_type="purchase_request",
+                entity_id=requisition_id,
+                operator_id=withdrawn_by,
+            )
+        except Exception as e:
+            logger.warning("取消采购申请审批流程失败或无需取消: {}", e)
+
+        req.status = DocumentStatus.DRAFT.value
+        req.review_status = ReviewStatus.PENDING.value
+        req.reviewer_id = None
+        req.reviewer_name = None
+        req.review_time = None
+        req.review_remarks = None
+        req.updated_by = withdrawn_by
         await req.save()
 
         return await self.get_requisition_by_id(tenant_id, requisition_id)

@@ -5,7 +5,7 @@
 """
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
-from typing import Optional, Dict, Any
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 from uuid import UUID
 
@@ -42,6 +42,28 @@ class ApprovalInstanceUpdate(BaseModel):
         if v not in allowed_statuses:
             raise ValueError(f'审批状态必须是 {allowed_statuses} 之一')
         return v
+
+
+class ApprovalInstanceBatchAction(BaseModel):
+    """批量审批操作"""
+    instance_uuids: List[str] = Field(..., min_length=1, description="审批实例 UUID 列表")
+    action: str = Field(..., description="操作类型（approve、reject）")
+    comment: Optional[str] = Field(None, description="审批意见")
+
+    @field_validator('action')
+    @classmethod
+    def validate_action(cls, v):
+        allowed_actions = ['approve', 'reject']
+        if v not in allowed_actions:
+            raise ValueError(f'批量操作类型必须是 {allowed_actions} 之一')
+        return v
+
+
+class ApprovalInstanceBatchResult(BaseModel):
+    """批量审批结果"""
+    success_count: int
+    failure_count: int
+    failures: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class ApprovalInstanceAction(BaseModel):

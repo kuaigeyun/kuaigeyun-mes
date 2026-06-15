@@ -74,8 +74,348 @@ async def _edit_sales_order(
     return result
 
 
+async def _edit_purchase_order(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase import PurchaseOrderUpdate
+    from apps.kuaizhizao.services.purchase_service import PurchaseService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "purchase_order", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = PurchaseOrderUpdate.model_validate(body)
+    svc = PurchaseService()
+    result = await svc.update_purchase_order(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "purchase_order", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_quotation(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.quotation import QuotationUpdate
+    from apps.kuaizhizao.services.quotation_service import QuotationService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "quotation", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = QuotationUpdate.model_validate(body)
+    svc = QuotationService()
+    result = await svc.update_quotation(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "quotation", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_demand(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.demand import DemandUpdate
+    from apps.kuaizhizao.services.demand_service import DemandService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "demand", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = DemandUpdate.model_validate(body)
+    svc = DemandService()
+    result = await svc.update_demand(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "demand", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_sales_contract(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.sales_contract import SalesContractUpdate
+    from apps.kuaizhizao.services.sales_contract_service import SalesContractService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "sales_contract", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = SalesContractUpdate.model_validate(body)
+    svc = SalesContractService()
+    result = await svc.update_contract(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "sales_contract", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_purchase_request(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase_requisition import PurchaseRequisitionUpdate
+    from apps.kuaizhizao.services.purchase_requisition_service import PurchaseRequisitionService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "purchase_request", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = PurchaseRequisitionUpdate.model_validate(body)
+    svc = PurchaseRequisitionService()
+    result = await svc.update_requisition(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "purchase_request", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_sales_forecast(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.sales import SalesForecastUpdate
+    from apps.kuaizhizao.services.sales_service import SalesForecastService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "sales_forecast", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = SalesForecastUpdate.model_validate(body)
+    svc = SalesForecastService()
+    result = await svc.update_sales_forecast(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "sales_forecast", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_sales_order_change(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.order_change import SalesOrderChangeUpdate
+    from apps.kuaizhizao.services.sales_order_change_service import SalesOrderChangeService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "sales_order_change", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = SalesOrderChangeUpdate.model_validate(body)
+    svc = SalesOrderChangeService()
+    result = await svc.update_change_order(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "sales_order_change", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_purchase_order_change(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.order_change import PurchaseOrderChangeUpdate
+    from apps.kuaizhizao.services.purchase_order_change_service import PurchaseOrderChangeService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "purchase_order_change", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = PurchaseOrderChangeUpdate.model_validate(body)
+    svc = PurchaseOrderChangeService()
+    result = await svc.update_change_order(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "purchase_order_change", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_purchase_inquiry(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.purchase_inquiry import PurchaseInquiryUpdate
+    from apps.kuaizhizao.services.purchase_inquiry_service import PurchaseInquiryService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "purchase_inquiry", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = PurchaseInquiryUpdate.model_validate(body)
+    svc = PurchaseInquiryService()
+    result = await svc.update_inquiry(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "purchase_inquiry", entity_id, edit_ctx
+    )
+    return result
+
+
+async def _edit_production_plan(
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    payload: Dict[str, Any],
+    comment: Optional[str],
+) -> Any:
+    from apps.kuaizhizao.schemas.planning import ProductionPlanUpdate
+    from apps.kuaizhizao.services.planning_service import ProductionPlanningService
+    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+    edit_ctx = await ApprovalEditGuard.assert_approver_can_edit(
+        tenant_id, "production_plan", entity_id, user_id
+    )
+    body = dict(payload or {})
+    body.pop("comment", None)
+    update_data = ProductionPlanUpdate.model_validate(body)
+    svc = ProductionPlanningService()
+    result = await svc.update_production_plan(
+        tenant_id,
+        entity_id,
+        update_data,
+        user_id,
+        approval_edit_context=edit_ctx,
+        approval_edit_comment=comment,
+    )
+    await ApprovalEditGuard.refresh_instance_context_if_needed(
+        tenant_id, "production_plan", entity_id, edit_ctx
+    )
+    return result
+
+
 _EDIT_DISPATCH = {
     "sales_order": _edit_sales_order,
+    "purchase_order": _edit_purchase_order,
+    "quotation": _edit_quotation,
+    "demand": _edit_demand,
+    "sales_contract": _edit_sales_contract,
+    "purchase_request": _edit_purchase_request,
+    "sales_forecast": _edit_sales_forecast,
+    "sales_order_change": _edit_sales_order_change,
+    "purchase_order_change": _edit_purchase_order_change,
+    "purchase_inquiry": _edit_purchase_inquiry,
+    "production_plan": _edit_production_plan,
 }
 
 

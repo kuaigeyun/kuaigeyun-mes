@@ -205,3 +205,24 @@ export async function performApprovalAction(approvalInstanceUuid: string, action
   });
 }
 
+export interface ApprovalInstanceBatchActionData {
+  instance_uuids: string[];
+  action: 'approve' | 'reject';
+  comment?: string;
+}
+
+export interface ApprovalInstanceBatchResult {
+  success_count: number;
+  failure_count: number;
+  failures: Array<{ uuid: string; error: string }>;
+}
+
+export async function batchPerformApprovalActions(
+  data: ApprovalInstanceBatchActionData,
+): Promise<ApprovalInstanceBatchResult> {
+  return apiRequest<ApprovalInstanceBatchResult>('/core/approval-instances/batch-action', {
+    method: 'POST',
+    data,
+  });
+}
+

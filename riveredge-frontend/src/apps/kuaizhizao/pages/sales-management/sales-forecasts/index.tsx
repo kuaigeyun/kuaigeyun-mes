@@ -1158,11 +1158,6 @@ export default function SalesForecastsPage() {
             workflowAuditEnabled={auditEnabled}
             theme="link"
             size="small"
-            actions={{
-              submit: async (id) => submitSalesForecast(id),
-              approve: approveSalesForecast,
-              revoke: withdrawSalesForecastApproval,
-            }}
             onSuccess={() => {
               invalidateForecastCache();
               invalidateStatistics();
@@ -1906,11 +1901,6 @@ export default function SalesForecastsPage() {
       setTrackingRefreshKey((k) => k + 1);
       actionRef.current?.reload();
                   setDrawerVisible(false);
-                }}
-                actions={{
-                  submit: (id) => submitSalesForecast(id),
-                  approve: approveSalesForecast,
-                  revoke: withdrawSalesForecastApproval,
                 }}
               />
             </Space>

@@ -293,7 +293,7 @@ function AuditHubDetailPanel({
 
       <Col flex="0 0 42%" style={{ minWidth: 0 }}>
 
-        <Space direction="vertical" size={12} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={12} style={{ width: '100%' }}>
 
           <div>
 
@@ -335,7 +335,7 @@ function AuditHubDetailPanel({
 
       <Col flex="1" style={{ minWidth: 0, borderLeft: `1px solid ${token.colorBorderSecondary}`, paddingLeft: 16 }}>
 
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space orientation="vertical" size={16} style={{ width: '100%' }}>
 
           <div>
 
@@ -412,7 +412,7 @@ function AuditHubDetailPanel({
 
           ) : (
 
-            <Space direction="vertical" size={12} style={{ width: '100%' }}>
+            <Space orientation="vertical" size={12} style={{ width: '100%' }}>
 
               {nodesOverview.map((node) => {
 
@@ -797,7 +797,7 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
         width={960}
 
-        destroyOnClose
+        destroyOnHidden
 
         styles={{ body: { paddingTop: 12 } }}
 
@@ -949,11 +949,11 @@ export const UniAuditModal: React.FC<UniAuditModalProps> = ({
 
       width={720}
 
-      destroyOnClose
+      destroyOnHidden
 
     >
 
-      <Space direction="vertical" style={{ width: '100%' }} size={12}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={12}>
 
         <Space>
 

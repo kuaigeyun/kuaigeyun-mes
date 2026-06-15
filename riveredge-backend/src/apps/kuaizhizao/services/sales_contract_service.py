@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from tortoise.expressions import Q
 from tortoise.transactions import in_transaction
@@ -361,8 +361,15 @@ class SalesContractService(AppBaseService[SalesContract]):
             qs = qs.filter(Q(contract_code__icontains=keyword) | Q(customer_name__icontains=keyword))
         total = await qs.count()
         rows = await qs.order_by("-contract_date", "-id").offset(skip).limit(limit)
+        from core.services.approval.audit_record_enricher import enrich_items
+
+        items = await enrich_items(
+            tenant_id,
+            "sales_contract",
+            [self._contract_to_response(r) for r in rows],
+        )
         return SalesContractListResponse(
-            items=[self._contract_to_response(r) for r in rows],
+            items=items,
             total=total,
         )
 
@@ -380,7 +387,10 @@ class SalesContractService(AppBaseService[SalesContract]):
         if include_items:
             items = await SalesContractItem.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
             milestones = await SalesContractMilestone.filter(tenant_id=tenant_id, contract_id=contract_id).order_by("id")
-        return self._contract_to_response(contract, items, milestones)
+        resp = self._contract_to_response(contract, items, milestones)
+        from core.services.approval.audit_record_enricher import enrich_record
+
+        return await enrich_record(tenant_id, "sales_contract", resp)
 
     async def update_contract(
         self,
@@ -388,12 +398,47 @@ class SalesContractService(AppBaseService[SalesContract]):
         contract_id: int,
         data: SalesContractUpdate,
         updated_by: int,
+        approval_edit_context: Optional[Dict[str, Any]] = None,
+        approval_edit_comment: Optional[str] = None,
     ) -> SalesContractResponse:
         contract = await SalesContract.get_or_none(tenant_id=tenant_id, id=contract_id, deleted_at__isnull=True)
         if not contract:
             raise NotFoundError("销售合同不存在")
-        if (contract.status or "") not in ("草稿",):
-            raise BusinessLogicError("仅草稿状态合同可编辑")
+        is_draft = (contract.status or "") in ("草稿",)
+        is_pending = (contract.status or "") in ("待审核",)
+        if not is_draft:
+            if not (is_pending and approval_edit_context):
+                if is_pending and not approval_edit_context:
+                    from core.services.approval.approval_edit_guard import ApprovalEditGuard
+
+                    edit_ctx = await ApprovalEditGuard.get_pending_edit_context(
+                        tenant_id, "sales_contract", contract_id, updated_by
+                    )
+                    if not edit_ctx:
+                        raise BusinessLogicError("单据审核中，仅已开启改单权限的当前审批人可修改")
+                    approval_edit_context = edit_ctx
+                else:
+                    raise BusinessLogicError("仅草稿状态合同可编辑")
+
+        if approval_edit_context:
+            from core.config.audit_editable_fields import is_field_editable
+
+            node_editable = approval_edit_context.get("editable_fields")
+            preview = data.model_dump(exclude_unset=True, exclude={"items", "milestones", "contract_terms"})
+            for field in preview:
+                if field in ("updated_by",):
+                    continue
+                if not is_field_editable("sales_contract", field, node_editable):
+                    raise ValidationError(f"字段「{field}」不允许在审核中修改")
+            if data.items is not None and not is_field_editable("sales_contract", "items", node_editable):
+                raise ValidationError("字段「合同明细」不允许在审核中修改")
+            if data.milestones is not None and not is_field_editable("sales_contract", "milestones", node_editable):
+                raise ValidationError("字段「合同里程碑」不允许在审核中修改")
+            if data.contract_terms is not None and not is_field_editable(
+                "sales_contract", "contract_terms", node_editable
+            ):
+                raise ValidationError("字段「合同条款」不允许在审核中修改")
+
         async with in_transaction():
             update_fields = data.model_dump(exclude_unset=True, exclude={"items", "milestones", "contract_terms"})
             if "term_group_id" in data.model_fields_set or data.contract_terms is not None:
