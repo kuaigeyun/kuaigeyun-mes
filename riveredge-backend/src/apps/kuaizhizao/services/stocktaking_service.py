@@ -25,6 +25,7 @@ from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingItemUpdate,
     StocktakingItemResponse,
     StocktakingWithItemsResponse,
+    StartStocktakingRequest,
 )
 
 from apps.common.base_service import AppBaseService
@@ -89,6 +90,8 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 warehouse_name=stocktaking_data.warehouse_name,
                 stocktaking_date=stocktaking_data.stocktaking_date,
                 stocktaking_type=stocktaking_data.stocktaking_type,
+                line_granularity=stocktaking_data.line_granularity,
+                include_zero_stock=stocktaking_data.include_zero_stock,
                 status="draft",
                 total_items=0,
                 counted_items=0,
@@ -213,6 +216,10 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 stocktaking.stocktaking_date = stocktaking_data.stocktaking_date
             if stocktaking_data.stocktaking_type is not None:
                 stocktaking.stocktaking_type = stocktaking_data.stocktaking_type
+            if stocktaking_data.line_granularity is not None:
+                stocktaking.line_granularity = stocktaking_data.line_granularity
+            if stocktaking_data.include_zero_stock is not None:
+                stocktaking.include_zero_stock = stocktaking_data.include_zero_stock
             if stocktaking_data.remarks is not None:
                 stocktaking.remarks = stocktaking_data.remarks
 
@@ -227,22 +234,13 @@ class StocktakingService(AppBaseService[Stocktaking]):
         self,
         tenant_id: int,
         stocktaking_id: int,
-        started_by: int
+        started_by: int,
+        start_request: Optional[StartStocktakingRequest] = None,
     ) -> StocktakingResponse:
         """
         开始盘点（将状态从draft改为in_progress）
 
-        Args:
-            tenant_id: 组织ID
-            stocktaking_id: 盘点单ID
-            started_by: 开始人ID
-
-        Returns:
-            StocktakingResponse: 更新后的盘点单信息
-
-        Raises:
-            NotFoundError: 盘点单不存在
-            ValidationError: 数据验证失败
+        全盘且无明细时自动快照仓库账面库存生成盘点行。
         """
         # 0. 检查节点是否启用
         is_enabled = await self.business_config_service.check_node_enabled(tenant_id, "stocktaking")
@@ -250,7 +248,6 @@ class StocktakingService(AppBaseService[Stocktaking]):
             raise BusinessLogicError("盘点单节点未启用，无法开始盘点")
 
         async with in_transaction():
-            # 获取盘点单
             stocktaking = await Stocktaking.get_or_none(
                 id=stocktaking_id,
                 tenant_id=tenant_id,
@@ -263,10 +260,58 @@ class StocktakingService(AppBaseService[Stocktaking]):
             if stocktaking.status != 'draft':
                 raise ValidationError(f"盘点单状态为{stocktaking.status}，不能开始盘点")
 
-            # 获取开始人信息
+            existing_count = await StocktakingItem.filter(
+                stocktaking_id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).count()
+
+            if start_request and existing_count == 0:
+                if start_request.line_granularity is not None:
+                    stocktaking.line_granularity = start_request.line_granularity
+                if start_request.include_zero_stock is not None:
+                    stocktaking.include_zero_stock = start_request.include_zero_stock
+
+            if stocktaking.stocktaking_type == "full" and existing_count == 0:
+                from apps.kuaizhizao.services.stocktaking_inventory_snapshot import build_inventory_snapshot
+
+                snapshot_lines = await build_inventory_snapshot(
+                    tenant_id=tenant_id,
+                    warehouse_id=stocktaking.warehouse_id,
+                    granularity=stocktaking.line_granularity or "batch",
+                    include_zero_stock=bool(stocktaking.include_zero_stock),
+                )
+                if not snapshot_lines:
+                    raise ValidationError("该仓库无可盘点库存，无法开始全盘")
+
+                bulk_items = [
+                    StocktakingItemCreate(
+                        stocktaking_id=stocktaking_id,
+                        material_id=line.material_id,
+                        material_code=line.material_code,
+                        material_name=line.material_name,
+                        warehouse_id=line.warehouse_id,
+                        location_code=line.location_code,
+                        batch_no=line.batch_no,
+                        book_quantity=line.book_quantity,
+                        unit_price=line.unit_price,
+                    )
+                    for line in snapshot_lines
+                ]
+                await self._create_stocktaking_items_internal(
+                    tenant_id=tenant_id,
+                    stocktaking=stocktaking,
+                    items=bulk_items,
+                    created_by=started_by,
+                )
+                stocktaking.total_items = await StocktakingItem.filter(
+                    stocktaking_id=stocktaking_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                ).count()
+
             user_info = await self.get_user_info(started_by)
 
-            # 更新状态
             stocktaking.status = 'in_progress'
             stocktaking.updated_by = started_by
             stocktaking.updated_by_name = user_info["name"]
@@ -316,29 +361,12 @@ class StocktakingService(AppBaseService[Stocktaking]):
             # 获取创建人信息
             user_info = await self.get_user_info(created_by)
 
-            # 创建盘点明细
-            item = await StocktakingItem.create(
+            item = await self._create_single_item_record(
                 tenant_id=tenant_id,
-                uuid=str(uuid.uuid4()),
-                stocktaking_id=stocktaking_id,
-                material_id=item_data.material_id,
-                material_code=item_data.material_code,
-                material_name=item_data.material_name,
-                warehouse_id=item_data.warehouse_id,
-                location_id=item_data.location_id,
-                location_code=item_data.location_code,
-                batch_no=item_data.batch_no,
-                book_quantity=item_data.book_quantity,
-                actual_quantity=item_data.actual_quantity,
-                difference_quantity=Decimal("0"),
-                unit_price=item_data.unit_price,
-                difference_amount=Decimal("0"),
-                status="pending",
-                remarks=item_data.remarks,
+                stocktaking=stocktaking,
+                item_data=item_data,
                 created_by=created_by,
-                created_by_name=user_info["name"],
-                updated_by=created_by,
-                updated_by_name=user_info["name"],
+                user_name=user_info["name"],
             )
 
             # 更新盘点单的物料总数
@@ -474,24 +502,8 @@ class StocktakingService(AppBaseService[Stocktaking]):
         items: List[StocktakingItemCreate],
         created_by: int
     ) -> List[StocktakingItemResponse]:
-        """
-        添加盘点明细
-
-        Args:
-            tenant_id: 组织ID
-            stocktaking_id: 盘点单ID
-            items: 盘点明细列表
-            created_by: 创建人ID
-
-        Returns:
-            List[StocktakingItemResponse]: 创建的盘点明细列表
-
-        Raises:
-            NotFoundError: 盘点单不存在
-            ValidationError: 数据验证失败
-        """
+        """批量添加盘点明细"""
         async with in_transaction():
-            # 检查盘点单是否存在
             stocktaking = await Stocktaking.get_or_none(
                 id=stocktaking_id,
                 tenant_id=tenant_id,
@@ -501,61 +513,21 @@ class StocktakingService(AppBaseService[Stocktaking]):
             if not stocktaking:
                 raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
 
-            # 检查盘点单状态
             if stocktaking.status not in ['draft', 'in_progress']:
                 raise ValidationError(f"盘点单状态为{stocktaking.status}，不能添加明细")
 
-            # 获取创建人信息
-            user_info = await self.get_user_info(created_by)
+            created_items = await self._create_stocktaking_items_internal(
+                tenant_id=tenant_id,
+                stocktaking=stocktaking,
+                items=items,
+                created_by=created_by,
+            )
 
-            # 创建盘点明细
-            from apps.kuaizhizao.services.inventory_service import InventoryService
-
-            created_items = []
-            for item_data in items:
-                # 从库存服务获取账面数量（若未传入则自动获取）
-                book_quantity = item_data.book_quantity
-                if book_quantity is None:
-                    book_quantity = await InventoryService.get_quantity(
-                        tenant_id=tenant_id,
-                        material_id=item_data.material_id,
-                        warehouse_id=item_data.warehouse_id,
-                        batch_no=item_data.batch_no,
-                    ) or Decimal("0")
-
-                item = await StocktakingItem.create(
-                    tenant_id=tenant_id,
-                    uuid=str(uuid.uuid4()),
-                    stocktaking_id=stocktaking_id,
-                    material_id=item_data.material_id,
-                    material_code=item_data.material_code,
-                    material_name=item_data.material_name,
-                    warehouse_id=item_data.warehouse_id,
-                    location_id=item_data.location_id,
-                    location_code=item_data.location_code,
-                    batch_no=item_data.batch_no,
-                    book_quantity=book_quantity,
-                    actual_quantity=item_data.actual_quantity,
-                    difference_quantity=Decimal("0"),
-                    unit_price=item_data.unit_price,
-                    difference_amount=Decimal("0"),
-                    status="pending",
-                    remarks=item_data.remarks,
-                    created_by=created_by,
-                    created_by_name=user_info["name"],
-                    updated_by=created_by,
-                    updated_by_name=user_info["name"],
-                )
-
-                created_items.append(item)
-
-            # 更新盘点单的物料总数
             stocktaking.total_items = await StocktakingItem.filter(
                 stocktaking_id=stocktaking_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True
             ).count()
-
             await stocktaking.save()
 
             return [StocktakingItemResponse.model_validate(item) for item in created_items]
@@ -642,23 +614,21 @@ class StocktakingService(AppBaseService[Stocktaking]):
         stocktaking_id: int,
         adjusted_by: int
     ) -> StocktakingResponse:
-        """
-        处理盘点差异（调整库存）
+        """处理盘点差异（调整库存），兼容旧接口，委托 complete_stocktaking"""
+        return await self.complete_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            completed_by=adjusted_by,
+        )
 
-        Args:
-            tenant_id: 组织ID
-            stocktaking_id: 盘点单ID
-            adjusted_by: 调整人ID
-
-        Returns:
-            StocktakingResponse: 更新后的盘点单信息
-
-        Raises:
-            NotFoundError: 盘点单不存在
-            ValidationError: 数据验证失败
-        """
+    async def complete_stocktaking(
+        self,
+        tenant_id: int,
+        stocktaking_id: int,
+        completed_by: int,
+    ) -> StocktakingResponse:
+        """完成盘点：校验全部已盘点，有差异则调库存，无差异直接结案"""
         async with in_transaction():
-            # 获取盘点单
             stocktaking = await Stocktaking.get_or_none(
                 id=stocktaking_id,
                 tenant_id=tenant_id,
@@ -669,20 +639,26 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
 
             if stocktaking.status != 'in_progress':
-                raise ValidationError(f"盘点单状态为{stocktaking.status}，不能处理差异")
+                raise ValidationError(f"盘点单状态为{stocktaking.status}，不能完成盘点")
 
-            # 获取所有有差异的明细
-            items = await StocktakingItem.filter(
+            all_items = await StocktakingItem.filter(
                 stocktaking_id=stocktaking_id,
                 tenant_id=tenant_id,
                 deleted_at__isnull=True,
-                difference_quantity__ne=Decimal("0")
             )
 
-            # 调用统一库存服务调整库存（将库存调整为实际数量）
+            if not all_items:
+                raise ValidationError("盘点单无明细，不能完成盘点")
+
+            pending = [i for i in all_items if i.status != "counted"]
+            if pending:
+                raise ValidationError(f"尚有 {len(pending)} 条明细未盘点，请先录入实盘数量")
+
+            diff_items = [i for i in all_items if i.difference_quantity != Decimal("0")]
+
             from apps.kuaizhizao.services.inventory_service import InventoryService
 
-            for item in items:
+            for item in diff_items:
                 await InventoryService.adjust_inventory(
                     tenant_id=tenant_id,
                     material_id=item.material_id,
@@ -691,14 +667,11 @@ class StocktakingService(AppBaseService[Stocktaking]):
                     batch_no=item.batch_no,
                     reason="stocktaking",
                 )
-                item.status = "adjusted"
-                await item.save()
 
-            # 盘盈回写移动加权平均（盘亏仅减库存，均价不变）
             try:
                 from apps.kuaicaiwu.services.inventory_cost_service import InventoryCostService
                 cost_svc = InventoryCostService()
-                for item in items:
+                for item in diff_items:
                     if Decimal(str(item.difference_quantity or 0)) <= 0:
                         continue
                     await cost_svc.on_stocktaking_difference_adjusted(
@@ -711,20 +684,152 @@ class StocktakingService(AppBaseService[Stocktaking]):
                 import logging
                 logging.getLogger(__name__).warning("盘点差异成本回写失败: %s", cost_e)
 
-            # 获取调整人信息
-            user_info = await self.get_user_info(adjusted_by)
+            for item in all_items:
+                item.status = "adjusted"
+                await item.save()
 
-            # 更新盘点单状态为已完成
+            user_info = await self.get_user_info(completed_by)
+
             stocktaking.status = "completed"
-            stocktaking.completed_by = adjusted_by
+            stocktaking.completed_by = completed_by
             stocktaking.completed_by_name = user_info["name"]
             stocktaking.completed_at = datetime.now()
-            stocktaking.updated_by = adjusted_by
+            stocktaking.updated_by = completed_by
             stocktaking.updated_by_name = user_info["name"]
 
             await stocktaking.save()
 
             return StocktakingResponse.model_validate(stocktaking)
+
+    async def withdraw_stocktaking(
+        self,
+        tenant_id: int,
+        stocktaking_id: int,
+        withdrawn_by: int,
+    ) -> StocktakingResponse:
+        """
+        撤回盘点（盘点中 -> 草稿）。
+
+        未录入实盘数量时可撤回并清空明细，以便删除误开始的盘点单。
+        """
+        async with in_transaction():
+            stocktaking = await Stocktaking.get_or_none(
+                id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if not stocktaking:
+                raise NotFoundError(f"盘点单不存在: {stocktaking_id}")
+            if stocktaking.status != "in_progress":
+                raise BusinessLogicError("只有盘点中状态的盘点单才能撤回")
+
+            counted = await StocktakingItem.filter(
+                stocktaking_id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                status__in=["counted", "adjusted"],
+            ).count()
+            if counted > 0:
+                raise BusinessLogicError("已有盘点录入，不能撤回")
+
+            now = datetime.now()
+            await StocktakingItem.filter(
+                stocktaking_id=stocktaking_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).update(deleted_at=now)
+
+            user_info = await self.get_user_info(withdrawn_by)
+            stocktaking.status = "draft"
+            stocktaking.total_items = 0
+            stocktaking.counted_items = 0
+            stocktaking.total_differences = 0
+            stocktaking.total_difference_amount = Decimal("0")
+            stocktaking.updated_by = withdrawn_by
+            stocktaking.updated_by_name = user_info["name"]
+            await stocktaking.save()
+
+            return StocktakingResponse.model_validate(stocktaking)
+
+    async def _resolve_book_quantity(
+        self,
+        tenant_id: int,
+        material_id: int,
+        warehouse_id: int,
+        batch_no: Optional[str],
+        book_quantity: Optional[Decimal],
+    ) -> Decimal:
+        if book_quantity is not None:
+            return book_quantity
+        from apps.kuaizhizao.services.inventory_service import InventoryService
+        return await InventoryService.get_quantity(
+            tenant_id=tenant_id,
+            material_id=material_id,
+            warehouse_id=warehouse_id,
+            batch_no=batch_no,
+        ) or Decimal("0")
+
+    async def _create_single_item_record(
+        self,
+        tenant_id: int,
+        stocktaking: Stocktaking,
+        item_data: StocktakingItemCreate,
+        created_by: int,
+        user_name: str,
+    ) -> StocktakingItem:
+        warehouse_id = item_data.warehouse_id or stocktaking.warehouse_id
+        book_quantity = await self._resolve_book_quantity(
+            tenant_id=tenant_id,
+            material_id=item_data.material_id,
+            warehouse_id=warehouse_id,
+            batch_no=item_data.batch_no,
+            book_quantity=item_data.book_quantity,
+        )
+        return await StocktakingItem.create(
+            tenant_id=tenant_id,
+            uuid=str(uuid.uuid4()),
+            stocktaking_id=stocktaking.id,
+            material_id=item_data.material_id,
+            material_code=item_data.material_code,
+            material_name=item_data.material_name,
+            warehouse_id=warehouse_id,
+            location_id=item_data.location_id,
+            location_code=item_data.location_code,
+            batch_no=item_data.batch_no,
+            book_quantity=book_quantity,
+            actual_quantity=item_data.actual_quantity,
+            difference_quantity=Decimal("0"),
+            unit_price=item_data.unit_price or Decimal("0"),
+            difference_amount=Decimal("0"),
+            status="pending",
+            remarks=item_data.remarks,
+            created_by=created_by,
+            created_by_name=user_name,
+            updated_by=created_by,
+            updated_by_name=user_name,
+        )
+
+    async def _create_stocktaking_items_internal(
+        self,
+        tenant_id: int,
+        stocktaking: Stocktaking,
+        items: List[StocktakingItemCreate],
+        created_by: int,
+    ) -> List[StocktakingItem]:
+        user_info = await self.get_user_info(created_by)
+        created_items: List[StocktakingItem] = []
+        for item_data in items:
+            item_data.stocktaking_id = stocktaking.id
+            created_items.append(
+                await self._create_single_item_record(
+                    tenant_id=tenant_id,
+                    stocktaking=stocktaking,
+                    item_data=item_data,
+                    created_by=created_by,
+                    user_name=user_info["name"],
+                )
+            )
+        return created_items
 
     async def _update_stocktaking_statistics(
         self,
@@ -733,10 +838,6 @@ class StocktakingService(AppBaseService[Stocktaking]):
     ) -> None:
         """
         更新盘点单统计信息
-
-        Args:
-            tenant_id: 组织ID
-            stocktaking_id: 盘点单ID
         """
         # 获取所有明细
         items = await StocktakingItem.filter(

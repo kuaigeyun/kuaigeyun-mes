@@ -61,6 +61,7 @@ class OQCInspection(BaseModel):
     review_status = fields.CharField(max_length=20, default="待审核", description="审核状态")
 
     status = fields.CharField(max_length=20, default="待检验", description="单据状态")
+    attachments = fields.JSONField(null=True, description="附件列表")
     notes = fields.TextField(null=True, description="备注")
     inspection_standard = fields.TextField(null=True, description="检验标准")
     other_checks = fields.JSONField(null=True, description="检验方案/标准模板（JSON）")

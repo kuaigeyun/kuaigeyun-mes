@@ -22,6 +22,8 @@ import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 interface ReceiptVoucher {
   id: number;
@@ -135,6 +137,7 @@ const ReceiptsPage: React.FC = () => {
       bank_account: bank?.account_number || values.bank_account,
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
     };
     await apiRequest('/apps/kuaicaiwu/receipts', { method: 'POST', data });
     messageApi.success('收款单创建成功');
@@ -618,6 +621,7 @@ const ReceiptsPage: React.FC = () => {
         />
         <ProFormText name="bank_account" label="收款账号（备注）" placeholder="未选银行账户时可手工填写" />
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="receipt_attachments" />
       </ModalForm>
 
       <Drawer

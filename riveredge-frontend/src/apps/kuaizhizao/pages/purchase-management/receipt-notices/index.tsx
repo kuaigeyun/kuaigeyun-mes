@@ -70,6 +70,8 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 interface ReceiptNotice {
   id?: number;
@@ -90,6 +92,7 @@ interface ReceiptNotice {
   total_quantity?: number;
   total_amount?: number;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -457,6 +460,7 @@ const ReceiptNoticesPage: React.FC = () => {
         warehouse_name: detail.warehouse_name,
         planned_receipt_date: detail.planned_receipt_date ? dayjs(detail.planned_receipt_date) : undefined,
         notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         items: itemsForm.length ? itemsForm : [defaultReceiptItem],
       });
       setEditingId(record.id!);
@@ -805,6 +809,7 @@ const ReceiptNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name,
         planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
@@ -837,6 +842,7 @@ const ReceiptNoticesPage: React.FC = () => {
         warehouse_name: values.warehouse_name,
         planned_receipt_date: values.planned_receipt_date ? dayjs(values.planned_receipt_date).format('YYYY-MM-DD') : undefined,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
@@ -1058,6 +1064,7 @@ const ReceiptNoticesPage: React.FC = () => {
         }}
       />
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
   );
 
@@ -1115,6 +1122,7 @@ const ReceiptNoticesPage: React.FC = () => {
         </AntForm.Item>
       </div>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <DocumentAttachmentsField category="receipt_notice_attachments" />
     </>
   );
 

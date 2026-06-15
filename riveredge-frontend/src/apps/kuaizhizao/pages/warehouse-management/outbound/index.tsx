@@ -4,14 +4,13 @@
  * 提供出库单的管理功能，支持多种出库类型：生产领料、销售出库、退货出库等。
  */
 
-import React, { useRef, useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProForm, ProFormSelect, type ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Form, Tooltip, Typography, Spin, Empty, theme as AntdTheme, AutoComplete, Dropdown } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { PlusOutlined, EyeOutlined, CheckCircleOutlined, InboxOutlined, DownOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Space, Modal, Card, Table, Tooltip, Typography, Spin, Empty, Upload, theme as AntdTheme } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, InboxOutlined, RollbackOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -25,15 +24,15 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
+
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
-import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
+import { UniPullLoadButton } from '../../../../../components/uni-pull';
+import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../WarehouseTraceBriefFooter';
-import { apiRequest } from '../../../../../services/api';
 import { warehouseApi, workOrderApi, outsourceMaterialIssueApi } from '../../../services/production';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getOutboundLifecycle } from '../../../utils/outboundLifecycle';
@@ -41,32 +40,26 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../services/sales-order';
 import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
+import { uploadMultipleFiles } from '../../../../../services/file';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
+import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
+import { fetchOutboundHubList } from './outboundListAggregate';
+import { batchConfirmOutboundDocuments, withdrawOutboundDocument } from './outboundBatchConfirm';
+import {
+  type OutboundHubOrder,
+  type OutboundIssueType,
+  OUTBOUND_ISSUE_TYPE_LABELS,
+  isOutboundConfirmable,
+  isOutboundWithdrawable,
+  mapOutsourceIssueToOutbound,
+  outboundDocumentCode,
+} from './outboundHubTypes';
+import type { OutboundPullEntryNavigationState } from './outboundPullEntryTypes';
 
-// 统一的出库单接口（结合生产领料和销售出库）
-interface OutboundOrder {
-  id?: number;
-  tenant_id?: number;
-  delivery_code?: string; // 销售出库单编号
-  picking_code?: string; // 生产领料单编号
-  outbound_type?: 'production_picking' | 'sales_delivery' | 'outsource_issue'; // 出库类型
-  status?: string;
-  delivery_date?: string; // 出库日期
-  customer_id?: number;
-  customer_name?: string;
-  work_order_id?: number;
-  work_order_code?: string;
-  picking_score?: number | null;
-  picking_rank_band?: string | null;
-  picking_score_breakdown?: Record<string, { score?: number; weight?: number; weighted?: number; raw?: unknown }> | null;
-  warehouse_id?: number;
-  warehouse_name?: string;
-  delivered_by?: string; // 操作员
-  total_quantity?: number;
-  total_items?: number;
-  notes?: string;
-  created_at?: string;
-  updated_at?: string;
+interface OutboundOrder extends OutboundHubOrder {
   items?: OutboundOrderItem[];
 }
 
@@ -100,84 +93,28 @@ interface WavePickingResult {
   merged_items: WaveMergedItem[];
 }
 
-type SalesBatchPickOption = { value: string; label: string };
-
-function normalizeSalesBatchFormValue(raw: unknown): string {
-  if (raw == null) return '';
-  if (typeof raw === 'string') return raw.trim();
-  if (typeof raw === 'number' || typeof raw === 'boolean') return String(raw).trim();
-  if (typeof raw === 'object' && raw !== null && 'value' in (raw as object)) {
-    const v = (raw as { value?: unknown }).value;
-    return v != null && v !== '' ? String(v).trim() : '';
-  }
-  return String(raw).trim();
-}
-
-/** 解析 confirm 接口响应中的出库单对象（兼容 { data: {...} } 等包装） */
-function parseSalesDeliveryConfirmResult(raw: unknown): { status?: string } {
-  if (!raw || typeof raw !== 'object') return {};
-  const o = raw as Record<string, unknown>;
-  if (typeof o.status === 'string') return { status: o.status };
-  const inner = o.data;
-  if (inner && typeof inner === 'object' && typeof (inner as Record<string, unknown>).status === 'string') {
-    return { status: (inner as { status: string }).status };
-  }
-  return {};
-}
-
-function outboundDocumentTrackingType(order: OutboundOrder): 'production_picking' | 'sales_delivery' | undefined {
+function outboundDocumentTrackingType(
+  order: OutboundOrder,
+): 'production_picking' | 'sales_delivery' | 'other_outbound' | 'material_borrow' | undefined {
   if (order.outbound_type === 'sales_delivery') return 'sales_delivery';
   if (order.outbound_type === 'production_picking') return 'production_picking';
+  if (order.outbound_type === 'other_outbound') return 'other_outbound';
+  if (order.outbound_type === 'material_borrow') return 'material_borrow';
   return undefined;
 }
 
 const SALES_DELIVERY_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_deliveries';
 const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickings';
 
-function mapOutsourceIssueToOutbound(item: Record<string, unknown>): OutboundOrder {
-  const code = String(item.code ?? '');
-  const statusRaw = String(item.status ?? '');
-  const status =
-    statusRaw === 'completed' ? '已完成' : statusRaw === 'draft' ? '已出库' : statusRaw || '已出库';
-  return {
-    id: item.id as number,
-    outbound_type: 'outsource_issue',
-    picking_code: code,
-    work_order_code: String(item.outsource_work_order_code ?? item.outsourceWorkOrderCode ?? ''),
-    warehouse_id: item.warehouse_id as number | undefined,
-    warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
-    total_quantity: Number(item.quantity ?? 0),
-    total_items: 1,
-    delivered_by: String(
-      item.issued_by_name ?? item.issuedByName ?? item.created_by_name ?? item.createdByName ?? '',
-    ),
-    delivery_date: String(item.issued_at ?? item.issuedAt ?? item.created_at ?? item.createdAt ?? ''),
-    status,
-    updated_at: String(item.updated_at ?? item.updatedAt ?? ''),
-    created_at: String(item.created_at ?? item.createdAt ?? ''),
-    notes: String(item.remarks ?? item.notes ?? ''),
-    items: [
-      {
-        material_code: String(item.material_code ?? item.materialCode ?? ''),
-        material_name: String(item.material_name ?? item.materialName ?? ''),
-        delivery_quantity: Number(item.quantity ?? 0),
-        material_unit: String(item.unit ?? ''),
-        warehouse_name: String(item.warehouse_name ?? item.warehouseName ?? ''),
-        batch_number: String(item.batch_number ?? item.batchNumber ?? ''),
-      },
-    ],
-  };
-}
-
 const OutboundPage: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const location = useLocation();
   const { token } = AntdTheme.useToken();
   const outboundDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
-  const pullFromWorkOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_work_order');
-  const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('outbound.pull_from_sales_order');
   const actionRef = useRef<ActionType>(null);
+  const quickPullRef = useRef<OutboundQuickPullModalsRef>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
   const {
@@ -213,6 +150,8 @@ const OutboundPage: React.FC = () => {
   // Drawer 相关状态（详情查看）
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentOrder, setCurrentOrder] = useState<OutboundOrder | null>(null);
+  const [salesDeliveryAttachments, setSalesDeliveryAttachments] = useState<any[]>([]);
+  const [savingSalesDeliveryAttachments, setSavingSalesDeliveryAttachments] = useState(false);
   const [outboundTrackingRefreshKey, setOutboundTrackingRefreshKey] = useState(0);
 
   // 批量出库 Modal
@@ -254,86 +193,9 @@ const OutboundPage: React.FC = () => {
   const [waveGenerating, setWaveGenerating] = useState(false);
   const [waveResult, setWaveResult] = useState<WavePickingResult | null>(null);
 
-  /** 销售出库确认前批号预览 */
-  const [salesConfirmOpen, setSalesConfirmOpen] = useState(false);
-  const [salesConfirmRecord, setSalesConfirmRecord] = useState<OutboundOrder | null>(null);
-  const [salesConfirmDetail, setSalesConfirmDetail] = useState<any>(null);
-  const [salesConfirmSubmitting, setSalesConfirmSubmitting] = useState(false);
-  const [pendingSalesConfirmFormValues, setPendingSalesConfirmFormValues] = useState<Record<string, unknown> | null>(null);
-  const [salesBatchOptionsByMaterialId, setSalesBatchOptionsByMaterialId] = useState<
-    Record<number, SalesBatchPickOption[]>
-  >({});
-  const [salesBatchOptionsLoading, setSalesBatchOptionsLoading] = useState(false);
-  const [salesConfirmForm] = Form.useForm();
-
-  const salesConfirmActiveLines: any[] = useMemo(() => {
-    const items = Array.isArray(salesConfirmDetail?.items) ? salesConfirmDetail.items : [];
-    return items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
-  }, [salesConfirmDetail]);
-
-  useEffect(() => {
-    if (!salesConfirmOpen || !salesConfirmDetail?.items?.length) {
-      setSalesBatchOptionsByMaterialId({});
-      return;
-    }
-    const active = salesConfirmDetail.items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
-    if (!active.length) {
-      setSalesBatchOptionsByMaterialId({});
-      return;
-    }
-    const mids = [
-      ...new Set(active.map((x: { material_id?: number }) => x.material_id).filter(Boolean) as number[]),
-    ];
-    if (!mids.length) return;
-
-    let cancelled = false;
-    (async () => {
-      setSalesBatchOptionsLoading(true);
-      try {
-        const wid = salesConfirmDetail.warehouse_id;
-        const res = await apiRequest<{ items?: Record<string, unknown>[] }>(
-          '/apps/kuaizhizao/reports/inventory/batch-query',
-          {
-            method: 'GET',
-            params: {
-              material_ids: mids,
-              include_expired: false,
-              ...(wid != null && wid !== '' ? { warehouse_id: wid } : {}),
-            },
-          },
-        );
-        const rows = res.items ?? [];
-        const map: Record<number, SalesBatchPickOption[]> = {};
-        for (const row of rows) {
-          const mid = row.material_id as number;
-          if (!mid) continue;
-          const isMainBatch =
-            row.warehouse_name === '主仓' ||
-            (typeof row.id === 'number' && row.id >= 1_000_000 && row.id < 2_000_000);
-          if (!isMainBatch) continue;
-          const qty = Number(row.quantity ?? 0);
-          if (qty <= 0) continue;
-          if (row.status === '已过期' || row.status === '无库存') continue;
-          const bn = String(row.batch_no ?? '').trim();
-          if (!bn) continue;
-          if (!map[mid]) map[mid] = [];
-          if (map[mid].some((o) => o.value === bn)) continue;
-          map[mid].push({ value: bn, label: `${bn}（可用 ${qty}）` });
-        }
-        for (const k of Object.keys(map)) {
-          map[+k].sort((a, b) => a.value.localeCompare(b.value, 'zh-CN'));
-        }
-        if (!cancelled) setSalesBatchOptionsByMaterialId(map);
-      } catch {
-        if (!cancelled) setSalesBatchOptionsByMaterialId({});
-      } finally {
-        if (!cancelled) setSalesBatchOptionsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [salesConfirmOpen, salesConfirmDetail?.id]);
+  const [confirmPreviewOpen, setConfirmPreviewOpen] = useState(false);
+  const [confirmPreviewRecord, setConfirmPreviewRecord] = useState<OutboundOrder | null>(null);
+  const [batchConfirmSubmitting, setBatchConfirmSubmitting] = useState(false);
 
   const outboundDocTrackingType = currentOrder ? outboundDocumentTrackingType(currentOrder) : undefined;
   const outboundTracking = useDocumentTracking(outboundDocTrackingType, currentOrder?.id, outboundTrackingRefreshKey);
@@ -349,6 +211,18 @@ const OutboundPage: React.FC = () => {
     };
     loadExecutionConfig();
   }, []);
+
+  const openConfirmPreview = useCallback((record: OutboundOrder) => {
+    setConfirmPreviewRecord(record);
+    setConfirmPreviewOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const dc = (location.state as OutboundPullEntryNavigationState | null)?.outboundDirectConfirm;
+    if (!dc?.id || !dc.outbound_type) return;
+    navigate(location.pathname, { replace: true, state: null });
+    openConfirmPreview({ id: dc.id, outbound_type: dc.outbound_type });
+  }, [location.pathname, location.state, navigate, openConfirmPreview]);
 
   /** 批量出库：加载工单、销售订单、仓库 */
   useEffect(() => {
@@ -501,12 +375,7 @@ const OutboundPage: React.FC = () => {
   };
 
   const handleCreate = () => {
-    // 生产领料必须基于工单下推创建；直接打开批量出库弹窗并默认到生产领料。
-    batchFormRef.current?.resetFields();
-    resetProductionPickingFormFieldValues();
-    resetSalesDeliveryFormFieldValues();
-    setBatchOutboundType('production_picking');
-    setBatchModalVisible(true);
+    quickPullRef.current?.open('work_order');
   };
 
   useNewShortcut(handleCreate);
@@ -521,15 +390,24 @@ const OutboundPage: React.FC = () => {
         detailData = await warehouseApi.productionPicking.get(record.id!.toString());
       } else if (record.outbound_type === 'sales_delivery') {
         detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+      } else if (record.outbound_type === 'other_outbound') {
+        detailData = await warehouseApi.otherOutbound.get(record.id!.toString());
+      } else if (record.outbound_type === 'material_borrow') {
+        detailData = await warehouseApi.materialBorrow.get(record.id!.toString());
       } else if (record.outbound_type === 'outsource_issue') {
         const raw = await outsourceMaterialIssueApi.get(record.id!.toString());
         detailData = mapOutsourceIssueToOutbound(raw as Record<string, unknown>);
-        setCurrentOrder(detailData);
+        setCurrentOrder({ ...detailData, items: detailData.items as OutboundOrderItem[] });
         setDetailDrawerVisible(true);
         setOutboundTrackingRefreshKey((k) => k + 1);
         return;
       }
       setCurrentOrder(detailData ? { ...detailData, outbound_type: record.outbound_type } : null);
+      if (record.outbound_type === 'sales_delivery') {
+        setSalesDeliveryAttachments(mapAttachmentsToUploadList((detailData as OutboundOrder)?.attachments));
+      } else {
+        setSalesDeliveryAttachments([]);
+      }
       setDetailDrawerVisible(true);
       setOutboundTrackingRefreshKey((k) => k + 1);
       if (record.outbound_type === 'sales_delivery' && record.id != null) {
@@ -542,18 +420,50 @@ const OutboundPage: React.FC = () => {
     }
   };
 
+  const isEditableSalesDelivery = (order?: OutboundOrder | null) =>
+    order?.outbound_type === 'sales_delivery' &&
+    ['draft', '草稿', '待出库'].includes(String(order?.status || ''));
+
+  const handleSaveSalesDeliveryAttachments = async () => {
+    if (!currentOrder?.id || !isEditableSalesDelivery(currentOrder)) return;
+    setSavingSalesDeliveryAttachments(true);
+    try {
+      await warehouseApi.salesDelivery.update(String(currentOrder.id), {
+        customer_id: Number(currentOrder.customer_id || 0),
+        customer_name: currentOrder.customer_name || '',
+        warehouse_id: Number(currentOrder.warehouse_id || 0),
+        warehouse_name: currentOrder.warehouse_name || '',
+        notes: currentOrder.notes || undefined,
+        attachments: normalizeDocumentAttachments(salesDeliveryAttachments),
+      });
+      const detail = await warehouseApi.salesDelivery.get(String(currentOrder.id));
+      setCurrentOrder({ ...detail, outbound_type: 'sales_delivery' });
+      setSalesDeliveryAttachments(mapAttachmentsToUploadList(detail.attachments));
+      messageApi.success('附件已保存');
+    } catch (error: any) {
+      messageApi.error(error?.message || '保存附件失败');
+    } finally {
+      setSavingSalesDeliveryAttachments(false);
+    }
+  };
+
   const refreshOrderAfterConfirm = async (record: OutboundOrder) => {
     actionRef.current?.reload();
     if (currentOrder?.id === record.id) {
       try {
-        let detailData: any;
+        let detailData: Record<string, unknown> | undefined;
+        const id = record.id!.toString();
         if (record.outbound_type === 'production_picking') {
-          detailData = await warehouseApi.productionPicking.get(record.id!.toString());
+          detailData = (await warehouseApi.productionPicking.get(id)) as Record<string, unknown>;
         } else if (record.outbound_type === 'sales_delivery') {
-          detailData = await warehouseApi.salesDelivery.get(record.id!.toString());
+          detailData = (await warehouseApi.salesDelivery.get(id)) as Record<string, unknown>;
+        } else if (record.outbound_type === 'other_outbound') {
+          detailData = (await warehouseApi.otherOutbound.get(id)) as Record<string, unknown>;
+        } else if (record.outbound_type === 'material_borrow') {
+          detailData = (await warehouseApi.materialBorrow.get(id)) as Record<string, unknown>;
         }
         if (detailData) {
-          setCurrentOrder({ ...detailData, outbound_type: record.outbound_type });
+          setCurrentOrder({ ...detailData, outbound_type: record.outbound_type } as OutboundOrder);
           if (record.outbound_type === 'sales_delivery' && record.id != null) {
             await loadSalesDeliveryFieldValuesForDetail(record.id);
           } else if (record.outbound_type === 'production_picking' && record.id != null) {
@@ -567,72 +477,90 @@ const OutboundPage: React.FC = () => {
     setOutboundTrackingRefreshKey((k) => k + 1);
   };
 
-  const openSalesDeliveryConfirmModal = async (record: OutboundOrder) => {
+  const handleConfirmPreviewSuccess = async () => {
+    invalidateMenuBadgeCounts();
+    actionRef.current?.reload();
+    if (confirmPreviewRecord && currentOrder?.id === confirmPreviewRecord.id) {
+      await refreshOrderAfterConfirm(confirmPreviewRecord);
+    }
+    setOutboundTrackingRefreshKey((k) => k + 1);
+  };
+
+  const handleBatchConfirm = async (keys: React.Key[]) => {
+    if (!keys.length) {
+      messageApi.warning('请先选择待出库单据');
+      return;
+    }
+    const records = keys
+      .map((key) => {
+        const [type, id] = String(key).split('::');
+        return { outbound_type: type as OutboundIssueType, id: Number(id) } as OutboundOrder;
+      })
+      .filter((r) => r.id && isOutboundConfirmable(r));
+    if (!records.length) {
+      messageApi.warning('所选单据均不可确认出库');
+      return;
+    }
+    setBatchConfirmSubmitting(true);
     try {
-      const detail = await warehouseApi.salesDelivery.get(record.id!.toString());
-      const items = Array.isArray(detail?.items) ? detail.items : [];
-      const active = items.filter((it: any) => Number(it.delivery_quantity ?? 0) > 0);
-      if (!active.length) {
-        messageApi.warning('没有可出库明细');
-        return;
+      const result = await batchConfirmOutboundDocuments(records);
+      if (result.success > 0) {
+        messageApi.success(`成功确认 ${result.success} 张出库单`);
+        invalidateMenuBadgeCounts();
+        actionRef.current?.reload();
       }
-      setSalesConfirmRecord(record);
-      setSalesConfirmDetail(detail);
-      salesConfirmForm.resetFields();
-      const init: Record<string, string> = {};
-      active.forEach((it: any) => {
-        if (it.id != null) init[`batch_${it.id}`] = it.batch_number ? String(it.batch_number) : '';
-      });
-      setPendingSalesConfirmFormValues(init);
-      setSalesConfirmOpen(true);
-    } catch {
-      messageApi.error('获取出库单详情失败');
+      if (result.failed.length) {
+        messageApi.warning(
+          `${result.failed.length} 张失败：${result.failed.slice(0, 3).map((f) => f.message).join('；')}`,
+        );
+      }
+    } finally {
+      setBatchConfirmSubmitting(false);
     }
   };
 
-  const submitSalesDeliveryConfirm = async () => {
-    if (!salesConfirmRecord?.id || !salesConfirmDetail) return;
-    const vals = salesConfirmForm.getFieldsValue(true);
-    const item_batches = salesConfirmActiveLines
-      .map((it: any) => {
-        const lineId = Number(it.id);
-        const key = Number.isFinite(lineId) ? `batch_${lineId}` : '';
-        const fromForm = key ? vals[key] : undefined;
-        const trimmedForm = normalizeSalesBatchFormValue(fromForm);
-        const fallback = String(it.batch_number ?? '').trim();
-        const batch_no = trimmedForm || fallback;
-        return { item_id: lineId, batch_no };
-      })
-      .filter((row) => Number.isFinite(row.item_id) && row.item_id > 0);
-    const rec = salesConfirmRecord;
+  const handleWithdraw = (record: OutboundOrder) => {
+    Modal.confirm({
+      title: '撤回出库',
+      content: `确定撤回单据 "${outboundDocumentCode(record)}" 吗？系统将回冲库存并恢复待出库状态。`,
+      onOk: async () => {
+        try {
+          await withdrawOutboundDocument(record);
+          messageApi.success('撤回成功');
+          invalidateMenuBadgeCounts();
+          await refreshOrderAfterConfirm(record);
+        } catch (e: unknown) {
+          const err = e as { message?: string; response?: { data?: { detail?: string } } };
+          messageApi.error(err?.message || err?.response?.data?.detail || '撤回失败');
+        }
+      },
+    });
+  };
+
+  const handlePrint = async (record: OutboundOrder) => {
+    if (!record.id) return;
     try {
-      setSalesConfirmSubmitting(true);
-      const updated = parseSalesDeliveryConfirmResult(
-        await warehouseApi.salesDelivery.confirm(rec.id!.toString(), {
-          item_batches,
-        }),
-      );
-      const st = (updated?.status ?? '').trim();
-      const posted = st === '已出库' || st === '已完成' || st === 'completed';
-      if (!posted) {
-        messageApi.error(
-          `出库未生效（接口返回状态：${st || '未知'}）。若列表仍显示待出库，请刷新页面后重试。`,
-        );
-        await refreshOrderAfterConfirm({ ...rec, outbound_type: 'sales_delivery' });
+      const id = String(record.id);
+      if (record.outbound_type === 'sales_delivery') {
+        await warehouseApi.salesDelivery.print(id);
+      } else if (record.outbound_type === 'other_outbound') {
+        await warehouseApi.otherOutbound.print(id);
+      } else if (record.outbound_type === 'material_borrow') {
+        await warehouseApi.materialBorrow.print(id);
+      } else {
+        messageApi.warning('该类型暂不支持打印');
         return;
       }
-      messageApi.success('出库确认成功，库存已更新');
-      invalidateMenuBadgeCounts();
-      setSalesConfirmOpen(false);
-      setSalesConfirmRecord(null);
-      setSalesConfirmDetail(null);
-      await refreshOrderAfterConfirm({ ...rec, outbound_type: 'sales_delivery' });
-    } catch (e: any) {
-      messageApi.error(e?.message || '出库确认失败');
-      throw e;
-    } finally {
-      setSalesConfirmSubmitting(false);
+      messageApi.success('已发送打印请求');
+    } catch (e: unknown) {
+      const err = e as { message?: string };
+      messageApi.error(err?.message || '打印失败');
     }
+  };
+
+  const handleConfirm = async (record: OutboundOrder) => {
+    if (record.outbound_type === 'outsource_issue') return;
+    openConfirmPreview(record);
   };
 
   const selectedProductionPickingIds = useMemo(
@@ -662,115 +590,6 @@ const OutboundPage: React.FC = () => {
     } finally {
       setWaveGenerating(false);
     }
-  };
-
-  const handleWithdrawSalesDelivery = (record: OutboundOrder) => {
-    Modal.confirm({
-      title: '撤回销售出库',
-      content: `确定撤回单据 "${record.delivery_code || record.id}" 吗？系统将回冲库存并恢复待出库状态。`,
-      onOk: async () => {
-        try {
-          await warehouseApi.salesDelivery.withdraw(String(record.id));
-          messageApi.success('撤回成功');
-          invalidateMenuBadgeCounts();
-          await refreshOrderAfterConfirm(record);
-        } catch (e: any) {
-          messageApi.error(e?.message || '撤回失败');
-        }
-      },
-    });
-  };
-
-  const salesDeliveryConfirmColumns: ColumnsType<any> = useMemo(
-    () => [
-      {
-        title: '行',
-        key: 'idx',
-        width: 52,
-        align: 'center',
-        render: (_: unknown, __: unknown, index: number) => index + 1,
-      },
-      {
-        title: '物料编码',
-        dataIndex: 'material_code',
-        width: 112,
-        ellipsis: true,
-        render: (v: unknown) => v ?? '—',
-      },
-      {
-        title: '物料名称',
-        dataIndex: 'material_name',
-        ellipsis: true,
-        render: (v: unknown) => v ?? '—',
-      },
-      {
-        title: '出库数量',
-        key: 'qty',
-        width: 120,
-        align: 'right',
-        render: (_: unknown, it: any) =>
-          `${it.delivery_quantity ?? ''}${it.material_unit ? ` ${it.material_unit}` : ''}`,
-      },
-      {
-        title: '批号',
-        key: 'batch',
-        width: 260,
-        render: (_: unknown, it: any) => {
-          const opts = salesBatchOptionsByMaterialId[it.material_id] ?? [];
-          return (
-            <Form.Item name={`batch_${it.id}`} style={{ marginBottom: 0 }}>
-              <AutoComplete
-                size="small"
-                allowClear
-                options={opts}
-                placeholder="下拉选择或扫描/输入批号"
-                filterOption={(input, option) => {
-                  const q = (input || '').toLowerCase();
-                  const lab = String(option?.label ?? '').toLowerCase();
-                  const val = String(option?.value ?? '').toLowerCase();
-                  return lab.includes(q) || val.includes(q);
-                }}
-                notFoundContent={salesBatchOptionsLoading ? '加载批次…' : '无主仓可选批次，请手输'}
-              />
-            </Form.Item>
-          );
-        },
-      },
-    ],
-    [salesBatchOptionsByMaterialId, salesBatchOptionsLoading],
-  );
-
-  /**
-   * 处理确认出库（销售出库先弹出批号预览；生产领料保持原确认框）
-   */
-  const handleConfirm = async (record: OutboundOrder) => {
-    if (
-      record.outbound_type === 'production_picking' &&
-      executionConfig &&
-      executionConfig.current_user_can_confirm_picking === false
-    ) {
-      messageApi.warning('当前业务配置下，您无权限确认生产领料');
-      return;
-    }
-    if (record.outbound_type === 'sales_delivery') {
-      await openSalesDeliveryConfirmModal(record);
-      return;
-    }
-    Modal.confirm({
-      title: '确认出库',
-      content: `确定要确认出库单 "${record.delivery_code || record.picking_code}" 吗？确认后将更新库存。`,
-      onOk: async () => {
-        try {
-          await warehouseApi.productionPicking.confirm(record.id!.toString());
-          messageApi.success('出库确认成功，库存已更新');
-          invalidateMenuBadgeCounts();
-          await refreshOrderAfterConfirm(record);
-        } catch (e: any) {
-          messageApi.error(e?.message || '出库确认失败');
-          throw e;
-        }
-      },
-    });
   };
 
   /**
@@ -811,9 +630,11 @@ const OutboundPage: React.FC = () => {
       dataIndex: 'outbound_type',
       width: 100,
       valueEnum: {
-        production_picking: { text: '生产领料', status: 'processing' },
-        sales_delivery: { text: '销售出库', status: 'success' },
-        outsource_issue: { text: '委外发料', status: 'warning' },
+        production_picking: { text: OUTBOUND_ISSUE_TYPE_LABELS.production_picking, status: 'processing' },
+        sales_delivery: { text: OUTBOUND_ISSUE_TYPE_LABELS.sales_delivery, status: 'success' },
+        outsource_issue: { text: OUTBOUND_ISSUE_TYPE_LABELS.outsource_issue, status: 'warning' },
+        other_outbound: { text: OUTBOUND_ISSUE_TYPE_LABELS.other_outbound, status: 'default' },
+        material_borrow: { text: OUTBOUND_ISSUE_TYPE_LABELS.material_borrow, status: 'default' },
       },
     },
     {
@@ -891,20 +712,12 @@ const OutboundPage: React.FC = () => {
     ...productionPickingCustomFieldColumns,
     {
       title: '操作',
-      width: 180,
+      width: 220,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          {(record.status === 'draft' || record.status === '草稿' || record.status === '待领料' || record.status === '待出库') &&
-            record.outbound_type !== 'outsource_issue' && (
+        <Space wrap>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+          {isOutboundConfirmable(record) && record.outbound_type !== 'outsource_issue' && (
             <Tooltip
               title={
                 record.outbound_type === 'production_picking' &&
@@ -915,11 +728,9 @@ const OutboundPage: React.FC = () => {
               }
             >
               <Button
-                type="link"
-                size="small"
-                icon={<CheckCircleOutlined />}
-                onClick={() => handleConfirm(record)}
-                style={{ color: '#52c41a' }}
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
+                onClick={() => void handleConfirm(record)}
                 disabled={
                   record.outbound_type === 'production_picking' &&
                   executionConfig &&
@@ -930,15 +741,14 @@ const OutboundPage: React.FC = () => {
               </Button>
             </Tooltip>
           )}
-          {record.outbound_type === 'sales_delivery' && record.status === '已出库' && (
-            <Button
-              type="link"
-              size="small"
-              danger
-              onClick={() => handleWithdrawSalesDelivery(record)}
-            >
+          {isOutboundWithdrawable(record) && record.outbound_type !== 'outsource_issue' && (
+            <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
               撤回
             </Button>
+          )}
+          {['sales_delivery', 'other_outbound', 'material_borrow'].includes(String(record.outbound_type)) &&
+            isOutboundWithdrawable(record) && (
+            <Button {...rowActionKind('print')} onClick={() => void handlePrint(record)} />
           )}
         </Space>
       ),
@@ -956,89 +766,19 @@ const OutboundPage: React.FC = () => {
         showAdvancedSearch={true}
         request={async (params) => {
           try {
-            const kw = (params as any).keyword;
-            const typeFilter = (params as any).outbound_type as string | undefined;
-            const skip = (params.current! - 1) * params.pageSize!;
-            const limit = params.pageSize!;
-
-            const fetchPicking = !typeFilter || typeFilter === 'production_picking';
-            const fetchDelivery = !typeFilter || typeFilter === 'sales_delivery';
-            const fetchOutsource = !typeFilter || typeFilter === 'outsource_issue';
-
-            const [pickingRes, deliveryRes, outsourceRes] = await Promise.all([
-              fetchPicking
-                ? warehouseApi.productionPicking.list({
-                    skip,
-                    limit,
-                    ...params,
-                    keyword: kw,
-                  })
-                : Promise.resolve([]),
-              fetchDelivery
-                ? warehouseApi.salesDelivery.list({
-                    skip,
-                    limit,
-                    ...params,
-                    keyword: kw,
-                  })
-                : Promise.resolve([]),
-              fetchOutsource
-                ? outsourceMaterialIssueApi.list({
-                    skip,
-                    limit,
-                    keyword: kw,
-                  })
-                : Promise.resolve([]),
-            ]);
-
-            const toList = (r: any) => (Array.isArray(r) ? r : r?.data ?? r?.items ?? []);
-            const pickingData = fetchPicking
-              ? await enrichProductionPickingRecordsWithCustomFields(
-                  toList(pickingRes).map((item: any) => ({
-                    ...item,
-                    outbound_type: 'production_picking' as const,
-                  })),
-                )
-              : [];
-            const deliveryData = fetchDelivery
-              ? await enrichSalesDeliveryRecordsWithCustomFields(
-                  toList(deliveryRes).map((item: any) => ({
-                    ...item,
-                    outbound_type: 'sales_delivery' as const,
-                  })),
-                )
-              : [];
-            const outsourceData = fetchOutsource
-              ? toList(outsourceRes).map((item: any) => mapOutsourceIssueToOutbound(item))
-              : [];
-
-            let combinedData = [...pickingData, ...deliveryData, ...outsourceData];
-
-            combinedData.sort(
-              (a, b) => new Date(b.updated_at || '').getTime() - new Date(a.updated_at || '').getTime(),
-            );
-
-            const total =
-              (fetchPicking && typeof pickingRes?.total === 'number' ? pickingRes.total : pickingData.length) +
-              (fetchDelivery && typeof deliveryRes?.total === 'number' ? deliveryRes.total : deliveryData.length) +
-              (fetchOutsource ? outsourceData.length : 0);
-
-            return {
-              data: combinedData,
-              success: true,
-              total,
-            };
+            return await fetchOutboundHubList(params as Record<string, unknown>, {
+              enrichProductionPickingRecordsWithCustomFields,
+              enrichSalesDeliveryRecordsWithCustomFields,
+            });
           } catch {
             messageApi.error('获取出库单列表失败');
-            return {
-              data: [],
-              success: false,
-              total: 0,
-            };
+            return { data: [], success: false, total: 0 };
           }
         }}
         enableRowSelection={true}
+        selectedRowKeys={selectedOutboundKeys}
         onRowSelectionChange={setSelectedOutboundKeys}
+        rowSelectionGetCheckboxProps={(record) => ({ disabled: !isOutboundConfirmable(record) })}
         showDeleteButton={true}
         onDelete={async (keys) => {
           try {
@@ -1048,46 +788,65 @@ const OutboundPage: React.FC = () => {
                 await warehouseApi.productionPicking.delete(id);
               } else if (type === 'sales_delivery') {
                 await warehouseApi.salesDelivery.delete(id);
+              } else if (type === 'other_outbound') {
+                await warehouseApi.otherOutbound.delete(id);
+              } else if (type === 'material_borrow') {
+                await warehouseApi.materialBorrow.delete(id);
               }
             }
             messageApi.success(`成功删除 ${keys.length} 条记录`);
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
-          } catch (error: any) {
-            messageApi.error(error?.message || '删除失败');
+          } catch (error: unknown) {
+            const err = error as { message?: string };
+            messageApi.error(err?.message || '删除失败');
           }
         }}
         deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条出库单吗？`}
         toolBarRender={() => [
-          <UniPullCreateToolbar
-            compactKey="create-outbound-with-pull"
-            createIcon={<PlusOutlined />}
-            createLabel={'新建出库单' + NEW_SHORTCUT_HINT}
-            onCreate={handleCreate}
+          <UniPullLoadButton
+            key="pull"
+            compactKey="outbound-pull-load"
+            type="primary"
+            variant="solid"
             menuItems={buildKuaizhizaoPullCreateMenuItems([
+              {
+                actionKey: 'sales_delivery.pull_from_shipment_notice',
+                onClick: () => quickPullRef.current?.open('shipment_notice'),
+              },
               {
                 key: 'pull-from-work-order',
                 actionKey: 'outbound.pull_from_work_order',
-                onClick: () => {
-                  batchFormRef.current?.resetFields();
-                  resetProductionPickingFormFieldValues();
-                  resetSalesDeliveryFormFieldValues();
-                  setBatchOutboundType('production_picking');
-                  setBatchModalVisible(true);
-                },
+                onClick: () => quickPullRef.current?.open('work_order'),
               },
               {
                 key: 'pull-from-sales-order',
                 actionKey: 'outbound.pull_from_sales_order',
-                onClick: () => {
-                  batchFormRef.current?.resetFields();
-                  resetProductionPickingFormFieldValues();
-                  resetSalesDeliveryFormFieldValues();
-                  setBatchOutboundType('sales_delivery');
-                  setBatchModalVisible(true);
-                },
+                onClick: () => quickPullRef.current?.open('sales_order'),
+              },
+              {
+                actionKey: 'outbound.pull_from_outsource_work_order',
+                onClick: () => quickPullRef.current?.open('outsource'),
               },
             ])}
+          />,
+        ]}
+        toolBarActionsAfterBatch={[
+          <UniBatchMenuButton
+            key="batch-confirm"
+            selectedRowKeys={selectedOutboundKeys}
+            buttonText="批量操作"
+            disabled={batchConfirmSubmitting}
+            menuItems={[
+              {
+                key: 'batch-confirm',
+                label: batchConfirmSubmitting ? '确认中…' : '批量确认出库',
+                requireConfirm: true,
+                confirmTitle: (count) => `确认批量出库 ${count} 张单据`,
+                confirmDescription: '将按单据类型调用对应确认接口；不可确认的单据会跳过并汇总失败原因。',
+                onClick: handleBatchConfirm,
+              },
+            ]}
           />,
         ]}
         toolBarActionsAfterDelete={[
@@ -1201,58 +960,18 @@ const OutboundPage: React.FC = () => {
         </ProForm>
       </Modal>
 
-      <Modal
-        title="确认出库 — 批号核对"
-        open={salesConfirmOpen}
-        okText="确认出库并过账"
-        cancelText="取消"
-        confirmLoading={salesConfirmSubmitting}
-        destroyOnHidden
-        width={880}
-        styles={{ body: { paddingTop: 12 } }}
-        onCancel={() => {
-          setSalesConfirmOpen(false);
-          setSalesConfirmRecord(null);
-          setSalesConfirmDetail(null);
-          setPendingSalesConfirmFormValues(null);
+      <OutboundQuickPullModals ref={quickPullRef} onSuccess={() => actionRef.current?.reload()} />
+
+      <OutboundConfirmPreviewModal
+        open={confirmPreviewOpen}
+        record={confirmPreviewRecord}
+        executionConfig={executionConfig}
+        onClose={() => {
+          setConfirmPreviewOpen(false);
+          setConfirmPreviewRecord(null);
         }}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingSalesConfirmFormValues) {
-              salesConfirmForm.setFieldsValue(pendingSalesConfirmFormValues);
-            }
-            return;
-          }
-          salesConfirmForm.resetFields();
-          setPendingSalesConfirmFormValues(null);
-        }}
-        onOk={submitSalesDeliveryConfirm}
-      >
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-          请核对实物批号：可从下拉选择主仓可用批次，或直接扫描/输入。启用批号管理的物料在确认时会校验；未启用的行可留空由系统按策略分摊。
-        </Typography.Paragraph>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 12 }}>
-          先进先出/后进先出等策略见 <Link to="/system/config-center">配置中心 → 仓储参数</Link>。
-        </Typography.Paragraph>
-        {salesConfirmRecord?.delivery_code ? (
-          <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-            出库单号：<Typography.Text strong>{salesConfirmRecord.delivery_code}</Typography.Text>
-          </Typography.Text>
-        ) : null}
-        <Form form={salesConfirmForm} component={false}>
-          <Table<any>
-            size="small"
-            rowKey={(it) => String(it.id ?? `${it.material_id}-${it.material_code}`)}
-            columns={salesDeliveryConfirmColumns}
-            dataSource={salesConfirmActiveLines}
-            pagination={false}
-            scroll={{
-              x: 700,
-              y: Math.min(salesConfirmActiveLines.length * 46 + 40, 420),
-            }}
-          />
-        </Form>
-      </Modal>
+        onSuccess={() => void handleConfirmPreviewSuccess()}
+      />
 
       <Modal
         title={`波次拣货单${waveResult?.wave_code ? ` - ${waveResult.wave_code}` : ''}`}
@@ -1298,6 +1017,7 @@ const OutboundPage: React.FC = () => {
         onClose={() => {
           setDetailDrawerVisible(false);
           setCurrentOrder(null);
+          setSalesDeliveryAttachments([]);
           resetSalesDeliveryDetailFieldValues();
           resetProductionPickingDetailFieldValues();
         }}
@@ -1306,12 +1026,11 @@ const OutboundPage: React.FC = () => {
         extra={
           currentOrder ? (
             <Space>
-              {['draft', '草稿', '待领料', '待出库'].includes(currentOrder.status || '') &&
-                currentOrder.outbound_type !== 'outsource_issue' && (
+              {isOutboundConfirmable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
                 <Button
                   type="primary"
                   icon={<CheckCircleOutlined />}
-                  onClick={() => handleConfirm(currentOrder)}
+                  onClick={() => void handleConfirm(currentOrder)}
                   disabled={
                     currentOrder.outbound_type === 'production_picking' &&
                     executionConfig &&
@@ -1321,8 +1040,8 @@ const OutboundPage: React.FC = () => {
                   确认出库
                 </Button>
               )}
-              {currentOrder.outbound_type === 'sales_delivery' && currentOrder.status === '已出库' && (
-                <Button danger onClick={() => handleWithdrawSalesDelivery(currentOrder)}>
+              {isOutboundWithdrawable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
+                <Button danger icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentOrder)}>
                   撤回
                 </Button>
               )}
@@ -1341,10 +1060,14 @@ const OutboundPage: React.FC = () => {
                         : 'success'
                   }>
                     {currentOrder.outbound_type === 'production_picking'
-                      ? '生产领料'
+                      ? OUTBOUND_ISSUE_TYPE_LABELS.production_picking
                       : currentOrder.outbound_type === 'outsource_issue'
-                        ? '委外发料'
-                        : '销售出库'}
+                        ? OUTBOUND_ISSUE_TYPE_LABELS.outsource_issue
+                        : currentOrder.outbound_type === 'other_outbound'
+                          ? OUTBOUND_ISSUE_TYPE_LABELS.other_outbound
+                          : currentOrder.outbound_type === 'material_borrow'
+                            ? OUTBOUND_ISSUE_TYPE_LABELS.material_borrow
+                            : OUTBOUND_ISSUE_TYPE_LABELS.sales_delivery}
                   </Tag>
                 </p>
                 <p><strong>状态：</strong>
@@ -1391,6 +1114,55 @@ const OutboundPage: React.FC = () => {
                 {currentOrder.notes && (
                   <p style={{ marginTop: 12 }}><strong>备注：</strong>{currentOrder.notes}</p>
                 )}
+                {currentOrder.outbound_type === 'sales_delivery' ? (
+                  <div style={{ marginTop: 12 }}>
+                    <Typography.Text strong>附件</Typography.Text>
+                    {isEditableSalesDelivery(currentOrder) ? (
+                      <>
+                        <Upload
+                          fileList={salesDeliveryAttachments}
+                          onChange={({ fileList }) => setSalesDeliveryAttachments(fileList)}
+                          customRequest={async (options) => {
+                            try {
+                              const res = await uploadMultipleFiles([options.file as File], {
+                                category: 'sales_delivery_attachments',
+                              });
+                              options.onSuccess?.(res[0], options.file as any);
+                            } catch (err) {
+                              options.onError?.(err as Error);
+                            }
+                          }}
+                          multiple
+                          style={{ marginTop: 8, display: 'block' }}
+                        >
+                          <Button>上传附件</Button>
+                        </Upload>
+                        <Button
+                          size="small"
+                          style={{ marginTop: 8 }}
+                          loading={savingSalesDeliveryAttachments}
+                          onClick={handleSaveSalesDeliveryAttachments}
+                        >
+                          保存附件
+                        </Button>
+                      </>
+                    ) : (currentOrder.attachments?.length ?? 0) > 0 ? (
+                      <ul style={{ marginTop: 8, paddingLeft: 20 }}>
+                        {(currentOrder.attachments ?? []).map((file) => (
+                          <li key={file.uid ?? file.name}>
+                            <a href={file.url} target="_blank" rel="noreferrer">
+                              {file.name ?? '附件'}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                        暂无附件
+                      </Typography.Text>
+                    )}
+                  </div>
+                ) : null}
               </Card>
 
               {/* 生命周期 */}

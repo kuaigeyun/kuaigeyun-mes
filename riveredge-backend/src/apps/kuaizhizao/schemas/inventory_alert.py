@@ -34,6 +34,7 @@ class InventoryAlertRuleBase(BaseModel):
     notify_users: Optional[List[int]] = Field(None, description="通知用户ID列表")
     notify_roles: Optional[List[int]] = Field(None, description="通知角色ID列表")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class InventoryAlertRuleCreate(InventoryAlertRuleBase):
@@ -60,6 +61,7 @@ class InventoryAlertRuleUpdate(BaseModel):
     notify_users: Optional[List[int]] = Field(None, description="通知用户ID列表")
     notify_roles: Optional[List[int]] = Field(None, description="通知角色ID列表")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class InventoryAlertRuleResponse(InventoryAlertRuleBase):

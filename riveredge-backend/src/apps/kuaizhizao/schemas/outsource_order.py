@@ -8,7 +8,7 @@ Date: 2025-01-04
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -55,6 +55,7 @@ class OutsourceOrderBase(BaseModel):
 
     # 备注
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OutsourceOrderCreate(OutsourceOrderBase):
@@ -120,6 +121,7 @@ class OutsourceOrderUpdate(BaseModel):
     purchase_receipt_id: Optional[int] = Field(None, description="采购入库单ID")
     purchase_receipt_code: Optional[str] = Field(None, description="采购入库单编码")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OutsourceOrderResponse(OutsourceOrderBase):

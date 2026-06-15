@@ -62,6 +62,8 @@ import { customerMaterialRegistrationApi } from '../../../services/customer-mate
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import InspectionDetailQualityActions from '../components/InspectionDetailQualityActions';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   fetchPurchaseReceiptsForIqc,
   type InspectionDropdownOption,
@@ -146,6 +148,7 @@ interface IncomingInspection {
   review_remarks?: string;
   status?: string;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -309,6 +312,7 @@ const IncomingInspectionPage: React.FC = () => {
       qualified_quantity: record.inspection_quantity || 0,
       unqualified_quantity: 0,
       notes: '',
+      attachments: mapAttachmentsToUploadList(record.attachments),
     };
     if (record.id != null) {
       const customFormValues = await loadInspectionFormFieldValues(record.id);
@@ -328,6 +332,7 @@ const IncomingInspectionPage: React.FC = () => {
           unqualified_quantity: standardValues.unqualified_quantity,
           notes: standardValues.notes,
           nonconformance_reason: standardValues.nonconformance_reason,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           ...pickInspectionConductExtras(standardValues),
         });
         if (Object.keys(customData).length > 0) {
@@ -1025,6 +1030,7 @@ const IncomingInspectionPage: React.FC = () => {
           customFieldValues={inspectionFormCustomFieldValues}
           gridColumns={2}
         />
+        <DocumentAttachmentsField category="incoming_inspection_attachments" />
         <ProFormTextArea
           name="notes"
           label="检验备注"

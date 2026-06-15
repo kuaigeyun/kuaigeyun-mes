@@ -8,7 +8,7 @@ Date: 2026-01-05
 """
 
 from datetime import datetime, date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -42,6 +42,7 @@ class EquipmentBase(BaseModel):
     status: str = Field(default="正常", max_length=50, description="设备状态（正常、维修中、停用、报废）")
     is_active: bool = Field(default=True, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
     @classmethod
@@ -101,6 +102,7 @@ class EquipmentUpdate(BaseModel):
     status: Optional[str] = Field(None, max_length=50, description="设备状态（正常、维修中、停用、报废）")
     is_active: Optional[bool] = Field(None, description="是否启用")
     description: Optional[str] = Field(None, description="描述")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
     @classmethod
@@ -161,6 +163,7 @@ class EquipmentCalibrationCreate(BaseModel):
     certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
     expiry_date: Optional[date] = Field(None, description="有效期至")
     attachment_uuid: Optional[str] = Field(None, max_length=36, description="报告附件ID")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     remark: Optional[str] = Field(None, description="备注")
 
 
@@ -176,6 +179,7 @@ class EquipmentCalibrationResponse(BaseModel):
     certificate_no: Optional[str] = None
     expiry_date: Optional[date] = None
     attachment_uuid: Optional[str] = None
+    attachments: Optional[List[dict]] = None
     remark: Optional[str] = None
     created_at: datetime
 

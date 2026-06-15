@@ -10,10 +10,13 @@ import {
   Select,
   Space,
   Typography,
+  Upload,
 } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd';
 import type { Quality8DReport } from '../../../../services/quality-improvement';
 import { useTranslation } from 'react-i18next';
+import { uploadMultipleFiles } from '../../../../../../services/file';
 import {
   EIGHT_D_SEVERITY_I18N_KEY,
   EIGHT_D_STAGE_FIELDS,
@@ -98,6 +101,32 @@ export const EightDStageEditor: React.FC<EightDStageEditorProps> = ({ form, repo
 
       <Form.Item name="remarks" label={t('app.kuaizhizao.eightD.columns.remarks')}>
         <TextArea autoSize={{ minRows: 2, maxRows: 6 }} placeholder={t('app.kuaizhizao.eightD.placeholders.remarks')} />
+      </Form.Item>
+
+      <Form.Item
+        name="attachments"
+        label={t('common.attachments', '附件')}
+        valuePropName="fileList"
+        getValueFromEvent={(event) => {
+          if (Array.isArray(event)) return event;
+          return event?.fileList;
+        }}
+      >
+        <Upload
+          multiple
+          customRequest={async (options) => {
+            try {
+              const res = await uploadMultipleFiles([options.file as File], {
+                category: 'quality_8d_report_attachments',
+              });
+              options.onSuccess?.(res[0], options.file as any);
+            } catch (err) {
+              options.onError?.(err as Error);
+            }
+          }}
+        >
+          <Button icon={<UploadOutlined />}>{t('common.upload', '上传')}</Button>
+        </Upload>
       </Form.Item>
 
       <Space style={{ justifyContent: 'flex-end', width: '100%' }}>

@@ -51,6 +51,8 @@ import {
 } from '../../../../../components/layout-templates';
 import { SimpleSparkline } from '../../../../../components';
 import { packingBindingApi } from '../../../services/packing-binding';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 import { qrcodeApi } from '../../../../../services/qrcode';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -80,6 +82,7 @@ interface PackingBinding {
   bound_by_name?: string;
   bound_at?: string;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -319,6 +322,7 @@ const PackingBindingPage: React.FC = () => {
         packing_quantity: detail.packing_quantity,
         box_no: detail.box_no,
         remarks: detail.remarks,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取装箱绑定记录详情失败');
@@ -336,6 +340,7 @@ const PackingBindingPage: React.FC = () => {
         packing_quantity: values.packing_quantity,
         box_no: values.box_no,
         remarks: values.remarks,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('装箱绑定记录更新成功');
       const oid = currentBindingId;
@@ -787,6 +792,7 @@ const PackingBindingPage: React.FC = () => {
           placeholder="请输入备注"
           fieldProps={{ rows: 3 }}
         />
+        <DocumentAttachmentsField category="packing_binding_attachments" />
       </FormModalTemplate>
 
       <DetailDrawerTemplate

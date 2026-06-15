@@ -206,6 +206,44 @@ export const outsourceMaterialReceiptApi = {
   },
 };
 
+// 委外退料相关接口
+export const outsourceMaterialReturnApi = {
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-returns', { method: 'GET', params });
+  },
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-material-returns', { method: 'POST', data });
+  },
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-material-returns/${id}`, { method: 'GET' });
+  },
+  returnPreview: async (outsourceWorkOrderId: number | string) => {
+    return apiRequest(
+      `/apps/kuaizhizao/outsource-work-orders/${outsourceWorkOrderId}/material-return-preview`,
+      { method: 'GET' },
+    );
+  },
+};
+
+// 委外退货相关接口
+export const outsourceProductReturnApi = {
+  list: async (params?: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-product-returns', { method: 'GET', params });
+  },
+  create: async (data: any) => {
+    return apiRequest('/apps/kuaizhizao/outsource-product-returns', { method: 'POST', data });
+  },
+  get: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/outsource-product-returns/${id}`, { method: 'GET' });
+  },
+  returnPreview: async (outsourceWorkOrderId: number | string) => {
+    return apiRequest(
+      `/apps/kuaizhizao/outsource-work-orders/${outsourceWorkOrderId}/product-return-preview`,
+      { method: 'GET' },
+    );
+  },
+};
+
 // 委外单相关接口（工序委外，保留用于向后兼容）
 export const outsourceOrderApi = {
   // 获取委外单列表

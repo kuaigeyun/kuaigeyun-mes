@@ -89,6 +89,7 @@ class InventoryAlertRule(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

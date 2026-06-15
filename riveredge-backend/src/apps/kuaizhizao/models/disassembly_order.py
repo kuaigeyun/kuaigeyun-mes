@@ -64,6 +64,7 @@ class DisassemblyOrder(BaseModel):
     total_items = fields.IntField(default=0, description="组件产出数")
 
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     created_by = fields.IntField(null=True, description="创建人ID")
     created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")

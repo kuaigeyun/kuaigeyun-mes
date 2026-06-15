@@ -68,6 +68,7 @@ class BatchingOrder(BaseModel):
     target_warehouse_name = fields.CharField(max_length=200, null=True, description="目标线边仓名称")
 
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     created_by = fields.IntField(null=True, description="创建人ID")
     created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")

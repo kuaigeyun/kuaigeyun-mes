@@ -244,6 +244,28 @@ class PurchaseOrderListParams(BaseModel):
     limit: int = 20
 
 
+class PurchaseReceiptPullCandidate(BaseModel):
+    """采购入库选单弹窗候选项（含明细数量汇总）"""
+    id: int
+    order_code: str
+    supplier_name: Optional[str] = None
+    status: str
+    order_date: Optional[date] = None
+    delivery_date: Optional[date] = None
+    items_count: Optional[int] = None
+    ordered_total: Decimal = Field(default=Decimal(0), description="采购数量合计")
+    received_total: Decimal = Field(default=Decimal(0), description="已入库数量合计")
+    outstanding_total: Decimal = Field(default=Decimal(0), description="未入库数量合计")
+    pullable: bool = Field(..., description="是否可取单（未入库数量 > 0）")
+    lifecycle: Optional[dict] = Field(None, description="生命周期（入库进度展示）")
+
+
+class PurchaseReceiptPullCandidateListResponse(BaseModel):
+    data: List[PurchaseReceiptPullCandidate]
+    total: int
+    success: bool = True
+
+
 class ExpediteRequest(BaseModel):
     reason: str
     expected_delivery_date: date

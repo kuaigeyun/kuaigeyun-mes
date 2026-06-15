@@ -31,6 +31,7 @@ class BankAccountCreate(BaseSchema):
     currency: str = Field("CNY", max_length=10)
     opening_balance: Decimal = Field(Decimal("0"))
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BankAccountUpdate(BaseSchema):
@@ -40,6 +41,7 @@ class BankAccountUpdate(BaseSchema):
     currency: Optional[str] = None
     is_active: Optional[bool] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BankAccountResponse(BankAccountCreate):

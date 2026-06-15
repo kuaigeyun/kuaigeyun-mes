@@ -71,6 +71,8 @@ class Stocktaking(BaseModel):
     stocktaking_date = fields.DatetimeField(description="盘点日期")
     status = fields.CharField(max_length=20, default="draft", description="状态（draft/in_progress/completed/cancelled）")
     stocktaking_type = fields.CharField(max_length=20, default="full", description="盘点类型（full/partial/cycle）")
+    line_granularity = fields.CharField(max_length=20, default="batch", description="明细粒度（material/batch）")
+    include_zero_stock = fields.BooleanField(default=False, description="是否包含零库存行")
 
     # 统计信息
     total_items = fields.IntField(default=0, description="盘点物料总数")
@@ -80,6 +82,7 @@ class Stocktaking(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 审核信息
     approved_by = fields.IntField(null=True, description="审核人ID")

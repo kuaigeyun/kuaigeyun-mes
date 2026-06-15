@@ -55,6 +55,7 @@ class ReworkOrderBase(BaseModel):
     
     # 备注
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ReworkOrderOperationItem(BaseModel):
@@ -105,6 +106,7 @@ class ReworkOrderUpdate(BaseModel):
     operator_name: Optional[str] = Field(None, max_length=100, description="操作员姓名")
     cost: Optional[Decimal] = Field(None, description="返工成本")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     start_work_order_operation_id: Optional[int] = Field(
         None, description="返工起始工序 ID（不选则取原工单首道工序）"
     )

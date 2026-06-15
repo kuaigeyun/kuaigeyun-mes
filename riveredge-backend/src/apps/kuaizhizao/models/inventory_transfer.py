@@ -83,6 +83,7 @@ class InventoryTransfer(BaseModel):
     # 调拨原因和备注
     transfer_reason = fields.TextField(null=True, description="调拨原因")
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 执行信息
     executed_by = fields.IntField(null=True, description="执行人ID")
@@ -112,9 +113,13 @@ class InventoryTransferItem(BaseModel):
         material_code: 物料编码
         material_name: 物料名称
         from_warehouse_id: 调出仓库ID
+        from_storage_area_id: 调出库区ID（可选）
+        from_storage_area_code: 调出库区编码（可选）
         from_location_id: 调出库位ID（可选）
         from_location_code: 调出库位编码（可选）
         to_warehouse_id: 调入仓库ID
+        to_storage_area_id: 调入库区ID（可选）
+        to_storage_area_code: 调入库区编码（可选）
         to_location_id: 调入库位ID（可选）
         to_location_code: 调入库位编码（可选）
         batch_no: 批次号（可选）
@@ -151,13 +156,17 @@ class InventoryTransferItem(BaseModel):
     material_code = fields.CharField(max_length=50, description="物料编码")
     material_name = fields.CharField(max_length=200, description="物料名称")
 
-    # 调出仓库和库位信息
+    # 调出仓库、库区、库位信息
     from_warehouse_id = fields.IntField(description="调出仓库ID")
+    from_storage_area_id = fields.IntField(null=True, description="调出库区ID（可选）")
+    from_storage_area_code = fields.CharField(max_length=50, null=True, description="调出库区编码（可选）")
     from_location_id = fields.IntField(null=True, description="调出库位ID（可选）")
     from_location_code = fields.CharField(max_length=50, null=True, description="调出库位编码（可选）")
 
-    # 调入仓库和库位信息
+    # 调入仓库、库区、库位信息
     to_warehouse_id = fields.IntField(description="调入仓库ID")
+    to_storage_area_id = fields.IntField(null=True, description="调入库区ID（可选）")
+    to_storage_area_code = fields.CharField(max_length=50, null=True, description="调入库区编码（可选）")
     to_location_id = fields.IntField(null=True, description="调入库位ID（可选）")
     to_location_code = fields.CharField(max_length=50, null=True, description="调入库位编码（可选）")
 

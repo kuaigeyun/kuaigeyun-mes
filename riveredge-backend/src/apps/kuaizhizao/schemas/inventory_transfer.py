@@ -28,6 +28,7 @@ class InventoryTransferBase(BaseModel):
     transfer_date: datetime = Field(..., description="调拨日期")
     transfer_reason: Optional[str] = Field(None, description="调拨原因")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class InventoryTransferCreate(InventoryTransferBase):
@@ -37,6 +38,34 @@ class InventoryTransferCreate(InventoryTransferBase):
     用于创建新库存调拨单的数据验证。
     """
     allow_same_warehouse: bool = Field(False, description="是否允许同仓调拨（用于库内移位）")
+
+
+class InventoryTransferItemInput(BaseModel):
+    """创建调拨单时嵌套的明细行（不含 transfer_id）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    from_warehouse_id: Optional[int] = Field(None, description="调出仓库ID（默认同单头）")
+    from_storage_area_id: Optional[int] = Field(None, description="调出库区ID")
+    from_storage_area_code: Optional[str] = Field(None, description="调出库区编码")
+    from_location_id: Optional[int] = Field(None, description="调出库位ID")
+    from_location_code: Optional[str] = Field(None, description="调出库位编码")
+    to_warehouse_id: Optional[int] = Field(None, description="调入仓库ID（默认同单头）")
+    to_storage_area_id: Optional[int] = Field(None, description="调入库区ID")
+    to_storage_area_code: Optional[str] = Field(None, description="调入库区编码")
+    to_location_id: Optional[int] = Field(None, description="调入库位ID")
+    to_location_code: Optional[str] = Field(None, description="调入库位编码")
+    batch_no: Optional[str] = Field(None, description="批次号（可选）")
+    quantity: Decimal = Field(..., gt=0, description="调拨数量")
+    unit_price: Decimal = Field(default=0, description="单价")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class InventoryTransferCreateWithItems(InventoryTransferCreate):
+    """创建调拨单（含明细）"""
+    items: List[InventoryTransferItemInput] = Field(..., min_length=1, description="调拨明细")
 
 
 class InventoryTransferUpdate(BaseModel):
@@ -54,6 +83,7 @@ class InventoryTransferUpdate(BaseModel):
     transfer_date: Optional[datetime] = Field(None, description="调拨日期")
     transfer_reason: Optional[str] = Field(None, description="调拨原因")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     allow_same_warehouse: Optional[bool] = Field(None, description="是否允许同仓调拨（用于库内移位）")
 
 
@@ -104,9 +134,13 @@ class InventoryTransferItemBase(BaseModel):
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
     from_warehouse_id: int = Field(..., description="调出仓库ID")
+    from_storage_area_id: Optional[int] = Field(None, description="调出库区ID（可选）")
+    from_storage_area_code: Optional[str] = Field(None, description="调出库区编码（可选）")
     from_location_id: Optional[int] = Field(None, description="调出库位ID（可选）")
     from_location_code: Optional[str] = Field(None, description="调出库位编码（可选）")
     to_warehouse_id: int = Field(..., description="调入仓库ID")
+    to_storage_area_id: Optional[int] = Field(None, description="调入库区ID（可选）")
+    to_storage_area_code: Optional[str] = Field(None, description="调入库区编码（可选）")
     to_location_id: Optional[int] = Field(None, description="调入库位ID（可选）")
     to_location_code: Optional[str] = Field(None, description="调入库位编码（可选）")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
@@ -134,6 +168,14 @@ class InventoryTransferItemUpdate(BaseModel):
 
     quantity: Optional[Decimal] = Field(None, description="调拨数量")
     unit_price: Optional[Decimal] = Field(None, description="单价")
+    from_storage_area_id: Optional[int] = Field(None, description="调出库区ID")
+    from_storage_area_code: Optional[str] = Field(None, description="调出库区编码")
+    from_location_id: Optional[int] = Field(None, description="调出库位ID")
+    from_location_code: Optional[str] = Field(None, description="调出库位编码")
+    to_storage_area_id: Optional[int] = Field(None, description="调入库区ID")
+    to_storage_area_code: Optional[str] = Field(None, description="调入库区编码")
+    to_location_id: Optional[int] = Field(None, description="调入库位ID")
+    to_location_code: Optional[str] = Field(None, description="调入库位编码")
     remarks: Optional[str] = Field(None, description="备注")
 
 

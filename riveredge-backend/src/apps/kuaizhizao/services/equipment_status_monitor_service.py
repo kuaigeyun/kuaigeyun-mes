@@ -276,6 +276,7 @@ class EquipmentStatusMonitorService:
             is_online=data.is_online if data.is_online is not None else equipment.status == "运行中",
             monitored_at=datetime.now(),
             data_source="manual",
+            attachments=data.attachments,
         )
 
         return await self.create_status_monitor(

@@ -28,6 +28,9 @@ import { warehouseApi } from '../../../services/production';
 import { getMaterialBorrowLifecycle } from '../../../utils/materialBorrowLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
@@ -216,24 +219,23 @@ const MaterialBorrowsPage: React.FC = () => {
         const printInMore = record.status === '待借出';
         return (
           <Space size="small" wrap>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-              详情
-            </Button>
+            <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
             {record.status === '待借出' && (
               <>
                 <Button
-                  type="link"
-                  size="small"
-                  icon={<CheckCircleOutlined />}
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
                   onClick={() => handleConfirm(record)}
-                  style={{ color: '#52c41a' }}
                 >
                   确认借出
                 </Button>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-                  删除
-                </Button>
+                <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
               </>
+            )}
+            {record.status === '已借出' && (
+              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+                撤回
+              </Button>
             )}
             {printInMore ? (
               <Dropdown
@@ -249,16 +251,12 @@ const MaterialBorrowsPage: React.FC = () => {
                 }}
                 trigger={['click']}
               >
-                <Button type="link" size="small" icon={<MoreOutlined />}>
+                <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
                   更多
                 </Button>
               </Dropdown>
             ) : (
-              showPrint && (
-                <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
-                  打印
-                </Button>
-              )
+              showPrint && <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
             )}
           </Space>
         );
@@ -289,6 +287,23 @@ const MaterialBorrowsPage: React.FC = () => {
           actionRef.current?.reload();
         } catch (error: any) {
           messageApi.error(error.message || '借出确认失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = async (record: MaterialBorrow) => {
+    Modal.confirm({
+      title: '撤回借出',
+      content: `确定撤回借料单 "${record.borrow_code}" 吗？系统将回冲库存并恢复待借出状态。`,
+      onOk: async () => {
+        try {
+          await warehouseApi.materialBorrow.withdraw(record.id!.toString());
+          messageApi.success('撤回成功');
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
         }
       },
     });
@@ -413,6 +428,7 @@ const MaterialBorrowsPage: React.FC = () => {
         department: values.department,
         expected_return_date: values.expected_return_date ? dayjs(values.expected_return_date).format('YYYY-MM-DD') : undefined,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -777,6 +793,7 @@ const MaterialBorrowsPage: React.FC = () => {
             </AntForm.List>
           </AntForm.Item>
         </div>
+        <DocumentAttachmentsField category="material_borrow_attachments" />
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 

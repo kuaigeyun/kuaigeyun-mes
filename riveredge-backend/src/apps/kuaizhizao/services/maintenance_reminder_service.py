@@ -257,6 +257,7 @@ class MaintenanceReminderService:
         reminder_uuid: str,
         handled_by: Optional[int] = None,
         remark: Optional[str] = None,
+        attachments: Optional[list] = None,
     ) -> MaintenanceReminder:
         """
         标记提醒为已处理
@@ -295,6 +296,8 @@ class MaintenanceReminderService:
         reminder.handled_at = datetime.now()
         reminder.handled_by = handled_by
         reminder.handled_by_name = user_name
+        if attachments is not None:
+            reminder.attachments = attachments
         await reminder.save()
 
         return reminder

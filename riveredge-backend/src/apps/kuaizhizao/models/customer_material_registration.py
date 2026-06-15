@@ -85,6 +85,7 @@ class BarcodeMappingRule(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -191,6 +192,7 @@ class CustomerMaterialRegistration(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -226,6 +228,7 @@ class CustomerMaterialRegistrationItem(BaseModel):
     barcode_type = fields.CharField(max_length=10, default="1d", description="条码类型")
     mapping_rule_id = fields.IntField(null=True, description="条码映射规则ID")
     batch_number = fields.CharField(max_length=100, null=True, description="批号")
+    serial_numbers = fields.JSONField(null=True, description="序列号列表（JSON数组）")
     status = fields.CharField(max_length=20, default="pending", description="状态")
     remarks = fields.TextField(null=True, description="备注")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")

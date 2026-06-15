@@ -10,7 +10,11 @@ export type BatchingTaskTabKey =
   | 'proactive_prep'
   | 'backflush_alert';
 
-export type OutsourceMaterialTabKey = 'outsource_issue' | 'outsource_receipt';
+export type OutsourceMaterialTabKey =
+  | 'outsource_issue'
+  | 'outsource_receipt'
+  | 'outsource_material_return'
+  | 'outsource_product_return';
 
 export type MaterialCenterTabKey = BatchingTaskTabKey | OutsourceMaterialTabKey;
 
@@ -42,6 +46,16 @@ export const MATERIAL_CENTER_TABS: MaterialCenterTabMeta[] = [
     hint: '委外加工完成后收回半成品/成品入库',
   },
   {
+    key: 'outsource_material_return',
+    label: '委外退料',
+    hint: '供应商退回未使用的委外发料原料，增加库存',
+  },
+  {
+    key: 'outsource_product_return',
+    label: '委外退货',
+    hint: '委外成品不合格退回供应商，扣减库存',
+  },
+  {
     key: 'proactive_prep',
     label: '备料建议',
     hint: '系统根据工单与库存推算的缺料提醒，可生成配料单后再到「配料执行」处理',
@@ -56,7 +70,10 @@ export const MATERIAL_CENTER_TABS: MaterialCenterTabMeta[] = [
 /** @deprecated 使用 MATERIAL_CENTER_TABS */
 export const BATCHING_CENTER_TABS = MATERIAL_CENTER_TABS.filter(
   (t): t is MaterialCenterTabMeta & { key: BatchingTaskTabKey } =>
-    t.key !== 'outsource_issue' && t.key !== 'outsource_receipt',
+    t.key !== 'outsource_issue' &&
+    t.key !== 'outsource_receipt' &&
+    t.key !== 'outsource_material_return' &&
+    t.key !== 'outsource_product_return',
 );
 
 export const BATCHING_TASK_TYPE_LABEL: Record<BatchingTaskTabKey, string> = {
@@ -72,5 +89,10 @@ export const DEFAULT_MATERIAL_CENTER_TAB: MaterialCenterTabKey = 'batching_draft
 export const DEFAULT_BATCHING_CENTER_TAB = DEFAULT_MATERIAL_CENTER_TAB as BatchingTaskTabKey;
 
 export function isBatchingTaskTab(key: MaterialCenterTabKey): key is BatchingTaskTabKey {
-  return key !== 'outsource_issue' && key !== 'outsource_receipt';
+  return (
+    key !== 'outsource_issue' &&
+    key !== 'outsource_receipt' &&
+    key !== 'outsource_material_return' &&
+    key !== 'outsource_product_return'
+  );
 }

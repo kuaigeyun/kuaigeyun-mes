@@ -22,6 +22,7 @@ class DisassemblyOrderBase(BaseModel):
     product_material_name: str = Field(..., description="成品物料名称")
     total_quantity: Decimal = Field(0, description="拆卸数量（成品数量）")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class DisassemblyOrderCreate(DisassemblyOrderBase):
@@ -39,6 +40,7 @@ class DisassemblyOrderUpdate(BaseModel):
     product_material_name: Optional[str] = None
     total_quantity: Optional[Decimal] = None
     remarks: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class DisassemblyOrderResponse(DisassemblyOrderBase):

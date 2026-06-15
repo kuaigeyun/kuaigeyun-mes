@@ -25,7 +25,8 @@ from apps.kuaizhizao.schemas.purchase import (
     PurchaseOrderListParams, MaterialPriceHistoryResponse,
     PurchaseTrackingResponse,
     ExpediteRequest, ExpediteResponse, PriceComparisonResponse,
-    LandingCostAllocationRequest, PurchaseOrderChangeResponse
+    LandingCostAllocationRequest, PurchaseOrderChangeResponse,
+    PurchaseReceiptPullCandidateListResponse,
 )
 from apps.kuaizhizao.services.purchase_service import PurchaseService
 from apps.kuaizhizao.services.purchase_cost_service import PurchaseCostService
@@ -187,6 +188,28 @@ async def get_purchase_order_statistics(
         },
     }
 
+
+
+@router.get(
+    "/purchase-orders/receipt-pull-candidates",
+    response_model=PurchaseReceiptPullCandidateListResponse,
+    summary="List purchase orders for inbound pull modal",
+)
+async def list_purchase_receipt_pull_candidates(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=200, description="返回数量"),
+    keyword: Optional[str] = Query(None, description="按采购订单号/供应商搜索"),
+    current_user: CurrentUser = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """采购入库选单弹窗：返回可筛选的采购订单及入库数量汇总（单次请求，无 N+1）。"""
+    return await PurchaseService().list_purchase_receipt_pull_candidates(
+        tenant_id,
+        keyword=keyword,
+        skip=skip,
+        limit=limit,
+        current_user=current_user,
+    )
 
 
 @router.get("/purchase-orders/{order_id}", response_model=PurchaseOrderResponse, summary="Get purchase order")

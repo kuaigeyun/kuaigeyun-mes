@@ -17,6 +17,7 @@ import {
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getBackflushRecordLifecycle } from '../../../utils/backflushRecordLifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 interface BackflushRecordItem {
   id: number;
@@ -166,12 +167,7 @@ const BackflushRecordsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) =>
         record.status === 'failed' ? (
-          <Button
-            type="link"
-            size="small"
-            icon={<ReloadOutlined />}
-            onClick={() => handleRetry(record)}
-          >
+          <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
             重试
           </Button>
         ) : null,

@@ -86,6 +86,8 @@ from apps.kuaizhizao.schemas.warehouse import (
     SalesReturnCreate,
     SalesReturnUpdate,
     SalesReturnResponse,
+    WorkOrderInboundPreviewResponse,
+    SalesOrderReturnPreviewResponse,
     PurchaseReceiptCreate,
     PurchaseReceiptUpdate,
     PurchaseReceiptResponse,
@@ -115,6 +117,8 @@ from apps.kuaizhizao.schemas.warehouse import (
     MaterialReturnWithItemsResponse,
     MaterialPrepReminderResponse,
     InboundConfirmationRequest,
+    OutboundConfirmationRequest,
+    OutboundConfirmationItem,
 )
 from apps.kuaizhizao.schemas.replenishment_suggestion import (
     ReplenishmentSuggestionResponse,
@@ -757,6 +761,7 @@ async def update_production_picking(
 @router.post("/production-pickings/{picking_id}/confirm", response_model=ProductionPickingResponse, summary="Confirm picking")
 async def confirm_production_picking(
     picking_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> ProductionPickingResponse:
@@ -773,7 +778,31 @@ async def confirm_production_picking(
     return await ProductionPickingService().confirm_picking(
         tenant_id=tenant_id,
         picking_id=picking_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post(
+    "/production-pickings/{picking_id}/withdraw",
+    response_model=ProductionPickingResponse,
+    summary="Withdraw production picking",
+)
+async def withdraw_production_picking(
+    picking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> ProductionPickingResponse:
+    """撤回生产领料确认"""
+    await _assert_production_picking_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        picking_id=picking_id,
+    )
+    return await ProductionPickingService().withdraw_picking_confirmation(
+        tenant_id=tenant_id,
+        picking_id=picking_id,
+        updated_by=current_user.id,
     )
 
 
@@ -1284,6 +1313,7 @@ async def delete_other_outbound(
 @router.post("/other-outbounds/{outbound_id}/confirm", response_model=OtherOutboundResponse, summary="Confirm outbound")
 async def confirm_other_outbound(
     outbound_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1296,7 +1326,27 @@ async def confirm_other_outbound(
     return await OtherOutboundService().confirm_outbound(
         tenant_id=tenant_id,
         outbound_id=outbound_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post("/other-outbounds/{outbound_id}/withdraw", response_model=OtherOutboundResponse, summary="Withdraw misc outbound")
+async def withdraw_other_outbound(
+    outbound_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OtherOutboundResponse:
+    """撤回其他出库确认"""
+    await _assert_other_outbound_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        outbound_id=outbound_id,
+    )
+    return await OtherOutboundService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        outbound_id=outbound_id,
+        updated_by=current_user.id,
     )
 
 
@@ -1434,6 +1484,7 @@ async def delete_material_borrow(
 @router.post("/material-borrows/{borrow_id}/confirm", response_model=MaterialBorrowResponse, summary="Confirm borrow issue")
 async def confirm_material_borrow(
     borrow_id: int,
+    confirmation_data: Optional[OutboundConfirmationRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ):
@@ -1446,7 +1497,27 @@ async def confirm_material_borrow(
     return await MaterialBorrowService().confirm_borrow(
         tenant_id=tenant_id,
         borrow_id=borrow_id,
-        confirmed_by=current_user.id
+        confirmed_by=current_user.id,
+        confirmation_data=confirmation_data,
+    )
+
+
+@router.post("/material-borrows/{borrow_id}/withdraw", response_model=MaterialBorrowResponse, summary="Withdraw material borrow")
+async def withdraw_material_borrow(
+    borrow_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> MaterialBorrowResponse:
+    """撤回借料确认"""
+    await _assert_material_borrow_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        borrow_id=borrow_id,
+    )
+    return await MaterialBorrowService().withdraw_confirmation(
+        tenant_id=tenant_id,
+        borrow_id=borrow_id,
+        updated_by=current_user.id,
     )
 
 
@@ -1638,6 +1709,22 @@ async def print_material_return(
 
 # ============ 成品入库管理 API ============
 
+@router.get(
+    "/finished-goods-receipts/work-order-preview",
+    response_model=WorkOrderInboundPreviewResponse,
+    summary="Preview inbound lines from work order",
+)
+async def preview_work_order_inbound(
+    work_order_id: int = Query(..., description="工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> WorkOrderInboundPreviewResponse:
+    return await FinishedGoodsReceiptService().get_work_order_inbound_preview(
+        tenant_id=tenant_id,
+        work_order_id=work_order_id,
+    )
+
+
 @router.post("/finished-goods-receipts/quick-receipt", response_model=FinishedGoodsReceiptResponse, summary="Quick receipt from work order")
 async def quick_receipt_from_work_order(
     work_order_id: int = Query(..., description="工单ID"),
@@ -1679,6 +1766,8 @@ async def batch_receipt_from_work_orders(
     work_order_ids: List[int] = Query(..., description="工单ID列表"),
     warehouse_id: Optional[int] = Query(None, description="仓库ID（可选）"),
     warehouse_name: Optional[str] = Query(None, description="仓库名称（可选）"),
+    receipt_code: Optional[str] = Query(None, description="入库单编码（仅单工单时可指定）"),
+    receipt_quantity: Optional[float] = Query(None, description="入库数量（仅单工单时可指定）"),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> List[FinishedGoodsReceiptResponse]:
@@ -1698,7 +1787,9 @@ async def batch_receipt_from_work_orders(
         work_order_ids=work_order_ids,
         created_by=current_user.id,
         warehouse_id=warehouse_id,
-        warehouse_name=warehouse_name
+        warehouse_name=warehouse_name,
+        receipt_code=receipt_code,
+        receipt_quantity=receipt_quantity,
     )
 
 
@@ -3090,12 +3181,11 @@ async def confirm_sales_delivery(
         current_user=current_user,
         delivery_id=delivery_id,
     )
-    batches = body.item_batches if body else None
     return await SalesDeliveryService().confirm_delivery(
         tenant_id=tenant_id,
         delivery_id=delivery_id,
         confirmed_by=current_user.id,
-        item_batches=batches,
+        confirm_request=body,
     )
 
 
@@ -3441,6 +3531,22 @@ async def create_sales_return(
     )
 
 
+@router.get(
+    "/sales-returns/sales-order-preview",
+    response_model=SalesOrderReturnPreviewResponse,
+    summary="Preview sales return lines from sales order",
+)
+async def preview_sales_order_return(
+    sales_order_id: int = Query(..., description="销售订单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> SalesOrderReturnPreviewResponse:
+    return await SalesReturnService().get_sales_order_return_preview(
+        tenant_id=tenant_id,
+        sales_order_id=sales_order_id,
+    )
+
+
 @router.post("/sales-returns/pull-from-sales-order", response_model=SalesReturnResponse, summary="Push sales return from sales order")
 async def pull_sales_return_from_sales_order(
     request: Dict[str, Any],
@@ -3451,6 +3557,7 @@ async def pull_sales_return_from_sales_order(
     warehouse_id = request.get("warehouse_id")
     warehouse_name = request.get("warehouse_name")
     return_quantities = request.get("return_quantities")
+    return_code = request.get("return_code")
 
     if not sales_order_id:
         raise ValidationError("必须提供销售订单ID")
@@ -3469,6 +3576,7 @@ async def pull_sales_return_from_sales_order(
         warehouse_id=int(warehouse_id),
         warehouse_name=warehouse_name,
         return_quantities=return_quantities if isinstance(return_quantities, dict) else None,
+        return_code=return_code if return_code else None,
     )
 
 

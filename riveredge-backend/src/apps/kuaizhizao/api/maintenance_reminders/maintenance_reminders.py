@@ -162,7 +162,8 @@ async def mark_reminder_as_handled(
             tenant_id=tenant_id,
             reminder_uuid=data.reminder_uuid,
             handled_by=current_user.id,
-            remark=data.remark
+            remark=data.remark,
+            attachments=data.attachments,
         )
         
         return MaintenanceReminderResponse.model_validate(reminder)

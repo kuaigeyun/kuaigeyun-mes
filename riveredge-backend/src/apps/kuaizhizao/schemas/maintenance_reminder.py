@@ -8,7 +8,7 @@ Date: 2026-01-16
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 
 
@@ -49,6 +49,7 @@ class MaintenanceReminderResponse(BaseModel):
     handled_at: Optional[datetime] = Field(None, description="处理时间")
     handled_by: Optional[int] = Field(None, description="处理人ID")
     handled_by_name: Optional[str] = Field(None, description="处理人姓名")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     created_at: datetime = Field(..., description="创建时间")
     updated_at: datetime = Field(..., description="更新时间")
 
@@ -79,3 +80,4 @@ class MaintenanceReminderMarkHandledRequest(BaseModel):
     """
     reminder_uuid: str = Field(..., max_length=36, description="提醒UUID")
     remark: Optional[str] = Field(None, description="处理备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")

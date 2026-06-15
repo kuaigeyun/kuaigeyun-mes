@@ -10,11 +10,13 @@
 import React, { useRef, useState } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography, Tag } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select } from 'antd';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
+import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
+import { UniTableDetailHeader } from '../../../../../components/uni-table-detail/UniTableDetail';
 import { inventoryTransferApi } from '../../../services/inventory-transfer';
 import { getInventoryTransferLifecycle } from '../../../utils/inventoryTransferLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -22,6 +24,9 @@ import { materialApi } from '../../../../master-data/services/material';
 import { storageAreaApi, storageLocationApi } from '../../../../master-data/services/warehouse';
 import dayjs from 'dayjs';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 interface InventoryTransfer {
   id?: number;
@@ -55,9 +60,13 @@ interface InventoryTransferItem {
   material_code?: string;
   material_name?: string;
   from_warehouse_id?: number;
+  from_storage_area_id?: number;
+  from_storage_area_code?: string;
   from_location_id?: number;
   from_location_code?: string;
   to_warehouse_id?: number;
+  to_storage_area_id?: number;
+  to_storage_area_code?: string;
   to_location_id?: number;
   to_location_code?: string;
   batch_no?: string;
@@ -67,6 +76,19 @@ interface InventoryTransferItem {
   status?: string;
   remarks?: string;
 }
+
+const defaultTransferItem = {
+  material_id: undefined as number | undefined,
+  material_code: '',
+  material_name: '',
+  quantity: undefined as number | undefined,
+  unit_price: 0,
+  from_storage_area_id: undefined as number | undefined,
+  from_location_id: undefined as number | undefined,
+  to_storage_area_id: undefined as number | undefined,
+  to_location_id: undefined as number | undefined,
+  batch_no: '',
+};
 
 const InventoryTransferPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
@@ -92,6 +114,67 @@ const InventoryTransferPage: React.FC = () => {
   // 当前调拨单ID（用于添加明细）
   const [currentTransferId, setCurrentTransferId] = useState<number | null>(null);
   const [currentItemTransferMode, setCurrentItemTransferMode] = useState<'transfer' | 'bin_relocation'>('transfer');
+  const [selectedCreateWarehouseId, setSelectedCreateWarehouseId] = useState<number | undefined>();
+
+  const resolveAreaMeta = (areaId?: number) => {
+    const area = storageAreaList.find((a: any) => a.id === areaId);
+    return { id: areaId, code: area?.code as string | undefined };
+  };
+
+  const resolveLocationMeta = (locationId?: number) => {
+    const loc = storageLocationList.find((l: any) => l.id === locationId);
+    return { id: locationId, code: loc?.code as string | undefined };
+  };
+
+  const buildItemPayload = (
+    it: Record<string, unknown>,
+    header: { from_warehouse_id: number; to_warehouse_id: number },
+  ) => {
+    const fromArea = resolveAreaMeta(it.from_storage_area_id as number | undefined);
+    const toArea = resolveAreaMeta(it.to_storage_area_id as number | undefined);
+    const fromLoc = resolveLocationMeta(it.from_location_id as number | undefined);
+    const toLoc = resolveLocationMeta(it.to_location_id as number | undefined);
+    return {
+      material_id: it.material_id,
+      material_code: it.material_code || '',
+      material_name: it.material_name || '',
+      from_warehouse_id: header.from_warehouse_id,
+      to_warehouse_id: header.to_warehouse_id,
+      from_storage_area_id: fromArea.id,
+      from_storage_area_code: fromArea.code,
+      from_location_id: fromLoc.id,
+      from_location_code: fromLoc.code,
+      to_storage_area_id: toArea.id,
+      to_storage_area_code: toArea.code,
+      to_location_id: toLoc.id,
+      to_location_code: toLoc.code,
+      batch_no: it.batch_no || undefined,
+      quantity: Number(it.quantity) || 0,
+      unit_price: Number(it.unit_price) || 0,
+      remarks: it.remarks,
+    };
+  };
+
+  const validateTransferItems = (items: Record<string, unknown>[], mode: 'transfer' | 'bin_relocation') => {
+    const valid = items.filter((it) => it.material_id && (Number(it.quantity) || 0) > 0);
+    if (!valid.length) {
+      messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
+      throw new Error('no items');
+    }
+    if (mode === 'bin_relocation') {
+      for (const it of valid) {
+        if (!it.from_storage_area_id || !it.from_location_id || !it.to_storage_area_id || !it.to_location_id) {
+          messageApi.error('库内移位明细须填写调出/调入库区与库位');
+          throw new Error('bin_relocation areas required');
+        }
+        if (it.from_location_id === it.to_location_id) {
+          messageApi.error('库内移位时调出库位和调入库位不能相同');
+          throw new Error('same location');
+        }
+      }
+    }
+    return valid;
+  };
 
   // 加载仓库逻辑移除
 
@@ -134,11 +217,13 @@ const InventoryTransferPage: React.FC = () => {
   const handleCreate = () => {
     setCreateModalVisible(true);
     setCreateTransferMode('transfer');
+    setSelectedCreateWarehouseId(undefined);
     setTimeout(() => {
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         transfer_date: dayjs(),
         transfer_mode: 'transfer',
+        items: [{ ...defaultTransferItem }],
       });
     }, 0);
   };
@@ -159,6 +244,11 @@ const InventoryTransferPage: React.FC = () => {
       }
 
       const transferDate = dayjs(values.transfer_date);
+      const validItems = validateTransferItems(values.items || [], mode);
+      const header = {
+        from_warehouse_id: values.from_warehouse_id,
+        to_warehouse_id: values.to_warehouse_id,
+      };
       const payload = {
         from_warehouse_id: values.from_warehouse_id,
         from_warehouse_name: values._from_warehouse_name || '',
@@ -167,7 +257,9 @@ const InventoryTransferPage: React.FC = () => {
         transfer_date: transferDate.isValid() ? transferDate.toISOString() : new Date().toISOString(),
         transfer_reason: values.transfer_reason,
         remarks: values.remarks,
+        attachments: normalizeDocumentAttachments(values.attachments),
         allow_same_warehouse: mode === 'bin_relocation',
+        items: validItems.map((it) => buildItemPayload(it, header)),
       };
       if (mode === 'bin_relocation') {
         await inventoryTransferApi.createBinTransfer(payload);
@@ -184,7 +276,10 @@ const InventoryTransferPage: React.FC = () => {
     } catch (error: any) {
       if (
         error.message !== '跨仓调拨时，调出仓库和调入仓库不能相同' &&
-        error.message !== '库内移位时，调出仓库和调入仓库必须相同'
+        error.message !== '库内移位时，调出仓库和调入仓库必须相同' &&
+        error.message !== 'no items' &&
+        error.message !== 'bin_relocation areas required' &&
+        error.message !== 'same location'
       ) {
         messageApi.error(error.message || '创建调拨单失败');
       }
@@ -260,8 +355,8 @@ const InventoryTransferPage: React.FC = () => {
       }
 
       if (currentItemTransferMode === 'bin_relocation') {
-        if (!values.from_location_id || !values.to_location_id) {
-          messageApi.error('库内移位必须选择调出库位和调入库位');
+        if (!values.from_storage_area_id || !values.from_location_id || !values.to_storage_area_id || !values.to_location_id) {
+          messageApi.error('库内移位必须选择调出/调入库区与库位');
           return;
         }
         if (values.from_location_id === values.to_location_id) {
@@ -270,8 +365,10 @@ const InventoryTransferPage: React.FC = () => {
         }
       }
 
-      const fromLocation = storageLocationList.find((x: any) => x.id === values.from_location_id);
-      const toLocation = storageLocationList.find((x: any) => x.id === values.to_location_id);
+      const fromArea = resolveAreaMeta(values.from_storage_area_id);
+      const toArea = resolveAreaMeta(values.to_storage_area_id);
+      const fromLocation = resolveLocationMeta(values.from_location_id);
+      const toLocation = resolveLocationMeta(values.to_location_id);
 
       await inventoryTransferApi.createItem(currentTransferId.toString(), {
         transfer_id: currentTransferId,
@@ -279,11 +376,15 @@ const InventoryTransferPage: React.FC = () => {
         material_code: material.mainCode ?? material.code ?? '',
         material_name: material.name,
         from_warehouse_id: values.from_warehouse_id,
-        from_location_id: values.from_location_id,
-        from_location_code: fromLocation?.code || values.from_location_code,
+        from_storage_area_id: fromArea.id,
+        from_storage_area_code: fromArea.code,
+        from_location_id: fromLocation.id,
+        from_location_code: fromLocation.code,
         to_warehouse_id: values.to_warehouse_id,
-        to_location_id: values.to_location_id,
-        to_location_code: toLocation?.code || values.to_location_code,
+        to_storage_area_id: toArea.id,
+        to_storage_area_code: toArea.code,
+        to_location_id: toLocation.id,
+        to_location_code: toLocation.code,
         batch_no: values.batch_no,
         quantity: values.quantity,
         unit_price: values.unit_price || 0,
@@ -404,42 +505,23 @@ const InventoryTransferPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'draft' && (
             <>
-              <Button
-                type="link"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => handleAddItem(record)}
-              >
+              <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
                 添加明细
               </Button>
               <Button
-                type="link"
-                size="small"
-                icon={<PlayCircleOutlined />}
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
                 onClick={() => handleExecute(record)}
-                style={{ color: '#52c41a' }}
               >
                 执行调拨
               </Button>
             </>
           )}
           {record.status === 'in_progress' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={() => handleAddItem(record)}
-            >
+            <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
               添加明细
             </Button>
           )}
@@ -525,6 +607,7 @@ const InventoryTransferPage: React.FC = () => {
         onFinish={handleCreateSubmit}
         formRef={formRef}
         grid={false}
+        width={createTransferMode === 'bin_relocation' ? MODAL_CONFIG.EXTRA_LARGE_WIDTH : MODAL_CONFIG.LARGE_WIDTH}
         {...MODAL_CONFIG}
       >
         <ProFormSelect
@@ -561,6 +644,7 @@ const InventoryTransferPage: React.FC = () => {
               required
               onChange={(value, option) => {
                 formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name });
+                setSelectedCreateWarehouseId(typeof value === 'number' ? value : Number(value));
                 if (createTransferMode === 'bin_relocation') {
                   formRef.current?.setFieldsValue({
                     to_warehouse_id: value,
@@ -592,12 +676,233 @@ const InventoryTransferPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+        <div className="uni-table-detail" style={{ width: '100%' }}>
+          <UniTableDetailHeader title="调拨明细" required />
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+            <AntForm.List name="items">
+              {(fields, { add, remove }) => {
+                const baseCols = [
+                  {
+                    title: '物料',
+                    dataIndex: 'material_id',
+                    width: 240,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}>
+                        {({ getFieldValue }: { getFieldValue: (name: string) => unknown }) => {
+                          const row = (getFieldValue('items') as Record<string, unknown>[] | undefined)?.[index];
+                          const mid = row?.material_id ? Number(row.material_id) : null;
+                          const fallback = mid && (row?.material_code || row?.material_name)
+                            ? { value: mid, label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid) }
+                            : undefined;
+                          return (
+                            <div className="warehouse-detail-material-cell">
+                              <UniMaterialSelect
+                                name={[index, 'material_id']}
+                                label=""
+                                placeholder="请选择物料"
+                                required
+                                size="small"
+                                listFieldKey={index}
+                                listFieldName="items"
+                                fillMapping={{
+                                  material_code: 'mainCode',
+                                  material_name: 'name',
+                                }}
+                                fallbackOption={fallback}
+                                formItemProps={{ style: { margin: 0 } }}
+                                showQuickCreate
+                                showAdvancedSearch
+                              />
+                            </div>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '数量',
+                    dataIndex: 'quantity',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item
+                        name={[index, 'quantity']}
+                        rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]}
+                        style={{ margin: 0 }}
+                      >
+                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                ];
+                const binCols = createTransferMode === 'bin_relocation'
+                  ? [
+                      {
+                        title: '调出库区',
+                        dataIndex: 'from_storage_area_id',
+                        width: 150,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <AntForm.Item
+                            name={[index, 'from_storage_area_id']}
+                            rules={[{ required: true, message: '必选' }]}
+                            style={{ margin: 0 }}
+                          >
+                            <Select
+                              options={getAreaOptions(selectedCreateWarehouseId)}
+                              placeholder="调出库区"
+                              size="small"
+                              showSearch
+                              optionFilterProp="label"
+                              onChange={() => {
+                                const items = formRef.current?.getFieldValue('items') || [];
+                                items[index] = { ...items[index], from_location_id: undefined };
+                                formRef.current?.setFieldsValue({ items });
+                              }}
+                            />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '调出库位',
+                        dataIndex: 'from_location_id',
+                        width: 150,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <AntForm.Item noStyle shouldUpdate>
+                            {({ getFieldValue }: { getFieldValue: (name: (string | number)[]) => unknown }) => (
+                              <AntForm.Item
+                                name={[index, 'from_location_id']}
+                                rules={[{ required: true, message: '必选' }]}
+                                style={{ margin: 0 }}
+                              >
+                                <Select
+                                  options={getLocationOptions(getFieldValue(['items', index, 'from_storage_area_id']) as number | undefined)}
+                                  placeholder="调出库位"
+                                  size="small"
+                                  showSearch
+                                  optionFilterProp="label"
+                                />
+                              </AntForm.Item>
+                            )}
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '调入库区',
+                        dataIndex: 'to_storage_area_id',
+                        width: 150,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <AntForm.Item
+                            name={[index, 'to_storage_area_id']}
+                            rules={[{ required: true, message: '必选' }]}
+                            style={{ margin: 0 }}
+                          >
+                            <Select
+                              options={getAreaOptions(selectedCreateWarehouseId)}
+                              placeholder="调入库区"
+                              size="small"
+                              showSearch
+                              optionFilterProp="label"
+                              onChange={() => {
+                                const items = formRef.current?.getFieldValue('items') || [];
+                                items[index] = { ...items[index], to_location_id: undefined };
+                                formRef.current?.setFieldsValue({ items });
+                              }}
+                            />
+                          </AntForm.Item>
+                        ),
+                      },
+                      {
+                        title: '调入库位',
+                        dataIndex: 'to_location_id',
+                        width: 150,
+                        render: (_: unknown, __: unknown, index: number) => (
+                          <AntForm.Item noStyle shouldUpdate>
+                            {({ getFieldValue }: { getFieldValue: (name: (string | number)[]) => unknown }) => (
+                              <AntForm.Item
+                                name={[index, 'to_location_id']}
+                                rules={[{ required: true, message: '必选' }]}
+                                style={{ margin: 0 }}
+                              >
+                                <Select
+                                  options={getLocationOptions(getFieldValue(['items', index, 'to_storage_area_id']) as number | undefined)}
+                                  placeholder="调入库位"
+                                  size="small"
+                                  showSearch
+                                  optionFilterProp="label"
+                                />
+                              </AntForm.Item>
+                            )}
+                          </AntForm.Item>
+                        ),
+                      },
+                    ]
+                  : [];
+                const tailCols = [
+                  {
+                    title: '批次号',
+                    dataIndex: 'batch_no',
+                    width: 120,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <AntForm.Item name={[index, 'batch_no']} style={{ margin: 0 }}>
+                        <Input placeholder="可选" size="small" />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '操作',
+                    width: 60,
+                    render: (_: unknown, __: unknown, index: number) => (
+                      <Button
+                        type="link"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        onClick={() => remove(index)}
+                        disabled={fields.length <= 1}
+                      />
+                    ),
+                  },
+                ];
+                const cols = [...baseCols, ...binCols, ...tailCols];
+                const totalWidth = cols.reduce((s, c) => s + ((c.width as number) || 0), 0);
+                return (
+                  <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
+                    <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+                    <div style={{ width: '100%', overflowX: 'auto' }}>
+                      <Table
+                        className="warehouse-detail-table"
+                        size="small"
+                        dataSource={fields.map((f, i) => ({ ...f, key: f.key ?? i }))}
+                        rowKey="key"
+                        pagination={false}
+                        columns={cols}
+                        scroll={fields.length > 0 ? { x: totalWidth } : undefined}
+                        style={{ width: '100%', margin: 0 }}
+                        footer={() => (
+                          <Button
+                            type="dashed"
+                            icon={<PlusOutlined />}
+                            block
+                            onClick={() => add({ ...defaultTransferItem })}
+                          >
+                            添加明细
+                          </Button>
+                        )}
+                      />
+                    </div>
+                  </div>
+                );
+              }}
+            </AntForm.List>
+          </AntForm.Item>
+        </div>
         <ProFormTextArea
           name="transfer_reason"
           label="调拨原因"
           placeholder="请输入调拨原因"
           fieldProps={{ rows: 3 }}
         />
+        <DocumentAttachmentsField category="inventory_transfer_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -651,62 +956,88 @@ const InventoryTransferPage: React.FC = () => {
         />
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormSelect
-              name="from_storage_area_id"
-              label="调出库区"
-              placeholder="请选择调出库区"
-              options={getAreaOptions(itemFormRef.current?.getFieldValue?.('from_warehouse_id'))}
-              fieldProps={{
-                showSearch: true,
-                onChange: () => {
-                  itemFormRef.current?.setFieldsValue({ from_location_id: undefined });
-                },
-              }}
-            />
+            <AntForm.Item noStyle shouldUpdate>
+              {() => (
+                <ProFormSelect
+                  name="from_storage_area_id"
+                  label="调出库区"
+                  placeholder="请选择调出库区"
+                  rules={
+                    currentItemTransferMode === 'bin_relocation'
+                      ? [{ required: true, message: '库内移位必须选择调出库区' }]
+                      : undefined
+                  }
+                  options={getAreaOptions(itemFormRef.current?.getFieldValue?.('from_warehouse_id'))}
+                  fieldProps={{
+                    showSearch: true,
+                    onChange: () => {
+                      itemFormRef.current?.setFieldsValue({ from_location_id: undefined });
+                    },
+                  }}
+                />
+              )}
+            </AntForm.Item>
           </Col>
           <Col span={12}>
-            <ProFormSelect
-              name="from_location_id"
-              label="调出库位"
-              placeholder="请选择调出库位"
-              rules={
-                currentItemTransferMode === 'bin_relocation'
-                  ? [{ required: true, message: '库内移位必须选择调出库位' }]
-                  : undefined
-              }
-              options={getLocationOptions(itemFormRef.current?.getFieldValue?.('from_storage_area_id'))}
-              fieldProps={{ showSearch: true }}
-            />
+            <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev.from_storage_area_id !== curr.from_storage_area_id}>
+              {() => (
+                <ProFormSelect
+                  name="from_location_id"
+                  label="调出库位"
+                  placeholder="请选择调出库位"
+                  rules={
+                    currentItemTransferMode === 'bin_relocation'
+                      ? [{ required: true, message: '库内移位必须选择调出库位' }]
+                      : undefined
+                  }
+                  options={getLocationOptions(itemFormRef.current?.getFieldValue?.('from_storage_area_id'))}
+                  fieldProps={{ showSearch: true }}
+                />
+              )}
+            </AntForm.Item>
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormSelect
-              name="to_storage_area_id"
-              label="调入库区"
-              placeholder="请选择调入库区"
-              options={getAreaOptions(itemFormRef.current?.getFieldValue?.('to_warehouse_id'))}
-              fieldProps={{
-                showSearch: true,
-                onChange: () => {
-                  itemFormRef.current?.setFieldsValue({ to_location_id: undefined });
-                },
-              }}
-            />
+            <AntForm.Item noStyle shouldUpdate>
+              {() => (
+                <ProFormSelect
+                  name="to_storage_area_id"
+                  label="调入库区"
+                  placeholder="请选择调入库区"
+                  rules={
+                    currentItemTransferMode === 'bin_relocation'
+                      ? [{ required: true, message: '库内移位必须选择调入库区' }]
+                      : undefined
+                  }
+                  options={getAreaOptions(itemFormRef.current?.getFieldValue?.('to_warehouse_id'))}
+                  fieldProps={{
+                    showSearch: true,
+                    onChange: () => {
+                      itemFormRef.current?.setFieldsValue({ to_location_id: undefined });
+                    },
+                  }}
+                />
+              )}
+            </AntForm.Item>
           </Col>
           <Col span={12}>
-            <ProFormSelect
-              name="to_location_id"
-              label="调入库位"
-              placeholder="请选择调入库位"
-              rules={
-                currentItemTransferMode === 'bin_relocation'
-                  ? [{ required: true, message: '库内移位必须选择调入库位' }]
-                  : undefined
-              }
-              options={getLocationOptions(itemFormRef.current?.getFieldValue?.('to_storage_area_id'))}
-              fieldProps={{ showSearch: true }}
-            />
+            <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev.to_storage_area_id !== curr.to_storage_area_id}>
+              {() => (
+                <ProFormSelect
+                  name="to_location_id"
+                  label="调入库位"
+                  placeholder="请选择调入库位"
+                  rules={
+                    currentItemTransferMode === 'bin_relocation'
+                      ? [{ required: true, message: '库内移位必须选择调入库位' }]
+                      : undefined
+                  }
+                  options={getLocationOptions(itemFormRef.current?.getFieldValue?.('to_storage_area_id'))}
+                  fieldProps={{ showSearch: true }}
+                />
+              )}
+            </AntForm.Item>
           </Col>
         </Row>
         <ProFormText name="from_location_code" hidden />
@@ -806,6 +1137,18 @@ const InventoryTransferPage: React.FC = () => {
                   dataIndex: 'quantity',
                   width: 100,
                   align: 'right',
+                },
+                {
+                  title: '调出库区/库位',
+                  width: 160,
+                  render: (_: unknown, row: InventoryTransferItem) =>
+                    [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
+                },
+                {
+                  title: '调入库区/库位',
+                  width: 160,
+                  render: (_: unknown, row: InventoryTransferItem) =>
+                    [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
                 },
                 {
                   title: '单价',

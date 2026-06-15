@@ -25,6 +25,8 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -91,6 +93,7 @@ interface MaintenancePlan {
   planned_start_date?: string;
   planned_end_date?: string;
   status?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -161,6 +164,7 @@ const MaintenancePlansPage: React.FC = () => {
           planned_start_date: detail.planned_start_date ? dayjs(detail.planned_start_date) : null,
           planned_end_date: detail.planned_end_date ? dayjs(detail.planned_end_date) : null,
           status: detail.status,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
         });
       }, 100);
     } catch (error) {
@@ -221,6 +225,7 @@ const MaintenancePlansPage: React.FC = () => {
         ...values,
         planned_start_date: values.planned_start_date ? values.planned_start_date.format('YYYY-MM-DD') : null,
         planned_end_date: values.planned_end_date ? values.planned_end_date.format('YYYY-MM-DD') : null,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
 
       const editedUuid = isEdit ? currentPlan?.uuid : undefined;
@@ -282,6 +287,7 @@ const MaintenancePlansPage: React.FC = () => {
         execution_content: values.execution_content,
         execution_result: values.execution_result ?? '正常',
         status: '已确认',
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('执行记录已提交');
       setExecuteModalVisible(false);
@@ -696,6 +702,11 @@ const MaintenancePlansPage: React.FC = () => {
           </Col>
         </Row>
         <Row gutter={16}>
+          <Col span={24}>
+            <DocumentAttachmentsField category="maintenance_plan_attachments" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
           <Col span={12}>
             <ProFormSelect
               name="status"
@@ -750,6 +761,11 @@ const MaintenancePlansPage: React.FC = () => {
               ]}
               rules={[{ required: true, message: '请选择执行结果' }]}
             />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <DocumentAttachmentsField category="maintenance_execution_attachments" />
           </Col>
         </Row>
         <Row gutter={16}>

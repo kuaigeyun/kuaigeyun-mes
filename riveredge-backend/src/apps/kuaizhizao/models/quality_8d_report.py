@@ -46,4 +46,5 @@ class Quality8DReport(BaseModel):
     d8_team_congratulation = fields.TextField(null=True, description="D8 团队总结")
     verification_result = fields.TextField(null=True, description="验证结果")
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

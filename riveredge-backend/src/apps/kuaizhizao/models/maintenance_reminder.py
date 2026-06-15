@@ -90,6 +90,7 @@ class MaintenanceReminder(BaseModel):
     handled_at = fields.DatetimeField(null=True, description="处理时间")
     handled_by = fields.IntField(null=True, description="处理人ID")
     handled_by_name = fields.CharField(max_length=100, null=True, description="处理人姓名")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

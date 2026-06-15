@@ -14,6 +14,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 
@@ -27,6 +29,7 @@ interface ToolCalibration {
   certificate_no?: string;
   expiry_date?: string;
   calibration_org?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
 
@@ -62,6 +65,7 @@ const ToolCalibrationsPage: React.FC = () => {
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
         calibration_org: values.calibration_org,
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('校准记录已保存');
       setModalVisible(false);
@@ -196,6 +200,7 @@ const ToolCalibrationsPage: React.FC = () => {
         <ProFormText name="certificate_no" label="证书编号" colProps={{ span: 12 }} />
         <ProFormDatePicker name="expiry_date" label="有效期至" colProps={{ span: 12 }} />
         <ProFormText name="calibration_org" label="校验机构" colProps={{ span: 12 }} />
+        <DocumentAttachmentsField category="tool_calibration_attachments" />
         <ProFormText name="remark" label="备注" colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>

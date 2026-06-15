@@ -42,6 +42,8 @@ import {
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { LifecycleResult } from '../../../../../components/uni-lifecycle/types';
 import { inspectionPlanApi } from '../../../services/production';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
@@ -103,6 +105,7 @@ interface InspectionPlan {
   version?: string;
   is_active?: boolean;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   created_at?: string;
   updated_at?: string;
   steps?: InspectionPlanStepItem[];
@@ -238,6 +241,7 @@ const InspectionPlansPage: React.FC = () => {
           version: detail.version,
           is_active: detail.is_active,
           remarks: detail.remarks,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
         });
       }, 100);
     } catch (error) {
@@ -269,6 +273,7 @@ const InspectionPlansPage: React.FC = () => {
     try {
       const submitData = {
         ...values,
+        attachments: normalizeDocumentAttachments(values.attachments),
         steps: steps.map((s, i) => ({ ...s, sequence: i })),
       };
 
@@ -587,6 +592,7 @@ const InspectionPlansPage: React.FC = () => {
             <ProFormTextArea name="remarks" label="备注" placeholder="可选" />
           </Col>
         </Row>
+        <DocumentAttachmentsField category="inspection_plan_attachments" />
         <Row gutter={16}>
           <Col span={12}>
             <ProFormSwitch name="is_active" label="启用状态" initialValue={true} />

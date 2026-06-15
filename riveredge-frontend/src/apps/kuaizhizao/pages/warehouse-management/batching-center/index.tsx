@@ -22,6 +22,7 @@ import {
   WarningOutlined,
   ExportOutlined,
   ImportOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -35,6 +36,8 @@ import {
   WAREHOUSE_DETAIL_TABLE_STYLES,
 } from '../../../../../components/layout-templates';
 import { batchingOrderApi } from '../../../services/batching-order';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { workOrderApi } from '../../../services/work-order';
 import BatchingTaskQueue from './BatchingTaskQueue';
 import OutsourceMaterialPanel from './OutsourceMaterialPanel';
@@ -152,6 +155,7 @@ const BatchingCenterPage: React.FC = () => {
           target_warehouse_id: values.target_warehouse_id || undefined,
           target_warehouse_name: values._target_warehouse_name || undefined,
           remarks: values.remarks,
+          attachments: normalizeDocumentAttachments(values.attachments),
           allow_existing_draft: true,
         });
         messageApi.success('从工单生成配料单成功');
@@ -166,6 +170,7 @@ const BatchingCenterPage: React.FC = () => {
           warehouse_name: values._warehouse_name || '',
           batching_date: values.batching_date?.toISOString?.() || new Date().toISOString(),
           remarks: values.remarks,
+          attachments: normalizeDocumentAttachments(values.attachments),
         };
         const itemPayload = items.map((it: any) => ({
           material_id: it.material_id,
@@ -202,6 +207,8 @@ const BatchingCenterPage: React.FC = () => {
     material_call: <PhoneOutlined />,
     outsource_issue: <ExportOutlined />,
     outsource_receipt: <ImportOutlined />,
+    outsource_material_return: <RollbackOutlined />,
+    outsource_product_return: <RollbackOutlined />,
     proactive_prep: <BulbOutlined />,
     backflush_alert: <WarningOutlined />,
   };
@@ -419,6 +426,7 @@ const BatchingCenterPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+        <DocumentAttachmentsField category="batching_order_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"

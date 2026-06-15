@@ -55,6 +55,7 @@ class PurchaseInvoice(BaseModel):
 
     # 附件信息
     attachment_path = fields.CharField(max_length=500, null=True, description="附件路径")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     notes = fields.TextField(null=True, description="备注")
     is_active = fields.BooleanField(default=True, description="是否有效")

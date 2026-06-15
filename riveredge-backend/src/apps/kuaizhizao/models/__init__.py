@@ -26,6 +26,7 @@ from .material_binding import MaterialBinding
 from .stocktaking import Stocktaking, StocktakingItem
 from .inventory_transfer import InventoryTransfer, InventoryTransferItem
 from .assembly_order import AssemblyOrder, AssemblyOrderItem
+from .assembly_template import AssemblyTemplate, AssemblyTemplateItem
 from .assembly_material_binding import AssemblyMaterialBinding
 from .batching_order import BatchingOrder, BatchingOrderItem
 from .disassembly_order import DisassemblyOrder, DisassemblyOrderItem

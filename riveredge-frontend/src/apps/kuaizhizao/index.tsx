@@ -111,11 +111,25 @@ const CostReportPage = lazy(() => import('./pages/cost-management/cost-report'))
 const WarehouseDashboard = lazy(() => import('./pages/warehouse-management/dashboard'));
 const InventoryPage = lazy(() => import('./pages/warehouse-management/inventory'));
 const InboundPage = lazy(() => import('./pages/warehouse-management/inbound'));
+const InboundPoPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundPoPullEntryPage'));
+const InboundWorkOrderPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundWorkOrderPullEntryPage'));
+const InboundSalesReturnPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundSalesReturnPullEntryPage'));
+const InboundProductionReturnPullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundProductionReturnPullEntryPage'));
+const InboundOutsourcePullEntryPage = lazy(() => import('./pages/warehouse-management/inbound/InboundOutsourcePullEntryPage'));
 const OtherInboundPage = lazy(() => import('./pages/warehouse-management/other-inbound'));
 const OtherOutboundPage = lazy(() => import('./pages/warehouse-management/other-outbound'));
 const MaterialBorrowsPage = lazy(() => import('./pages/warehouse-management/material-borrows'));
 const MaterialReturnsPage = lazy(() => import('./pages/warehouse-management/material-returns'));
 const OutboundPage = lazy(() => import('./pages/warehouse-management/outbound'));
+const OutboundWorkOrderPullEntryPage = lazy(
+  () => import('./pages/warehouse-management/outbound/OutboundWorkOrderPullEntryPage'),
+);
+const OutboundSalesOrderPullEntryPage = lazy(
+  () => import('./pages/warehouse-management/outbound/OutboundSalesOrderPullEntryPage'),
+);
+const OutboundOutsourcePullEntryPage = lazy(
+  () => import('./pages/warehouse-management/outbound/OutboundOutsourcePullEntryPage'),
+);
 const CustomerMaterialRegistrationPage = lazy(() => import('./pages/warehouse-management/customer-material-registration'));
 const BarcodeMappingRulesPage = lazy(() => import('./pages/warehouse-management/barcode-mapping-rules'));
 const MaterialShortageExceptionsPage = lazy(() => import('./pages/production-execution/material-shortage-exceptions'));
@@ -350,11 +364,43 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="warehouse-management/dashboard" element={withPageSuspense(WarehouseDashboard)} />
       <Route path="warehouse-management/inventory" element={withPageSuspense(InventoryPage)} />
       <Route path="warehouse-management/replenishment-suggestions" element={withPageSuspense(ReplenishmentSuggestionsPage)} />
+      <Route
+        path="warehouse-management/inbound/entry/purchase-order/:poId"
+        element={withPageSuspense(InboundPoPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/inbound/entry/work-order/:woId"
+        element={withPageSuspense(InboundWorkOrderPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/inbound/entry/sales-order/:salesOrderId"
+        element={withPageSuspense(InboundSalesReturnPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/inbound/entry/production-return/:workOrderId"
+        element={withPageSuspense(InboundProductionReturnPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/inbound/entry/outsource-work-order/:woId"
+        element={withPageSuspense(InboundOutsourcePullEntryPage)}
+      />
       <Route path="warehouse-management/inbound" element={withPageSuspense(InboundPage)} />
       <Route path="warehouse-management/other-inbound" element={withPageSuspense(OtherInboundPage)} />
       <Route path="warehouse-management/other-outbound" element={withPageSuspense(OtherOutboundPage)} />
       <Route path="warehouse-management/material-borrows" element={withPageSuspense(MaterialBorrowsPage)} />
       <Route path="warehouse-management/material-returns" element={withPageSuspense(MaterialReturnsPage)} />
+      <Route
+        path="warehouse-management/outbound/entry/work-order/:woId"
+        element={withPageSuspense(OutboundWorkOrderPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/outbound/entry/sales-order/:soId"
+        element={withPageSuspense(OutboundSalesOrderPullEntryPage)}
+      />
+      <Route
+        path="warehouse-management/outbound/entry/outsource-work-order/:woId"
+        element={withPageSuspense(OutboundOutsourcePullEntryPage)}
+      />
       <Route path="warehouse-management/outbound" element={withPageSuspense(OutboundPage)} />
       <Route path="warehouse-management/customer-material-registration" element={withPageSuspense(CustomerMaterialRegistrationPage)} />
       <Route path="warehouse-management/barcode-mapping-rules" element={withPageSuspense(BarcodeMappingRulesPage)} />

@@ -22,6 +22,8 @@ import { payableService } from '../../../services/finance/payable';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { paymentService } from '../../../services/finance/payment';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 
 interface PaymentVoucher {
@@ -138,6 +140,7 @@ const PaymentsPage: React.FC = () => {
       bank_account: bank?.account_number || values.bank_account,
       settlement_type: values.settlement_type || 'normal',
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
     };
     await apiRequest('/apps/kuaicaiwu/payments', { method: 'POST', data });
     messageApi.success('付款单创建成功');
@@ -220,6 +223,7 @@ const PaymentsPage: React.FC = () => {
           bank_account: bankAccountOptions.find((o) => o.value === values.bank_account_id)?.account_number || values.bank_account,
           settlement_type: values.settlement_type || 'normal',
           notes: String(values.notes ?? '').trim() || `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
+          attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
       messageApi.success(`已创建${pullFromPayableAction.targetLabel}`);
@@ -628,6 +632,7 @@ const PaymentsPage: React.FC = () => {
         />
         <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
 
       <ModalForm
@@ -673,6 +678,7 @@ const PaymentsPage: React.FC = () => {
         />
         <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
 
       <Drawer

@@ -8,7 +8,7 @@ Date: 2026-01-16
 """
 
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -29,6 +29,7 @@ class EquipmentStatusMonitorBase(BaseModel):
     other_parameters: Optional[Dict[str, Any]] = Field(None, description="其他参数（JSON格式）")
     data_source: str = Field(default="manual", max_length=50, description="数据来源（manual/SCADA/sensor）")
     monitored_at: datetime = Field(..., description="监控时间")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class EquipmentStatusMonitorCreate(EquipmentStatusMonitorBase):
@@ -126,3 +127,4 @@ class EquipmentStatusUpdateRequest(BaseModel):
     is_online: Optional[bool] = Field(None, description="是否在线")
     reason: Optional[str] = Field(None, max_length=200, description="变更原因")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")

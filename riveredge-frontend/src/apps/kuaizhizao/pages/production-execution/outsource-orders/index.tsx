@@ -68,6 +68,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const OUTSOURCE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_orders';
 
@@ -98,6 +100,7 @@ interface OutsourceOrder {
   purchase_receipt_id?: number;
   purchase_receipt_code?: string;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -375,6 +378,7 @@ export const OutsourceOrdersTable: React.FC = () => {
           qualified_quantity: detail.qualified_quantity,
           unqualified_quantity: detail.unqualified_quantity,
           remarks: detail.remarks,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
         });
         if (detail.id != null) {
           loadOutsourceFormFieldValues(detail.id).then((fieldFormValues) => {
@@ -436,6 +440,7 @@ export const OutsourceOrdersTable: React.FC = () => {
       const { customData, standardValues } = extractOutsourceFormValues(values);
       const submitData = {
         ...standardValues,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
         planned_start_date: standardValues.planned_start_date
           ? standardValues.planned_start_date.format('YYYY-MM-DD HH:mm:ss')
           : undefined,
@@ -829,6 +834,7 @@ export const OutsourceOrdersTable: React.FC = () => {
             customFieldValues={outsourceFormCustomFieldValues}
             gridColumns={1}
           />
+          <DocumentAttachmentsField category="outsource_order_attachments" />
           <ProFormTextArea
             name="remarks"
             label="备注"

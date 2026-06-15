@@ -492,3 +492,35 @@ export async function buildImageUploadFileUrls(fileUuid: string): Promise<{
   return { thumbUrl, url };
 }
 
+export interface ImageTierBackfillResult {
+  total_images: number;
+  batch_size: number;
+  processed: number;
+  generated: number;
+  skipped: number;
+  failed: number;
+  next_offset: number;
+  remaining: number;
+  done: boolean;
+  errors: string[];
+}
+
+/**
+ * 存量图片三档压缩（缩略图 64 / 预览图 512），循环调用直至 done。
+ */
+export async function backfillImageTiers(params?: {
+  limit?: number;
+  offset?: number;
+  category?: string;
+  force?: boolean;
+}): Promise<ImageTierBackfillResult> {
+  const query = new URLSearchParams();
+  if (params?.limit != null) query.set('limit', String(params.limit));
+  if (params?.offset != null) query.set('offset', String(params.offset));
+  if (params?.category) query.set('category', params.category);
+  if (params?.force) query.set('force', 'true');
+  const qs = query.toString();
+  const url = qs ? `/core/files/image-tiers/backfill?${qs}` : '/core/files/image-tiers/backfill';
+  return apiRequest<ImageTierBackfillResult>(url, { method: 'POST' });
+}
+

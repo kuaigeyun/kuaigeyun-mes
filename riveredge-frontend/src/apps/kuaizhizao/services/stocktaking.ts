@@ -5,42 +5,41 @@
 import { apiRequest } from '../../../services/api';
 
 export const stocktakingApi = {
-  // 获取盘点单列表
   list: async (params?: any) => {
     return apiRequest('/apps/kuaizhizao/stocktakings', { method: 'GET', params });
   },
 
-  // 创建盘点单
   create: async (data: any) => {
     return apiRequest('/apps/kuaizhizao/stocktakings', { method: 'POST', data });
   },
 
-  // 更新盘点单
   update: async (id: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}`, { method: 'PUT', data });
   },
 
-  // 获取盘点单详情
   get: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}`, { method: 'GET' });
   },
 
-  // 开始盘点
-  start: async (id: string) => {
-    return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/start`, { method: 'POST' });
+  start: async (id: string, data?: { line_granularity?: string; include_zero_stock?: boolean }) => {
+    return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/start`, { method: 'POST', data: data ?? {} });
   },
 
-  // 添加盘点明细
   createItem: async (stocktakingId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${stocktakingId}/items`, { method: 'POST', data });
   },
 
-  // 更新盘点明细
+  bulkCreateItems: async (stocktakingId: string, items: any[]) => {
+    return apiRequest(`/apps/kuaizhizao/stocktakings/${stocktakingId}/items/bulk`, {
+      method: 'POST',
+      data: { items },
+    });
+  },
+
   updateItem: async (stocktakingId: string, itemId: string, data: any) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${stocktakingId}/items/${itemId}`, { method: 'PUT', data });
   },
 
-  // 执行盘点明细（记录实际数量）
   executeItem: async (stocktakingId: string, itemId: string, actualQuantity: number, remarks?: string) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${stocktakingId}/items/${itemId}/execute`, {
       method: 'POST',
@@ -48,13 +47,28 @@ export const stocktakingApi = {
     });
   },
 
-  // 处理盘点差异（调整库存）
+  complete: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/complete`, { method: 'POST' });
+  },
+
+  withdraw: async (id: string) => {
+    return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/withdraw`, { method: 'POST' });
+  },
+
   adjust: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}/adjust`, { method: 'POST' });
   },
 
-  // 删除盘点单
   delete: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/stocktakings/${id}`, { method: 'DELETE' });
+  },
+};
+
+export const inventoryReportApi = {
+  batchLines: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/reports/inventory/batch-lines', { method: 'GET', params });
+  },
+  materialBalances: async (params?: Record<string, unknown>) => {
+    return apiRequest('/apps/kuaizhizao/reports/inventory/material-balances', { method: 'GET', params });
   },
 };

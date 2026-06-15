@@ -60,6 +60,7 @@ class InspectionPlan(BaseModel):
     version = fields.CharField(max_length=20, default="1.0", description="版本号")
     is_active = fields.BooleanField(default=True, description="是否启用")
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
     def __str__(self):

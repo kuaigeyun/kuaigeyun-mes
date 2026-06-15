@@ -31,6 +31,9 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-production-rework-order": "FGD", # 返工单
     "kuaizhizao-production-outsource-order": "WW",   # 委外
     "kuaizhizao-production-outsource-work-order": "WWGD",  # 委外工单
+    "kuaizhizao-production-outsource-material-receipt": "OWR",  # 委外收货
+    "kuaizhizao-production-outsource-material-return": "OMR",  # 委外退料
+    "kuaizhizao-production-outsource-product-return": "OPR",  # 委外退货
     "kuaizhizao-purchase-order": "CG",           # 采购
     "kuaizhizao-purchase-requisition": "CGSQ",   # 采购申请
     "kuaizhizao-purchase-inquiry": "CGXJ",       # 采购询价单
@@ -63,8 +66,11 @@ PAGE_CODE_TO_FIXED_TEXT_PRESET: Dict[str, str] = {
     "kuaizhizao-equipment-management-mold": "MJ",        # 模具（拼音 muju）
     "kuaizhizao-equipment-management-tool": "GZ",       # 工装（拼音 gongzhuang）
     "kuaizhizao-warehouse-assembly-order": "ZZD",        # 组装单
+    "kuaizhizao-warehouse-assembly-template": "ZZMB",   # 组装模板
     "kuaizhizao-warehouse-disassembly-order": "CXD",    # 拆卸单
     "kuaizhizao-warehouse-batching-order": "PL",        # 配料单
+    "kuaizhizao-warehouse-stocktaking": "ST",         # 盘点单
+    "kuaizhizao-warehouse-inventory-transfer": "TR",  # 调拨单
     # 好力 GO — 模具单据单号前缀（与编码规则固定字一致）
     "haoligo-molds-documents-trial": "SM",
     "haoligo-molds-documents-borrow-out": "LY",
@@ -694,6 +700,18 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "allow_manual_edit": True,
     },
     {
+        "page_code": "kuaizhizao-warehouse-assembly-template",
+        "page_name": "组装模板",
+        "page_path": "/apps/kuaizhizao/warehouse-management/assembly-orders",
+        "code_field": "template_code",
+        "code_field_label": "组装模板编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "ASSEMBLY_TEMPLATE_CODE",
+        "allow_manual_edit": True,
+    },
+    {
         "page_code": "kuaizhizao-warehouse-disassembly-order",
         "page_name": "拆卸单",
         "page_path": "/apps/kuaizhizao/warehouse-management/disassembly-orders",
@@ -715,6 +733,30 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "BATCHING_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-stocktaking",
+        "page_name": "盘点单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/stocktaking",
+        "code_field": "code",
+        "code_field_label": "盘点单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "STOCKTAKING_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-warehouse-inventory-transfer",
+        "page_name": "调拨单",
+        "page_path": "/apps/kuaizhizao/warehouse-management/inventory-transfer",
+        "code_field": "code",
+        "code_field_label": "调拨单编码",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "INVENTORY_TRANSFER_CODE",
         "allow_manual_edit": True,
     },
     {
@@ -896,6 +938,42 @@ CODE_RULE_PAGES: List[CodeRulePageConfig] = [
         "module_icon": "tool",
         "auto_generate": True,
         "rule_code": "OUTSOURCE_WORK_ORDER_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-production-outsource-material-receipt",
+        "page_name": "委外收货",
+        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "code_field": "code",
+        "code_field_label": "委外收货单编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OUTSOURCE_MATERIAL_RECEIPT_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-production-outsource-material-return",
+        "page_name": "委外退料",
+        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "code_field": "code",
+        "code_field_label": "委外退料单编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OUTSOURCE_MATERIAL_RETURN_CODE",
+        "allow_manual_edit": True,
+    },
+    {
+        "page_code": "kuaizhizao-production-outsource-product-return",
+        "page_name": "委外退货",
+        "page_path": "/apps/kuaizhizao/warehouse-management/batching-center",
+        "code_field": "code",
+        "code_field_label": "委外退货单编号",
+        "module": "快格轻制造",
+        "module_icon": "tool",
+        "auto_generate": True,
+        "rule_code": "OUTSOURCE_PRODUCT_RETURN_CODE",
         "allow_manual_edit": True,
     },
     # 好力 GO — 模具单据单号默认规则（与流水号配置 UI 一致）：固定字符 + 提交日期（YYMMDD）+ 3 位自动计数（每日重置）

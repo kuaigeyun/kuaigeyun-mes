@@ -18,6 +18,7 @@ from tortoise.exceptions import IntegrityError
 from core.models.file import File
 from core.schemas.file import FileCreate, FileUpdate
 from core.services.file.image_compress import compress_image_content, effective_storage_extension
+from core.services.file.image_tier_service import ImageTierService
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from infra.config.infra_config import infra_settings as settings
 
@@ -403,6 +404,8 @@ class FileService:
         file.deleted_at = datetime.now()
         await file.save()
         
+        ImageTierService.delete_tier_cache(uuid)
+        
         # 物理删除文件（安全增强：防止已删除记录的文件通过 URL 被执行或访问）
         await FileService.destroy_physical_file(file.file_path)
     
@@ -426,7 +429,7 @@ class FileService:
             tenant_id=tenant_id,
             uuid__in=uuids,
             deleted_at__isnull=True
-        ).values_list("file_path", flat=True)
+        ).values_list("uuid", "file_path")
 
         if not files_to_delete:
             return 0
@@ -439,7 +442,8 @@ class FileService:
         ).update(deleted_at=datetime.now())
         
         # 执行物理删除
-        for path in files_to_delete:
+        for file_uuid, path in files_to_delete:
+            ImageTierService.delete_tier_cache(str(file_uuid))
             await FileService.destroy_physical_file(path)
 
         return count
@@ -527,6 +531,13 @@ class FileService:
             tags=tags,
             description=description,
         )
+
+        if ImageTierService.is_tier_eligible_image(file_type, file_extension):
+            ImageTierService.ensure_tiers_for_content(
+                file.uuid,
+                file_content,
+                file_type,
+            )
         
         return file
     

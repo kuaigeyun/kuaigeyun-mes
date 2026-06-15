@@ -24,6 +24,8 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPayableLifecycle } from '../../../utils/financeLifecycle';
 import dayjs from 'dayjs';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -96,6 +98,7 @@ const PayableList: React.FC = () => {
             status: '未付款',
             review_status: '待审核',
             notes: values.notes,
+            attachments: normalizeDocumentAttachments(values.attachments),
         };
         await payableService.createPayable(data);
         messageApi.success('创建成功');
@@ -443,6 +446,7 @@ const PayableList: React.FC = () => {
                 <ProFormDatePicker name="due_date" label="到期日期" rules={[{ required: true }]} />
                 <ProFormDatePicker name="business_date" label="业务日期" />
                 <ProFormTextArea name="notes" label="备注" />
+                <DocumentAttachmentsField category="payable_attachments" />
             </ModalForm>
         </ListPageTemplate>
     );

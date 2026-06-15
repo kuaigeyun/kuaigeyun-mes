@@ -30,6 +30,7 @@ class ShipmentNoticeBase(BaseSchema):
     shipping_address: Optional[str] = Field(None, description="收货地址")
     status: str = Field("待发货", max_length=20, description="通知状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ShipmentNoticeCreate(ShipmentNoticeBase):

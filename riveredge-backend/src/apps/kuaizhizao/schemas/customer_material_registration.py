@@ -29,6 +29,7 @@ class BarcodeMappingRuleBase(BaseModel):
     is_enabled: bool = Field(True, description="是否启用")
     priority: int = Field(0, description="优先级")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BarcodeMappingRuleCreate(BarcodeMappingRuleBase):
@@ -45,6 +46,7 @@ class BarcodeMappingRuleUpdate(BaseModel):
     is_enabled: Optional[bool] = Field(None, description="是否启用")
     priority: Optional[int] = Field(None, description="优先级")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BarcodeMappingRuleResponse(BarcodeMappingRuleBase):
@@ -79,6 +81,7 @@ class CustomerMaterialRegistrationItemBase(BaseModel):
     barcode_type: str = Field("1d", description="条码类型")
     mapping_rule_id: Optional[int] = Field(None, description="映射规则ID")
     batch_number: Optional[str] = Field(None, description="批号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
     remarks: Optional[str] = Field(None, description="备注")
 
 
@@ -116,10 +119,12 @@ class CustomerMaterialRegistrationBase(BaseModel):
     work_order_id: Optional[int] = Field(None, description="工单ID")
     work_order_code: Optional[str] = Field(None, description="工单编码")
     batch_number: Optional[str] = Field(None, description="批号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表（扫码单行）")
     material_id: Optional[int] = Field(None, description="物料ID（扫码未映射时手动选择）")
     material_code: Optional[str] = Field(None, description="物料编码")
     material_name: Optional[str] = Field(None, description="物料名称")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class CustomerMaterialRegistrationCreate(CustomerMaterialRegistrationBase):
@@ -138,6 +143,7 @@ class CustomerMaterialRegistrationUpdate(BaseModel):
     work_order_id: Optional[int] = Field(None, description="工单ID")
     work_order_code: Optional[str] = Field(None, description="工单编码")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     items: Optional[List[CustomerMaterialRegistrationItemCreate]] = Field(None, description="明细行")
 
 

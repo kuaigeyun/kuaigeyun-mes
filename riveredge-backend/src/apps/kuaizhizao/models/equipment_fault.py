@@ -82,6 +82,7 @@ class EquipmentFault(BaseModel):
     status = fields.CharField(max_length=50, default="待处理", description="故障状态（待处理、处理中、已修复、已关闭）")
     repair_required = fields.BooleanField(default=True, description="是否需要维修")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -170,6 +171,7 @@ class EquipmentRepair(BaseModel):
     status = fields.CharField(max_length=50, default="进行中", description="维修状态（进行中、已完成、已取消）")
     repair_result = fields.CharField(max_length=50, null=True, description="维修结果（成功、失败、部分成功）")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

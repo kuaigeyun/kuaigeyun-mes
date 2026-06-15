@@ -94,6 +94,7 @@ class FinishedGoodsInspection(BaseModel):
     certificate_issued = fields.BooleanField(default=False, description="是否已出具证书")
 
     status = fields.CharField(max_length=20, default="待检验", description="单据状态")
+    attachments = fields.JSONField(null=True, description="附件列表")
     notes = fields.TextField(null=True, description="备注")
     is_active = fields.BooleanField(default=True, description="是否有效")
     created_by = fields.IntField(null=True, description="创建人ID")

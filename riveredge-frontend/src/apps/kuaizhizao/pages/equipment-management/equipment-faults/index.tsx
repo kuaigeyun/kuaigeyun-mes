@@ -23,6 +23,8 @@ import {
 } from '@ant-design/pro-components';
 import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   ListPageTemplate,
@@ -87,6 +89,7 @@ interface EquipmentFault {
   fault_description?: string;
   status?: string;
   repair_required?: boolean;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -155,6 +158,7 @@ const EquipmentFaultsPage: React.FC = () => {
           fault_description: detail.fault_description,
           status: detail.status,
           repair_required: detail.repair_required,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
         });
       }, 100);
     } catch (error) {
@@ -214,6 +218,7 @@ const EquipmentFaultsPage: React.FC = () => {
       const submitData = {
         ...values,
         fault_date: values.fault_date ? values.fault_date.format('YYYY-MM-DD') : null,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
 
       const editedUuid = isEdit ? currentFault?.uuid : undefined;
@@ -276,6 +281,7 @@ const EquipmentFaultsPage: React.FC = () => {
         repair_type: values.repair_type ?? '现场维修',
         repair_description: values.repair_description ?? '',
         status: values.status ?? '进行中',
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('维修记录已创建');
       setRepairModalVisible(false);
@@ -662,6 +668,11 @@ const EquipmentFaultsPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={24}>
+            <DocumentAttachmentsField category="equipment_fault_attachments" />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
             <ProFormTextArea
               name="fault_description"
               label="故障描述"
@@ -738,6 +749,11 @@ const EquipmentFaultsPage: React.FC = () => {
               ]}
               rules={[{ required: true, message: '请选择维修类型' }]}
             />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={24}>
+            <DocumentAttachmentsField category="equipment_repair_attachments" />
           </Col>
         </Row>
         <Row gutter={16}>

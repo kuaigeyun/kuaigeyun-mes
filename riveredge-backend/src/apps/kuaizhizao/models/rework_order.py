@@ -125,6 +125,7 @@ class ReworkOrder(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 创建人和更新人
     created_by = fields.IntField(null=True, description="创建人ID")

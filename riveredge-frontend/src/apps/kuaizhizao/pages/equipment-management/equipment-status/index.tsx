@@ -16,6 +16,8 @@ import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, Paus
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi } from '../../../services/equipment';
 import { ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
@@ -196,7 +198,10 @@ const EquipmentStatusPage: React.FC = () => {
   const handleUpdateStatusSubmit = async (values: any) => {
     try {
       const targetUuid = values.equipment_uuid as string;
-      await equipmentStatusApi.updateStatus(values);
+      await equipmentStatusApi.updateStatus({
+        ...values,
+        attachments: normalizeDocumentAttachments(values.attachments),
+      });
       messageApi.success('设备状态更新成功');
       setUpdateModalVisible(false);
       await fetchStatusList();
@@ -637,6 +642,7 @@ const EquipmentStatusPage: React.FC = () => {
           label="变更原因"
           placeholder="请输入状态变更原因"
         />
+        <DocumentAttachmentsField category="equipment_status_attachments" />
         <ProFormTextArea
           name="remark"
           label="备注"

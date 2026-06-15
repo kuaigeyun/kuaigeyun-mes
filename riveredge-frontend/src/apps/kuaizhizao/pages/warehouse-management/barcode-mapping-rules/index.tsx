@@ -17,6 +17,9 @@ import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG
 import { warehouseApi } from '../../../services/production';
 import { customerApi, unwrapSupplyPagedList } from '../../../../master-data/services/supply-chain';
 import { materialApi } from '../../../../master-data/services/material';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind } from '../../../../../components/uni-action';
 
 /**
  * 条码映射规则接口定义
@@ -87,6 +90,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
           is_enabled: detailData.is_enabled,
           priority: detailData.priority,
           remarks: detailData.remarks,
+          attachments: mapAttachmentsToUploadList(detailData.attachments),
         });
       } catch (error) {
         messageApi.error('获取规则详情失败');
@@ -210,36 +214,15 @@ const BarcodeMappingRulesPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+          <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
           <Popconfirm
             title="确定要删除这条映射规则吗？"
             onConfirm={() => handleDelete(record)}
             okText="确定"
             cancelText="取消"
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
+            <Button {...rowActionKind('delete')} />
           </Popconfirm>
         </Space>
       ),
@@ -252,11 +235,15 @@ const BarcodeMappingRulesPage: React.FC = () => {
   const handleFormFinish = async (values: any) => {
     try {
       setFormLoading(true);
+      const payload = {
+        ...values,
+        attachments: normalizeDocumentAttachments(values.attachments),
+      };
       if (isEdit && currentId) {
-        await warehouseApi.barcodeMappingRule.update(currentId.toString(), values);
+        await warehouseApi.barcodeMappingRule.update(currentId.toString(), payload);
         messageApi.success('更新成功');
       } else {
-        await warehouseApi.barcodeMappingRule.create(values);
+        await warehouseApi.barcodeMappingRule.create(payload);
         messageApi.success('创建成功');
       }
       setModalVisible(false);
@@ -437,6 +424,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
           fieldProps={{ min: 0 }}
           colProps={{ span: 12 }}
         />
+        <DocumentAttachmentsField category="barcode_mapping_rule_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"

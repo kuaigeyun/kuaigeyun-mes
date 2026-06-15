@@ -83,8 +83,18 @@ function clonePropsForRowTone(
   }
 }
 
-function rowActionClassName(kind: ReturnType<typeof resolveActionKind>): string {
-  return ['ant-btn-row-action', kind === 'detail' ? 'ant-btn-row-action-detail' : ''].filter(Boolean).join(' ')
+const ROW_ACTION_SUCCESS_KINDS = new Set<RowActionPermissionKind>(['execute', 'complete', 'approve'])
+
+function rowActionClassName(
+  kind: ReturnType<typeof resolveActionKind>,
+  explicit?: RowActionPermissionKind | null,
+): string {
+  const parts = ['ant-btn-row-action']
+  if (kind === 'detail') parts.push('ant-btn-row-action-detail')
+  if (explicit && ROW_ACTION_SUCCESS_KINDS.has(explicit)) {
+    parts.push('ant-btn-row-action-success')
+  }
+  return parts.filter(Boolean).join(' ')
 }
 
 function resolveEffectiveActionKind(
@@ -194,11 +204,12 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const catalogLabel = resolveCatalogButtonLabel(node, inheritedExplicit)
     const normalizedText =
       catalogLabel ?? (normalizeActionLabelText(rawChildrenText) || props.children)
+    const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
     const kind = resolveEffectiveActionKind(node, inheritedExplicit)
     const currentIcon = props.icon
     const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     const nextIcon = defaultIcon ?? currentIcon
-    const targetClass = rowActionClassName(kind)
+    const targetClass = rowActionClassName(kind, explicit)
 
     const sameTone = rowActionToneMatchesProps(tone, props as Record<string, unknown>)
     const sameClass = String(props.className || '').trim() === targetClass
@@ -228,6 +239,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     const text = normalizeActionLabelText(readNodeText(node))
     const inheritedExplicit = ctx.inheritedExplicitKind ?? null
     const tone = resolveButtonToneFromNode(node, inheritedExplicit)
+    const explicit = readExplicitActionKind(node) ?? inheritedExplicit ?? null
     const kind = resolveEffectiveActionKind(node, inheritedExplicit)
     const defaultIcon = defaultIconForRowActionWithKind(node, inheritedExplicit)
     if (
@@ -240,7 +252,7 @@ export function normalizeActionTree(node: React.ReactNode, ctx: NormalizeActionC
     return (
       <Button
         size="small"
-        className={rowActionClassName(kind)}
+        className={rowActionClassName(kind, explicit)}
         type={tone.type}
         danger={tone.mode === 'destructive' ? true : tone.danger}
         icon={(props.icon as React.ReactNode) || defaultIcon}

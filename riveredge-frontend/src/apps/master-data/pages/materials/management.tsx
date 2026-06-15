@@ -296,7 +296,14 @@ function clampContextMenuPosition(
   return { x: nextX, y: nextY }
 }
 
-/** 列表首列附件：图片走缩略图，PDF/DWG 等显示图标并可新开下载页 */
+/** 与 MaterialForm 一致：非图片附件扩展名 */
+const MATERIAL_NON_IMAGE_EXT = new Set(['pdf', 'dwg', 'dxf', 'step', 'stp', 'xls', 'xlsx'])
+
+function normalizeMaterialAttachmentExt(raw: string): string {
+  return raw.trim().toLowerCase().replace(/^\./, '')
+}
+
+/** 列表首列附件：图片走缩略图，PDF/DWG 等显示图标并可预览 */
 const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({ fileUuid, alt }) => {
   const { t } = useTranslation()
   const [ext, setExt] = useState<string | null>(null)
@@ -308,24 +315,26 @@ const MaterialAttachmentThumb: React.FC<{ fileUuid: string; alt?: string }> = ({
     getFileByUuid(fileUuid)
       .then((f) => {
         if (cancelled) return
-        const fromField = (f.file_extension && String(f.file_extension).toLowerCase()) || ''
+        const fromField = f.file_extension ? normalizeMaterialAttachmentExt(String(f.file_extension)) : ''
         const name = f.original_name || ''
         const fromName =
-          name.lastIndexOf('.') >= 0 ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : ''
+          name.lastIndexOf('.') >= 0
+            ? normalizeMaterialAttachmentExt(name.slice(name.lastIndexOf('.') + 1))
+            : ''
         setExt(fromField || fromName || '')
         setFileName(name)
       })
       .catch(() => {
-        if (!cancelled) setExt('')
+        // 元数据失败时保持 null，继续按图片缩略图尝试加载
       })
     return () => {
       cancelled = true
     }
   }, [fileUuid])
 
-  const imageExt = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
-  // 未知扩展名时先按图片展示，避免 getFileByUuid 阻塞整表缩略图
-  if (ext === null || imageExt.includes(ext)) {
+  // 仅已知非图片扩展名才切文件图标；未知/空扩展名仍走 SecureImage（与改前列表行为一致）
+  const showAsFileIcon = ext !== null && ext !== '' && MATERIAL_NON_IMAGE_EXT.has(ext)
+  if (!showAsFileIcon) {
     return (
       <SecureImage
         fileUuid={fileUuid}

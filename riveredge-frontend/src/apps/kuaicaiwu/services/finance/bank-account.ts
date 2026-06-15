@@ -12,6 +12,7 @@ export interface BankAccount {
   current_balance: number;
   is_active: boolean;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
 }
 
 const API = '/apps/kuaicaiwu/bank-accounts';

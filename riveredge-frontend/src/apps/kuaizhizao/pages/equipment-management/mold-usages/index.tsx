@@ -14,6 +14,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { moldApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 
@@ -31,6 +33,7 @@ interface MoldUsage {
   status?: string;
   return_date?: string;
   remark?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
 
@@ -67,6 +70,7 @@ const MoldUsagesPage: React.FC = () => {
         operator_name: values.operator_name,
         status: values.status || '使用中',
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('使用记录已保存');
       setModalVisible(false);
@@ -209,6 +213,7 @@ const MoldUsagesPage: React.FC = () => {
         <ProFormText name="source_type" label="来源类型" placeholder="如：工单" colProps={{ span: 12 }} />
         <ProFormText name="source_no" label="来源单号" colProps={{ span: 12 }} />
         <ProFormText name="operator_name" label="操作人" colProps={{ span: 12 }} />
+        <DocumentAttachmentsField category="mold_usage_attachments" />
       </FormModalTemplate>
     </ListPageTemplate>
   );

@@ -20,6 +20,7 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, ListPageTemplate } from '../../../../../components/layout-templates';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { warehouseApi } from '../../../services/production';
@@ -200,22 +201,9 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleProcess(record)}
-              style={{ color: '#52c41a' }}
-            >
+            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleProcess(record)}>
               处理
             </Button>
           )}

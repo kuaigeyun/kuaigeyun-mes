@@ -15,9 +15,11 @@ from core.schemas.file import (
     FileListResponse,
     FilePreviewResponse,
     FileUploadResponse,
+    ImageTierBackfillResponse,
 )
 from core.services.file.file_service import FileService
 from core.services.file.file_preview_service import FilePreviewService
+from core.services.file.image_tier_service import ImageTierService, IMAGE_TIER_THUMB_SIZE
 from core.api.deps.deps import get_current_tenant
 from core.api.deps.access import AuthContext, require_access
 from core.api.deps.file_upload_access import require_file_upload_access
@@ -250,7 +252,7 @@ async def list_files(
             preview_url = await FilePreviewService.generate_simple_preview_url(
                 file_uuid=file.uuid,
                 tenant_id=tenant_id,
-                size=128, # 使用 128px 缩略图加速加载
+                size=IMAGE_TIER_THUMB_SIZE,
             )
             file_dict["preview_url"] = preview_url
         items.append(file_dict)
@@ -262,6 +264,30 @@ async def list_files(
         page_size=result["page_size"],
         non_empty_attachment_categories=non_empty_attachment_categories,
     )
+
+
+@router.post("/image-tiers/backfill", response_model=ImageTierBackfillResponse)
+async def backfill_image_tiers(
+    limit: int = Query(50, ge=1, le=200, description="每批处理数量"),
+    offset: int = Query(0, ge=0, description="偏移量"),
+    category: Optional[str] = Query(None, description="仅处理指定分类"),
+    force: bool = Query(False, description="强制重新生成已有档位"),
+    _auth: object = Depends(require_access("system.file", "update")),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    存量图片三档压缩：为已有图片生成缩略图(64)与预览图(512)持久化缓存。
+    前端可循环调用直至 done=true。
+    """
+    result = await ImageTierService.backfill_image_tiers(
+        tenant_id=tenant_id,
+        limit=limit,
+        offset=offset,
+        category=category,
+        force=force,
+    )
+    return ImageTierBackfillResponse(**result)
 
 
 @router.get("/{uuid}", response_model=FileResponse)
@@ -406,82 +432,13 @@ async def download_file(
         # 缩略图：仅图片且指定 size 时，返回缩放后的图片
         # PNG 透明图保留透明通道输出 PNG，避免白底；其他输出 JPEG
         file_type = FileService.resolve_download_media_type(file, file_content)
-        # 缩略图：仅图片且指定 size 时，通过磁盘缓存或实时生成返回缩放后的图片
+        # 缩略图：仅图片且指定 size 时，通过持久化档位或实时生成返回缩放后的图片
         if size and file_type.startswith("image/"):
-            try:
-                from io import BytesIO
-                from PIL import Image
-                import os
-                
-                # 磁盘缓存路径逻辑
-                thumb_cache_dir = os.path.join(FS.UPLOAD_DIR, "thumbnails")
-                os.makedirs(thumb_cache_dir, exist_ok=True)
-                thumb_cache_path = os.path.join(thumb_cache_dir, f"{uuid}_{size}.bin")
-                
-                # 1. 尝试命中缓存
-                if os.path.exists(thumb_cache_path):
-                    with open(thumb_cache_path, "rb") as f:
-                        thumb_bytes = f.read()
-                    # 根据原始类型决定返回格式（简单起见，缓存中存原始 bytes，输出头保持一致）
-                    is_png = file_type == "image/png"
-                    return StreamingResponse(
-                        iter([thumb_bytes]),
-                        media_type="image/png" if is_png else "image/jpeg",
-                        headers={
-                            "Content-Disposition": f"inline; filename=\"thumb_{size}.{'png' if is_png else 'jpg'}\"",
-                            "Content-Length": str(len(thumb_bytes)),
-                            "Cache-Control": "public, max-age=86400",
-                            "X-Cache": "HIT" # 标记命中缓存
-                        },
-                    )
-
-                # 2. 缓存未命中，实时生成
-                img = Image.open(BytesIO(file_content))
-                has_alpha = img.mode in ("RGBA", "LA", "P")
-                if has_alpha:
-                    img = img.convert("RGBA")
-                    img.thumbnail((size, size), Image.Resampling.LANCZOS)
-                    buf = BytesIO()
-                    img.save(buf, format="PNG", optimize=True)
-                    thumb_bytes = buf.getvalue()
-                    # 写入缓存
-                    with open(thumb_cache_path, "wb") as f:
-                        f.write(thumb_bytes)
-                    return StreamingResponse(
-                        iter([thumb_bytes]),
-                        media_type="image/png",
-                        headers={
-                            "Content-Disposition": "inline; filename=\"thumb.png\"",
-                            "Content-Length": str(len(thumb_bytes)),
-                            "Cache-Control": "public, max-age=86400",
-                            "X-Cache": "MISS"
-                        },
-                    )
-                else:
-                    if img.mode == "P":
-                        img = img.convert("RGB")
-                    elif img.mode not in ("RGB", "L"):
-                        img = img.convert("RGB")
-                    img.thumbnail((size, size), Image.Resampling.LANCZOS)
-                    buf = BytesIO()
-                    img.save(buf, format="JPEG", quality=85, optimize=True)
-                    thumb_bytes = buf.getvalue()
-                    # 写入缓存
-                    with open(thumb_cache_path, "wb") as f:
-                        f.write(thumb_bytes)
-                    return StreamingResponse(
-                        iter([thumb_bytes]),
-                        media_type="image/jpeg",
-                        headers={
-                            "Content-Disposition": "inline; filename=\"thumb.jpg\"",
-                            "Content-Length": str(len(thumb_bytes)),
-                            "Cache-Control": "public, max-age=86400",
-                            "X-Cache": "MISS"
-                        },
-                    )
-            except Exception as e:
-                logger.warning(f"缩略图生成失败，回退原图: {e}")
-                pass
+            tier_response = ImageTierService.streaming_response_for_tier(
+                uuid, size, file_type, file_content,
+            )
+            if tier_response is not None:
+                return tier_response
         
         # 构建完整路径（用于获取文件类型）
         import os

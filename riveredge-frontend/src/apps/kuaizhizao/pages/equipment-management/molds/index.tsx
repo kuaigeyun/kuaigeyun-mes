@@ -13,10 +13,13 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormText, ProFormSelect, ProFormDatePicker, ProFormDigit, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty } from 'antd';
+import { App, Button, Tag, Space, message, Modal, Tabs, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Row, Col, Typography, Spin, theme as AntdTheme, Empty, Upload } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMoldAssetLifecycle } from '../../../utils/equipmentLifecycle';
-import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
+import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, UploadOutlined } from '@ant-design/icons';
+import { uploadMultipleFiles } from '../../../../../services/file';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import CodeField from '../../../../../components/code-field';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
@@ -58,6 +61,7 @@ interface Mold {
   status?: string;
   is_active?: boolean;
   description?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   total_usage_count?: number;
   cavity_count?: number;
   design_lifetime?: number;
@@ -80,6 +84,7 @@ interface MoldUsage {
   operator_name?: string;
   status?: string;
   return_date?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
 }
 
 interface MoldCalibration {
@@ -90,6 +95,7 @@ interface MoldCalibration {
   certificate_no?: string;
   expiry_date?: string;
   remark?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
 }
 
 const MoldsPage: React.FC = () => {
@@ -220,6 +226,7 @@ const MoldsPage: React.FC = () => {
         cavity_count: detail.cavity_count,
         design_lifetime: detail.design_lifetime,
         description: detail.description,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         ...fieldFormValues,
       });
       setModalVisible(true);
@@ -324,6 +331,7 @@ const MoldsPage: React.FC = () => {
         certificate_no: values.certificate_no,
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       await moldApi.createCalibration(data);
       messageApi.success('校验记录已保存');
@@ -354,6 +362,7 @@ const MoldsPage: React.FC = () => {
         usage_count: values.usage_count ?? 1,
         operator_name: values.operator_name,
         status: values.status || '使用中',
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       await moldApi.createUsage(data);
       messageApi.success('使用记录创建成功');
@@ -405,6 +414,7 @@ const MoldsPage: React.FC = () => {
         installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
         cavity_count: standardValues.cavity_count ?? null,
         design_lifetime: standardValues.design_lifetime ?? null,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
 
       const editedUuid = isEdit ? currentMold?.uuid : undefined;
@@ -995,6 +1005,9 @@ const MoldsPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <DocumentAttachmentsField category="mold_attachments" />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea
               name="description"
               label="描述"
@@ -1268,6 +1281,24 @@ const MoldsPage: React.FC = () => {
           <Form.Item name="expiry_date" label="有效期至">
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'mold_calibration_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
+          </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} placeholder="请输入备注" />
           </Form.Item>
@@ -1312,6 +1343,24 @@ const MoldsPage: React.FC = () => {
               { label: '已归还', value: '已归还' },
               { label: '已报废', value: '已报废' },
             ]} />
+          </Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'mold_usage_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
           </Form.Item>
         </Form>
       </Modal>

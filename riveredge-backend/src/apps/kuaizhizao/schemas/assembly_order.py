@@ -21,7 +21,10 @@ class AssemblyOrderBase(BaseModel):
     product_material_code: str = Field(..., description="成品物料编码")
     product_material_name: str = Field(..., description="成品物料名称")
     total_quantity: Decimal = Field(0, description="组装数量（成品数量）")
+    assembly_template_id: Optional[int] = Field(None, description="套用的组装模板ID")
+    assembly_template_code: Optional[str] = Field(None, description="套用的组装模板编码")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class AssemblyOrderCreate(AssemblyOrderBase):
@@ -38,7 +41,10 @@ class AssemblyOrderUpdate(BaseModel):
     product_material_code: Optional[str] = None
     product_material_name: Optional[str] = None
     total_quantity: Optional[Decimal] = None
+    assembly_template_id: Optional[int] = None
+    assembly_template_code: Optional[str] = None
     remarks: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class AssemblyOrderResponse(AssemblyOrderBase):

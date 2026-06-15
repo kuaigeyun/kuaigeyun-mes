@@ -25,7 +25,10 @@ class StocktakingBase(BaseModel):
     warehouse_name: str = Field(..., description="仓库名称")
     stocktaking_date: datetime = Field(..., description="盘点日期")
     stocktaking_type: str = Field("full", description="盘点类型（full/partial/cycle）")
+    line_granularity: str = Field("batch", description="明细粒度（material/batch）")
+    include_zero_stock: bool = Field(False, description="是否包含零库存行")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class StocktakingCreate(StocktakingBase):
@@ -49,7 +52,16 @@ class StocktakingUpdate(BaseModel):
     warehouse_name: Optional[str] = Field(None, description="仓库名称")
     stocktaking_date: Optional[datetime] = Field(None, description="盘点日期")
     stocktaking_type: Optional[str] = Field(None, description="盘点类型")
+    line_granularity: Optional[str] = Field(None, description="明细粒度（material/batch）")
+    include_zero_stock: Optional[bool] = Field(None, description="是否包含零库存行")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
+
+
+class StartStocktakingRequest(BaseModel):
+    """开始盘点请求（可覆盖头字段，仅草稿且无明细时生效）"""
+    line_granularity: Optional[str] = Field(None, description="明细粒度（material/batch）")
+    include_zero_stock: Optional[bool] = Field(None, description="是否包含零库存行")
 
 
 class StocktakingResponse(StocktakingBase):
@@ -62,6 +74,8 @@ class StocktakingResponse(StocktakingBase):
     uuid: str = Field(..., description="业务ID")
     code: str = Field(..., description="盘点单号")
     status: str = Field(..., description="状态")
+    line_granularity: str = Field("batch", description="明细粒度（material/batch）")
+    include_zero_stock: bool = Field(False, description="是否包含零库存行")
     total_items: int = Field(..., description="盘点物料总数")
     counted_items: int = Field(..., description="已盘点物料数")
     total_differences: int = Field(..., description="差异总数")
@@ -101,7 +115,7 @@ class StocktakingItemBase(BaseModel):
     material_id: int = Field(..., description="物料ID")
     material_code: str = Field(..., description="物料编码")
     material_name: str = Field(..., description="物料名称")
-    warehouse_id: int = Field(..., description="仓库ID")
+    warehouse_id: Optional[int] = Field(None, description="仓库ID（不传则继承盘点单头）")
     location_id: Optional[int] = Field(None, description="库位ID（可选）")
     location_code: Optional[str] = Field(None, description="库位编码（可选）")
     batch_no: Optional[str] = Field(None, description="批次号（可选）")
@@ -118,6 +132,11 @@ class StocktakingItemCreate(StocktakingItemBase):
     用于创建新库存盘点明细的数据验证。
     """
     pass
+
+
+class StocktakingItemBulkCreate(BaseModel):
+    """批量添加盘点明细"""
+    items: List[StocktakingItemCreate] = Field(..., description="盘点明细列表")
 
 
 class StocktakingItemUpdate(BaseModel):

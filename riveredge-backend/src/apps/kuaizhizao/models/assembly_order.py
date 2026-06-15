@@ -60,10 +60,14 @@ class AssemblyOrder(BaseModel):
     product_material_code = fields.CharField(max_length=50, description="成品物料编码")
     product_material_name = fields.CharField(max_length=200, description="成品物料名称")
 
+    assembly_template_id = fields.IntField(null=True, description="套用的组装模板ID")
+    assembly_template_code = fields.CharField(max_length=50, null=True, description="套用的组装模板编码")
+
     total_quantity = fields.DecimalField(max_digits=12, decimal_places=2, default=0, description="组装数量（成品数量）")
     total_items = fields.IntField(default=0, description="组件明细数")
 
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     created_by = fields.IntField(null=True, description="创建人ID")
     created_by_name = fields.CharField(max_length=100, null=True, description="创建人姓名")

@@ -1,6 +1,6 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 /**
- * 物料中心 - 委外发料 / 委外收货列表与新建
+ * 物料中心 - 委外发料 / 收货 / 退料 / 退货列表与新建
  */
 import React, { useRef, useState } from 'react';
 import {
@@ -9,6 +9,8 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
+  ProFormItem,
+  ProFormDigit,
 } from '@ant-design/pro-components';
 import { App, Button, Tag } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
@@ -19,6 +21,8 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import {
   outsourceMaterialIssueApi,
   outsourceMaterialReceiptApi,
+  outsourceMaterialReturnApi,
+  outsourceProductReturnApi,
   outsourceWorkOrderApi,
 } from '../../../services/production';
 import OutsourceIssueFormContent, { type OutsourceIssueLine } from '../../../components/OutsourceIssueFormContent';
@@ -56,6 +60,8 @@ type OutsourceMaterialRow = {
   unit?: string;
   warehouseName?: string;
   warehouse_name?: string;
+  returnReason?: string;
+  return_reason?: string;
   status?: string;
   createdAt?: string;
   created_at?: string;
@@ -67,6 +73,9 @@ interface OutsourceMaterialPanelProps {
 
 const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode }) => {
   const isIssue = mode === 'outsource_issue';
+  const isReceipt = mode === 'outsource_receipt';
+  const isMaterialReturn = mode === 'outsource_material_return';
+  const isProductReturn = mode === 'outsource_product_return';
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const formRef = useRef<any>();
@@ -76,16 +85,44 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
   const [issuePreviewLoading, setIssuePreviewLoading] = useState(false);
   const [issuePreviewMessage, setIssuePreviewMessage] = useState<string | null>(null);
   const [receiptLine, setReceiptLine] = useState<OutsourceReceiptLine | null>(null);
+  const [materialReturnLines, setMaterialReturnLines] = useState<any[]>([]);
+  const [productReturnLines, setProductReturnLines] = useState<any[]>([]);
 
-  const api = isIssue ? outsourceMaterialIssueApi : outsourceMaterialReceiptApi;
+  const api = isIssue
+    ? outsourceMaterialIssueApi
+    : isReceipt
+      ? outsourceMaterialReceiptApi
+      : isMaterialReturn
+        ? outsourceMaterialReturnApi
+        : outsourceProductReturnApi;
+
+  const panelTitle = isIssue
+    ? '委外发料单'
+    : isReceipt
+      ? '委外收货单'
+      : isMaterialReturn
+        ? '委外退料单'
+        : '委外退货单';
+
+  const createLabel = isIssue
+    ? '新建委外发料'
+    : isReceipt
+      ? '新建委外收货'
+      : isMaterialReturn
+        ? '新建委外退料'
+        : '新建委外退货';
 
   const handleComplete = (record: OutsourceMaterialRow) => {
-    if (!record.id) return;
+    if (!record.id || isMaterialReturn || isProductReturn) return;
     modalApi.confirm({
       title: isIssue ? '确认完成委外发料？' : '确认完成委外收货？',
       content: '完成后将更新委外工单发料/收货数量。',
       onOk: async () => {
-        await api.complete(String(record.id));
+        if (isIssue) {
+          await outsourceMaterialIssueApi.complete(String(record.id));
+        } else {
+          await outsourceMaterialReceiptApi.complete(String(record.id));
+        }
         messageApi.success('操作成功');
         actionRef.current?.reload();
       },
@@ -105,7 +142,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       width: 150,
       render: (_, r) => r.outsourceWorkOrderCode || r.outsource_work_order_code || '-',
     },
-    ...(isIssue
+    ...(isIssue || isMaterialReturn
       ? [
           {
             title: '物料',
@@ -116,6 +153,17 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
           } as ProColumns<OutsourceMaterialRow>,
         ]
       : []),
+    ...(isProductReturn
+      ? [
+          {
+            title: '退货原因',
+            dataIndex: ['returnReason', 'return_reason'],
+            width: 160,
+            ellipsis: true,
+            render: (_, r) => r.returnReason || r.return_reason || '-',
+          } as ProColumns<OutsourceMaterialRow>,
+        ]
+      : []),
     {
       title: '数量',
       dataIndex: 'quantity',
@@ -123,12 +171,16 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       align: 'right',
       render: (_, r) => (r.quantity != null ? `${Number(r.quantity).toFixed(2)} ${r.unit || ''}` : '-'),
     },
-    {
-      title: '仓库',
-      dataIndex: ['warehouseName', 'warehouse_name'],
-      width: 120,
-      render: (_, r) => r.warehouseName || r.warehouse_name || '-',
-    },
+    ...(!isProductReturn
+      ? [
+          {
+            title: '仓库',
+            dataIndex: ['warehouseName', 'warehouse_name'],
+            width: 120,
+            render: (_: unknown, r: OutsourceMaterialRow) => r.warehouseName || r.warehouse_name || '-',
+          } as ProColumns<OutsourceMaterialRow>,
+        ]
+      : []),
     {
       title: '状态',
       dataIndex: 'status',
@@ -153,7 +205,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       width: 100,
       fixed: 'right',
       render: (_, record) =>
-        !isIssue && record.status === 'draft' && record.id ? (
+        isReceipt && record.status === 'draft' && record.id ? (
           <Button type="link" size="small" onClick={() => handleComplete(record)}>
             完成
           </Button>
@@ -163,11 +215,17 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
     },
   ];
 
-  const openCreate = () => {
+  const resetCreateState = () => {
     setSelectedOwo(null);
     setIssueLines([]);
     setIssuePreviewMessage(null);
     setReceiptLine(null);
+    setMaterialReturnLines([]);
+    setProductReturnLines([]);
+  };
+
+  const openCreate = () => {
+    resetCreateState();
     setCreateOpen(true);
     setTimeout(() => formRef.current?.resetFields(), 0);
   };
@@ -209,8 +267,32 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
     setSelectedOwo(detail);
     if (isIssue) {
       await loadIssuePreview(owoId);
-    } else {
+      return;
+    }
+    if (isReceipt) {
       setReceiptLine(buildReceiptLineFromWorkOrder(detail));
+      return;
+    }
+    if (isMaterialReturn) {
+      const preview: any = await outsourceMaterialReturnApi.returnPreview(owoId);
+      const lines = preview?.lines ?? preview?.data?.lines ?? [];
+      setMaterialReturnLines(lines);
+      const first = lines[0];
+      formRef.current?.setFieldsValue?.({
+        issueId: first?.issue_id ?? first?.issueId,
+        returnQuantity: Number(first?.returnable_quantity ?? first?.returnableQuantity ?? 0) || undefined,
+      });
+      return;
+    }
+    if (isProductReturn) {
+      const preview: any = await outsourceProductReturnApi.returnPreview(owoId);
+      const lines = preview?.lines ?? preview?.data?.lines ?? [];
+      setProductReturnLines(lines);
+      const first = lines[0];
+      formRef.current?.setFieldsValue?.({
+        receiptId: first?.receipt_id ?? first?.receiptId,
+        returnQuantity: Number(first?.returnable_quantity ?? first?.returnableQuantity ?? 0) || undefined,
+      });
     }
   };
 
@@ -243,7 +325,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
           unit: l.unit,
         })),
       });
-    } else {
+    } else if (isReceipt) {
       if (!receiptLine || receiptLine.receiptQuantity <= 0) {
         messageApi.error('请填写本次收货数量');
         throw new Error('no qty');
@@ -264,13 +346,61 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
         batch_number: values.batchNumber,
         remarks: values.remarks,
       });
+    } else if (isMaterialReturn) {
+      const issueId = Number(values.issueId || 0);
+      const line = materialReturnLines.find((l) => Number(l.issue_id ?? l.issueId) === issueId);
+      if (!line) {
+        messageApi.error('请选择可退料的发料单');
+        throw new Error('no line');
+      }
+      const qty = Number(values.returnQuantity || 0);
+      if (qty <= 0) {
+        messageApi.error('请填写退料数量');
+        throw new Error('no qty');
+      }
+      if (!values.warehouseId) {
+        messageApi.error('请选择退料入库仓库');
+        throw new Error('no warehouse');
+      }
+      await outsourceMaterialReturnApi.create({
+        outsource_work_order_id: selectedOwo.id,
+        outsource_work_order_code: selectedOwo.code,
+        outsource_material_issue_id: issueId,
+        material_id: Number(line.material_id ?? line.materialId),
+        material_code: line.material_code ?? line.materialCode ?? '',
+        material_name: line.material_name ?? line.materialName ?? '',
+        quantity: qty,
+        unit: line.unit || '个',
+        warehouse_id: values.warehouseId,
+        warehouse_name: values.warehouseName,
+        batch_number: values.batchNumber,
+        remarks: values.remarks,
+      });
+    } else if (isProductReturn) {
+      const receiptId = Number(values.receiptId || 0);
+      const line = productReturnLines.find((l) => Number(l.receipt_id ?? l.receiptId) === receiptId);
+      if (!line) {
+        messageApi.error('请选择可退货的收货单');
+        throw new Error('no line');
+      }
+      const qty = Number(values.returnQuantity || 0);
+      if (qty <= 0) {
+        messageApi.error('请填写退货数量');
+        throw new Error('no qty');
+      }
+      await outsourceProductReturnApi.create({
+        outsource_work_order_id: selectedOwo.id,
+        outsource_work_order_code: selectedOwo.code,
+        outsource_material_receipt_id: receiptId,
+        quantity: qty,
+        unit: line.unit || selectedOwo.unit || '件',
+        return_reason: values.returnReason,
+        remarks: values.remarks,
+      });
     }
-    messageApi.success(isIssue ? `委外发料成功，共 ${issueLines.filter((l) => l.issueQuantity > 0).length} 条明细` : '委外收货单创建成功');
+    messageApi.success(`${createLabel}成功`);
     setCreateOpen(false);
-    setSelectedOwo(null);
-    setIssueLines([]);
-    setIssuePreviewMessage(null);
-    setReceiptLine(null);
+    resetCreateState();
     actionRef.current?.reload();
   };
 
@@ -281,10 +411,10 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
         rowKey="id"
         columns={columns}
         columnPersistenceId={`apps.kuaizhizao.pages.warehouse-management.material-center.${mode}`}
-        headerTitle={isIssue ? '委外发料单' : '委外收货单'}
+        headerTitle={panelTitle}
         toolBarRender={() => [
           <Button {...rowActionKind('create')} key="create" type="primary" onClick={openCreate}>
-            {isIssue ? '新建委外发料' : '新建委外收货'}
+            {createLabel}
           </Button>,
         ]}
         request={async (params) => {
@@ -299,14 +429,11 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
       />
 
       <FormModalTemplate
-        title={isIssue ? '新建委外发料' : '新建委外收货'}
+        title={createLabel}
         open={createOpen}
         onClose={() => {
           setCreateOpen(false);
-          setSelectedOwo(null);
-          setIssueLines([]);
-          setIssuePreviewMessage(null);
-          setReceiptLine(null);
+          resetCreateState();
         }}
         onFinish={handleSubmit}
         formRef={formRef}
@@ -322,7 +449,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
             const res = await outsourceWorkOrderApi.list({ skip: 0, limit: 1000 });
             const rows = unwrapList<any>(res);
             return rows
-              .filter((r) => r.status === 'released' || r.status === 'in_progress')
+              .filter((r) => r.status === 'released' || r.status === 'in_progress' || r.status === 'completed')
               .map((r) => ({
                 label: `${r.code} - ${r.productName || r.product_name || ''}`,
                 value: r.id,
@@ -346,7 +473,7 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
             />
           </div>
         )}
-        {selectedOwo && !isIssue && (
+        {selectedOwo && isReceipt && (
           <div style={{ gridColumn: '1 / -1' }}>
             <OutsourceReceiptFormContent
               workOrder={selectedOwo}
@@ -355,15 +482,84 @@ const OutsourceMaterialPanel: React.FC<OutsourceMaterialPanelProps> = ({ mode })
             />
           </div>
         )}
-        <UniWarehouseSelect
-          name="warehouseId"
-          label={isIssue ? '出库仓库' : '入库仓库'}
-          required
-          colProps={{ span: 12 }}
-          onChange={(_v, wh) => formRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
-        />
+        {selectedOwo && isMaterialReturn && materialReturnLines.length > 0 && (
+          <>
+            <ProFormSelect
+              name="issueId"
+              label="委外发料单"
+              colProps={{ span: 12 }}
+              rules={[{ required: true, message: '请选择发料单' }]}
+              options={materialReturnLines.map((l) => ({
+                value: Number(l.issue_id ?? l.issueId),
+                label: `${l.issue_code ?? l.issueCode} - ${l.material_name ?? l.materialName}`,
+              }))}
+              fieldProps={{
+                onChange: (v: number) => {
+                  const line = materialReturnLines.find((l) => Number(l.issue_id ?? l.issueId) === v);
+                  if (line) {
+                    formRef.current?.setFieldsValue?.({
+                      returnQuantity: Number(line.returnable_quantity ?? line.returnableQuantity ?? 0),
+                    });
+                  }
+                },
+              }}
+            />
+            <ProFormDigit
+              name="returnQuantity"
+              label="退料数量"
+              colProps={{ span: 12 }}
+              min={0.01}
+              rules={[{ required: true, message: '请填写退料数量' }]}
+              fieldProps={{ precision: 2, style: { width: '100%' } }}
+            />
+          </>
+        )}
+        {selectedOwo && isProductReturn && productReturnLines.length > 0 && (
+          <>
+            <ProFormSelect
+              name="receiptId"
+              label="委外收货单"
+              colProps={{ span: 12 }}
+              rules={[{ required: true, message: '请选择收货单' }]}
+              options={productReturnLines.map((l) => ({
+                value: Number(l.receipt_id ?? l.receiptId),
+                label: `${l.receipt_code ?? l.receiptCode}`,
+              }))}
+              fieldProps={{
+                onChange: (v: number) => {
+                  const line = productReturnLines.find((l) => Number(l.receipt_id ?? l.receiptId) === v);
+                  if (line) {
+                    formRef.current?.setFieldsValue?.({
+                      returnQuantity: Number(line.returnable_quantity ?? line.returnableQuantity ?? 0),
+                    });
+                  }
+                },
+              }}
+            />
+            <ProFormDigit
+              name="returnQuantity"
+              label="退货数量"
+              colProps={{ span: 12 }}
+              min={0.01}
+              rules={[{ required: true, message: '请填写退货数量' }]}
+              fieldProps={{ precision: 2, style: { width: '100%' } }}
+            />
+            <ProFormText name="returnReason" label="退货原因" colProps={{ span: 24 }} />
+          </>
+        )}
+        {!isProductReturn && (
+          <UniWarehouseSelect
+            name="warehouseId"
+            label={isIssue ? '出库仓库' : '入库仓库'}
+            required
+            colProps={{ span: 12 }}
+            onChange={(_v, wh) => formRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
+          />
+        )}
         <ProFormText name="warehouseName" hidden />
-        {!isIssue && <ProFormText name="batchNumber" label="批次号" colProps={{ span: 12 }} />}
+        {(isReceipt || isMaterialReturn) && (
+          <ProFormText name="batchNumber" label="批次号" colProps={{ span: 12 }} />
+        )}
         <ProFormTextArea name="remarks" label="备注" colProps={{ span: 24 }} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>

@@ -46,6 +46,8 @@ import {
   type PurchaseInquiryItem,
   type PurchaseInquiryVendor,
 } from '../../../services/purchase-inquiry';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   buildPurchaseInquiryLifecycleValueEnum,
   getPurchaseInquiryLifecycle,
@@ -158,6 +160,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       inquiry_date: full.inquiry_date ? dayjs(full.inquiry_date) : undefined,
       quote_deadline: full.quote_deadline ? dayjs(full.quote_deadline) : undefined,
       notes: full.notes,
+      attachments: mapAttachmentsToUploadList(full.attachments),
       __inquiry_edit_item: (full.items ?? []).map((item) => ({ material_id: item.material_id })),
     });
     setEditOpen(true);
@@ -170,6 +173,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       inquiry_date: values.inquiry_date?.format('YYYY-MM-DD'),
       quote_deadline: values.quote_deadline?.format('YYYY-MM-DD'),
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
       items: editItems.map((item) => ({
         material_id: item.material_id!,
         material_code: item.material_code!,
@@ -938,6 +942,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         </div>
 
         <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+        <DocumentAttachmentsField category="purchase_inquiry_attachments" />
       </FormModalTemplate>
 
       <Modal

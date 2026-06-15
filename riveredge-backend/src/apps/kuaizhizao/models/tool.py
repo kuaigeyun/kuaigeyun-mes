@@ -62,6 +62,7 @@ class Tool(BaseModel):
     total_usage_count = fields.IntField(default=0, description="累计使用次数")
     
     description = fields.TextField(null=True, description="备注说明")
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
 
     def __str__(self):
@@ -101,6 +102,7 @@ class ToolUsage(BaseModel):
     
     status = fields.CharField(max_length=50, default="使用中", description="状态（使用中、已归还）")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True)
 
 
@@ -125,6 +127,7 @@ class ToolMaintenance(BaseModel):
     cost = fields.DecimalField(max_digits=10, decimal_places=2, default=0, description="维保费用")
     
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True)
 
 
@@ -149,4 +152,5 @@ class ToolCalibration(BaseModel):
     
     attachment_uuid = fields.CharField(max_length=36, null=True, description="报告附件UUID")
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True)

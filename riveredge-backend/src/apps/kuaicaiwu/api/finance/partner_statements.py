@@ -85,6 +85,7 @@ async def create_partner_statement(
             period=data.statement_period,
             created_by=current_user.id,
             notes=data.notes,
+            attachments=data.attachments,
             start_date=data.start_date,
             end_date=data.end_date,
         )

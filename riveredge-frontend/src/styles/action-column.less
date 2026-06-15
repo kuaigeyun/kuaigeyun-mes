@@ -30,7 +30,19 @@
     outline-offset: 2px !important;
   }
 
-  /* 特殊处理：详情动作使用主题色 */
+  &:hover:not(:disabled) {
+    background: var(--ant-colorFillTertiary, rgba(30, 41, 59, 0.08)) !important;
+    color: var(--ant-colorTextHeading, #020617) !important;
+    box-shadow: none !important;
+  }
+
+  &:active:not(:disabled) {
+    background: var(--ant-colorFillSecondary, rgba(15, 23, 42, 0.1)) !important;
+    transform: translateZ(0) !important;
+    box-shadow: none !important;
+  }
+
+  /* 特殊处理：详情动作使用主题色（须在通用 hover 之后，避免被覆盖） */
   &.ant-btn-row-action-detail {
     color: var(--ant-color-primary, #1677ff) !important;
     font-weight: 600 !important;
@@ -42,16 +54,15 @@
     }
   }
 
-  &:hover:not(:disabled) {
-    background: var(--ant-colorFillTertiary, rgba(30, 41, 59, 0.08)) !important;
-    color: var(--ant-colorTextHeading, #020617) !important;
-    box-shadow: none !important;
-  }
+  /* 正向执行类动作：统一成功色（须在通用 hover 之后） */
+  &.ant-btn-row-action-success {
+    color: var(--ant-colorSuccess, #52c41a) !important;
 
-  &:active:not(:disabled) {
-    background: var(--ant-colorFillSecondary, rgba(15, 23, 42, 0.1)) !important;
-    transform: translateZ(0) !important;
-    box-shadow: none !important;
+    &:hover:not(:disabled) {
+      background: var(--ant-colorSuccessBg, rgba(82, 196, 26, 0.08)) !important;
+      color: var(--ant-colorSuccessHover, #73d13d) !important;
+      box-shadow: none !important;
+    }
   }
 
   &.ant-btn-dangerous {
@@ -102,6 +113,15 @@ html[data-theme='dark'] body .ant-btn-row-action.ant-btn {
     &:hover:not(:disabled) {
       background: var(--ant-colorErrorBg) !important;
       color: var(--ant-colorErrorHover) !important;
+      box-shadow: none !important;
+    }
+  }
+
+  &.ant-btn-row-action-success {
+    color: var(--ant-colorSuccess) !important;
+    &:hover:not(:disabled) {
+      background: var(--ant-colorSuccessBg) !important;
+      color: var(--ant-colorSuccessHover) !important;
       box-shadow: none !important;
     }
   }

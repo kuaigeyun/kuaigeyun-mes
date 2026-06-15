@@ -31,6 +31,7 @@ class Quality8DBase(BaseSchema):
     d8_team_congratulation: Optional[str] = Field(None, description="D8 团队总结")
     verification_result: Optional[str] = Field(None, description="验证结果")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class Quality8DCreate(Quality8DBase):
@@ -52,6 +53,7 @@ class Quality8DUpdate(BaseSchema):
     d8_team_congratulation: Optional[str] = None
     verification_result: Optional[str] = None
     remarks: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class Quality8DTransition(BaseSchema):
@@ -101,6 +103,7 @@ class NonconformingDispositionUpdate(BaseSchema):
     status: Optional[str] = Field(None, description="台账状态")
     quarantine_location: Optional[str] = Field(None, description="隔离库位")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OQCInspectionBase(BaseSchema):
@@ -125,6 +128,7 @@ class OQCInspectionBase(BaseSchema):
     release_decision: str = Field("pending", description="放行结论")
     release_note: Optional[str] = Field(None, description="放行说明")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OQCInspectionCreate(OQCInspectionBase):
@@ -139,6 +143,7 @@ class OQCInspectionConduct(BaseSchema):
     release_decision: str = Field("pending", description="放行结论")
     release_note: Optional[str] = Field(None, description="放行说明")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     measurement_data: Optional[dict] = Field(None, description="测量数据")
     item_results: Optional[dict] = Field(None, description="检验项判定结果")
 

@@ -22,6 +22,8 @@ import dayjs from 'dayjs';
 import { listPurchaseOrders } from '../../../../kuaizhizao/services/purchase';
 import { warehouseApi } from '../../../../kuaizhizao/services/warehouse-execution';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 import { INVOICE_TYPE_OPTIONS } from '../../../utils/purchaseInvoiceUi';
 
@@ -102,6 +104,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 notes: values.notes,
                 status: '未审核',
                 review_status: '待审核',
+                attachments: normalizeDocumentAttachments(values.attachments),
             };
 
             await purchaseInvoiceService.create(data);
@@ -271,6 +274,7 @@ const PurchaseInvoiceList: React.FC = () => {
                 notes: String(values.notes ?? '').trim() || `从${sourceLabel} ${pullSelectedSource.source_code} 创建`,
                 status: '未审核',
                 review_status: '待审核',
+                attachments: normalizeDocumentAttachments(values.attachments),
             });
             messageApi.success(`已创建${pullFromPurchaseOrderAction.targetLabel}`);
             setPullFormVisible(false);
@@ -641,6 +645,7 @@ const PurchaseInvoiceList: React.FC = () => {
                     fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
                 <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 3 }} />
+                <DocumentAttachmentsField category="purchase_invoice_attachments" />
             </ModalForm>
 
             <ModalForm
@@ -696,6 +701,7 @@ const PurchaseInvoiceList: React.FC = () => {
                     fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
                 <ProFormTextArea name="notes" label="备注" />
+                <DocumentAttachmentsField category="purchase_invoice_attachments" />
             </ModalForm>
         </ListPageTemplate>
     );

@@ -114,6 +114,7 @@ class Equipment(BaseModel):
     next_calibration_date = fields.DateField(null=True, description="下次校验日期")
     
     description = fields.TextField(null=True, description="描述")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -141,5 +142,6 @@ class EquipmentCalibration(BaseModel):
     expiry_date = fields.DateField(null=True, description="有效期至")
     attachment_uuid = fields.CharField(max_length=36, null=True, description="报告附件ID")
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True)
 

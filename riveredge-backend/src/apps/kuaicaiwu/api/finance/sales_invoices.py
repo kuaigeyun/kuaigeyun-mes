@@ -109,6 +109,7 @@ async def _serialize(tenant_id: int, user_id: int, obj: Invoice) -> SalesInvoice
         receivable_id=getattr(obj, "receivable_id", None),
         receivable_code=getattr(obj, "receivable_code", None),
         attachment_path=obj.attachment_uuid,
+        attachments=getattr(obj, "attachments", None),
         notes=obj.description,
         original_invoice_id=getattr(obj, "original_invoice_id", None),
         red_flush_invoice_id=getattr(obj, "red_flush_invoice_id", None),
@@ -251,6 +252,7 @@ async def create_sales_invoice(
         total_amount=data.total_amount,
         source_document_code=data.sales_order_code,
         attachment_uuid=data.attachment_path,
+        attachments=data.attachments,
         description=data.notes,
         status="未审核",
         created_by=current_user.id,
@@ -339,6 +341,8 @@ async def update_sales_invoice(
         update_data["total_amount"] = data.total_amount
     if data.notes is not None:
         update_data["description"] = data.notes
+    if data.attachments is not None:
+        update_data["attachments"] = data.attachments
     if update_data:
         await Invoice.filter(id=id).update(**update_data)
     return await _serialize(tenant_id, current_user.id, await _get_or_404(tenant_id, id))

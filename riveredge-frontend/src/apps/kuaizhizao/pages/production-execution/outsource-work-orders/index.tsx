@@ -79,6 +79,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const OUTSOURCE_WORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_outsource_work_orders';
 
@@ -113,6 +115,7 @@ interface OutsourceWorkOrder {
   frozenBy?: number;
   frozenByName?: string;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   createdAt?: string;
   updatedAt?: string;
   /** 后端 snake_case */
@@ -606,6 +609,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           plannedStartDate: (detail.plannedStartDate || detail.planned_start_date) ? dayjs(detail.plannedStartDate || detail.planned_start_date) : undefined,
           plannedEndDate: (detail.plannedEndDate || detail.planned_end_date) ? dayjs(detail.plannedEndDate || detail.planned_end_date) : undefined,
           remarks: detail.remarks,
+          attachments: mapAttachmentsToUploadList((detail as any).attachments),
         });
         if (detail.id != null) {
           loadOwoFormFieldValues(detail.id).then((fieldFormValues) => {
@@ -742,6 +746,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         delete values.unitPrice;
         values.total_amount = values.quantity * values.unit_price;
       }
+
+      values.attachments = normalizeDocumentAttachments(values.attachments);
 
       const wid = currentWorkOrder?.id;
       let recordId = wid;
@@ -1502,6 +1508,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           customFieldValues={owoFormCustomFieldValues}
           gridColumns={2}
         />
+
+        <DocumentAttachmentsField category="outsource_work_order_attachments" />
 
         <ProFormTextArea
           name="remarks"

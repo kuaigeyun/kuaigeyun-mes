@@ -40,8 +40,11 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
-import { batchRuleApi, serialRuleApi } from '../../../../master-data/services/batchSerialRules';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
@@ -155,8 +158,6 @@ const OtherInboundPage: React.FC = () => {
   const [warehouseList, setWarehouseList] = useState<any[]>([]);
   const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
   const [reasonTypeLoading, setReasonTypeLoading] = useState(false);
-  const [batchRules, setBatchRules] = useState<{ id: number; name: string; code: string }[]>([]);
-  const [serialRules, setSerialRules] = useState<{ id: number; name: string; code: string }[]>([]);
   const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
   const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
   const {
@@ -169,14 +170,8 @@ const OtherInboundPage: React.FC = () => {
   useEffect(() => {
     const load = async () => {
       try {
-        const [wh, batchRes, serialRes] = await Promise.all([
-          masterDataWarehouseApi.list({ limit: 1000, is_active: true }),
-          batchRuleApi.list({ pageSize: 200, isActive: true }),
-          serialRuleApi.list({ pageSize: 200, isActive: true }),
-        ]);
+        const wh = await masterDataWarehouseApi.list({ limit: 1000, is_active: true });
         setWarehouseList(Array.isArray(wh) ? wh : (wh as any)?.items || []);
-        setBatchRules(batchRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
-        setSerialRules(serialRes.items.map((r) => ({ id: r.id, name: r.name, code: r.code })));
       } catch (e) {
         console.error('加载仓库/规则失败', e);
       }
@@ -269,38 +264,30 @@ const OtherInboundPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-            详情
-          </Button>,
+          <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
         ];
         if (record.status === '待入库') {
           actions.push(
             <Button
               key="confirm"
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
               onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
             >
               确认入库
             </Button>,
           );
           actions.push(
-            <Button key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              删除
-            </Button>,
+            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
           );
         }
         if (record.status === '已入库') {
           actions.push(
             <Button
               key="withdraw"
-              type="link"
-              size="small"
-              icon={<ThunderboltOutlined />}
+              {...rowActionKind('revoke')}
+              {...rowActionLabelKeep()}
               onClick={() => handleWithdraw(record)}
-              style={{ color: '#fa8c16' }}
             >
               撤销
             </Button>,
@@ -379,19 +366,43 @@ const OtherInboundPage: React.FC = () => {
   };
 
   const appendOtherInboundItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
       const current = formRef.current?.getFieldValue('items') ?? [];
-      const newRows = selected.map((m) => ({
-        ...defaultInboundItem,
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_unit: m.baseUnit ?? '',
-      }));
+      const newRows = await Promise.all(
+        selected.map(async (m) => {
+          const row = {
+            ...defaultInboundItem,
+            material_id: m.id,
+            material_code: m.mainCode ?? m.code ?? '',
+            material_name: m.name ?? '',
+            material_unit: m.baseUnit ?? '',
+            material_uuid: m.uuid,
+            batch_managed: m.batchManaged ?? false,
+            serial_managed: m.serialManaged ?? false,
+            default_batch_rule_id: m.defaultBatchRuleId,
+            default_serial_rule_id: m.defaultSerialRuleId,
+          };
+          if (m.uuid) {
+            try {
+              const full = await materialApi.get(m.uuid);
+              return {
+                ...row,
+                batch_managed: full.batchManaged ?? false,
+                serial_managed: full.serialManaged ?? false,
+                default_batch_rule_id: full.defaultBatchRuleId,
+                default_serial_rule_id: full.defaultSerialRuleId,
+              };
+            } catch {
+              return row;
+            }
+          }
+          return row;
+        }),
+      );
       formRef.current?.setFieldsValue({ items: [...current, ...newRows] });
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [messageApi, t],
   );
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
@@ -421,6 +432,7 @@ const OtherInboundPage: React.FC = () => {
         warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
         notes: standardValues.notes,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -471,27 +483,30 @@ const OtherInboundPage: React.FC = () => {
     }
   };
 
-  const handleGenerateSerials = async (idx: number) => {
+  const handleGenerateSerials = async (idx: number): Promise<string[]> => {
     const items = formRef.current?.getFieldValue('items') ?? [];
     const row = items[idx];
     if (!row?.material_uuid) {
       messageApi.warning('请先选择物料');
-      return;
+      return [];
     }
     const count = Math.max(1, Math.floor(Number(row.inbound_quantity) || 1));
     if (count > 100) {
       messageApi.warning('单次最多生成100个序列号');
-      return;
+      return [];
     }
     setGeneratingSerialIdx(idx);
     try {
       const res = await materialSerialApi.generate(row.material_uuid, count, {
         ruleId: row.serial_rule_id ?? row.default_serial_rule_id,
       });
-      formRef.current?.setFieldValue(['items', idx, 'serial_numbers'], res.serial_nos);
+      const serialNos = res.serial_nos ?? [];
+      formRef.current?.setFieldValue(['items', idx, 'serial_numbers'], serialNos);
       messageApi.success(`已生成 ${res.count} 个序列号`);
+      return serialNos;
     } catch (e: any) {
       messageApi.error(e?.message || '序列号生成失败');
+      return [];
     } finally {
       setGeneratingSerialIdx(null);
     }
@@ -649,10 +664,21 @@ const OtherInboundPage: React.FC = () => {
                     width: 60,
                     render: (val) => <DictionaryLabel dictionaryCode="unit" value={val} />,
                   },
+                  { title: '库位', dataIndex: 'location_code', width: 100, ellipsis: true },
                   { title: '入库数量', dataIndex: 'inbound_quantity', width: 100, align: 'right' },
                   { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' },
                   { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
-                  { title: '批次号', dataIndex: 'batch_number', width: 100 },
+                  { title: '批号', dataIndex: 'batch_number', width: 120, ellipsis: true },
+                  {
+                    title: '序列号',
+                    dataIndex: 'serial_numbers',
+                    width: 140,
+                    ellipsis: true,
+                    render: (val) => {
+                      const list = Array.isArray(val) ? val : [];
+                      return list.length > 0 ? list.join('、') : '—';
+                    },
+                  },
                   { title: '备注', dataIndex: 'notes' },
                 ]}
                 dataSource={inboundDetail.items}
@@ -673,7 +699,8 @@ const OtherInboundPage: React.FC = () => {
         }}
         formRef={formRef}
         onFinish={handleCreateSubmit}
-        width={MODAL_CONFIG.LARGE_WIDTH}
+        submitText="保存草稿"
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         initialValues={{ reason_type: '其他' }}
         grid={false}
       >
@@ -806,7 +833,7 @@ const OtherInboundPage: React.FC = () => {
                   {
                     title: '库位',
                     dataIndex: 'location_code',
-                    width: 180,
+                    width: 150,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
                         <Select
@@ -819,6 +846,67 @@ const OtherInboundPage: React.FC = () => {
                           allowClear
                           disabled={!selectedWarehouseId}
                         />
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '批号',
+                    dataIndex: 'batch_number',
+                    width: 130,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+                      >
+                        {({ getFieldValue }) => {
+                          const row = getFieldValue('items')?.[index];
+                          if (!row?.batch_managed) return '—';
+                          return (
+                            <Space size={2}>
+                              <AntForm.Item name={[index, 'batch_number']} style={{ margin: 0 }}>
+                                <Input placeholder="可选" size="small" style={{ width: 96 }} />
+                              </AntForm.Item>
+                              <Button
+                                type="link"
+                                size="small"
+                                icon={<ThunderboltOutlined />}
+                                loading={generatingBatchIdx === index}
+                                onClick={() => handleGenerateBatch(index)}
+                                style={{ padding: 0 }}
+                              />
+                            </Space>
+                          );
+                        }}
+                      </AntForm.Item>
+                    ),
+                  },
+                  {
+                    title: '序列号',
+                    dataIndex: 'serial_numbers',
+                    width: 150,
+                    render: (_: any, __: any, index: number) => (
+                      <AntForm.Item
+                        noStyle
+                        shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+                      >
+                        {({ getFieldValue }) => {
+                          const row = getFieldValue('items')?.[index];
+                          if (!row?.serial_managed) return '—';
+                          const qty = Number(row?.inbound_quantity ?? 0);
+                          const sn = getFieldValue(['items', index, 'serial_numbers']);
+                          return (
+                            <SerialNumbersImportTrigger
+                              serials={Array.isArray(sn) ? sn : []}
+                              expectedCount={qty > 0 ? qty : undefined}
+                              materialLabel={row?.material_code || row?.material_name}
+                              generateLoading={generatingSerialIdx === index}
+                              onSerialsChange={(next) =>
+                                formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                              }
+                              onGenerate={() => handleGenerateSerials(index)}
+                            />
+                          );
+                        }}
                       </AntForm.Item>
                     ),
                   },
@@ -842,68 +930,6 @@ const OtherInboundPage: React.FC = () => {
                   },
                 ];
                 const totalWidth = cols.reduce((s, c) => s + (c.width as number || 0), 0);
-                const expandedRowRender = (_record: any, index: number) => {
-                  const row = formRef.current?.getFieldValue('items')?.[index];
-                  const batchManaged = row?.batch_managed;
-                  const serialManaged = row?.serial_managed;
-                  if (!batchManaged && !serialManaged) return null;
-                  return (
-                    <div style={{ padding: '8px 0', display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-                      {batchManaged && (
-                        <>
-                          <Select
-                            placeholder="批号规则（可选）"
-                            allowClear
-                            style={{ width: 160 }}
-                            value={row?.batch_rule_id ?? row?.default_batch_rule_id ?? undefined}
-                            onChange={(v) => formRef.current?.setFieldValue(['items', index, 'batch_rule_id'], v ?? undefined)}
-                            options={batchRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                          />
-                          <AntForm.Item name={['items', index, 'batch_number']} style={{ margin: 0, width: 160 }}>
-                            <Input placeholder="批号（可手动输入或生成）" size="small" />
-                          </AntForm.Item>
-                          <Button
-                            type="link"
-                            size="small"
-                            icon={<ThunderboltOutlined />}
-                            loading={generatingBatchIdx === index}
-                            onClick={() => handleGenerateBatch(index)}
-                          >
-                            生成批号
-                          </Button>
-                        </>
-                      )}
-                      {serialManaged && (
-                        <>
-                          <Select
-                            placeholder="序列号规则（可选）"
-                            allowClear
-                            style={{ width: 160 }}
-                            value={row?.serial_rule_id ?? row?.default_serial_rule_id ?? undefined}
-                            onChange={(v) => formRef.current?.setFieldValue(['items', index, 'serial_rule_id'], v ?? undefined)}
-                            options={serialRules.map((r) => ({ label: `${r.name} (${r.code})`, value: r.id }))}
-                          />
-                          <Button
-                            type="link"
-                            size="small"
-                            icon={<ThunderboltOutlined />}
-                            loading={generatingSerialIdx === index}
-                            onClick={() => handleGenerateSerials(index)}
-                          >
-                            生成序列号
-                          </Button>
-                          <AntForm.Item noStyle shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}>
-                            {({ getFieldValue }: any) => {
-                              const sn = getFieldValue(['items', index, 'serial_numbers']);
-                              const count = Array.isArray(sn) ? sn.length : 0;
-                              return count > 0 ? <span style={{ color: '#52c41a', fontSize: 12 }}>已生成 {count} 个</span> : null;
-                            }}
-                          </AntForm.Item>
-                        </>
-                      )}
-                    </div>
-                  );
-                };
                 return (
                   <div style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }}>
                     <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -917,13 +943,6 @@ const OtherInboundPage: React.FC = () => {
                         columns={cols}
                         scroll={fields.length > 0 ? { x: totalWidth } : undefined}
                         style={{ width: '100%', margin: 0 }}
-                        expandable={{
-                          expandedRowRender: (record) => expandedRowRender(record, record.key),
-                          rowExpandable: (record) => {
-                            const row = formRef.current?.getFieldValue('items')?.[record.key];
-                            return !!(row?.batch_managed || row?.serial_managed);
-                          },
-                        }}
                         footer={() => (
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                             <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultInboundItem)}>
@@ -946,6 +965,7 @@ const OtherInboundPage: React.FC = () => {
               }}
             </AntForm.List>
         </div>
+        <DocumentAttachmentsField category="other_inbound_attachments" />
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 

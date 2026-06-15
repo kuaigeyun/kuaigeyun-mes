@@ -35,6 +35,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
@@ -63,6 +65,7 @@ interface ReworkOrder {
   qualified_quantity?: number;
   unqualified_quantity?: number;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
   start_work_order_operation_id?: number;
@@ -450,6 +453,7 @@ const ReworkOrdersPage: React.FC = () => {
             ?? (detail.rework_operations || []).find((o: any) => o.is_start)?.work_order_operation_id
             ?? (detail.rework_operations || [])[0]?.work_order_operation_id,
           remarks: detail.remarks,
+          attachments: mapAttachmentsToUploadList(detail.attachments),
         });
         if (detail.id != null) {
           loadReworkFormFieldValues(detail.id).then((fieldFormValues) => {
@@ -573,6 +577,7 @@ const ReworkOrdersPage: React.FC = () => {
   const handleSubmitForm = async (values: any): Promise<void> => {
     try {
       const { customData, standardValues } = extractReworkFormValues(values);
+      standardValues.attachments = normalizeDocumentAttachments(standardValues.attachments);
       if (isEdit && currentReworkOrder?.id) {
         await reworkOrderApi.update(currentReworkOrder.id.toString(), standardValues);
         messageApi.success('返工单更新成功');
@@ -908,6 +913,7 @@ const ReworkOrdersPage: React.FC = () => {
           customFieldValues={reworkFormCustomFieldValues}
           gridColumns={2}
         />
+        <DocumentAttachmentsField category="rework_order_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"

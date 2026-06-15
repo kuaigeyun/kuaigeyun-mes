@@ -15,6 +15,8 @@ import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../.
 import { OQCInspection, qualityImprovementApi } from '../../../services/quality-improvement';
 import InspectionTemplateConductFields from '../components/InspectionTemplateConductFields';
 import { pickInspectionConductExtras } from '../components/inspectionTemplateUtils';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   fetchSalesDeliveriesForOqc,
   fetchShipmentNoticesForOqc,
@@ -138,6 +140,7 @@ const OQCInspectionPage: React.FC = () => {
                       release_decision: row.release_decision || 'pending',
                       qualified_quantity: row.qualified_quantity,
                       unqualified_quantity: row.unqualified_quantity,
+                      attachments: mapAttachmentsToUploadList(row.attachments),
                     }),
                   50,
                 );
@@ -343,6 +346,7 @@ const OQCInspectionPage: React.FC = () => {
             }
             await qualityImprovementApi.oqc.conduct(currentRow.id, {
               ...values,
+              attachments: normalizeDocumentAttachments(values.attachments),
               ...pickInspectionConductExtras(values),
             });
             messageApi.success('检验执行成功');
@@ -368,6 +372,7 @@ const OQCInspectionPage: React.FC = () => {
             rules={[{ required: true }]}
           />
           <ProFormTextArea name="release_note" label="放行说明" />
+          <DocumentAttachmentsField category="oqc_inspection_attachments" />
           <ProFormTextArea name="notes" label="备注" />
         </FormModalTemplate>
       </ListPageTemplate>

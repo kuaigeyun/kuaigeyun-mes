@@ -142,6 +142,7 @@ class OutsourceWorkOrder(BaseModel):
 
     # 备注
     remarks = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 创建更新信息
     created_by = fields.IntField(description="创建人ID")

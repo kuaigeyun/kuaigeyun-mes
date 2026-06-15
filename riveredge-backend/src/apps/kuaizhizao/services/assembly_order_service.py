@@ -32,9 +32,11 @@ from apps.kuaizhizao.schemas.assembly_material_binding import (
     AssemblyMaterialBindingCreate,
     ExecuteAssemblyOrderRequest,
 )
+from apps.kuaizhizao.models.assembly_template import AssemblyTemplate, AssemblyTemplateItem
+from apps.kuaizhizao.schemas.assembly_template import ApplyAssemblyTemplateRequest
 
 from apps.common.base_service import AppBaseService
-from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
+from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError, ConflictError
 from infra.services.business_config_service import BusinessConfigService
 
 
@@ -61,6 +63,18 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
             )
             user_info = await self.get_user_info(created_by)
 
+            template_id = order_data.assembly_template_id
+            template_code = order_data.assembly_template_code
+            if template_id and not template_code:
+                template = await AssemblyTemplate.get_or_none(
+                    id=template_id,
+                    tenant_id=tenant_id,
+                    deleted_at__isnull=True,
+                    is_active=True,
+                )
+                if template:
+                    template_code = template.template_code
+
             order = await AssemblyOrder.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -73,6 +87,8 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                 product_material_code=order_data.product_material_code,
                 product_material_name=order_data.product_material_name,
                 total_quantity=order_data.total_quantity or Decimal("0"),
+                assembly_template_id=template_id,
+                assembly_template_code=template_code,
                 total_items=0,
                 remarks=order_data.remarks,
                 created_by=created_by,
@@ -354,6 +370,91 @@ class AssemblyOrderService(AppBaseService[AssemblyOrder]):
                     )
 
             return AssemblyOrderResponse.model_validate(order)
+
+    async def apply_template_to_order(
+        self,
+        tenant_id: int,
+        order_id: int,
+        request: ApplyAssemblyTemplateRequest,
+        updated_by: int,
+    ) -> AssemblyOrderWithItemsResponse:
+        async with in_transaction():
+            order = await AssemblyOrder.get_or_none(
+                id=order_id, tenant_id=tenant_id, deleted_at__isnull=True
+            )
+            if not order:
+                raise NotFoundError(f"组装单不存在: {order_id}")
+            if order.status != "draft":
+                raise ValidationError(f"组装单状态为{order.status}，不能套用模板")
+
+            template = await AssemblyTemplate.get_or_none(
+                id=request.template_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                is_active=True,
+            )
+            if not template:
+                raise NotFoundError(f"组装模板不存在或未启用: {request.template_id}")
+
+            template_items = await AssemblyTemplateItem.filter(
+                tenant_id=tenant_id,
+                template_id=template.id,
+                deleted_at__isnull=True,
+            ).order_by("sequence", "id")
+            if not template_items:
+                raise ValidationError("组装模板无明细，无法套用")
+
+            pending_items = await AssemblyOrderItem.filter(
+                tenant_id=tenant_id,
+                assembly_order_id=order_id,
+                deleted_at__isnull=True,
+                status="pending",
+            )
+            if pending_items and not request.replace_existing:
+                raise ConflictError(
+                    "组装单已有明细，请确认覆盖后再套用模板",
+                    {"pending_count": len(pending_items)},
+                )
+
+            now = datetime.now()
+            if pending_items:
+                await AssemblyOrderItem.filter(
+                    tenant_id=tenant_id,
+                    assembly_order_id=order_id,
+                    deleted_at__isnull=True,
+                    status="pending",
+                ).update(deleted_at=now)
+
+            total_qty = Decimal(str(order.total_quantity or 0))
+            if total_qty <= 0:
+                raise ValidationError("请先填写组装数量后再套用模板")
+
+            for tpl_item in template_items:
+                qty = Decimal(str(tpl_item.quantity_per_base)) * total_qty
+                unit_price = tpl_item.unit_price or Decimal("0")
+                await AssemblyOrderItem.create(
+                    tenant_id=tenant_id,
+                    uuid=str(uuid.uuid4()),
+                    assembly_order_id=order_id,
+                    material_id=tpl_item.material_id,
+                    material_code=tpl_item.material_code,
+                    material_name=tpl_item.material_name,
+                    quantity=qty,
+                    unit_price=unit_price,
+                    amount=qty * unit_price,
+                    status="pending",
+                    remarks=tpl_item.remarks,
+                )
+
+            user_info = await self.get_user_info(updated_by)
+            order.assembly_template_id = template.id
+            order.assembly_template_code = template.template_code
+            order.updated_by = updated_by
+            order.updated_by_name = user_info["name"]
+            await order.save()
+            await self._update_order_statistics(tenant_id, order_id)
+
+            return await self.get_assembly_order_by_id(tenant_id, order_id)
 
     async def delete_assembly_order(self, tenant_id: int, order_id: int) -> bool:
         """删除组装单（软删除，仅草稿可删）"""

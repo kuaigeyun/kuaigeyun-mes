@@ -24,6 +24,8 @@ import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getReceivableLifecycle } from '../../../utils/financeLifecycle';
 import dayjs from 'dayjs';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -96,6 +98,7 @@ const ReceivableList: React.FC = () => {
             status: '未收款',
             review_status: '待审核',
             notes: values.notes,
+            attachments: normalizeDocumentAttachments(values.attachments),
         };
         await receivableService.createReceivable(data);
         messageApi.success('创建成功');
@@ -450,6 +453,7 @@ const ReceivableList: React.FC = () => {
                 <ProFormDatePicker name="due_date" label="到期日期" rules={[{ required: true }]} />
                 <ProFormDatePicker name="business_date" label="业务日期" />
                 <ProFormTextArea name="notes" label="备注" />
+                <DocumentAttachmentsField category="receivable_attachments" />
             </ModalForm>
         </ListPageTemplate>
     );

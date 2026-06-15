@@ -39,6 +39,9 @@ import dayjs from 'dayjs';
 import { warehouseApi as masterDataWarehouseApi } from '../../../../master-data/services/warehouse';
 import { useTranslation } from 'react-i18next';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -246,27 +249,31 @@ const OtherOutboundPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => {
         const actions: React.ReactNode[] = [
-          <Button key="detail" type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-            详情
-          </Button>,
+          <Button key="detail" {...rowActionKind('read')} onClick={() => handleDetail(record)} />,
         ];
         if (record.status === '待出库') {
           actions.push(
             <Button
               key="confirm"
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
+              {...rowActionKind('execute')}
+              {...rowActionLabelKeep()}
               onClick={() => handleConfirm(record)}
-              style={{ color: '#52c41a' }}
             >
               确认出库
             </Button>,
           );
           actions.push(
-            <Button key="delete" type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-              删除
+            <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)} />,
+          );
+        }
+        if (record.status === '已出库') {
+          actions.push(
+            <Button key="withdraw" {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+              撤回
             </Button>,
+          );
+          actions.push(
+            <Button key="print" {...rowActionKind('print')} onClick={() => void handlePrint(record)} />,
           );
         }
         return <Space>{actions}</Space>;
@@ -303,6 +310,33 @@ const OtherOutboundPage: React.FC = () => {
         }
       },
     });
+  };
+
+  const handleWithdraw = async (record: OtherOutbound) => {
+    Modal.confirm({
+      title: '撤回出库',
+      content: `确定撤回出库单 "${record.outbound_code}" 吗？系统将回冲库存并恢复待出库状态。`,
+      onOk: async () => {
+        try {
+          await warehouseApi.otherOutbound.withdraw(record.id!.toString());
+          messageApi.success('撤回成功');
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
+        }
+      },
+    });
+  };
+
+  const handlePrint = async (record: OtherOutbound) => {
+    if (!record.id) return;
+    try {
+      await warehouseApi.otherOutbound.print(String(record.id));
+      messageApi.success('已发送打印请求');
+    } catch (error: any) {
+      messageApi.error(error.message || '打印失败');
+    }
   };
 
   const handleDelete = async (record: OtherOutbound) => {
@@ -363,15 +397,21 @@ const OtherOutboundPage: React.FC = () => {
         warehouse_id: standardValues.warehouse_id,
         warehouse_name: warehouseName,
         notes: standardValues.notes,
-        items: validItems.map((it: any) => ({
-          material_id: it.material_id,
-          material_code: it.material_code || '',
-          material_name: it.material_name || '',
-          material_unit: it.material_unit || '',
-          location_code: it.location_code || undefined,
-          outbound_quantity: Number(it.outbound_quantity) || 0,
-          unit_price: Number(it.unit_price) || 0,
-        })),
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
+        items: validItems.map((it: any) => {
+          const outboundQty = Number(it.outbound_quantity) || 0;
+          const unitPrice = Number(it.unit_price) || 0;
+          return {
+            material_id: it.material_id,
+            material_code: it.material_code || undefined,
+            material_name: it.material_name || undefined,
+            material_unit: it.material_unit || '',
+            location_code: it.location_code || undefined,
+            outbound_quantity: outboundQty,
+            unit_price: unitPrice,
+            total_amount: outboundQty * unitPrice,
+          };
+        }),
       });
       const recordId = Number((created as { id?: number })?.id ?? 0);
       if (recordId > 0 && Object.keys(customData).length > 0) {
@@ -614,6 +654,12 @@ const OtherOutboundPage: React.FC = () => {
                             : undefined;
                           return (
                             <div className="warehouse-detail-material-cell">
+                              <AntForm.Item name={[index, 'material_code']} hidden>
+                                <input type="hidden" />
+                              </AntForm.Item>
+                              <AntForm.Item name={[index, 'material_name']} hidden>
+                                <input type="hidden" />
+                              </AntForm.Item>
                               <UniMaterialSelect
                                 name={[index, 'material_id']}
                                 label=""
@@ -744,6 +790,7 @@ const OtherOutboundPage: React.FC = () => {
               }}
             </AntForm.List>
         </div>
+        <DocumentAttachmentsField category="other_outbound_attachments" />
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 

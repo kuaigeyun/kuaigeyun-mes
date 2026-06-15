@@ -355,6 +355,7 @@ class DefectRecordService(AppBaseService[DefectRecord]):
         status: Optional[str] = None,
         quarantine_location: Optional[str] = None,
         remarks: Optional[str] = None,
+        attachments: Optional[list] = None,
     ) -> DefectRecordResponse:
         """更新不合格品台账处置信息。"""
         async with in_transaction():
@@ -380,6 +381,8 @@ class DefectRecordService(AppBaseService[DefectRecord]):
             if remarks:
                 append_line = f"[处置更新 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {remarks}"
                 defect_record.remarks = f"{defect_record.remarks}\n{append_line}".strip() if defect_record.remarks else append_line
+            if attachments is not None:
+                defect_record.attachments = attachments
             defect_record.updated_by = updated_by
             defect_record.updated_by_name = user_info["name"]
             await defect_record.save()

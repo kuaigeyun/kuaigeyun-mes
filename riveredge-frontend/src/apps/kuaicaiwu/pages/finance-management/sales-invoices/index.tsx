@@ -27,6 +27,8 @@ import dayjs from 'dayjs';
 import { listSalesOrders } from '../../../../kuaizhizao/services/sales-order';
 import { warehouseApi } from '../../../../kuaizhizao/services/warehouse-execution';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
 
 interface SalesInvoice {
@@ -125,6 +127,7 @@ const SalesInvoicesPage: React.FC = () => {
       tax_amount: taxAmount,
       total_amount: totalAmount,
       notes: values.notes,
+      attachments: normalizeDocumentAttachments(values.attachments),
     };
     await apiRequest('/apps/kuaicaiwu/sales-invoices', { method: 'POST', data });
     messageApi.success('销售发票创建成功');
@@ -264,6 +267,7 @@ const SalesInvoicesPage: React.FC = () => {
           tax_amount: taxAmount,
           total_amount: totalAmount,
           notes: String(values.notes ?? '').trim() || `从${sourceLabel} ${pullSelectedSource.source_code} 创建`,
+          attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
       messageApi.success(`已创建${pullFromSalesOrderAction.targetLabel}`);
@@ -351,6 +355,7 @@ const SalesInvoicesPage: React.FC = () => {
         method: 'PUT',
         data: {
           invoice_number: String(values.invoice_number ?? '').trim(),
+          attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
       messageApi.success('发票号码已保存');
@@ -751,6 +756,7 @@ const SalesInvoicesPage: React.FC = () => {
           fieldProps={{ precision: 2, style: { width: '100%' } }}
         />
         <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 3 }} />
+        <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
 
       <ModalForm
@@ -765,7 +771,10 @@ const SalesInvoicesPage: React.FC = () => {
         width={480}
         modalProps={{ destroyOnHidden: true }}
         submitter={{ submitButtonProps: { loading: editSubmitting } }}
-        initialValues={{ invoice_number: editingRecord?.invoice_number || '' }}
+        initialValues={{
+          invoice_number: editingRecord?.invoice_number || '',
+          attachments: mapAttachmentsToUploadList((editingRecord as any)?.attachments),
+        }}
       >
         <ProFormText
           name="invoice_number"
@@ -773,6 +782,7 @@ const SalesInvoicesPage: React.FC = () => {
           rules={[{ required: true, message: '请输入发票号码' }]}
           placeholder="请输入票面发票号码"
         />
+        <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
 
       <ModalForm
@@ -818,6 +828,7 @@ const SalesInvoicesPage: React.FC = () => {
           fieldProps={{ precision: 2, style: { width: '100%' } }}
         />
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="sales_invoice_attachments" />
       </ModalForm>
     </ListPageTemplate>
   );

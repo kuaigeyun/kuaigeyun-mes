@@ -45,6 +45,9 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 interface DeliveryNotice {
   id?: number;
@@ -245,15 +248,17 @@ const DeliveryNotesPage: React.FC = () => {
         ]
         return (
           <Space>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>详情</Button>
+            <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
             {record.status === '待发送' && (
               <>
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>编辑</Button>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>删除</Button>
+                <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
+                <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
               </>
             )}
             <Dropdown menu={{ items: moreItems }} trigger={['click']}>
-              <Button type="link" size="small" icon={<MoreOutlined />}>更多</Button>
+              <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
+                更多
+              </Button>
             </Dropdown>
           </Space>
         )
@@ -296,6 +301,7 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: detail.tracking_number,
         shipping_address: detail.shipping_address,
         notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         items: items.length > 0 ? items : [defaultDeliveryItem],
       });
       setEditingId(record.id!);
@@ -543,6 +549,7 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -586,6 +593,7 @@ const DeliveryNotesPage: React.FC = () => {
         tracking_number: values.tracking_number,
         shipping_address: values.shipping_address,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code || '',
@@ -890,6 +898,7 @@ const DeliveryNotesPage: React.FC = () => {
           </AntForm.List>
         </AntForm.Item>
       </div>
+      <DocumentAttachmentsField category="delivery_notice_attachments" />
       <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
     </>
   );

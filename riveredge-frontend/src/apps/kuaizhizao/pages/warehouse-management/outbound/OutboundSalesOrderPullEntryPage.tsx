@@ -1,0 +1,330 @@
+/**
+ * 从销售订单取单开销售出库 — 独立 Tab 页
+ */
+
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
+import { ArrowLeftOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
+import type { UploadFile } from 'antd/es/upload/interface';
+import {
+  DOCUMENT_DETAIL_PAGE_TITLE_STYLE,
+  DocumentFormPageLayout,
+  PAGE_SPACING,
+  WAREHOUSE_DETAIL_TABLE_STYLES,
+} from '../../../../../components/layout-templates';
+import { warehouseApi as masterWarehouseApi } from '../../../../master-data/services/warehouse';
+import { getSalesOrder, type SalesOrderItem } from '../../../services/sales-order';
+import { warehouseApi } from '../../../services/warehouse-execution';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
+import { formatDateBySiteSetting } from '../../../../../utils/format';
+import {
+  OutboundEntryAttachmentsSection,
+  OutboundEntryOperatorField,
+  OutboundEntryRemarksSection,
+  ReadOnlyFormValue,
+  mapWarehouseSelectOptions,
+  useOutboundOperatorSelect,
+} from './outboundEntryShared';
+import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
+
+const OutboundSalesOrderPullEntryPage: React.FC = () => {
+  const { soId: soIdParam } = useParams<{ soId: string }>();
+  const salesOrderId = Number(soIdParam);
+  const navigate = useNavigate();
+  const { message: messageApi } = App.useApp();
+  const operatorHook = useOutboundOperatorSelect();
+  const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const initRef = useRef(false);
+
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [order, setOrder] = useState<Record<string, unknown> | null>(null);
+  const [items, setItems] = useState<SalesOrderItem[]>([]);
+  const [warehouseOptions, setWarehouseOptions] = useState<{ label: string; value: number; name: string }[]>([]);
+  const [quantities, setQuantities] = useState<Record<number, number>>({});
+  const [warehouseId, setWarehouseId] = useState<number | undefined>();
+  const [deliveryTime, setDeliveryTime] = useState(() => dayjs());
+  const [notes, setNotes] = useState('');
+  const [attachments, setAttachments] = useState<UploadFile[]>([]);
+
+  const pagePath =
+    Number.isFinite(salesOrderId) && salesOrderId > 0 ? outboundSalesOrderEntryPath(salesOrderId) : OUTBOUND_LIST_PATH;
+  const orderCode = String(order?.order_code ?? order?.code ?? '');
+
+  const totalQty = useMemo(
+    () => items.reduce((sum, it) => sum + Number(quantities[it.id!] ?? 0), 0),
+    [items, quantities],
+  );
+
+  const leavePage = useCallback(() => {
+    navigate(OUTBOUND_LIST_PATH);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!(Number.isFinite(salesOrderId) && salesOrderId > 0)) {
+      messageApi.error('无效的销售订单');
+      leavePage();
+    }
+  }, [salesOrderId, leavePage, messageApi]);
+
+  useEffect(() => {
+    const title = orderCode ? `销售出库 — ${orderCode}` : '销售出库';
+    setCustomPageTitle(pagePath, title);
+    window.dispatchEvent(
+      new CustomEvent('riveredge:update-tab-title', {
+        detail: { key: pagePath, path: pagePath, title },
+      }),
+    );
+    return () => {
+      removeCustomPageTitle(pagePath);
+    };
+  }, [orderCode, pagePath]);
+
+  useEffect(() => {
+    if (!Number.isFinite(salesOrderId) || salesOrderId <= 0 || initRef.current) return;
+    initRef.current = true;
+    void (async () => {
+      setLoading(true);
+      try {
+        const [so, whRes] = await Promise.all([
+          getSalesOrder(salesOrderId, true),
+          masterWarehouseApi.list({ is_active: true, limit: 500 }),
+        ]);
+        setOrder(so as Record<string, unknown>);
+        const lines = (so.items ?? []) as SalesOrderItem[];
+        setItems(lines);
+        setWarehouseOptions(mapWarehouseSelectOptions(whRes));
+        const initQty: Record<number, number> = {};
+        lines.forEach((it) => {
+          if (it.id == null) return;
+          const pending = Number(it.remaining_quantity ?? 0);
+          initQty[it.id] = pending > 0 ? pending : 0;
+        });
+        setQuantities(initQty);
+      } catch (e: unknown) {
+        messageApi.error((e as Error)?.message || '加载销售订单失败');
+        leavePage();
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [salesOrderId, leavePage, messageApi]);
+
+  const submit = async (mode: 'draft' | 'confirm') => {
+    if (!warehouseId || !(warehouseId > 0)) {
+      messageApi.error('请选择出库仓库');
+      return;
+    }
+    const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
+    if (!whOpt) return;
+
+    const deliveryQuantities: Record<number, number> = {};
+    let hasPositive = false;
+    for (const it of items) {
+      if (it.id == null) continue;
+      const qty = Number(quantities[it.id] ?? 0);
+      if (qty <= 0) continue;
+      const max = Number(it.remaining_quantity ?? 0);
+      if (qty > max) {
+        messageApi.error(`物料 ${it.material_code || it.material_name} 出库数量不能超过待交 ${max}`);
+        return;
+      }
+      deliveryQuantities[it.id] = qty;
+      hasPositive = true;
+    }
+    if (!hasPositive) {
+      messageApi.warning('请至少填写一行出库数量');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const created = (await warehouseApi.salesDelivery.pullFromSalesOrder({
+        sales_order_id: salesOrderId,
+        warehouse_id: warehouseId,
+        warehouse_name: whOpt.name,
+        delivery_quantities: deliveryQuantities,
+      })) as { id?: number; delivery_code?: string };
+      if (created?.id == null) {
+        messageApi.error('下推成功但未返回出库单 ID');
+        return;
+      }
+      await warehouseApi.salesDelivery.update(String(created.id), {
+        customer_id: Number(order?.customer_id ?? 0),
+        customer_name: String(order?.customer_name ?? ''),
+        warehouse_id: warehouseId,
+        warehouse_name: whOpt.name,
+        delivery_time: deliveryTime?.toISOString(),
+        deliverer_name: operatorHook.receiverName.trim() || undefined,
+        notes: notes.trim() || undefined,
+        attachments: normalizeDocumentAttachments(attachments),
+      });
+      invalidateMenuBadgeCounts();
+      if (mode === 'confirm') {
+        navigate(OUTBOUND_LIST_PATH, {
+          state: {
+            outboundDirectConfirm: {
+              id: Number(created.id),
+              outbound_type: 'sales_delivery',
+            },
+          },
+        });
+      } else {
+        messageApi.success(`已生成销售出库草稿${created.delivery_code ? `：${created.delivery_code}` : ''}`);
+        leavePage();
+      }
+    } catch (e: unknown) {
+      const err = e as { message?: string; response?: { data?: { detail?: string } } };
+      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <DocumentFormPageLayout
+      header={
+        <>
+          <Space align="center" size={8}>
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
+              {orderCode ? `销售出库 — ${orderCode}` : '销售出库'}
+            </Typography.Title>
+          </Space>
+          <Space wrap>
+            <Button disabled={submitting || loading} onClick={leavePage}>
+              取消
+            </Button>
+            <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
+              生成草稿
+            </Button>
+            <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
+              确认出库
+            </Button>
+          </Space>
+        </>
+      }
+    >
+      <Spin spinning={loading}>
+        <Card styles={{ body: { padding: PAGE_SPACING.PADDING } }}>
+          {order && (
+            <Form layout="vertical" requiredMark={false}>
+              <Row gutter={16}>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="出库类型">
+                    <ReadOnlyFormValue value="销售出库" />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="源单编号">
+                    <ReadOnlyFormValue value={orderCode} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="客户">
+                    <ReadOnlyFormValue value={String(order.customer_name ?? '')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="订单状态">
+                    <ReadOnlyFormValue value={String(order.status ?? '')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="出库仓库" required>
+                    <Select
+                      style={{ width: '100%' }}
+                      placeholder="请选择出库仓库"
+                      options={warehouseOptions}
+                      value={warehouseId}
+                      onChange={setWarehouseId}
+                      showSearch
+                      filterOption={(input, opt) =>
+                        (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())
+                      }
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <Form.Item label="出库日期">
+                    <DatePicker
+                      style={{ width: '100%' }}
+                      value={deliveryTime}
+                      onChange={(v) => setDeliveryTime(v ?? dayjs())}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} lg={6}>
+                  <OutboundEntryOperatorField hook={operatorHook} />
+                </Col>
+                <Col xs={24}>
+                  <OutboundEntryRemarksSection value={notes} onChange={setNotes} />
+                </Col>
+                <Col xs={24}>
+                  <OutboundEntryAttachmentsSection
+                    category="sales_delivery_attachments"
+                    fileList={attachments}
+                    onChange={setAttachments}
+                  />
+                </Col>
+              </Row>
+              <Typography.Text strong style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>
+                出库明细
+                <Typography.Text type="secondary" style={{ marginLeft: 12, fontWeight: 'normal' }}>
+                  合计出库数量：{totalQty}
+                </Typography.Text>
+              </Typography.Text>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey={(r) => String(r.id)}
+                pagination={false}
+                dataSource={items}
+                columns={[
+                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                  { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+                  {
+                    title: '订单数量',
+                    dataIndex: 'quantity',
+                    width: 100,
+                    align: 'right',
+                  },
+                  {
+                    title: '待交数量',
+                    key: 'pending',
+                    width: 100,
+                    align: 'right',
+                    render: (_, it) => Number(it.remaining_quantity ?? 0),
+                  },
+                  {
+                    title: '本次出库',
+                    key: 'qty',
+                    width: 140,
+                    render: (_, it) =>
+                      it.id != null ? (
+                        <InputNumber
+                          min={0}
+                          max={Number(it.remaining_quantity ?? 0)}
+                          value={quantities[it.id]}
+                          onChange={(v) => setQuantities((prev) => ({ ...prev, [it.id!]: Number(v ?? 0) }))}
+                          style={{ width: '100%' }}
+                        />
+                      ) : null,
+                  },
+                  { title: '单位', dataIndex: 'material_unit', width: 60 },
+                ]}
+              />
+            </Form>
+          )}
+        </Card>
+      </Spin>
+    </DocumentFormPageLayout>
+  );
+};
+
+export default OutboundSalesOrderPullEntryPage;

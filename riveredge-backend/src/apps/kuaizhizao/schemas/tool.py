@@ -33,6 +33,7 @@ class ToolBase(BaseModel):
     calibration_period: Optional[int] = Field(None, description="校验周期（天）")
     
     description: Optional[str] = Field(None)
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
     @field_validator("status")
     @classmethod
@@ -58,6 +59,7 @@ class ToolUpdate(BaseModel):
     needs_calibration: Optional[bool] = None
     calibration_period: Optional[int] = None
     description: Optional[str] = None
+    attachments: Optional[List[dict]] = None
 
 
 class ToolResponse(ToolBase):
@@ -89,6 +91,7 @@ class ToolUsageBase(BaseModel):
     checkin_date: Optional[datetime] = None
     status: str = Field(default="使用中")
     remark: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ToolUsageCreate(ToolUsageBase):
@@ -116,6 +119,7 @@ class ToolMaintenanceBase(BaseModel):
     result: str = Field(default="完成")
     cost: float = Field(default=0.0)
     remark: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ToolMaintenanceCreate(ToolMaintenanceBase):
@@ -141,6 +145,7 @@ class ToolCalibrationBase(BaseModel):
     result: str = Field(..., description="合格、不合格、准用")
     expiry_date: Optional[date] = None
     attachment_uuid: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     remark: Optional[str] = None
 
 

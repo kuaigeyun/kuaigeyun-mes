@@ -14,6 +14,8 @@ import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quali
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
@@ -157,7 +159,15 @@ const NonconformingLedgerPage: React.FC = () => {
               onClick={() => {
                 setCurrentRow(row);
                 setOpen(true);
-                setTimeout(() => formRef.current?.setFieldsValue({ disposition: row.disposition, status: row.status }), 50);
+                setTimeout(
+                  () =>
+                    formRef.current?.setFieldsValue({
+                      disposition: row.disposition,
+                      status: row.status,
+                      attachments: mapAttachmentsToUploadList(row.attachments),
+                    }),
+                  50,
+                );
               }}
             >
               更新处置
@@ -232,7 +242,10 @@ const NonconformingLedgerPage: React.FC = () => {
               messageApi.error('无处置更新权限');
               return false;
             }
-            await qualityImprovementApi.nonconformingLedger.updateDisposition(currentRow.id, values);
+            await qualityImprovementApi.nonconformingLedger.updateDisposition(currentRow.id, {
+              ...values,
+              attachments: normalizeDocumentAttachments(values.attachments),
+            });
             messageApi.success('台账处置已更新');
             setOpen(false);
             setCurrentRow(null);
@@ -258,6 +271,7 @@ const NonconformingLedgerPage: React.FC = () => {
             valueEnum={{ draft: '草稿', processed: '已处理', cancelled: '已取消' }}
           />
           <ProFormTextArea name="remarks" label="备注" />
+          <DocumentAttachmentsField category="nonconforming_ledger_attachments" />
         </FormModalTemplate>
       </ListPageTemplate>
     </PermissionGuard>

@@ -78,6 +78,7 @@ export const partnerStatementService = {
     start_date?: string;
     end_date?: string;
     notes?: string;
+    attachments?: Array<{ uid?: string; name?: string; status?: string; url?: string }>;
   }) => apiRequest<PartnerStatement>(API, { method: 'POST', data }),
 
   list: (params?: Record<string, unknown>) =>

@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -7,8 +7,8 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Card, Col, Form as AntForm, Modal, Row, Space, Table, Tag, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { App, Button, Card, Col, Form as AntForm, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, PlayCircleOutlined, SnippetsOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
@@ -23,7 +23,12 @@ import {
 } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
+import { assemblyTemplateApi } from '../../../services/assembly-template';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 type OrderLike = {
   id?: number;
@@ -64,7 +69,10 @@ type OrderApi = {
   updateItem: (orderId: string, itemId: string, data: any) => Promise<any>;
   deleteItem: (orderId: string, itemId: string) => Promise<any>;
   execute: (orderId: string) => Promise<any>;
-  delete: (id: string) => Promise<any>;
+  applyTemplate?: (
+    orderId: string,
+    data: { template_id: number; replace_existing: boolean }
+  ) => Promise<any>;
 };
 
 type PageConfig = {
@@ -86,12 +94,14 @@ type PageConfig = {
   quantityLabel: string;
   listEmptyText: string;
   itemDoneStatus: string;
+  attachmentCategory: string;
   getLifecycle: (record: Record<string, unknown>) => {
     percent: number;
     stageName: string;
     status: 'normal' | 'warning' | 'exception' | 'success' | 'active';
     subStages?: string[];
   };
+  enableTemplateApply?: boolean;
 };
 
 const orderStatusMap: Record<string, { text: string; color: string }> = {
@@ -120,6 +130,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const createFormRef = useRef<any>(null);
   const itemFormRef = useRef<any>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
+  const { canUpdate: canUpdateAssemblyOrder } = useResourcePermissions(
+    'kuaizhizao:warehouse-management-assembly-orders'
+  );
+  const canApplyTemplate = config.enableTemplateApply ? canUpdateAssemblyOrder : false;
 
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
@@ -128,6 +142,37 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const [currentOrder, setCurrentOrder] = useState<OrderLike | null>(null);
   const [editingOrder, setEditingOrder] = useState<OrderLike | null>(null);
   const [editingItem, setEditingItem] = useState<ItemLike | null>(null);
+  const [templateOptions, setTemplateOptions] = useState<
+    { label: string; value: number; productMaterialId?: number }[]
+  >([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<number | undefined>();
+
+  const loadTemplateOptions = async (productMaterialId?: number) => {
+    if (!config.enableTemplateApply) return;
+    try {
+      const result = await assemblyTemplateApi.list({
+        limit: 200,
+        is_active: true,
+        product_material_id: productMaterialId,
+      });
+      const items = result.items || [];
+      setTemplateOptions(
+        items.map((item: any) => ({
+          label: `${item.template_code} - ${item.template_name}`,
+          value: item.id,
+          productMaterialId: item.product_material_id,
+        }))
+      );
+    } catch {
+      setTemplateOptions([]);
+    }
+  };
+
+  useEffect(() => {
+    if (config.enableTemplateApply) {
+      void loadTemplateOptions();
+    }
+  }, [config.enableTemplateApply]);
 
   const reloadList = () => actionRef.current?.reload();
 
@@ -151,6 +196,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         [config.dateField]: dayjs(),
         total_quantity: 1,
       });
+      if (config.enableTemplateApply) {
+        void loadTemplateOptions();
+      }
     }, 0);
   };
 
@@ -168,8 +216,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         product_material_code: order.product_material_code,
         product_material_name: order.product_material_name,
         total_quantity: order.total_quantity ?? 1,
+        assembly_template_id: order.assembly_template_id,
         remarks: order.remarks,
+        attachments: mapAttachmentsToUploadList(order.attachments),
       });
+      if (config.enableTemplateApply) {
+        void loadTemplateOptions(order.product_material_id);
+      }
     }, 0);
   };
 
@@ -184,7 +237,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         product_material_code: values.product_material_code || '',
         product_material_name: values.product_material_name || '',
         total_quantity: Number(values.total_quantity || 0),
+        assembly_template_id: values.assembly_template_id || undefined,
         remarks: values.remarks,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       if (editingOrder?.id) {
         await api.update(String(editingOrder.id), payload);
@@ -211,10 +266,57 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     try {
       const detail = await api.get(String(record.id));
       setCurrentOrder(detail as OrderLike);
+      setSelectedTemplateId(detail.assembly_template_id ?? undefined);
+      if (config.enableTemplateApply && detail.product_material_id) {
+        await loadTemplateOptions(detail.product_material_id);
+      }
       setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error?.message || `${config.actionNoun}详情加载失败`);
     }
+  };
+
+  const applyTemplateToOrder = async (order: OrderLike, templateId: number, replaceExisting: boolean) => {
+    if (!order.id || !api.applyTemplate) return;
+    try {
+      const updated = await api.applyTemplate(String(order.id), {
+        template_id: templateId,
+        replace_existing: replaceExisting,
+      });
+      messageApi.success('套用模板成功');
+      setCurrentOrder(updated as OrderLike);
+      setSelectedTemplateId(templateId);
+      invalidateMenuBadgeCounts();
+      reloadList();
+    } catch (error: any) {
+      messageApi.error(error?.message || '套用模板失败');
+    }
+  };
+
+  const confirmApplyTemplate = (order: OrderLike) => {
+    if (!selectedTemplateId) {
+      messageApi.warning('请先选择组装模板');
+      return;
+    }
+    if (!order.total_quantity || Number(order.total_quantity) <= 0) {
+      messageApi.warning(`请先填写${config.quantityLabel}后再套用模板`);
+      return;
+    }
+    const pendingCount = Array.isArray(order.items)
+      ? order.items.filter((item) => item.status === 'pending').length
+      : Number(order.total_items || 0);
+    const runApply = (replaceExisting: boolean) => {
+      void applyTemplateToOrder(order, selectedTemplateId, replaceExisting);
+    };
+    if (pendingCount > 0) {
+      Modal.confirm({
+        title: '套用模板',
+        content: '当前组装单已有明细，套用模板将覆盖现有 pending 明细，是否继续？',
+        onOk: () => runApply(true),
+      });
+      return;
+    }
+    runApply(false);
   };
 
   const confirmDeleteOrder = async (record: OrderLike) => {
@@ -389,29 +491,21 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => openDetailDrawer(record)}>
-            详情
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
           {record.status === 'draft' && (
             <>
-              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEditOrderModal(record)}>
-                编辑
-              </Button>
-              <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openItemModal(record)}>
+              <Button {...rowActionKind('update')} onClick={() => openEditOrderModal(record)} />
+              <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => openItemModal(record)}>
                 添加明细
               </Button>
               <Button
-                type="link"
-                size="small"
-                icon={<PlayCircleOutlined />}
-                style={{ color: '#52c41a' }}
+                {...rowActionKind('execute')}
+                {...rowActionLabelKeep()}
                 onClick={() => confirmExecuteOrder(record)}
               >
                 {config.executeActionLabel}
               </Button>
-              <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteOrder(record)}>
-                删除
-              </Button>
+              <Button {...rowActionKind('delete')} onClick={() => confirmDeleteOrder(record)} />
             </>
           )}
         </Space>
@@ -434,6 +528,9 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     },
     { title: config.quantityLabel, dataIndex: 'total_quantity' },
     { title: '组件数', dataIndex: 'total_items' },
+    ...(config.enableTemplateApply
+      ? [{ title: '组装模板', dataIndex: 'assembly_template_code' as const }]
+      : []),
     { title: '执行人', dataIndex: 'executed_by_name' },
     { title: '执行时间', dataIndex: 'executed_at', valueType: 'dateTime' },
     { title: '备注', dataIndex: 'remarks', span: 2 },
@@ -539,7 +636,24 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             product_material_code: 'mainCode',
             product_material_name: 'name',
           }}
+          fieldProps={{
+            onChange: (value: number) => {
+              if (config.enableTemplateApply) {
+                void loadTemplateOptions(value);
+                createFormRef.current?.setFieldsValue({ assembly_template_id: undefined });
+              }
+            },
+          }}
         />
+        {config.enableTemplateApply && (
+          <AntForm.Item name="assembly_template_id" label="组装模板">
+            <Select
+              allowClear
+              placeholder="可选，创建后在详情中套用"
+              options={templateOptions}
+            />
+          </AntForm.Item>
+        )}
         <ProFormDigit
           name="total_quantity"
           label={config.quantityLabel}
@@ -547,6 +661,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
+        <DocumentAttachmentsField category={config.attachmentCategory} />
         <ProFormTextArea name="remarks" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
         <AntForm.Item name="_warehouse_name" hidden />
         <AntForm.Item name="warehouse_name" hidden />
@@ -604,11 +719,33 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         dataSource={currentOrder || {}}
         columns={detailColumns}
         customContent={
-          currentOrder?.items && currentOrder.items.length > 0 ? (
+          <>
+            {config.enableTemplateApply && currentOrder?.status === 'draft' && canApplyTemplate && api.applyTemplate && (
+              <Card title="套用模板" style={{ marginBottom: 16 }}>
+                <Space wrap>
+                  <Select
+                    style={{ minWidth: 280 }}
+                    placeholder="选择组装模板"
+                    value={selectedTemplateId}
+                    onChange={setSelectedTemplateId}
+                    options={templateOptions.filter(
+                      (opt) =>
+                        !currentOrder.product_material_id ||
+                        !opt.productMaterialId ||
+                        opt.productMaterialId === currentOrder.product_material_id
+                    )}
+                    allowClear
+                  />
+                  <Button icon={<SnippetsOutlined />} onClick={() => confirmApplyTemplate(currentOrder)}>
+                    套用模板
+                  </Button>
+                </Space>
+              </Card>
+            )}
             <Card
               title="明细"
               extra={
-                currentOrder.status === 'draft' ? (
+                currentOrder?.status === 'draft' ? (
                   <Space>
                     <Button size="small" onClick={() => openEditOrderModal(currentOrder)}>
                       编辑主单
@@ -624,67 +761,67 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
               }
             >
               <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
-              <Table<ItemLike>
-                className="warehouse-detail-table"
-                size="small"
-                rowKey="id"
-                pagination={false}
-                columns={[
-                  { title: '组件编码', dataIndex: 'material_code', width: 120 },
-                  { title: '组件名称', dataIndex: 'material_name', width: 150 },
-                  { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-                  {
-                    title: '单价',
-                    dataIndex: 'unit_price',
-                    width: 90,
-                    align: 'right',
-                    render: (value) => Number(value || 0).toFixed(2),
-                  },
-                  {
-                    title: '金额',
-                    dataIndex: 'amount',
-                    width: 90,
-                    align: 'right',
-                    render: (value) => Number(value || 0).toFixed(2),
-                  },
-                  {
-                    title: '状态',
-                    dataIndex: 'status',
-                    width: 90,
-                    render: (status) => {
-                      const mapped =
-                        itemStatusMap[String(status ?? '')] ||
-                        (String(status ?? '') === config.itemDoneStatus
-                          ? { text: config.itemDoneStatus, color: 'success' }
-                          : { text: String(status ?? '-'), color: 'default' });
-                      return <Tag color={mapped.color}>{mapped.text}</Tag>;
+              {currentOrder?.items && currentOrder.items.length > 0 ? (
+                <Table<ItemLike>
+                  className="warehouse-detail-table"
+                  size="small"
+                  rowKey="id"
+                  pagination={false}
+                  columns={[
+                    { title: '组件编码', dataIndex: 'material_code', width: 120 },
+                    { title: '组件名称', dataIndex: 'material_name', width: 150 },
+                    { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
+                    {
+                      title: '单价',
+                      dataIndex: 'unit_price',
+                      width: 90,
+                      align: 'right',
+                      render: (value) => Number(value || 0).toFixed(2),
                     },
-                  },
-                  { title: '备注', dataIndex: 'remarks' },
-                  {
-                    title: '操作',
-                    width: 150,
-                    render: (_, item) =>
-                      currentOrder.status === 'draft' ? (
-                        <Space size={0}>
-                          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
-                            编辑
-                          </Button>
-                          <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
-                            删除
-                          </Button>
-                        </Space>
-                      ) : null,
-                  },
-                ]}
-                dataSource={currentOrder.items}
-              />
+                    {
+                      title: '金额',
+                      dataIndex: 'amount',
+                      width: 90,
+                      align: 'right',
+                      render: (value) => Number(value || 0).toFixed(2),
+                    },
+                    {
+                      title: '状态',
+                      dataIndex: 'status',
+                      width: 90,
+                      render: (status) => {
+                        const mapped =
+                          itemStatusMap[String(status ?? '')] ||
+                          (String(status ?? '') === config.itemDoneStatus
+                            ? { text: config.itemDoneStatus, color: 'success' }
+                            : { text: String(status ?? '-'), color: 'default' });
+                        return <Tag color={mapped.color}>{mapped.text}</Tag>;
+                      },
+                    },
+                    { title: '备注', dataIndex: 'remarks' },
+                    {
+                      title: '操作',
+                      width: 150,
+                      render: (_, item) =>
+                        currentOrder.status === 'draft' ? (
+                          <Space size={0}>
+                            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
+                              编辑
+                            </Button>
+                            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
+                              删除
+                            </Button>
+                          </Space>
+                        ) : null,
+                    },
+                  ]}
+                  dataSource={currentOrder.items}
+                />
+              ) : (
+                <Typography.Text type="secondary">暂无明细，可套用模板或手工添加。</Typography.Text>
+              )}
             </Card>
-          ) : (
-            <Card title="明细">
-              <Typography.Text type="secondary">暂无明细，请先添加。</Typography.Text>
-            </Card>
-          )
+          </>
         }
       />
     </ListPageTemplate>

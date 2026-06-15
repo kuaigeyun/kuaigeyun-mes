@@ -46,6 +46,8 @@ import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/cod
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 interface ShipmentNotice {
   id?: number;
@@ -67,6 +69,7 @@ interface ShipmentNotice {
   total_quantity?: number;
   total_amount?: number;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
 
@@ -307,6 +310,7 @@ const ShipmentNoticesPage: React.FC = () => {
         planned_ship_date: detail.planned_ship_date ? dayjs(detail.planned_ship_date) : undefined,
         shipping_address: detail.shipping_address,
         notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         items: itemsForm.length ? itemsForm : [defaultNoticeItem],
       });
       setEditingId(record.id!);
@@ -647,6 +651,7 @@ const ShipmentNoticesPage: React.FC = () => {
         planned_ship_date: values.planned_ship_date ? dayjs(values.planned_ship_date).format('YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems.map((it: any) => ({
           material_id: it.material_id,
           material_code: it.material_code,
@@ -683,6 +688,7 @@ const ShipmentNoticesPage: React.FC = () => {
         planned_ship_date: values.planned_ship_date ? dayjs(values.planned_ship_date).format('YYYY-MM-DD') : undefined,
         shipping_address: values.shipping_address,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('更新成功');
       setEditModalVisible(false);
@@ -953,6 +959,7 @@ const ShipmentNoticesPage: React.FC = () => {
       />
       <ShipmentNoticeFormSummary />
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
 
@@ -1027,6 +1034,7 @@ const ShipmentNoticesPage: React.FC = () => {
         <ShipmentNoticeFormSummary />
       </ProFormItem>
       <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
 

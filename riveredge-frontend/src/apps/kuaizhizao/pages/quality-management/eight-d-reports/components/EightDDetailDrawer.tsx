@@ -4,6 +4,7 @@ import dayjs from 'dayjs';
 import { DetailDrawerTemplate, DRAWER_CONFIG } from '../../../../../../components/layout-templates';
 import { UniLifecycleStepper } from '../../../../../../components/uni-lifecycle';
 import { qualityImprovementApi, type Quality8DHistoryEntry, type Quality8DReport } from '../../../../services/quality-improvement';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../utils/documentAttachments';
 import { EightDHistoryTimeline } from './EightDHistoryTimeline';
 import { EightDStageEditor } from './EightDStageEditor';
 import { buildEightDStepperSteps, getEightDNextStatus, getEightDSeverityText, getEightDStatusText } from './eightDMeta';
@@ -68,6 +69,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
     form.setFieldsValue({
       ...report,
       due_date: report.due_date ? dayjs(report.due_date) : null,
+      attachments: mapAttachmentsToUploadList(report.attachments),
     });
   }, [report, form]);
 
@@ -85,6 +87,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
       const payload = {
         ...values,
         due_date: values.due_date ? dayjs(values.due_date as any).toISOString() : null,
+        attachments: normalizeDocumentAttachments(values.attachments as any),
       };
       await qualityImprovementApi.eightD.update(report.id, payload);
       messageApi.success(t('app.kuaizhizao.eightD.saveSuccess'));
@@ -113,6 +116,7 @@ export const EightDDetailDrawer: React.FC<EightDDetailDrawerProps> = ({
       await qualityImprovementApi.eightD.update(report.id, {
         ...formValues,
         due_date: formValues.due_date ? dayjs(formValues.due_date as any).toISOString() : null,
+        attachments: normalizeDocumentAttachments(formValues.attachments as any),
       });
       await qualityImprovementApi.eightD.transition(report.id, {
         to_status: nextStatus,

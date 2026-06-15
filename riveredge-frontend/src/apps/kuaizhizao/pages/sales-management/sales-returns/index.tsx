@@ -54,6 +54,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const SALES_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_sales_returns';
 
@@ -87,6 +89,7 @@ interface SalesReturn {
   tracking_number?: string;
   shipping_address?: string;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
 
@@ -502,6 +505,7 @@ const SalesReturnsPage: React.FC = () => {
         return_type: detail.return_type,
         shipping_method: detail.shipping_method,
         notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         items: (detail.items || []).map((it) => ({
           material_id: it.material_id,
           material_code: it.material_code,
@@ -663,6 +667,7 @@ const SalesReturnsPage: React.FC = () => {
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
           notes: standardValues.notes ?? null,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           sales_delivery_id: detail.sales_delivery_id ?? null,
           sales_delivery_code: detail.sales_delivery_code ?? null,
           sales_order_id: detail.sales_order_id ?? null,
@@ -676,6 +681,7 @@ const SalesReturnsPage: React.FC = () => {
         const created = await warehouseApi.salesReturn.create({
           ...standardValues,
           return_time: returnTime,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           items: itemsPayload,
         });
         recordId = (created as any)?.id;
@@ -1108,6 +1114,7 @@ const SalesReturnsPage: React.FC = () => {
         />
 
         <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
+        <DocumentAttachmentsField category="sales_return_attachments" />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

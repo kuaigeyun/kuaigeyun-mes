@@ -8,7 +8,7 @@ Date: 2025-01-04
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel, Field, ConfigDict
 from decimal import Decimal
 
@@ -47,6 +47,7 @@ class DefectRecordBase(BaseModel):
     scrap_record_id: Optional[int] = Field(None, description="报废记录ID（当处理方式为报废时关联）")
     status: str = Field("draft", description="状态（draft/processed/cancelled）")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class DefectRecordCreate(DefectRecordBase):
@@ -102,6 +103,7 @@ class DefectRecordUpdate(BaseModel):
     scrap_record_id: Optional[int] = Field(None, description="报废记录ID")
     status: Optional[str] = Field(None, description="状态")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class DefectRecordResponse(DefectRecordBase):
@@ -144,4 +146,5 @@ class DefectRecordListResponse(BaseModel):
     disposition: str = Field(..., description="处理方式")
     status: str = Field(..., description="状态")
     created_at: datetime = Field(..., description="创建时间")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 

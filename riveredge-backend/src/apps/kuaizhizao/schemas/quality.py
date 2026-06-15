@@ -52,6 +52,7 @@ class IncomingInspectionBase(BaseSchema):
     corrective_action: Optional[str] = Field(None, description="纠正措施")
     status: str = Field("待检验", max_length=20, description="单据状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class IncomingInspectionItemCreate(BaseSchema):
@@ -136,6 +137,7 @@ class ProcessInspectionBase(BaseSchema):
     preventive_action: Optional[str] = Field(None, description="预防措施")
     status: str = Field("待检验", max_length=20, description="单据状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ProcessInspectionCreate(ProcessInspectionBase):
@@ -216,6 +218,7 @@ class FinishedGoodsInspectionBase(BaseSchema):
     certificate_issued: bool = Field(False, description="是否已出具证书")
     status: str = Field("待检验", max_length=20, description="单据状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class FinishedGoodsInspectionCreate(FinishedGoodsInspectionBase):

@@ -11,8 +11,13 @@ export type KuaizhizaoDocumentActionKey =
   | 'work_order.pull_from_production_plan'
   | 'outbound.pull_from_work_order'
   | 'outbound.pull_from_sales_order'
+  | 'sales_delivery.pull_from_shipment_notice'
+  | 'outbound.pull_from_outsource_work_order'
   | 'inbound.pull_from_purchase_order'
-  | 'inbound.pull_from_work_order';
+  | 'inbound.pull_from_work_order'
+  | 'inbound.pull_from_sales_order'
+  | 'inbound.pull_from_outsource_work_order'
+  | 'inbound.pull_from_work_order_for_production_return';
 
 export interface KuaizhizaoDocumentActionDefinition {
   key: KuaizhizaoDocumentActionKey;
@@ -21,6 +26,8 @@ export interface KuaizhizaoDocumentActionDefinition {
   label: string;
   sourceLabel: string;
   targetLabel: string;
+  /** 取单录入页 path 前缀（不含 :id 参数） */
+  targetPath?: string;
 }
 
 export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActionKey, KuaizhizaoDocumentActionDefinition> = {
@@ -111,6 +118,7 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     label: '从工单创建生产领料单',
     sourceLabel: '工单',
     targetLabel: '生产领料单',
+    targetPath: '/apps/kuaizhizao/warehouse-management/outbound/entry/work-order',
   },
   'outbound.pull_from_sales_order': {
     key: 'outbound.pull_from_sales_order',
@@ -119,6 +127,25 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     label: '从销售订单创建销售出库单',
     sourceLabel: '销售订单',
     targetLabel: '销售出库单',
+    targetPath: '/apps/kuaizhizao/warehouse-management/outbound/entry/sales-order',
+  },
+  'sales_delivery.pull_from_shipment_notice': {
+    key: 'sales_delivery.pull_from_shipment_notice',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从发货通知单创建销售出库单',
+    sourceLabel: '发货通知单',
+    targetLabel: '销售出库单',
+    targetPath: '/apps/kuaizhizao/warehouse-management/outbound/entry/sales-order',
+  },
+  'outbound.pull_from_outsource_work_order': {
+    key: 'outbound.pull_from_outsource_work_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从委外工单创建委外发料单',
+    sourceLabel: '委外工单',
+    targetLabel: '委外发料单',
+    targetPath: '/apps/kuaizhizao/warehouse-management/outbound/entry/outsource-work-order',
   },
   'inbound.pull_from_purchase_order': {
     key: 'inbound.pull_from_purchase_order',
@@ -135,6 +162,30 @@ export const KUAIZHIZAO_DOCUMENT_ACTION_REGISTRY: Record<KuaizhizaoDocumentActio
     label: '从工单创建成品入库单',
     sourceLabel: '工单',
     targetLabel: '成品入库单',
+  },
+  'inbound.pull_from_sales_order': {
+    key: 'inbound.pull_from_sales_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从销售订单创建销售退货单',
+    sourceLabel: '销售订单',
+    targetLabel: '销售退货单',
+  },
+  'inbound.pull_from_outsource_work_order': {
+    key: 'inbound.pull_from_outsource_work_order',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从委外工单创建委外入库单',
+    sourceLabel: '委外工单',
+    targetLabel: '委外入库单',
+  },
+  'inbound.pull_from_work_order_for_production_return': {
+    key: 'inbound.pull_from_work_order_for_production_return',
+    module: 'kuaizhizao',
+    kind: 'pull_create',
+    label: '从工单创建生产退料单',
+    sourceLabel: '工单',
+    targetLabel: '生产退料单',
   },
 };
 

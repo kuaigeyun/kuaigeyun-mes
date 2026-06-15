@@ -39,6 +39,7 @@ class PayableBase(BaseSchema):
     review_status: str = Field("待审核", max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PayableCreate(PayableBase):
@@ -96,6 +97,7 @@ class PurchaseInvoiceBase(BaseSchema):
     payable_code: Optional[str] = Field(None, max_length=50, description="应付单编码")
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PurchaseInvoiceCreate(PurchaseInvoiceBase):
@@ -152,6 +154,7 @@ class ReceivableBase(BaseSchema):
     review_status: str = Field("待审核", max_length=20, description="审核状态")
     review_remarks: Optional[str] = Field(None, description="审核备注")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ReceivableCreate(ReceivableBase):
@@ -228,6 +231,7 @@ class PaymentVoucherBase(BaseSchema):
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
     settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PaymentVoucherCreate(PaymentVoucherBase):
@@ -243,6 +247,7 @@ class PaymentVoucherUpdate(BaseSchema):
     bank_account_id: Optional[int] = None
     settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PaymentVoucherResponse(PaymentVoucherBase):
@@ -281,6 +286,7 @@ class ReceiptVoucherBase(BaseSchema):
     bank_account_id: Optional[int] = Field(None, description="银行账户ID")
     settlement_type: str = Field("normal", max_length=20, description="结算类型 normal/prepayment")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ReceiptVoucherCreate(ReceiptVoucherBase):
@@ -296,6 +302,7 @@ class ReceiptVoucherUpdate(BaseSchema):
     bank_account_id: Optional[int] = None
     settlement_type: Optional[str] = Field(None, max_length=20)
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ReceiptVoucherResponse(ReceiptVoucherBase):
@@ -339,6 +346,7 @@ class SalesInvoiceBase(BaseSchema):
     receivable_id: Optional[int] = Field(None, description="关联应收单ID")
     receivable_code: Optional[str] = Field(None, max_length=50, description="关联应收单编码")
     attachment_path: Optional[str] = Field(None, max_length=500, description="附件路径")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     notes: Optional[str] = Field(None, description="备注")
 
 
@@ -360,6 +368,7 @@ class SalesInvoiceUpdate(BaseSchema):
     tax_amount: Optional[Decimal] = None
     total_amount: Optional[Decimal] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class SalesInvoiceLineResponse(BaseSchema):
@@ -463,6 +472,7 @@ class PartnerStatementCreate(BaseSchema):
     start_date: Optional[date] = None
     end_date: Optional[date] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PartnerStatementMarkSentRequest(BaseSchema):
@@ -498,6 +508,7 @@ class PartnerStatementResponse(BaseSchema):
     dispute_reason: Optional[str] = None
     disputed_at: Optional[datetime] = None
     notes: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     created_by: Optional[int] = None
     created_at: datetime
 

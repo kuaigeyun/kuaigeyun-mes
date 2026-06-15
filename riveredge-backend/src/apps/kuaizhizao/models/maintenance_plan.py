@@ -92,6 +92,7 @@ class MaintenancePlan(BaseModel):
     # 状态
     status = fields.CharField(max_length=50, default="草稿", description="计划状态（草稿、已发布、执行中、已完成、已取消）")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -184,6 +185,7 @@ class MaintenanceExecution(BaseModel):
     acceptance_date = fields.DatetimeField(null=True, description="验收日期")
     acceptance_result = fields.CharField(max_length=50, null=True, description="验收结果（合格、不合格）")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

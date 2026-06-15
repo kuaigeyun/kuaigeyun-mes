@@ -20,6 +20,7 @@ import {
   ContractMaterialSelectCell,
   defaultContractItem,
 } from './contract-line-items-shared';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 export type ContractItemsFormTableProps = {
   formRef: React.RefObject<ProFormInstance | undefined>;
@@ -180,7 +181,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             render: (_: unknown, __: unknown, index: number) => (
                               <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue: gf2 }: any) => {
-                                  const itemsVal = gf2('items') ?? [];
+                                  const itemsVal = normalizeFormListItems<any>(gf2('items'));
                                   const row = itemsVal[index];
                                   const line = calcContractLineAmounts(
                                     row?.contract_quantity,
@@ -206,7 +207,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                                   size="small"
                                   style={{ padding: '0 4px', height: 'auto' }}
                                   onClick={() => {
-                                    const itemsVal = formRef.current?.getFieldValue('items') ?? [];
+                                    const itemsVal = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
                                     if (itemsVal.length === 0) return;
                                     const rate = prompt(t('app.kuaizhizao.salesOrder.taxRateBatch'), '13');
                                     if (rate != null && rate !== '') {
@@ -246,7 +247,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                             render: (_: unknown, __: unknown, index: number) => (
                               <Form.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
                                 {({ getFieldValue: gf2 }: any) => {
-                                  const itemsVal = gf2('items') ?? [];
+                                  const itemsVal = normalizeFormListItems<any>(gf2('items'));
                                   const row = itemsVal[index];
                                   const line = calcContractLineAmounts(
                                     row?.contract_quantity,
@@ -400,7 +401,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       type="dashed"
                       icon={<PlusOutlined />}
                       onClick={() => {
-                        const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+                        const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
                         items.push({ ...defaultContractItem });
                         formRef.current?.setFieldsValue({ items });
                       }}

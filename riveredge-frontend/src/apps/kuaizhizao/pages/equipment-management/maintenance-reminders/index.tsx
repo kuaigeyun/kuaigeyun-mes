@@ -20,6 +20,8 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { maintenanceReminderApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecycle';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
@@ -206,6 +208,7 @@ const MaintenanceRemindersPage: React.FC = () => {
       const updated = (await maintenanceReminderApi.markAsHandled({
         reminder_uuid: currentReminder.uuid,
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       })) as MaintenanceReminder;
 
       messageApi.success('已标记为已处理');
@@ -615,6 +618,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         layout="vertical"
         onFinish={handleMarkAsHandledSubmit}
       >
+        <DocumentAttachmentsField category="maintenance_reminder_attachments" />
         <ProFormTextArea
           name="remark"
           label="处理备注"

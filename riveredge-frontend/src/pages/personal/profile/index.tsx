@@ -33,6 +33,7 @@ import {
   PROFILE_AVATAR_USE_NOTIONISTS,
   buildGeneratedAvatarUrl,
   buildAvatarCandidateBatch,
+  generatedAvatarToPngBlob,
   resolveStableAvatarSeed,
   type AvatarCandidate,
 } from '../../../utils/generatedAvatar';
@@ -354,11 +355,11 @@ const UserProfilePage: React.FC = () => {
   const handleApplyAvatarCandidate = async (candidate: AvatarCandidate) => {
     try {
       setApplyingCandidateSeed(candidate.seed);
-      const res = await fetch(candidate.url);
-      if (!res.ok) {
-        throw new Error(`DiceBear ${res.status}`);
-      }
-      const blob = await res.blob();
+      const blob = await generatedAvatarToPngBlob({
+        seed: candidate.seed,
+        gender: resolveProfileGender(),
+        size: 128,
+      });
       await applyAvatarBlob(blob, `avatar-${candidate.seed.slice(0, 20)}.png`);
     } catch (error: unknown) {
       const errMsg = error instanceof Error ? error.message : '';

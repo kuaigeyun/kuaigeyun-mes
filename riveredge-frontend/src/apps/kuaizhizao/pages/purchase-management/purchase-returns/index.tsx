@@ -86,6 +86,8 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const PURCHASE_RETURN_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_returns';
 
@@ -118,6 +120,7 @@ interface PurchaseReturn {
   tracking_number?: string;
   shipping_address?: string;
   notes?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -379,6 +382,7 @@ const PurchaseReturnsPage: React.FC = () => {
         return_type: detail.return_type,
         shipping_method: detail.shipping_method,
         notes: detail.notes,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         items: (detail.items || []).map((it) => ({
           material_id: (it as any).material_id,
           material_code: it.material_code,
@@ -477,6 +481,7 @@ const PurchaseReturnsPage: React.FC = () => {
           tracking_number: detail.tracking_number ?? null,
           shipping_address: detail.shipping_address ?? null,
           notes: standardValues.notes ?? null,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           purchase_receipt_id: detail.purchase_receipt_id ?? null,
           purchase_receipt_code: detail.purchase_receipt_code ?? null,
           purchase_order_id: detail.purchase_order_id ?? null,
@@ -490,6 +495,7 @@ const PurchaseReturnsPage: React.FC = () => {
         const created = await warehouseApi.purchaseReturn.create({
           ...standardValues,
           return_time: returnTime,
+          attachments: normalizeDocumentAttachments(standardValues.attachments),
           items: itemsPayload,
         });
         recordId = (created as any)?.id;
@@ -1204,6 +1210,7 @@ const PurchaseReturnsPage: React.FC = () => {
         />
 
         <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
+        <DocumentAttachmentsField category="purchase_return_attachments" />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker

@@ -19,10 +19,12 @@ from tortoise.expressions import F
 from apps.kuaizhizao.models.inventory_transfer import InventoryTransfer, InventoryTransferItem
 from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferCreate,
+    InventoryTransferCreateWithItems,
     InventoryTransferUpdate,
     InventoryTransferResponse,
     InventoryTransferListResponse,
     InventoryTransferItemCreate,
+    InventoryTransferItemInput,
     InventoryTransferItemUpdate,
     InventoryTransferItemResponse,
     InventoryTransferWithItemsResponse,
@@ -53,11 +55,76 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
         resp.transfer_mode = self._infer_transfer_mode(transfer)
         return resp
 
+    @staticmethod
+    def _validate_transfer_item(
+        transfer: InventoryTransfer,
+        *,
+        from_storage_area_id: Optional[int],
+        from_location_id: Optional[int],
+        to_storage_area_id: Optional[int],
+        to_location_id: Optional[int],
+    ) -> None:
+        mode = InventoryTransferService._infer_transfer_mode(transfer)
+        if mode != "bin_relocation":
+            return
+        if not from_storage_area_id or not from_location_id:
+            raise ValidationError("库内移位必须填写调出库区/库位")
+        if not to_storage_area_id or not to_location_id:
+            raise ValidationError("库内移位必须填写调入库区/库位")
+        if from_location_id == to_location_id:
+            raise ValidationError("库内移位时调出库位和调入库位不能相同")
+
+    async def _create_transfer_item_record(
+        self,
+        tenant_id: int,
+        transfer: InventoryTransfer,
+        item_data: InventoryTransferItemInput | InventoryTransferItemCreate,
+        *,
+        transfer_id: Optional[int] = None,
+    ) -> InventoryTransferItem:
+        from_wh = getattr(item_data, "from_warehouse_id", None) or transfer.from_warehouse_id
+        to_wh = getattr(item_data, "to_warehouse_id", None) or transfer.to_warehouse_id
+
+        self._validate_transfer_item(
+            transfer,
+            from_storage_area_id=getattr(item_data, "from_storage_area_id", None),
+            from_location_id=getattr(item_data, "from_location_id", None),
+            to_storage_area_id=getattr(item_data, "to_storage_area_id", None),
+            to_location_id=getattr(item_data, "to_location_id", None),
+        )
+
+        amount = item_data.quantity * item_data.unit_price
+        return await InventoryTransferItem.create(
+            tenant_id=tenant_id,
+            uuid=str(uuid.uuid4()),
+            transfer_id=transfer_id or transfer.id,
+            material_id=item_data.material_id,
+            material_code=item_data.material_code,
+            material_name=item_data.material_name,
+            from_warehouse_id=from_wh,
+            from_storage_area_id=getattr(item_data, "from_storage_area_id", None),
+            from_storage_area_code=getattr(item_data, "from_storage_area_code", None),
+            from_location_id=getattr(item_data, "from_location_id", None),
+            from_location_code=getattr(item_data, "from_location_code", None),
+            to_warehouse_id=to_wh,
+            to_storage_area_id=getattr(item_data, "to_storage_area_id", None),
+            to_storage_area_code=getattr(item_data, "to_storage_area_code", None),
+            to_location_id=getattr(item_data, "to_location_id", None),
+            to_location_code=getattr(item_data, "to_location_code", None),
+            batch_no=getattr(item_data, "batch_no", None),
+            quantity=item_data.quantity,
+            unit_price=item_data.unit_price,
+            amount=amount,
+            status="pending",
+            remarks=getattr(item_data, "remarks", None),
+        )
+
     async def create_inventory_transfer(
         self,
         tenant_id: int,
-        transfer_data: InventoryTransferCreate,
-        created_by: int
+        transfer_data: InventoryTransferCreate | InventoryTransferCreateWithItems,
+        created_by: int,
+        items: Optional[List[InventoryTransferItemInput]] = None,
     ) -> InventoryTransferResponse:
         """
         创建库存调拨单
@@ -114,6 +181,16 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 updated_by=created_by,
                 updated_by_name=user_info["name"],
             )
+
+            line_items = items
+            if line_items is None and isinstance(transfer_data, InventoryTransferCreateWithItems):
+                line_items = transfer_data.items
+            if line_items:
+                for item_data in line_items:
+                    await self._create_transfer_item_record(
+                        tenant_id, transfer, item_data
+                    )
+                await self._update_transfer_statistics(tenant_id, transfer.id)
 
             return self._to_transfer_response(transfer)
 
@@ -344,39 +421,10 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
             if transfer.status not in ['draft', 'in_progress']:
                 raise ValidationError(f"调拨单状态为{transfer.status}，不能添加明细")
 
-            # 获取创建人信息
-            user_info = await self.get_user_info(created_by)
-
-            # 计算金额
-            amount = item_data.quantity * item_data.unit_price
-
-            # 创建调拨明细
-            item = await InventoryTransferItem.create(
-                tenant_id=tenant_id,
-                uuid=str(uuid.uuid4()),
-                transfer_id=transfer_id,
-                material_id=item_data.material_id,
-                material_code=item_data.material_code,
-                material_name=item_data.material_name,
-                from_warehouse_id=item_data.from_warehouse_id,
-                from_location_id=item_data.from_location_id,
-                from_location_code=item_data.from_location_code,
-                to_warehouse_id=item_data.to_warehouse_id,
-                to_location_id=item_data.to_location_id,
-                to_location_code=item_data.to_location_code,
-                batch_no=item_data.batch_no,
-                quantity=item_data.quantity,
-                unit_price=item_data.unit_price,
-                amount=amount,
-                status="pending",
-                remarks=item_data.remarks,
-                created_by=created_by,
-                created_by_name=user_info["name"],
-                updated_by=created_by,
-                updated_by_name=user_info["name"],
+            item = await self._create_transfer_item_record(
+                tenant_id, transfer, item_data, transfer_id=transfer_id
             )
 
-            # 更新调拨单统计信息
             await self._update_transfer_statistics(tenant_id, transfer_id)
 
             return InventoryTransferItemResponse.model_validate(item)
@@ -427,8 +475,38 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
                 item.quantity = item_data.quantity
             if item_data.unit_price is not None:
                 item.unit_price = item_data.unit_price
+            if item_data.from_storage_area_id is not None:
+                item.from_storage_area_id = item_data.from_storage_area_id
+            if item_data.from_storage_area_code is not None:
+                item.from_storage_area_code = item_data.from_storage_area_code
+            if item_data.from_location_id is not None:
+                item.from_location_id = item_data.from_location_id
+            if item_data.from_location_code is not None:
+                item.from_location_code = item_data.from_location_code
+            if item_data.to_storage_area_id is not None:
+                item.to_storage_area_id = item_data.to_storage_area_id
+            if item_data.to_storage_area_code is not None:
+                item.to_storage_area_code = item_data.to_storage_area_code
+            if item_data.to_location_id is not None:
+                item.to_location_id = item_data.to_location_id
+            if item_data.to_location_code is not None:
+                item.to_location_code = item_data.to_location_code
             if item_data.remarks is not None:
                 item.remarks = item_data.remarks
+
+            transfer = await InventoryTransfer.get_or_none(
+                id=item.transfer_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            )
+            if transfer:
+                self._validate_transfer_item(
+                    transfer,
+                    from_storage_area_id=item.from_storage_area_id,
+                    from_location_id=item.from_location_id,
+                    to_storage_area_id=item.to_storage_area_id,
+                    to_location_id=item.to_location_id,
+                )
 
             # 重新计算金额
             item.amount = item.quantity * item.unit_price
@@ -488,6 +566,15 @@ class InventoryTransferService(AppBaseService[InventoryTransfer]):
 
             if not items:
                 raise ValidationError("调拨单没有待调拨的明细")
+
+            for item in items:
+                self._validate_transfer_item(
+                    transfer,
+                    from_storage_area_id=item.from_storage_area_id,
+                    from_location_id=item.from_location_id,
+                    to_storage_area_id=item.to_storage_area_id,
+                    to_location_id=item.to_location_id,
+                )
 
             # 调用统一库存服务：从调出仓库扣减，向调入仓库增加
             from apps.kuaizhizao.services.inventory_service import InventoryService

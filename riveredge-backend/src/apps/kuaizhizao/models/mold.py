@@ -101,6 +101,7 @@ class Mold(BaseModel):
     next_calibration_date = fields.DateField(null=True, description="下次校验日期")
     
     description = fields.TextField(null=True, description="描述")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -188,6 +189,7 @@ class MoldUsage(BaseModel):
     status = fields.CharField(max_length=50, default="使用中", description="使用状态（使用中、已归还、已报废）")
     return_date = fields.DatetimeField(null=True, description="归还日期")
     remark = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")
@@ -215,5 +217,6 @@ class MoldCalibration(BaseModel):
     expiry_date = fields.DateField(null=True, description="有效期至")
     attachment_uuid = fields.CharField(max_length=36, null=True, description="附件ID")
     remark = fields.TextField(null=True)
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True)
 

@@ -17,6 +17,7 @@ import {
   Descriptions,
   Divider,
 } from 'antd';
+import { ProForm } from '@ant-design/pro-components';
 import { EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import dayjs, { Dayjs } from 'dayjs';
@@ -30,6 +31,8 @@ import {
   PARTNER_STATEMENT_STATUS_MAP,
 } from '../../../services/finance/partnerStatement';
 import { apiRequest } from '../../../../../services/api';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -47,6 +50,7 @@ const PartnerStatementsPage: React.FC = () => {
   const [partnerId, setPartnerId] = useState<number | null>(null);
   const [period, setPeriod] = useState<Dayjs>(() => dayjs().subtract(1, 'month').startOf('month'));
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
+  const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
 
@@ -84,6 +88,7 @@ const PartnerStatementsPage: React.FC = () => {
     setPreview(null);
     setPartnerId(null);
     setPeriod(dayjs().subtract(1, 'month').startOf('month'));
+    createForm.resetFields();
   };
 
   const handlePreview = async () => {
@@ -120,6 +125,7 @@ const PartnerStatementsPage: React.FC = () => {
         statement_period: periodRange.label,
         start_date: periodRange.start.format('YYYY-MM-DD'),
         end_date: periodRange.end.format('YYYY-MM-DD'),
+        attachments: normalizeDocumentAttachments(createForm.getFieldValue('attachments')),
       });
       messageApi.success('对账单已生成');
       setCreateOpen(false);
@@ -492,6 +498,9 @@ const PartnerStatementsPage: React.FC = () => {
                   },
                 ]}
               />
+              <ProForm form={createForm} submitter={false}>
+                <DocumentAttachmentsField category="partner_statement_attachments" />
+              </ProForm>
             </>
           ) : (
             <Typography.Text type="secondary">选择往来单位与对账月份后，点击「预览」查看明细。</Typography.Text>

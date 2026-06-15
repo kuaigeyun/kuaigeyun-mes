@@ -32,6 +32,7 @@ class EquipmentFaultBase(BaseModel):
     status: str = Field(default="待处理", max_length=50, description="故障状态（待处理、处理中、已修复、已关闭）")
     repair_required: bool = Field(default=True, description="是否需要维修")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("fault_type")
     @classmethod
@@ -82,6 +83,7 @@ class EquipmentFaultUpdate(BaseModel):
     status: Optional[str] = Field(None, max_length=50, description="故障状态")
     repair_required: Optional[bool] = Field(None, description="是否需要维修")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class EquipmentFaultResponse(EquipmentFaultBase):
@@ -123,6 +125,7 @@ class EquipmentRepairBase(BaseModel):
     status: str = Field(default="进行中", max_length=50, description="维修状态（进行中、已完成、已取消）")
     repair_result: Optional[str] = Field(None, max_length=50, description="维修结果（成功、失败、部分成功）")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("repair_type")
     @classmethod
@@ -176,6 +179,7 @@ class EquipmentRepairUpdate(BaseModel):
     status: Optional[str] = Field(None, max_length=50, description="维修状态")
     repair_result: Optional[str] = Field(None, max_length=50, description="维修结果")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class EquipmentRepairResponse(EquipmentRepairBase):

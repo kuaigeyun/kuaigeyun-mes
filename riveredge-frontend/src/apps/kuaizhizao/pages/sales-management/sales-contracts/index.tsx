@@ -22,6 +22,7 @@ import {
   getDocumentFormDraft,
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 
@@ -656,7 +657,7 @@ const SalesContractsPage: React.FC = () => {
 
     if (nextType === currentType) return;
 
-    const items = formRef.current?.getFieldValue('items') ?? [];
+    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
 
     const next = items.map((row: any) => ({
 
@@ -712,7 +713,7 @@ const SalesContractsPage: React.FC = () => {
 
       }
 
-      const items = [...(formRef.current?.getFieldValue('items') ?? [])];
+      const items = [...normalizeFormListItems<any>(formRef.current?.getFieldValue('items'))];
 
       if (items[index]) {
 
@@ -734,7 +735,7 @@ const SalesContractsPage: React.FC = () => {
 
     (selected: Material[]) => {
 
-      const current = formRef.current?.getFieldValue('items') ?? [];
+      const current = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
 
       const newRows = selected.map((m) => ({
 
@@ -825,7 +826,7 @@ const SalesContractsPage: React.FC = () => {
         return;
       }
 
-      const currentItems = formRef.current?.getFieldValue('items') || [];
+      const currentItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
       formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
       messageApi.success(`成功导入 ${newItems.length} 条明细`);
       setImportModalVisible(false);
@@ -835,7 +836,7 @@ const SalesContractsPage: React.FC = () => {
 
   const buildFormPayload = (values: any) => {
 
-    const validItems = (values.items ?? []).filter(
+    const validItems = normalizeFormListItems<any>(values.items).filter(
 
       (it: any) => it.material_id && Number(it.contract_quantity) > 0 && Number(it.unit_price) >= 0,
 
@@ -929,7 +930,7 @@ const SalesContractsPage: React.FC = () => {
 
       })),
 
-      milestones: (values.milestones ?? [])
+      milestones: normalizeFormListItems<any>(values.milestones)
 
         .filter((ms: any) => ms?.milestone_name && (ms.planned_date || ms.planned_amount || ms.planned_ratio))
 
@@ -1082,34 +1083,45 @@ const SalesContractsPage: React.FC = () => {
 
   const handleFormSubmit = async (values: any, options?: { asDraft?: boolean }) => {
     const asDraft = options?.asDraft ?? false;
-    const payload = buildFormPayload(values);
+    try {
+      const payload = buildFormPayload(values);
 
-    if (editingId) {
-      await salesContractApi.update(editingId, payload);
-      if (!asDraft) {
-        await salesContractApi.submit(editingId);
-        messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit', '已保存并提交'));
+      if (editingId) {
+        await salesContractApi.update(editingId, payload);
+        if (!asDraft) {
+          await salesContractApi.submit(editingId);
+          messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit', '已保存并提交'));
+        } else {
+          messageApi.success(t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存'));
+        }
       } else {
-        messageApi.success(t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存'));
+        await salesContractApi.create(payload, !asDraft);
+        messageApi.success(
+          asDraft
+            ? t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存')
+            : '销售合同已创建',
+        );
       }
-    } else {
-      await salesContractApi.create(payload, !asDraft);
-      messageApi.success(
-        asDraft
-          ? t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存')
-          : '销售合同已创建',
-      );
-    }
 
-    if (isFormPage) {
-      if (isCreatePage) {
-        clearSalesContractCreateDraft();
+      if (isFormPage) {
+        if (isCreatePage) {
+          clearSalesContractCreateDraft();
+        }
+        navigate(SALES_CONTRACT_LIST_PATH);
+      } else {
+        setEditingId(null);
+        actionRef.current?.reload();
+        if (detail?.id === editingId) openDetail(editingId);
       }
-      navigate(SALES_CONTRACT_LIST_PATH);
-    } else {
-      setEditingId(null);
-      actionRef.current?.reload();
-      if (detail?.id === editingId) openDetail(editingId);
+    } catch (err: any) {
+      if (err?.message === '请至少添加一条有效合同明细') {
+        return;
+      }
+      if (err?.errorFields?.length) {
+        messageApi.warning(err?.message ?? t('components.layoutTemplates.formModal.checkFormHint'));
+        return;
+      }
+      messageApi.error(err?.message || (asDraft ? '保存草稿失败' : '创建销售合同失败'));
     }
   };
 

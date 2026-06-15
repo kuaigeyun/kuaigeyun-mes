@@ -7,11 +7,13 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, Typography } from 'antd';
-import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
+import { App, Button, Tag, Space, Modal, Card, Table, Row, Col, InputNumber } from 'antd';
+import { PlusOutlined, EyeOutlined, PlayCircleOutlined, CheckCircleOutlined, DatabaseOutlined, RollbackOutlined } from '@ant-design/icons';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -19,11 +21,13 @@ import {
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
-import { stocktakingApi } from '../../../services/stocktaking';
+import { stocktakingApi, inventoryReportApi } from '../../../services/stocktaking';
 import { getStocktakingLifecycle } from '../../../utils/stocktakingLifecycle';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { resolveListLifecycleStageFromSearch } from '../../../../../utils/listLifecycleStage';
 
 interface Stocktaking {
@@ -35,6 +39,8 @@ interface Stocktaking {
   stocktaking_date?: string;
   status?: string;
   stocktaking_type?: string;
+  line_granularity?: string;
+  include_zero_stock?: boolean;
   total_items?: number;
   counted_items?: number;
   total_differences?: number;
@@ -68,33 +74,35 @@ interface StocktakingItem {
   remarks?: string;
 }
 
+const STOCKTAKING_RESOURCE = 'kuaizhizao:warehouse-management-stocktaking';
+
+const granularityLabel = (value?: string) => (value === 'material' ? '物料汇总' : '批次行');
+
 const StocktakingPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
+  const canRevoke = canAction?.('revoke') ?? false;
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   // Modal 相关状态
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [itemModalVisible, setItemModalVisible] = useState(false);
-  const [executeModalVisible, setExecuteModalVisible] = useState(false);
+  const [inventoryPickerVisible, setInventoryPickerVisible] = useState(false);
   const formRef = useRef<any>(null);
   const itemFormRef = useRef<any>(null);
-  const executeFormRef = useRef<any>(null);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [currentStocktaking, setCurrentStocktaking] = useState<Stocktaking | null>(null);
+  const [savingItemId, setSavingItemId] = useState<number | null>(null);
+  const [editingActualQty, setEditingActualQty] = useState<Record<number, number>>({});
 
-  // 仓库列表状态 (由 UniWarehouseSelect 内部接管，不再需要手工维护)
-  // 物料列表状态
   const [materialList, setMaterialList] = useState<any[]>([]);
-  // 当前盘点单ID（用于添加明细）
-  const [currentStocktakingId, setCurrentStocktakingId] = useState<number | null>(null);
-  // 当前执行盘点的明细ID
-  const [currentItemId, setCurrentItemId] = useState<number | null>(null);
-  const [pendingExecuteFormValues, setPendingExecuteFormValues] = useState<Record<string, any> | null>(null);
-
-  // 仓库加载交由 UniWarehouseSelect
+  const [currentStocktakingForItem, setCurrentStocktakingForItem] = useState<Stocktaking | null>(null);
+  const [inventoryRows, setInventoryRows] = useState<any[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [selectedInventoryKeys, setSelectedInventoryKeys] = useState<React.Key[]>([]);
 
   /**
    * 加载物料列表
@@ -122,6 +130,8 @@ const StocktakingPage: React.FC = () => {
       formRef.current?.setFieldsValue({
         stocktaking_date: dayjs(),
         stocktaking_type: 'full',
+        line_granularity: 'batch',
+        include_zero_stock: false,
       });
     }, 0);
   };
@@ -139,7 +149,10 @@ const StocktakingPage: React.FC = () => {
           ? stocktakingDate.toISOString()
           : new Date().toISOString(),
         stocktaking_type: values.stocktaking_type || 'full',
+        line_granularity: values.line_granularity || 'batch',
+        include_zero_stock: Boolean(values.include_zero_stock),
         remarks: values.remarks,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('盘点单创建成功');
       setCreateModalVisible(false);
@@ -153,13 +166,18 @@ const StocktakingPage: React.FC = () => {
     }
   };
 
+  const refreshCurrentDetail = useCallback(async (stocktakingId: number) => {
+    const detail = await stocktakingApi.get(stocktakingId.toString());
+    setCurrentStocktaking(detail);
+    return detail;
+  }, []);
+
   /**
    * 处理查看详情
    */
   const handleDetail = async (record: Stocktaking) => {
     try {
-      const detail = await stocktakingApi.get(record.id!.toString());
-      setCurrentStocktaking(detail);
+      await refreshCurrentDetail(record.id!);
       setDetailDrawerVisible(true);
     } catch (error: any) {
       messageApi.error(error.message || '获取盘点单详情失败');
@@ -170,16 +188,25 @@ const StocktakingPage: React.FC = () => {
    * 处理开始盘点
    */
   const handleStart = async (record: Stocktaking) => {
+    const isFull = record.stocktaking_type === 'full';
+    const content = isFull
+      ? `将按【${granularityLabel(record.line_granularity)}】载入仓库「${record.warehouse_name || ''}」的账面库存并进入盘点，确定开始吗？`
+      : `确定要开始盘点单 "${record.code}" 吗？抽盘/循环盘点可在开始后从仓库库存勾选明细。`;
+
     Modal.confirm({
       title: '开始盘点',
-      content: `确定要开始盘点单 "${record.code}" 吗？`,
+      content,
       onOk: async () => {
         try {
-          await stocktakingApi.start(record.id!.toString());
+          await stocktakingApi.start(record.id!.toString(), {
+            line_granularity: record.line_granularity,
+            include_zero_stock: record.include_zero_stock,
+          });
           messageApi.success('盘点已开始');
           invalidateMenuBadgeCounts();
-
           actionRef.current?.reload();
+          await refreshCurrentDetail(record.id!);
+          setDetailDrawerVisible(true);
         } catch (error: any) {
           messageApi.error(error.message || '开始盘点失败');
         }
@@ -187,13 +214,71 @@ const StocktakingPage: React.FC = () => {
     });
   };
 
+  const isPartialType = (record?: Stocktaking | null) =>
+    record?.stocktaking_type === 'partial' || record?.stocktaking_type === 'cycle';
+
   /**
-   * 处理添加盘点明细
+   * 处理添加盘点明细（抽盘手工加行）
    */
   const handleAddItem = (record: Stocktaking) => {
-    setCurrentStocktakingId(record.id!);
+    setCurrentStocktakingForItem(record);
     setItemModalVisible(true);
     itemFormRef.current?.resetFields();
+  };
+
+  const loadInventoryPicker = async (record: Stocktaking) => {
+    if (!record.warehouse_id) {
+      messageApi.error('盘点单未指定仓库');
+      return;
+    }
+    setInventoryLoading(true);
+    try {
+      const params = {
+        warehouse_id: record.warehouse_id,
+        include_zero_stock: false,
+        current: 1,
+        page_size: 500,
+      };
+      const result = record.line_granularity === 'material'
+        ? await inventoryReportApi.materialBalances(params)
+        : await inventoryReportApi.batchLines(params);
+      setInventoryRows(result.items || result.data || []);
+      setSelectedInventoryKeys([]);
+      setInventoryPickerVisible(true);
+    } catch (error: any) {
+      messageApi.error(error.message || '加载仓库库存失败');
+    } finally {
+      setInventoryLoading(false);
+    }
+  };
+
+  const handleInventoryPickerSubmit = async () => {
+    if (!currentStocktaking?.id) return;
+    const selected = inventoryRows.filter((row) => selectedInventoryKeys.includes(row.id));
+    if (!selected.length) {
+      messageApi.warning('请至少选择一条库存');
+      return;
+    }
+    try {
+      await stocktakingApi.bulkCreateItems(
+        currentStocktaking.id.toString(),
+        selected.map((row) => ({
+          stocktaking_id: currentStocktaking.id,
+          material_id: row.material_id,
+          material_code: row.material_code,
+          material_name: row.material_name,
+          batch_no: row.batch_no,
+          unit_price: 0,
+        })),
+      );
+      messageApi.success(`已添加 ${selected.length} 条盘点明细`);
+      setInventoryPickerVisible(false);
+      invalidateMenuBadgeCounts();
+      actionRef.current?.reload();
+      await refreshCurrentDetail(currentStocktaking.id);
+    } catch (error: any) {
+      messageApi.error(error.message || '批量添加盘点明细失败');
+    }
   };
 
   /**
@@ -201,7 +286,7 @@ const StocktakingPage: React.FC = () => {
    */
   const handleAddItemSubmit = async (values: any) => {
     try {
-      if (!currentStocktakingId) {
+      if (!currentStocktakingForItem?.id) {
         messageApi.error('盘点单ID不存在');
         return;
       }
@@ -212,95 +297,99 @@ const StocktakingPage: React.FC = () => {
         return;
       }
 
-      await stocktakingApi.createItem(currentStocktakingId.toString(), {
-        stocktaking_id: currentStocktakingId,
+      await stocktakingApi.createItem(currentStocktakingForItem.id.toString(), {
+        stocktaking_id: currentStocktakingForItem.id,
         material_id: values.material_id,
         material_code: material.mainCode ?? material.code ?? '',
         material_name: material.name,
-        warehouse_id: values.warehouse_id,
-        location_id: values.location_id,
+        warehouse_id: currentStocktakingForItem.warehouse_id,
         location_code: values.location_code,
         batch_no: values.batch_no,
-        book_quantity: values.book_quantity,
         unit_price: values.unit_price || 0,
         remarks: values.remarks,
       });
+      const stocktakingId = currentStocktakingForItem.id;
       messageApi.success('盘点明细添加成功');
       setItemModalVisible(false);
-      setCurrentStocktakingId(null);
+      setCurrentStocktakingForItem(null);
       itemFormRef.current?.resetFields();
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
+      if (currentStocktaking?.id === stocktakingId) {
+        await refreshCurrentDetail(stocktakingId);
+      }
     } catch (error: any) {
       messageApi.error(error.message || '添加盘点明细失败');
       throw error;
     }
   };
 
-  /**
-   * 处理执行盘点明细
-   */
-  const handleExecuteItem = (item: StocktakingItem) => {
-    setCurrentItemId(item.id!);
-    setExecuteModalVisible(true);
-    setPendingExecuteFormValues({
-      actual_quantity: item.actual_quantity || item.book_quantity,
-      remarks: item.remarks,
-    });
-  };
-
-  /**
-   * 处理提交执行盘点明细
-   */
-  const handleExecuteItemSubmit = async (values: any) => {
+  const handleSaveActualQuantity = async (item: StocktakingItem) => {
+    if (!currentStocktaking?.id || !item.id) return;
+    const actualQty = editingActualQty[item.id] ?? item.actual_quantity ?? item.book_quantity ?? 0;
+    setSavingItemId(item.id);
     try {
-      if (!currentItemId || !currentStocktaking?.id) {
-        messageApi.error('盘点明细ID不存在');
-        return;
-      }
-
       await stocktakingApi.executeItem(
         currentStocktaking.id.toString(),
-        currentItemId.toString(),
-        values.actual_quantity,
-        values.remarks
+        item.id.toString(),
+        Number(actualQty),
+        item.remarks,
       );
-      messageApi.success('盘点明细执行成功');
-      setExecuteModalVisible(false);
-      setCurrentItemId(null);
-      setPendingExecuteFormValues(null);
-      executeFormRef.current?.resetFields();
-      // 刷新详情
-      if (currentStocktaking) {
-        const detail = await stocktakingApi.get(currentStocktaking.id.toString());
-        setCurrentStocktaking(detail);
-      }
+      messageApi.success('实盘数量已保存');
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
+      await refreshCurrentDetail(currentStocktaking.id);
     } catch (error: any) {
-      messageApi.error(error.message || '执行盘点明细失败');
-      throw error;
+      messageApi.error(error.message || '保存实盘数量失败');
+    } finally {
+      setSavingItemId(null);
     }
   };
 
-  /**
-   * 处理盘点差异
-   */
-  const handleAdjust = async (record: Stocktaking) => {
+  const canComplete = (record?: Stocktaking | null) =>
+    record?.status === 'in_progress'
+    && (record.total_items ?? 0) > 0
+    && record.counted_items === record.total_items;
+
+  const handleComplete = async (record: Stocktaking) => {
+    const hasDiff = (record.total_differences ?? 0) > 0;
     Modal.confirm({
-      title: '处理盘点差异',
-      content: `确定要处理盘点单 "${record.code}" 的差异吗？处理后将调整库存。`,
+      title: '完成盘点',
+      content: hasDiff
+        ? `盘点单 "${record.code}" 存在 ${record.total_differences} 处差异，完成后将调整库存。确定吗？`
+        : `盘点单 "${record.code}" 账实相符，确定完成盘点吗？`,
       onOk: async () => {
         try {
-          await stocktakingApi.adjust(record.id!.toString());
-          messageApi.success('盘点差异处理成功');
+          await stocktakingApi.complete(record.id!.toString());
+          messageApi.success('盘点已完成');
           invalidateMenuBadgeCounts();
-
           actionRef.current?.reload();
+          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
+            await refreshCurrentDetail(record.id!);
+          }
         } catch (error: any) {
-          messageApi.error(error.message || '处理盘点差异失败');
+          messageApi.error(error.message || '完成盘点失败');
+        }
+      },
+    });
+  };
+
+  const handleWithdraw = (record: Stocktaking) => {
+    Modal.confirm({
+      title: '撤回盘点',
+      content: `确定将盘点单 "${record.code}" 撤回到草稿吗？未录入实盘的明细将被清空，之后可删除该盘点单。`,
+      okText: '撤回',
+      onOk: async () => {
+        try {
+          await stocktakingApi.withdraw(record.id!.toString());
+          messageApi.success('盘点单已撤回为草稿');
+          invalidateMenuBadgeCounts();
+          actionRef.current?.reload();
+          if (detailDrawerVisible && currentStocktaking?.id === record.id) {
+            await refreshCurrentDetail(record.id!);
+          }
+        } catch (error: any) {
+          messageApi.error(error.message || '撤回失败');
         }
       },
     });
@@ -373,11 +462,14 @@ const StocktakingPage: React.FC = () => {
       dataIndex: 'total_difference_amount',
       width: 120,
       align: 'right',
-      render: (_, record) => (
-        <span style={{ color: record.total_difference_amount! > 0 ? '#ff4d4f' : '#52c41a' }}>
-          ¥{record.total_difference_amount?.toFixed(2) || '0.00'}
-        </span>
-      ),
+      render: (_, record) => {
+        const amount = Number(record.total_difference_amount ?? 0);
+        return (
+          <span style={{ color: amount > 0 ? '#ff4d4f' : '#52c41a' }}>
+            ¥{amount.toFixed(2)}
+          </span>
+        );
+      },
     },
     {
       title: '更新时间',
@@ -413,57 +505,32 @@ const StocktakingPage: React.FC = () => {
       width: 300,
       fixed: 'right',
       render: (_, record) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          {record.status === 'draft' && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<PlayCircleOutlined />}
-                onClick={() => handleStart(record)}
-              >
-                开始盘点
-              </Button>
-              <Button
-                type="link"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => handleAddItem(record)}
-              >
-                添加明细
-              </Button>
-            </>
+        <Space wrap>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
+          {record.status === 'draft' && canUpdate && (
+            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleStart(record)}>
+              开始盘点
+            </Button>
           )}
-          {record.status === 'in_progress' && (
-            <>
-              <Button
-                type="link"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={() => handleAddItem(record)}
-              >
-                添加明细
-              </Button>
-              {record.total_differences! > 0 && (
-                <Button
-                  type="link"
-                  size="small"
-                  icon={<CheckCircleOutlined />}
-                  onClick={() => handleAdjust(record)}
-                  style={{ color: '#52c41a' }}
-                >
-                  处理差异
-                </Button>
-              )}
-            </>
+          {record.status === 'draft' && isPartialType(record) && canCreate && (
+            <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
+              添加明细
+            </Button>
+          )}
+          {record.status === 'in_progress' && isPartialType(record) && canCreate && (
+            <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
+              添加明细
+            </Button>
+          )}
+          {record.status === 'in_progress' && canComplete(record) && canUpdate && (
+            <Button {...rowActionKind('complete')} {...rowActionLabelKeep()} onClick={() => handleComplete(record)}>
+              完成盘点
+            </Button>
+          )}
+          {record.status === 'in_progress' && canRevoke && (
+            <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
+              撤回
+            </Button>
           )}
         </Space>
       ),
@@ -479,9 +546,9 @@ const StocktakingPage: React.FC = () => {
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
-        showCreateButton={true}
+        showCreateButton={canCreate}
         createButtonText="新建盘点单"
-        onCreate={handleCreate}
+        onCreate={canCreate ? handleCreate : undefined}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
             const lifecycleStage = resolveListLifecycleStageFromSearch(searchFormValues, params);
@@ -507,8 +574,8 @@ const StocktakingPage: React.FC = () => {
             };
           }
         }}
-        enableRowSelection={true}
-        showDeleteButton={true}
+        enableRowSelection={canDelete}
+        showDeleteButton={canDelete}
         onDelete={async (keys) => {
           try {
             for (const id of keys) {
@@ -545,8 +612,8 @@ const StocktakingPage: React.FC = () => {
               label="仓库"
               placeholder="请选择仓库"
               required
-              onChange={(_, option) => {
-                formRef.current?.setFieldsValue({ _warehouse_name: option?.name });
+              onChange={(_value, warehouse) => {
+                formRef.current?.setFieldsValue({ _warehouse_name: warehouse?.name ?? '' });
               }}
             />
           </Col>
@@ -572,8 +639,25 @@ const StocktakingPage: React.FC = () => {
               ]}
             />
           </Col>
+          <Col span={12}>
+            <ProFormSelect
+              name="line_granularity"
+              label="明细粒度"
+              rules={[{ required: true, message: '请选择明细粒度' }]}
+              options={[
+                { label: '批次行', value: 'batch' },
+                { label: '物料汇总', value: 'material' },
+              ]}
+            />
+          </Col>
+        </Row>
+        <Row gutter={16}>
+          <Col span={12}>
+            <ProFormSwitch name="include_zero_stock" label="包含零库存" />
+          </Col>
           <Col span={12} />
         </Row>
+        <DocumentAttachmentsField category="stocktaking_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"
@@ -588,7 +672,7 @@ const StocktakingPage: React.FC = () => {
         open={itemModalVisible}
         onClose={() => {
           setItemModalVisible(false);
-          setCurrentStocktakingId(null);
+          setCurrentStocktakingForItem(null);
           itemFormRef.current?.resetFields();
         }}
         onFinish={handleAddItemSubmit}
@@ -609,14 +693,6 @@ const StocktakingPage: React.FC = () => {
             filterOption: (input: string, option: any) =>
               option?.label?.toLowerCase().includes(input.toLowerCase()),
           }}
-        />
-        <ProFormDigit
-          name="book_quantity"
-          label="账面数量"
-          placeholder="请输入账面数量"
-          rules={[{ required: true, message: '请输入账面数量' }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
         />
         <ProFormDigit
           name="unit_price"
@@ -643,45 +719,39 @@ const StocktakingPage: React.FC = () => {
         />
       </FormModalTemplate>
 
-      {/* 执行盘点明细Modal */}
-      <FormModalTemplate
-        title="执行盘点明细"
-        open={executeModalVisible}
-        onClose={() => {
-          setExecuteModalVisible(false);
-          setCurrentItemId(null);
-          setPendingExecuteFormValues(null);
-          executeFormRef.current?.resetFields();
-        }}
-        afterOpenChange={(open) => {
-          if (open) {
-            if (pendingExecuteFormValues) {
-              executeFormRef.current?.setFieldsValue(pendingExecuteFormValues);
-            }
-            return;
-          }
-          executeFormRef.current?.resetFields?.();
-          setPendingExecuteFormValues(null);
-        }}
-        onFinish={handleExecuteItemSubmit}
-        formRef={executeFormRef}
-        {...MODAL_CONFIG}
+      <Modal
+        title="从仓库库存选择"
+        open={inventoryPickerVisible}
+        onCancel={() => setInventoryPickerVisible(false)}
+        onOk={handleInventoryPickerSubmit}
+        width={900}
+        okText="添加到盘点单"
       >
-        <ProFormDigit
-          name="actual_quantity"
-          label="实际数量"
-          placeholder="请输入实际数量"
-          rules={[{ required: true, message: '请输入实际数量' }]}
-          min={0}
-          fieldProps={{ precision: 2 }}
+        <Table
+          rowKey="id"
+          loading={inventoryLoading}
+          dataSource={inventoryRows}
+          rowSelection={{
+            selectedRowKeys: selectedInventoryKeys,
+            onChange: setSelectedInventoryKeys,
+          }}
+          pagination={false}
+          scroll={{ y: 400 }}
+          size="small"
+          columns={[
+            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+            { title: '物料名称', dataIndex: 'material_name', width: 160 },
+            { title: '批次号', dataIndex: 'batch_no', width: 120, render: (v) => v || '-' },
+            {
+              title: '账面数量',
+              dataIndex: 'quantity',
+              width: 100,
+              align: 'right',
+              render: (v) => Number(v ?? 0).toFixed(2),
+            },
+          ]}
         />
-        <ProFormTextArea
-          name="remarks"
-          label="备注"
-          placeholder="请输入备注"
-          fieldProps={{ rows: 3 }}
-        />
-      </FormModalTemplate>
+      </Modal>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
@@ -717,6 +787,11 @@ const StocktakingPage: React.FC = () => {
             },
           },
           {
+            title: '明细粒度',
+            dataIndex: 'line_granularity',
+            render: (_: unknown, entity: Stocktaking) => granularityLabel(entity.line_granularity),
+          },
+          {
             title: '状态',
             dataIndex: 'status',
             valueEnum: {
@@ -741,7 +816,7 @@ const StocktakingPage: React.FC = () => {
           {
             title: '差异总金额',
             dataIndex: 'total_difference_amount',
-            render: (dom: React.ReactNode, entity: Stocktaking) => `¥${entity.total_difference_amount?.toFixed(2) || '0.00'}`,
+            render: (dom: React.ReactNode, entity: Stocktaking) => `¥${Number(entity.total_difference_amount ?? 0).toFixed(2)}`,
           },
           {
             title: '备注',
@@ -749,7 +824,43 @@ const StocktakingPage: React.FC = () => {
           },
         ]}
         customContent={
-          currentStocktaking && currentStocktaking.items && currentStocktaking.items.length > 0 && (
+          currentStocktaking && (
+            <>
+              {currentStocktaking.status === 'in_progress' && (
+                <Space style={{ marginTop: 16 }}>
+                  {isPartialType(currentStocktaking) && canCreate && (
+                    <>
+                      <Button
+                        icon={<DatabaseOutlined />}
+                        onClick={() => loadInventoryPicker(currentStocktaking)}
+                      >
+                        从仓库库存选择
+                      </Button>
+                      <Button
+                        icon={<PlusOutlined />}
+                        onClick={() => handleAddItem(currentStocktaking)}
+                      >
+                        手工添加明细
+                      </Button>
+                    </>
+                  )}
+                  {canComplete(currentStocktaking) && canUpdate && (
+                    <Button
+                      type="primary"
+                      icon={<CheckCircleOutlined />}
+                      onClick={() => handleComplete(currentStocktaking)}
+                    >
+                      完成盘点
+                    </Button>
+                  )}
+                  {canRevoke && (
+                    <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentStocktaking)}>
+                      撤回
+                    </Button>
+                  )}
+                </Space>
+              )}
+              {currentStocktaking.items && currentStocktaking.items.length > 0 ? (
             <Card title="盘点明细" style={{ marginTop: 16 }}>
               <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
               <Table
@@ -766,38 +877,69 @@ const StocktakingPage: React.FC = () => {
                     width: 150,
                   },
                   {
+                    title: '批次号',
+                    dataIndex: 'batch_no',
+                    width: 100,
+                    render: (v) => v || '-',
+                  },
+                  {
                     title: '账面数量',
                     dataIndex: 'book_quantity',
                     width: 100,
                     align: 'right',
+                    render: (v) => Number(v ?? 0).toFixed(2),
                   },
                   {
-                    title: '实际数量',
+                    title: '实盘数量',
                     dataIndex: 'actual_quantity',
-                    width: 100,
+                    width: 140,
                     align: 'right',
+                    render: (_: unknown, item: StocktakingItem) => {
+                      if (currentStocktaking.status !== 'in_progress' || item.status !== 'pending') {
+                        return Number(item.actual_quantity ?? 0).toFixed(2);
+                      }
+                      const itemId = item.id!;
+                      return (
+                        <InputNumber
+                          size="small"
+                          min={0}
+                          precision={2}
+                          style={{ width: '100%' }}
+                          value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
+                          onChange={(val) => {
+                            setEditingActualQty((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));
+                          }}
+                        />
+                      );
+                    },
                   },
                   {
                     title: '差异数量',
                     dataIndex: 'difference_quantity',
                     width: 100,
                     align: 'right',
-                    render: (value: number) => (
-                      <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
-                        {value > 0 ? '+' : ''}{value?.toFixed(2) || '0.00'}
-                      </span>
-                    ),
+                    render: (value: number) => {
+                      const qty = Number(value ?? 0);
+                      return (
+                        <span style={{ color: qty > 0 ? '#ff4d4f' : qty < 0 ? '#1890ff' : '#52c41a' }}>
+                          {qty > 0 ? '+' : ''}{qty.toFixed(2)}
+                        </span>
+                      );
+                    },
                   },
                   {
                     title: '差异金额',
                     dataIndex: 'difference_amount',
                     width: 100,
                     align: 'right',
-                    render: (value: number) => (
-                      <span style={{ color: value > 0 ? '#ff4d4f' : value < 0 ? '#1890ff' : '#52c41a' }}>
-                        ¥{value?.toFixed(2) || '0.00'}
-                      </span>
-                    ),
+                    render: (value: number) => {
+                      const amount = Number(value ?? 0);
+                      return (
+                        <span style={{ color: amount > 0 ? '#ff4d4f' : amount < 0 ? '#1890ff' : '#52c41a' }}>
+                          ¥{amount.toFixed(2)}
+                        </span>
+                      );
+                    },
                   },
                   {
                     title: '状态',
@@ -815,22 +957,18 @@ const StocktakingPage: React.FC = () => {
                   },
                   {
                     title: '操作',
-                    width: 150,
-                    render: (_: any, item: StocktakingItem) => (
-                      <Space>
-                        {currentStocktaking.status === 'in_progress' && item.status === 'pending' && (
-                          <Button
-                            type="link"
-                            size="small"
-                            onClick={() => {
-                              setCurrentStocktaking(currentStocktaking);
-                              handleExecuteItem(item);
-                            }}
-                          >
-                            执行盘点
-                          </Button>
-                        )}
-                      </Space>
+                    width: 100,
+                    render: (_: unknown, item: StocktakingItem) => (
+                      currentStocktaking.status === 'in_progress' && item.status === 'pending' && canUpdate ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          loading={savingItemId === item.id}
+                          onClick={() => handleSaveActualQuantity(item)}
+                        >
+                          保存
+                        </Button>
+                      ) : null
                     ),
                   },
                 ]}
@@ -838,8 +976,17 @@ const StocktakingPage: React.FC = () => {
                 rowKey="id"
                 pagination={false}
                 size="small"
+                scroll={{ x: 1000 }}
               />
             </Card>
+              ) : (
+                <Card style={{ marginTop: 16 }}>
+                  {currentStocktaking.status === 'draft'
+                    ? '开始盘点后将自动载入账面库存（全盘）或从仓库库存勾选明细（抽盘）。'
+                    : '暂无盘点明细'}
+                </Card>
+              )}
+            </>
           )
         }
       />

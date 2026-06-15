@@ -289,6 +289,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
         period: str,
         created_by: int,
         notes: Optional[str] = None,
+        attachments: Optional[list] = None,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
     ) -> PartnerStatement:
@@ -343,6 +344,7 @@ class PartnerStatementService(AppBaseService[PartnerStatement]):
             transaction_details=details,
             company_name=company_name,
             notes=notes,
+            attachments=attachments,
             created_by=created_by,
         )
 

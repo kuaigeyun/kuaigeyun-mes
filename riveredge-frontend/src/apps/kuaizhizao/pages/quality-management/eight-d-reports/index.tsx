@@ -15,6 +15,8 @@ import { hasModulePermission } from '../../../../../utils/permissionContract';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import { withSingleNewShortcutHint } from '../../../../../utils/globalNewShortcut';
 import { EightDDetailDrawer } from './components/EightDDetailDrawer';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import {
   EIGHT_D_SEVERITY_I18N_KEY,
   EIGHT_D_STATUS_I18N_KEY,
@@ -338,6 +340,7 @@ const EightDReportsPage: React.FC = () => {
               status: 'd1_team',
               owner_id: values.owner_id ?? null,
               owner_name: values.owner_name ?? null,
+              attachments: normalizeDocumentAttachments(values.attachments),
             } as Record<string, unknown>;
             delete payload.owner_uuid;
             const created = await qualityImprovementApi.eightD.create(payload);
@@ -398,6 +401,7 @@ const EightDReportsPage: React.FC = () => {
             label={t('app.kuaizhizao.eightD.status.d1_team')}
             colProps={{ span: 24 }}
           />
+          <DocumentAttachmentsField category="quality_8d_report_attachments" />
         </FormModalTemplate>
         <EightDDetailDrawer
           open={detailVisible}

@@ -36,6 +36,7 @@ class PackingBindingBase(BaseModel):
     barcode: Optional[str] = Field(None, description="条码（可选，用于扫码绑定）")
     bound_at: datetime = Field(default_factory=datetime.now, description="绑定时间")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PackingBindingCreate(PackingBindingBase):
@@ -96,6 +97,7 @@ class PackingBindingUpdate(BaseModel):
     packing_quantity: Optional[Decimal] = Field(None, gt=0, description="装箱数量")
     box_no: Optional[str] = Field(None, description="箱号")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PackingBindingResponse(PackingBindingBase):

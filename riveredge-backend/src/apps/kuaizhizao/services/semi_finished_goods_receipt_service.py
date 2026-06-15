@@ -511,6 +511,53 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                 target_qty,
             )
 
+    async def get_work_order_inbound_preview(
+        self,
+        tenant_id: int,
+        work_order_id: int,
+    ):
+        from apps.kuaizhizao.models.work_order import WorkOrder
+        from apps.kuaizhizao.schemas.warehouse import InboundCreatePreviewLine, WorkOrderInboundPreviewResponse
+        from apps.kuaizhizao.services.warehouse_service import FinishedGoodsReceiptService
+        from apps.master_data.models.material import Material
+
+        work_order = await WorkOrder.get_or_none(tenant_id=tenant_id, id=work_order_id)
+        if not work_order:
+            raise NotFoundError(f"工单不存在: {work_order_id}")
+        if work_order.status not in ("in_progress", "completed", "进行中", "已完成"):
+            raise BusinessLogicError(f"工单状态为 {work_order.status}，无法预览入库明细")
+
+        fg_svc = FinishedGoodsReceiptService()
+        planned = float(work_order.quantity or 0)
+        received = await fg_svc._sum_work_order_inbound_quantity(tenant_id, work_order_id)
+        pending = max(0.0, planned - received)
+        suggested = await fg_svc._resolve_work_order_suggested_receipt_quantity(tenant_id, work_order_id)
+        receipt_qty = min(suggested, pending) if pending > 0 else suggested
+
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=work_order.product_id,
+            deleted_at__isnull=True,
+        )
+        material_unit = (getattr(material, "base_unit", None) or "个") if material else "个"
+        line = InboundCreatePreviewLine(
+            material_id=int(work_order.product_id),
+            material_code=(getattr(material, "main_code", None) or getattr(material, "code", None) or work_order.product_code or ""),
+            material_name=(getattr(material, "name", None) or work_order.product_name or ""),
+            material_spec=getattr(material, "specification", None) or getattr(work_order, "product_spec", None),
+            material_unit=material_unit,
+            source_doc_quantity=planned,
+            source_received_quantity=received,
+            source_pending_quantity=pending,
+            receipt_quantity=receipt_qty,
+        )
+        return WorkOrderInboundPreviewResponse(
+            work_order_id=work_order_id,
+            work_order_code=work_order.code or str(work_order_id),
+            inbound_doc_kind="semi_finished_goods",
+            lines=[line],
+        )
+
     async def quick_receipt_from_work_order(
         self,
         tenant_id: int,
@@ -519,6 +566,7 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
         warehouse_id: Optional[int] = None,
         warehouse_name: Optional[str] = None,
         receipt_quantity: Optional[float] = None,
+        receipt_code: Optional[str] = None,
     ) -> SemiFinishedGoodsReceiptResponse:
         from apps.kuaizhizao.models.reporting_record import ReportingRecord
         from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
@@ -586,13 +634,16 @@ class SemiFinishedGoodsReceiptService(AppBaseService[SemiFinishedGoodsReceipt]):
                     )
                 warehouse_id, warehouse_name = resolved[0], resolved[1]
 
-            today = datetime.now().strftime("%Y%m%d")
-            receipt_code = await self.generate_code(
-                tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SF{today}"
-            )
+            if receipt_code:
+                code = receipt_code
+            else:
+                today = datetime.now().strftime("%Y%m%d")
+                code = await self.generate_code(
+                    tenant_id, "SEMI_FINISHED_GOODS_RECEIPT_CODE", prefix=f"SF{today}"
+                )
             receipt = await SemiFinishedGoodsReceipt.create(
                 tenant_id=tenant_id,
-                receipt_code=receipt_code,
+                receipt_code=code,
                 work_order_id=work_order_id,
                 work_order_code=work_order.code,
                 sales_order_id=work_order.sales_order_id,

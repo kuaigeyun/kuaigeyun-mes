@@ -1,5 +1,5 @@
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, Spin, Alert, Image } from 'antd';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Modal, Spin, Alert, Image, Button, App } from 'antd';
 import {
   BorderOutlined,
   CompressOutlined,
@@ -7,7 +7,7 @@ import {
   ZoomOutOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { getFileByUuid, getFilePreview } from '../../services/file';
+import { getFileByUuid, getFilePreview, getFileDownloadUrlWithToken, FILE_IMAGE_SIZE_MEDIUM } from '../../services/file';
 import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
 import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
 import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
@@ -49,7 +49,11 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   height = '72vh',
 }) => {
   const { t } = useTranslation();
+  const { message: messageApi } = App.useApp();
   const [previewUrl, setPreviewUrl] = useState<string>('');
+  const [displayUrl, setDisplayUrl] = useState<string>('');
+  const [isOriginalPreview, setIsOriginalPreview] = useState(false);
+  const [loadingOriginal, setLoadingOriginal] = useState(false);
   const [pdfBlobUrl, setPdfBlobUrl] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [pdfLoading, setPdfLoading] = useState(false);
@@ -102,17 +106,25 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setError('');
       try {
         if (url) {
-          if (!cancelled) setPreviewUrl(url);
+          if (!cancelled) {
+            setPreviewUrl(url);
+            setDisplayUrl(url);
+            setIsOriginalPreview(false);
+          }
           return;
         }
         if (!fileUuid) {
           throw new Error(t('app.master-data.drawings.previewFailed'));
         }
-        const preview = await getFilePreview(fileUuid);
+        const preview = await getFilePreview(fileUuid, { size: FILE_IMAGE_SIZE_MEDIUM });
         if (!preview?.preview_url || preview.supported === false) {
           throw new Error(t('app.master-data.drawings.previewUnsupported'));
         }
-        if (!cancelled) setPreviewUrl(preview.preview_url);
+        if (!cancelled) {
+          setPreviewUrl(preview.preview_url);
+          setDisplayUrl(preview.preview_url);
+          setIsOriginalPreview(false);
+        }
       } catch (e: unknown) {
         if (!cancelled) {
           const msg = e instanceof Error ? e.message : t('app.master-data.drawings.previewFailed');
@@ -170,6 +182,29 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
       setPdfBlobUrl('');
     };
   }, [open, previewUrl, isPdf]);
+
+  useEffect(() => {
+    if (!open) {
+      setDisplayUrl('');
+      setIsOriginalPreview(false);
+      setLoadingOriginal(false);
+    }
+  }, [open]);
+
+  const handleViewOriginal = useCallback(async () => {
+    if (!fileUuid || loadingOriginal || isOriginalPreview) return;
+    setLoadingOriginal(true);
+    try {
+      const originalUrl = await getFileDownloadUrlWithToken(fileUuid);
+      setDisplayUrl(originalUrl);
+      setIsOriginalPreview(true);
+      messageApi.success(t('components.secureImage.switchedToOriginal'));
+    } catch {
+      messageApi.error(t('common.loadFailed'));
+    } finally {
+      setLoadingOriginal(false);
+    }
+  }, [fileUuid, loadingOriginal, isOriginalPreview, messageApi, t]);
 
   const appendPdfViewerParams = (src: string) => {
     if (!src) return src;
@@ -292,16 +327,39 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
     <>
       {previewUrl && isImage ? (
         <Image
-          src={previewUrl}
+          src={displayUrl || previewUrl}
           alt={fileName || 'preview'}
           style={{ display: 'none' }}
           preview={{
             visible: open,
-            src: previewUrl,
+            src: displayUrl || previewUrl,
             destroyOnHidden: true,
             onVisibleChange: (visible) => {
               if (!visible) onClose();
             },
+            actionsRender: fileUuid
+              ? (originalNode) => (
+                  <>
+                    {originalNode}
+                    {!isOriginalPreview && (
+                      <Button
+                        type="link"
+                        size="small"
+                        loading={loadingOriginal}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleViewOriginal();
+                        }}
+                        style={{ color: 'rgba(255,255,255, 0.85)' }}
+                      >
+                        {loadingOriginal
+                          ? t('components.secureImage.loadingOriginal')
+                          : t('components.secureImage.viewOriginal')}
+                      </Button>
+                    )}
+                  </>
+                )
+              : undefined,
           }}
         />
       ) : null}

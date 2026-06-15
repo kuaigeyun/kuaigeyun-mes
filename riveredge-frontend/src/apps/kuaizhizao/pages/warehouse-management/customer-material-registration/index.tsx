@@ -16,11 +16,14 @@ import {
   ProFormDatePicker,
   ProForm,
 } from '@ant-design/pro-components';
-import { App, Button, Space, Popconfirm, Row, Col, Typography, Segmented, Input, InputNumber, Form as AntForm } from 'antd';
-import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, RollbackOutlined } from '@ant-design/icons';
+import { App, Button, Space, Popconfirm, Row, Col, Typography, Segmented, Input, InputNumber, Form as AntForm, Table } from 'antd';
+import { EyeOutlined, CheckCircleOutlined, CloseCircleOutlined, ScanOutlined, RollbackOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG, WAREHOUSE_DETAIL_TABLE_STYLES } from '../../../../../components/layout-templates';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCustomerMaterialRegistrationLifecycle } from '../../../utils/customerMaterialRegistrationLifecycle';
@@ -34,6 +37,8 @@ import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-sele
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import dayjs from 'dayjs';
 import { coerceFormDate } from '../../../../../utils/formDate';
+import { materialApi, materialBatchApi, materialSerialApi } from '../../../../master-data/services/material';
+import { SerialNumbersImportTrigger } from '../../../../../components/serial-numbers-import';
 
 interface RegistrationItem {
   material_id?: number;
@@ -44,7 +49,24 @@ interface RegistrationItem {
   quantity?: number;
   barcode?: string;
   batch_number?: string;
+  serial_numbers?: string[];
+  material_uuid?: string;
+  batch_managed?: boolean;
+  serial_managed?: boolean;
+  default_batch_rule_id?: number;
+  default_serial_rule_id?: number;
 }
+
+const defaultRegistrationItem: RegistrationItem = {
+  quantity: 1,
+  material_uuid: undefined,
+  batch_managed: false,
+  serial_managed: false,
+  default_batch_rule_id: undefined,
+  default_serial_rule_id: undefined,
+  batch_number: undefined,
+  serial_numbers: undefined,
+};
 
 interface CustomerMaterialRegistration {
   id?: number;
@@ -90,27 +112,58 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const [submitLoading, setSubmitLoading] = useState(false);
   const [startProductionLoading, setStartProductionLoading] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
+  const [generatingBatchIdx, setGeneratingBatchIdx] = useState<number | null>(null);
+  const [generatingSerialIdx, setGeneratingSerialIdx] = useState<number | null>(null);
+  const [scanBatchManaged, setScanBatchManaged] = useState(false);
+  const [scanSerialManaged, setScanSerialManaged] = useState(false);
+  const [scanMaterialUuid, setScanMaterialUuid] = useState<string | undefined>();
+  const [scanDefaultBatchRuleId, setScanDefaultBatchRuleId] = useState<number | undefined>();
+  const [scanDefaultSerialRuleId, setScanDefaultSerialRuleId] = useState<number | undefined>();
+  const [generatingScanBatch, setGeneratingScanBatch] = useState(false);
+  const [generatingScanSerial, setGeneratingScanSerial] = useState(false);
   const resourcePerms = useResourcePermissions('kuaizhizao:warehouse-management-customer-material-registration');
   const canStartProduction =
     !resourcePerms.enabled || (resourcePerms.canAction?.('execute') ?? false);
 
   const appendItemsFromMaterials = useCallback(
-    (selected: Material[]) => {
+    async (selected: Material[]) => {
       const isEmptyItemRow = (row: RegistrationItem | undefined) => {
         if (row == null) return true;
         if (row.material_id != null && row.material_id !== '') return false;
         const code = row.material_code;
         return code == null || String(code).trim() === '';
       };
-      const rowFromMaterial = (m: Material): RegistrationItem => ({
-        material_id: m.id,
-        material_code: m.mainCode ?? m.code ?? '',
-        material_name: m.name ?? '',
-        material_spec: m.specification ?? '',
-        material_unit: m.baseUnit ?? '',
-        quantity: 1,
-      });
-      const queue = selected.map(rowFromMaterial);
+      const rowFromMaterial = async (m: Material): Promise<RegistrationItem> => {
+        const row: RegistrationItem = {
+          ...defaultRegistrationItem,
+          material_id: m.id,
+          material_code: m.mainCode ?? m.code ?? '',
+          material_name: m.name ?? '',
+          material_spec: m.specification ?? '',
+          material_unit: m.baseUnit ?? '',
+          material_uuid: m.uuid,
+          batch_managed: m.batchManaged ?? false,
+          serial_managed: m.serialManaged ?? false,
+          default_batch_rule_id: m.defaultBatchRuleId,
+          default_serial_rule_id: m.defaultSerialRuleId,
+        };
+        if (m.uuid) {
+          try {
+            const full = await materialApi.get(m.uuid);
+            return {
+              ...row,
+              batch_managed: full.batchManaged ?? false,
+              serial_managed: full.serialManaged ?? false,
+              default_batch_rule_id: full.defaultBatchRuleId,
+              default_serial_rule_id: full.defaultSerialRuleId,
+            };
+          } catch {
+            return row;
+          }
+        }
+        return row;
+      };
+      const queue = await Promise.all(selected.map(rowFromMaterial));
       const items = [...(formRef.current?.getFieldValue('items') ?? [])].map((row: RegistrationItem) => ({
         ...row,
       }));
@@ -129,6 +182,159 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     [messageApi],
   );
 
+  const onMaterialSelectForBatchSerial = async (
+    idx: number,
+    _val: number | undefined,
+    material: Material | undefined,
+  ) => {
+    if (!material) return;
+    const uuid = material.uuid;
+    let batchManaged = material.batchManaged ?? false;
+    let serialManaged = material.serialManaged ?? false;
+    let defaultBatchRuleId = material.defaultBatchRuleId;
+    let defaultSerialRuleId = material.defaultSerialRuleId;
+    if (uuid) {
+      try {
+        const full = await materialApi.get(uuid);
+        batchManaged = full.batchManaged ?? false;
+        serialManaged = full.serialManaged ?? false;
+        defaultBatchRuleId = full.defaultBatchRuleId;
+        defaultSerialRuleId = full.defaultSerialRuleId;
+      } catch {
+        // 使用列表返回字段
+      }
+    }
+    formRef.current?.setFieldValue(['items', idx, 'material_uuid'], uuid);
+    formRef.current?.setFieldValue(['items', idx, 'batch_managed'], batchManaged);
+    formRef.current?.setFieldValue(['items', idx, 'serial_managed'], serialManaged);
+    formRef.current?.setFieldValue(['items', idx, 'default_batch_rule_id'], defaultBatchRuleId);
+    formRef.current?.setFieldValue(['items', idx, 'default_serial_rule_id'], defaultSerialRuleId);
+  };
+
+  const onScanMaterialSelect = async (_val: number | undefined, material: Material | undefined) => {
+    if (!material) {
+      setScanMaterialUuid(undefined);
+      setScanBatchManaged(false);
+      setScanSerialManaged(false);
+      return;
+    }
+    const uuid = material.uuid;
+    let batchManaged = material.batchManaged ?? false;
+    let serialManaged = material.serialManaged ?? false;
+    let defaultBatchRuleId = material.defaultBatchRuleId;
+    let defaultSerialRuleId = material.defaultSerialRuleId;
+    if (uuid) {
+      try {
+        const full = await materialApi.get(uuid);
+        batchManaged = full.batchManaged ?? false;
+        serialManaged = full.serialManaged ?? false;
+        defaultBatchRuleId = full.defaultBatchRuleId;
+        defaultSerialRuleId = full.defaultSerialRuleId;
+      } catch {
+        // 使用列表返回字段
+      }
+    }
+    setScanMaterialUuid(uuid);
+    setScanBatchManaged(batchManaged);
+    setScanSerialManaged(serialManaged);
+    setScanDefaultBatchRuleId(defaultBatchRuleId);
+    setScanDefaultSerialRuleId(defaultSerialRuleId);
+  };
+
+  const handleGenerateBatch = async (idx: number) => {
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const row = items[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    setGeneratingBatchIdx(idx);
+    try {
+      const res = await materialBatchApi.generate(row.material_uuid, {
+        ruleId: row.default_batch_rule_id,
+      });
+      formRef.current?.setFieldValue(['items', idx, 'batch_number'], res.batch_no);
+      messageApi.success('批号生成成功');
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || '批号生成失败');
+    } finally {
+      setGeneratingBatchIdx(null);
+    }
+  };
+
+  const handleGenerateSerials = async (idx: number): Promise<string[]> => {
+    const items = formRef.current?.getFieldValue('items') ?? [];
+    const row = items[idx];
+    if (!row?.material_uuid) {
+      messageApi.warning('请先选择物料');
+      return [];
+    }
+    const count = Math.max(1, Math.floor(Number(row.quantity) || 1));
+    if (count > 100) {
+      messageApi.warning('单次最多生成100个序列号');
+      return [];
+    }
+    setGeneratingSerialIdx(idx);
+    try {
+      const res = await materialSerialApi.generate(row.material_uuid, count, {
+        ruleId: row.default_serial_rule_id,
+      });
+      const serialNos = res.serial_nos ?? [];
+      formRef.current?.setFieldValue(['items', idx, 'serial_numbers'], serialNos);
+      messageApi.success(`已生成 ${res.count} 个序列号`);
+      return serialNos;
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || '序列号生成失败');
+      return [];
+    } finally {
+      setGeneratingSerialIdx(null);
+    }
+  };
+
+  const handleGenerateScanBatch = async () => {
+    if (!scanMaterialUuid) {
+      messageApi.warning('请先选择物料');
+      return;
+    }
+    setGeneratingScanBatch(true);
+    try {
+      const res = await materialBatchApi.generate(scanMaterialUuid, { ruleId: scanDefaultBatchRuleId });
+      formRef.current?.setFieldValue('batch_number', res.batch_no);
+      messageApi.success('批号生成成功');
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || '批号生成失败');
+    } finally {
+      setGeneratingScanBatch(false);
+    }
+  };
+
+  const handleGenerateScanSerials = async (): Promise<string[]> => {
+    if (!scanMaterialUuid) {
+      messageApi.warning('请先选择物料');
+      return [];
+    }
+    const count = Math.max(1, Math.floor(Number(formRef.current?.getFieldValue('quantity') || 1)));
+    if (count > 100) {
+      messageApi.warning('单次最多生成100个序列号');
+      return [];
+    }
+    setGeneratingScanSerial(true);
+    try {
+      const res = await materialSerialApi.generate(scanMaterialUuid, count, {
+        ruleId: scanDefaultSerialRuleId,
+      });
+      const serialNos = res.serial_nos ?? [];
+      formRef.current?.setFieldValue('serial_numbers', serialNos);
+      messageApi.success(`已生成 ${res.count} 个序列号`);
+      return serialNos;
+    } catch (e: unknown) {
+      messageApi.error((e as Error)?.message || '序列号生成失败');
+      return [];
+    } finally {
+      setGeneratingScanSerial(false);
+    }
+  };
+
   const buildCreatePayload = (values: any) => {
     if (!values.customer_id) {
       messageApi.error('请选择客户');
@@ -141,6 +347,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       warehouse_id: values.warehouse_id,
       warehouse_name: values.warehouse_name,
       remarks: values.remarks,
+      attachments: normalizeDocumentAttachments(values.attachments),
     };
 
     if (entryMode === 'document') {
@@ -159,7 +366,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         material_unit: it.material_unit,
         quantity: it.quantity,
         barcode: it.barcode,
-        batch_number: it.batch_number,
+        batch_number: it.batch_number || undefined,
+        serial_numbers: it.serial_numbers || undefined,
       }));
     } else {
       if (!values.material_id) {
@@ -170,6 +378,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       payload.barcode_type = values.barcode_type || '1d';
       payload.quantity = values.quantity;
       payload.batch_number = values.batch_number;
+      payload.serial_numbers = values.serial_numbers || undefined;
       payload.material_id = values.material_id;
       payload.material_code = values.material_code;
       payload.material_name = values.material_name;
@@ -180,12 +389,15 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const handleCreate = async () => {
     setCreateModalVisible(true);
     setEntryMode('document');
+    setScanMaterialUuid(undefined);
+    setScanBatchManaged(false);
+    setScanSerialManaged(false);
     setTimeout(() => {
       formRef.current?.resetFields();
       formRef.current?.setFieldsValue({
         registration_date: dayjs(),
         barcode_type: '1d',
-        items: [{ quantity: 1 }],
+        items: [{ ...defaultRegistrationItem }],
       });
     }, 0);
   };
@@ -223,8 +435,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       if (!created?.id) {
         throw new Error('客供料入库单创建失败');
       }
-      await customerMaterialRegistrationApi.process(String(created.id));
-      messageApi.success('客供料已确认入库');
+      messageApi.success('代工来料已保存为待入库草稿');
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
@@ -446,18 +657,16 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-            详情
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
             <>
               <Popconfirm title="确定确认入库吗？" onConfirm={() => handleProcess(record)}>
-                <Button type="link" size="small" icon={<CheckCircleOutlined />}>
+                <Button {...rowActionKind('execute')} {...rowActionLabelKeep()}>
                   确认入库
                 </Button>
               </Popconfirm>
               <Popconfirm title="确定取消吗？" onConfirm={() => handleCancel(record)}>
-                <Button type="link" size="small" danger icon={<CloseCircleOutlined />}>
+                <Button {...rowActionKind('reject')} {...rowActionLabelKeep()}>
                   取消
                 </Button>
               </Popconfirm>
@@ -465,7 +674,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           )}
           {record.status === 'processed' && (
             <Popconfirm title="确定撤回入库吗？将冲减客供库存。" onConfirm={() => handleWithdraw(record)}>
-              <Button type="link" size="small" danger icon={<RollbackOutlined />}>
+              <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()}>
                 撤回
               </Button>
             </Popconfirm>
@@ -549,10 +758,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         }}
         onFinish={handleCreateSubmit}
         formRef={formRef}
-        width={MODAL_CONFIG.LARGE_WIDTH || MODAL_CONFIG.STANDARD_WIDTH}
+        width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         grid={false}
         loading={submitLoading || startProductionLoading}
-        submitText="客供料入库"
+        submitText="保存草稿"
         extraFooter={
           canStartProduction ? (
             <Button type="default" loading={startProductionLoading} onClick={() => void handleStartProduction()}>
@@ -571,7 +780,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             const mode = v as 'scan' | 'document';
             setEntryMode(mode);
             if (mode === 'document' && !(formRef.current?.getFieldValue('items') || []).length) {
-              formRef.current?.setFieldsValue({ items: [{ quantity: 1 }] });
+              formRef.current?.setFieldsValue({ items: [{ ...defaultRegistrationItem }] });
             }
           }}
           style={{ marginBottom: 16 }}
@@ -652,15 +861,49 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                 material_code: 'mainCode',
                 material_name: 'name',
               }}
+              onChange={(v, m) => void onScanMaterialSelect(v, m as Material | undefined)}
             />
             <Row gutter={16}>
               <Col span={12}>
                 <ProFormDigit name="quantity" label="来料数量" rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} />
               </Col>
               <Col span={12}>
-                <ProFormText name="batch_number" label="批号" />
+                {scanBatchManaged ? (
+                  <ProForm.Item label="批号">
+                    <Space size={4}>
+                      <ProFormText name="batch_number" noStyle fieldProps={{ placeholder: '可选' }} />
+                      <Button
+                        type="link"
+                        icon={<ThunderboltOutlined />}
+                        loading={generatingScanBatch}
+                        onClick={() => void handleGenerateScanBatch()}
+                      />
+                    </Space>
+                  </ProForm.Item>
+                ) : (
+                  <ProFormText name="batch_number" label="批号" fieldProps={{ placeholder: '—' }} disabled />
+                )}
               </Col>
             </Row>
+            {scanSerialManaged ? (
+              <ProForm.Item label="序列号" shouldUpdate>
+                {({ getFieldValue }) => {
+                  const qty = Number(getFieldValue('quantity') ?? 0);
+                  const sn = getFieldValue('serial_numbers');
+                  return (
+                    <SerialNumbersImportTrigger
+                      serials={Array.isArray(sn) ? sn : []}
+                      expectedCount={qty > 0 ? qty : undefined}
+                      materialLabel={getFieldValue('material_code') || getFieldValue('material_name')}
+                      generateLoading={generatingScanSerial}
+                      onSerialsChange={(next) => formRef.current?.setFieldValue('serial_numbers', next)}
+                      onGenerate={() => handleGenerateScanSerials()}
+                    />
+                  );
+                }}
+              </ProForm.Item>
+            ) : null}
+            <AntForm.Item name="serial_numbers" hidden />
           </>
         ) : (
           <UniTableDetail
@@ -668,7 +911,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             title="明细"
             required
             requiredMessage="请至少添加一条明细"
-            initialValue={{ quantity: 1 }}
+            initialValue={{ ...defaultRegistrationItem }}
             containerStyle={{ width: '100%' }}
             onBatchSelect={() => setMaterialPickerOpen(true)}
             columns={[
@@ -709,9 +952,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                             }}
                             fallbackOption={fallback}
                             formItemProps={{ style: { margin: 0 } }}
-                            showQuickCreate
-                            showAdvancedSearch
-                          />
+                                showQuickCreate
+                                showAdvancedSearch
+                                onChange={(v, m) => void onMaterialSelectForBatchSerial(index, v, m as Material | undefined)}
+                              />
                         </div>
                       );
                     }}
@@ -769,16 +1013,68 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               {
                 title: '批号',
                 dataIndex: 'batch_number',
-                width: 120,
+                width: 130,
                 render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item name={[index, 'batch_number']} style={{ margin: 0 }}>
-                    <Input size="small" placeholder="可选" />
+                  <AntForm.Item
+                    noStyle
+                    shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+                  >
+                    {({ getFieldValue }) => {
+                      const row = getFieldValue('items')?.[index];
+                      if (!row?.batch_managed) return '—';
+                      return (
+                        <Space size={2}>
+                          <AntForm.Item name={[index, 'batch_number']} style={{ margin: 0 }}>
+                            <Input placeholder="可选" size="small" style={{ width: 96 }} />
+                          </AntForm.Item>
+                          <Button
+                            type="link"
+                            size="small"
+                            icon={<ThunderboltOutlined />}
+                            loading={generatingBatchIdx === index}
+                            onClick={() => void handleGenerateBatch(index)}
+                            style={{ padding: 0 }}
+                          />
+                        </Space>
+                      );
+                    }}
+                  </AntForm.Item>
+                ),
+              },
+              {
+                title: '序列号',
+                dataIndex: 'serial_numbers',
+                width: 150,
+                render: (_: unknown, __: unknown, index: number) => (
+                  <AntForm.Item
+                    noStyle
+                    shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+                  >
+                    {({ getFieldValue }) => {
+                      const row = getFieldValue('items')?.[index];
+                      if (!row?.serial_managed) return '—';
+                      const qty = Number(row?.quantity ?? 0);
+                      const sn = getFieldValue(['items', index, 'serial_numbers']);
+                      return (
+                        <SerialNumbersImportTrigger
+                          serials={Array.isArray(sn) ? sn : []}
+                          expectedCount={qty > 0 ? qty : undefined}
+                          materialLabel={row?.material_code || row?.material_name}
+                          generateLoading={generatingSerialIdx === index}
+                          onSerialsChange={(next) =>
+                            formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                          }
+                          onGenerate={() => handleGenerateSerials(index)}
+                        />
+                      );
+                    }}
                   </AntForm.Item>
                 ),
               },
             ]}
           />
         )}
+        <DocumentAttachmentsField category="customer_material_registration_attachments" />
         <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
@@ -817,6 +1113,38 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           { title: '确认人', dataIndex: 'processed_by_name' },
           { title: '备注', dataIndex: 'remarks' },
         ]}
+        lines={
+          currentRegistration?.items && currentRegistration.items.length > 0 ? (
+            <>
+              <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
+              <Table
+                className="warehouse-detail-table"
+                size="small"
+                rowKey={(r) => String(r.id ?? `${r.material_id}-${r.material_code}`)}
+                pagination={false}
+                dataSource={currentRegistration.items}
+                columns={[
+                  { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
+                  { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                  { title: '规格', dataIndex: 'material_spec', width: 100, ellipsis: true },
+                  { title: '单位', dataIndex: 'material_unit', width: 70 },
+                  { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
+                  { title: '批号', dataIndex: 'batch_number', width: 120, ellipsis: true },
+                  {
+                    title: '序列号',
+                    dataIndex: 'serial_numbers',
+                    width: 140,
+                    ellipsis: true,
+                    render: (val) => {
+                      const list = Array.isArray(val) ? val : [];
+                      return list.length > 0 ? list.join('、') : '—';
+                    },
+                  },
+                ]}
+              />
+            </>
+          ) : undefined
+        }
       />
     </ListPageTemplate>
   );

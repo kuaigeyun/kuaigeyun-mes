@@ -369,6 +369,8 @@ class OQCInspectionService(AppBaseService[OQCInspection]):
         row.notes = payload.notes
         if conduct_extra.get("other_checks") is not None:
             row.other_checks = conduct_extra["other_checks"]
+        if conduct_extra.get("attachments") is not None:
+            row.attachments = conduct_extra["attachments"]
         if conduct_extra.get("measurement_data") is not None:
             pass  # OQC 暂无 measurement_data 列，已并入 other_checks
         row.status = "已检验"

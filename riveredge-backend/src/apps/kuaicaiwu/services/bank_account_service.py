@@ -28,6 +28,7 @@ class BankAccountService:
         currency: str = "CNY",
         opening_balance: Decimal = Decimal("0"),
         notes: Optional[str] = None,
+        attachments: Optional[list] = None,
     ) -> BankAccount:
         exists = await BankAccount.filter(
             tenant_id=tenant_id,
@@ -49,6 +50,7 @@ class BankAccountService:
             opening_balance=ob,
             current_balance=ob,
             notes=notes,
+            attachments=attachments,
         )
 
     async def get_by_id(self, tenant_id: int, account_id: int) -> BankAccount:
@@ -81,7 +83,7 @@ class BankAccountService:
         row = await self.get_by_id(tenant_id, account_id)
         allowed = {
             "account_name", "bank_name", "account_number", "currency",
-            "is_active", "notes", "current_balance",
+            "is_active", "notes", "current_balance", "attachments",
         }
         for key, val in fields.items():
             if key in allowed and val is not None:

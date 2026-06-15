@@ -212,6 +212,42 @@ class ProductionReturnWithItemsResponse(ProductionReturnResponse):
     items: List[ProductionReturnItemResponse] = Field(default_factory=list, description="退料明细列表")
 
 
+# === 入库创建预览（统一明细载入） ===
+
+class InboundCreatePreviewLine(BaseSchema):
+    """入库/退货创建 — 预览明细行"""
+    sales_order_item_id: Optional[int] = Field(None, description="销售订单明细ID")
+    picking_item_id: Optional[int] = Field(None, description="领料单明细ID")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., max_length=50, description="物料编码")
+    material_name: str = Field(..., max_length=200, description="物料名称")
+    material_spec: Optional[str] = Field(None, max_length=200, description="物料规格")
+    material_unit: str = Field(default="个", max_length=20, description="物料单位")
+    source_doc_quantity: Optional[float] = Field(None, description="源单数量")
+    source_received_quantity: Optional[float] = Field(None, description="已处理数量")
+    source_pending_quantity: Optional[float] = Field(None, description="待处理数量")
+    receipt_quantity: Optional[float] = Field(None, description="本次入库数量")
+    return_quantity: Optional[float] = Field(None, description="本次退货/退料数量")
+    unit_price: Optional[float] = Field(None, description="单价")
+
+
+class WorkOrderInboundPreviewResponse(BaseSchema):
+    """生产入库 — 工单预览"""
+    work_order_id: int = Field(..., description="工单ID")
+    work_order_code: str = Field(..., description="工单编码")
+    inbound_doc_kind: str = Field(..., description="finished_goods | semi_finished_goods")
+    lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+class SalesOrderReturnPreviewResponse(BaseSchema):
+    """销售退货 — 订单预览"""
+    sales_order_id: int = Field(..., description="销售订单ID")
+    sales_order_code: str = Field(..., description="销售订单编码")
+    lines: List[InboundCreatePreviewLine] = Field(default_factory=list, description="预览明细")
+    message: Optional[str] = Field(None, description="提示信息")
+
+
 # === 成品入库单 ===
 
 class FinishedGoodsReceiptBase(BaseSchema):
@@ -446,6 +482,7 @@ class SalesDeliveryBase(BaseSchema):
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="收货地址")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class SalesDeliveryCreate(SalesDeliveryBase):
@@ -536,11 +573,19 @@ class SalesDeliveryConfirmItemBatch(BaseSchema):
 
 
 class SalesDeliveryConfirmRequest(BaseSchema):
-    """确认销售出库请求体（可选，用于提交各行批号预览结果）"""
+    """确认销售出库请求体（可选，用于提交各行批号/库位/序列号或出库确认通用字段）"""
 
     item_batches: Optional[List[SalesDeliveryConfirmItemBatch]] = Field(
         default=None,
         description="各行批号；传入时须覆盖本单所有「出库数量>0」的明细行 id",
+    )
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID（若提供则覆盖表头未指定者）")
+    warehouse_name: Optional[str] = Field(None, description="出库仓库名称")
+    delivery_time: Optional[datetime] = Field(None, description="出库时间")
+    notes: Optional[str] = Field(None, description="确认备注")
+    items: Optional[List["OutboundConfirmationItem"]] = Field(
+        None,
+        description="明细更新（可选，用于补全库位/批号/序列号等）",
     )
 
 
@@ -569,6 +614,7 @@ class PurchaseReceiptBase(BaseSchema):
     delivery_note: Optional[str] = Field(None, max_length=100, description="送货单号")
     invoice_number: Optional[str] = Field(None, max_length=100, description="发票号")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 # === 采购入库单明细 ===
@@ -601,8 +647,10 @@ class PurchaseReceiptItemBase(BaseSchema):
 
 
 class PurchaseReceiptItemCreate(PurchaseReceiptItemBase):
-    """采购入库单明细创建schema"""
-    pass
+    """采购入库单明细创建 schema（编码/名称/金额可由服务端按 material_id 补全）"""
+    material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
+    material_name: Optional[str] = Field(None, max_length=200, description="物料名称")
+    total_amount: Optional[float] = Field(None, ge=0, description="金额")
 
 
 class PurchaseReceiptItemUpdate(PurchaseReceiptItemBase):
@@ -692,6 +740,7 @@ class SalesReturnBase(BaseSchema):
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="退货地址")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class SalesReturnCreate(SalesReturnBase):
@@ -808,6 +857,7 @@ class PurchaseReturnBase(BaseSchema):
     tracking_number: Optional[str] = Field(None, max_length=100, description="物流单号")
     shipping_address: Optional[str] = Field(None, description="退货地址")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class PurchaseReturnCreate(PurchaseReturnBase):
@@ -907,6 +957,7 @@ class OtherInboundBase(BaseSchema):
     total_quantity: float = Field(0, ge=0, description="总入库数量")
     total_amount: float = Field(0, ge=0, description="总金额")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OtherInboundCreate(OtherInboundBase):
@@ -958,8 +1009,10 @@ class OtherInboundItemBase(BaseSchema):
 
 
 class OtherInboundItemCreate(OtherInboundItemBase):
-    """其他入库单明细创建schema"""
-    pass
+    """其他入库单明细创建 schema（编码/名称/金额可由服务端按 material_id 补全）"""
+    material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
+    material_name: Optional[str] = Field(None, max_length=200, description="物料名称")
+    total_amount: Optional[float] = Field(None, ge=0, description="金额")
 
 
 class OtherInboundItemUpdate(OtherInboundItemBase):
@@ -1008,6 +1061,7 @@ class OtherOutboundBase(BaseSchema):
     total_quantity: float = Field(0, ge=0, description="总出库数量")
     total_amount: float = Field(0, ge=0, description="总金额")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OtherOutboundCreate(OtherOutboundBase):
@@ -1059,8 +1113,10 @@ class OtherOutboundItemBase(BaseSchema):
 
 
 class OtherOutboundItemCreate(OtherOutboundItemBase):
-    """其他出库单明细创建schema"""
-    pass
+    """其他出库单明细创建 schema（编码/名称/金额可由服务端按 material_id 补全）"""
+    material_code: Optional[str] = Field(None, max_length=50, description="物料编码")
+    material_name: Optional[str] = Field(None, max_length=200, description="物料名称")
+    total_amount: Optional[float] = Field(None, ge=0, description="金额")
 
 
 class OtherOutboundItemUpdate(OtherOutboundItemBase):
@@ -1106,6 +1162,7 @@ class MaterialBorrowBase(BaseSchema):
     status: str = Field("待借出", max_length=20, description="借料状态")
     total_quantity: float = Field(0, ge=0, description="总借出数量")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MaterialBorrowCreate(MaterialBorrowBase):
@@ -1206,6 +1263,7 @@ class MaterialReturnBase(BaseSchema):
     status: str = Field("待归还", max_length=20, description="还料状态")
     total_quantity: float = Field(0, ge=0, description="总归还数量")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MaterialReturnCreate(MaterialReturnBase):
@@ -1330,3 +1388,28 @@ class InboundConfirmationRequest(BaseSchema):
     receipt_time: Optional[datetime] = Field(None, description="入库时间")
     notes: Optional[str] = Field(None, description="确认备注")
     items: Optional[List[InboundConfirmationItem]] = Field(None, description="明细更新（可选，用于补全批号/序列号等）")
+
+
+# === 出库确认通用 Schema ===
+
+class OutboundConfirmationItem(BaseSchema):
+    """出库确认明细字段（支持在确认时补齐或修改批号/库位/仓库/序列号）"""
+    item_id: int = Field(..., description="明细ID")
+    warehouse_id: Optional[int] = Field(None, description="出库仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="出库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    location_code: Optional[str] = Field(None, description="库位编码")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    serial_numbers: Optional[List[str]] = Field(None, description="序列号列表")
+
+
+class OutboundConfirmationRequest(BaseSchema):
+    """出库确认通用请求"""
+    warehouse_id: Optional[int] = Field(None, description="总出库仓库ID（若提供则覆盖表头和明细未指定者）")
+    warehouse_name: Optional[str] = Field(None, description="出库仓库名称")
+    delivery_time: Optional[datetime] = Field(None, description="出库时间")
+    notes: Optional[str] = Field(None, description="确认备注")
+    items: Optional[List[OutboundConfirmationItem]] = Field(
+        None,
+        description="明细更新（可选，用于补全批号/库位/序列号等）",
+    )

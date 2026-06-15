@@ -61,6 +61,7 @@ class InspectionPlanBase(BaseSchema):
     version: str = Field("1.0", max_length=20, description="版本号")
     is_active: bool = Field(True, description="是否启用")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class InspectionPlanCreate(InspectionPlanBase):

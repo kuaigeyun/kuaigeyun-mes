@@ -4,6 +4,7 @@ import { UniMaterialSelect } from '../../../../../components/uni-material-select
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import type { Material } from '../../../../master-data/types/material';
+import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 export const defaultContractItem = {
   material_id: undefined as number | undefined,
@@ -157,7 +158,7 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
 
 export const ContractFormSummary: React.FC = () => {
   const items = Form.useWatch('items');
-  const normalizedItems = Array.isArray(items) ? items : [];
+  const normalizedItems = normalizeFormListItems<any>(items);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
   const { token } = AntdTheme.useToken();
   const totalQuantity = normalizedItems.reduce(

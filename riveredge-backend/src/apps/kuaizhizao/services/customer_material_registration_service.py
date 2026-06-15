@@ -4,6 +4,7 @@
 
 import uuid
 import re
+import json
 import logging
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -96,6 +97,25 @@ class BarcodeMappingRuleService(AppBaseService[BarcodeMappingRule]):
         return [BarcodeMappingRuleListResponse.model_validate(rule) for rule in rules]
 
 
+def _parse_serial_numbers(serial_numbers: Any) -> List[str]:
+    if serial_numbers is None:
+        return []
+    if isinstance(serial_numbers, list):
+        return [str(x).strip() for x in serial_numbers if str(x).strip()]
+    if isinstance(serial_numbers, str):
+        text = serial_numbers.strip()
+        if not text:
+            return []
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except json.JSONDecodeError:
+            pass
+        return [s.strip() for s in text.replace("\n", ",").split(",") if s.strip()]
+    return []
+
+
 class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistration]):
     def __init__(self):
         super().__init__(CustomerMaterialRegistration)
@@ -128,6 +148,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 barcode_type=registration.barcode_type,
                 mapping_rule_id=registration.mapping_rule_id,
                 batch_number=registration.batch_number,
+                serial_numbers=getattr(registration, "serial_numbers", None),
                 status=registration.status,
             )
             return [pseudo]
@@ -140,9 +161,12 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
     ) -> CustomerMaterialRegistrationResponse:
         data = CustomerMaterialRegistrationResponse.model_validate(registration)
         if items is not None:
-            data.items = [
-                CustomerMaterialRegistrationItemResponse.model_validate(it) for it in items
-            ]
+            data.items = []
+            for it in items:
+                row = CustomerMaterialRegistrationItemResponse.model_validate(it)
+                parsed = _parse_serial_numbers(getattr(it, "serial_numbers", None))
+                row.serial_numbers = parsed or None
+                data.items.append(row)
         return data
 
     async def parse_barcode(
@@ -204,6 +228,10 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
     ) -> List[CustomerMaterialRegistrationItem]:
         created: List[CustomerMaterialRegistrationItem] = []
         for row in items_data:
+            serial_numbers = row.serial_numbers
+            serial_numbers_json = None
+            if serial_numbers and isinstance(serial_numbers, list):
+                serial_numbers_json = json.dumps(serial_numbers)
             item = await CustomerMaterialRegistrationItem.create(
                 tenant_id=tenant_id,
                 uuid=str(uuid.uuid4()),
@@ -218,6 +246,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                 barcode_type=row.barcode_type,
                 mapping_rule_id=row.mapping_rule_id,
                 batch_number=row.batch_number,
+                serial_numbers=serial_numbers_json,
                 status="pending",
                 remarks=row.remarks,
             )
@@ -340,6 +369,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                             barcode_type=registration_data.barcode_type,
                             mapping_rule_id=mapping_rule_id,
                             batch_number=registration_data.batch_number,
+                            serial_numbers=registration_data.serial_numbers,
                         )
                     ],
                 )
@@ -424,7 +454,7 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
     ) -> None:
         from apps.kuaizhizao.services.inventory_service import InventoryService
         from apps.master_data.models.material import Material
-        from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item
+        from apps.kuaizhizao.services.batch_serial_helper import ensure_batch_no_for_item, ensure_serial_nos_for_item
 
         if not registration.warehouse_id:
             raise BusinessLogicError("确认入库前必须指定入库仓库")
@@ -451,12 +481,23 @@ class CustomerMaterialRegistrationService(AppBaseService[CustomerMaterialRegistr
                     if item.id:
                         await item.save()
 
+            serial_nos = _parse_serial_numbers(getattr(item, "serial_numbers", None))
+            if material.serial_managed and not serial_nos:
+                count = int(qty)
+                serial_nos = await ensure_serial_nos_for_item(
+                    registration.tenant_id, material, item, count
+                )
+                if serial_nos and item.id:
+                    item.serial_numbers = json.dumps(serial_nos)
+                    await item.save()
+
             await InventoryService._increase_stock_no_atomic(
                 tenant_id=registration.tenant_id,
                 material_id=item.material_id,
                 quantity=qty,
                 warehouse_id=registration.warehouse_id,
                 batch_no=batch_no or None,
+                serial_nos=serial_nos or None,
                 source_type="customer_material_inbound",
                 source_doc_id=registration.id,
                 source_doc_code=registration.registration_code,

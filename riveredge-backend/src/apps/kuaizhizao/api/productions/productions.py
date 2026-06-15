@@ -25,6 +25,8 @@ from apps.kuaizhizao.services.outsource_service import OutsourceService
 from apps.kuaizhizao.services.outsource_work_order_service import OutsourceWorkOrderService
 from apps.kuaizhizao.services.outsource_material_issue_service import OutsourceMaterialIssueService
 from apps.kuaizhizao.services.outsource_material_receipt_service import OutsourceMaterialReceiptService
+from apps.kuaizhizao.services.outsource_material_return_service import OutsourceMaterialReturnService
+from apps.kuaizhizao.services.outsource_product_return_service import OutsourceProductReturnService
 from apps.kuaizhizao.services.outsource_collaboration_service import OutsourceCollaborationService
 from apps.kuaizhizao.services.outsource_settlement_service import OutsourceSettlementService
 from apps.kuaizhizao.services.supplier_collaboration_service import SupplierCollaborationService
@@ -32,6 +34,7 @@ from apps.kuaizhizao.services.customer_collaboration_service import CustomerColl
 from apps.kuaizhizao.services.stocktaking_service import StocktakingService
 from apps.kuaizhizao.services.inventory_transfer_service import InventoryTransferService
 from apps.kuaizhizao.services.assembly_order_service import AssemblyOrderService
+from apps.kuaizhizao.services.assembly_template_service import AssemblyTemplateService
 from apps.kuaizhizao.services.disassembly_order_service import DisassemblyOrderService
 from apps.kuaizhizao.services.exception_service import ExceptionService
 from apps.kuaizhizao.services.exception_process_service import ExceptionProcessService
@@ -43,10 +46,13 @@ work_order_service = WorkOrderService()
 outsource_work_order_service = OutsourceWorkOrderService()
 outsource_material_issue_service = OutsourceMaterialIssueService()
 outsource_material_receipt_service = OutsourceMaterialReceiptService()
+outsource_material_return_service = OutsourceMaterialReturnService()
+outsource_product_return_service = OutsourceProductReturnService()
 defect_record_service = DefectRecordService()
 stocktaking_service = StocktakingService()
 inventory_transfer_service = InventoryTransferService()
 assembly_order_service = AssemblyOrderService()
+assembly_template_service = AssemblyTemplateService()
 disassembly_order_service = DisassemblyOrderService()
 exception_service = ExceptionService()
 exception_process_service = ExceptionProcessService()
@@ -104,6 +110,12 @@ from apps.kuaizhizao.schemas.outsource_work_order import (
     OutsourceMaterialReceiptCreate,
     OutsourceMaterialReceiptUpdate,
     OutsourceMaterialReceiptResponse,
+    OutsourceMaterialReturnCreate,
+    OutsourceMaterialReturnResponse,
+    OutsourceMaterialReturnPreviewResponse,
+    OutsourceProductReturnCreate,
+    OutsourceProductReturnResponse,
+    OutsourceProductReturnPreviewResponse,
     # 委外协同
     OutsourceProgressUpdateRequest,
     OutsourceCompletionRequest,
@@ -141,9 +153,12 @@ from apps.kuaizhizao.schemas.stocktaking import (
     StocktakingItemCreate,
     StocktakingItemUpdate,
     StocktakingItemResponse,
+    StartStocktakingRequest,
+    StocktakingItemBulkCreate,
 )
 from apps.kuaizhizao.schemas.inventory_transfer import (
     InventoryTransferCreate,
+    InventoryTransferCreateWithItems,
     InventoryTransferUpdate,
     InventoryTransferResponse,
     InventoryTransferListResponse,
@@ -163,6 +178,17 @@ from apps.kuaizhizao.schemas.assembly_order import (
     AssemblyOrderItemResponse,
 )
 from apps.kuaizhizao.schemas.assembly_material_binding import ExecuteAssemblyOrderRequest
+from apps.kuaizhizao.schemas.assembly_template import (
+    AssemblyTemplateCreate,
+    AssemblyTemplateUpdate,
+    AssemblyTemplateResponse,
+    AssemblyTemplateListResponse,
+    AssemblyTemplateItemCreateInput,
+    AssemblyTemplateItemUpdate,
+    AssemblyTemplateItemResponse,
+    AssemblyTemplateBomPreviewResponse,
+    ApplyAssemblyTemplateRequest,
+)
 from apps.kuaizhizao.schemas.disassembly_order import (
     DisassemblyOrderCreate,
     DisassemblyOrderUpdate,
@@ -2219,7 +2245,12 @@ async def get_production_report(
 
 # ============ 库存盘点 API ============
 
-@router.post("/stocktakings", response_model=StocktakingResponse, summary="Create stocktaking")
+@router.post(
+    "/stocktakings",
+    response_model=StocktakingResponse,
+    summary="Create stocktaking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:create"))],
+)
 async def create_stocktaking(
     stocktaking: StocktakingCreate,
     current_user: User = Depends(get_current_user),
@@ -2306,7 +2337,12 @@ async def get_stocktaking(
         raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
-@router.put("/stocktakings/{stocktaking_id}", response_model=StocktakingResponse, summary="Update stocktaking")
+@router.put(
+    "/stocktakings/{stocktaking_id}",
+    response_model=StocktakingResponse,
+    summary="Update stocktaking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
 async def update_stocktaking(
     stocktaking_id: int,
     stocktaking: StocktakingUpdate,
@@ -2336,9 +2372,15 @@ async def update_stocktaking(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/start", response_model=StocktakingResponse, summary="Start stocktaking")
+@router.post(
+    "/stocktakings/{stocktaking_id}/start",
+    response_model=StocktakingResponse,
+    summary="Start stocktaking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
 async def start_stocktaking(
     stocktaking_id: int,
+    start_request: Optional[StartStocktakingRequest] = Body(None),
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> StocktakingResponse:
@@ -2355,7 +2397,8 @@ async def start_stocktaking(
         return await stocktaking_service.start_stocktaking(
             tenant_id=tenant_id,
             stocktaking_id=stocktaking_id,
-            started_by=current_user.id
+            started_by=current_user.id,
+            start_request=start_request,
         )
     except NotFoundError as e:
         raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/start", tenant_id)
@@ -2363,7 +2406,12 @@ async def start_stocktaking(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/start", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/items", response_model=StocktakingItemResponse, summary="Add stocktaking line")
+@router.post(
+    "/stocktakings/{stocktaking_id}/items",
+    response_model=StocktakingItemResponse,
+    summary="Add stocktaking line",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:create"))],
+)
 async def create_stocktaking_item(
     stocktaking_id: int,
     item: StocktakingItemCreate,
@@ -2393,7 +2441,38 @@ async def create_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items", tenant_id)
 
 
-@router.put("/stocktakings/{stocktaking_id}/items/{item_id}", response_model=StocktakingItemResponse, summary="Update stocktaking line")
+@router.post(
+    "/stocktakings/{stocktaking_id}/items/bulk",
+    response_model=List[StocktakingItemResponse],
+    summary="Bulk add stocktaking lines",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:create"))],
+)
+async def bulk_create_stocktaking_items(
+    stocktaking_id: int,
+    payload: StocktakingItemBulkCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[StocktakingItemResponse]:
+    """批量添加盘点明细（抽盘从仓库库存勾选）"""
+    try:
+        return await stocktaking_service.add_stocktaking_items(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            items=payload.items,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/items/bulk", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/bulk", tenant_id)
+
+
+@router.put(
+    "/stocktakings/{stocktaking_id}/items/{item_id}",
+    response_model=StocktakingItemResponse,
+    summary="Update stocktaking line",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
 async def update_stocktaking_item(
     stocktaking_id: int,
     item_id: int,
@@ -2425,7 +2504,12 @@ async def update_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/items/{item_id}/execute", response_model=StocktakingItemResponse, summary="Execute stocktaking line")
+@router.post(
+    "/stocktakings/{stocktaking_id}/items/{item_id}/execute",
+    response_model=StocktakingItemResponse,
+    summary="Execute stocktaking line",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
 async def execute_stocktaking_item(
     stocktaking_id: int,
     item_id: int,
@@ -2460,7 +2544,60 @@ async def execute_stocktaking_item(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/items/{item_id}/execute", tenant_id)
 
 
-@router.post("/stocktakings/{stocktaking_id}/adjust", response_model=StocktakingResponse, summary="Post stocktaking variance")
+@router.post(
+    "/stocktakings/{stocktaking_id}/complete",
+    response_model=StocktakingResponse,
+    summary="Complete stocktaking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
+async def complete_stocktaking(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """完成盘点（账实相符或有差异均可结案）"""
+    try:
+        return await stocktaking_service.complete_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            completed_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/complete", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/complete", tenant_id)
+
+
+@router.post(
+    "/stocktakings/{stocktaking_id}/withdraw",
+    response_model=StocktakingResponse,
+    summary="Withdraw stocktaking to draft",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:revoke"))],
+)
+async def withdraw_stocktaking(
+    stocktaking_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> StocktakingResponse:
+    """撤回盘点（盘点中 -> 草稿），便于删除误开始的盘点单。"""
+    try:
+        return await stocktaking_service.withdraw_stocktaking(
+            tenant_id=tenant_id,
+            stocktaking_id=stocktaking_id,
+            withdrawn_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/stocktakings/{stocktaking_id}/withdraw", tenant_id)
+    except (ValidationError, BusinessLogicError) as e:
+        raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/withdraw", tenant_id)
+
+
+@router.post(
+    "/stocktakings/{stocktaking_id}/adjust",
+    response_model=StocktakingResponse,
+    summary="Post stocktaking variance",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:update"))],
+)
 async def adjust_stocktaking_differences(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2487,7 +2624,12 @@ async def adjust_stocktaking_differences(
         raise _http_exception_with_trace(400, str(e), "/stocktakings/{stocktaking_id}/adjust", tenant_id)
 
 
-@router.delete("/stocktakings/{stocktaking_id}", status_code=http_status.HTTP_204_NO_CONTENT, summary="Delete stocktaking")
+@router.delete(
+    "/stocktakings/{stocktaking_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete stocktaking",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:warehouse-management-stocktaking:delete"))],
+)
 async def delete_stocktaking(
     stocktaking_id: int,
     current_user: User = Depends(get_current_user),
@@ -2504,7 +2646,7 @@ async def delete_stocktaking(
 
 @router.post("/inventory-transfers", response_model=InventoryTransferResponse, summary="Create inventory transfer")
 async def create_inventory_transfer(
-    transfer: InventoryTransferCreate,
+    transfer: InventoryTransferCreateWithItems,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> InventoryTransferResponse:
@@ -2531,7 +2673,7 @@ async def create_inventory_transfer(
 
 @router.post("/bin-transfers", response_model=InventoryTransferResponse, summary="Create bin relocation")
 async def create_bin_transfer(
-    transfer: InventoryTransferCreate,
+    transfer: InventoryTransferCreateWithItems,
     current_user: User = Depends(get_current_user),
     tenant_id: int = Depends(get_current_tenant),
 ) -> InventoryTransferResponse:
@@ -2765,6 +2907,259 @@ async def delete_inventory_transfer(
     )
 
 
+# ============ 组装模板 API ============
+
+_ASSEMBLY_ORDERS_READ = "kuaizhizao:warehouse-management-assembly-orders:read"
+_ASSEMBLY_ORDERS_CREATE = "kuaizhizao:warehouse-management-assembly-orders:create"
+_ASSEMBLY_ORDERS_UPDATE = "kuaizhizao:warehouse-management-assembly-orders:update"
+_ASSEMBLY_ORDERS_DELETE = "kuaizhizao:warehouse-management-assembly-orders:delete"
+
+
+@router.post(
+    "/assembly-templates",
+    response_model=AssemblyTemplateResponse,
+    summary="Create assembly template",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_CREATE))],
+)
+async def create_assembly_template(
+    data: AssemblyTemplateCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateResponse:
+    try:
+        return await assembly_template_service.create_template(
+            tenant_id=tenant_id,
+            data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/assembly-templates", tenant_id)
+
+
+@router.get(
+    "/assembly-templates",
+    response_model=AssemblyTemplateListResponse,
+    summary="List assembly templates",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_READ))],
+)
+async def list_assembly_templates(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    keyword: Optional[str] = Query(None, description="关键字"),
+    product_material_id: Optional[int] = Query(None, description="成品物料ID"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateListResponse:
+    return await assembly_template_service.list_templates(
+        tenant_id=tenant_id,
+        skip=skip,
+        limit=limit,
+        keyword=keyword,
+        product_material_id=product_material_id,
+        is_active=is_active,
+    )
+
+
+@router.get(
+    "/assembly-templates/bom-preview",
+    response_model=AssemblyTemplateBomPreviewResponse,
+    summary="Preview BOM for assembly template",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_READ))],
+)
+async def preview_assembly_template_bom(
+    product_material_id: int = Query(..., description="成品/半成品物料ID"),
+    base_quantity: Decimal = Query(Decimal("1"), gt=0, description="基准数量"),
+    product_material_code: Optional[str] = Query(None, description="成品物料编码"),
+    product_material_name: Optional[str] = Query(None, description="成品物料名称"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateBomPreviewResponse:
+    try:
+        return await assembly_template_service.preview_bom(
+            tenant_id=tenant_id,
+            product_material_id=product_material_id,
+            base_quantity=base_quantity,
+            product_material_code=product_material_code,
+            product_material_name=product_material_name,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/assembly-templates/bom-preview", tenant_id)
+
+
+@router.get(
+    "/assembly-templates/{template_id}",
+    response_model=AssemblyTemplateResponse,
+    summary="Get assembly template",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_READ))],
+)
+async def get_assembly_template(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateResponse:
+    try:
+        return await assembly_template_service.get_template_by_id(
+            tenant_id=tenant_id,
+            template_id=template_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/assembly-templates/{template_id}", tenant_id)
+
+
+@router.put(
+    "/assembly-templates/{template_id}",
+    response_model=AssemblyTemplateResponse,
+    summary="Update assembly template",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
+)
+async def update_assembly_template(
+    template_id: int,
+    data: AssemblyTemplateUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateResponse:
+    try:
+        return await assembly_template_service.update_template(
+            tenant_id=tenant_id,
+            template_id=template_id,
+            data=data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/assembly-templates/{template_id}", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/assembly-templates/{template_id}", tenant_id)
+
+
+@router.delete(
+    "/assembly-templates/{template_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete assembly template",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_DELETE))],
+)
+async def delete_assembly_template(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await assembly_template_service.delete_template(
+            tenant_id=tenant_id,
+            template_id=template_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/assembly-templates/{template_id}", tenant_id)
+
+
+@router.post(
+    "/assembly-templates/{template_id}/items",
+    response_model=AssemblyTemplateItemResponse,
+    summary="Add assembly template line",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_CREATE))],
+)
+async def create_assembly_template_item(
+    template_id: int,
+    item: AssemblyTemplateItemCreateInput,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateItemResponse:
+    try:
+        return await assembly_template_service.create_template_item(
+            tenant_id=tenant_id,
+            template_id=template_id,
+            item_data=item,
+            created_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/assembly-templates/{template_id}/items", tenant_id)
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/assembly-templates/{template_id}/items", tenant_id)
+
+
+@router.put(
+    "/assembly-templates/{template_id}/items/{item_id}",
+    response_model=AssemblyTemplateItemResponse,
+    summary="Update assembly template line",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
+)
+async def update_assembly_template_item(
+    template_id: int,
+    item_id: int,
+    item: AssemblyTemplateItemUpdate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateItemResponse:
+    try:
+        return await assembly_template_service.update_template_item(
+            tenant_id=tenant_id,
+            template_id=template_id,
+            item_id=item_id,
+            item_data=item,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/assembly-templates/{template_id}/items/{item_id}", tenant_id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/assembly-templates/{template_id}/items/{item_id}", tenant_id
+        )
+
+
+@router.delete(
+    "/assembly-templates/{template_id}/items/{item_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    summary="Delete assembly template line",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_DELETE))],
+)
+async def delete_assembly_template_item(
+    template_id: int,
+    item_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        await assembly_template_service.delete_template_item(
+            tenant_id=tenant_id,
+            template_id=template_id,
+            item_id=item_id,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/assembly-templates/{template_id}/items/{item_id}", tenant_id
+        )
+
+
+@router.post(
+    "/assembly-templates/{template_id}/import-from-bom",
+    response_model=AssemblyTemplateResponse,
+    summary="Import assembly template lines from BOM",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
+)
+async def import_assembly_template_from_bom(
+    template_id: int,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyTemplateResponse:
+    try:
+        return await assembly_template_service.import_from_bom(
+            tenant_id=tenant_id,
+            template_id=template_id,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/assembly-templates/{template_id}/import-from-bom", tenant_id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/assembly-templates/{template_id}/import-from-bom", tenant_id
+        )
+
+
 # ============ 组装单 API ============
 
 @router.post("/assembly-orders", response_model=AssemblyOrderResponse, summary="Create assembly order")
@@ -2919,6 +3314,35 @@ async def delete_assembly_order(
         tenant_id=tenant_id,
         order_id=order_id
     )
+
+
+@router.post(
+    "/assembly-orders/{order_id}/apply-template",
+    response_model=AssemblyOrderWithItemsResponse,
+    summary="Apply assembly template to draft order",
+    dependencies=[Depends(require_permission_codes(_ASSEMBLY_ORDERS_UPDATE))],
+)
+async def apply_assembly_template_to_order(
+    order_id: int,
+    request_data: ApplyAssemblyTemplateRequest,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> AssemblyOrderWithItemsResponse:
+    try:
+        return await assembly_order_service.apply_template_to_order(
+            tenant_id=tenant_id,
+            order_id=order_id,
+            request=request_data,
+            updated_by=current_user.id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/assembly-orders/{order_id}/apply-template", tenant_id
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(
+            400, str(e), "/assembly-orders/{order_id}/apply-template", tenant_id
+        )
 
 
 @router.post("/assembly-orders/{order_id}/execute", response_model=AssemblyOrderResponse, summary="Execute assembly")
@@ -3543,6 +3967,186 @@ async def complete_outsource_material_receipt(
         raise _http_exception_with_trace(404, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
     except BusinessLogicError as e:
         raise _http_exception_with_trace(400, str(e), "/outsource-material-receipts/{receipt_id}/complete", tenant_id)
+
+
+# ==================== 委外退料 / 委外退货 API ====================
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/material-return-preview",
+    response_model=OutsourceMaterialReturnPreviewResponse,
+    summary="Preview subcontract material return lines",
+)
+async def get_outsource_material_return_preview(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReturnPreviewResponse:
+    try:
+        return await outsource_material_return_service.get_return_preview(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/material-return-preview", tenant_id
+        )
+
+
+@router.post(
+    "/outsource-material-returns",
+    response_model=OutsourceMaterialReturnResponse,
+    summary="Create subcontract material return",
+)
+async def create_outsource_material_return(
+    data: OutsourceMaterialReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReturnResponse:
+    try:
+        return await outsource_material_return_service.create_material_return(
+            tenant_id=tenant_id,
+            return_data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/outsource-material-returns", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-returns", tenant_id)
+
+
+@router.get(
+    "/outsource-material-returns",
+    response_model=List[OutsourceMaterialReturnResponse],
+    summary="List subcontract material returns",
+)
+async def list_outsource_material_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceMaterialReturnResponse]:
+    try:
+        return await outsource_material_return_service.list_material_returns(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            outsource_work_order_id=outsource_work_order_id,
+            status=status,
+            keyword=keyword,
+        )
+    except Exception as e:
+        raise _http_exception_with_trace(500, str(e), "/outsource-material-returns", tenant_id)
+
+
+@router.get(
+    "/outsource-material-returns/{return_id}",
+    response_model=OutsourceMaterialReturnResponse,
+    summary="Get subcontract material return",
+)
+async def get_outsource_material_return(
+    return_id: int = Path(..., description="委外退料单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceMaterialReturnResponse:
+    try:
+        return await outsource_material_return_service.get_material_return(
+            tenant_id=tenant_id,
+            return_id=return_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-material-returns/{return_id}", tenant_id)
+
+
+@router.get(
+    "/outsource-work-orders/{work_order_id}/product-return-preview",
+    response_model=OutsourceProductReturnPreviewResponse,
+    summary="Preview subcontract product return lines",
+)
+async def get_outsource_product_return_preview(
+    work_order_id: int = Path(..., description="委外工单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceProductReturnPreviewResponse:
+    try:
+        return await outsource_product_return_service.get_return_preview(
+            tenant_id=tenant_id,
+            outsource_work_order_id=work_order_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(
+            404, str(e), "/outsource-work-orders/{work_order_id}/product-return-preview", tenant_id
+        )
+
+
+@router.post(
+    "/outsource-product-returns",
+    response_model=OutsourceProductReturnResponse,
+    summary="Create subcontract product return",
+)
+async def create_outsource_product_return(
+    data: OutsourceProductReturnCreate,
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceProductReturnResponse:
+    try:
+        return await outsource_product_return_service.create_product_return(
+            tenant_id=tenant_id,
+            return_data=data,
+            created_by=current_user.id,
+        )
+    except ValidationError as e:
+        raise _http_exception_with_trace(400, str(e), "/outsource-product-returns", tenant_id)
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-product-returns", tenant_id)
+
+
+@router.get(
+    "/outsource-product-returns",
+    response_model=List[OutsourceProductReturnResponse],
+    summary="List subcontract product returns",
+)
+async def list_outsource_product_returns(
+    skip: int = Query(0, ge=0, description="跳过数量"),
+    limit: int = Query(100, ge=1, le=1000, description="限制数量"),
+    outsource_work_order_id: Optional[int] = Query(None, description="委外工单ID筛选"),
+    status: Optional[str] = Query(None, description="状态筛选"),
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> List[OutsourceProductReturnResponse]:
+    try:
+        return await outsource_product_return_service.list_product_returns(
+            tenant_id=tenant_id,
+            skip=skip,
+            limit=limit,
+            outsource_work_order_id=outsource_work_order_id,
+            status=status,
+            keyword=keyword,
+        )
+    except Exception as e:
+        raise _http_exception_with_trace(500, str(e), "/outsource-product-returns", tenant_id)
+
+
+@router.get(
+    "/outsource-product-returns/{return_id}",
+    response_model=OutsourceProductReturnResponse,
+    summary="Get subcontract product return",
+)
+async def get_outsource_product_return(
+    return_id: int = Path(..., description="委外退货单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+) -> OutsourceProductReturnResponse:
+    try:
+        return await outsource_product_return_service.get_product_return(
+            tenant_id=tenant_id,
+            return_id=return_id,
+        )
+    except NotFoundError as e:
+        raise _http_exception_with_trace(404, str(e), "/outsource-product-returns/{return_id}", tenant_id)
 
 
 # ==================== 供应商协同 API ====================

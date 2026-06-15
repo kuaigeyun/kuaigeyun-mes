@@ -23,6 +23,7 @@ class BatchingOrderBase(BaseModel):
     target_warehouse_id: Optional[int] = Field(None, description="目标线边仓ID")
     target_warehouse_name: Optional[str] = Field(None, description="目标线边仓名称")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BatchingOrderCreate(BatchingOrderBase):
@@ -46,6 +47,7 @@ class BatchingOrderUpdate(BaseModel):
     target_warehouse_id: Optional[int] = None
     target_warehouse_name: Optional[str] = None
     remarks: Optional[str] = None
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class BatchingOrderResponse(BatchingOrderBase):
@@ -134,6 +136,7 @@ class PullFromWorkOrderRequest(BaseModel):
     target_warehouse_id: Optional[int] = Field(None, description="目标线边仓ID，空则按工单解析")
     target_warehouse_name: Optional[str] = Field(None, description="目标线边仓名称")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     allow_existing_draft: bool = Field(False, description="若已有草稿配料单则返回已有单")
 
 

@@ -40,6 +40,7 @@ class OutsourceWorkOrderBase(BaseModel):
     planned_start_date: Optional[datetime] = Field(None, description="计划开始时间")
     planned_end_date: Optional[datetime] = Field(None, description="计划结束时间")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OutsourceWorkOrderCreate(OutsourceWorkOrderBase):
@@ -66,6 +67,7 @@ class OutsourceWorkOrderUpdate(BaseModel):
     unqualified_quantity: Optional[Decimal] = Field(None, description="不合格数量")
     issued_quantity: Optional[Decimal] = Field(None, description="已发料数量")
     remarks: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class OutsourceWorkOrderResponse(OutsourceWorkOrderBase):
@@ -360,3 +362,138 @@ class ReconciliationResponse(BaseModel):
     confirmed_amount: float = Field(..., description="确认金额")
     amount_difference: float = Field(..., description="金额差异")
     reconciled_at: str = Field(..., description="对账时间")
+
+
+# ==================== 委外退料 Schema ====================
+
+class OutsourceMaterialReturnBase(BaseModel):
+    """委外退料基础 Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外退料单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_material_issue_id: Optional[int] = Field(None, description="委外发料单ID（可选）")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    quantity: Decimal = Field(..., gt=0, description="退料数量")
+    unit: str = Field(..., description="单位")
+    warehouse_id: int = Field(..., description="入库仓库ID")
+    warehouse_name: str = Field(..., description="入库仓库名称")
+    location_id: Optional[int] = Field(None, description="库位ID")
+    batch_number: Optional[str] = Field(None, description="批次号")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceMaterialReturnCreate(OutsourceMaterialReturnBase):
+    """创建委外退料 Schema"""
+    pass
+
+
+class OutsourceMaterialReturnResponse(OutsourceMaterialReturnBase):
+    """委外退料响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    status: str = Field(..., description="状态")
+    returned_at: Optional[datetime] = Field(None, alias="returnedAt", description="退料时间")
+    returned_by: Optional[int] = Field(None, alias="returnedBy", description="退料人ID")
+    returned_by_name: Optional[str] = Field(None, alias="returnedByName", description="退料人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+
+
+class OutsourceMaterialReturnPreviewLine(BaseModel):
+    """委外退料预览明细（按发料单）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    issue_id: int = Field(..., description="发料单ID")
+    issue_code: str = Field(..., description="发料单编码")
+    material_id: int = Field(..., description="物料ID")
+    material_code: str = Field(..., description="物料编码")
+    material_name: str = Field(..., description="物料名称")
+    unit: str = Field(..., description="单位")
+    issued_quantity: Decimal = Field(..., description="已发数量")
+    returned_quantity: Decimal = Field(..., description="已退数量")
+    returnable_quantity: Decimal = Field(..., description="可退数量")
+
+
+class OutsourceMaterialReturnPreviewResponse(BaseModel):
+    """委外退料预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceMaterialReturnPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")
+
+
+# ==================== 委外退货 Schema ====================
+
+class OutsourceProductReturnBase(BaseModel):
+    """委外退货基础 Schema"""
+    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+
+    code: Optional[str] = Field(None, description="委外退货单编码（可选，创建时自动生成）")
+    outsource_work_order_id: int = Field(..., description="委外工单ID")
+    outsource_work_order_code: str = Field(..., description="委外工单编码")
+    outsource_material_receipt_id: Optional[int] = Field(None, description="委外收货单ID（可选）")
+    quantity: Decimal = Field(..., gt=0, description="退货数量")
+    unit: str = Field(..., description="单位")
+    return_reason: Optional[str] = Field(None, description="退货原因")
+    remarks: Optional[str] = Field(None, description="备注")
+
+
+class OutsourceProductReturnCreate(OutsourceProductReturnBase):
+    """创建委外退货 Schema"""
+    pass
+
+
+class OutsourceProductReturnResponse(OutsourceProductReturnBase):
+    """委外退货响应 Schema"""
+    id: int = Field(..., description="主键ID")
+    uuid: str = Field(..., description="UUID")
+    tenant_id: int = Field(..., alias="tenantId", description="组织ID")
+    status: str = Field(..., description="状态")
+    returned_at: Optional[datetime] = Field(None, alias="returnedAt", description="退货时间")
+    returned_by: Optional[int] = Field(None, alias="returnedBy", description="退货人ID")
+    returned_by_name: Optional[str] = Field(None, alias="returnedByName", description="退货人姓名")
+    created_by: int = Field(..., alias="createdBy", description="创建人ID")
+    created_by_name: str = Field(..., alias="createdByName", description="创建人姓名")
+    updated_by: Optional[int] = Field(None, alias="updatedBy", description="更新人ID")
+    updated_by_name: Optional[str] = Field(None, alias="updatedByName", description="更新人姓名")
+    created_at: datetime = Field(..., alias="createdAt", description="创建时间")
+    updated_at: datetime = Field(..., alias="updatedAt", description="更新时间")
+    deleted_at: Optional[datetime] = Field(None, alias="deletedAt", description="删除时间")
+
+
+class OutsourceProductReturnPreviewLine(BaseModel):
+    """委外退货预览明细（按收货单）"""
+    model_config = ConfigDict(from_attributes=True)
+
+    receipt_id: int = Field(..., description="收货单ID")
+    receipt_code: str = Field(..., description="收货单编码")
+    product_code: str = Field(..., description="产品编码")
+    product_name: str = Field(..., description="产品名称")
+    unit: str = Field(..., description="单位")
+    received_quantity: Decimal = Field(..., description="已收数量")
+    returned_quantity: Decimal = Field(..., description="已退数量")
+    returnable_quantity: Decimal = Field(..., description="可退数量")
+    warehouse_id: Optional[int] = Field(None, description="收货仓库ID")
+    warehouse_name: Optional[str] = Field(None, description="收货仓库名称")
+
+
+class OutsourceProductReturnPreviewResponse(BaseModel):
+    """委外退货预览响应"""
+    model_config = ConfigDict(from_attributes=True)
+
+    outsource_work_order_id: int = Field(...)
+    outsource_work_order_code: str = Field(...)
+    lines: List[OutsourceProductReturnPreviewLine] = Field(default_factory=list)
+    message: Optional[str] = Field(None, description="提示信息")

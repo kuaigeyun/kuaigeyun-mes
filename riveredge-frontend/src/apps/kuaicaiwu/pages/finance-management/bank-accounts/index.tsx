@@ -14,6 +14,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { CURRENCY_SELECT_OPTIONS, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
+import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 type BankTx = Record<string, unknown>;
 
@@ -201,17 +203,25 @@ const BankAccountsPage: React.FC = () => {
         width={MODAL_CONFIG.STANDARD_WIDTH}
         isEdit={!!editing}
         onFinish={async (values) => {
+          const payload = {
+            ...values,
+            attachments: normalizeDocumentAttachments(values.attachments),
+          };
           if (editing) {
-            await bankAccountService.update(editing.id, values);
+            await bankAccountService.update(editing.id, payload);
             messageApi.success('更新成功');
           } else {
-            await bankAccountService.create(values);
+            await bankAccountService.create(payload);
             messageApi.success('创建成功');
           }
           setModalVisible(false);
           actionRef.current?.reload();
         }}
-        initialValues={editing ?? { currency: 'CNY', is_active: true }}
+        initialValues={
+          editing
+            ? { ...editing, attachments: mapAttachmentsToUploadList(editing.attachments) }
+            : { currency: 'CNY', is_active: true }
+        }
       >
         <ProFormText name="account_code" label="账户编码" rules={[{ required: true }]} disabled={!!editing} />
         <ProFormText name="account_name" label="账户名称" rules={[{ required: true }]} />
@@ -227,6 +237,7 @@ const BankAccountsPage: React.FC = () => {
           />
         )}
         <ProFormTextArea name="notes" label="备注" />
+        <DocumentAttachmentsField category="bank_account_attachments" />
       </FormModalTemplate>
     </ListPageTemplate>
   );

@@ -41,8 +41,13 @@ import {
   Typography,
   Empty,
   Spin,
+  Upload,
   theme as AntdTheme,
 } from 'antd';
+import { UploadOutlined } from '@ant-design/icons';
+import { uploadMultipleFiles } from '../../../../../services/file';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { PlusOutlined, EditOutlined, DeleteOutlined, EyeOutlined, HistoryOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -132,6 +137,7 @@ interface Equipment {
   status?: string;
   is_active?: boolean;
   description?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
   lifecycle?: { main_stages?: Array<unknown> };
@@ -262,6 +268,7 @@ const EquipmentPage: React.FC = () => {
         status: detail.status,
         is_active: detail.is_active,
         description: detail.description,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
         ...fieldFormValues,
       });
       setModalVisible(true);
@@ -351,6 +358,7 @@ const EquipmentPage: React.FC = () => {
         certificate_no: values.certificate_no,
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       await equipmentApi.createCalibration(equipmentUuid, data);
       messageApi.success('校验记录已保存');
@@ -375,6 +383,7 @@ const EquipmentPage: React.FC = () => {
         ...standardValues,
         purchase_date: standardValues.purchase_date ? standardValues.purchase_date.format('YYYY-MM-DD') : null,
         installation_date: standardValues.installation_date ? standardValues.installation_date.format('YYYY-MM-DD') : null,
+        attachments: normalizeDocumentAttachments(standardValues.attachments),
       };
 
       const editedUuid = isEdit ? currentEquipment?.uuid : undefined;
@@ -962,6 +971,9 @@ const EquipmentPage: React.FC = () => {
             />
           </Col>
           <Col span={24}>
+            <DocumentAttachmentsField category="equipment_attachments" />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea
               name="description"
               label="描述"
@@ -1226,6 +1238,24 @@ const EquipmentPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="expiry_date" label="有效期至">
             <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'equipment_calibration_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
           </Form.Item>
           <Form.Item name="remark" label="备注">
             <Input.TextArea rows={2} placeholder="请输入备注" />

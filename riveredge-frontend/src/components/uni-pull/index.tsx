@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button, Dropdown, Space } from 'antd';
-import { DownOutlined } from '@ant-design/icons';
+import type { ButtonProps } from 'antd';
+import { DownOutlined, FileSearchOutlined } from '@ant-design/icons';
 import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut';
 
 export interface UniPullMenuItem {
@@ -54,4 +55,46 @@ export const UniPullCreateToolbar: React.FC<UniPullCreateToolbarProps> = ({
     </Space.Compact>
   );
 };
+
+export interface UniPullLoadButtonProps {
+  /** 默认「从单据加载」 */
+  label?: React.ReactNode;
+  menuItems: UniPullMenuItem[];
+  icon?: React.ReactNode;
+  type?: ButtonProps['type'];
+  color?: ButtonProps['color'];
+  variant?: ButtonProps['variant'];
+  compactKey?: string;
+}
+
+/**
+ * 独立的「从单据加载」入口，与「新建」主按钮并列，便于发现取单能力。
+ */
+export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
+  label = '从单据加载',
+  menuItems,
+  icon,
+  type,
+  color = 'primary',
+  variant = 'outlined',
+  compactKey = 'uni-pull-load-button',
+}) => (
+  <Dropdown
+    key={compactKey}
+    trigger={['click']}
+    menu={{
+      items: menuItems.map((it) => ({
+        key: it.key,
+        label: it.label,
+        disabled: it.disabled,
+        onClick: it.onClick,
+      })),
+    }}
+  >
+    <Button type={type} color={color} variant={variant} icon={icon ?? <FileSearchOutlined />}>
+      {label}
+      <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
+    </Button>
+  </Dropdown>
+);
 

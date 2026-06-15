@@ -21,8 +21,11 @@ import {
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, MODAL_CONFIG, DRAWER_CONFIG } from '../../../../../components/layout-templates';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { inventoryAlertApi } from '../../../services/inventory-alert';
 import { getInventoryAlertLifecycle } from '../../../utils/inventoryAlertLifecycle';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 interface InventoryAlert {
   id?: number;
@@ -148,6 +151,7 @@ const InventoryAlertPage: React.FC = () => {
         notify_users: detail.notify_users,
         notify_roles: detail.notify_roles,
         remarks: detail.remarks,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
       });
     } catch (error: any) {
       messageApi.error(error.message || '获取预警规则详情失败');
@@ -168,6 +172,7 @@ const InventoryAlertPage: React.FC = () => {
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
           remarks: values.remarks,
+          attachments: normalizeDocumentAttachments(values.attachments),
         });
         messageApi.success('预警规则更新成功');
       } else {
@@ -185,6 +190,7 @@ const InventoryAlertPage: React.FC = () => {
           notify_users: values.notify_users,
           notify_roles: values.notify_roles,
           remarks: values.remarks,
+          attachments: normalizeDocumentAttachments(values.attachments),
         });
         messageApi.success('预警规则创建成功');
       }
@@ -418,21 +424,9 @@ const InventoryAlertPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
+          <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
-            <Button
-              type="link"
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleAlert(record)}
-            >
+            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleAlert(record)}>
               处理
             </Button>
           )}
@@ -523,28 +517,14 @@ const InventoryAlertPage: React.FC = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEditRule(record)}
-          >
-            编辑
-          </Button>
+          <Button {...rowActionKind('update')} onClick={() => handleEditRule(record)} />
           <Popconfirm
             title="确定要删除这个预警规则吗？"
             onConfirm={() => handleDeleteRule(record)}
             okText="确定"
             cancelText="取消"
           >
-            <Button
-              type="link"
-              size="small"
-              danger
-              icon={<DeleteOutlined />}
-            >
-              删除
-            </Button>
+            <Button {...rowActionKind('delete')} />
           </Popconfirm>
         </Space>
       ),
@@ -795,6 +775,7 @@ const InventoryAlertPage: React.FC = () => {
           name="is_enabled"
           label="是否启用"
         />
+        <DocumentAttachmentsField category="inventory_alert_rule_attachments" />
         <ProFormTextArea
           name="remarks"
           label="备注"

@@ -35,6 +35,7 @@ class MaintenancePlanBase(BaseModel):
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="负责人姓名")
     status: str = Field(default="草稿", max_length=50, description="计划状态（草稿、已发布、执行中、已完成、已取消）")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("plan_type")
     @classmethod
@@ -88,6 +89,7 @@ class MaintenancePlanUpdate(BaseModel):
     responsible_person_name: Optional[str] = Field(None, max_length=100, description="负责人姓名")
     status: Optional[str] = Field(None, max_length=50, description="计划状态")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MaintenancePlanResponse(MaintenancePlanBase):
@@ -131,6 +133,7 @@ class MaintenanceExecutionBase(BaseModel):
     acceptance_date: Optional[datetime] = Field(None, description="验收日期")
     acceptance_result: Optional[str] = Field(None, max_length=50, description="验收结果（合格、不合格）")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("execution_result")
     @classmethod
@@ -178,6 +181,7 @@ class MaintenanceExecutionUpdate(BaseModel):
     acceptance_date: Optional[datetime] = Field(None, description="验收日期")
     acceptance_result: Optional[str] = Field(None, max_length=50, description="验收结果")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MaintenanceExecutionResponse(MaintenanceExecutionBase):

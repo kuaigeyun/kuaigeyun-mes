@@ -339,6 +339,7 @@ async def update_nonconforming_disposition(
         status=payload.status,
         quarantine_location=payload.quarantine_location,
         remarks=payload.remarks,
+        attachments=payload.attachments,
     )
 
 

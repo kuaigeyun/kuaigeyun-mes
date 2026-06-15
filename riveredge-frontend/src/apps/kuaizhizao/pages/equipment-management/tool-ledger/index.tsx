@@ -22,8 +22,11 @@ import {
   ProDescriptionsItemProps,
 } from '@ant-design/pro-components';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
-import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
-import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined } from '@ant-design/icons';
+import { App, Button, Tag, Table, Form, Input, InputNumber, Descriptions, DatePicker, Select, Modal, Row, Col, Typography, Empty, Spin, theme as AntdTheme, Upload } from 'antd';
+import { PlusOutlined, EditOutlined, EyeOutlined, ReloadOutlined, UploadOutlined } from '@ant-design/icons';
+import { uploadMultipleFiles } from '../../../../../services/file';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import CodeField from '../../../../../components/code-field';
@@ -90,6 +93,7 @@ interface Tool {
   calibration_period?: number;
   total_usage_count?: number;
   description?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
   updated_at?: string;
 }
@@ -248,6 +252,7 @@ const ToolLedgerPage: React.FC = () => {
         needs_calibration: detail.needs_calibration,
         calibration_period: detail.calibration_period,
         description: detail.description,
+        attachments: mapAttachmentsToUploadList(detail.attachments),
       });
       setModalVisible(true);
     } catch (error) {
@@ -282,7 +287,10 @@ const ToolLedgerPage: React.FC = () => {
   const handleSubmitCheckout = async () => {
     try {
       const values = await usageForm.validateFields();
-      await toolApi.checkout(values);
+      await toolApi.checkout({
+        ...values,
+        attachments: normalizeDocumentAttachments(values.attachments),
+      });
       messageApi.success('领用成功');
       setUsageModalVisible(false);
       if (toolDetail?.uuid) {
@@ -325,6 +333,7 @@ const ToolLedgerPage: React.FC = () => {
         ...values,
         maintenance_date: values.maintenance_date?.format?.('YYYY-MM-DD') || values.maintenance_date,
         cost: values.cost ?? 0,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       await toolApi.recordMaintenance(data);
       messageApi.success('维保记录已保存');
@@ -352,6 +361,7 @@ const ToolLedgerPage: React.FC = () => {
         ...values,
         calibration_date: values.calibration_date?.format?.('YYYY-MM-DD') || values.calibration_date,
         expiry_date: values.expiry_date?.format?.('YYYY-MM-DD') || values.expiry_date,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       await toolApi.recordCalibration(data);
       messageApi.success('校验记录已保存');
@@ -379,6 +389,7 @@ const ToolLedgerPage: React.FC = () => {
         ...values,
         purchase_date: values.purchase_date?.format?.('YYYY-MM-DD') || values.purchase_date,
         warranty_expiry: values.warranty_expiry?.format?.('YYYY-MM-DD') || values.warranty_expiry,
+        attachments: normalizeDocumentAttachments(values.attachments),
       };
       const editedUuid = isEdit ? currentTool?.uuid : undefined;
       if (isEdit && editedUuid) {
@@ -761,6 +772,9 @@ const ToolLedgerPage: React.FC = () => {
             <ProFormDigit name="calibration_period" label="校验周期（天）" placeholder="请输入校验周期" />
           </Col>
           <Col span={24}>
+            <DocumentAttachmentsField category="tool_ledger_attachments" />
+          </Col>
+          <Col span={24}>
             <ProFormTextArea name="description" label="备注" placeholder="请输入备注" fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
@@ -985,6 +999,24 @@ const ToolLedgerPage: React.FC = () => {
             ]} />
           </Form.Item>
           <Form.Item name="source_no" label="来源单号"><Input placeholder="请输入来源单号" /></Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'tool_usage_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
+          </Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
         </Form>
       </Modal>
@@ -1008,6 +1040,24 @@ const ToolLedgerPage: React.FC = () => {
             <Select options={[{ label: '完成', value: '完成' }, { label: '未完成', value: '未完成' }]} />
           </Form.Item>
           <Form.Item name="cost" label="费用" initialValue={0}><InputNumber min={0} step={0.01} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'tool_maintenance_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
+          </Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
         </Form>
       </Modal>
@@ -1029,6 +1079,24 @@ const ToolLedgerPage: React.FC = () => {
           </Form.Item>
           <Form.Item name="expiry_date" label="有效期至">
             <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item
+            name="attachments"
+            label="附件"
+            valuePropName="fileList"
+            getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
+          >
+            <Upload
+              multiple
+              customRequest={async (options) => {
+                const res = await uploadMultipleFiles([options.file as File], {
+                  category: 'tool_calibration_attachments',
+                });
+                options.onSuccess?.(res[0], options.file as any);
+              }}
+            >
+              <Button icon={<UploadOutlined />}>上传</Button>
+            </Upload>
           </Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
         </Form>

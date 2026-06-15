@@ -176,11 +176,55 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
-  const handleChange = (val: number | undefined, _option: any) => {
+  const mergeMaterialsIntoData = (items: Material[]) => {
+    if (!items.length) return;
+    setData((prev) => {
+      const merged = [...prev];
+      for (const item of items) {
+        const id = Number((item as any).id);
+        if (!merged.some((m) => Number((m as any).id) === id)) {
+          merged.push(item);
+        }
+      }
+      return merged;
+    });
+  };
+
+  const resolveSelectedMaterial = async (
+    val: number,
+    opt: any,
+    currentData: Material[],
+  ): Promise<Material | undefined> => {
+    let selected =
+      currentData.find((m) => Number((m as any).id) === Number(val)) ?? undefined;
+    if (selected) return selected;
+
+    const labelStr = typeof opt?.label === 'string' ? opt.label : '';
+    const codePart = labelStr.split(' - ')[0]?.trim();
+    if (!codePart) return undefined;
+
+    try {
+      const list = await materialApi.list({
+        code: codePart,
+        limit: 50,
+        isActive: activeOnly ? true : undefined,
+        mastersOnly: mastersOnly ? true : undefined,
+        sourceType: sourceType || undefined,
+      });
+      selected = list.items.find((m) => Number((m as any).id) === Number(val));
+      if (selected) {
+        mergeMaterialsIntoData([selected]);
+      }
+      return selected;
+    } catch (error) {
+      console.error('Failed to resolve material for fillMapping:', error);
+      return undefined;
+    }
+  };
+
+  const handleChange = async (val: number | undefined, opt: any) => {
     const selectedMaterial =
-      val != null
-        ? data.find((m) => Number((m as any).id) === Number(val))
-        : undefined;
+      val != null ? await resolveSelectedMaterial(val, opt, data) : undefined;
 
     if (selectedMaterial && fillMapping && form) {
       const isListContext = listFieldKey !== undefined && listFieldKey !== null;
@@ -214,7 +258,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
       const n = Number(val);
       numVal = Number.isFinite(n) ? n : undefined;
     }
-    handleChange(numVal, opt);
+    void handleChange(numVal, opt);
   };
 
   const options = useMemo(() => {
@@ -272,6 +316,7 @@ export const UniMaterialSelect: React.FC<UniMaterialSelectProps> = ({
                 const raw = list as { items?: Material[]; data?: Material[] } | Material[];
                 const rows = Array.isArray(raw) ? raw : raw?.items ?? raw?.data ?? [];
                 const items = filterSelectableMaterials(Array.isArray(rows) ? rows : [], mastersOnly);
+                mergeMaterialsIntoData(items);
                 return items.map((m) => {
                   const rawId = (m as any).id;
                   const numId = Number(rawId);

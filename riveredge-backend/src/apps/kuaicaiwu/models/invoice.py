@@ -53,6 +53,7 @@ class Invoice(BaseModel):
     source_document_code = fields.CharField(max_length=100, null=True, description="来源单据号")
     attachment_uuid = fields.CharField(max_length=36, null=True, description="发票文件ID")
     description = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     receivable_id = fields.IntField(null=True, description="关联应收单ID")
     receivable_code = fields.CharField(max_length=50, null=True, description="关联应收单编码")

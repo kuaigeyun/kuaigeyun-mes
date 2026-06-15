@@ -33,6 +33,15 @@ export const assemblyOrderApi = {
   execute: async (orderId: string) => {
     return apiRequest(`/apps/kuaizhizao/assembly-orders/${orderId}/execute`, { method: 'POST' });
   },
+  applyTemplate: async (
+    orderId: string,
+    data: { template_id: number; replace_existing: boolean }
+  ) => {
+    return apiRequest(`/apps/kuaizhizao/assembly-orders/${orderId}/apply-template`, {
+      method: 'POST',
+      data,
+    });
+  },
   delete: async (id: string) => {
     return apiRequest(`/apps/kuaizhizao/assembly-orders/${id}`, { method: 'DELETE' });
   },

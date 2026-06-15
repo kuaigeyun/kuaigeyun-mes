@@ -83,6 +83,7 @@ async def create_payment(
         settlement_type=data.settlement_type or "normal",
         status="Draft",
         notes=data.notes,
+        attachments=data.attachments,
         created_by=current_user.id,
     )
     return _serialize(payment)

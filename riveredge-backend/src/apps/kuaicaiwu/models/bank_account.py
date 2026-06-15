@@ -33,6 +33,7 @@ class BankAccount(BaseModel):
     )
     is_active = fields.BooleanField(default=True, description="是否启用")
     notes = fields.TextField(null=True, description="备注")
+    attachments = fields.JSONField(null=True, description="附件列表")
     deleted_at = fields.DatetimeField(null=True, description="删除时间")
 
     def __str__(self):

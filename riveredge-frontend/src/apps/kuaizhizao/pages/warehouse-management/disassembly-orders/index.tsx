@@ -24,6 +24,7 @@ const DisassemblyOrdersPage: React.FC = () => {
         quantityLabel: '拆卸数量',
         listEmptyText: '暂无拆卸单数据。',
         itemDoneStatus: 'produced',
+        attachmentCategory: 'disassembly_order_attachments',
         getLifecycle: getDisassemblyOrderLifecycle,
       }}
     />

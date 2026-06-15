@@ -29,6 +29,7 @@ class ReceiptNoticeBase(BaseSchema):
     planned_receipt_date: Optional[date] = Field(None, description="计划收货日期")
     status: str = Field("待收货", max_length=20, description="通知状态")
     notes: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class ReceiptNoticeCreate(ReceiptNoticeBase):

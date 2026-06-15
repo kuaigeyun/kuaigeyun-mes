@@ -8,7 +8,7 @@ Date: 2025-01-15
 """
 
 from datetime import datetime, date
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
@@ -38,6 +38,7 @@ class MoldBase(BaseModel):
     cavity_count: Optional[int] = Field(None, ge=1, description="腔数/模数，一次成型产出件数")
     design_lifetime: Optional[int] = Field(None, ge=1, description="设计寿命（使用次数），用于寿命预警")
     description: Optional[str] = Field(None, description="描述")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
     @classmethod
@@ -81,6 +82,7 @@ class MoldUpdate(BaseModel):
     cavity_count: Optional[int] = Field(None, ge=1, description="腔数/模数")
     design_lifetime: Optional[int] = Field(None, ge=1, description="设计寿命（使用次数）")
     description: Optional[str] = Field(None, description="描述")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MoldResponse(MoldBase):
@@ -126,6 +128,7 @@ class MoldUsageBase(BaseModel):
     status: str = Field(default="使用中", max_length=50, description="使用状态（使用中、已归还、已报废）")
     return_date: Optional[datetime] = Field(None, description="归还日期")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     
     @field_validator("status")
     @classmethod
@@ -158,6 +161,7 @@ class MoldUsageUpdate(BaseModel):
     status: Optional[str] = Field(None, max_length=50, description="使用状态")
     return_date: Optional[datetime] = Field(None, description="归还日期")
     remark: Optional[str] = Field(None, description="备注")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
 
 
 class MoldUsageResponse(MoldUsageBase):
@@ -219,6 +223,7 @@ class MoldCalibrationCreate(BaseModel):
     result: str = Field(..., max_length=50, description="校验结果（合格、不合格、准用）")
     certificate_no: Optional[str] = Field(None, max_length=100, description="证书编号")
     expiry_date: Optional[date] = Field(None, description="有效期至")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     remark: Optional[str] = Field(None, description="备注")
 
 
@@ -237,6 +242,7 @@ class MoldCalibrationResponse(BaseModel):
     result: str = Field(..., description="校验结果")
     certificate_no: Optional[str] = Field(None, description="证书编号")
     expiry_date: Optional[date] = Field(None, description="有效期至")
+    attachments: Optional[List[dict]] = Field(None, description="附件列表")
     remark: Optional[str] = Field(None, description="备注")
     created_at: datetime = Field(..., description="创建时间")
 

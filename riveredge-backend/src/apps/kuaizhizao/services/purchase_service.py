@@ -14,6 +14,7 @@ from decimal import Decimal
 
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
+from tortoise.functions import Sum, Count
 
 from apps.common.base_service import AppBaseService
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
@@ -30,10 +31,22 @@ from apps.kuaizhizao.schemas.purchase import (
     MaterialPriceHistoryResponse, MaterialPriceHistoryItem,
     PurchaseTrackingResponse, PurchaseTrackingNode,
     ExpediteResponse,
-    PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem
+    PriceComparisonResponse, MaterialPriceComparison, PriceComparisonItem,
+    PurchaseReceiptPullCandidate,
 )
 from apps.kuaizhizao.constants import DocumentStatus, ReviewStatus, LEGACY_AUDITED_VALUES, is_draft_status, is_pending_review_status
 from infra.services.business_config_service import BusinessConfigService
+
+# 采购入库选单：与前端 inboundCreateConfig.PURCHASE_ORDER_RECEIPT_ELIGIBLE_STATUSES 一致
+PURCHASE_RECEIPT_PULL_ELIGIBLE_STATUSES = (
+    "已审核",
+    "已确认",
+    "AUDITED",
+    "CONFIRMED",
+    "执行中",
+    "IN_PROGRESS",
+    "进行中",
+)
 
 
 class PurchaseService(AppBaseService[PurchaseOrder]):
@@ -321,9 +334,11 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         # 为每个订单加载明细（简化版，只返回基本信息）
         # 不能直接 model_validate(order)：order.items 是 ReverseRelation，会导致 Pydantic 校验失败
+        order_ids = [order.id for order in orders]
+        items_count_by_order = await self._batch_order_items_count(tenant_id, order_ids)
         result = []
         for order in orders:
-            items_count = await PurchaseOrderItem.filter(tenant_id=tenant_id, order_id=order.id).count()
+            items_count = items_count_by_order.get(order.id, 0)
             order_data = order.__dict__.copy()
             order_data.pop('items', None)
             order_data['items_count'] = items_count
@@ -342,6 +357,128 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             "total": total,
             "success": True
         })
+
+    async def _batch_order_items_count(
+        self, tenant_id: int, order_ids: List[int]
+    ) -> Dict[int, int]:
+        """批量统计采购订单明细行数（列表用，避免 N+1 count）。"""
+        if not order_ids:
+            return {}
+        rows = (
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=order_ids,
+            )
+            .group_by("order_id")
+            .annotate(cnt=Count("id"))
+            .values("order_id", "cnt")
+        )
+        return {int(row["order_id"]): int(row["cnt"]) for row in rows}
+
+    async def _batch_order_receipt_totals(
+        self, tenant_id: int, order_ids: List[int]
+    ) -> Dict[int, Dict[str, Decimal]]:
+        """批量汇总采购订单明细的采购/已入库/未入库数量。"""
+        if not order_ids:
+            return {}
+        rows = (
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                order_id__in=order_ids,
+            )
+            .group_by("order_id")
+            .annotate(
+                ordered_total=Sum("ordered_quantity"),
+                received_total=Sum("received_quantity"),
+                outstanding_total=Sum("outstanding_quantity"),
+                items_count=Count("id"),
+            )
+            .values(
+                "order_id",
+                "ordered_total",
+                "received_total",
+                "outstanding_total",
+                "items_count",
+            )
+        )
+        result: Dict[int, Dict[str, Any]] = {}
+        for row in rows:
+            oid = int(row["order_id"])
+            result[oid] = {
+                "ordered_total": Decimal(str(row.get("ordered_total") or 0)),
+                "received_total": Decimal(str(row.get("received_total") or 0)),
+                "outstanding_total": Decimal(str(row.get("outstanding_total") or 0)),
+                "items_count": int(row.get("items_count") or 0),
+            }
+        return result
+
+    async def list_purchase_receipt_pull_candidates(
+        self,
+        tenant_id: int,
+        *,
+        keyword: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100,
+        current_user: Optional[CurrentUser] = None,
+    ) -> Dict[str, Any]:
+        """
+        采购入库选单弹窗候选项：单次查询订单 + 批量汇总明细数量，避免前端 N+1 拉详情。
+        """
+        query = PurchaseOrder.filter(
+            tenant_id=tenant_id,
+            status__in=list(PURCHASE_RECEIPT_PULL_ELIGIBLE_STATUSES),
+        )
+
+        if current_user:
+            from core.services.authorization.data_scope_service import DataScopeService
+
+            query = await DataScopeService.apply(
+                query,
+                tenant_id=tenant_id,
+                user=current_user,
+                resource="kuaizhizao:purchase-order",
+            )
+
+        if keyword:
+            kw = keyword.strip()
+            if kw:
+                query = query.filter(
+                    Q(order_code__icontains=kw) | Q(supplier_name__icontains=kw)
+                )
+
+        total = await query.count()
+        orders = await query.offset(skip).limit(limit).order_by("-created_at")
+        order_ids = [order.id for order in orders]
+        totals_by_order = await self._batch_order_receipt_totals(tenant_id, order_ids)
+
+        from apps.kuaizhizao.services.document_lifecycle_service import get_purchase_order_lifecycle
+
+        candidates: List[PurchaseReceiptPullCandidate] = []
+        for order in orders:
+            agg = totals_by_order.get(order.id, {})
+            outstanding = agg.get("outstanding_total", Decimal(0))
+            candidates.append(
+                PurchaseReceiptPullCandidate(
+                    id=order.id,
+                    order_code=order.order_code,
+                    supplier_name=order.supplier_name,
+                    status=order.status,
+                    order_date=order.order_date,
+                    delivery_date=order.delivery_date,
+                    items_count=agg.get("items_count", 0),
+                    ordered_total=agg.get("ordered_total", Decimal(0)),
+                    received_total=agg.get("received_total", Decimal(0)),
+                    outstanding_total=outstanding,
+                    pullable=outstanding > 0,
+                    lifecycle=get_purchase_order_lifecycle(order),
+                )
+            )
+
+        return {
+            "data": [item.model_dump() for item in candidates],
+            "total": total,
+            "success": True,
+        }
 
     async def update_purchase_order(
         self,

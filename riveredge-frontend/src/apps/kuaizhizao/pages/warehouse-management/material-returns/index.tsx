@@ -23,6 +23,9 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
 import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
 import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 
 interface MaterialReturn {
   id?: number;
@@ -222,23 +225,17 @@ const MaterialReturnsPage: React.FC = () => {
         const printInMore = record.status === '待归还';
         return (
           <Space size="small" wrap>
-            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-              详情
-            </Button>
+            <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
             {record.status === '待归还' && (
               <>
                 <Button
-                  type="link"
-                  size="small"
-                  icon={<CheckCircleOutlined />}
+                  {...rowActionKind('execute')}
+                  {...rowActionLabelKeep()}
                   onClick={() => handleConfirm(record)}
-                  style={{ color: '#52c41a' }}
                 >
-                  确认归还
+                  确认入库
                 </Button>
-                <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
-                  删除
-                </Button>
+                <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
               </>
             )}
             {printInMore ? (
@@ -255,16 +252,12 @@ const MaterialReturnsPage: React.FC = () => {
                 }}
                 trigger={['click']}
               >
-                <Button type="link" size="small" icon={<MoreOutlined />}>
+                <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
                   更多
                 </Button>
               </Dropdown>
             ) : (
-              showPrint && (
-                <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => handlePrint(record)}>
-                  打印
-                </Button>
-              )
+              showPrint && <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
             )}
           </Space>
         );
@@ -284,17 +277,17 @@ const MaterialReturnsPage: React.FC = () => {
 
   const handleConfirm = async (record: MaterialReturn) => {
     Modal.confirm({
-      title: '确认归还',
+      title: '确认入库',
       content: `确定要确认还料单 "${record.return_code}" 吗？确认后将增加库存。`,
       onOk: async () => {
         try {
           await warehouseApi.materialReturn.confirm(record.id!.toString());
-          messageApi.success('归还确认成功');
+          messageApi.success('确认入库成功');
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '归还确认失败');
+          messageApi.error(error.message || '确认入库失败');
         }
       },
     });
@@ -378,6 +371,7 @@ const MaterialReturnsPage: React.FC = () => {
         warehouse_name: selectedBorrowDetail.warehouse_name,
         returner_name: values.returner_name,
         notes: values.notes,
+        attachments: normalizeDocumentAttachments(values.attachments),
         items: validItems,
       });
       messageApi.success('创建成功');
@@ -506,6 +500,7 @@ const MaterialReturnsPage: React.FC = () => {
         onClose={() => setCreateModalVisible(false)}
         formRef={formRef}
         onFinish={handleCreateSubmit}
+        submitText="保存草稿"
         width={MODAL_CONFIG.LARGE_WIDTH}
         grid={false}
       >
@@ -585,6 +580,7 @@ const MaterialReturnsPage: React.FC = () => {
           </Col>
           <Col span={12} />
         </Row>
+        <DocumentAttachmentsField category="material_return_attachments" />
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
     </>

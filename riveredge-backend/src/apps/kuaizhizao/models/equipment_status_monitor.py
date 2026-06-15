@@ -85,6 +85,7 @@ class EquipmentStatusMonitor(BaseModel):
 
     # 监控时间
     monitored_at = fields.DatetimeField(description="监控时间")
+    attachments = fields.JSONField(null=True, description="附件列表")
 
     # 软删除字段
     deleted_at = fields.DatetimeField(null=True, description="删除时间（软删除）")

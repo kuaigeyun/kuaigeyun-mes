@@ -88,6 +88,7 @@ async def create_receipt(
         settlement_type=data.settlement_type or "normal",
         status="Draft",
         notes=data.notes,
+        attachments=data.attachments,
         created_by=current_user.id,
     )
     return await _serialize(tenant_id, current_user.id, receipt)

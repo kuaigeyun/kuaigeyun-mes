@@ -14,6 +14,8 @@ import { UniTable } from '../../../../../components/uni-table';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { toolApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 
@@ -27,6 +29,7 @@ interface ToolMaintenance {
   executor?: string;
   content?: string;
   result?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
   created_at?: string;
 }
 
@@ -62,6 +65,7 @@ const ToolMaintenancesPage: React.FC = () => {
         content: values.content,
         result: values.result || '完成',
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('维保记录已保存');
       setModalVisible(false);
@@ -186,6 +190,7 @@ const ToolMaintenancesPage: React.FC = () => {
           ]}
           colProps={{ span: 12 }}
         />
+        <DocumentAttachmentsField category="tool_maintenance_attachments" />
         <ProFormText name="content" label="维保内容" colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>

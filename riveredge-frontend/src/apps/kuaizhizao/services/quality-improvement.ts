@@ -22,6 +22,7 @@ export interface Quality8DReport {
   d8_team_congratulation?: string;
   verification_result?: string;
   remarks?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   closed_at?: string;
   lifecycle_stages?: Array<{ key: string; label: string; status: 'done' | 'active' | 'pending' }>;
   next_status?: string | null;
@@ -62,6 +63,7 @@ export interface DefectLedgerItem {
   process_inspection_code?: string;
   finished_goods_inspection_id?: number;
   finished_goods_inspection_code?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
 }
 
 export interface OQCInspection {
@@ -84,6 +86,7 @@ export interface OQCInspection {
   customer_name?: string;
   inspection_standard?: string;
   other_checks?: Record<string, unknown>;
+  attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
   created_at?: string;
 }
 

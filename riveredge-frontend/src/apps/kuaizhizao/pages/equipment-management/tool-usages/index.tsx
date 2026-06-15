@@ -11,6 +11,8 @@ import { App, Button, Tag, message, Modal, Typography } from 'antd';
 import { PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
+import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { ProFormSelect, ProFormText } from '@ant-design/pro-components';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCheckoutUsageLifecycle } from '../../../utils/equipmentLifecycle';
@@ -31,6 +33,7 @@ interface ToolUsage {
   checkin_date?: string;
   status?: string;
   remark?: string;
+  attachments?: Array<{ uid?: string; name?: string; url?: string }>;
 }
 
 const ToolUsagesPage: React.FC = () => {
@@ -84,6 +87,7 @@ const ToolUsagesPage: React.FC = () => {
         source_no: values.source_no,
         checkout_date: values.checkout_date?.format?.('YYYY-MM-DD HH:mm:ss') || values.checkout_date,
         remark: values.remark,
+        attachments: normalizeDocumentAttachments(values.attachments),
       });
       messageApi.success('领用成功');
       setModalVisible(false);
@@ -234,6 +238,7 @@ const ToolUsagesPage: React.FC = () => {
         <ProFormText name="department_name" label="领用部门" colProps={{ span: 12 }} />
         <ProFormText name="source_type" label="来源类型" placeholder="如：工单" colProps={{ span: 12 }} />
         <ProFormText name="source_no" label="来源单号" colProps={{ span: 12 }} />
+        <DocumentAttachmentsField category="tool_usage_attachments" />
         <ProFormText name="remark" label="备注" colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>

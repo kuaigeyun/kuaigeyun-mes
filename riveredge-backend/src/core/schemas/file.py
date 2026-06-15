@@ -109,3 +109,18 @@ class FileUploadResponse(BaseModel):
     file_extension: Optional[str] = Field(None, description="文件扩展名")
     file_path: str = Field(..., description="文件存储路径")
 
+
+class ImageTierBackfillResponse(BaseModel):
+    """存量图片三档压缩批次结果"""
+
+    total_images: int = Field(..., description="符合条件的图片总数")
+    batch_size: int = Field(..., description="本批次处理条数")
+    processed: int = Field(..., description="成功处理数")
+    generated: int = Field(..., description="本批次新生成档位数>0的文件数")
+    skipped: int = Field(..., description="跳过数（已有档位或不可处理）")
+    failed: int = Field(..., description="失败数")
+    next_offset: int = Field(..., description="下一批次 offset")
+    remaining: int = Field(..., description="剩余未扫描条数（估算）")
+    done: bool = Field(..., description="是否已全部处理完成")
+    errors: List[str] = Field(default_factory=list, description="错误摘要（最多20条）")
+

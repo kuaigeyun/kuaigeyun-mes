@@ -123,6 +123,7 @@ class PurchaseInquiryCreate(BaseModel):
     source_id: Optional[int] = None
     source_code: Optional[str] = None
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     items: List[PurchaseInquiryItemCreate] = Field(default_factory=list)
     vendors: List[PurchaseInquiryVendorCreate] = Field(default_factory=list)
 
@@ -132,6 +133,7 @@ class PurchaseInquiryUpdate(BaseModel):
     inquiry_date: Optional[date] = None
     quote_deadline: Optional[date] = None
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     items: Optional[List[PurchaseInquiryItemCreate]] = None
     vendors: Optional[List[PurchaseInquiryVendorCreate]] = None
 
@@ -158,6 +160,7 @@ class PurchaseInquiryResponse(BaseModel):
     review_remarks: Optional[str] = None
     total_quantity: Decimal
     notes: Optional[str] = None
+    attachments: Optional[list] = None
     created_at: datetime
     updated_at: datetime
     items: List[PurchaseInquiryItemResponse] = Field(default_factory=list)

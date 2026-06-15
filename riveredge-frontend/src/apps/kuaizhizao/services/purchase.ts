@@ -100,6 +100,31 @@ export interface PurchaseOrderListResponse {
   success: boolean;
 }
 
+/** 采购入库选单弹窗候选项 */
+export interface PurchaseReceiptPullCandidate {
+  id: number;
+  order_code: string;
+  supplier_name?: string;
+  status: string;
+  order_date?: string;
+  delivery_date?: string;
+  items_count?: number;
+  ordered_total?: number;
+  received_total?: number;
+  outstanding_total?: number;
+  pullable: boolean;
+  lifecycle?: {
+    current_stage_name?: string;
+    sub_stages?: Array<{ key: string; label: string; status: string }>;
+  };
+}
+
+export interface PurchaseReceiptPullCandidateListResponse {
+  data: PurchaseReceiptPullCandidate[];
+  total: number;
+  success: boolean;
+}
+
 /** 采购订单统计（用于指标卡片） */
 export interface PurchaseOrderStatistics {
   active_count: number;
@@ -141,6 +166,24 @@ export async function listPurchaseOrders(params: PurchaseOrderListParams = {}): 
     method: 'GET',
     params: safeParams,
   });
+}
+
+/** 采购入库选单弹窗：单次请求返回订单及入库数量汇总 */
+export async function listPurchaseReceiptPullCandidates(params: {
+  skip?: number;
+  limit?: number;
+  keyword?: string;
+} = {}): Promise<PurchaseReceiptPullCandidateListResponse> {
+  const limit = typeof params.limit === 'number'
+    ? Math.max(1, Math.min(200, Math.trunc(params.limit)))
+    : 100;
+  return apiRequest<PurchaseReceiptPullCandidateListResponse>(
+    '/apps/kuaizhizao/purchase-orders/receipt-pull-candidates',
+    {
+      method: 'GET',
+      params: { ...params, limit },
+    },
+  );
 }
 
 /**
