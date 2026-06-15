@@ -3816,6 +3816,47 @@ async def get_purchase_receipt(
     )
 
 
+@router.get(
+    "/purchase-receipts/{receipt_id}/print",
+    summary="Print purchase receipt",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:inbound:print"))],
+)
+async def print_purchase_receipt(
+    receipt_id: int = Path(..., description="采购入库单ID"),
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from fastapi.responses import HTMLResponse, JSONResponse
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    await _assert_purchase_receipt_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        receipt_id=receipt_id,
+    )
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="purchase_receipt",
+            document_id=receipt_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
 @router.put("/purchase-receipts/{receipt_id}", response_model=PurchaseReceiptResponse, summary="Update purchase receipt")
 async def update_purchase_receipt(
     receipt_id: int,

@@ -173,50 +173,38 @@ const RedirectAnalysisCenterToKuaireport: React.FC = () => {
 
 // 销售管理报表
 const SalesOrderQueryPage = lazy(() => import('./pages/sales-management/reports/SalesOrderQuery'));
+const SalesDeliveryDetailPage = lazy(() => import('./pages/sales-management/reports/SalesDeliveryDetail'));
+const SalesReturnDetailPage = lazy(() => import('./pages/sales-management/reports/SalesReturnDetail'));
 const OrderExecutionTrackingPage = lazy(() => import('./pages/sales-management/reports/OrderExecutionTracking'));
+const MaterialSalesSummaryPage = lazy(() => import('./pages/sales-management/reports/MaterialSalesSummary'));
 const CustomerSalesSummaryPage = lazy(() => import('./pages/sales-management/reports/CustomerSalesSummary'));
 const CustomerSalesReconciliationPage = lazy(() => import('./pages/sales-management/reports/CustomerSalesReconciliation'));
 const ProductSalesRankingPage = lazy(() => import('./pages/sales-management/reports/ProductSalesRanking'));
-const ForecastVsActualPage = lazy(() => import('./pages/sales-management/reports/ForecastVsActual'));
 const QuotationQueryPage = lazy(() => import('./pages/sales-management/reports/QuotationQuery'));
-const SalesTrendAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesTrendAnalysis'));
-const SalesReturnAnalysisPage = lazy(() => import('./pages/sales-management/reports/SalesReturnAnalysis'));
 const SalespersonPerformancePage = lazy(() => import('./pages/sales-management/reports/SalespersonPerformance'));
 const ContractExecutionReportPage = lazy(() => import('./pages/sales-management/reports/contract-execution'));
 
 // 计划管理报表
 const DemandPlanDetailPage = lazy(() => import('./pages/plan-management/reports/DemandPlanDetail'));
-const ProductionPlanComparisonPage = lazy(() => import('./pages/plan-management/reports/ProductionPlanComparison'));
-const PurchasePlanComparisonPage = lazy(() => import('./pages/plan-management/reports/PurchasePlanComparison'));
-const CapacityLoadAnalysisPage = lazy(() => import('./pages/plan-management/reports/CapacityLoadAnalysis'));
 const MaterialShortageAlertPage = lazy(() => import('./pages/plan-management/reports/MaterialShortageAlert'));
 const PlanFulfillmentRatePage = lazy(() => import('./pages/plan-management/reports/PlanFulfillmentRate'));
-const ProductionDelayAnalysisPage = lazy(() => import('./pages/plan-management/reports/ProductionDelayAnalysis'));
 
 // 采购管理报表
 const PurchaseRequisitionTrackingPage = lazy(() => import('./pages/purchase-management/reports/PurchaseRequisitionTracking'));
 const PurchaseOrderQueryPage = lazy(() => import('./pages/purchase-management/reports/PurchaseOrderQuery'));
 const PurchaseOrderProgressPage = lazy(() => import('./pages/purchase-management/reports/PurchaseOrderProgress'));
 const SupplierDeliverySummaryPage = lazy(() => import('./pages/purchase-management/reports/SupplierDeliverySummary'));
-const SupplierPriceComparisonPage = lazy(() => import('./pages/purchase-management/reports/SupplierPriceComparison'));
 const PurchaseReconciliationPage = lazy(() => import('./pages/purchase-management/reports/PurchaseReconciliation'));
-const SupplierQualityRatePage = lazy(() => import('./pages/purchase-management/reports/SupplierQualityRate'));
-const PurchaseCostTrendPage = lazy(() => import('./pages/purchase-management/reports/PurchaseCostTrend'));
-const SupplierLeadTimePage = lazy(() => import('./pages/purchase-management/reports/SupplierLeadTime'));
 
 // 生产执行报表
 const WorkOrderQueryPage = lazy(() => import('./pages/production-execution/reports/WorkOrderQuery'));
 const WorkOrderTrackingPage = lazy(() => import('./pages/production-execution/reports/WorkOrderTracking'));
 const WorkOrderMaterialUsagePage = lazy(() => import('./pages/production-execution/reports/WorkOrderMaterialUsage'));
 const WorkOrderLaborDetailPage = lazy(() => import('./pages/production-execution/reports/WorkOrderLaborDetail'));
-const ProductionEfficiencyPage = lazy(() => import('./pages/production-execution/reports/ProductionEfficiency'));
-const ProcessProgressDetailPage = lazy(() => import('./pages/production-execution/reports/ProcessProgressDetail'));
-const ReworkOrderAnalysisPage = lazy(() => import('./pages/production-execution/reports/ReworkOrderAnalysis'));
 const OutsourceOrderQueryPage = lazy(() => import('./pages/production-execution/reports/OutsourceOrderQuery'));
 const OutsourceMaterialReconciliationPage = lazy(() => import('./pages/production-execution/reports/OutsourceMaterialReconciliation'));
-const WIPInventoryPage = lazy(() => import('./pages/production-execution/reports/WIPInventory'));
 const ScrapDefectAnalysisPage = lazy(() => import('./pages/production-execution/reports/ScrapDefectAnalysis'));
-const ProductionLeadTimePage = lazy(() => import('./pages/production-execution/reports/ProductionLeadTime'));
+const ProductionDelayWarningPage = lazy(() => import('./pages/production-execution/reports/ProductionDelayWarning'));
 
 // 质量管理报表
 const IncomingInspectionReportPage = lazy(() => import('./pages/quality-management/reports/IncomingInspectionReport'));
@@ -225,25 +213,19 @@ const FinishedInspectionReportPage = lazy(() => import('./pages/quality-manageme
 const QualityExceptionTrackingPage = lazy(() => import('./pages/quality-management/reports/QualityExceptionTracking'));
 const NonconformingSummaryPage = lazy(() => import('./pages/quality-management/reports/NonconformingSummary'));
 const QualityRateTrendPage = lazy(() => import('./pages/quality-management/reports/QualityRateTrend'));
-const DefectParetoAnalysisPage = lazy(() => import('./pages/quality-management/reports/DefectParetoAnalysis'));
 
 // 设备管理报表
 const EquipmentMaintenanceDetailPage = lazy(() => import('./pages/equipment-management/reports/EquipmentMaintenanceDetail'));
 const EquipmentMaintenancePlanPage = lazy(() => import('./pages/equipment-management/reports/EquipmentMaintenancePlan'));
 const EquipmentFaultAnalysisPage = lazy(() => import('./pages/equipment-management/reports/EquipmentFaultAnalysis'));
 const EquipmentStatusLogPage = lazy(() => import('./pages/equipment-management/reports/EquipmentStatusLog'));
-const EquipmentOEEAnalysisPage = lazy(() => import('./pages/equipment-management/reports/EquipmentOEEAnalysis'));
 
 // 仓储管理报表
 const InventorySummaryPage = lazy(() => import('./pages/warehouse-management/reports/InventorySummary'));
 const InventoryLedgerPage = lazy(() => import('./pages/warehouse-management/reports/InventoryLedger'));
-const InventoryAgeAnalysisPage = lazy(() => import('./pages/warehouse-management/reports/InventoryAgeAnalysis'));
 const SlowMovingInventoryPage = lazy(() => import('./pages/warehouse-management/reports/SlowMovingInventory'));
-const InboundSummaryPage = lazy(() => import('./pages/warehouse-management/reports/InboundSummary'));
-const OutboundSummaryPage = lazy(() => import('./pages/warehouse-management/reports/OutboundSummary'));
 const StocktakingHistoryPage = lazy(() => import('./pages/warehouse-management/reports/StocktakingHistory'));
 const TransferTrackingPage = lazy(() => import('./pages/warehouse-management/reports/TransferTracking'));
-const InventoryTurnoverAnalysisPage = lazy(() => import('./pages/warehouse-management/reports/InventoryTurnoverAnalysis'));
 
 // 绩效管理报表
 const EmployeeEfficiencyRankingPage = lazy(() => import('./pages/performance/reports/EmployeeEfficiencyRanking'));
@@ -427,50 +409,38 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="cost-management/cost-report" element={withPageSuspense(CostReportPage)} />
 
       <Route path="sales-management/reports/sales-order-query" element={withPageSuspense(SalesOrderQueryPage)} />
+      <Route path="sales-management/reports/sales-delivery-detail" element={withPageSuspense(SalesDeliveryDetailPage)} />
+      <Route path="sales-management/reports/sales-return-detail" element={withPageSuspense(SalesReturnDetailPage)} />
       <Route path="sales-management/reports/order-execution-tracking" element={withPageSuspense(OrderExecutionTrackingPage)} />
+      <Route path="sales-management/reports/material-sales-summary" element={withPageSuspense(MaterialSalesSummaryPage)} />
       <Route path="sales-management/reports/customer-sales-summary" element={withPageSuspense(CustomerSalesSummaryPage)} />
       <Route path="sales-management/reports/customer-sales-reconciliation" element={withPageSuspense(CustomerSalesReconciliationPage)} />
-      <Route path="sales-management/reports/product-sales-ranking" element={withPageSuspense(ProductSalesRankingPage)} />
-      <Route path="sales-management/reports/forecast-vs-actual" element={withPageSuspense(ForecastVsActualPage)} />
-      <Route path="sales-management/reports/quotation-query" element={withPageSuspense(QuotationQueryPage)} />
-      <Route path="sales-management/reports/sales-trend-analysis" element={withPageSuspense(SalesTrendAnalysisPage)} />
-      <Route path="sales-management/reports/sales-return-analysis" element={withPageSuspense(SalesReturnAnalysisPage)} />
       <Route path="sales-management/reports/salesperson-performance" element={withPageSuspense(SalespersonPerformancePage)} />
+      <Route path="sales-management/reports/product-sales-ranking" element={withPageSuspense(ProductSalesRankingPage)} />
+      <Route path="sales-management/reports/quotation-query" element={withPageSuspense(QuotationQueryPage)} />
       <Route path="sales-management/reports/contract-execution" element={withPageSuspense(ContractExecutionReportPage)} />
 
       {/* 计划管理报表 */}
       <Route path="plan-management/reports/demand-plan-detail" element={withPageSuspense(DemandPlanDetailPage)} />
-      <Route path="plan-management/reports/production-plan-comparison" element={withPageSuspense(ProductionPlanComparisonPage)} />
-      <Route path="plan-management/reports/purchase-plan-comparison" element={withPageSuspense(PurchasePlanComparisonPage)} />
-      <Route path="plan-management/reports/capacity-load-analysis" element={withPageSuspense(CapacityLoadAnalysisPage)} />
       <Route path="plan-management/reports/material-shortage-alert" element={withPageSuspense(MaterialShortageAlertPage)} />
       <Route path="plan-management/reports/plan-fulfillment-rate" element={withPageSuspense(PlanFulfillmentRatePage)} />
-      <Route path="plan-management/reports/production-delay-analysis" element={withPageSuspense(ProductionDelayAnalysisPage)} />
 
       {/* 采购管理报表 */}
       <Route path="purchase-management/reports/purchase-requisition-tracking" element={withPageSuspense(PurchaseRequisitionTrackingPage)} />
       <Route path="purchase-management/reports/purchase-order-query" element={withPageSuspense(PurchaseOrderQueryPage)} />
       <Route path="purchase-management/reports/purchase-order-progress" element={withPageSuspense(PurchaseOrderProgressPage)} />
       <Route path="purchase-management/reports/supplier-delivery-summary" element={withPageSuspense(SupplierDeliverySummaryPage)} />
-      <Route path="purchase-management/reports/supplier-price-comparison" element={withPageSuspense(SupplierPriceComparisonPage)} />
       <Route path="purchase-management/reports/purchase-reconciliation" element={withPageSuspense(PurchaseReconciliationPage)} />
-      <Route path="purchase-management/reports/supplier-quality-rate" element={withPageSuspense(SupplierQualityRatePage)} />
-      <Route path="purchase-management/reports/purchase-cost-trend" element={withPageSuspense(PurchaseCostTrendPage)} />
-      <Route path="purchase-management/reports/supplier-lead-time" element={withPageSuspense(SupplierLeadTimePage)} />
 
       {/* 生产执行报表 */}
       <Route path="production-execution/reports/work-order-query" element={withPageSuspense(WorkOrderQueryPage)} />
       <Route path="production-execution/reports/work-order-tracking" element={withPageSuspense(WorkOrderTrackingPage)} />
       <Route path="production-execution/reports/work-order-material-usage" element={withPageSuspense(WorkOrderMaterialUsagePage)} />
       <Route path="production-execution/reports/work-order-labor-detail" element={withPageSuspense(WorkOrderLaborDetailPage)} />
-      <Route path="production-execution/reports/production-efficiency" element={withPageSuspense(ProductionEfficiencyPage)} />
-      <Route path="production-execution/reports/process-progress-detail" element={withPageSuspense(ProcessProgressDetailPage)} />
-      <Route path="production-execution/reports/rework-order-analysis" element={withPageSuspense(ReworkOrderAnalysisPage)} />
       <Route path="production-execution/reports/outsource-order-query" element={withPageSuspense(OutsourceOrderQueryPage)} />
       <Route path="production-execution/reports/outsource-material-reconciliation" element={withPageSuspense(OutsourceMaterialReconciliationPage)} />
-      <Route path="production-execution/reports/wip-inventory" element={withPageSuspense(WIPInventoryPage)} />
       <Route path="production-execution/reports/scrap-defect-analysis" element={withPageSuspense(ScrapDefectAnalysisPage)} />
-      <Route path="production-execution/reports/production-lead-time" element={withPageSuspense(ProductionLeadTimePage)} />
+      <Route path="production-execution/reports/production-delay-warning" element={withPageSuspense(ProductionDelayWarningPage)} />
 
       {/* 质量管理报表 */}
       <Route path="quality-management/reports/incoming-inspection-report" element={withPageSuspense(IncomingInspectionReportPage)} />
@@ -479,25 +449,19 @@ const KuaizhizaoApp: React.FC = () => {
       <Route path="quality-management/reports/quality-exception-tracking" element={withPageSuspense(QualityExceptionTrackingPage)} />
       <Route path="quality-management/reports/nonconforming-summary" element={withPageSuspense(NonconformingSummaryPage)} />
       <Route path="quality-management/reports/quality-rate-trend" element={withPageSuspense(QualityRateTrendPage)} />
-      <Route path="quality-management/reports/defect-pareto-analysis" element={withPageSuspense(DefectParetoAnalysisPage)} />
 
       {/* 设备管理报表 */}
       <Route path="equipment-management/reports/equipment-maintenance-detail" element={withPageSuspense(EquipmentMaintenanceDetailPage)} />
       <Route path="equipment-management/reports/equipment-maintenance-plan" element={withPageSuspense(EquipmentMaintenancePlanPage)} />
       <Route path="equipment-management/reports/equipment-fault-analysis" element={withPageSuspense(EquipmentFaultAnalysisPage)} />
       <Route path="equipment-management/reports/equipment-status-log" element={withPageSuspense(EquipmentStatusLogPage)} />
-      <Route path="equipment-management/reports/equipment-oee-analysis" element={withPageSuspense(EquipmentOEEAnalysisPage)} />
 
       {/* 仓储管理报表 */}
       <Route path="warehouse-management/reports/inventory-summary" element={withPageSuspense(InventorySummaryPage)} />
       <Route path="warehouse-management/reports/inventory-ledger" element={withPageSuspense(InventoryLedgerPage)} />
-      <Route path="warehouse-management/reports/inventory-age-analysis" element={withPageSuspense(InventoryAgeAnalysisPage)} />
       <Route path="warehouse-management/reports/slow-moving-inventory" element={withPageSuspense(SlowMovingInventoryPage)} />
-      <Route path="warehouse-management/reports/inbound-summary" element={withPageSuspense(InboundSummaryPage)} />
-      <Route path="warehouse-management/reports/outbound-summary" element={withPageSuspense(OutboundSummaryPage)} />
       <Route path="warehouse-management/reports/stocktaking-history" element={withPageSuspense(StocktakingHistoryPage)} />
       <Route path="warehouse-management/reports/transfer-tracking" element={withPageSuspense(TransferTrackingPage)} />
-      <Route path="warehouse-management/reports/inventory-turnover-analysis" element={withPageSuspense(InventoryTurnoverAnalysisPage)} />
 
       {/* 绩效管理报表 */}
       <Route path="performance/reports/employee-efficiency-ranking" element={withPageSuspense(EmployeeEfficiencyRankingPage)} />

@@ -4,11 +4,13 @@
 
 import { createLifecycleResolver } from './createLifecycleResolver';
 
+const P = 'app.kuaizhizao.shipmentNotice';
+
 export const getShipmentNoticeLifecycle = createLifecycleResolver({
   stageDefs: [
-    { key: 'pending', label: '待发货' },
-    { key: 'notified', label: '已通知' },
-    { key: 'shipped', label: '已出库' },
+    { key: 'pending', label: '待发货', labelKey: `${P}.statusPending` },
+    { key: 'notified', label: '已通知', labelKey: `${P}.statusNotified` },
+    { key: 'shipped', label: '已出库', labelKey: `${P}.statusShipped` },
   ],
   statusToKey: {
     待发货: 'pending',
@@ -18,6 +20,11 @@ export const getShipmentNoticeLifecycle = createLifecycleResolver({
   nextStepSuggestions: {
     pending: ['通知仓库', '编辑通知明细'],
     notified: ['撤回通知（回到待发货）', '执行出库'],
+    shipped: [],
+  },
+  nextStepSuggestionKeys: {
+    pending: [`${P}.lifecycleNextNotifyWarehouse`, `${P}.lifecycleNextEditItems`],
+    notified: [`${P}.lifecycleNextWithdrawNotify`, `${P}.lifecycleNextExecuteOutbound`],
     shipped: [],
   },
   successKeys: ['shipped'],

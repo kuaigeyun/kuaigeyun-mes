@@ -15,6 +15,7 @@ import {
   CheckCircleOutlined,
   DeleteOutlined,
   RollbackOutlined,
+  PrinterOutlined,
 } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -77,6 +78,8 @@ import {
 } from './inboundHubTypes';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { inboundReceiptTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 
 interface InboundOrder extends InboundHubOrder {
   workshop_name?: string;
@@ -333,6 +336,7 @@ function renderInboundRowActions(nodes: React.ReactNode[], keyPrefix: string): R
 
 const InboundPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
@@ -1423,6 +1427,17 @@ const InboundPage: React.FC = () => {
             </Button>
           );
         }
+        const printDocType = inboundReceiptTypeToPrintDocumentType(record.receipt_type);
+        if (printDocType && record.id) {
+          nodes.push(
+            <Button
+              {...rowActionKind('print')}
+              key="print"
+              icon={<PrinterOutlined />}
+              onClick={() => openPrint({ documentType: printDocType, documentId: record.id! })}
+            />
+          );
+        }
         return nodes;
       },
     },
@@ -2184,6 +2199,7 @@ const InboundPage: React.FC = () => {
           ) : null
         }
       />
+      {PrintModal}
     </ListPageTemplate>
   );
 };

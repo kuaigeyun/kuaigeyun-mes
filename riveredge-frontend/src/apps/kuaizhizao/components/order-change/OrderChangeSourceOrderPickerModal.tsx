@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { App, Input, Modal, Space, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { listSalesOrders } from '../../services/sales-order';
 import { listPurchaseOrders } from '../../services/purchase';
 import {
@@ -23,6 +24,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
   onCancel,
   onSelect,
 }) => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -65,12 +67,16 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
         }
       } catch (e: any) {
         setCandidates([]);
-        message.error(e?.message ?? `加载${docType === 'sales' ? '销售' : '采购'}订单失败`);
+        const loadFailedKey =
+          docType === 'sales'
+            ? 'app.kuaizhizao.orderChange.loadSalesOrdersFailed'
+            : 'app.kuaizhizao.orderChange.loadPurchaseOrdersFailed';
+        message.error(e?.message ?? t(loadFailedKey));
       } finally {
         setLoading(false);
       }
     },
-    [docType, message],
+    [docType, message, t],
   );
 
   useEffect(() => {
@@ -80,12 +86,16 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
     void loadCandidates('');
   }, [open, loadCandidates]);
 
-  const partnerLabel = docType === 'sales' ? '客户' : '供应商';
-  const orderLabel = docType === 'sales' ? '销售订单' : '采购订单';
+  const partnerLabel =
+    docType === 'sales' ? t('path.customers') : t('path.suppliers');
+  const orderLabel =
+    docType === 'sales'
+      ? t('app.kuaizhizao.salesOrderChange.salesOrderLabel')
+      : t('app.kuaizhizao.orderChange.purchaseOrderLabel');
 
   return (
     <Modal
-      title={`选择${orderLabel}`}
+      title={t('app.kuaizhizao.orderChange.selectOrderTitle', { orderLabel })}
       open={open}
       width={960}
       onCancel={onCancel}
@@ -93,15 +103,18 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
         const picked = candidates.find((c) => c.id === selectedId);
         if (picked) onSelect(picked);
       }}
-      okText="确定"
+      okText={t('common.confirm')}
       okButtonProps={{ disabled: !selectedId }}
       destroyOnHidden
     >
       <Space orientation="vertical" style={{ width: '100%' }} size={12}>
         <Input.Search
           allowClear
-          placeholder={`搜索${orderLabel}（单号/${partnerLabel}）`}
-          enterButton="搜索"
+          placeholder={t('app.kuaizhizao.orderChange.searchOrderPlaceholder', {
+            orderLabel,
+            partnerLabel,
+          })}
+          enterButton={t('app.kuaizhizao.orderChange.search')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
           onSearch={(v) => void loadCandidates(v)}
@@ -112,7 +125,11 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
           loading={loading}
           pagination={false}
           scroll={{ y: 360 }}
-          locale={{ emptyText: keyword ? `未找到可变更的${orderLabel}` : `暂无可变更的${orderLabel}` }}
+          locale={{
+            emptyText: keyword
+              ? t('app.kuaizhizao.orderChange.emptyNoSearchResults', { orderLabel })
+              : t('app.kuaizhizao.orderChange.emptyNoEligibleOrders', { orderLabel }),
+          }}
           dataSource={candidates}
           rowSelection={{
             type: 'radio',
@@ -123,16 +140,16 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
             onClick: () => setSelectedId(record.id),
           })}
           columns={[
-            { title: '订单号', dataIndex: 'order_code', width: 160 },
+            { title: t('app.kuaizhizao.orderChange.colOrderCode'), dataIndex: 'order_code', width: 160 },
             { title: partnerLabel, dataIndex: 'partner_name', ellipsis: true },
             {
-              title: '订单日期',
+              title: t('app.kuaizhizao.salesOrder.orderDate'),
               dataIndex: 'order_date',
               width: 120,
               render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
             },
             {
-              title: '金额',
+              title: t('app.kuaizhizao.orderChange.colAmount'),
               dataIndex: 'total_amount',
               width: 120,
               align: 'right',
@@ -140,7 +157,7 @@ export const OrderChangeSourceOrderPickerModal: React.FC<OrderChangeSourceOrderP
                 v != null ? Number(v).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-',
             },
             {
-              title: '状态',
+              title: t('common.status'),
               dataIndex: 'status',
               width: 100,
               render: (v: string) => <Tag>{v || '-'}</Tag>,

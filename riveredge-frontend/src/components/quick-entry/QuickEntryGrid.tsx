@@ -11,6 +11,7 @@ import React, { useState } from 'react';
 import { Card, Button, Modal, Tree, message, theme, Spin } from 'antd';
 import { SettingOutlined, PlusOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import type { DataNode } from 'antd/es/tree';
 import { QuickEntryIcon } from './QuickEntryIcon';
 import { generateQuickEntryGradient, type QuickEntryThemeStyle } from './quickEntryGradients';
@@ -65,6 +66,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   title,
   isDark = false,
 }) => {
+  const { t } = useTranslation();
   const { token } = useToken();
   const navigate = useNavigate();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle) as QuickEntryThemeStyle;
@@ -86,7 +88,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   // 保存配置
   const handleSaveConfig = async () => {
     if (!onSave) {
-      message.warning('未提供保存回调函数');
+      message.warning(t('pages.dashboard.quickEntryNoSaveCallback'));
       return;
     }
 
@@ -130,9 +132,13 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
       await onSave(newItems);
       setEditingItems(newItems);
       setConfigModalVisible(false);
-      message.success('快捷入口配置已保存');
+      message.success(t('pages.dashboard.quickEntrySaved'));
     } catch (error: any) {
-      message.error(`保存失败: ${error.message || '未知错误'}`);
+      message.error(
+        t('pages.dashboard.quickEntrySaveFailed', {
+          message: error.message || t('pages.dashboard.unknownError'),
+        }),
+      );
     }
   };
 
@@ -147,10 +153,10 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
   // 右键快捷删除（非编辑态）
   const handleDeleteByContextMenu = (targetItem: QuickEntryItem) => {
     Modal.confirm({
-      title: '删除快捷方式',
-      content: `确定要删除“${targetItem.menu_name}”吗？`,
-      okText: '删除',
-      cancelText: '取消',
+      title: t('pages.dashboard.quickEntryDeleteTitle'),
+      content: t('pages.dashboard.quickEntryDeleteConfirm', { name: targetItem.menu_name }),
+      okText: t('common.delete'),
+      cancelText: t('common.cancel'),
       okButtonProps: { danger: true },
       onOk: async () => {
         const newItems = displayedItems
@@ -163,7 +169,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
         setEditingItems(newItems);
         const keys = newItems.map(item => item.menu_uuid);
         setSelectedMenuKeys(keys);
-        message.success('快捷方式已删除');
+        message.success(t('pages.dashboard.quickEntryDeleted'));
       },
     });
   };
@@ -172,7 +178,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
     <>
       <div className="dashboard-section dashboard-quick-entry-section">
         <div className="dashboard-section__head">
-          <div className="dashboard-section__title">{title || '快捷入口'}</div>
+          <div className="dashboard-section__title">{title || t('pages.dashboard.quickEntry')}</div>
           {showConfig ? (
             <div className="dashboard-section__extra">
               <Button
@@ -181,7 +187,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                 icon={<SettingOutlined />}
                 onClick={handleOpenConfig}
               >
-                自定义
+                {t('pages.dashboard.quickEntryCustomize')}
               </Button>
             </div>
           ) : null}
@@ -206,6 +212,7 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
                 display: 'grid',
                 gridTemplateColumns: 'repeat(auto-fill, minmax(64px, 1fr))',
                 gap: '14px 6px',
+                minWidth: 0,
               }}
             >
               {displayedItems.map((item, index) => (
@@ -232,13 +239,13 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: '40px 0', color: token.colorTextSecondary }}>
-              <p>暂无快捷入口</p>
+              <p>{t('pages.dashboard.quickEntryEmpty')}</p>
               <Button
                 type="link"
                 icon={<PlusOutlined />}
                 onClick={handleOpenConfig}
               >
-                添加快捷入口
+                {t('pages.dashboard.quickEntryAdd')}
               </Button>
             </div>
           )}
@@ -248,17 +255,17 @@ export const QuickEntryGrid: React.FC<QuickEntryGridProps> = ({
 
       {/* 配置模态框 */}
       <Modal
-        title="自定义快捷入口"
+        title={t('pages.dashboard.configQuickEntry')}
         open={configModalVisible}
         onOk={handleSaveConfig}
         onCancel={() => setConfigModalVisible(false)}
-        okText="保存"
-        cancelText="取消"
+        okText={t('pages.dashboard.save')}
+        cancelText={t('common.cancel')}
         width={600}
       >
         <div style={{ marginBottom: 16 }}>
           <p style={{ color: token.colorTextSecondary, marginBottom: 16 }}>
-            请选择要添加到快捷入口的菜单项。只能选择有路径的菜单项。
+            {t('pages.dashboard.configQuickEntryHint')}
           </p>
           <Tree
             checkable

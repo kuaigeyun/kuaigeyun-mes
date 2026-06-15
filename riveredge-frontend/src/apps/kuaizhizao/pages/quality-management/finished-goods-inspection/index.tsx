@@ -38,7 +38,7 @@ import {
 } from 'antd';
 import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { getDataDictionaryList, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloseCircleOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -75,6 +75,7 @@ import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
 import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import KuaizhizaoDocumentPrintModal from '../../../components/KuaizhizaoDocumentPrintModal';
 import { useCustomFields } from '../../../../../hooks/useCustomFields';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
@@ -147,6 +148,8 @@ interface FinishedGoodsInspection {
   review_time?: string;
   review_status?: string;
   review_remarks?: string;
+  release_certificate?: string;
+  certificate_issued?: boolean;
   status?: string;
   notes?: string;
   attachments?: Array<{ uid?: string; name?: string; url?: string; status?: string }>;
@@ -203,6 +206,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['finished-goods-inspection-statistics'] });
   const { canUpdate: canRegisterDefect } = useResourcePermissions(FINISHED_RESOURCE);
+  const { canPrint: canPrintCertificate } = useResourcePermissions(FINISHED_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
   const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
   const [disposalLoading, setDisposalLoading] = useState(false);
@@ -262,6 +266,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
 
   // 详情Drawer状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
+  const [certificatePrintOpen, setCertificatePrintOpen] = useState(false);
   const [inspectionDetail, setInspectionDetail] = useState<FinishedGoodsInspection | null>(null);
 
   const [fgiTrackingRefreshKey, setFgiTrackingRefreshKey] = useState(0);
@@ -1062,7 +1067,19 @@ const FinishedGoodsInspectionPage: React.FC = () => {
         column={3}
         extra={
           inspectionDetail && (
-            <UniWorkflowActions {...rowActionKind('skip')}
+            <Space>
+              {canPrintCertificate &&
+              inspectionDetail.certificate_issued &&
+              inspectionDetail.quality_status === '合格' ? (
+                <Button
+                  size="small"
+                  icon={<PrinterOutlined />}
+                  onClick={() => setCertificatePrintOpen(true)}
+                >
+                  打印合格证
+                </Button>
+              ) : null}
+              <UniWorkflowActions {...rowActionKind('skip')}
               record={inspectionDetail}
               entityName="成品检验单"
               statusField="status"
@@ -1087,6 +1104,7 @@ const FinishedGoodsInspectionPage: React.FC = () => {
                 }
               }}
             />
+            </Space>
           )
         }
         customContent={
@@ -1270,6 +1288,19 @@ const FinishedGoodsInspectionPage: React.FC = () => {
           fieldProps={{ rows: 2 }}
         />
       </FormModalTemplate>
+
+      <KuaizhizaoDocumentPrintModal
+        open={certificatePrintOpen}
+        onClose={() => setCertificatePrintOpen(false)}
+        documentType="product_quality_certificate"
+        documentId={inspectionDetail?.id ?? null}
+        printApiPath={
+          inspectionDetail?.id
+            ? `/apps/kuaizhizao/finished-goods-inspections/${inspectionDetail.id}/print-certificate`
+            : ''
+        }
+        title="打印产品合格证"
+      />
     </ListPageTemplate>
   );
 };

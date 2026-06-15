@@ -129,14 +129,36 @@ interface ProductionPlanItem {
 
 const { useToken } = theme;
 
-const PLAN_TYPE_FALLBACK = [
-  { label: 'MRP计划', value: 'MRP' },
-  { label: '历史LRP类型', value: 'LRP' },
-  { label: '手动计划', value: 'MANUAL' },
-];
-
 const ProductionPlansPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+
+  const planTypeFallback = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.productionPlan.planType.mrp'), value: 'MRP' },
+      { label: t('app.kuaizhizao.productionPlan.planType.lrp'), value: 'LRP' },
+      { label: t('app.kuaizhizao.productionPlan.planType.manual'), value: 'MANUAL' },
+    ],
+    [t],
+  );
+
+  const productionPlanStatusLabels = useMemo(
+    () => ({
+      草稿: t('app.kuaizhizao.productionPlan.statusDraft'),
+      已审核: t('app.kuaizhizao.productionPlan.statusApproved'),
+      已执行: t('app.kuaizhizao.productionPlan.statusExecuted'),
+      已取消: t('app.kuaizhizao.productionPlan.statusCancelled'),
+      已驳回: t('app.kuaizhizao.productionPlan.statusRejected'),
+    }),
+    [t],
+  );
+
+  const resolveProductionPlanStatusLabel = useCallback(
+    (status: string | undefined, fallbackKey: 'statusDraft' | 'executionNotExecuted' = 'statusDraft') =>
+      (status && productionPlanStatusLabels[status as keyof typeof productionPlanStatusLabels]) ||
+      status ||
+      t(`app.kuaizhizao.productionPlan.${fallbackKey}`),
+    [productionPlanStatusLabels, t],
+  );
 
   const productionPlanImportTemplate = useMemo(
     () =>
@@ -177,7 +199,7 @@ const ProductionPlansPage: React.FC = () => {
   const { token } = useToken();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
+  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(planTypeFallback);
   const [planTypeLoading, setPlanTypeLoading] = useState(false);
 
   useEffect(() => {
@@ -188,13 +210,13 @@ const ProductionPlansPage: React.FC = () => {
         const items = await getDictionaryItemList(dict.uuid, true);
         setPlanTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
-        setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+        setPlanTypeOptions(planTypeFallback);
       } finally {
         setPlanTypeLoading(false);
       }
     };
     load();
-  }, []);
+  }, [planTypeFallback]);
 
   const invalidatePlanStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['productionPlanStatistics'] });
@@ -216,31 +238,31 @@ const ProductionPlansPage: React.FC = () => {
     const s = planStatistics;
     return [
       {
-        title: '计划总数',
+        title: t('app.kuaizhizao.productionPlan.statTotal'),
         value: s?.total_count ?? 0,
         prefix: <AppstoreOutlined />,
         valueStyle: { color: '#1890ff' },
       },
       {
-        title: '待执行',
+        title: t('app.kuaizhizao.productionPlan.statPendingExecution'),
         value: s?.pending_execution_count ?? 0,
         prefix: <ClockCircleOutlined />,
         valueStyle: { color: '#faad14' },
       },
       {
-        title: '已执行',
+        title: t('app.kuaizhizao.productionPlan.statExecuted'),
         value: s?.executed_count ?? 0,
         prefix: <CheckCircleOutlined />,
         valueStyle: { color: '#52c41a' },
       },
       {
-        title: '逾期未执行',
+        title: t('app.kuaizhizao.productionPlan.statOverdue'),
         value: s?.overdue_plans_count ?? 0,
         prefix: <ExclamationCircleOutlined />,
         valueStyle: { color: '#ff4d4f' },
       },
     ];
-  }, [planStatistics]);
+  }, [planStatistics, t]);
 
   // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState<boolean>(false);
@@ -299,9 +321,9 @@ const ProductionPlansPage: React.FC = () => {
   );
 
   // 表格列定义
-  const columns: ProColumns<ProductionPlan>[] = [
+  const columns: ProColumns<ProductionPlan>[] = useMemo(() => [
     {
-      title: '计划名称 / 编号',
+      title: t('app.kuaizhizao.productionPlan.colPlanPrimary'),
       key: 'plan_code',
       dataIndex: 'plan_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -314,68 +336,69 @@ const ProductionPlansPage: React.FC = () => {
       ),
     },
     {
-      title: '计划编号',
+      title: t('app.kuaizhizao.productionPlan.import.planCode'),
       dataIndex: 'plan_code',
       hideInTable: true,
     },
     {
-      title: '计划名称',
+      title: t('app.kuaizhizao.productionPlan.import.planName'),
       dataIndex: 'plan_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '计划类型',
+      title: t('app.kuaizhizao.productionPlan.import.planType'),
       dataIndex: 'plan_type',
       width: 100,
       render: (type) => {
         const typeMap = {
-          'MRP': { text: '按预测计划', color: 'processing' },
-          'LRP': { text: '历史按订单计划', color: 'success' },
+          MRP: { text: t('app.kuaizhizao.productionPlan.planTypeForecast'), color: 'processing' },
+          LRP: { text: t('app.kuaizhizao.productionPlan.planTypeLegacyOrder'), color: 'success' },
         };
         const config = typeMap[type as keyof typeof typeMap] || { text: type, color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '计划期间',
+      title: t('app.kuaizhizao.productionPlan.colPlanPeriod'),
       dataIndex: 'plan_duration',
       width: 200,
       hideInSearch: true,
       render: (_, record) => `${record.plan_start_date} ~ ${record.plan_end_date}`,
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.productionPlan.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       valueType: 'select',
       valueEnum: {
-        草稿: { text: '草稿' },
-        已审核: { text: '已审核' },
-        已执行: { text: '已执行' },
-        已取消: { text: '已取消' },
-        已驳回: { text: '已驳回' },
+        草稿: { text: t('app.kuaizhizao.productionPlan.statusDraft') },
+        已审核: { text: t('app.kuaizhizao.productionPlan.statusApproved') },
+        已执行: { text: t('app.kuaizhizao.productionPlan.statusExecuted') },
+        已取消: { text: t('app.kuaizhizao.productionPlan.statusCancelled') },
+        已驳回: { text: t('app.kuaizhizao.productionPlan.statusRejected') },
       },
       render: (_: unknown, record: ProductionPlan) => {
         const lifecycle = getProductionPlanLifecycle(record);
-        const stageName = lifecycle.stageName ?? record.status ?? '草稿';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const stageName = lifecycle.stageName ?? record.status ?? t('app.kuaizhizao.productionPlan.statusDraft');
+        const displayName = resolveProductionPlanStatusLabel(stageName);
+        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{displayName}</Tag>;
       },
     },
     {
-      title: '生成人',
+      title: t('app.kuaizhizao.productionPlan.colCreatedBy'),
       dataIndex: 'created_by_name',
       width: 100,
       ellipsis: true,
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     ...productionPlanCustomFieldColumns,
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 260,
       fixed: 'right',
       render: (_, record) => (
@@ -386,11 +409,11 @@ const ProductionPlansPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            详情
+            {t('common.detail')}
           </Button>
           <UniWorkflowActions
             record={record}
-            entityName="生产计划"
+            entityName={t('app.kuaizhizao.productionPlan.entityName')}
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={[]}
@@ -414,7 +437,7 @@ const ProductionPlansPage: React.FC = () => {
             onClick={() => handleEdit(record)}
             disabled={record.execution_status === '已执行'}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           {record.execution_status !== '已执行' && (
             <Button
@@ -424,7 +447,7 @@ const ProductionPlansPage: React.FC = () => {
               onClick={() => handleExecute(record)}
               style={{ color: '#1890ff' }}
             >
-              执行
+              {t('app.kuaizhizao.productionPlan.execute')}
             </Button>
           )}
           <Button
@@ -434,12 +457,12 @@ const ProductionPlansPage: React.FC = () => {
             onClick={() => handleDelete(record)}
             disabled={record.execution_status === '已执行'}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
     },
-  ];
+  ], [t, productionPlanCustomFieldColumns, currentPlan?.id, resolveProductionPlanStatusLabel]);
 
   // 处理详情查看
   const handleDetail = async (record: ProductionPlan) => {
@@ -452,23 +475,23 @@ const ProductionPlansPage: React.FC = () => {
         await loadProductionPlanFieldValuesForDetail(record.id);
       }
     } catch (error) {
-      messageApi.error('获取生产计划详情失败');
+      messageApi.error(t('app.kuaizhizao.productionPlan.detailFailed'));
     }
   };
 
   // 处理执行
   const handleExecute = async (record: ProductionPlan) => {
     Modal.confirm({
-      title: '执行生产计划',
-      content: `确定要执行生产计划 "${record.plan_name}" 吗？执行后将生成相应的工单。`,
+      title: t('app.kuaizhizao.productionPlan.executeConfirmTitle'),
+      content: t('app.kuaizhizao.productionPlan.executeConfirmContent', { name: record.plan_name }),
       onOk: async () => {
         try {
           await planningApi.productionPlan.execute(record.id!.toString());
-          messageApi.success('生产计划执行成功，已生成工单');
+          messageApi.success(t('app.kuaizhizao.productionPlan.executeSuccess'));
           invalidatePlanStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || '生产计划执行失败');
+          messageApi.error(error?.response?.data?.detail || t('app.kuaizhizao.productionPlan.executeFailed'));
         }
       },
     });
@@ -477,7 +500,7 @@ const ProductionPlansPage: React.FC = () => {
   // 处理编辑（表头与计划期间；明细行以下游工单/需求计算为准）
   const handleEdit = async (record: ProductionPlan) => {
     if (record.execution_status === '已执行') {
-      messageApi.warning('已执行的生产计划不可修改');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.cannotEditExecuted'));
       return;
     }
     try {
@@ -506,24 +529,24 @@ const ProductionPlansPage: React.FC = () => {
         }
       }, 0);
     } catch {
-      messageApi.error('加载生产计划失败');
+      messageApi.error(t('app.kuaizhizao.productionPlan.loadFailed'));
     }
   };
 
   // 处理删除
   const handleDelete = async (record: ProductionPlan) => {
     Modal.confirm({
-      title: '删除生产计划',
-      content: `确定要删除生产计划 "${record.plan_code}" 吗？此操作不可撤销。`,
+      title: t('app.kuaizhizao.productionPlan.deleteConfirmTitle'),
+      content: t('app.kuaizhizao.productionPlan.deleteConfirmContent', { code: record.plan_code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await planningApi.productionPlan.delete(record.id!.toString());
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           invalidatePlanStatistics();
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error?.response?.data?.detail || '删除失败');
+          messageApi.error(error?.response?.data?.detail || t('common.deleteFailed'));
         }
       },
     });
@@ -535,18 +558,18 @@ const ProductionPlansPage: React.FC = () => {
       for (const k of keys) {
         await planningApi.productionPlan.delete(String(k));
       }
-      messageApi.success(`已删除 ${keys.length} 条生产计划`);
+      messageApi.success(t('app.kuaizhizao.productionPlan.batchDeleteSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
       invalidatePlanStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.response?.data?.detail || '批量删除失败');
+      messageApi.error(error?.response?.data?.detail || t('common.batchDeleteFailed'));
     }
   };
 
   const handleBatchSubmit = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择生产计划');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
       return;
     }
     let success = 0;
@@ -564,8 +587,8 @@ const ProductionPlansPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已提交 ${success} 条生产计划`);
-    if (failed > 0) messageApi.warning(`${failed} 条提交失败（仅草稿可提交）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchSubmitSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchSubmitPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidatePlanStatistics();
     actionRef.current?.reload();
@@ -573,7 +596,7 @@ const ProductionPlansPage: React.FC = () => {
 
   const handleBatchApprove = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择生产计划');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
       return;
     }
     let success = 0;
@@ -591,8 +614,8 @@ const ProductionPlansPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已审核 ${success} 条生产计划`);
-    if (failed > 0) messageApi.warning(`${failed} 条审核失败（仅待审核可操作）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchApproveSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchApprovePartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidatePlanStatistics();
     actionRef.current?.reload();
@@ -600,7 +623,7 @@ const ProductionPlansPage: React.FC = () => {
 
   const handleBatchExecute = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择生产计划');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
       return;
     }
     let success = 0;
@@ -618,8 +641,8 @@ const ProductionPlansPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已执行 ${success} 条生产计划`);
-    if (failed > 0) messageApi.warning(`${failed} 条执行失败（仅已审核可执行）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchExecuteSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchExecutePartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidatePlanStatistics();
     actionRef.current?.reload();
@@ -627,7 +650,7 @@ const ProductionPlansPage: React.FC = () => {
 
   const handleBatchPushToWorkOrders = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择生产计划');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.selectFirst'));
       return;
     }
     let success = 0;
@@ -645,16 +668,17 @@ const ProductionPlansPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已下推 ${success} 条生产计划到工单`);
-    if (failed > 0) messageApi.warning(`${failed} 条下推失败`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.productionPlan.batchPushSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.productionPlan.batchPushPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidatePlanStatistics();
     actionRef.current?.reload();
   };
 
   const handleListImport = async (data: any[][]) => {
+    const defaultUnit = t('app.kuaizhizao.productionPlan.defaultUnit');
     if (!data || data.length < 2) {
-      messageApi.warning('导入数据为空或格式不正确');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.importDataInvalid'));
       return;
     }
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -663,11 +687,11 @@ const ProductionPlansPage: React.FC = () => {
       productionPlanImportTemplate.importHeaderMap,
     );
     if (headerIndexMap.plan_name === undefined) {
-      messageApi.error('导入表头需包含计划名称');
+      messageApi.error(t('app.kuaizhizao.productionPlan.importHeaderPlanNameRequired'));
       return;
     }
     if (headerIndexMap.material_code === undefined || headerIndexMap.quantity === undefined) {
-      messageApi.error('导入表头需包含物料编号和数量');
+      messageApi.error(t('app.kuaizhizao.productionPlan.importHeaderMaterialQtyRequired'));
       return;
     }
     const getVal = (row: any[], key: string) => {
@@ -687,7 +711,7 @@ const ProductionPlansPage: React.FC = () => {
       const qty = Number(getVal(row, 'quantity')) || 0;
       if (!planName || !materialCode || qty <= 0) continue;
       const entry = grouped.get(planCode);
-      const item = { material_code: materialCode, quantity: qty, unit: getVal(row, 'unit') || '件' };
+      const item = { material_code: materialCode, quantity: qty, unit: getVal(row, 'unit') || defaultUnit };
       if (!entry) {
         grouped.set(planCode, {
           plan_name: planName,
@@ -709,7 +733,7 @@ const ProductionPlansPage: React.FC = () => {
       items: v.items,
     }));
     if (toImport.length === 0) {
-      messageApi.warning('没有可导入的有效数据');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.noValidImportData'));
       return;
     }
     const matRes = await materialApi.list({ limit: 5000, isActive: true });
@@ -723,13 +747,13 @@ const ProductionPlansPage: React.FC = () => {
           material_code: it.material_code,
           material_name: mat?.name || mat?.material_name || '',
           planned_quantity: it.quantity,
-          unit: it.unit || mat?.unit || mat?.material_unit || '件',
+          unit: it.unit || mat?.unit || mat?.material_unit || defaultUnit,
           suggested_action: '生产',
         };
       }).filter((it) => it.material_id || it.material_code),
     })).filter((t) => t.items.length > 0);
     if (items.length === 0) {
-      messageApi.warning('没有匹配到物料的有效数据');
+      messageApi.warning(t('app.kuaizhizao.productionPlan.noMatchedMaterialData'));
       return;
     }
     const result = await batchImport({
@@ -744,18 +768,68 @@ const ProductionPlansPage: React.FC = () => {
           source_type: 'Manual',
           items: item.items,
         }),
-      title: '导入生产计划',
+      title: t('app.kuaizhizao.productionPlan.importTitle'),
       concurrency: 5,
     });
     if (result.successCount > 0) {
-      messageApi.success(`成功导入 ${result.successCount} 条生产计划`);
+      messageApi.success(t('app.kuaizhizao.productionPlan.importSuccess', { count: result.successCount }));
       invalidatePlanStatistics();
       actionRef.current?.reload();
     }
     if (result.failureCount > 0) {
-      messageApi.warning(`部分失败 ${result.failureCount} 条`);
+      messageApi.warning(t('app.kuaizhizao.productionPlan.importPartialFailed', { count: result.failureCount }));
     }
   };
+
+  const planItemDetailColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.productionPlan.import.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.productionPlan.import.materialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.productionPlan.plannedQuantity'), dataIndex: 'planned_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.productionPlan.import.unit'), dataIndex: 'unit', width: 60 },
+      {
+        title: t('app.kuaizhizao.productionPlan.colSchedulingSuggestion'),
+        dataIndex: 'planned_date',
+        width: 140,
+        render: (date: string, record: ProductionPlanItem) => (
+          <div>
+            <div>{date}</div>
+            {record.planned_quantity && record.planned_quantity > 150 && (
+              <div style={{ color: '#ff4d4f', fontSize: 12 }}>
+                {t('app.kuaizhizao.productionPlan.suggestPostpone', { date: '02-16' })}
+              </div>
+            )}
+          </div>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.productionPlan.colExecutionStatus'),
+        dataIndex: 'execution_status',
+        width: 100,
+        render: (status: string) => (
+          <Tag color={status === '已执行' ? 'green' : 'default'}>
+            {resolveProductionPlanStatusLabel(status, 'executionNotExecuted')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.productionPlan.colRelatedDoc'),
+        dataIndex: 'work_order_id',
+        width: 150,
+        render: (woId: number, record: ProductionPlanItem) => {
+          if (record.suggested_action === '生产' && woId) {
+            return (
+              <a onClick={() => messageApi.info(t('app.kuaizhizao.productionPlan.navigateWorkOrder', { id: woId }))}>
+                {record.work_order_code || t('app.kuaizhizao.productionPlan.workOrderPrefix', { id: woId })}
+              </a>
+            );
+          }
+          return '-';
+        },
+      },
+    ],
+    [t, messageApi, resolveProductionPlanStatusLabel],
+  );
 
   return (
     <ListPageTemplate statCards={statCards}>
@@ -764,13 +838,13 @@ const ProductionPlansPage: React.FC = () => {
       </div>
       <UniTable
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.production-plans"
-          headerTitle="生产计划管理"
+          headerTitle={t('app.kuaizhizao.productionPlan.title')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建生产计划"
+          createButtonText={t('app.kuaizhizao.productionPlan.create')}
           onCreate={() => {
             setEditingPlanId(null);
             setEditingPlanSnapshot(null);
@@ -781,7 +855,7 @@ const ProductionPlansPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条生产计划吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.productionPlan.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="production-plan-batch-menu"
@@ -789,25 +863,25 @@ const ProductionPlansPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'submit',
-                  label: '批量提交',
+                  label: t('app.kuaizhizao.productionPlan.batchSubmit'),
                   icon: <SendOutlined />,
                   onClick: handleBatchSubmit,
                 },
                 {
                   key: 'approve',
-                  label: '批量审核',
+                  label: t('app.kuaizhizao.productionPlan.batchApprove'),
                   icon: <CheckCircleOutlined />,
                   onClick: handleBatchApprove,
                 },
                 {
                   key: 'execute',
-                  label: '批量执行',
+                  label: t('app.kuaizhizao.productionPlan.batchExecute'),
                   icon: <PlayCircleOutlined />,
                   onClick: handleBatchExecute,
                 },
                 {
                   key: 'push-to-work-orders',
-                  label: '批量下推工单',
+                  label: t('app.kuaizhizao.productionPlan.batchPushWorkOrders'),
                   icon: <AppstoreOutlined />,
                   onClick: handleBatchPushToWorkOrders,
                 },
@@ -831,7 +905,7 @@ const ProductionPlansPage: React.FC = () => {
                 items = items.filter((d: ProductionPlan) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -841,9 +915,9 @@ const ProductionPlansPage: React.FC = () => {
               a.download = `production-plans-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton
@@ -865,7 +939,7 @@ const ProductionPlansPage: React.FC = () => {
         />
 
       <ModalForm
-        title={editingPlanId ? '编辑生产计划' : '创建生产计划'}
+        title={editingPlanId ? t('app.kuaizhizao.productionPlan.editTitle') : t('app.kuaizhizao.productionPlan.createTitle')}
         open={createModalVisible}
         onOpenChange={(open) => {
           if (!open) {
@@ -910,7 +984,7 @@ const ProductionPlansPage: React.FC = () => {
               if (Object.keys(customData).length > 0) {
                 await saveProductionPlanCustomFieldValues(editingPlanId, customData);
               }
-              messageApi.success('生产计划已更新（明细行请在下游工单或需求计算中调整）');
+              messageApi.success(t('app.kuaizhizao.productionPlan.updateSuccess'));
             } else {
               const payload = {
                 ...standardValues,
@@ -928,31 +1002,31 @@ const ProductionPlansPage: React.FC = () => {
               if (recordId > 0 && Object.keys(customData).length > 0) {
                 await saveProductionPlanCustomFieldValues(recordId, customData);
               }
-              messageApi.success('创建生产计划成功');
+              messageApi.success(t('app.kuaizhizao.productionPlan.createSuccess'));
             }
             resetProductionPlanFormFieldValues();
             invalidatePlanStatistics();
             actionRef.current?.reload();
             return true;
           } catch (error) {
-            messageApi.error(editingPlanId ? '更新生产计划失败' : '创建生产计划失败');
+            messageApi.error(editingPlanId ? t('app.kuaizhizao.productionPlan.updateFailed') : t('app.kuaizhizao.productionPlan.createFailed'));
             return false;
           }
         }}
       >
-        <ProFormGroup title="基本信息">
-          <ProFormText name="plan_name" label="计划名称" rules={[{ required: true }]} />
-          <ProFormItem name="plan_type" label="计划类型" initialValue="MANUAL">
+        <ProFormGroup title={t('app.kuaizhizao.productionPlan.basicInfo')}>
+          <ProFormText name="plan_name" label={t('app.kuaizhizao.productionPlan.import.planName')} rules={[{ required: true }]} />
+          <ProFormItem name="plan_type" label={t('app.kuaizhizao.productionPlan.import.planType')} initialValue="MANUAL">
             <UniDropdown
-              placeholder="请选择计划类型"
+              placeholder={t('app.kuaizhizao.productionPlan.planTypePlaceholder')}
               showSearch
               allowClear
               loading={planTypeLoading}
               options={planTypeOptions}
-              quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+              quickCreate={{ label: t('app.kuaizhizao.productionPlan.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
             />
           </ProFormItem>
-          <ProFormDateRangePicker name="dateRange" label="计划期间" rules={[{ required: true }]} />
+          <ProFormDateRangePicker name="dateRange" label={t('app.kuaizhizao.productionPlan.colPlanPeriod')} rules={[{ required: true }]} />
         </ProFormGroup>
         <CustomFieldsFormSection
           customFields={productionPlanFormCustomFields}
@@ -960,19 +1034,19 @@ const ProductionPlansPage: React.FC = () => {
           gridColumns={2}
         />
         <div className="uni-table-detail">
-          <UniTableDetailHeader title="计划明细" />
+          <UniTableDetailHeader title={t('app.kuaizhizao.productionPlan.planItems')} />
           <ProFormList
             name="items"
             copyIconProps={false}
             creatorButtonProps={{
-              creatorButtonText: '添加物料',
+              creatorButtonText: t('app.kuaizhizao.productionPlan.addMaterial'),
             }}
           >
             <ProFormGroup>
-              <ProFormText name="material_code" label="物料编号" width="sm" rules={[{ required: true }]} />
-              <ProFormText name="material_name" label="物料名称" width="sm" rules={[{ required: true }]} />
-              <ProFormDigit name="planned_quantity" label="计划数量" width="xs" rules={[{ required: true }]} />
-              <ProFormDatePicker name="planned_date" label="计划日期" width="xs" rules={[{ required: true }]} />
+              <ProFormText name="material_code" label={t('app.kuaizhizao.productionPlan.import.materialCode')} width="sm" rules={[{ required: true }]} />
+              <ProFormText name="material_name" label={t('app.kuaizhizao.productionPlan.import.materialName')} width="sm" rules={[{ required: true }]} />
+              <ProFormDigit name="planned_quantity" label={t('app.kuaizhizao.productionPlan.plannedQuantity')} width="xs" rules={[{ required: true }]} />
+              <ProFormDatePicker name="planned_date" label={t('app.kuaizhizao.productionPlan.plannedDate')} width="xs" rules={[{ required: true }]} />
             </ProFormGroup>
           </ProFormList>
         </div>
@@ -990,7 +1064,7 @@ const ProductionPlansPage: React.FC = () => {
       />
 
       <DetailDrawerTemplate
-        title={`生产计划详情 - ${currentPlan?.plan_code || ''}`}
+        title={t('app.kuaizhizao.productionPlan.detailTitle', { code: currentPlan?.plan_code || '' })}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -1004,7 +1078,7 @@ const ProductionPlansPage: React.FC = () => {
             <Space>
               <UniWorkflowActions
                 record={currentPlan}
-                entityName="生产计划"
+                entityName={t('app.kuaizhizao.productionPlan.entityName')}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={[]}
@@ -1029,9 +1103,9 @@ const ProductionPlansPage: React.FC = () => {
               />
               <DetailDrawerActions
                 items={[
-                  { key: 'edit', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(currentPlan); }}>编辑</Button> },
-                  { key: 'execute', visible: currentPlan.status === '已审核', render: () => <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(currentPlan)}>执行计划</Button> },
-                  { key: 'delete', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(currentPlan)}>删除</Button> },
+                  { key: 'edit', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => { setDetailDrawerVisible(false); handleEdit(currentPlan); }}>{t('common.edit')}</Button> },
+                  { key: 'execute', visible: currentPlan.status === '已审核', render: () => <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleExecute(currentPlan)}>{t('app.kuaizhizao.productionPlan.executePlan')}</Button> },
+                  { key: 'delete', visible: currentPlan.status !== '已执行', render: () => <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(currentPlan)}>{t('common.delete')}</Button> },
                 ]}
               />
             </Space>
@@ -1040,38 +1114,40 @@ const ProductionPlansPage: React.FC = () => {
         customContent={
           currentPlan ? (
             <div style={{ padding: '16px 0' }}>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.productionPlan.basicInfo')}>
                 <Row gutter={16}>
                   <Col span={12}>
-                    <strong>计划编号：</strong>{currentPlan.plan_code}
+                    <strong>{t('app.kuaizhizao.productionPlan.labelPlanCode')}</strong>{currentPlan.plan_code}
                   </Col>
                   <Col span={12}>
-                    <strong>计划名称：</strong>{currentPlan.plan_name}
+                    <strong>{t('app.kuaizhizao.productionPlan.labelPlanName')}</strong>{currentPlan.plan_name}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={8}>
-                    <strong>计划类型：</strong>
+                    <strong>{t('app.kuaizhizao.productionPlan.labelPlanType')}</strong>
                     <Tag color={currentPlan.plan_type === 'MRP' ? 'processing' : 'success'}>
-                      {currentPlan.plan_type === 'MRP' ? '按预测计划' : '按订单计划'}
+                      {currentPlan.plan_type === 'MRP'
+                        ? t('app.kuaizhizao.productionPlan.planTypeForecast')
+                        : t('app.kuaizhizao.productionPlan.planTypeOrder')}
                     </Tag>
                   </Col>
                   <Col span={8}>
-                    <strong>状态：</strong>
+                    <strong>{t('app.kuaizhizao.productionPlan.labelStatus')}</strong>
                     <Tag color={currentPlan.status === '已执行' ? 'success' : 'default'}>
-                      {currentPlan.status}
+                      {resolveProductionPlanStatusLabel(currentPlan.status)}
                     </Tag>
                   </Col>
                   <Col span={8}>
-                    <strong>生成人：</strong>{currentPlan.created_by_name}
+                    <strong>{t('app.kuaizhizao.productionPlan.labelCreatedBy')}</strong>{currentPlan.created_by_name}
                   </Col>
                 </Row>
                 <Row gutter={16} style={{ marginTop: 8 }}>
                   <Col span={12}>
-                    <strong>计划期间：</strong>{currentPlan.plan_start_date} ~ {currentPlan.plan_end_date}
+                    <strong>{t('app.kuaizhizao.productionPlan.labelPlanPeriod')}</strong>{currentPlan.plan_start_date} ~ {currentPlan.plan_end_date}
                   </Col>
                   <Col span={12}>
-                    <strong>创建时间：</strong>{currentPlan.created_at}
+                    <strong>{t('app.kuaizhizao.productionPlan.labelCreatedAt')}</strong>{currentPlan.created_at}
                   </Col>
                 </Row>
                 {hasCustomFieldsDetailContent(
@@ -1088,7 +1164,7 @@ const ProductionPlansPage: React.FC = () => {
                 {currentPlan.notes ? (
                   <Row gutter={16} style={{ marginTop: 8 }}>
                     <Col span={24}>
-                      <strong>备注：</strong>{currentPlan.notes}
+                      <strong>{t('app.kuaizhizao.productionPlan.labelNotes')}</strong>{currentPlan.notes}
                     </Col>
                   </Row>
                 ) : null}
@@ -1100,7 +1176,7 @@ const ProductionPlansPage: React.FC = () => {
                 const mainStages = lifecycle.mainStages ?? [];
                 if (mainStages.length === 0) return null;
                 return (
-                  <DetailDrawerSection title="生命周期">
+                  <DetailDrawerSection title={t('app.kuaizhizao.productionPlan.colLifecycle')}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                       {mainStages.length > 0 && (
                         <UniLifecycleStepper
@@ -1117,53 +1193,10 @@ const ProductionPlansPage: React.FC = () => {
 
               {/* 3. 单据明细 */}
               {currentPlan.items && currentPlan.items.length > 0 && (
-                <DetailDrawerSection title="计划明细">
+                <DetailDrawerSection title={t('app.kuaizhizao.productionPlan.planItems')}>
                   <Table
                     size="small"
-                    columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '计划数量', dataIndex: 'planned_quantity', width: 100, align: 'right' },
-                      { title: '单位', dataIndex: 'unit', width: 60 },
-                      { 
-                        title: '排程建议', 
-                        dataIndex: 'planned_date', 
-                        width: 140,
-                        render: (date, record) => (
-                          <div>
-                            <div>{date}</div>
-                            {record.planned_quantity && record.planned_quantity > 150 && (
-                              <div style={{ color: '#ff4d4f', fontSize: 12 }}>建议顺延至: 02-16</div>
-                            )}
-                          </div>
-                        )
-                      },
-                      { 
-                        title: '执行状态', 
-                        dataIndex: 'execution_status', 
-                        width: 100,
-                        render: (status) => (
-                          <Tag color={status === '已执行' ? 'green' : 'default'}>
-                            {status || '未执行'}
-                          </Tag>
-                        )
-                      },
-                      { 
-                        title: '关联单号', 
-                        dataIndex: 'work_order_id', 
-                        width: 150,
-                        render: (woId, record) => {
-                          if (record.suggested_action === '生产' && woId) {
-                            return (
-                              <a onClick={() => messageApi.info(`跳转到工单详情: ${woId}`)}>
-                                {record.work_order_code || `工单#${woId}`}
-                              </a>
-                            );
-                          }
-                          return '-';
-                        }
-                      },
-                    ]}
+                    columns={planItemDetailColumns}
                     dataSource={currentPlan.items}
                     pagination={false}
                     rowKey="id"
@@ -1174,7 +1207,7 @@ const ProductionPlansPage: React.FC = () => {
 
               {/* 4. 操作记录 */}
               {currentPlan?.id && (
-                <DetailDrawerSection title="操作历史">
+                <DetailDrawerSection title={t('app.kuaizhizao.productionPlan.operationHistory')}>
                   <DocumentTrackingPanel documentType="production_plan" documentId={currentPlan.id} />
                 </DetailDrawerSection>
               )}
@@ -1184,7 +1217,7 @@ const ProductionPlansPage: React.FC = () => {
       />
       
       <SyncFromDatasetModal
-        title="从数据集中心同步生产计划"
+        title={t('app.kuaizhizao.productionPlan.syncFromDataset')}
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onConfirm={async (rows) => {
@@ -1202,12 +1235,12 @@ const ProductionPlansPage: React.FC = () => {
               await planningApi.productionPlan.create(payload);
               successCount += 1;
             }
-            messageApi.success(`已同步 ${successCount} 条生产计划`);
+            messageApi.success(t('app.kuaizhizao.productionPlan.syncSuccess', { count: successCount }));
             setSyncModalVisible(false);
             invalidatePlanStatistics();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error?.message || '同步失败');
+            messageApi.error(error?.message || t('app.kuaizhizao.productionPlan.syncFailed'));
           }
         }}
       />

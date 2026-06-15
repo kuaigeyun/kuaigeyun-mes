@@ -36,9 +36,10 @@ from .customer_pool.customer_pool import router as customer_pool_router
 from .state_transitions.state_transitions import router as state_transition_router
 from .document_push_pull.document_push_pull import router as document_push_pull_router
 from .document_relations.document_relations import router as document_relation_router
-from .scheduling_configs.scheduling_configs import router as scheduling_config_router
+from .routes_print import router as print_router
 from .visual_scheduling.visual_scheduling import router as visual_scheduling_router
 from .rolling_schedules.rolling_schedules import router as rolling_schedules_router
+from .scheduling_configs.scheduling_configs import router as scheduling_config_router
 from .dashboards.dashboards import router as dashboard_router
 from .reports.reports import router as reports_router
 from .wave_pickings.wave_pickings import router as wave_picking_router
@@ -79,6 +80,7 @@ router.include_router(quotation_router)  # 报价单管理
 router.include_router(sales_contract_terms_router)  # 条款项/条款组（须在 /{contract_id} 之前）
 router.include_router(sales_contract_router)  # 销售合同
 router.include_router(delivery_notice_router)  # 送货单管理
+router.include_router(print_router)  # 打印预设加载
 router.include_router(shipment_notice_router)  # 发货通知单管理
 router.include_router(receipt_notice_router)  # 收货通知单管理
 router.include_router(customer_follow_up_router)  # 客户跟进（销售极简 CRM）

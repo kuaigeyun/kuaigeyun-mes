@@ -1,5 +1,6 @@
 import React from 'react';
 import { Alert, Descriptions, List, Modal, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import type { ChangeImpactPreview } from '../../services/sales-order-change';
 
 interface OrderChangeImpactModalProps {
@@ -17,10 +18,12 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
   impact,
   onClose,
   onConfirm,
-  confirmText = '确认提交',
+  confirmText,
 }) => {
+  const { t } = useTranslation();
   const blocking = impact?.blocking_errors ?? [];
   const canProceed = blocking.length === 0;
+  const okText = confirmText ?? t('app.kuaizhizao.orderChange.confirmSubmit');
 
   const renderList = (title: string, items?: Array<Record<string, unknown>>) => {
     if (!items?.length) return null;
@@ -42,32 +45,38 @@ export const OrderChangeImpactModal: React.FC<OrderChangeImpactModalProps> = ({
 
   return (
     <Modal
-      title="变更影响预览"
+      title={t('app.kuaizhizao.orderChange.impactTitle')}
       open={open}
       onCancel={onClose}
       onOk={canProceed ? onConfirm : undefined}
-      okText={confirmText}
+      okText={okText}
       okButtonProps={{ disabled: !canProceed, loading }}
       width={720}
       destroyOnHidden
     >
       {blocking.length > 0 && (
-        <Alert type="error" showIcon title="存在阻断项" description={blocking.join('；')} style={{ marginBottom: 16 }} />
+        <Alert
+          type="error"
+          showIcon
+          title={t('app.kuaizhizao.orderChange.blockingTitle')}
+          description={blocking.join('；')}
+          style={{ marginBottom: 16 }}
+        />
       )}
       {(impact?.recommended_actions?.length ?? 0) > 0 && (
         <Descriptions size="small" column={1} style={{ marginBottom: 16 }}>
-          <Descriptions.Item label="建议操作">
+          <Descriptions.Item label={t('app.kuaizhizao.orderChange.recommendedActions')}>
             {(impact?.recommended_actions ?? []).join('、')}
           </Descriptions.Item>
         </Descriptions>
       )}
-      {renderList('受影响需求', impact?.affected_demands)}
-      {renderList('受影响需求计算', impact?.affected_computations)}
-      {renderList('受影响生产计划', impact?.affected_plans)}
-      {renderList('受影响工单', impact?.affected_work_orders)}
-      {renderList('受影响收货通知', impact?.affected_receipt_notices)}
-      {renderList('受影响入库单', impact?.affected_inbounds)}
-      {!impact && !loading && <Alert type="info" title="暂无影响数据" />}
+      {renderList(t('app.kuaizhizao.orderChange.affectedDemands'), impact?.affected_demands)}
+      {renderList(t('app.kuaizhizao.orderChange.affectedComputations'), impact?.affected_computations)}
+      {renderList(t('app.kuaizhizao.orderChange.affectedPlans'), impact?.affected_plans)}
+      {renderList(t('app.kuaizhizao.orderChange.affectedWorkOrders'), impact?.affected_work_orders)}
+      {renderList(t('app.kuaizhizao.orderChange.affectedReceiptNotices'), impact?.affected_receipt_notices)}
+      {renderList(t('app.kuaizhizao.orderChange.affectedInbounds'), impact?.affected_inbounds)}
+      {!impact && !loading && <Alert type="info" title={t('app.kuaizhizao.orderChange.noImpactData')} />}
     </Modal>
   );
 };

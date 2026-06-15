@@ -3,6 +3,7 @@ import { App, Typography } from 'antd';
 import { ProFormDateTimePicker, ProFormSelect } from '@ant-design/pro-components';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import dayjs, { type Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate } from '../../../../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../../../../components/layout-templates/constants';
 import type { WorkOrderForGantt, WorkstationResource } from '../../../../components/GanttSchedulingChart/types';
@@ -84,6 +85,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
   onCancel,
   onSubmit,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const cascadingRef = useRef(false);
@@ -172,11 +174,10 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
   const submitPrepForm = async (rawValues: Record<string, unknown>) => {
     if (!workOrder) return;
     if (operationsNeedingStation.length === 0) {
-      messageApi.error('该工单暂无工序，无法排产');
+      messageApi.error(t('app.kuaizhizao.scheduling.prep.noOperations'));
       return;
     }
 
-    // Table 内嵌 ProForm 字段可能未注册，提交时合并 getFieldsValue(true) 兜底
     const values = {
       ...rawValues,
       ...(formRef.current?.getFieldsValue(true) ?? {}),
@@ -189,7 +190,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
         ? dayjs(workOrder.planned_start_date)
         : startRaw;
     if (needsStart && !anchorStart) {
-      messageApi.error('请选择计划开始时间');
+      messageApi.error(t('app.kuaizhizao.scheduling.prep.selectStartRequired'));
       return;
     }
 
@@ -199,7 +200,9 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     if (scheduleResult.adjustedOperationNames.length > 0) {
       formRef.current?.setFieldsValue(operationPrepScheduleDatesToFormValues(scheduleResult));
       messageApi.info(
-        `工序 ${scheduleResult.adjustedOperationNames.join('、')} 的计划时间已按顺序自动调整`
+        t('app.kuaizhizao.scheduling.prep.scheduleAdjusted', {
+          names: scheduleResult.adjustedOperationNames.join('、'),
+        })
       );
     }
 
@@ -207,7 +210,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     for (const op of operationsNeedingStation) {
       const stationId = Number(values[operationFieldName(op.operationId)]);
       if (!Number.isInteger(stationId) || stationId <= 0) {
-        messageApi.error(`请为工序「${op.operationName}」选择工位`);
+        messageApi.error(t('app.kuaizhizao.scheduling.prep.selectStationForOp', { name: op.operationName }));
         return;
       }
       operationStations.push({
@@ -232,7 +235,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
     }
 
     if (!planned_start_date || !planned_end_date) {
-      messageApi.error('请填写计划起止时间');
+      messageApi.error(t('app.kuaizhizao.scheduling.prep.fillDatesRequired'));
       return;
     }
 
@@ -246,7 +249,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
 
   return (
     <FormModalTemplate
-      title="补充排产信息"
+      title={t('app.kuaizhizao.scheduling.prep.title')}
       open={open}
       onClose={onCancel}
       loading={loading}
@@ -258,20 +261,21 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
       onFinish={submitPrepForm}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        工单 {workOrder?.code || workOrder?.id} 缺少排产必备信息，补充后将自动排入上方排产区。
-        工序未填开始时间时默认接上道工序结束；若开始时间早于前道结束，将自动顺延以保持顺序时间线。
+        {t('app.kuaizhizao.scheduling.prep.description', {
+          code: workOrder?.code || workOrder?.id,
+        })}
       </Typography.Paragraph>
       {needsStations ? (
         <>
           <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>
-            工序排产
+            {t('app.kuaizhizao.scheduling.prep.operationScheduling')}
           </Typography.Text>
           <div className="scheduling-prep-station-grid">
             <div className="scheduling-prep-station-grid__head">
-              <span>工序</span>
-              <span>工位</span>
-              <span>开始时间</span>
-              <span>结束时间</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colOperation')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colStation')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colStart')}</span>
+              <span>{t('app.kuaizhizao.scheduling.prep.colEnd')}</span>
             </div>
             {sortedOperations.map((op, index) => {
               const stationOptions = stationOptionsForOperation(op, workstations, workCenters);
@@ -282,14 +286,17 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                   </div>
                   <ProFormSelect
                     name={operationFieldName(op.operationId)}
-                    rules={[{ required: true, message: '请选择工位' }]}
+                    rules={[{ required: true, message: t('app.kuaizhizao.scheduling.prep.selectStationRequired') }]}
                     formItemProps={{ style: { marginBottom: 0 } }}
                     options={stationOptions}
                     fieldProps={{
                       size: 'small',
                       showSearch: true,
                       optionFilterProp: 'label',
-                      placeholder: stationOptions.length > 0 ? '请选择工位' : '暂无可用工位',
+                      placeholder:
+                        stationOptions.length > 0
+                          ? t('app.kuaizhizao.scheduling.prep.selectStation')
+                          : t('app.kuaizhizao.scheduling.prep.noStationsAvailable'),
                       disabled: stationOptions.length === 0 || loading,
                       style: { width: '100%' },
                     }}
@@ -303,7 +310,10 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                       format: 'YYYY-MM-DD HH:mm',
                       allowClear: true,
                       style: { width: '100%' },
-                      placeholder: index > 0 ? '默认接上道工序' : '默认当前时间',
+                      placeholder:
+                        index > 0
+                          ? t('app.kuaizhizao.scheduling.prep.placeholderAfterPrevOp')
+                          : t('app.kuaizhizao.scheduling.prep.placeholderCurrentTime'),
                     }}
                   />
                   <ProFormDateTimePicker
@@ -315,7 +325,7 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
                       format: 'YYYY-MM-DD HH:mm',
                       allowClear: true,
                       style: { width: '100%' },
-                      placeholder: '默认开始+8小时',
+                      placeholder: t('app.kuaizhizao.scheduling.prep.placeholderStartPlus8h'),
                     }}
                   />
                 </div>
@@ -325,22 +335,22 @@ const SchedulingWorkOrderPrepModal: React.FC<SchedulingWorkOrderPrepModalProps> 
         </>
       ) : workOrder && !loading ? (
         <Typography.Paragraph type="warning" style={{ marginBottom: 16 }}>
-          该工单暂无工序，请先在工单中维护工艺路线后再排产。
+          {t('app.kuaizhizao.scheduling.prep.noRouteWarning')}
         </Typography.Paragraph>
       ) : null}
       {needsStart ? (
         <ProFormDateTimePicker
           name="planned_start_date"
-          label="计划开始时间"
-          rules={[{ required: true, message: '请选择计划开始时间' }]}
+          label={t('app.kuaizhizao.scheduling.prep.plannedStart')}
+          rules={[{ required: true, message: t('app.kuaizhizao.scheduling.prep.selectStartRequired') }]}
           fieldProps={{ style: { width: '100%' } }}
         />
       ) : null}
       {needsEnd ? (
         <ProFormDateTimePicker
           name="planned_end_date"
-          label="计划结束时间"
-          rules={[{ required: true, message: '请选择计划结束时间' }]}
+          label={t('app.kuaizhizao.scheduling.prep.plannedEnd')}
+          rules={[{ required: true, message: t('app.kuaizhizao.scheduling.prep.selectEndRequired') }]}
           fieldProps={{ style: { width: '100%' } }}
         />
       ) : null}

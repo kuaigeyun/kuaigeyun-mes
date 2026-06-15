@@ -48,6 +48,7 @@ export interface ResolvedTheme {
     borderRadius?: number;
     fontSize?: number;
     colorBorder?: string;
+    colorBorderSecondary?: string;
     colorSplit?: string;
   };
   isDark: boolean;
@@ -167,6 +168,8 @@ function computeResolved(themeMode: ThemeMode, config: ThemeConfig): ResolvedThe
       borderRadius: config.borderRadius ?? DEFAULT_CONFIG.borderRadius,
       fontSize: config.fontSize ?? DEFAULT_CONFIG.fontSize,
       colorBorder: isDark ? '#303030' : '#d9d9d9',
+      /** Card / 次级容器边框：比 Ant Design 默认 (#f0f0f0 / #303030) 深/亮一级，全局统一 */
+      colorBorderSecondary: isDark ? '#424242' : '#d9d9d9',
       colorSplit: isDark ? '#262626' : '#f0f0f0',
     },
     isDark,

@@ -1,5 +1,6 @@
 import React, { useCallback } from 'react';
 import { Form, Typography, theme as AntdTheme } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
@@ -11,7 +12,7 @@ export const defaultContractItem = {
   material_code: '',
   material_name: '',
   material_spec: '',
-  material_unit: '件',
+  material_unit: '',
   contract_quantity: 1,
   unit_price: undefined as number | undefined,
   tax_rate: 0,
@@ -81,6 +82,7 @@ export const convertUnitPriceByPriceType = (
 };
 
 export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+  const { t } = useTranslation();
   const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
   const mid =
@@ -125,7 +127,7 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
         <UniMaterialSelect
           name={[index, 'material_id']}
           label=""
-          placeholder="请选择物料（支持名称/编号搜索）"
+          placeholder={t('app.kuaizhizao.salesContract.materialSelectPlaceholder')}
           required
           size="small"
           listFieldKey={index}
@@ -157,6 +159,7 @@ export const ContractAmountCell: React.FC<{ index: number }> = ({ index }) => {
 };
 
 export const ContractFormSummary: React.FC = () => {
+  const { t } = useTranslation();
   const items = Form.useWatch('items');
   const normalizedItems = normalizeFormListItems<any>(items);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
@@ -188,19 +191,19 @@ export const ContractFormSummary: React.FC = () => {
       }}
     >
       <span>
-        总数量: <Typography.Text strong>{totalQuantity}</Typography.Text>
+        {t('app.kuaizhizao.salesOrder.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text>
       </span>
       {priceType === 'tax_exclusive' ? (
         <>
           <span>
-            未税总额:{' '}
+            {t('app.kuaizhizao.salesContract.exclTotal')}:{' '}
             <Typography.Text strong>
               <AmountDisplay resource={SC} fieldName="amount_without_tax" value={totalExcl} />
             </Typography.Text>
           </span>
           {Math.abs(totalIncl - totalExcl) > 0.005 && (
             <span>
-              价税合计(含税):{' '}
+              {t('app.kuaizhizao.salesContract.inclTotalWithTax')}:{' '}
               <Typography.Text strong type="danger">
                 <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
               </Typography.Text>
@@ -209,7 +212,7 @@ export const ContractFormSummary: React.FC = () => {
         </>
       ) : (
         <span>
-          价税合计:{' '}
+          {t('app.kuaizhizao.salesOrder.inclAmount')}:{' '}
           <Typography.Text strong type="danger">
             <AmountDisplay resource={SC} fieldName="amount_with_tax" value={totalIncl} />
           </Typography.Text>

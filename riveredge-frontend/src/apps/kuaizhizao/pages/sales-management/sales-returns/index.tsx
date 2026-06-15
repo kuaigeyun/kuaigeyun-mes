@@ -7,7 +7,8 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState, useEffect, lazy, Suspense } from 'react';
+import React, { useRef, useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import type { TFunction } from 'i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useNavigate } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -38,10 +39,11 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocationOptions';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import dayjs from 'dayjs';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import { getSalesReturnLifecycle } from '../../../utils/salesReturnLifecycle';
 import { listSalesOrders } from '../../../services/sales-order';
-import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import {
   DocumentTrackingTimelineBody,
   useDocumentTracking,
@@ -123,32 +125,57 @@ interface PullSalesOrderCandidate {
 }
 
 /** 与后端 `system_dictionaries.py` 一致，租户未同步字典时的下拉兜底 */
-const FALLBACK_RETURN_REASON: { label: string; value: string }[] = [
-  { label: '质量问题', value: 'QUALITY_ISSUE' },
-  { label: '规格不符', value: 'SPEC_MISMATCH' },
-  { label: '数量错误', value: 'QTY_ERROR' },
-  { label: '包装破损', value: 'PACKAGE_DAMAGE' },
-  { label: '错发漏发', value: 'WRONG_OR_MISSING' },
-  { label: '客户取消', value: 'CUSTOMER_CANCEL' },
-  { label: '其他', value: 'OTHER' },
+const RETURN_REASON_VALUES = [
+  'QUALITY_ISSUE',
+  'SPEC_MISMATCH',
+  'QTY_ERROR',
+  'PACKAGE_DAMAGE',
+  'WRONG_OR_MISSING',
+  'CUSTOMER_CANCEL',
+  'OTHER',
 ];
+const RETURN_TYPE_VALUES = ['EXCHANGE', 'REFUND', 'REWORK', 'SCRAP_RETURN', 'OTHER'];
+const SHIPPING_METHOD_VALUES = ['EXPRESS', 'LOGISTICS', 'SELF_PICKUP', 'DEDICATED', 'AIR', 'SEA'];
 
-const FALLBACK_RETURN_TYPE: { label: string; value: string }[] = [
-  { label: '换货', value: 'EXCHANGE' },
-  { label: '退款', value: 'REFUND' },
-  { label: '返修', value: 'REWORK' },
-  { label: '报废退货', value: 'SCRAP_RETURN' },
-  { label: '其他', value: 'OTHER' },
-];
+const DICT_VALUE_TO_KEY: Record<string, string> = {
+  QUALITY_ISSUE: 'qualityIssue',
+  SPEC_MISMATCH: 'specMismatch',
+  QTY_ERROR: 'qtyError',
+  PACKAGE_DAMAGE: 'packageDamage',
+  WRONG_OR_MISSING: 'wrongOrMissing',
+  CUSTOMER_CANCEL: 'customerCancel',
+  OTHER: 'other',
+  EXCHANGE: 'exchange',
+  REFUND: 'refund',
+  REWORK: 'rework',
+  SCRAP_RETURN: 'scrapReturn',
+  EXPRESS: 'express',
+  LOGISTICS: 'logistics',
+  SELF_PICKUP: 'selfPickup',
+  DEDICATED: 'dedicated',
+  AIR: 'air',
+  SEA: 'sea',
+};
 
-const FALLBACK_SHIPPING_METHOD: { label: string; value: string }[] = [
-  { label: '快递', value: 'EXPRESS' },
-  { label: '物流', value: 'LOGISTICS' },
-  { label: '自提', value: 'SELF_PICKUP' },
-  { label: '专车配送', value: 'DEDICATED' },
-  { label: '空运', value: 'AIR' },
-  { label: '海运', value: 'SEA' },
-];
+function buildDictFallbackOptions(t: TFunction, values: string[]) {
+  return values.map((value) => {
+    const dictKey = DICT_VALUE_TO_KEY[value] ?? value.toLowerCase();
+    return {
+      label: t(`app.kuaizhizao.salesReturn.dict.${dictKey}`),
+      value,
+    };
+  });
+}
+
+function getImportRowValue(row: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = row[key];
+    if (value !== undefined && value !== null && String(value).trim() !== '') {
+      return value;
+    }
+  }
+  return undefined;
+}
 
 const SalesReturnsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -173,13 +200,35 @@ const SalesReturnsPage: React.FC = () => {
     if (!text) return;
     try {
       await navigator.clipboard.writeText(text);
-      messageApi.success('复制成功');
+      messageApi.success(t('common.copySuccess'));
     } catch {
-      messageApi.error('复制失败');
+      messageApi.error(t('common.copyFailed'));
     }
   };
 
-  
+  const fallbackReturnReasonOptions = useMemo(
+    () => buildDictFallbackOptions(t, RETURN_REASON_VALUES),
+    [t],
+  );
+  const fallbackReturnTypeOptions = useMemo(
+    () => buildDictFallbackOptions(t, RETURN_TYPE_VALUES),
+    [t],
+  );
+  const fallbackShippingMethodOptions = useMemo(
+    () => buildDictFallbackOptions(t, SHIPPING_METHOD_VALUES),
+    [t],
+  );
+
+  const getReturnStatusLabel = (status?: string) => {
+    if (!status) return '-';
+    const statusLabelMap: Record<string, string> = {
+      '待退货': t('app.kuaizhizao.salesReturn.statusPending'),
+      '已退货': t('app.kuaizhizao.salesReturn.statusReturned'),
+      '已取消': t('app.kuaizhizao.salesReturn.statusCancelled'),
+      '草稿': t('app.kuaizhizao.salesReturn.statusDraft'),
+    };
+    return statusLabelMap[status] ?? status;
+  };
   // 创建/编辑相关状态
   const [modalVisible, setModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -228,9 +277,9 @@ const SalesReturnsPage: React.FC = () => {
     updateSelectedWarehouseId,
     resetSelectedWarehouseId,
   } = useWarehouseLocationOptions();
-  const [returnReasonOptions, setReturnReasonOptions] = useState(FALLBACK_RETURN_REASON);
-  const [returnTypeOptions, setReturnTypeOptions] = useState(FALLBACK_RETURN_TYPE);
-  const [shippingMethodOptions, setShippingMethodOptions] = useState(FALLBACK_SHIPPING_METHOD);
+  const [returnReasonOptions, setReturnReasonOptions] = useState(fallbackReturnReasonOptions);
+  const [returnTypeOptions, setReturnTypeOptions] = useState(fallbackReturnTypeOptions);
+  const [shippingMethodOptions, setShippingMethodOptions] = useState(fallbackShippingMethodOptions);
   const [dictOptionsLoading, setDictOptionsLoading] = useState(false);
 
   /** 打开表单时拉取字典；若租户未初始化则尝试同步系统字典（与 core 配置一致） */
@@ -258,9 +307,9 @@ const SalesReturnsPage: React.FC = () => {
           }
         }
         if (!cancelled) {
-          setReturnReasonOptions(reason.length ? reason : FALLBACK_RETURN_REASON);
-          setReturnTypeOptions(rtype.length ? rtype : FALLBACK_RETURN_TYPE);
-          setShippingMethodOptions(ship.length ? ship : FALLBACK_SHIPPING_METHOD);
+          setReturnReasonOptions(reason.length ? reason : fallbackReturnReasonOptions);
+          setReturnTypeOptions(rtype.length ? rtype : fallbackReturnTypeOptions);
+          setShippingMethodOptions(ship.length ? ship : fallbackShippingMethodOptions);
         }
       } finally {
         if (!cancelled) setDictOptionsLoading(false);
@@ -269,7 +318,7 @@ const SalesReturnsPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [modalVisible]);
+  }, [modalVisible, fallbackReturnReasonOptions, fallbackReturnTypeOptions, fallbackShippingMethodOptions]);
 
   const renderSalesReturnRowActions = (actions: React.ReactNode[]) => {
     return actions;
@@ -280,7 +329,7 @@ const SalesReturnsPage: React.FC = () => {
   // 表格列定义
   const columns: ProColumns<SalesReturn>[] = [
     {
-      title: '客户 / 退货单号',
+      title: t('app.kuaizhizao.salesReturn.colCustomerReturnCode'),
       key: 'return_code',
       dataIndex: 'return_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -292,80 +341,75 @@ const SalesReturnsPage: React.FC = () => {
         />
       ),
     },
-    { title: '退货单编号', dataIndex: 'return_code', hideInTable: true },
-    { title: '客户', dataIndex: 'customer_name', hideInTable: true },
+    { title: t('app.kuaizhizao.salesReturn.colReturnCode'), dataIndex: 'return_code', hideInTable: true },
+    { title: t('app.kuaizhizao.salesReturn.customer'), dataIndex: 'customer_name', hideInTable: true },
     {
-      title: '销售出库单编号',
+      title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
       width: 140,
       ellipsis: true,
     },
     {
-      title: '销售订单编号',
+      title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
       dataIndex: 'sales_order_code',
       width: 140,
       ellipsis: true,
     },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.salesReturn.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: t('app.kuaizhizao.salesReturn.totalQuantity') || '总数量',
+      title: t('app.kuaizhizao.salesReturn.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: t('app.kuaizhizao.salesReturn.totalAmount') || '总金额',
+      title: t('app.kuaizhizao.salesReturn.totalAmount'),
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
       render: (text: any) => `¥${Number(text || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
     },
     {
-      title: t('app.kuaizhizao.salesReturn.returnTime') || '退货时间',
+      title: t('app.kuaizhizao.salesReturn.returnTime'),
       dataIndex: 'return_time',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: t('common.createdAt') || '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
+      title: t('app.kuaizhizao.salesReturn.colLifecycle'),
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'center',
       fixed: 'right',
       render: (_, record) => (
-        <UniLifecycle
-          {...getSalesReturnLifecycle(record as any)}
-          showLabel
-          showCircleTooltip={false}
-          size="small"
-        />
+        <ListUniLifecycleCell lifecycle={getSalesReturnLifecycle(record as any, t)} />
       ),
     },
     ...salesReturnCustomFieldColumns,
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 220,
       fixed: 'right',
       render: (_, record) => renderSalesReturnRowActions([
-        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         ...(record.status === '待退货' || record.status === '草稿' ? [
-          <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>编辑</Button>,
+          <Button {...rowActionKind('update')} key="edit" onClick={() => void handleEdit(record)}>{t('common.edit')}</Button>,
         ] : []),
         ...(record.status === '待退货' ? [
-          <Button {...rowActionKind('audit')} key="confirm" onClick={() => handleConfirm(record)}>确认退货</Button>,
+          <Button {...rowActionKind('audit')} key="confirm" onClick={() => handleConfirm(record)}>{t('app.kuaizhizao.salesReturn.confirmReturn')}</Button>,
         ] : []),
         ...(record.status === '已退货' ? [
-          <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record)}>撤回确认</Button>,
+          <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record)}>{t('app.kuaizhizao.salesReturn.withdrawConfirm')}</Button>,
         ] : []),
       ]),
     },
@@ -382,7 +426,7 @@ const SalesReturnsPage: React.FC = () => {
         await loadSalesReturnFieldValuesForDetail(record.id);
       }
     } catch (error) {
-      messageApi.error('获取销售退货单详情失败');
+      messageApi.error(t('app.kuaizhizao.salesReturn.detailFailed'));
     }
   };
 
@@ -397,7 +441,7 @@ const SalesReturnsPage: React.FC = () => {
         material_code: it.material_code || '',
         material_name: it.material_name || '',
         material_spec: it.material_spec ?? undefined,
-        material_unit: it.material_unit || '件',
+        material_unit: it.material_unit || t('app.kuaizhizao.salesReturn.defaultUnit'),
         return_quantity: qty,
         unit_price: price,
         total_amount: total,
@@ -441,7 +485,7 @@ const SalesReturnsPage: React.FC = () => {
       );
     } catch {
       setPullSalesOrderCandidates([]);
-      messageApi.error('加载销售订单失败');
+      messageApi.error(t('app.kuaizhizao.salesReturn.loadSalesOrdersFailed'));
     } finally {
       setPullSalesOrderLoading(false);
     }
@@ -458,11 +502,11 @@ const SalesReturnsPage: React.FC = () => {
 
   const handlePullFromSalesOrderConfirm = async () => {
     if (!selectedPullSalesOrderId) {
-      messageApi.warning('请选择销售订单');
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectSalesOrder'));
       return;
     }
     if (!pullWarehouseId || pullWarehouseId <= 0) {
-      messageApi.warning('请选择退入仓库');
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnWarehouse'));
       return;
     }
     setPullSalesOrderSubmitting(true);
@@ -472,13 +516,13 @@ const SalesReturnsPage: React.FC = () => {
         warehouse_id: pullWarehouseId,
         warehouse_name: pullWarehouseName || undefined,
       });
-      messageApi.success('下推成功，已生成销售退货单');
+      messageApi.success(t('app.kuaizhizao.salesReturn.pullSuccess'));
       invalidateMenuBadgeCounts();
       setPullFromSalesOrderVisible(false);
       setSelectedPullSalesOrderId(null);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '下推失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.salesReturn.pullFailed'));
     } finally {
       setPullSalesOrderSubmitting(false);
     }
@@ -486,7 +530,7 @@ const SalesReturnsPage: React.FC = () => {
 
   const handleEdit = async (record: SalesReturn) => {
     if (record.status !== '待退货' && record.status !== '草稿') {
-      messageApi.warning('仅「待退货」或「草稿」状态可编辑');
+      messageApi.warning(t('app.kuaizhizao.salesReturn.editOnlyPending'));
       return;
     }
     try {
@@ -517,7 +561,7 @@ const SalesReturnsPage: React.FC = () => {
           notes: it.notes,
           sales_delivery_item_id: it.sales_delivery_item_id,
           material_spec: (it as any).material_spec,
-          material_unit: (it as any).material_unit ?? '件',
+          material_unit: (it as any).material_unit ?? t('app.kuaizhizao.salesReturn.defaultUnit'),
         })),
       });
       if (record.id != null) {
@@ -529,24 +573,24 @@ const SalesReturnsPage: React.FC = () => {
       }
       setModalVisible(true);
     } catch {
-      messageApi.error('加载退货单失败');
+      messageApi.error(t('app.kuaizhizao.salesReturn.loadDetailFailed'));
     }
   };
 
   // 处理确认退货
   const handleConfirm = async (record: SalesReturn) => {
     Modal.confirm({
-      title: '确认销售退货',
-      content: `确定要确认销售退货单 "${record.return_code}" 吗？确认后将自动更新库存。`,
+      title: t('app.kuaizhizao.salesReturn.confirmTitle'),
+      content: t('app.kuaizhizao.salesReturn.confirmContent', { code: record.return_code }),
       onOk: async () => {
         try {
           await warehouseApi.salesReturn.confirm(record.id!.toString());
-          messageApi.success('销售退货确认成功');
+          messageApi.success(t('app.kuaizhizao.salesReturn.confirmSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '销售退货确认失败');
+          messageApi.error(error.message || t('app.kuaizhizao.salesReturn.confirmFailed'));
         }
       },
     });
@@ -554,17 +598,17 @@ const SalesReturnsPage: React.FC = () => {
 
   const handleWithdraw = async (record: SalesReturn) => {
     Modal.confirm({
-      title: '撤回退货确认',
-      content: `确定要撤回销售退货单 "${record.return_code}" 的确认状态吗？`,
+      title: t('app.kuaizhizao.salesReturn.withdrawTitle'),
+      content: t('app.kuaizhizao.salesReturn.withdrawContent', { code: record.return_code }),
       onOk: async () => {
         try {
           await warehouseApi.salesReturn.withdraw(record.id!.toString());
-          messageApi.success('已撤回到待退货');
+          messageApi.success(t('app.kuaizhizao.salesReturn.withdrawSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '撤回失败');
+          messageApi.error(error.message || t('app.kuaizhizao.salesReturn.withdrawFailed'));
         }
       },
     });
@@ -577,17 +621,17 @@ const SalesReturnsPage: React.FC = () => {
       for (const id of keys) {
         await warehouseApi.salesReturn.delete(String(id));
       }
-      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      messageApi.success(t('app.kuaizhizao.salesReturn.batchDeleteSuccess', { count: keys.length }));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('app.kuaizhizao.salesReturn.deleteFailed'));
     }
   };
 
   const handleBatchConfirm = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择销售退货单');
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnsFirst'));
       return;
     }
     let success = 0;
@@ -605,8 +649,8 @@ const SalesReturnsPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已确认 ${success} 条销售退货单`);
-    if (failed > 0) messageApi.warning(`${failed} 条确认失败（仅待退货状态可确认）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.salesReturn.batchConfirmSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesReturn.batchConfirmPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
@@ -614,7 +658,7 @@ const SalesReturnsPage: React.FC = () => {
 
   const handleBatchWithdraw = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择销售退货单');
+      messageApi.warning(t('app.kuaizhizao.salesReturn.selectReturnsFirst'));
       return;
     }
     let success = 0;
@@ -632,8 +676,8 @@ const SalesReturnsPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已撤回 ${success} 条销售退货单`);
-    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已退货状态可撤回）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.salesReturn.batchWithdrawSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesReturn.batchWithdrawPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
@@ -652,7 +696,7 @@ const SalesReturnsPage: React.FC = () => {
       if (editingId) {
         const detail = editingDetail;
         if (!detail || (detail.status !== '待退货' && detail.status !== '草稿')) {
-          messageApi.warning('当前状态不允许编辑');
+          messageApi.warning(t('app.kuaizhizao.salesReturn.editNotAllowed'));
           return;
         }
         await warehouseApi.salesReturn.update(editingId.toString(), {
@@ -676,7 +720,7 @@ const SalesReturnsPage: React.FC = () => {
           items: itemsPayload,
         });
         recordId = editingId;
-        messageApi.success('销售退货单已更新');
+        messageApi.success(t('app.kuaizhizao.salesReturn.updateSuccess'));
       } else {
         const created = await warehouseApi.salesReturn.create({
           ...standardValues,
@@ -685,7 +729,7 @@ const SalesReturnsPage: React.FC = () => {
           items: itemsPayload,
         });
         recordId = (created as any)?.id;
-        messageApi.success('销售退货单创建成功');
+        messageApi.success(t('app.kuaizhizao.salesReturn.createSuccess'));
       }
       if (recordId != null) {
         await saveSalesReturnCustomFieldValues(recordId, customData);
@@ -700,7 +744,7 @@ const SalesReturnsPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('app.kuaizhizao.salesReturn.operationFailed'));
     }
   };
 
@@ -724,14 +768,41 @@ const SalesReturnsPage: React.FC = () => {
 
   // Excel导入处理
   const handleImport = (data: any[]) => {
+    const materialCodeKeys = [
+      t('app.kuaizhizao.salesReturn.import.materialCode'),
+      t('app.kuaizhizao.salesOrder.materialCode'),
+      '物料编号',
+    ];
+    const returnQuantityKeys = [
+      t('app.kuaizhizao.salesReturn.import.returnQuantity'),
+      '退货数量',
+    ];
+    const unitPriceKeys = [
+      t('app.kuaizhizao.salesReturn.import.unitPrice'),
+      t('app.kuaizhizao.salesOrder.unitPrice'),
+      '单价',
+    ];
+    const batchNumberKeys = [
+      t('app.kuaizhizao.salesReturn.import.batchNumber'),
+      '批次号',
+    ];
+    const locationKeys = [
+      t('app.kuaizhizao.salesReturn.import.location'),
+      '库位',
+    ];
+    const notesKeys = [
+      t('app.kuaizhizao.salesReturn.import.notes'),
+      t('app.kuaizhizao.common.fieldNotes'),
+      '备注',
+    ];
     const currentItems = formRef.current?.getFieldValue('items') || [];
-    const newItems = data.map(row => ({
-      material_code: row['物料编号'],
-      return_quantity: Number(row['退货数量'] || 1),
-      unit_price: Number(row['单价'] || 0),
-      batch_number: row['批次号'],
-      location_code: row['库位'],
-      notes: row['备注'],
+    const newItems = data.map((row) => ({
+      material_code: getImportRowValue(row, materialCodeKeys),
+      return_quantity: Number(getImportRowValue(row, returnQuantityKeys) ?? 1),
+      unit_price: Number(getImportRowValue(row, unitPriceKeys) ?? 0),
+      batch_number: getImportRowValue(row, batchNumberKeys),
+      location_code: getImportRowValue(row, locationKeys),
+      notes: getImportRowValue(row, notesKeys),
     }));
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems]
@@ -742,62 +813,62 @@ const SalesReturnsPage: React.FC = () => {
   // 详情列 definition
   const detailColumns: ProDescriptionsItemProps<SalesReturnDetail>[] = [
     {
-      title: '退货单编号',
+      title: t('app.kuaizhizao.salesReturn.colReturnCode'),
       dataIndex: 'return_code',
     },
     {
-      title: '销售出库单编号',
+      title: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'),
       dataIndex: 'sales_delivery_code',
     },
     {
-      title: '销售订单编号',
+      title: t('app.kuaizhizao.salesReturn.colSalesOrderCode'),
       dataIndex: 'sales_order_code',
     },
     {
-      title: '客户',
+      title: t('app.kuaizhizao.salesReturn.customer'),
       dataIndex: 'customer_name',
     },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.salesReturn.colWarehouse'),
       dataIndex: 'warehouse_name',
     },
     {
-      title: '退货状态',
+      title: t('app.kuaizhizao.salesReturn.returnStatus'),
       dataIndex: 'status',
       render: (status) => {
         const statusMap: Record<string, { text: string; color: string }> = {
-          '待退货': { text: '待退货', color: 'default' },
-          '已退货': { text: '已退货', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
+          '待退货': { text: t('app.kuaizhizao.salesReturn.statusPending'), color: 'default' },
+          '已退货': { text: t('app.kuaizhizao.salesReturn.statusReturned'), color: 'success' },
+          '已取消': { text: t('app.kuaizhizao.salesReturn.statusCancelled'), color: 'error' },
         };
-        const config = statusMap[(status as any) || ''] || { text: (status as any) || '-', color: 'default' };
+        const config = statusMap[(status as any) || ''] || { text: getReturnStatusLabel(status as string), color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '退货原因',
+      title: t('app.kuaizhizao.salesReturn.returnReason'),
       dataIndex: 'return_reason',
     },
     {
-      title: '退货类型',
+      title: t('app.kuaizhizao.salesReturn.returnType'),
       dataIndex: 'return_type',
     },
     {
-      title: '总数量',
+      title: t('app.kuaizhizao.salesReturn.totalQuantity'),
       dataIndex: 'total_quantity',
     },
     {
-      title: '总金额',
+      title: t('app.kuaizhizao.salesReturn.totalAmount'),
       dataIndex: 'total_amount',
       render: (text) => `¥${text?.toLocaleString() || 0}`,
     },
     {
-      title: '退货时间',
+      title: t('app.kuaizhizao.salesReturn.returnTime'),
       dataIndex: 'return_time',
       valueType: 'dateTime',
     },
     {
-      title: '退货人',
+      title: t('app.kuaizhizao.salesReturn.returner'),
       dataIndex: 'returner_name',
     },
   ];
@@ -807,7 +878,7 @@ const SalesReturnsPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.sales-returns"
-          headerTitle="销售退货"
+          headerTitle={t('app.kuaizhizao.salesReturn.title')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -815,18 +886,18 @@ const SalesReturnsPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showAdvancedSearch={true}
           showCreateButton={false}
-          createButtonText="新建销售退货单"
+          createButtonText={t('app.kuaizhizao.salesReturn.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-sales-return-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel="新建销售退货单"
+              createLabel={t('app.kuaizhizao.salesReturn.create')}
               onCreate={handleCreate}
               menuItems={[
                 {
                   key: 'pull-from-sales-order',
-                  label: '下推销售订单',
+                  label: t('app.kuaizhizao.salesReturn.pullFromSalesOrder'),
                   onClick: openPullFromSalesOrder,
                 },
               ]}
@@ -849,7 +920,7 @@ const SalesReturnsPage: React.FC = () => {
                 total: Array.isArray(response) ? enriched.length : response.total || enriched.length,
               };
             } catch (error) {
-              messageApi.error('获取销售退货单列表失败');
+              messageApi.error(t('app.kuaizhizao.salesReturn.listFailed'));
               return {
                 data: [],
                 success: false,
@@ -860,7 +931,7 @@ const SalesReturnsPage: React.FC = () => {
           enableRowSelection={true}
           showDeleteButton={true}
           onDelete={handleDelete}
-          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售退货单？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.salesReturn.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="sales-return-batch-menu"
@@ -868,13 +939,13 @@ const SalesReturnsPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'confirm',
-                  label: '批量确认退货',
+                  label: t('app.kuaizhizao.salesReturn.batchConfirm'),
                   icon: <CheckCircleOutlined />,
                   onClick: handleBatchConfirm,
                 },
                 {
                   key: 'withdraw',
-                  label: '批量撤回确认',
+                  label: t('app.kuaizhizao.salesReturn.batchWithdraw'),
                   icon: <CopyOutlined />,
                   onClick: handleBatchWithdraw,
                 },
@@ -886,7 +957,7 @@ const SalesReturnsPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={editingId ? '编辑销售退货单' : '新增销售退货单'}
+        title={editingId ? t('app.kuaizhizao.salesReturn.editTitle') : t('app.kuaizhizao.salesReturn.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -913,14 +984,14 @@ const SalesReturnsPage: React.FC = () => {
           <Col span={8}>
             <ProFormSelect
               name="customer_id"
-              label="客户"
-              placeholder="请选择客户"
+              label={t('app.kuaizhizao.salesReturn.customer')}
+              placeholder={t('app.kuaizhizao.salesReturn.selectCustomer')}
               required
               request={async () => {
                 const res = await customerApi.list({ limit: 1000, isActive: true });
                 const list = Array.isArray(res) ? res : (res as any)?.data || (res as any)?.items || [];
                 return list.map((c: any) => ({
-                  label: c.name || c.customer_name || c.code || `客户${c.id}`,
+                  label: c.name || c.customer_name || c.code || t('app.kuaizhizao.salesReturn.customerFallback', { id: c.id }),
                   value: c.id ?? c.customer_id,
                 }));
               }}
@@ -931,28 +1002,28 @@ const SalesReturnsPage: React.FC = () => {
                   formRef.current?.setFieldsValue({ customer_name: (option as any)?.label ?? '' });
                 },
               }}
-              rules={[{ required: true, message: '请选择客户' }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectCustomer') }]}
             />
             <ProFormText name="customer_name" hidden />
           </Col>
           <Col span={8}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="退入仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
+              placeholder={t('app.kuaizhizao.salesReturn.selectWarehouse')}
               required
               onChange={(value, wh) => {
                 formRef.current?.setFieldsValue({ warehouse_name: (wh as any)?.name ?? '' });
                 updateSelectedWarehouseId(value);
               }}
-              rules={[{ required: true, message: '请选择仓库' }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.salesReturn.selectWarehouse') }]}
             />
             <ProFormText name="warehouse_name" hidden />
           </Col>
           <Col span={8}>
             <ProFormDatePicker
               name="return_time"
-              label="退货日期"
+              label={t('app.kuaizhizao.salesReturn.returnDate')}
               required
               fieldProps={{ style: { width: '100%' } }}
               initialValue={dayjs()}
@@ -963,8 +1034,8 @@ const SalesReturnsPage: React.FC = () => {
           <Col span={8}>
             <ProFormSelect
               name="return_reason"
-              label="退货原因"
-              placeholder="请选择退货原因"
+              label={t('app.kuaizhizao.salesReturn.returnReason')}
+              placeholder={t('app.kuaizhizao.salesReturn.selectReturnReason')}
               options={returnReasonOptions}
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
@@ -972,8 +1043,8 @@ const SalesReturnsPage: React.FC = () => {
           <Col span={8}>
             <ProFormSelect
               name="return_type"
-              label="退货类型"
-              placeholder="请选择退货类型"
+              label={t('app.kuaizhizao.salesReturn.returnType')}
+              placeholder={t('app.kuaizhizao.salesReturn.selectReturnType')}
               options={returnTypeOptions}
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
@@ -981,8 +1052,8 @@ const SalesReturnsPage: React.FC = () => {
           <Col span={8}>
             <ProFormSelect
               name="shipping_method"
-              label="发货方式"
-              placeholder="请选择发货方式"
+              label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+              placeholder={t('app.kuaizhizao.salesReturn.selectShippingMethod')}
               options={shippingMethodOptions}
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
@@ -997,9 +1068,9 @@ const SalesReturnsPage: React.FC = () => {
 
         <UniTableDetail
           name="items"
-          title="退货明细"
+          title={t('app.kuaizhizao.salesReturn.itemsTitle')}
           required
-          requiredMessage="请添加至少一项明细"
+          requiredMessage={t('app.kuaizhizao.salesReturn.itemsRequired')}
           headerExtra={(
             <Space size={8}>
               <Button
@@ -1007,7 +1078,7 @@ const SalesReturnsPage: React.FC = () => {
                 icon={<ImportOutlined />}
                 onClick={() => setImportModalVisible(true)}
               >
-                导入明细
+                {t('app.kuaizhizao.salesReturn.importItems')}
               </Button>
               <Button
                 type="dashed"
@@ -1018,7 +1089,7 @@ const SalesReturnsPage: React.FC = () => {
                   formRef.current?.setFieldsValue({ items });
                 }}
               >
-                添加明细
+                {t('common.addDetail')}
               </Button>
               <Button
                 type="default"
@@ -1031,14 +1102,14 @@ const SalesReturnsPage: React.FC = () => {
           )}
           columns={[
                     {
-                      title: '物料',
+                      title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
                       width: 260,
                       render: (_: unknown, __: unknown, index: number) => (
                         <UniMaterialSelect
                           name={[index, 'material_id']}
                           label=""
-                          placeholder="选择物料"
+                          placeholder={t('app.kuaizhizao.salesOrder.materialPickerTitle')}
                           required
                           size="small"
                           listFieldKey={index}
@@ -1054,24 +1125,24 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '批号',
+                      title: t('app.kuaizhizao.salesReturn.batchNumber'),
                       dataIndex: 'batch_number',
                       width: 150,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'batch_number']} noStyle>
-                          <Input size="small" placeholder="请输入批号" />
+                          <Input size="small" placeholder={t('app.kuaizhizao.salesReturn.batchNumberPlaceholder')} />
                         </AntForm.Item>
                       ),
                     },
                     {
-                      title: '库位',
+                      title: t('app.kuaizhizao.salesReturn.location'),
                       dataIndex: 'location_code',
                       width: 180,
                       render: (_: unknown, __: unknown, index: number) => (
                         <AntForm.Item name={[index, 'location_code']} noStyle>
                           <Select
                             options={locationOptions}
-                            placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                            placeholder={selectedWarehouseId ? t('app.kuaizhizao.salesReturn.selectLocation') : t('app.kuaizhizao.salesReturn.selectWarehouseFirst')}
                             style={{ width: '100%' }}
                             size="small"
                             showSearch
@@ -1083,7 +1154,7 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '退货数量',
+                      title: t('app.kuaizhizao.salesReturn.returnQuantity'),
                       dataIndex: 'return_quantity',
                       width: 120,
                       align: 'right' as const,
@@ -1094,7 +1165,7 @@ const SalesReturnsPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '单价',
+                      title: t('app.kuaizhizao.salesOrder.unitPrice'),
                       dataIndex: 'unit_price',
                       width: 120,
                       align: 'right' as const,
@@ -1113,7 +1184,7 @@ const SalesReturnsPage: React.FC = () => {
           }}
         />
 
-        <ProFormTextArea name="notes" label="备注" placeholder="请输入备注说明" fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.salesReturn.notesPlaceholder')} fieldProps={{ rows: 3 }} />
         <DocumentAttachmentsField category="sales_return_attachments" />
       </FormModalTemplate>
 
@@ -1124,7 +1195,7 @@ const SalesReturnsPage: React.FC = () => {
       />
 
       <Modal
-        title="从销售订单下推"
+        title={t('app.kuaizhizao.salesReturn.pullModalTitle')}
         open={pullFromSalesOrderVisible}
         onCancel={() => {
           if (pullSalesOrderSubmitting) return;
@@ -1134,25 +1205,25 @@ const SalesReturnsPage: React.FC = () => {
         onOk={() => {
           void handlePullFromSalesOrderConfirm();
         }}
-        okText="创建销售退货单"
+        okText={t('app.kuaizhizao.salesReturn.pullCreateButton')}
         confirmLoading={pullSalesOrderSubmitting}
         destroyOnHidden
       >
         <Space direction="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
-            placeholder="按销售订单号/客户搜索"
+            placeholder={t('app.kuaizhizao.salesReturn.pullSearchPlaceholder')}
             value={pullSalesOrderKeyword}
             onChange={(e) => setPullSalesOrderKeyword(e.target.value)}
             onSearch={(value) => {
               setPullSalesOrderKeyword(value);
               void loadPullSalesOrderCandidates(value);
             }}
-            enterButton="搜索"
+            enterButton={t('app.kuaizhizao.salesReturn.search')}
           />
           <UniWarehouseSelect
-            label="退入仓库"
-            placeholder="请选择退入仓库"
+            label={t('app.kuaizhizao.salesReturn.returnWarehouse')}
+            placeholder={t('app.kuaizhizao.salesReturn.selectReturnWarehouseShort')}
             value={pullWarehouseId}
             onChange={(value, warehouse) => {
               const nextId = Number(value);
@@ -1181,11 +1252,11 @@ const SalesReturnsPage: React.FC = () => {
               },
             })}
             columns={[
-              { title: '销售订单号', dataIndex: 'order_code', width: 180, ellipsis: true },
-              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
-              { title: '订单状态', dataIndex: 'status', width: 130, align: 'center' },
-              { title: '交期', dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+              { title: t('app.kuaizhizao.salesReturn.salesOrderNo'), dataIndex: 'order_code', width: 180, ellipsis: true },
+              { title: t('app.kuaizhizao.salesReturn.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: t('app.kuaizhizao.salesReturn.orderStatus'), dataIndex: 'status', width: 130, align: 'center' },
+              { title: t('app.kuaizhizao.salesReturn.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
             ]}
           />
         </Space>
@@ -1196,15 +1267,31 @@ const SalesReturnsPage: React.FC = () => {
           visible={importModalVisible}
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleImport}
-          title="导入销售退货明细"
-          headers={['物料编号', '退货数量', '单价', '批次号', '库位', '备注']}
-          exampleRow={['MAT001', '10', '99.5', 'B20260117001', 'A01-01-01', '备注说明']}
+          title={t('app.kuaizhizao.salesReturn.importTitle')}
+          headers={[
+            t('app.kuaizhizao.salesReturn.import.materialCode'),
+            t('app.kuaizhizao.salesReturn.import.returnQuantity'),
+            t('app.kuaizhizao.salesReturn.import.unitPrice'),
+            t('app.kuaizhizao.salesReturn.import.batchNumber'),
+            t('app.kuaizhizao.salesReturn.import.location'),
+            t('app.kuaizhizao.salesReturn.import.notes'),
+          ]}
+          exampleRow={[
+            'MAT001',
+            '10',
+            '99.5',
+            'B20260117001',
+            'A01-01-01',
+            t('app.kuaizhizao.salesReturn.import.notesExample'),
+          ]}
         />
       </Suspense>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={`销售退货单详情${returnDetail?.return_code ? ` - ${returnDetail.return_code}` : ''}`}
+        title={t('app.kuaizhizao.salesReturn.detailTitle', {
+          suffix: returnDetail?.return_code ? ` - ${returnDetail.return_code}` : '',
+        })}
         open={detailDrawerVisible}
         zIndex={returnDetailDrawerZIndex}
         onClose={() => {
@@ -1218,18 +1305,18 @@ const SalesReturnsPage: React.FC = () => {
         customContent={
           returnDetail ? (
             <div style={{ padding: '16px 0' }}>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.basicInfo')}>
                 <Table
                   size="small"
                   pagination={false}
                   columns={[
-                    { title: '字段', dataIndex: 'k', width: 120 },
-                    { title: '值', dataIndex: 'v' },
+                    { title: t('app.kuaizhizao.salesReturn.fieldLabel'), dataIndex: 'k', width: 120 },
+                    { title: t('app.kuaizhizao.salesReturn.valueLabel'), dataIndex: 'v' },
                   ]}
                   dataSource={[
                     {
                       key: 'return_code',
-                      k: '退货单编号',
+                      k: t('app.kuaizhizao.salesReturn.colReturnCode'),
                       v: (
                         <Space size={4}>
                           <span>{returnDetail.return_code || '-'}</span>
@@ -1237,14 +1324,14 @@ const SalesReturnsPage: React.FC = () => {
                         </Space>
                       ),
                     },
-                    { key: 'sales_delivery_code', k: '销售出库单编号', v: returnDetail.sales_delivery_code || '-' },
-                    { key: 'sales_order_code', k: '销售订单编号', v: returnDetail.sales_order_code || '-' },
-                    { key: 'customer_name', k: '客户', v: returnDetail.customer_name || '-' },
-                    { key: 'warehouse_name', k: '仓库', v: returnDetail.warehouse_name || '-' },
-                    { key: 'status', k: '状态', v: returnDetail.status || '-' },
-                    { key: 'return_reason', k: '退货原因', v: returnDetail.return_reason || '-' },
-                    { key: 'return_type', k: '退货类型', v: returnDetail.return_type || '-' },
-                    { key: 'return_time', k: '退货时间', v: returnDetail.return_time || '-' },
+                    { key: 'sales_delivery_code', k: t('app.kuaizhizao.salesReturn.colSalesDeliveryCode'), v: returnDetail.sales_delivery_code || '-' },
+                    { key: 'sales_order_code', k: t('app.kuaizhizao.salesReturn.colSalesOrderCode'), v: returnDetail.sales_order_code || '-' },
+                    { key: 'customer_name', k: t('app.kuaizhizao.salesReturn.customer'), v: returnDetail.customer_name || '-' },
+                    { key: 'warehouse_name', k: t('app.kuaizhizao.salesReturn.colWarehouse'), v: returnDetail.warehouse_name || '-' },
+                    { key: 'status', k: t('common.status'), v: getReturnStatusLabel(returnDetail.status) },
+                    { key: 'return_reason', k: t('app.kuaizhizao.salesReturn.returnReason'), v: returnDetail.return_reason || '-' },
+                    { key: 'return_type', k: t('app.kuaizhizao.salesReturn.returnType'), v: returnDetail.return_type || '-' },
+                    { key: 'return_time', k: t('app.kuaizhizao.salesReturn.returnTime'), v: returnDetail.return_time || '-' },
                   ]}
                   rowKey="key"
                 />
@@ -1263,19 +1350,19 @@ const SalesReturnsPage: React.FC = () => {
                     style={{ marginTop: 16 }}
                     showHeader={false}
                     columns={[
-                      { title: '字段', dataIndex: 'k', width: 120 },
-                      { title: '值', dataIndex: 'v' },
+                      { title: t('app.kuaizhizao.salesReturn.fieldLabel'), dataIndex: 'k', width: 120 },
+                      { title: t('app.kuaizhizao.salesReturn.valueLabel'), dataIndex: 'v' },
                     ]}
-                    dataSource={[{ key: 'notes', k: '备注', v: returnDetail.notes }]}
+                    dataSource={[{ key: 'notes', k: t('app.kuaizhizao.common.fieldNotes'), v: returnDetail.notes }]}
                     rowKey="key"
                   />
                 ) : null}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.salesOrder.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lifecycle = getSalesReturnLifecycle(returnDetail as any);
+                    const lifecycle = getSalesReturnLifecycle(returnDetail as any, t);
                     return (
                       <>
                         {(lifecycle.mainStages ?? []).length > 0 && (
@@ -1312,7 +1399,7 @@ const SalesReturnsPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.itemsInfo')}>
                 <style>{`
                   .sales-return-detail-items .ant-table-wrapper .ant-table-body,
                   .sales-return-detail-items .ant-table-wrapper .ant-table-content {
@@ -1330,24 +1417,24 @@ const SalesReturnsPage: React.FC = () => {
                       tableLayout="fixed"
                       style={{ minWidth: 860 }}
                       columns={[
-                        { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                        { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                        { title: '退货数量', dataIndex: 'return_quantity', width: 100, align: 'right' },
-                        { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                        { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
-                        { title: '批次号', dataIndex: 'batch_number', width: 120 },
-                        { title: '库位', dataIndex: 'location_code', width: 100 },
+                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+                        { title: t('app.kuaizhizao.salesReturn.returnQuantity'), dataIndex: 'return_quantity', width: 100, align: 'right' },
+                        { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                        { title: t('app.kuaizhizao.salesReturn.amount'), dataIndex: 'total_amount', width: 100, align: 'right', render: (text) => `¥${text || 0}` },
+                        { title: t('app.kuaizhizao.salesReturn.import.batchNumber'), dataIndex: 'batch_number', width: 120 },
+                        { title: t('app.kuaizhizao.salesReturn.location'), dataIndex: 'location_code', width: 100 },
                       ]}
                       dataSource={returnDetail.items}
                       rowKey="id"
                     />
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesReturn.emptyItems')} />
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaizhizao.salesReturn.operationHistory')}>
                 {salesReturnTracking.loading && <Spin />}
                 {salesReturnTracking.error && <Typography.Text type="danger">{salesReturnTracking.error}</Typography.Text>}
                 {salesReturnTracking.data && <DocumentTrackingTimelineBody data={salesReturnTracking.data} />}

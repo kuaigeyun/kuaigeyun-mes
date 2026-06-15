@@ -2769,6 +2769,18 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           margin: 0;
           width: 100%;
         }
+        /* ProTable 外框：ProCard 默认用 colorSplit 过浅，统一为次级边框色 */
+        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table.ant-pro-table > .ant-pro-card.ant-pro-card-border {
+          border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder)) !important;
+          border-radius: var(--ant-borderRadiusLG, var(--ant-borderRadius, 6px)) !important;
+          overflow: hidden;
+        }
+        /* 表头 + 表身外框（不含工具栏、分页） */
+        .uni-table-container:not(.uni-table-embedded) .uni-table-pro-table .ant-table-container {
+          border: 1px solid var(--ant-colorBorderSecondary, var(--ant-colorBorder));
+          border-radius: var(--ant-borderRadius, 6px);
+          overflow: hidden;
+        }
         .uni-table-container.uni-table-embedded .ant-pro-card {
           border: none !important;
           box-shadow: none !important;

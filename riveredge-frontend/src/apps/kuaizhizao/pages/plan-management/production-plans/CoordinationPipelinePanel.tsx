@@ -27,6 +27,8 @@ import {
   RocketOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { useRequest } from 'ahooks';
 import { coordinationBoardApi, productionControlApi } from '../../../services/production';
 import { getStatusLabel } from '../../../constants/documentStatus';
@@ -65,37 +67,38 @@ function DocStatusTag({ status }: { status: string }) {
 interface RelatedDocumentsPanelProps {
   documents: PipelineDocuments;
   onNavigate: (path: string) => void;
+  t: TFunction;
 }
 
-const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents, onNavigate }) => {
+const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents, onNavigate, t }) => {
   const { token } = theme.useToken();
   const prList = documents.purchase_requisitions ?? [];
 
   const sections = [
     {
       key: 'pr',
-      label: '采购申请',
+      label: t('app.kuaizhizao.coordinationPipeline.purchaseRequisition'),
       count: prList.length,
       items: prList,
       path: '/apps/kuaizhizao/purchase-management/purchase-requisitions',
     },
     {
       key: 'po',
-      label: '采购订单',
+      label: t('app.kuaizhizao.coordinationPipeline.purchaseOrder'),
       count: documents.purchase_orders.length,
       items: documents.purchase_orders,
       path: '/apps/kuaizhizao/purchase-management/purchase-orders',
     },
     {
       key: 'owo',
-      label: '委外工单',
+      label: t('app.kuaizhizao.coordinationPipeline.outsourceWorkOrder'),
       count: documents.outsource_work_orders.length,
       items: documents.outsource_work_orders,
       path: '/apps/kuaizhizao/warehouse-management/batching-center?tab=outsource_issue',
     },
     {
       key: 'wo',
-      label: '生产工单',
+      label: t('app.kuaizhizao.coordinationPipeline.productionWorkOrder'),
       count: documents.work_orders.length,
       items: documents.work_orders,
       path: '/apps/kuaizhizao/production-execution/work-orders',
@@ -105,7 +108,7 @@ const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents
   return (
     <Affix offsetTop={16}>
       <Card
-        title="关联单据"
+        title={t('app.kuaizhizao.coordinationPipeline.relatedDocuments')}
         styles={{
           header: { fontSize: TYPO.panelTitle, minHeight: 40 },
           body: { padding: '8px 14px 14px', fontSize: TYPO.body },
@@ -134,7 +137,7 @@ const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents
                 style={{ fontSize: TYPO.secondary }}
                 onClick={() => onNavigate(section.path)}
               >
-                {section.count} 单 →
+                {t('app.kuaizhizao.coordinationPipeline.orderCount', { count: section.count })}
               </Link>
             </div>
             {section.items.length > 0 ? (
@@ -157,7 +160,7 @@ const RelatedDocumentsPanel: React.FC<RelatedDocumentsPanelProps> = ({ documents
                 )}
               />
             ) : (
-              <Text type="secondary" style={{ fontSize: TYPO.secondary }}>暂无</Text>
+              <Text type="secondary" style={{ fontSize: TYPO.secondary }}>{t('app.kuaizhizao.coordinationPipeline.none')}</Text>
             )}
           </div>
         ))}
@@ -210,13 +213,29 @@ type ActiveOrderItem = {
   updated_at?: string;
 };
 
-const BOM_STATUS_LABEL: Record<string, string> = {
-  done: 'BOM就绪',
-  pending: 'BOM待检',
-  blocked: '缺BOM',
-  partial: 'BOM部分',
-  skipped: '无需BOM',
+const getBomStatusLabel = (t: TFunction, status: string) => {
+  const key = `app.kuaizhizao.coordinationPipeline.bomStatus.${status}` as const;
+  const translated = t(key);
+  return translated === key ? status : translated;
 };
+
+const getStageStatusTag = (t: TFunction, status: StageStatus) => ({
+  done: { color: 'success', text: t('app.kuaizhizao.coordinationPipeline.stageStatus.done') },
+  pending: { color: 'warning', text: t('app.kuaizhizao.coordinationPipeline.stageStatus.pending') },
+  blocked: { color: 'error', text: t('app.kuaizhizao.coordinationPipeline.stageStatus.blocked') },
+  partial: { color: 'processing', text: t('app.kuaizhizao.coordinationPipeline.stageStatus.partial') },
+  skipped: { color: 'default', text: t('app.kuaizhizao.coordinationPipeline.stageStatus.skipped') },
+}[status]);
+
+const getStageGroups = (t: TFunction) => [
+  { key: 'sales', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.sales'), stageKeys: ['sales_order'] },
+  { key: 'plan', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.plan'), stageKeys: ['bom_check', 'mrp'] },
+  { key: 'purchase', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.purchase'), stageKeys: ['purchase_follow', 'purchase_receipt'] },
+  { key: 'warehouse', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.warehouse'), stageKeys: ['outsource'] },
+  { key: 'kitting', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.kitting'), stageKeys: ['kitting'] },
+  { key: 'scheduling', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.scheduling'), stageKeys: ['scheduling'] },
+  { key: 'production', label: t('app.kuaizhizao.coordinationPipeline.stageGroup.production'), stageKeys: ['release', 'production'] },
+];
 
 const STATUS_ICON: Record<StageStatus, React.ReactNode> = {
   done: <CheckCircleOutlined />,
@@ -226,14 +245,6 @@ const STATUS_ICON: Record<StageStatus, React.ReactNode> = {
   skipped: <MinusCircleOutlined />,
 };
 
-const STATUS_TAG: Record<StageStatus, { color: string; text: string }> = {
-  done: { color: 'success', text: '完成' },
-  pending: { color: 'warning', text: '待办' },
-  blocked: { color: 'error', text: '阻塞' },
-  partial: { color: 'processing', text: '进行中' },
-  skipped: { color: 'default', text: '跳过' },
-};
-
 const STATUS_NODE_COLOR: Record<StageStatus, string> = {
   done: '#52c41a',
   pending: '#faad14',
@@ -241,17 +252,6 @@ const STATUS_NODE_COLOR: Record<StageStatus, string> = {
   partial: '#1677ff',
   skipped: '#d9d9d9',
 };
-
-/** 按责任部门分组；组内步骤横向并排，组与组之间纵向串联 */
-const STAGE_GROUPS: { key: string; label: string; stageKeys: string[] }[] = [
-  { key: 'sales', label: '销售订单', stageKeys: ['sales_order'] },
-  { key: 'plan', label: '计划', stageKeys: ['bom_check', 'mrp'] },
-  { key: 'purchase', label: '采购', stageKeys: ['purchase_follow', 'purchase_receipt'] },
-  { key: 'warehouse', label: '仓储委外', stageKeys: ['outsource'] },
-  { key: 'kitting', label: '物控齐套', stageKeys: ['kitting'] },
-  { key: 'scheduling', label: '可视排产', stageKeys: ['scheduling'] },
-  { key: 'production', label: '生产执行', stageKeys: ['release', 'production'] },
-];
 
 function aggregateGroupStatus(stages: PipelineStage[]): StageStatus {
   if (stages.some((s) => s.status === 'blocked')) return 'blocked';
@@ -269,9 +269,77 @@ interface StageBlockProps {
   onAction: (action: { type: string; label: string; route?: string | null }) => void;
   token: ReturnType<typeof theme.useToken>['token'];
   horizontal?: boolean;
+  t: TFunction;
 }
 
-const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onAction, token, horizontal }) => (
+const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onAction, token, horizontal, t }) => {
+  const statusTag = getStageStatusTag(t, stage.status);
+  const lineColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colMaterialCode'),
+        dataIndex: 'material_code',
+        width: 110,
+        ellipsis: true,
+        render: (v: string) => <Text style={{ fontSize: TYPO.body }}>{v || '-'}</Text>,
+      },
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colName'),
+        dataIndex: 'material_name',
+        width: 140,
+        ellipsis: true,
+        render: (v: string) => <Text style={{ fontSize: TYPO.body }}>{v || '-'}</Text>,
+      },
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colSpec'),
+        dataIndex: 'material_spec',
+        width: 120,
+        ellipsis: true,
+        render: (v?: string | null) => (
+          <Text type="secondary" style={{ fontSize: TYPO.secondary }}>{v || '-'}</Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colQuantity'),
+        dataIndex: 'quantity',
+        width: 90,
+        align: 'right' as const,
+        render: (v: number, row: OrderLine) => (
+          <Text style={{ fontSize: TYPO.body }}>
+            {v}{row.unit ? ` ${row.unit}` : ''}
+          </Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colDeliveryDate'),
+        dataIndex: 'delivery_date',
+        width: 100,
+        render: (v?: string | null) => (
+          <Text style={{ fontSize: TYPO.body }}>{v ? v.slice(0, 10) : '-'}</Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.coordinationPipeline.colAvailableStock'),
+        dataIndex: 'available_quantity',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number, row: OrderLine) => (
+          <Text
+            style={{
+              fontSize: TYPO.body,
+              color: v < row.quantity ? token.colorWarning : undefined,
+              fontWeight: v < row.quantity ? 600 : undefined,
+            }}
+          >
+            {v}{row.unit ? ` ${row.unit}` : ''}
+          </Text>
+        ),
+      },
+    ],
+    [t, token.colorWarning],
+  );
+
+  return (
   <div
     style={{
       flex: horizontal ? '1 1 200px' : undefined,
@@ -288,10 +356,10 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
         >
           {stage.title}
         </Text>
-        <Tag color={STATUS_TAG[stage.status].color} style={{ margin: 0, fontSize: TYPO.caption }}>
-          {STATUS_TAG[stage.status].text}
+        <Tag color={statusTag.color} style={{ margin: 0, fontSize: TYPO.caption }}>
+          {statusTag.text}
         </Tag>
-        {isActive && <Tag color="blue" style={{ margin: 0, fontSize: TYPO.caption }}>当前</Tag>}
+        {isActive && <Tag color="blue" style={{ margin: 0, fontSize: TYPO.caption }}>{t('app.kuaizhizao.coordinationPipeline.current')}</Tag>}
       </div>
     )}
 
@@ -300,8 +368,8 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
           <Space size={8} wrap>
             <Text strong style={{ fontSize: TYPO.stageTitle }}>{stage.title}</Text>
-            <Tag color={STATUS_TAG[stage.status].color} style={{ margin: 0, fontSize: TYPO.caption }}>
-              {STATUS_TAG[stage.status].text}
+            <Tag color={statusTag.color} style={{ margin: 0, fontSize: TYPO.caption }}>
+              {statusTag.text}
             </Tag>
             <Text type="secondary" style={{ fontSize: TYPO.secondary }}>{stage.summary}</Text>
           </Space>
@@ -317,67 +385,7 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
           rowKey={(row) => String(row.material_id)}
           scroll={{ x: 720 }}
           dataSource={stage.lines}
-          columns={[
-            {
-              title: '商品编号',
-              dataIndex: 'material_code',
-              width: 110,
-              ellipsis: true,
-              render: (v: string) => <Text style={{ fontSize: TYPO.body }}>{v || '-'}</Text>,
-            },
-            {
-              title: '名称',
-              dataIndex: 'material_name',
-              width: 140,
-              ellipsis: true,
-              render: (v: string) => <Text style={{ fontSize: TYPO.body }}>{v || '-'}</Text>,
-            },
-            {
-              title: '规格',
-              dataIndex: 'material_spec',
-              width: 120,
-              ellipsis: true,
-              render: (v?: string | null) => (
-                <Text type="secondary" style={{ fontSize: TYPO.secondary }}>{v || '-'}</Text>
-              ),
-            },
-            {
-              title: '数量',
-              dataIndex: 'quantity',
-              width: 90,
-              align: 'right',
-              render: (v: number, row) => (
-                <Text style={{ fontSize: TYPO.body }}>
-                  {v}{row.unit ? ` ${row.unit}` : ''}
-                </Text>
-              ),
-            },
-            {
-              title: '交期',
-              dataIndex: 'delivery_date',
-              width: 100,
-              render: (v?: string | null) => (
-                <Text style={{ fontSize: TYPO.body }}>{v ? v.slice(0, 10) : '-'}</Text>
-              ),
-            },
-            {
-              title: '可用库存',
-              dataIndex: 'available_quantity',
-              width: 100,
-              align: 'right',
-              render: (v: number, row) => (
-                <Text
-                  style={{
-                    fontSize: TYPO.body,
-                    color: v < row.quantity ? token.colorWarning : undefined,
-                    fontWeight: v < row.quantity ? 600 : undefined,
-                  }}
-                >
-                  {v}{row.unit ? ` ${row.unit}` : ''}
-                </Text>
-              ),
-            },
-          ]}
+          columns={lineColumns}
         />
       </>
     ) : (
@@ -421,13 +429,15 @@ const StageBlock: React.FC<StageBlockProps> = ({ stage, isActive, releasing, onA
       </>
     )}
   </div>
-);
+  );
+};
 
 interface CoordinationPipelinePanelProps {
   onRefreshSummary?: () => void;
 }
 
 const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ onRefreshSummary }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { token } = theme.useToken();
   const [selectedSalesOrderId, setSelectedSalesOrderId] = useState<number | undefined>();
@@ -475,13 +485,14 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
 
   const groupedStages = useMemo(() => {
     if (!p?.stages?.length) return [];
-    return STAGE_GROUPS.map((group) => ({
+    const stageGroups = getStageGroups(t);
+    return stageGroups.map((group) => ({
       ...group,
       stages: group.stageKeys
         .map((key) => stageMap.get(key))
         .filter((s): s is PipelineStage => !!s),
     })).filter((g) => g.stages.length > 0);
-  }, [p, stageMap]);
+  }, [p, stageMap, t]);
 
   const activeStageKey = useMemo(() => {
     if (!p?.stages?.length) return null;
@@ -503,7 +514,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
       }
       if (action.type === 'refresh') {
         handleRefresh();
-        message.success('已刷新协调管道');
+        message.success(t('app.kuaizhizao.coordinationPipeline.refreshSuccess'));
         return;
       }
       if (action.type === 'release_kitted') {
@@ -512,25 +523,25 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
           const res = await productionControlApi.releaseKitted([]);
           const count = res?.count ?? 0;
           if (count > 0) {
-            message.success(`成功下达 ${count} 个齐套工单`);
+            message.success(t('app.kuaizhizao.coordinationPipeline.releaseSuccess', { count }));
           } else {
-            message.info('当前无符合齐套条件的草稿工单');
+            message.info(t('app.kuaizhizao.coordinationPipeline.noKittedWorkOrders'));
           }
           handleRefresh();
         } catch (err: any) {
-          message.error(err?.message || '齐套下达失败');
+          message.error(err?.message || t('app.kuaizhizao.coordinationPipeline.releaseFailed'));
         } finally {
           setReleasing(false);
         }
       }
     },
-    [navigate, handleRefresh],
+    [navigate, handleRefresh, t],
   );
 
   if (listLoading && !activeItems.length) {
     return (
       <div style={{ textAlign: 'center', padding: 48 }}>
-        <Spin tip="加载协调数据...">
+        <Spin tip={t('app.kuaizhizao.coordinationPipeline.loading')}>
           <div style={{ minHeight: 24 }} />
         </Spin>
       </div>
@@ -540,11 +551,11 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
   if (!activeItems.length) {
     return (
       <Empty
-        description="暂无已审核的销售订单，请先在「销售订单」中创建并审核订单"
+        description={t('app.kuaizhizao.coordinationPipeline.noActiveOrders')}
         style={{ padding: 48 }}
       >
         <Button type="primary" onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>
-          前往销售订单
+          {t('app.kuaizhizao.coordinationPipeline.goToSalesOrders')}
         </Button>
       </Empty>
     );
@@ -564,7 +575,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <Text strong style={{ fontSize: TYPO.panelTitle }}>未完成订单</Text>
+            <Text strong style={{ fontSize: TYPO.panelTitle }}>{t('app.kuaizhizao.coordinationPipeline.incompleteOrders')}</Text>
             <Button type="text" icon={<ReloadOutlined />} onClick={handleRefresh} />
           </div>
 
@@ -573,7 +584,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
               const selected = item.sales_order_id === selectedSalesOrderId;
               const hovered = item.sales_order_id === hoveredSalesOrderId;
               const pending = item.incomplete_work_orders ?? 0;
-              const bomLabel = BOM_STATUS_LABEL[item.bom_status ?? ''] ?? item.bom_status;
+              const bomLabel = getBomStatusLabel(t, item.bom_status ?? '');
               const itemBg = selected
                 ? token.colorFillSecondary
                 : hovered
@@ -635,15 +646,15 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                     )}
                     {pending > 0 ? (
                       <Tag variant="filled" color="processing" style={{ margin: 0, fontSize: 12 }}>
-                        {pending} 单在制
+                        {t('app.kuaizhizao.coordinationPipeline.wipCount', { count: pending })}
                       </Tag>
                     ) : !item.computation_id ? (
                       <Tag variant="filled" color="orange" style={{ margin: 0, fontSize: 12 }}>
-                        待MRP
+                        {t('app.kuaizhizao.coordinationPipeline.pendingMrp')}
                       </Tag>
                     ) : (
                       <Tag variant="filled" color="cyan" style={{ margin: 0, fontSize: 12 }}>
-                        协调中
+                        {t('app.kuaizhizao.coordinationPipeline.coordinating')}
                       </Tag>
                     )}
                   </Space>
@@ -668,7 +679,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
               type="warning"
               showIcon
               style={{ marginBottom: 12 }}
-              message="上游/下游变更提醒"
+              message={t('app.kuaizhizao.coordinationPipeline.upstreamAlert')}
               description={
                 <ul style={{ margin: 0, paddingLeft: 20 }}>
                   {p.dynamic_monitor_alerts.map((a, i) => (
@@ -689,7 +700,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                       <Text type="secondary" style={{ fontSize: TYPO.body }}>{p.computation.code}</Text>
                     )}
                     {p.sales_order?.delivery_date && (
-                      <Tag style={{ margin: 0, fontSize: TYPO.caption }}>交期 {p.sales_order.delivery_date.slice(0, 10)}</Tag>
+                      <Tag style={{ margin: 0, fontSize: TYPO.caption }}>{t('app.kuaizhizao.coordinationPipeline.deliveryDate', { date: p.sales_order.delivery_date.slice(0, 10) })}</Tag>
                     )}
                   </Space>
                 </div>
@@ -785,6 +796,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                                     onAction={handleAction}
                                     token={token}
                                     horizontal
+                                    t={t}
                                   />
                                 </React.Fragment>
                               ))}
@@ -796,6 +808,7 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                               releasing={releasing}
                               onAction={handleAction}
                               token={token}
+                              t={t}
                             />
                           )}
                         </div>
@@ -805,11 +818,11 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
                 </div>
 
                 <div style={{ marginTop: 12, paddingLeft: 48 }}>
-                  <Text type="secondary" style={{ fontSize: TYPO.secondary }}>↓ 成品交付</Text>
+                  <Text type="secondary" style={{ fontSize: TYPO.secondary }}>{t('app.kuaizhizao.coordinationPipeline.finalDelivery')}</Text>
                 </div>
               </>
             ) : (
-              <Empty description="请从左侧选择订单" />
+              <Empty description={t('app.kuaizhizao.coordinationPipeline.selectOrder')} />
             )}
           </Spin>
         </Col>
@@ -828,10 +841,11 @@ const CoordinationPipelinePanel: React.FC<CoordinationPipelinePanelProps> = ({ o
               <RelatedDocumentsPanel
                 documents={p.documents}
                 onNavigate={navigate}
+                t={t}
               />
             ) : (
-              <Card title="关联单据" styles={{ header: { fontSize: TYPO.panelTitle } }}>
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择订单" />
+              <Card title={t('app.kuaizhizao.coordinationPipeline.relatedDocuments')} styles={{ header: { fontSize: TYPO.panelTitle } }}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.coordinationPipeline.selectOrderHint')} />
               </Card>
             )}
           </Spin>

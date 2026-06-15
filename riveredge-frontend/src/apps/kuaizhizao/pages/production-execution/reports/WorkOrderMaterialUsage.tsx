@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const WorkOrderMaterialUsage: React.FC = () => {
   const { t } = useTranslation();
@@ -14,7 +14,8 @@ const WorkOrderMaterialUsage: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.WorkOrderMaterialUsage"
       title={t('app.kuaizhizao.menu.reports.work-order-material-usage')}
       reportType="wo_material_usage"
       columns={columns}

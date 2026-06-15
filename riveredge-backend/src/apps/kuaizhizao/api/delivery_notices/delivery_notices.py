@@ -183,3 +183,24 @@ async def print_delivery_notice(
     if response_format == "html":
         return HTMLResponse(content=result.get("content", ""), status_code=200)
     return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/{notice_id}/resolve-quality-certificate",
+    summary="Resolve quality certificates for delivery notice",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:print"))],
+)
+async def resolve_delivery_notice_quality_certificates(
+    notice_id: int = Path(..., description="通知单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    try:
+        certificates = await DocumentPrintService.resolve_quality_certificates_for_delivery_notice(
+            tenant_id, notice_id
+        )
+        return {"success": True, "certificates": certificates}
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e))

@@ -128,12 +128,6 @@
                 "permission": "kuaizhizao:sales-management-reports-product-sales-ranking:read"
               },
               {
-                "title": "app.kuaizhizao.menu.reports.forecast-vs-actual",
-                "path": "/apps/kuaierp/sales-management/reports/forecast-vs-actual",
-                "sort_order": 6,
-                "permission": "kuaizhizao:sales-management-reports-forecast-vs-actual:read"
-              },
-              {
                 "title": "app.kuaizhizao.menu.reports.quotation-query",
                 "path": "/apps/kuaierp/sales-management/reports/quotation-query",
                 "sort_order": 7,

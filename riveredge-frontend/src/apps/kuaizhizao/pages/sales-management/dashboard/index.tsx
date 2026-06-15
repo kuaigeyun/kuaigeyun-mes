@@ -28,6 +28,7 @@ import {
   WechatOutlined
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { Line } from '@ant-design/charts';
 import { mesDashboardService } from '../../../services/dashboard';
@@ -57,44 +58,6 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module
 
 const { Text, Title, Paragraph } = Typography;
 
-const DEFAULT_MONTHLY_TREND = [
-  { month: '2025-12', revenue: 650000, quantity: 24 },
-  { month: '2026-01', revenue: 780000, quantity: 28 },
-  { month: '2026-02', revenue: 450000, quantity: 18 },
-  { month: '2026-03', revenue: 890000, quantity: 35 },
-  { month: '2026-04', revenue: 950000, quantity: 38 },
-  { month: '2026-05', revenue: 1020000, quantity: 42 },
-];
-
-const DEFAULT_TOP_PRODUCTS = [
-  { material_name: '高精密五金冲压件A', quantity: 12000, amount: 240000 },
-  { material_name: '不锈钢钣金外壳机箱', quantity: 4500, amount: 180000 },
-  { material_name: '铝合金散热器底座', quantity: 8000, amount: 120000 },
-  { material_name: '注塑精密齿轮模组', quantity: 9500, amount: 95000 },
-  { material_name: '特氟龙耐高温垫圈', quantity: 50000, amount: 50000 },
-];
-
-const DEFAULT_TOP_CUSTOMERS = [
-  { name: '特斯拉中国有限公司', amount: 480000, orderCount: 12 },
-  { name: '比亚迪精密制造部', amount: 350000, orderCount: 9 },
-  { name: '宁德时代新能源科技', amount: 260000, orderCount: 6 },
-  { name: '华为技术有限公司数字能源部', amount: 190000, orderCount: 4 },
-  { name: '三一重工集团采购中心', amount: 150000, orderCount: 3 },
-];
-
-const DEFAULT_PENDING_TASKS = [
-  { id: -1, customer_name: '特斯拉中国有限公司', next_follow_up_at: dayjs().format('YYYY-MM-DD'), content: '跟进第二批高精密冲压件交付情况，确认是否追加订单。' },
-  { id: -2, customer_name: '比亚迪精密制造部', next_follow_up_at: dayjs().format('YYYY-MM-DD'), content: '商务洽谈：确认钣金外壳机箱第三季度合同细节。' },
-  { id: -3, customer_name: '宁德时代新能源科技', next_follow_up_at: dayjs().add(1, 'day').format('YYYY-MM-DD'), content: '常规回访：收集散热器底座样品测试反馈。' },
-];
-
-const DEFAULT_FOLLOW_UPS = [
-  { id: -1, customer_name: '特斯拉中国有限公司', occurred_at: dayjs().subtract(1, 'hour').toISOString(), content: '电话跟进：确认首批高精密冲压件已在排产中，客户反馈良好。', activity_type_code: 'PHONE' },
-  { id: -2, customer_name: '比亚迪精密制造部', occurred_at: dayjs().subtract(1, 'day').toISOString(), content: '现场拜访：沟通第二季度对账事宜，双方拟定结算方案。', activity_type_code: 'MEETING' },
-  { id: -3, customer_name: '华为技术有限公司', occurred_at: dayjs().subtract(2, 'day').toISOString(), content: '邮件发送：已发送最新报价方案，等待对方技术部门二次评审。', activity_type_code: 'EMAIL' },
-  { id: -4, customer_name: '宁德时代新能源科技', occurred_at: dayjs().subtract(3, 'day').toISOString(), content: '微信沟通：沟通散热器底座样品寄送，对方确认已收到并开始检测。', activity_type_code: 'WECHAT' }
-];
-
 /** 与后端 SALES_ORDER_PENDING_SHIP_STATUS 对齐 */
 const PENDING_DELIVERY_STATUS = new Set([
   'approved', 'confirmed',
@@ -110,6 +73,7 @@ function isPendingDeliveryOrder(order: { status?: string; delivery_progress?: nu
 
 const SalesDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
   const isPlain = isModuleDashboardPlain(themeStyle);
@@ -256,7 +220,11 @@ const SalesDashboard: React.FC = () => {
               style={{ margin: 0 }}
             />
             <span style={{ fontSize: 10, color: token.colorTextTertiary }}>
-              交期: {record.delivery_date ? dayjs(record.delivery_date).format('MM-DD') : '未定'}
+              {t('app.kuaizhizao.salesDashboard.deliveryDue', {
+                date: record.delivery_date
+                  ? dayjs(record.delivery_date).format('MM-DD')
+                  : t('app.kuaizhizao.salesDashboard.deliveryTbd'),
+              })}
             </span>
           </div>
           <Tag color={statusColor} style={{ margin: 0, fontSize: 10, padding: '0 4px', flexShrink: 0 }}>
@@ -265,7 +233,7 @@ const SalesDashboard: React.FC = () => {
         </div>
       );
     },
-    [isPlain, navigate, token.colorBorderSecondary, token.colorPrimary, token.colorTextTertiary],
+    [isPlain, navigate, t, token.colorBorderSecondary, token.colorPrimary, token.colorTextTertiary],
   );
 
   useEffect(() => {
@@ -332,7 +300,7 @@ const SalesDashboard: React.FC = () => {
   const topProducts = (() => {
     const raw = topProductsData || [];
     return raw.map((r: any) => ({
-      material_name: r.material_name || r.name || '未知商品',
+      material_name: r.material_name || r.name || t('app.kuaizhizao.salesDashboard.unknownProduct'),
       quantity: Number(r.quantity) || 0,
       amount: Number(r.amount) || 0
     })).filter(x => x.quantity > 0).slice(0, 5);
@@ -427,29 +395,32 @@ const SalesDashboard: React.FC = () => {
     () => [
       {
         key: 'quotations',
-        title: '待处理报价',
+        title: t('app.kuaizhizao.salesDashboard.kpi.pendingQuotations'),
         value: s?.pending_quotations ?? 0,
-        subtitle: '含草稿与待审核状态单据',
+        subtitle: t('app.kuaizhizao.salesDashboard.kpi.pendingQuotationsSubtitle'),
         icon: <FileTextOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         boxShadow: '0 4px 12px rgba(24, 144, 255, 0.15)',
         onClick: () => navigate('/apps/kuaizhizao/sales-management/quotations'),
-        sideMetrics: [{ label: '本月新增', value: s?.new_quotations_this_month ?? 0 }],
+        sideMetrics: [{ label: t('app.kuaizhizao.salesDashboard.kpi.newThisMonth'), value: s?.new_quotations_this_month ?? 0 }],
       },
       {
         key: 'shipments',
-        title: '待发货订单',
+        title: t('app.kuaizhizao.salesDashboard.kpi.pendingShipments'),
         value: s?.pending_shipments ?? 0,
-        subtitle: s?.overdue_shipments > 0 ? `含 ${s.overdue_shipments} 单已逾期` : '全部订单在交期内',
+        subtitle:
+          s?.overdue_shipments > 0
+            ? t('app.kuaizhizao.salesDashboard.kpi.overdueShipmentsSubtitle', { count: s.overdue_shipments })
+            : t('app.kuaizhizao.salesDashboard.kpi.allOnTime'),
         icon: <SendOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         boxShadow: '0 4px 12px rgba(255, 77, 79, 0.15)',
         onClick: () => navigate('/apps/kuaizhizao/sales-management/sales-orders?status=approved'),
-        sideMetrics: [{ label: '已逾期', value: s?.overdue_shipments ?? 0 }],
+        sideMetrics: [{ label: t('app.kuaizhizao.salesDashboard.kpi.overdue'), value: s?.overdue_shipments ?? 0 }],
       },
       {
         key: 'revenue',
-        title: '本月销售额 (元)',
+        title: t('app.kuaizhizao.salesDashboard.kpi.monthlyRevenue'),
         value: (
           <AmountDisplay
             resource={SO}
@@ -466,44 +437,44 @@ const SalesDashboard: React.FC = () => {
         progress: s?.achievement_rate ?? 0,
         sideMetrics: [
           {
-            label: '上月完成',
+            label: t('app.kuaizhizao.salesDashboard.kpi.lastMonth'),
             value: showMoney ? `${((s?.total_amount_last_month ?? 0) / 10000).toFixed(1)}w` : '***',
           },
-          { label: '达成率', value: `${s?.achievement_rate ?? 0}%` },
+          { label: t('app.kuaizhizao.salesDashboard.kpi.achievementRate'), value: `${s?.achievement_rate ?? 0}%` },
         ],
       },
     ],
-    [navigate, s, showMoney],
+    [navigate, s, showMoney, t],
   );
 
   const moduleShortcuts: ModuleShortcutDef[] = useMemo(
     () => [
       {
         key: 'quote',
-        title: '新建报价',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.newQuotation'),
         icon: <FileDoneOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
         path: '/apps/kuaizhizao/sales-management/quotations',
       },
       {
         key: 'orders',
-        title: '销售订单',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.salesOrders'),
         icon: <SolutionOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
         path: '/apps/kuaizhizao/sales-management/sales-orders',
       },
       {
         key: 'follow-up',
-        title: '客户跟进',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.followUp'),
         icon: <CustomerServiceOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
         path: '/apps/kuaizhizao/sales-management/customer-follow-ups',
       },
       {
         key: 'customers',
-        title: '客户管理',
+        title: t('app.kuaizhizao.salesDashboard.shortcut.customers'),
         icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
         path: '/apps/master-data/supply-chain/customers',
       },
     ],
-    [],
+    [t],
   );
 
 
@@ -527,7 +498,7 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <AuditOutlined style={{ color: '#fa8c16' }} />
-                  <span>今日任务与提醒</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.tasksTitle')}</span>
                 </div>
               }
               headerBordered
@@ -553,10 +524,10 @@ const SalesDashboard: React.FC = () => {
                   <ExclamationCircleOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 16 }} />
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <Text strong style={{ color: isPlain ? token.colorText : token.colorWarningText, fontSize: 12, lineHeight: 1.35 }}>
-                      您有待审核报价单
+                      {t('app.kuaizhizao.salesDashboard.pendingQuotationsAlert')}
                     </Text>
                     <div style={{ fontSize: 11, color: isPlain ? token.colorTextSecondary : token.colorWarningText, marginTop: 1, lineHeight: 1.35, opacity: 0.85 }}>
-                      共有 {s.pending_quotations} 份报价单处于待审核状态，请尽快处理。
+                      {t('app.kuaizhizao.salesDashboard.pendingQuotationsDetail', { count: s.pending_quotations })}
                     </div>
                   </div>
                   <RightOutlined style={{ color: isPlain ? token.colorPrimary : token.colorWarning, fontSize: 11, flexShrink: 0 }} />
@@ -569,7 +540,7 @@ const SalesDashboard: React.FC = () => {
                     <Spin size="small" />
                   </div>
                 ) : pendingTasks.length === 0 ? (
-                  <Empty description="今日暂无到期待跟进客户" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  <Empty description={t('app.kuaizhizao.salesDashboard.noFollowUpToday')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
                   pendingTasks.slice(0, 3).map((item: any) => (
                     <div key={item.id} style={{
@@ -585,7 +556,7 @@ const SalesDashboard: React.FC = () => {
                           <Text strong ellipsis style={{ fontSize: 12, lineHeight: 1.3 }}>{item.customer_name}</Text>
                         </div>
                         <Tag color="warning" style={{ margin: 0, fontSize: 10, lineHeight: '18px', padding: '0 5px', flexShrink: 0 }}>
-                          待跟进
+                          {t('app.kuaizhizao.salesDashboard.pendingFollowUp')}
                         </Tag>
                       </div>
                       <Paragraph
@@ -593,11 +564,13 @@ const SalesDashboard: React.FC = () => {
                         ellipsis={{ rows: 1 }}
                         style={{ fontSize: 11, lineHeight: 1.35, marginBottom: 4 }}
                       >
-                        {item.content || '无跟进任务描述'}
+                        {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpContent')}
                       </Paragraph>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
                         <Text type="secondary" style={{ fontSize: 10, lineHeight: 1.2 }}>
-                          计划 {dayjs(item.next_follow_up_at).format('YYYY-MM-DD')}
+                          {t('app.kuaizhizao.salesDashboard.plannedFollowUp', {
+                            date: dayjs(item.next_follow_up_at).format('YYYY-MM-DD'),
+                          })}
                         </Text>
                         <Button
                           type="link"
@@ -606,7 +579,7 @@ const SalesDashboard: React.FC = () => {
                           onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}
                           style={{ fontSize: 11, height: 20, padding: 0, flexShrink: 0 }}
                         >
-                          去跟进
+                          {t('app.kuaizhizao.salesDashboard.goFollowUp')}
                         </Button>
                       </div>
                     </div>
@@ -621,13 +594,13 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <SolutionOutlined style={{ color: '#52c41a' }} />
-                  <span>订单交付与交期跟踪</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.deliveryTrackingTitle')}</span>
                 </div>
               }
               headerBordered
               style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
               styles={{ body: {padding: 8 } }}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>查看全部</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-orders')}>{t('app.kuaizhizao.salesDashboard.viewAll')}</a>}
             >
               <div style={{ height: 250, overflow: 'hidden' }}>
                 {ordersLoading ? (
@@ -635,7 +608,7 @@ const SalesDashboard: React.FC = () => {
                     <Spin size="small" />
                   </div>
                 ) : pendingDeliveryOrders.length === 0 ? (
-                  <Empty description="暂无待交付订单" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  <Empty description={t('app.kuaizhizao.salesDashboard.noPendingDelivery')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
                   <div
                     ref={deliveryScrollRef}
@@ -661,13 +634,13 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <CustomerServiceOutlined style={{ color: '#722ed1' }} />
-                  <span>最近客户跟进动态</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.recentFollowUpTitle')}</span>
                 </div>
               }
               headerBordered
               style={{ height: '100%', borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
               styles={{ body: {padding: '10px 12px 8px' } }}
-              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>查看全部</a>}
+              extra={<a onClick={() => navigate('/apps/kuaizhizao/sales-management/customer-follow-ups')}>{t('app.kuaizhizao.salesDashboard.viewAll')}</a>}
             >
               <div style={{ minHeight: 250, maxHeight: 320, overflowY: 'auto', paddingRight: 2 }}>
                 {followUpsLoading ? (
@@ -675,7 +648,7 @@ const SalesDashboard: React.FC = () => {
                     <Spin size="small" />
                   </div>
                 ) : recentFollowUpItems.length === 0 ? (
-                  <Empty description="暂无客户跟进动态" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  <Empty description={t('app.kuaizhizao.salesDashboard.noRecentFollowUp')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                 ) : (
                   recentFollowUpItems.slice(0, 5).map((item: any) => (
                     <div
@@ -702,7 +675,7 @@ const SalesDashboard: React.FC = () => {
                           ellipsis={{ rows: 1 }}
                           style={{ fontSize: 11, color: token.colorTextSecondary, marginTop: 2, marginBottom: 0, lineHeight: 1.35 }}
                         >
-                          {item.content || '无跟进记录内容'}
+                          {item.content || t('app.kuaizhizao.salesDashboard.noFollowUpRecord')}
                         </Paragraph>
                       </div>
                     </div>
@@ -718,7 +691,7 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <RiseOutlined style={{ color: token.colorPrimary }} />
-                  <span>业绩与订单走势</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.trendTitle')}</span>
                 </div>
               }
               headerBordered
@@ -727,8 +700,8 @@ const SalesDashboard: React.FC = () => {
               extra={
                 <Segmented
                   options={[
-                    { label: '销售金额', value: 'revenue', disabled: !showMoney },
-                    { label: '订单数量', value: 'quantity' }
+                    { label: t('app.kuaizhizao.salesDashboard.trendRevenue'), value: 'revenue', disabled: !showMoney },
+                    { label: t('app.kuaizhizao.salesDashboard.trendQuantity'), value: 'quantity' },
                   ]}
                   value={trendType}
                   onChange={(val) => setTrendType(val as any)}
@@ -766,9 +739,13 @@ const SalesDashboard: React.FC = () => {
                       y: {
                         formatter: (val: any) => {
                           if (trendType === 'revenue') {
-                            return showMoney ? `${(Number(val) / 10000).toFixed(0)}万` : '***';
+                            return showMoney
+                              ? t('app.kuaizhizao.salesDashboard.trendRevenueUnit', {
+                                  value: (Number(val) / 10000).toFixed(0),
+                                })
+                              : '***';
                           }
-                          return `${val} 单`;
+                          return t('app.kuaizhizao.salesDashboard.trendOrderUnit', { value: val });
                         },
                       },
                     }}
@@ -784,7 +761,7 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <TrophyOutlined style={{ color: '#fa8c16' }} />
-                  <span>销售业绩排行榜</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.rankingTitle')}</span>
                 </div>
               }
               headerBordered
@@ -793,8 +770,8 @@ const SalesDashboard: React.FC = () => {
               extra={
                 <Segmented
                   options={[
-                    { label: '热销商品', value: 'products' },
-                    { label: '核心客户', value: 'customers' }
+                    { label: t('app.kuaizhizao.salesDashboard.rankProducts'), value: 'products' },
+                    { label: t('app.kuaizhizao.salesDashboard.rankCustomers'), value: 'customers' },
                   ]}
                   value={rankType}
                   onChange={(val) => setRankType(val as any)}
@@ -815,7 +792,7 @@ const SalesDashboard: React.FC = () => {
                       <Spin />
                     </div>
                   ) : topProducts.length === 0 ? (
-                    <Empty description="暂无热销排行数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    <Empty description={t('app.kuaizhizao.salesDashboard.noProductRank')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   ) : (
                     topProducts.map((item: any, idx: number) => (
                       <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
@@ -823,7 +800,9 @@ const SalesDashboard: React.FC = () => {
                         <div style={{ flex: 1, minWidth: 0 }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                             <Text strong ellipsis style={{ fontSize: 13 }}>{item.material_name}</Text>
-                            <Text type="secondary" style={{ fontSize: 12 }}>{item.quantity.toLocaleString()} 件</Text>
+                            <Text type="secondary" style={{ fontSize: 12 }}>
+                              {t('app.kuaizhizao.salesDashboard.piecesUnit', { count: item.quantity.toLocaleString() })}
+                            </Text>
                           </div>
                           <Progress
                             percent={Math.min(100, Math.round((item.quantity / Math.max(...topProducts.map(p => p.quantity || 1))) * 100))}
@@ -837,7 +816,7 @@ const SalesDashboard: React.FC = () => {
                   )
                 ) : (
                   topCustomers.length === 0 ? (
-                    <Empty description="暂无客户排行数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    <Empty description={t('app.kuaizhizao.salesDashboard.noCustomerRank')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   ) : (
                     topCustomers.map((item: any, idx: number) => (
                       <div key={idx} style={{ display: 'flex', alignItems: 'center', marginBottom: 16, gap: 12 }}>
@@ -846,7 +825,7 @@ const SalesDashboard: React.FC = () => {
                           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                             <Text strong ellipsis style={{ fontSize: 13 }}>{item.name}</Text>
                             <Text type="secondary" style={{ fontSize: 12 }}>
-                              {item.orderCount}单 | <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
+                              {t('app.kuaizhizao.salesDashboard.orderCountUnit', { count: item.orderCount })} | <AmountDisplay resource={SO} fieldName="amount" value={item.amount} />
                             </Text>
                           </div>
                           <Progress
@@ -871,13 +850,13 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <ExclamationCircleOutlined />
-                  <span>合同预警</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.contractAlertsTitle')}</span>
                 </div>
               }
               headerBordered
               extra={
                 <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/sales-contracts')}>
-                  查看全部
+                  {t('app.kuaizhizao.salesDashboard.viewAll')}
                 </Button>
               }
               style={{ borderRadius: token.borderRadiusLG, boxShadow: '0 1px 2px 0 rgba(0,0,0,0.03)' }}
@@ -885,7 +864,7 @@ const SalesDashboard: React.FC = () => {
               {contractAlertsLoading ? (
                 <Spin />
               ) : contractAlerts.length === 0 ? (
-                <Empty description="暂无合同预警" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={t('app.kuaizhizao.salesDashboard.noContractAlerts')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
                 contractAlerts.slice(0, 6).map((item) => (
                   <div
@@ -921,7 +900,11 @@ const SalesDashboard: React.FC = () => {
                       </Text>
                     </div>
                     <Tag color={item.severity === 'high' ? 'error' : 'warning'}>
-                      {item.alert_type === 'expiry' ? '到期' : item.alert_type === 'low_balance' ? '余量' : '里程碑'}
+                      {item.alert_type === 'expiry'
+                        ? t('app.kuaizhizao.salesDashboard.alertExpiry')
+                        : item.alert_type === 'low_balance'
+                          ? t('app.kuaizhizao.salesDashboard.alertLowBalance')
+                          : t('app.kuaizhizao.salesDashboard.alertMilestone')}
                     </Tag>
                   </div>
                 ))
@@ -933,7 +916,7 @@ const SalesDashboard: React.FC = () => {
               title={
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <AuditOutlined />
-                  <span>框架合同执行</span>
+                  <span>{t('app.kuaizhizao.salesDashboard.frameworkContractsTitle')}</span>
                 </div>
               }
               headerBordered
@@ -942,7 +925,7 @@ const SalesDashboard: React.FC = () => {
               {frameworkLoading ? (
                 <Spin />
               ) : frameworkContracts.length === 0 ? (
-                <Empty description="暂无执行中的框架合同" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                <Empty description={t('app.kuaizhizao.salesDashboard.noFrameworkContracts')} image={Empty.PRESENTED_IMAGE_SIMPLE} />
               ) : (
                 frameworkContracts.slice(0, 6).map((item) => {
                   const pct =
@@ -971,12 +954,16 @@ const SalesDashboard: React.FC = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                         <Text strong ellipsis>{item.contract_code}</Text>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          剩余 ¥{Number(item.remaining_amount).toLocaleString()}
+                          {t('app.kuaizhizao.salesDashboard.remainingAmount', {
+                            amount: Number(item.remaining_amount).toLocaleString(),
+                          })}
                         </Text>
                       </div>
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {item.customer_name}
-                        {item.valid_to ? ` · 至 ${item.valid_to}` : ''}
+                        {item.valid_to
+                          ? t('app.kuaizhizao.salesDashboard.validUntil', { date: item.valid_to })
+                          : ''}
                       </Text>
                       <Progress percent={pct} size="small" style={{ marginTop: 4 }} />
                     </div>

@@ -57,7 +57,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
           const showTaxColumns = priceType === 'tax_inclusive';
           const detailColumns = [
                     {
-                      title: '物料',
+                      title: t('app.kuaizhizao.salesOrder.material'),
                       dataIndex: 'material_id',
                       width: 260,
                       render: (_: unknown, __: unknown, index: number) => (
@@ -79,17 +79,17 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         ) : null,
                     },
                     {
-                      title: '规格',
+                      title: t('app.kuaizhizao.salesOrder.spec'),
                       dataIndex: 'material_spec',
                       width: 120,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                          <Input placeholder="规格" size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
                         </Form.Item>
                       ),
                     },
                     {
-                      title: '单位',
+                      title: t('app.kuaizhizao.salesOrder.unit'),
                       dataIndex: 'material_unit',
                       width: 100,
                       render: (_: unknown, __: unknown, index: number) => (
@@ -111,18 +111,18 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ),
                     },
                     {
-                      title: '数量',
+                      title: t('app.kuaizhizao.salesOrder.quantity'),
                       dataIndex: 'contract_quantity',
                       width: 100,
                       align: 'right' as const,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item
                           name={[index, 'contract_quantity']}
-                          rules={[{ required: true, message: '必填' }]}
+                          rules={[{ required: true, message: t('common.required') }]}
                           style={{ margin: 0 }}
                         >
                           <InputNumber
-                            placeholder="数量"
+                            placeholder={t('app.kuaizhizao.salesOrder.quantity')}
                             min={0.01}
                             precision={2}
                             style={{ width: '100%' }}
@@ -328,7 +328,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         ),
                     },
                     {
-                      title: '交货日期',
+                      title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                       dataIndex: 'delivery_date',
                       width: 130,
                       render: (_: unknown, __: unknown, index: number) => (
@@ -338,12 +338,12 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                       ),
                     },
                     {
-                      title: '备注',
+                      title: t('app.kuaizhizao.salesOrder.notes'),
                       dataIndex: 'notes',
                       width: 120,
                       render: (_: unknown, __: unknown, index: number) => (
                         <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                          <Input placeholder="备注" size="small" />
+                          <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
                         </Form.Item>
                       ),
                     },
@@ -367,9 +367,9 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                   `}</style>
               <UniTableDetail
                 name="items"
-                title="物料明细"
+                title={t('app.kuaizhizao.salesContract.contractItems')}
                 required
-                requiredMessage="请至少添加一条合同明细"
+                requiredMessage={t('app.kuaizhizao.salesContract.itemsRequired')}
                 leftExtra={(
                   <ProForm.Item
                     name="price_type"
@@ -394,7 +394,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         icon={<ImportOutlined />}
                         onClick={onOpenImport}
                       >
-                        导入明细
+                        {t('app.kuaizhizao.salesOrder.importItems')}
                       </Button>
                     ) : null}
                     <Button
@@ -406,7 +406,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                         formRef.current?.setFieldsValue({ items });
                       }}
                     >
-                      添加明细
+                      {t('app.kuaizhizao.salesOrder.addItem')}
                     </Button>
                     <Button
                       type="default"

@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const WorkOrderLaborDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -15,7 +15,8 @@ const WorkOrderLaborDetail: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.production-execution.reports.WorkOrderLaborDetail"
       title={t('app.kuaizhizao.menu.reports.work-order-labor-detail')}
       reportType="wo_labor_detail"
       columns={columns}

@@ -6,6 +6,7 @@
 import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
 
 function norm(s: string | undefined): string {
   return (s ?? '').trim();
@@ -231,9 +232,18 @@ export interface QuotationLike {
   conversion_downstream_missing?: boolean;
 }
 
+const QUOTATION_STAGE_I18N_BY_KEY: Record<string, string> = {
+  draft: 'app.kuaizhizao.quotation.statusFilter.draft',
+  generated: 'app.kuaizhizao.quotation.statusFilter.sent',
+  customer_confirmed: 'app.kuaizhizao.quotation.statusFilter.accepted',
+  converted: 'app.kuaizhizao.quotation.statusFilter.converted',
+  sent_pending_confirm: 'app.kuaizhizao.quotation.statusFilter.sent',
+};
+
 export function getQuotationLifecycle(
   record: QuotationLike | Record<string, unknown> | null | undefined,
   auditRequired = true,
+  t?: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const raw = record as Record<string, unknown>;
@@ -252,6 +262,11 @@ export function getQuotationLifecycle(
     };
   }
 
-  if (auditRequired) return base;
-  return adaptQuotationLifecycleForNoAudit(base, raw);
+  if (!auditRequired) {
+    base = adaptQuotationLifecycleForNoAudit(base, raw);
+  }
+
+  if (!t) return base;
+
+  return applyLifecycleI18n(base, t, QUOTATION_STAGE_I18N_BY_KEY);
 }

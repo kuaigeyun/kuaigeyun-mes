@@ -43,6 +43,8 @@ import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni
 import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import { uploadMultipleFiles } from '../../../../../services/file';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { outboundTypeToPrintDocumentType } from '../../../utils/kuaizhizaoPrintConfig';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import OutboundQuickPullModals, { type OutboundQuickPullModalsRef } from './OutboundQuickPullModals';
 import OutboundConfirmPreviewModal from './OutboundConfirmPreviewModal';
@@ -108,6 +110,7 @@ const PRODUCTION_PICKING_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_production_pickin
 
 const OutboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const location = useLocation();
   const { token } = AntdTheme.useToken();
@@ -537,25 +540,14 @@ const OutboundPage: React.FC = () => {
     });
   };
 
-  const handlePrint = async (record: OutboundOrder) => {
+  const handlePrint = (record: OutboundOrder) => {
     if (!record.id) return;
-    try {
-      const id = String(record.id);
-      if (record.outbound_type === 'sales_delivery') {
-        await warehouseApi.salesDelivery.print(id);
-      } else if (record.outbound_type === 'other_outbound') {
-        await warehouseApi.otherOutbound.print(id);
-      } else if (record.outbound_type === 'material_borrow') {
-        await warehouseApi.materialBorrow.print(id);
-      } else {
-        messageApi.warning('该类型暂不支持打印');
-        return;
-      }
-      messageApi.success('已发送打印请求');
-    } catch (e: unknown) {
-      const err = e as { message?: string };
-      messageApi.error(err?.message || '打印失败');
+    const docType = outboundTypeToPrintDocumentType(record.outbound_type);
+    if (!docType) {
+      messageApi.warning('该类型暂不支持打印');
+      return;
     }
+    openPrint({ documentType: docType, documentId: record.id });
   };
 
   const handleConfirm = async (record: OutboundOrder) => {
@@ -746,10 +738,12 @@ const OutboundPage: React.FC = () => {
               撤回
             </Button>
           )}
-          {['sales_delivery', 'other_outbound', 'material_borrow'].includes(String(record.outbound_type)) &&
-            isOutboundWithdrawable(record) && (
-            <Button {...rowActionKind('print')} onClick={() => void handlePrint(record)} />
-          )}
+          {(() => {
+            const printDocType = outboundTypeToPrintDocumentType(record.outbound_type);
+            return printDocType && record.id ? (
+              <Button {...rowActionKind('print')} onClick={() => handlePrint(record)} />
+            ) : null;
+          })()}
         </Space>
       ),
     },
@@ -1277,6 +1271,7 @@ const OutboundPage: React.FC = () => {
           ) : null
         }
       />
+      {PrintModal}
     </ListPageTemplate>
   );
 };

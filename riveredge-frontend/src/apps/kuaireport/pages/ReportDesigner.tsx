@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import { ArrowLeftOutlined, SaveOutlined } from '@ant-design/icons';
 import { useNavigate, useParams } from 'react-router-dom';
-import { getReport, createReport, updateReport, getChartTypes } from '../services/kuaireport';
+import { getReport, createReport, updateReport, getChartTypes, getDatasetFields } from '../services/kuaireport';
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
@@ -59,20 +59,31 @@ const StepDataConfig: React.FC<{ config: any; onChange: (v: any) => void }> = ({
         return () => { cancelled = true; };
     }, []);
 
-    const handleSourceChange = (val: string) => {
+    const handleSourceChange = async (val: string) => {
         const ds = datasets.find((d: any) => d.uuid === val);
-        onChange({
+        const nextConfig = {
             ...config,
             dataset_uuid: val,
             dataset_code: ds?.code,
-            // 模拟拉取字段信息，实际工程中应有单独的接口获取数据集元数据
-            fields: [
-                { field: 'id', label: 'ID', visible: true },
-                { field: 'name', label: '名称', visible: true },
-                { field: 'amount', label: '金额', visible: true, y_axis: true },
-                { field: 'created_at', label: '创建日期', visible: true, x_axis: true },
-            ]
-        });
+            fields: [] as any[],
+        };
+        onChange(nextConfig);
+        try {
+            const res = await getDatasetFields({ dataset_uuid: val, dataset_code: ds?.code });
+            if (res?.fields?.length) {
+                onChange({
+                    ...nextConfig,
+                    fields: res.fields.map((f) => ({
+                        field: f.field,
+                        label: f.label,
+                        visible: f.visible !== false,
+                        format: f.format,
+                    })),
+                });
+            }
+        } catch {
+            // 字段探测失败时保持空列表，由用户在下一步手动配置
+        }
     };
 
     // 自动选择第一个数据集（无默认时）

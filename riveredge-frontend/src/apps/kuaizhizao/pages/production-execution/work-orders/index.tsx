@@ -173,7 +173,7 @@ import { displayItemsToUsers } from '../../../../../utils/userDisplay'
 import { getEquipmentList } from '../../../../../services/equipment'
 import { getMoldList } from '../../../../../services/mold'
 import { toolApi } from '../../../services/equipment'
-const WorkOrderPrintModal = lazy(() => import('./components/WorkOrderPrintModal'))
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 /** 指标卡趋势图：首屏不拉 @ant-design/charts，减少工单页 JS 解析与主线程占用 */
 const LazyStatTrendArea = lazy(() =>
   import('../../../../../components/common/StatCardTrendArea').then((m) => ({ default: m.StatCardTrendArea }))
@@ -1135,6 +1135,7 @@ const WORK_ORDER_LIFECYCLE_VALUE_ENUM = buildWorkOrderLifecycleValueEnum()
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { message: messageApi } = App.useApp()
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal()
 
   const workOrderImportTemplate = useMemo(
     () =>
@@ -1992,10 +1993,7 @@ const WorkOrdersPage: React.FC = () => {
     }
   }, [dispatchModalVisible])
 
-  // 打印相关状态
-  const [printModalVisible, setPrintModalVisible] = useState(false)
   const [syncModalVisible, setSyncModalVisible] = useState(false)
-  const [currentWorkOrderForPrint, setCurrentWorkOrderForPrint] = useState<any>(null)
 
   const selectedRows = useMemo(() => {
     return selectedRowKeys.map(key => {
@@ -2779,8 +2777,8 @@ const WorkOrdersPage: React.FC = () => {
    * 处理打印
    */
   const handlePrint = (record: WorkOrder) => {
-    setCurrentWorkOrderForPrint(record)
-    setPrintModalVisible(true)
+    if (!record.id) return
+    openPrint({ documentType: 'work_order', documentId: record.id })
   }
 
   /**
@@ -6378,20 +6376,7 @@ const WorkOrdersPage: React.FC = () => {
         </Space>
       </Modal>
 
-      {/* 打印工单 Modal - 懒加载 */}
-      {printModalVisible && (
-        <Suspense fallback={<Spin spinning />}>
-          <WorkOrderPrintModal
-            visible={printModalVisible}
-            onCancel={() => {
-              setPrintModalVisible(false)
-              setCurrentWorkOrderForPrint(null)
-            }}
-            workOrderData={currentWorkOrderForPrint}
-            workOrderId={currentWorkOrderForPrint?.id}
-          />
-        </Suspense>
-      )}
+      {PrintModal}
 
       {/* 工序卡环形进度：快速报工（与报工管理新建逻辑一致） */}
       <FormModalTemplate

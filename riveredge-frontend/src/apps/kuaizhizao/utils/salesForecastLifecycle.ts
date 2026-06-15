@@ -7,6 +7,7 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
 
 /** 后端主轴 key：含历史四段式（含 pushed）与订单对齐七段式 */
 const SALES_FORECAST_BACKEND_KEYS = new Set([
@@ -357,12 +358,28 @@ export interface SalesForecastLike {
   lifecycle?: unknown;
 }
 
+const SALES_FORECAST_STAGE_I18N_BY_KEY: Record<string, string> = {
+  draft: 'app.kuaizhizao.salesForecast.statusDraft',
+  pending_review: 'app.kuaizhizao.salesForecast.statusPending',
+  audited: 'app.kuaizhizao.salesForecast.statusApproved',
+  pushed: 'app.kuaizhizao.salesForecast.statusPushed',
+  effective: 'app.kuaizhizao.salesForecast.lifecycleEffective',
+  executing: 'app.kuaizhizao.salesForecast.lifecycleExecuting',
+  delivered: 'app.kuaizhizao.salesOrder.lifecycleDelivered',
+  invoicing: 'app.kuaizhizao.salesOrder.lifecycleInvoicing',
+  completed: 'app.kuaizhizao.salesForecast.lifecycleCompleted',
+  demand_compute: 'app.kuaizhizao.salesForecast.lifecycleDemandCompute',
+  supply_execution: 'app.kuaizhizao.salesForecast.lifecycleSupplyExecution',
+  forecast_review: 'app.kuaizhizao.salesForecast.lifecycleForecastReview',
+};
+
 /**
  * 根据销售预测获取生命周期结果，供 UniLifecycleStepper 使用。
  */
 export function getSalesForecastLifecycle(
   record: SalesForecastLike | Record<string, unknown> | null | undefined,
-  auditRequired = true
+  auditRequired = true,
+  t?: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) {
     return { percent: 0, stageName: '-', mainStages: [] };
@@ -370,13 +387,17 @@ export function getSalesForecastLifecycle(
   const backend = (record?.lifecycle ?? (record as Record<string, unknown>).lifecycle) as
     | BackendLifecycle
     | undefined;
+  let result: LifecycleResult;
   if (backend?.main_stages?.length && isSalesForecastLifecycle(backend)) {
-    return finalizeForecastLifecyclePercent(adaptForAuditSwitch(parseBackendLifecycle(backend), auditRequired));
+    result = finalizeForecastLifecyclePercent(adaptForAuditSwitch(parseBackendLifecycle(backend), auditRequired));
+  } else {
+    result = finalizeForecastLifecyclePercent(
+      adaptForAuditSwitch(
+        parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>)),
+        auditRequired,
+      ),
+    );
   }
-  return finalizeForecastLifecyclePercent(
-    adaptForAuditSwitch(
-      parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>)),
-      auditRequired
-    )
-  );
+  if (!t) return result;
+  return applyLifecycleI18n(result, t, SALES_FORECAST_STAGE_I18N_BY_KEY);
 }

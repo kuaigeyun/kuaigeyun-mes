@@ -4,6 +4,7 @@ from typing import Optional, Dict, Any
 from loguru import logger
 from infra.models.user import User
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from core.services.application.application_service import ApplicationService
 from core.services.system.menu_service import MenuService
 from core.schemas.menu import MenuCreate
@@ -45,7 +46,7 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
 
 # ── 系统报表 ─────────────────────────────────────────────────────
 
-@router.get("/system-reports", response_model=ReportListResponse, summary="List system reports")
+@router.get("/system-reports", response_model=ReportListResponse, summary="List system reports", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def list_system_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -63,7 +64,7 @@ async def list_system_reports(
 
 # ── 用户自制报表 ───────────────────────────────────────────────
 
-@router.get("/my", response_model=ReportListResponse, summary="List my custom reports")
+@router.get("/my", response_model=ReportListResponse, summary="List my custom reports", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def list_my_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -99,7 +100,7 @@ async def execute_report_by_share_token_route(
 
 # ── 通用 CRUD ────────────────────────────────────────────────────
 
-@router.get("", response_model=ReportListResponse, summary="List reports (admin)")
+@router.get("", response_model=ReportListResponse, summary="List reports (admin)", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def list_reports(
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -109,7 +110,7 @@ async def list_reports(
     return await report_service.list(tenant_id=tenant_id, skip=skip, limit=limit)
 
 
-@router.post("", response_model=ReportResponse, summary="Create report")
+@router.post("", response_model=ReportResponse, summary="Create report", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def create_report(
     data: ReportCreate,
     current_user: User = Depends(get_current_user),
@@ -120,7 +121,23 @@ async def create_report(
     )
 
 
-@router.get("/{id}", response_model=ReportResponse, summary="Get report")
+@router.get("/datasets/fields", summary="Get dataset field metadata for report designer")
+async def get_dataset_fields(
+    dataset_uuid: Optional[str] = Query(None, description="数据集 UUID"),
+    dataset_code: Optional[str] = Query(None, description="数据集编码"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+    _perm: None = Depends(require_permission_codes("kuaireport:report:read")),
+):
+    """返回数据集字段列表，供 ReportDesigner 替换 mock 字段。"""
+    return await report_service.get_dataset_fields(
+        tenant_id=tenant_id,
+        dataset_uuid=dataset_uuid,
+        dataset_code=dataset_code,
+    )
+
+
+@router.get("/{id}", response_model=ReportResponse, summary="Get report", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def get_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -129,7 +146,7 @@ async def get_report(
     return await report_service.get_by_id(tenant_id=tenant_id, id=id)
 
 
-@router.put("/{id}", response_model=ReportResponse, summary="Update report")
+@router.put("/{id}", response_model=ReportResponse, summary="Update report", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def update_report(
     id: int,
     data: ReportUpdate,
@@ -145,7 +162,7 @@ async def update_report(
     )
 
 
-@router.delete("/{id}", summary="Delete report")
+@router.delete("/{id}", summary="Delete report", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def delete_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -159,7 +176,7 @@ async def delete_report(
 
 # ── 数据执行 ─────────────────────────────────────────────────────
 
-@router.post("/{id}/execute", summary="Execute report query")
+@router.post("/{id}/execute", summary="Execute report query", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def execute_report(
     id: int,
     filters: Dict[str, Any] = {},
@@ -174,7 +191,7 @@ async def execute_report(
 
 # ── 分享与挂载 ───────────────────────────────────────────────────
 
-@router.post("/{id}/share", summary="Create share link")
+@router.post("/{id}/share", summary="Create share link", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def share_report(
     id: int,
     expires_days: Optional[int] = Body(30, embed=True),
@@ -186,7 +203,7 @@ async def share_report(
     return result
 
 
-@router.post("/{id}/unshare", summary="Revoke share link")
+@router.post("/{id}/unshare", summary="Revoke share link", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def unshare_report(
     id: int,
     current_user: User = Depends(get_current_user),
@@ -197,7 +214,7 @@ async def unshare_report(
     return {"success": True}
 
 
-@router.post("/{id}/mount-to-menu", summary="Mount report to sidebar menu")
+@router.post("/{id}/mount-to-menu", summary="Mount report to sidebar menu", dependencies=[Depends(require_permission_codes("kuaireport:report:read"))])
 async def mount_report_to_menu(
     id: int,
     menu_name: Optional[str] = Body(None, embed=True),

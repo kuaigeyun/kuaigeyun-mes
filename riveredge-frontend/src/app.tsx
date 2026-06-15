@@ -25,9 +25,13 @@ import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
 import { useGlobalStore } from './stores';
-import { loadUserLanguage } from './config/i18n';
+import {
+  initLanguageFromApi,
+  isLanguageInitialized,
+  syncLanguageFromPreferences,
+} from './config/i18n';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
-import { useUserPreferenceStore } from './stores/userPreferenceStore';
+import { getLanguageFromPreferenceCache, useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
@@ -588,22 +592,40 @@ export default function App() {
   const subscribeToSystemTheme = useThemeStore((s) => s.subscribeToSystemTheme);
   const themeMode = useThemeStore((s) => s.theme);
 
-  // 主题初始化（挂载时执行一次）
+  // 主题与语言初始化（挂载时执行一次）
   useEffect(() => {
     useUserPreferenceStore.getState().rehydrateFromStorage();
-    const cachedPrefs = useUserPreferenceStore.getState().preferences;
-    if (cachedPrefs?.language) {
-      i18n.changeLanguage(cachedPrefs.language).catch(() => {});
+    const cachedLang = getLanguageFromPreferenceCache();
+    if (cachedLang) {
+      i18n.changeLanguage(cachedLang).catch(() => {});
     }
     initFromApi();
-    loadUserLanguage().catch((err) => {
-      console.warn('Failed to load user language during app init:', err);
+    initLanguageFromApi().catch((err) => {
+      console.warn('Failed to init user language during app init:', err);
     });
     // 尽早预取头像 URL，缩短顶栏头像显示延迟
     const userInfo = getUserInfo();
     const avatarUuid = (userInfo as any)?.avatar;
     if (avatarUuid) prefetchAvatarUrl(avatarUuid);
   }, [initFromApi]);
+
+  // 当 language 偏好变化时同步 i18n（与 theme 订阅策略一致）
+  useEffect(() => {
+    const languageSig = (prefs: Record<string, unknown> | undefined) =>
+      typeof prefs?.language === 'string' ? prefs.language : '';
+    let lastSig = languageSig(useUserPreferenceStore.getState().preferences as Record<string, unknown>);
+    const unsub = useUserPreferenceStore.subscribe((state) => {
+      const prefs = state.preferences;
+      if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) return;
+      const next = languageSig(prefs as Record<string, unknown>);
+      if (next === lastSig) return;
+      lastSig = next;
+      syncLanguageFromPreferences(prefs as Record<string, unknown>).catch((err) => {
+        console.warn('Failed to sync language from preferences:', err);
+      });
+    });
+    return unsub;
+  }, []);
 
   // 当「主题相关」偏好变化时同步 themeStore。勿在 ui.tables 等变更时触发：UniTable 列持久化会频繁 updatePreferences，
   // 若此处每次都 syncFromPreferences（内部会请求 site-settings），会与 user-preferences 交替形成请求风暴。
@@ -626,12 +648,20 @@ export default function App() {
   }, []);
 
   // 退出后重新登录时，clearForLogout 会将 initialized 置为 false，
-  // 需在用户登录成功后重新拉取主题偏好，无需刷新页面
+  // 需在用户登录成功后重新拉取主题与语言偏好，无需刷新页面
   useEffect(() => {
     if (currentUser && getToken() && !themeInitialized) {
       initFromApi();
     }
   }, [currentUser, themeInitialized, initFromApi]);
+
+  useEffect(() => {
+    if (currentUser && getToken() && !isLanguageInitialized()) {
+      initLanguageFromApi().catch((err) => {
+        console.warn('Failed to re-init user language after login:', err);
+      });
+    }
+  }, [currentUser]);
 
   // 监听系统主题变化（当 theme=auto 时）
   useEffect(() => {

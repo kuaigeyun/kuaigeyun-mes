@@ -45,6 +45,7 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘盈', label: '盘盈' },
@@ -116,6 +117,7 @@ const OTHER_INBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_inbounds';
 
 const OtherInboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -291,6 +293,15 @@ const OtherInboundPage: React.FC = () => {
             >
               撤销
             </Button>,
+          );
+        }
+        if (record.id) {
+          actions.push(
+            <Button
+              key="print"
+              {...rowActionKind('print')}
+              onClick={() => openPrint({ documentType: 'other_inbound', documentId: record.id! })}
+            />,
           );
         }
         return <Space>{actions}</Space>;
@@ -974,6 +985,7 @@ const OtherInboundPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendOtherInboundItemsFromMaterials}
       />
+      {PrintModal}
     </>
   );
 };

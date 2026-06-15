@@ -468,7 +468,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                     disabled={!!editing}
                     autoFocus={!editing}
                     quickCreate={{
-                      label: t('app.kuaizhizao.customerFollowUp.quickAddCustomer') || '快速新增客户',
+                      label: t('app.kuaizhizao.customerFollowUp.quickAddCustomer'),
                       onClick: () => setCustomerModalVisible(true),
                     }}
                     options={
@@ -520,13 +520,13 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                     renderExtraFooter={() => (
                       <Space style={{ padding: '8px 12px' }}>
                         <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(1, 'day'))}>
-                          明天
+                          {t('app.kuaizhizao.customerFollowUp.nextFollowUpTomorrow')}
                         </Button>
                         <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(3, 'day'))}>
-                          3天后
+                          {t('app.kuaizhizao.customerFollowUp.nextFollowUp3Days')}
                         </Button>
                         <Button size="small" type="link" onClick={() => form.setFieldValue('next_follow_up_at', dayjs().add(7, 'day'))}>
-                          1周后
+                          {t('app.kuaizhizao.customerFollowUp.nextFollowUp1Week')}
                         </Button>
                       </Space>
                     )}
@@ -585,7 +585,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                 rows={8}
                 showCount
                 maxLength={2000}
-                placeholder="请输入跟进记录内容..."
+                placeholder={t('app.kuaizhizao.customerFollowUp.contentPlaceholder')}
                 style={{ resize: 'vertical' }}
               />
             </Form.Item>
@@ -620,7 +620,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
           </Col>
           <Col xs={24} lg={8}>
             <div style={{ marginBottom: 8, fontWeight: 600 }}>
-              关联单据跟进记录
+              {t('app.kuaizhizao.customerFollowUp.linkedDocTimelineTitle')}
             </div>
             <div
               style={{
@@ -640,7 +640,7 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
               ) : relatedFollowUps.length === 0 ? (
                 <Empty
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description="当前关联单据暂无跟进记录"
+                  description={t('app.kuaizhizao.customerFollowUp.linkedDocTimelineEmpty')}
                 />
               ) : (
                 <List
@@ -665,12 +665,12 @@ export const CustomerFollowUpFormModal: React.FC<CustomerFollowUpFormModalProps>
                           <Space size={8} style={{ marginTop: 6 }} wrap>
                             {item.quotation_code ? (
                               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                报价单：{item.quotation_code}
+                                {t('app.kuaizhizao.customerFollowUp.linkedQuotationLabel')}{item.quotation_code}
                               </Typography.Text>
                             ) : null}
                             {item.sales_order_code ? (
                               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                                销售订单：{item.sales_order_code}
+                                {t('app.kuaizhizao.customerFollowUp.linkedSalesOrderLabel')}{item.sales_order_code}
                               </Typography.Text>
                             ) : null}
                           </Space>

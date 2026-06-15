@@ -13,6 +13,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { App, Card, Spin, message } from 'antd';
 import { QRCodeScanner } from '../../components/qrcode';
 import { qrcodeApi, type QRCodeParseResponse } from '../../services/qrcode';
+import { buildDocumentQrcodeNavigateUrl } from '../../apps/kuaizhizao/utils/documentQrcodeRoutes';
 
 /**
  * 二维码扫描页面组件
@@ -107,6 +108,18 @@ const QRCodeScanPage: React.FC = () => {
             messageApi.success(t('pages.qrcode.scan.navigatingToTrace'));
           } else {
             messageApi.error(t('pages.qrcode.scan.traceDataIncomplete'));
+          }
+          break;
+        }
+        case 'DOC': {
+          const documentType = String(data.document_type || '');
+          const documentUuid = String(data.document_uuid || '');
+          const target = buildDocumentQrcodeNavigateUrl(documentType, documentUuid);
+          if (target) {
+            navigate(target);
+            messageApi.success(t('pages.qrcode.scan.navigatingToDocument'));
+          } else {
+            messageApi.error(t('pages.qrcode.scan.documentDataIncomplete'));
           }
           break;
         }

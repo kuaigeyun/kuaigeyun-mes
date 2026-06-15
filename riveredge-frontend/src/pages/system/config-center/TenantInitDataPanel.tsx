@@ -13,29 +13,11 @@ import {
   type InitItem,
   type RunInitResponse,
 } from '../../../services/tenantInit';
-
-const INIT_ITEM_NAME_I18N: Record<string, string> = {
-  data_dictionary: 'pages.system.configCenter.tenantInit.item.data_dictionary',
-  language: 'pages.system.configCenter.tenantInit.item.language',
-  application: 'pages.system.configCenter.tenantInit.item.application',
-  system_parameter: 'pages.system.configCenter.tenantInit.item.system_parameter',
-  code_rule: 'pages.system.configCenter.tenantInit.item.code_rule',
-  approval_process_preset: 'pages.system.configCenter.tenantInit.item.approval_process_preset',
-  message_template_preset: 'pages.system.configCenter.tenantInit.item.message_template_preset',
-  print_template_preset: 'pages.system.configCenter.tenantInit.item.print_template_preset',
-  department_preset: 'pages.system.configCenter.tenantInit.item.department_preset',
-  position_preset: 'pages.system.configCenter.tenantInit.item.position_preset',
-  role_preset: 'pages.system.configCenter.tenantInit.item.role_preset',
-  warehouse_preset: 'pages.system.configCenter.tenantInit.item.warehouse_preset',
-  operation_preset: 'pages.system.configCenter.tenantInit.item.operation_preset',
-  variant_attribute_preset: 'pages.system.configCenter.tenantInit.item.variant_attribute_preset',
-  menu_sync: 'pages.system.configCenter.tenantInit.item.menu_sync',
-};
-
-function itemLabel(t: (k: string) => string, item: InitItem): string {
-  const key = INIT_ITEM_NAME_I18N[item.key];
-  return key ? t(key) : item.name;
-}
+import {
+  TENANT_INIT_ITEM_NAME_I18N,
+  tenantInitItemDescription,
+  tenantInitItemLabel,
+} from '../../../utils/tenantInitI18n';
 
 function resultRows(results: RunInitResponse['results'], items: InitItem[]) {
   const nameByKey = new Map(items.map((i) => [i.key, i]));
@@ -116,9 +98,9 @@ export const TenantInitDataPanel: React.FC = () => {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
             {requiredItems.map((item) => (
               <Card key={item.key} size="small" type="inner">
-                <Typography.Text strong>{itemLabel(t, item)}</Typography.Text>
+                <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
                 <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-                  {item.description}
+                  {tenantInitItemDescription(t, item)}
                 </Typography.Paragraph>
               </Card>
             ))}
@@ -147,10 +129,10 @@ export const TenantInitDataPanel: React.FC = () => {
               {optionalItems.map((item) => (
                 <Card key={item.key} size="small" type="inner">
                   <Checkbox value={item.key}>
-                    <Typography.Text strong>{itemLabel(t, item)}</Typography.Text>
+                    <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
                   </Checkbox>
                   <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0, marginLeft: 24 }}>
-                    {item.description}
+                    {tenantInitItemDescription(t, item)}
                   </Typography.Paragraph>
                 </Card>
               ))}
@@ -181,7 +163,7 @@ export const TenantInitDataPanel: React.FC = () => {
                   title: t('pages.system.configCenter.tenantInit.colItem'),
                   dataIndex: 'key',
                   render: (key: string, row) => {
-                    const i18nKey = INIT_ITEM_NAME_I18N[key];
+                    const i18nKey = TENANT_INIT_ITEM_NAME_I18N[key];
                     return i18nKey ? t(i18nKey) : row.name || key;
                   },
                 },

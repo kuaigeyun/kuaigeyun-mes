@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, validator
 
 class QRCodeGenerateRequest(BaseModel):
     """生成二维码请求"""
-    qrcode_type: str = Field(..., description="二维码类型（MAT/WO/OP/EQ/EMP/BOX/TRACE）")
+    qrcode_type: str = Field(..., description="二维码类型（MAT/WO/OP/EQ/EMP/BOX/TRACE/DOC）")
     data: Dict[str, Any] = Field(..., description="二维码数据")
     size: int = Field(10, ge=1, le=50, description="二维码大小（每个模块的像素数）")
     border: int = Field(4, ge=1, le=10, description="边框大小")
@@ -19,7 +19,7 @@ class QRCodeGenerateRequest(BaseModel):
     @validator("qrcode_type")
     def validate_qrcode_type(cls, v):
         """验证二维码类型"""
-        valid_types = ["MAT", "WO", "OP", "EQ", "EMP", "BOX", "TRACE"]
+        valid_types = ["MAT", "WO", "OP", "EQ", "EMP", "BOX", "TRACE", "DOC"]
         if v not in valid_types:
             raise ValueError(f"二维码类型必须是以下之一: {', '.join(valid_types)}")
         return v

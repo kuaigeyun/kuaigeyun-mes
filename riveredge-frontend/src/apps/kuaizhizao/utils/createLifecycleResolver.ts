@@ -6,14 +6,23 @@
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+
+export interface LifecycleStageDef {
+  key: string;
+  label: string;
+  labelKey?: string;
+}
 
 export interface LifecycleResolverConfig {
   /** 主阶段定义，顺序即展示顺序 */
-  stageDefs: { key: string; label: string }[];
+  stageDefs: LifecycleStageDef[];
   /** status 值（中英文）映射到 stage key */
   statusToKey: Record<string, string>;
-  /** 各阶段的下一步操作建议 */
+  /** 各阶段的下一步操作建议（无 t 时的兜底文案） */
   nextStepSuggestions: Record<string, string[]>;
+  /** 各阶段 next-step 的 i18n key（传入 t 时使用） */
+  nextStepSuggestionKeys?: Record<string, string[]>;
   /** 异常分支的 key（如 cancelled、rejected），这些 key 会显示为 exception 样式 */
   exceptionKeys?: string[];
   /** 异常时「当前阶段」对应的 key，若与 stageDefs 中某 key 一致则高亮该节点 */
@@ -28,9 +37,17 @@ function norm(s: string | undefined): string {
   return (s ?? '').trim();
 }
 
+function stageLabelKeysFromConfig(config: LifecycleResolverConfig): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const def of config.stageDefs) {
+    if (def.labelKey) map[def.key] = def.labelKey;
+  }
+  return map;
+}
+
 function buildFallbackFromConfig(
   record: Record<string, unknown>,
-  config: LifecycleResolverConfig
+  config: LifecycleResolverConfig,
 ): BackendLifecycle {
   const getStatus = config.getStatus ?? ((r) => (r?.status as string) ?? '');
   const status = norm(getStatus(record));
@@ -77,12 +94,23 @@ function buildFallbackFromConfig(
  * 创建生命周期解析函数。优先使用后端下发的 lifecycle，无则按 config 前端兜底。
  */
 export function createLifecycleResolver(config: LifecycleResolverConfig) {
+  const stageLabelKeys = stageLabelKeysFromConfig(config);
+
   return function getLifecycle(
-    record: Record<string, unknown> | null | undefined
+    record: Record<string, unknown> | null | undefined,
+    t?: LifecycleTranslateFn,
   ): LifecycleResult {
     if (!record) return { percent: 0, stageName: '-', mainStages: [] };
     const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-    if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
-    return parseBackendLifecycle(buildFallbackFromConfig(record as Record<string, unknown>, config));
+    let result: LifecycleResult;
+    if (backend?.main_stages?.length) {
+      result = parseBackendLifecycle(backend);
+    } else {
+      result = parseBackendLifecycle(buildFallbackFromConfig(record as Record<string, unknown>, config));
+    }
+    if (t && Object.keys(stageLabelKeys).length > 0) {
+      result = applyLifecycleI18n(result, t, stageLabelKeys, config.nextStepSuggestionKeys);
+    }
+    return result;
   };
 }

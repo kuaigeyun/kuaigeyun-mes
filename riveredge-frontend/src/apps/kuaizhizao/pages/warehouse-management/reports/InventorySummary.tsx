@@ -1,9 +1,8 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
-import { getWarehouseReport } from '../../../services/reports';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const InventorySummary: React.FC = () => {
   const { t } = useTranslation();
@@ -18,22 +17,12 @@ const InventorySummary: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.inventory-summary')}
       reportType="inventory_summary"
-      columns={columns}
+      templateId="inventoryLedger"
       columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.reports.InventorySummary"
-      request={async (params: any) => {
-        const res = await getWarehouseReport({
-          ...params,
-          report_type: 'inventory_summary',
-        });
-        return {
-          data: res.data || [],
-          success: res.success,
-          total: res.data?.length || 0,
-        };
-      }}
+      columns={columns}
     />
   );
 };

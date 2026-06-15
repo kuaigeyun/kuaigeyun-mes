@@ -1,73 +1,69 @@
 /**
- * 销售订单执行跟踪报表
+ * 销售未交数量表（订单行未交货明细）
  */
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Progress, Tag } from 'antd';
-import SalesBaseReport from './BaseReport';
-import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
+import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const OrderExecutionTracking: React.FC = () => {
+  const { t } = useTranslation();
   const columns: ProColumns[] = [
     {
-      title: '计划交期',
+      title: t('app.kuaizhizao.reports.plannedDeliveryRange'),
       dataIndex: 'delivery_date_range',
       valueType: 'dateRange',
       hideInTable: true,
-      search: { order: 9 } as any,
+      search: { order: 9 } as ProColumns['search'],
     },
     {
-      title: '订单编号',
+      title: t('app.kuaizhizao.reports.orderCode'),
       dataIndex: 'order_code',
       copyable: true,
       fixed: 'left',
       width: 150,
     },
     {
-      title: '客户名称',
+      title: t('app.kuaizhizao.reports.customerName'),
       dataIndex: 'customer_name',
       ellipsis: true,
       width: 150,
     },
     {
-      title: '物料编码',
+      title: t('app.kuaizhizao.reports.materialCode'),
       dataIndex: 'material_code',
       width: 150,
     },
     {
-      title: '物料名称',
+      title: t('app.kuaizhizao.reports.materialName'),
       dataIndex: 'material_name',
       ellipsis: true,
       width: 200,
     },
     {
-      title: '规格型号',
-      dataIndex: 'material_spec',
-      ellipsis: true,
-      width: 150,
-    },
-    {
-      title: '订单数量',
+      title: t('app.kuaizhizao.reports.orderQuantity'),
       dataIndex: 'order_quantity',
       valueType: 'digit',
       width: 120,
     },
     {
-      title: '已交数量',
+      title: t('app.kuaizhizao.reports.deliveredQuantity'),
       dataIndex: 'delivered_quantity',
       valueType: 'digit',
       width: 120,
     },
     {
-      title: '未交数量',
+      title: t('app.kuaizhizao.reports.remainingQuantity'),
       dataIndex: 'remaining_quantity',
       valueType: 'digit',
       width: 120,
     },
     {
-      title: '交货进度',
+      title: t('app.kuaizhizao.reports.deliveryProgress'),
       dataIndex: 'delivery_progress',
       width: 180,
+      hideInSearch: true,
       render: (_, record) => (
         <Progress
           percent={Math.round((record.delivered_quantity / record.order_quantity) * 100) || 0}
@@ -77,53 +73,32 @@ const OrderExecutionTracking: React.FC = () => {
       ),
     },
     {
-      title: '计划交期',
+      title: t('app.kuaizhizao.reports.plannedDelivery'),
       dataIndex: 'delivery_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '是否逾期',
+      title: t('app.kuaizhizao.reports.overdue'),
       dataIndex: 'is_overdue',
       width: 100,
+      hideInSearch: true,
       render: (_, record) => {
         const isOverdue = new Date(record.delivery_date) < new Date() && record.remaining_quantity > 0;
-        return isOverdue ? <Tag color="error">已逾期</Tag> : <Tag color="success">正常</Tag>;
+        return isOverdue ? <Tag color="error">{t('app.kuaizhizao.reports.overdueYes')}</Tag> : <Tag color="success">{t('app.kuaizhizao.reports.overdueNo')}</Tag>;
       },
-    },
-    {
-      title: '单位',
-      dataIndex: 'material_unit',
-      width: 80,
     },
   ];
 
   return (
-    <SalesBaseReport
-      title="销售订单执行跟踪"
+    <KuaizhizaoReport
+      title={t('app.kuaizhizao.menu.reports.order-execution-tracking')}
       reportType="execution"
+      dateRangeKeys={['delivery_date_range', 'date_range']}
+      summaryFields={['order_quantity', 'delivered_quantity', 'remaining_quantity']}
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.OrderExecutionTracking"
+      rowKey="id"
       columns={columns}
-      request={async (params, _s, _f, searchFormValues) => {
-        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
-          'delivery_date_range',
-          'date_range',
-          'dateRange',
-        ]);
-        const { skip, limit } = salesReportPageParams(params);
-        const res = await getSalesReport({
-          report_type: 'execution',
-          date_start,
-          date_end,
-          customer_keyword: searchFormValues?.customer_name,
-          skip,
-          limit,
-        });
-        return {
-          data: res.data,
-          success: res.success,
-          total: res.total ?? res.data?.length ?? 0,
-        };
-      }}
     />
   );
 };

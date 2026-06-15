@@ -7,41 +7,60 @@ import type { LifecycleResult, SubStage } from '../../../components/uni-lifecycl
 import type { CustomerFollowUp } from '../services/customer-follow-up';
 import dayjs from 'dayjs';
 
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
 function fmtPlan(dt: dayjs.Dayjs): string {
   return dt.format('YYYY-MM-DD HH:mm');
 }
 
-export function getCustomerFollowUpLifecycle(record: CustomerFollowUp): LifecycleResult {
+/** 回访计划已到期（与 `getCustomerFollowUpLifecycle` 的 exception 态一致） */
+export function isCustomerFollowUpRevisitOverdue(record: CustomerFollowUp): boolean {
+  const nextRaw = record.next_follow_up_at;
+  const next = nextRaw ? dayjs(nextRaw) : null;
+  const now = dayjs();
+  return Boolean(next?.isValid() && !next.isAfter(now));
+}
+
+export function getCustomerFollowUpLifecycle(
+  record: CustomerFollowUp,
+  t: TranslateFn,
+): LifecycleResult {
   const nextRaw = record.next_follow_up_at;
   const next = nextRaw ? dayjs(nextRaw) : null;
   const now = dayjs();
 
-  let revisitLabel = '无需回访';
+  let revisitLabel = t('app.kuaizhizao.customerFollowUp.lifecycle.noRevisitNeeded');
   let revisitStatus: SubStage['status'] = 'done';
   let percent = 100;
-  let stageName = '已闭环';
+  let stageName = t('app.kuaizhizao.customerFollowUp.lifecycle.closed');
   let lifecycleStatus: LifecycleResult['status'] = 'success';
   const suggestions: string[] = [];
 
   if (next?.isValid()) {
     if (next.isAfter(now)) {
-      revisitLabel = '待回访';
+      revisitLabel = t('app.kuaizhizao.customerFollowUp.lifecycle.pendingRevisit');
       revisitStatus = 'active';
       percent = 52;
-      stageName = '待回访';
-      suggestions.push(`下次回访计划：${fmtPlan(next)}`);
+      stageName = t('app.kuaizhizao.customerFollowUp.lifecycle.pendingRevisit');
+      suggestions.push(
+        t('app.kuaizhizao.customerFollowUp.lifecycle.suggestionNextPlan', { datetime: fmtPlan(next) }),
+      );
     } else {
-      revisitLabel = '回访逾期';
+      revisitLabel = t('app.kuaizhizao.customerFollowUp.lifecycle.revisitOverdue');
       revisitStatus = 'active';
       percent = 72;
-      stageName = '回访逾期';
+      stageName = t('app.kuaizhizao.customerFollowUp.lifecycle.revisitOverdue');
       lifecycleStatus = 'exception';
-      suggestions.push('已到计划回访时间，请尽快联系客户或调整下次跟进计划');
+      suggestions.push(t('app.kuaizhizao.customerFollowUp.lifecycle.suggestionOverdue'));
     }
   }
 
   const mainStages: SubStage[] = [
-    { key: 'recorded', label: '跟进记录', status: 'done' },
+    {
+      key: 'recorded',
+      label: t('app.kuaizhizao.customerFollowUp.lifecycle.recorded'),
+      status: 'done',
+    },
     { key: 'revisit_plan', label: revisitLabel, status: revisitStatus },
   ];
 
@@ -52,9 +71,4 @@ export function getCustomerFollowUpLifecycle(record: CustomerFollowUp): Lifecycl
     mainStages,
     nextStepSuggestions: suggestions.length ? suggestions : undefined,
   };
-}
-
-/** 回访计划已到期（与 `getCustomerFollowUpLifecycle` 的 exception 态一致） */
-export function isCustomerFollowUpRevisitOverdue(record: CustomerFollowUp): boolean {
-  return getCustomerFollowUpLifecycle(record).status === 'exception';
 }

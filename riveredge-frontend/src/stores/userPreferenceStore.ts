@@ -145,6 +145,13 @@ export function getThemeFromPreferenceCache(): { theme: string; theme_config: Re
   };
 }
 
+/** 从缓存中提取语言设置，供 i18n 首帧占位使用 */
+export function getLanguageFromPreferenceCache(): string | null {
+  const prefs = readCachedPreferencesForCurrentUser();
+  const language = prefs?.language;
+  return typeof language === 'string' && language ? language : null;
+}
+
 interface UserPreferenceState {
   preferences: Record<string, any>;
   loading: boolean;

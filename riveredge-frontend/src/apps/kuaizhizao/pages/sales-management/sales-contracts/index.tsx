@@ -158,11 +158,9 @@ import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constan
 import { useGlobalStore } from '../../../../../stores';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { hasModulePermission, hasReviewPermission } from '../../../../../utils/permissionContract';
-import { getPrintTemplateList, type PrintTemplate } from '../../../../../services/printTemplate';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { UniPdfPreview } from '../../../../../components/uni-preview';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 
 import {
 
@@ -178,7 +176,15 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 
 import { materialApi } from '../../../../master-data/services/material';
 
-import { parseBackendLifecycle } from '../../../utils/backendLifecycle';
+import {
+  buildSalesContractLifecycleValueEnum,
+  getSalesContractLifecycle,
+  resolveSalesContractListLifecycleParams,
+} from '../../../utils/salesContractLifecycle';
+
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 
 import salesContractApi, {
 
@@ -194,7 +200,7 @@ import { SalesContractItemsFormTable } from './SalesContractItemsFormTable';
 import {
   alignDescriptionColumns,
   alignProColumns,
-  SALES_COMMON_FORM_LABELS,
+  getSalesCommonFormLabels,
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
@@ -226,6 +232,8 @@ import {
 } from './contract-line-items-shared';
 
 const SALES_CONTRACT_RESOURCE = SC;
+
+const CONTRACT_ITEMS_REQUIRED = 'contract_items_required';
 
 const PENDING_REVIEW_STATUSES = new Set(['待审核', 'PENDING', 'PENDING_REVIEW']);
 
@@ -351,16 +359,6 @@ const defaultMilestone = {
   notes: '',
 };
 
-const CONTRACT_TYPE_MAP: Record<string, string> = {
-
-  single: '单次合同',
-
-  framework: '框架合同',
-
-};
-
-
-
 const STATUS_COLOR: Record<string, string> = {
 
   草稿: 'default',
@@ -427,6 +425,66 @@ const SalesContractsPage: React.FC = () => {
   const { message: messageApi } = App.useApp();
 
   const { t } = useTranslation();
+  const salesCommonLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
+  const contractTypeLabels = useMemo(
+    () => ({
+      single: t('app.kuaizhizao.salesContract.contractTypeSingle'),
+      framework: t('app.kuaizhizao.salesContract.contractTypeFramework'),
+    }),
+    [t],
+  );
+  const contractLifecycleValueEnum = useMemo(
+    () => buildSalesContractLifecycleValueEnum(t),
+    [t],
+  );
+  const statusLabels = useMemo(
+    () => ({
+      草稿: t('app.kuaizhizao.salesContract.statusDraft'),
+      待审核: t('app.kuaizhizao.salesContract.statusPending'),
+      已生效: t('app.kuaizhizao.salesContract.statusActive'),
+      执行中: t('app.kuaizhizao.salesContract.statusExecuting'),
+      已关闭: t('app.kuaizhizao.salesContract.statusClosed'),
+      已到期: t('app.kuaizhizao.salesContract.statusExpired'),
+    }),
+    [t],
+  );
+  const changeTypeLabels = useMemo(
+    () => ({
+      amendment: t('app.kuaizhizao.salesContract.changeTypeAmendment'),
+      amount_change: t('app.kuaizhizao.salesContract.changeTypeAmount'),
+      extension: t('app.kuaizhizao.salesContract.changeTypeExtension'),
+    }),
+    [t],
+  );
+  const contractImportHeaders = useMemo(
+    () => [
+      t('app.kuaizhizao.salesContract.importHeaders.materialCode'),
+      t('app.kuaizhizao.salesContract.importHeaders.spec'),
+      t('app.kuaizhizao.salesContract.importHeaders.unit'),
+      t('app.kuaizhizao.salesContract.importHeaders.quantity'),
+      t('app.kuaizhizao.salesContract.importHeaders.unitPrice'),
+      t('app.kuaizhizao.salesContract.importHeaders.deliveryDate'),
+      t('app.kuaizhizao.salesContract.importHeaders.notes'),
+    ],
+    [t],
+  );
+  const contractImportExampleRow = useMemo(
+    () => [
+      'MAT001',
+      'Spec X',
+      t('app.kuaizhizao.salesContract.defaultUnit'),
+      '100',
+      '1.5',
+      '2026-03-01',
+      '',
+    ],
+    [t],
+  );
+  const renderContractStatus = useCallback(
+    (status: string | undefined) => statusLabels[status as keyof typeof statusLabels] ?? status ?? '—',
+    [statusLabels],
+  );
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const currentUser = useGlobalStore((s) => s.currentUser);
   const contractPerms = useResourcePermissions(SALES_CONTRACT_RESOURCE);
@@ -515,14 +573,6 @@ const SalesContractsPage: React.FC = () => {
     }
     navigate(SALES_CONTRACT_LIST_PATH);
   }, [isCreatePage, clearSalesContractCreateDraft, navigate]);
-  const [printModalVisible, setPrintModalVisible] = useState(false);
-  const [printSubmitting, setPrintSubmitting] = useState(false);
-  const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
-  const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>();
-  const [printingRecord, setPrintingRecord] = useState<SalesContract | null>(null);
-  const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
-  const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
-  const [pdfPreviewFileName, setPdfPreviewFileName] = useState('销售合同.pdf');
 
   const termPlaceholderKeys = useMemo(
     () => extractPlaceholdersFromTerms(termTemplateTerms),
@@ -621,7 +671,7 @@ const SalesContractsPage: React.FC = () => {
         setTermPlaceholderValues({});
         syncTermsPreview(templates, {});
       } catch (e: any) {
-        messageApi.error(e?.message || '加载条款组失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadTermGroupFailed'));
         setTermTemplateTerms([]);
         setTermPlaceholderValues({});
         setTermsPreview([]);
@@ -747,7 +797,7 @@ const SalesContractsPage: React.FC = () => {
 
         material_spec: m.specification ?? '',
 
-        material_unit: m.baseUnit ?? '件',
+        material_unit: m.baseUnit ?? t('app.kuaizhizao.salesContract.defaultUnit'),
 
         contract_quantity: 1,
 
@@ -767,11 +817,11 @@ const SalesContractsPage: React.FC = () => {
 
       }
 
-      messageApi.success(`已添加 ${selected.length} 个物料`);
+      messageApi.success(t('app.kuaizhizao.salesContract.materialsAdded', { count: selected.length }));
 
     },
 
-    [messageApi],
+    [messageApi, t],
 
   );
 
@@ -822,16 +872,16 @@ const SalesContractsPage: React.FC = () => {
         .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id != null || it.material_code !== ''));
 
       if (newItems.length === 0) {
-        messageApi.warning('未检测到有效数据（请确保物料编号不为空）');
+        messageApi.warning(t('app.kuaizhizao.salesContract.importNoValidData'));
         return;
       }
 
       const currentItems = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
       formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
-      messageApi.success(`成功导入 ${newItems.length} 条明细`);
+      messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [materialList, messageApi],
+    [materialList, messageApi, t],
   );
 
   const buildFormPayload = (values: any) => {
@@ -844,9 +894,9 @@ const SalesContractsPage: React.FC = () => {
 
     if (!validItems.length) {
 
-      messageApi.error('请至少添加一条有效合同明细');
+      messageApi.error(t('app.kuaizhizao.salesContract.itemsRequired'));
 
-      throw new Error('请至少添加一条有效合同明细');
+      throw new Error(CONTRACT_ITEMS_REQUIRED);
 
     }
 
@@ -981,7 +1031,7 @@ const SalesContractsPage: React.FC = () => {
         formRef.current?.setFieldsValue(cachedDraft);
         if (!salesContractCreateDraftRestoredRef.current) {
           salesContractCreateDraftRestoredRef.current = true;
-          messageApi.info('已恢复暂存内容');
+          messageApi.info(t('app.kuaizhizao.salesContract.restoredDraft'));
         }
       }
     }, 100);
@@ -1025,7 +1075,7 @@ const SalesContractsPage: React.FC = () => {
         applyTermGroupPreview(data.term_group_id, data.contract_terms as SalesContractTermSnapshot[] | undefined);
       }, 100);
     } catch (e: any) {
-      messageApi.error(e?.message || '加载合同失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadContractFailed'));
       navigate(SALES_CONTRACT_LIST_PATH);
     }
   }
@@ -1090,16 +1140,16 @@ const SalesContractsPage: React.FC = () => {
         await salesContractApi.update(editingId, payload);
         if (!asDraft) {
           await salesContractApi.submit(editingId);
-          messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit', '已保存并提交'));
+          messageApi.success(t('app.kuaizhizao.salesContract.saveAndSubmit'));
         } else {
-          messageApi.success(t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存'));
+          messageApi.success(t('app.kuaizhizao.salesContract.savedDraft'));
         }
       } else {
         await salesContractApi.create(payload, !asDraft);
         messageApi.success(
           asDraft
-            ? t('app.kuaizhizao.salesContract.savedDraft', '草稿已保存')
-            : '销售合同已创建',
+            ? t('app.kuaizhizao.salesContract.savedDraft')
+            : t('app.kuaizhizao.salesContract.created'),
         );
       }
 
@@ -1114,14 +1164,17 @@ const SalesContractsPage: React.FC = () => {
         if (detail?.id === editingId) openDetail(editingId);
       }
     } catch (err: any) {
-      if (err?.message === '请至少添加一条有效合同明细') {
+      if (err?.message === CONTRACT_ITEMS_REQUIRED) {
         return;
       }
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('components.layoutTemplates.formModal.checkFormHint'));
         return;
       }
-      messageApi.error(err?.message || (asDraft ? '保存草稿失败' : '创建销售合同失败'));
+      messageApi.error(
+        err?.message ||
+          (asDraft ? t('app.kuaizhizao.salesContract.saveDraftFailed') : t('app.kuaizhizao.salesContract.createFailed')),
+      );
     }
   };
 
@@ -1144,11 +1197,13 @@ const SalesContractsPage: React.FC = () => {
 
     Modal.confirm({
 
-      title: '删除销售合同',
+      title: t('app.kuaizhizao.salesContract.deleteTitle'),
 
-      content: `确定删除草稿合同「${record.contract_code || record.id}」？此操作不可恢复。`,
+      content: t('app.kuaizhizao.salesContract.deleteDraftConfirm', {
+        code: record.contract_code || record.id,
+      }),
 
-      okText: '删除',
+      okText: t('common.delete'),
 
       okButtonProps: { danger: true },
 
@@ -1158,7 +1213,7 @@ const SalesContractsPage: React.FC = () => {
 
           await salesContractApi.remove(record.id!);
 
-          messageApi.success('已删除');
+          messageApi.success(t('app.kuaizhizao.salesContract.deleted'));
 
           if (detail?.id === record.id) setDetailOpen(false);
 
@@ -1166,7 +1221,7 @@ const SalesContractsPage: React.FC = () => {
 
         } catch (e: any) {
 
-          messageApi.error(e?.message || '删除失败');
+          messageApi.error(e?.message || t('common.deleteFailed'));
 
         }
 
@@ -1190,15 +1245,15 @@ const SalesContractsPage: React.FC = () => {
 
             name="contract_type"
 
-            label="合同类型"
+            label={t('app.kuaizhizao.salesContract.contractType')}
 
-            rules={[{ required: true, message: '请选择合同类型' }]}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractTypeRequired') }]}
 
             options={[
 
-              { label: '单次合同', value: 'single' },
+              { label: t('app.kuaizhizao.salesContract.contractTypeSingle'), value: 'single' },
 
-              { label: '框架合同', value: 'framework' },
+              { label: t('app.kuaizhizao.salesContract.contractTypeFramework'), value: 'framework' },
 
             ]}
 
@@ -1208,11 +1263,11 @@ const SalesContractsPage: React.FC = () => {
 
         <Col span={12}>
 
-          <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.salesContract.customer')} rules={[{ required: true, message: t('app.kuaizhizao.salesContract.selectCustomerRequired') }]}>
 
             <CustomerSelectDropdown
 
-              placeholder="请选择客户"
+              placeholder={t('app.kuaizhizao.salesContract.selectCustomer')}
 
               style={{ width: '100%' }}
 
@@ -1274,7 +1329,7 @@ const SalesContractsPage: React.FC = () => {
 
         <Col flex={1} style={{ minWidth: 0 }}>
 
-          <ProFormText name="salesman_name" label={SALES_COMMON_FORM_LABELS.salesman} placeholder="请输入销售员" />
+          <ProFormText name="salesman_name" label={salesCommonLabels.salesman} placeholder={t('app.kuaizhizao.salesContract.salesmanPlaceholder')} />
 
         </Col>
 
@@ -1284,9 +1339,9 @@ const SalesContractsPage: React.FC = () => {
 
             name="contract_date"
 
-            label="签订日期"
+            label={t('app.kuaizhizao.salesContract.contractDate')}
 
-            rules={[{ required: true, message: '请选择签订日期' }]}
+            rules={[{ required: true, message: t('app.kuaizhizao.salesContract.contractDateRequired') }]}
 
             fieldProps={{ style: { width: '100%' } }}
 
@@ -1296,13 +1351,13 @@ const SalesContractsPage: React.FC = () => {
 
         <Col flex={1} style={{ minWidth: 0 }}>
 
-          <ProFormDatePicker name="valid_from" label="生效日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="valid_from" label={t('app.kuaizhizao.salesContract.validFrom')} fieldProps={{ style: { width: '100%' } }} />
 
         </Col>
 
         <Col flex={1} style={{ minWidth: 0 }}>
 
-          <ProFormDatePicker name="valid_to" label="失效日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="valid_to" label={t('app.kuaizhizao.salesContract.validTo')} fieldProps={{ style: { width: '100%' } }} />
 
         </Col>
 
@@ -1314,9 +1369,9 @@ const SalesContractsPage: React.FC = () => {
 
             name="shipping_method"
 
-            label="发货方式"
+            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
 
-            placeholder="请选择发货方式"
+            placeholder={t('app.kuaizhizao.salesContract.selectShippingMethod')}
 
             formRef={formRef}
 
@@ -1332,19 +1387,19 @@ const SalesContractsPage: React.FC = () => {
 
         <Col span={4}>
 
-          <ProFormText name="customer_contact" label={SALES_COMMON_FORM_LABELS.contact} />
+          <ProFormText name="customer_contact" label={salesCommonLabels.contact} />
 
         </Col>
 
         <Col span={4}>
 
-          <ProFormText name="customer_phone" label={SALES_COMMON_FORM_LABELS.phone} />
+          <ProFormText name="customer_phone" label={salesCommonLabels.phone} />
 
         </Col>
 
         <Col span={8}>
 
-          <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
+          <ProFormText name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.salesContract.shippingAddressPlaceholder')} />
 
         </Col>
 
@@ -1356,9 +1411,9 @@ const SalesContractsPage: React.FC = () => {
 
             name="payment_terms"
 
-            label="付款条件"
+            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
 
-            placeholder="请选择付款条件"
+            placeholder={t('app.kuaizhizao.salesContract.selectPaymentTerms')}
 
             formRef={formRef}
 
@@ -1376,9 +1431,9 @@ const SalesContractsPage: React.FC = () => {
 
             name="currency_code"
 
-            label="币种"
+            label={t('app.kuaizhizao.salesContract.currency')}
 
-            placeholder="请选择币种"
+            placeholder={t('app.kuaizhizao.salesContract.selectCurrency')}
 
             formRef={formRef}
 
@@ -1402,7 +1457,7 @@ const SalesContractsPage: React.FC = () => {
 
         onOpenImport={() => {
           if (!contractPerms.canImport) {
-            messageApi.warning('无导入权限');
+            messageApi.warning(t('app.kuaizhizao.salesContract.noImportPermission'));
             return;
           }
           setImportModalVisible(true);
@@ -1423,7 +1478,7 @@ const SalesContractsPage: React.FC = () => {
 
       <div style={{ marginTop: 16 }}>
 
-        <ProForm.Item label="收款计划（可选）" colon={false}>
+        <ProForm.Item label={t('app.kuaizhizao.salesContract.paymentPlanOptional')} colon={false}>
 
           <AntForm.List name="milestones">
 
@@ -1433,7 +1488,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '里程碑名称',
+                  title: t('app.kuaizhizao.salesContract.milestoneName'),
 
                   width: 160,
 
@@ -1443,7 +1498,7 @@ const SalesContractsPage: React.FC = () => {
 
                       name={[index, 'milestone_name']}
 
-                      placeholder="如：预付款"
+                      placeholder={t('app.kuaizhizao.salesContract.milestoneNamePlaceholder')}
 
                       formItemProps={{ style: { margin: 0 } }}
 
@@ -1455,7 +1510,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '计划日期',
+                  title: t('app.kuaizhizao.salesContract.plannedDate'),
 
                   width: 140,
 
@@ -1477,7 +1532,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '计划金额',
+                  title: t('app.kuaizhizao.salesContract.plannedAmount'),
 
                   width: 120,
 
@@ -1501,7 +1556,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '比例(%)',
+                  title: t('app.kuaizhizao.salesContract.ratioPercent'),
 
                   width: 100,
 
@@ -1527,7 +1582,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '触发方式',
+                  title: t('app.kuaizhizao.salesContract.billingTrigger'),
 
                   width: 120,
 
@@ -1539,9 +1594,9 @@ const SalesContractsPage: React.FC = () => {
 
                       options={[
 
-                        { label: '里程碑', value: 'milestone' },
+                        { label: t('app.kuaizhizao.salesContract.billingTriggerMilestone'), value: 'milestone' },
 
-                        { label: '发货', value: 'delivery' },
+                        { label: t('app.kuaizhizao.salesContract.billingTriggerDelivery'), value: 'delivery' },
 
                       ]}
 
@@ -1555,7 +1610,7 @@ const SalesContractsPage: React.FC = () => {
 
                 {
 
-                  title: '操作',
+                  title: t('common.actions'),
 
                   width: 60,
 
@@ -1581,7 +1636,7 @@ const SalesContractsPage: React.FC = () => {
 
                   <Button type="dashed" block icon={<PlusOutlined />} style={{ marginTop: 8 }} onClick={() => add({ ...defaultMilestone })}>
 
-                    添加收款节点
+                    {t('app.kuaizhizao.salesContract.addPaymentNode')}
 
                   </Button>
 
@@ -1692,7 +1747,7 @@ const SalesContractsPage: React.FC = () => {
 
         <DocumentAttachmentsField category="sales_contract_attachments" />
 
-        <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
 
       </div>
 
@@ -1738,7 +1793,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '加载合同详情失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadDetailFailed'));
 
       setDetailOpen(false);
 
@@ -1792,9 +1847,11 @@ const SalesContractsPage: React.FC = () => {
 
     Modal.confirm({
 
-      title: '提交审核',
+      title: t('app.kuaizhizao.salesContract.submitReview'),
 
-      content: `确定提交合同「${record.contract_code || record.id}」？`,
+      content: t('app.kuaizhizao.salesContract.submitReviewConfirm', {
+        code: record.contract_code || record.id,
+      }),
 
       onOk: async () => {
 
@@ -1802,7 +1859,7 @@ const SalesContractsPage: React.FC = () => {
 
           await salesContractApi.submit(record.id!);
 
-          messageApi.success('已提交审核');
+          messageApi.success(t('app.kuaizhizao.salesContract.submittedForReview'));
 
           if (detail?.id === record.id) await refreshDetail(record.id!);
 
@@ -1810,7 +1867,7 @@ const SalesContractsPage: React.FC = () => {
 
         } catch (e: any) {
 
-          messageApi.error(e?.message || '提交失败');
+          messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.submitFailed'));
 
         }
 
@@ -1824,79 +1881,33 @@ const SalesContractsPage: React.FC = () => {
 
   // 统一审核动作由 UniWorkflowActions 接管（提交/撤回/通过/驳回/反审核）
 
-  const handlePrint = async (record: SalesContract) => {
-    try {
-      const templates = await getPrintTemplateList({
-        is_active: true,
-        document_type: 'sales_contract',
-      });
-      setPrintTemplates(templates || []);
-      const defaultTpl = templates.find((tpl) => tpl.is_default) ?? templates[0];
-      setSelectedPrintTemplateUuid(defaultTpl?.uuid);
-    } catch {
-      setPrintTemplates([]);
-      setSelectedPrintTemplateUuid(undefined);
-    }
-    setPrintingRecord(record);
-    setPrintModalVisible(true);
-  };
-
-  const handleConfirmPrint = async () => {
-    const record = printingRecord;
-    if (!record?.id) return;
-    const safeCode = String(record.contract_code || record.id).replace(/[/\\?%*:|"<>]/g, '-');
-    const fileName = `销售合同_${safeCode}.pdf`;
-    try {
-      setPrintSubmitting(true);
-      const result: DocumentPrintApiResult = await salesContractApi.print(record.id, {
-        templateUuid: selectedPrintTemplateUuid,
-        outputFormat: 'pdf',
-        responseFormat: 'json',
-      });
-      const raw = result?.content || '';
-      if (result?.content_encoding === 'base64' && result?.mime_type === 'application/pdf' && raw) {
-        const binary = atob(raw);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-        const blobUrl = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }));
-        setPdfPreviewBlobUrl(blobUrl);
-        setPdfPreviewFileName(fileName);
-        setPdfPreviewVisible(true);
-        setPrintModalVisible(false);
-        setPrintingRecord(null);
-        messageApi.success('已打开预览');
-        return;
-      }
-      messageApi.warning('打印内容为空');
-    } catch (e: any) {
-      messageApi.error(e?.message || '打印失败');
-    } finally {
-      setPrintSubmitting(false);
-    }
+  const handlePrint = (record: SalesContract) => {
+    if (!record.id) return;
+    openPrint({ documentType: 'sales_contract', documentId: record.id });
   };
 
   const handleToolbarPrint = async (keys: React.Key[]) => {
     if (!keys || keys.length !== 1) return;
     const numericId = Number(keys[0]);
     if (!Number.isFinite(numericId) || numericId <= 0) {
-      messageApi.warning('请选择一条有效记录');
+      messageApi.warning(t('app.kuaizhizao.salesContract.selectValidRecord'));
       return;
     }
     try {
       const latest = await salesContractApi.get(numericId, false);
       if (!canPrintContract(latest)) {
-        messageApi.warning('仅已审核通过且已生效的合同可打印');
+        messageApi.warning(t('app.kuaizhizao.salesContract.printNotAllowed'));
         return;
       }
       await handlePrint(latest);
     } catch (e: any) {
-      messageApi.error(e?.message || '加载合同失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadContractFailed'));
     }
   };
 
   const handleBatchDeleteDrafts = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择需要删除的记录');
+      messageApi.warning(t('app.kuaizhizao.salesContract.selectToDelete'));
       return;
     }
     let success = 0;
@@ -1914,11 +1925,11 @@ const SalesContractsPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已删除 ${success} 条销售合同`);
-    if (failed > 0) messageApi.warning(`${failed} 条删除失败（仅草稿可删除）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.salesContract.batchDeleteSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesContract.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   const handleCloseContract = async () => {
 
@@ -1928,7 +1939,7 @@ const SalesContractsPage: React.FC = () => {
 
       await salesContractApi.close(detail.id, closeReason.trim() || undefined);
 
-      messageApi.success('合同已关闭');
+      messageApi.success(t('app.kuaizhizao.salesContract.closed'));
 
       setCloseModalOpen(false);
 
@@ -1938,7 +1949,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '关闭失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.closeFailed'));
 
     }
 
@@ -1986,7 +1997,7 @@ const SalesContractsPage: React.FC = () => {
 
       if (!rows.length) {
 
-        messageApi.warning('没有可释放的明细行');
+        messageApi.warning(t('app.kuaizhizao.salesContract.noReleasableLines'));
 
         return;
 
@@ -2000,7 +2011,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '加载合同明细失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadItemsFailed'));
 
     }
 
@@ -2020,7 +2031,7 @@ const SalesContractsPage: React.FC = () => {
 
     if (!lines.length) {
 
-      messageApi.error('请至少选择一行并填写释放数量');
+      messageApi.error(t('app.kuaizhizao.salesContract.selectReleaseLine'));
 
       return;
 
@@ -2036,7 +2047,7 @@ const SalesContractsPage: React.FC = () => {
 
       const orderCode = (res.sales_order as any)?.order_code || '';
 
-      messageApi.success(`已生成销售订单 ${orderCode}`);
+      messageApi.success(t('app.kuaizhizao.salesContract.orderGenerated', { code: orderCode }));
 
       setReleaseModalOpen(false);
 
@@ -2056,7 +2067,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '下推订单失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.pushOrderFailed'));
 
     } finally {
 
@@ -2079,11 +2090,11 @@ const SalesContractsPage: React.FC = () => {
   const handleToolbarPushToOrder = useCallback(async () => {
     const record = selectedContractForPush;
     if (!record?.id) {
-      messageApi.warning('请先选择一条销售合同');
+      messageApi.warning(t('app.kuaizhizao.salesContract.selectContract'));
       return;
     }
     if (!['已生效', '执行中'].includes(record.status || '')) {
-      messageApi.warning('仅已生效或执行中的合同可下推订单');
+      messageApi.warning(t('app.kuaizhizao.salesContract.pushOrderStatusRequired'));
       return;
     }
     await openReleaseModal(record);
@@ -2103,7 +2114,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '加载变更记录失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.loadChangesFailed'));
 
       setChanges([]);
 
@@ -2153,7 +2164,7 @@ const SalesContractsPage: React.FC = () => {
 
       });
 
-      messageApi.success('变更单已创建');
+      messageApi.success(t('app.kuaizhizao.salesContract.changeCreated'));
 
       changeFormRef.current?.resetFields();
 
@@ -2163,7 +2174,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '创建变更失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.createChangeFailed'));
 
     } finally {
 
@@ -2187,7 +2198,7 @@ const SalesContractsPage: React.FC = () => {
 
       else await salesContractApi.rejectChange(changeId);
 
-      messageApi.success('操作成功');
+      messageApi.success(t('app.kuaizhizao.salesContract.actionSuccess'));
 
       await loadChanges(detail.id);
 
@@ -2195,7 +2206,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '操作失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesOrder.operationFailed'));
 
     }
 
@@ -2211,7 +2222,7 @@ const SalesContractsPage: React.FC = () => {
 
       await salesContractApi.generateMilestoneReceivable(detail.id, milestoneId);
 
-      messageApi.success('已生成应收');
+      messageApi.success(t('app.kuaizhizao.salesContract.receivableGenerated'));
 
       await refreshDetail(detail.id);
 
@@ -2219,7 +2230,7 @@ const SalesContractsPage: React.FC = () => {
 
     } catch (e: any) {
 
-      messageApi.error(e?.message || '生成应收失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.salesContract.generateReceivableFailed'));
 
     }
 
@@ -2227,39 +2238,9 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const renderStatusCell = (record: SalesContract) => {
-
-    if (record.lifecycle) {
-
-      const lc = parseBackendLifecycle(record.lifecycle);
-
-      const activeStage = lc.mainStages?.find((s) => s.status === 'active');
-
-      return (
-
-        <UniLifecycle
-
-          percent={lc.percent}
-
-          stageName={activeStage?.label ?? lc.stageName}
-
-          status={lc.status}
-
-          subStages={lc.subStages}
-
-          showLabel
-
-          showCircleTooltip={false}
-
-        />
-
-      );
-
-    }
-
-    return <Tag color={STATUS_COLOR[record.status || ''] || 'default'}>{record.status}</Tag>;
-
-  };
+  const renderLifecycleCell = (record: SalesContract) => (
+    <ListUniLifecycleCell lifecycle={getSalesContractLifecycle(record as Record<string, unknown>, t)} />
+  );
 
 
 
@@ -2267,11 +2248,11 @@ const SalesContractsPage: React.FC = () => {
 
     () => [
 
-      { title: '合同编号', dataIndex: 'contract_code', width: 160, ellipsis: true },
+      { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code', width: 160, ellipsis: true },
 
       {
 
-        title: '合同类型',
+        title: t('app.kuaizhizao.salesContract.contractType'),
 
         dataIndex: 'contract_type',
 
@@ -2279,23 +2260,26 @@ const SalesContractsPage: React.FC = () => {
 
         valueType: 'select',
 
-        valueEnum: { single: { text: '单次合同' }, framework: { text: '框架合同' } },
+        valueEnum: {
+          single: { text: contractTypeLabels.single },
+          framework: { text: contractTypeLabels.framework },
+        },
 
-        render: (_, r) => CONTRACT_TYPE_MAP[r.contract_type || ''] || r.contract_type,
+        render: (_, r) => contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type,
 
       },
 
-      { title: '客户', dataIndex: 'customer_name', ellipsis: true },
+      { title: t('app.kuaizhizao.salesContract.customer'), dataIndex: 'customer_name', ellipsis: true },
 
-      { title: '签订日期', dataIndex: 'contract_date', width: 120, valueType: 'date' },
+      { title: t('app.kuaizhizao.salesContract.contractDate'), dataIndex: 'contract_date', width: 120, valueType: 'date' },
 
-      { title: '有效期至', dataIndex: 'valid_to', width: 120, valueType: 'date' },
+      { title: t('app.kuaizhizao.salesContract.validUntil'), dataIndex: 'valid_to', width: 120, valueType: 'date' },
 
-      { title: '合同金额', dataIndex: 'total_amount', width: 120, align: 'right', valueType: 'money' },
+      { title: t('app.kuaizhizao.salesContract.contractAmount'), dataIndex: 'total_amount', width: 120, align: 'right', valueType: 'money' },
 
       {
 
-        title: '已释放',
+        title: t('app.kuaizhizao.salesContract.released'),
 
         dataIndex: 'released_amount',
 
@@ -2309,37 +2293,21 @@ const SalesContractsPage: React.FC = () => {
 
       {
 
-        title: '状态',
+        title: t('app.kuaizhizao.salesOrder.lifecycle'),
 
-        dataIndex: 'status',
-
-        width: 140,
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
 
         valueType: 'select',
 
-        valueEnum: {
+        valueEnum: contractLifecycleValueEnum,
 
-          草稿: { text: '草稿' },
-
-          待审核: { text: '待审核' },
-
-          已生效: { text: '已生效' },
-
-          执行中: { text: '执行中' },
-
-          已关闭: { text: '已关闭' },
-
-          已到期: { text: '已到期' },
-
-        },
-
-        render: (_, r) => renderStatusCell(r),
+        render: (_, r) => renderLifecycleCell(r),
 
       },
 
       {
 
-        title: '操作',
+        title: t('common.actions'),
 
         valueType: 'option',
 
@@ -2351,7 +2319,7 @@ const SalesContractsPage: React.FC = () => {
 
               <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record.id!)}>
 
-                详情
+                {t('app.kuaizhizao.salesOrder.viewDetail')}
 
               </Button>,
 
@@ -2359,7 +2327,7 @@ const SalesContractsPage: React.FC = () => {
 
                 contractPerms.canUpdate ? (
                   <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>
-                    编辑
+                    {t('common.edit')}
                   </Button>
                 ) : null
 
@@ -2369,7 +2337,7 @@ const SalesContractsPage: React.FC = () => {
 
                 contractPerms.canDelete ? (
                   <Button {...rowActionKind('delete')} key="del" onClick={() => handleDeleteDraft(record)}>
-                    删除
+                    {t('common.delete')}
                   </Button>
                 ) : null
 
@@ -2379,7 +2347,7 @@ const SalesContractsPage: React.FC = () => {
                 key="contract-workflow"
                 {...rowActionKind('skip')}
                 record={record}
-                entityName="销售合同"
+                entityName={t('app.kuaizhizao.salesContract.entityName')}
                 auditNodeKey="sales_contract"
                 resourcePrefix="kuaizhizao:sales-contract"
                 unifiedAudit
@@ -2394,7 +2362,7 @@ const SalesContractsPage: React.FC = () => {
 
                 <Button {...rowActionKind('print')} key="print" onClick={() => void handlePrint(record)}>
 
-                  打印
+                  {t('app.kuaizhizao.salesOrder.printPdf')}
 
                 </Button>
 
@@ -2404,7 +2372,7 @@ const SalesContractsPage: React.FC = () => {
 
                 <Button {...rowActionKind('release')} key="release" onClick={() => openReleaseModal(record)}>
 
-                  下推订单
+                  {t('app.kuaizhizao.salesContract.pushOrder')}
 
                 </Button>
 
@@ -2417,6 +2385,10 @@ const SalesContractsPage: React.FC = () => {
     ],
 
     [
+      t,
+      contractTypeLabels,
+      statusLabels,
+      renderContractStatus,
       canReviewContract,
       canRevokeContract,
       canSubmitContract,
@@ -2433,59 +2405,62 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const detailBasicColumns: ProDescriptionsItemProps<SalesContract>[] = [
-
-    { title: '合同编号', dataIndex: 'contract_code' },
+  const detailBasicColumns: ProDescriptionsItemProps<SalesContract>[] = useMemo(
+    () => [
+    { title: t('app.kuaizhizao.salesContract.contractCode'), dataIndex: 'contract_code' },
 
     {
 
-      title: '合同类型',
+      title: t('app.kuaizhizao.salesContract.contractType'),
 
       dataIndex: 'contract_type',
 
-      render: (_, r) => CONTRACT_TYPE_MAP[r.contract_type || ''] || r.contract_type,
+      render: (_, r) => contractTypeLabels[r.contract_type as keyof typeof contractTypeLabels] || r.contract_type,
 
     },
 
     {
 
-      title: '状态',
+      title: t('app.kuaizhizao.salesOrder.status'),
 
       dataIndex: 'status',
 
       render: (_, r) => (
 
-        <Tag color={STATUS_COLOR[r.status || ''] || 'default'}>{r.status || '—'}</Tag>
+        <Tag color={STATUS_COLOR[r.status || ''] || 'default'}>{renderContractStatus(r.status)}</Tag>
 
       ),
 
     },
 
-    { title: '客户', dataIndex: 'customer_name' },
+    { title: t('app.kuaizhizao.salesContract.customer'), dataIndex: 'customer_name' },
 
-    { title: SALES_COMMON_FORM_LABELS.contact, dataIndex: 'customer_contact' },
+    { title: salesCommonLabels.contact, dataIndex: 'customer_contact' },
 
-    { title: SALES_COMMON_FORM_LABELS.phone, dataIndex: 'customer_phone' },
+    { title: salesCommonLabels.phone, dataIndex: 'customer_phone' },
 
-    { title: '签订日期', dataIndex: 'contract_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.salesContract.contractDate'), dataIndex: 'contract_date', valueType: 'date' },
 
-    { title: '生效日期', dataIndex: 'valid_from', valueType: 'date' },
+    { title: t('app.kuaizhizao.salesContract.validFrom'), dataIndex: 'valid_from', valueType: 'date' },
 
-    { title: '失效日期', dataIndex: 'valid_to', valueType: 'date' },
+    { title: t('app.kuaizhizao.salesContract.validTo'), dataIndex: 'valid_to', valueType: 'date' },
 
     {
 
-      title: '是否含税',
+      title: t('app.kuaizhizao.salesContract.priceTypeLabel'),
 
       dataIndex: 'price_type',
 
-      render: (_, r) => (r.price_type === 'tax_inclusive' ? '含税单价' : '不含税单价'),
+      render: (_, r) =>
+        r.price_type === 'tax_inclusive'
+          ? t('app.kuaizhizao.salesContract.priceTypeTaxInclusive')
+          : t('app.kuaizhizao.salesContract.priceTypeTaxExclusive'),
 
     },
 
     {
 
-      title: '合同金额',
+      title: t('app.kuaizhizao.salesContract.contractAmount'),
 
       dataIndex: 'total_amount',
 
@@ -2495,7 +2470,7 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
-      title: '已释放金额',
+      title: t('app.kuaizhizao.salesContract.releasedAmount'),
 
       dataIndex: 'released_amount',
 
@@ -2505,7 +2480,7 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
-      title: '剩余金额',
+      title: t('app.kuaizhizao.salesContract.remainingAmount'),
 
       dataIndex: 'remaining_amount',
 
@@ -2515,7 +2490,7 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
-      title: '币种',
+      title: t('app.kuaizhizao.salesContract.currency'),
 
       dataIndex: 'currency_code',
 
@@ -2529,7 +2504,7 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
-      title: '付款条件',
+      title: t('app.kuaizhizao.salesOrder.paymentTerms'),
 
       dataIndex: 'payment_terms',
 
@@ -2541,11 +2516,11 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    { title: SALES_COMMON_FORM_LABELS.salesman, dataIndex: 'salesman_name' },
+    { title: salesCommonLabels.salesman, dataIndex: 'salesman_name' },
 
     {
 
-      title: '发货方式',
+      title: t('app.kuaizhizao.salesOrder.shippingMethod'),
 
       dataIndex: 'shipping_method',
 
@@ -2559,7 +2534,7 @@ const SalesContractsPage: React.FC = () => {
 
     {
 
-      title: '来源报价',
+      title: t('app.kuaizhizao.salesContract.sourceQuotation'),
 
       dataIndex: 'quotation_code',
 
@@ -2599,7 +2574,7 @@ const SalesContractsPage: React.FC = () => {
 
     },
 
-    { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
+    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
 
     {
       title: t('app.kuaizhizao.salesContract.terms.selectGroup'),
@@ -2625,9 +2600,11 @@ const SalesContractsPage: React.FC = () => {
         ),
     },
 
-    { title: '备注', dataIndex: 'notes', span: 3 },
+    { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
 
-  ];
+  ],
+    [t, contractTypeLabels, salesCommonLabels, renderContractStatus, navigate],
+  );
   const alignedDetailBasicColumns = useMemo(
     () => alignDescriptionColumns(detailBasicColumns, SALES_DOC_DETAIL_BASIC_FIELD_RANK),
     [detailBasicColumns],
@@ -2635,7 +2612,10 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const detailLifecycle = detail?.lifecycle ? parseBackendLifecycle(detail.lifecycle) : null;
+  const detailLifecycle = useMemo(
+    () => (detail ? getSalesContractLifecycle(detail as Record<string, unknown>, t) : null),
+    [detail, t],
+  );
 
 
 
@@ -2662,13 +2642,13 @@ const SalesContractsPage: React.FC = () => {
               <Button onClick={leaveSalesContractFormPage}>{t('common.cancel')}</Button>
               <Button onClick={() => void handleSaveDraft()}>
                 {isCreatePage
-                  ? t('app.kuaizhizao.salesContract.saveDraft', '保存为草稿')
+                  ? t('app.kuaizhizao.salesContract.saveDraft')
                   : t('common.save')}
               </Button>
               <Button type="primary" onClick={triggerContractFormSubmit}>
                 {isCreatePage
                   ? t('components.layoutTemplates.formModal.submitCreate')
-                  : t('app.kuaizhizao.salesContract.saveAndSubmit', '保存并提交')}
+                  : t('app.kuaizhizao.salesContract.saveAndSubmit')}
                 {SUBMIT_SHORTCUT_HINT}
               </Button>
             </Space>
@@ -2713,9 +2693,9 @@ const SalesContractsPage: React.FC = () => {
             visible={importModalVisible}
             onCancel={() => setImportModalVisible(false)}
             onConfirm={handleItemImport}
-            title="导入合同明细"
-            headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期', '备注']}
-            exampleRow={['MAT001', 'Spec X', '件', '100', '1.5', '2026-03-01', '']}
+            title={t('app.kuaizhizao.salesContract.importItemsTitle')}
+            headers={contractImportHeaders}
+            exampleRow={contractImportExampleRow}
           />
         </Suspense>
       </>
@@ -2750,11 +2730,11 @@ const SalesContractsPage: React.FC = () => {
 
           <Space>
 
-            <span>销售合同</span>
+            <span>{t('app.kuaizhizao.salesContract.title')}</span>
 
             <Button type="link" size="small" onClick={() => navigate('/apps/kuaizhizao/sales-management/quotations')}>
 
-              从报价单转合同 →
+              {t('app.kuaizhizao.salesContract.fromQuotationLink')}
 
             </Button>
 
@@ -2764,7 +2744,7 @@ const SalesContractsPage: React.FC = () => {
 
         showCreateButton
 
-        createButtonText="新建合同"
+        createButtonText={t('app.kuaizhizao.salesContract.create')}
 
         onCreate={handleCreate}
         toolBarActionsAfterCreate={[
@@ -2774,7 +2754,7 @@ const SalesContractsPage: React.FC = () => {
             menuItems={buildUniPushMenuItems([
               {
                 key: 'push-to-sales-order',
-                label: '下推销售订单',
+                label: t('app.kuaizhizao.salesContract.releaseOrder'),
                 onClick: () => void handleToolbarPushToOrder(),
               },
             ])}
@@ -2783,7 +2763,7 @@ const SalesContractsPage: React.FC = () => {
 
         showDeleteButton={contractPerms.canDelete}
         onDelete={handleBatchDeleteDrafts}
-        deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条销售合同？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.salesContract.batchDeleteConfirm', { count })}
         toolBarActionsAfterDelete={
           contractPerms.canPrint
             ? [
@@ -2793,7 +2773,7 @@ const SalesContractsPage: React.FC = () => {
                   menuItems={[
                     {
                       key: 'print',
-                      label: '打印合同',
+                      label: t('app.kuaizhizao.salesContract.printContract'),
                       icon: <PrinterOutlined />,
                       disabled: selectedRowKeys.length !== 1,
                       onClick: (keys: React.Key[]) => void handleToolbarPrint(keys),
@@ -2822,7 +2802,7 @@ const SalesContractsPage: React.FC = () => {
               items = items.filter((d) => d.id != null && keys.includes(d.id));
             }
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('app.kuaizhizao.salesContract.noExportData'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -2832,13 +2812,15 @@ const SalesContractsPage: React.FC = () => {
             a.download = `sales-contracts-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success(`已导出 ${items.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.salesContract.exportSuccess', { count: items.length }));
           } catch (error: any) {
-            messageApi.error(error?.message || '导出失败');
+            messageApi.error(error?.message || t('app.kuaizhizao.salesContract.exportFailed'));
           }
         }}
 
         request={async (params, _sort, _filter, searchFormValues) => {
+
+          const lifecycleParams = resolveSalesContractListLifecycleParams(searchFormValues, params);
 
           const res = await salesContractApi.list({
 
@@ -2848,7 +2830,7 @@ const SalesContractsPage: React.FC = () => {
 
             keyword: searchFormValues?.keyword,
 
-            status: searchFormValues?.status,
+            status: lifecycleParams.status ?? searchFormValues?.status,
 
             contract_type: searchFormValues?.contract_type,
 
@@ -2869,7 +2851,11 @@ const SalesContractsPage: React.FC = () => {
 
       <DetailDrawerTemplate
 
-        title={detail?.contract_code ? `销售合同 · ${detail.contract_code}` : '销售合同详情'}
+        title={
+          detail?.contract_code
+            ? t('app.kuaizhizao.salesContract.detailWithCode', { code: detail.contract_code })
+            : t('app.kuaizhizao.salesContract.detail')
+        }
 
         open={detailOpen}
 
@@ -2898,15 +2884,15 @@ const SalesContractsPage: React.FC = () => {
                 <>
 
                   {contractPerms.canUpdate ? (
-                    <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>编辑</Button>
+                    <Button icon={<EditOutlined />} onClick={() => handleEdit(detail)}>{t('common.edit')}</Button>
                   ) : null}
 
                   {contractPerms.canDelete ? (
-                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>删除</Button>
+                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDeleteDraft(detail)}>{t('common.delete')}</Button>
                   ) : null}
 
                   {canSubmitContract ? (
-                    <Button icon={<SendOutlined />} onClick={() => handleSubmit(detail)}>提交</Button>
+                    <Button icon={<SendOutlined />} onClick={() => handleSubmit(detail)}>{t('app.kuaizhizao.salesOrder.submitOrder')}</Button>
                   ) : null}
 
                 </>
@@ -2916,7 +2902,7 @@ const SalesContractsPage: React.FC = () => {
               <UniWorkflowActions
                 {...rowActionKind('skip')}
                 record={detail}
-                entityName="销售合同"
+                entityName={t('app.kuaizhizao.salesContract.entityName')}
                 theme="default"
                 auditNodeKey="sales_contract"
                 resourcePrefix="kuaizhizao:sales-contract"
@@ -2929,14 +2915,14 @@ const SalesContractsPage: React.FC = () => {
               />
 
               {canPrintContract(detail) && contractPerms.canPrint ? (
-                <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>打印</Button>
+                <Button icon={<PrinterOutlined />} onClick={() => void handlePrint(detail)}>{t('app.kuaizhizao.salesOrder.printPdf')}</Button>
               ) : null}
 
               {['已生效', '执行中'].includes(detail.status || '') && (
 
                 <Button type="primary" icon={<ShoppingOutlined />} onClick={() => openReleaseModal(detail)}>
 
-                  下推销售订单
+                  {t('app.kuaizhizao.salesContract.releaseOrder')}
 
                 </Button>
 
@@ -2944,13 +2930,13 @@ const SalesContractsPage: React.FC = () => {
 
               {['已生效', '执行中'].includes(detail.status || '') && (
 
-                <Button icon={<FormOutlined />} onClick={openChangeDrawer}>合同变更</Button>
+                <Button icon={<FormOutlined />} onClick={openChangeDrawer}>{t('app.kuaizhizao.salesContract.contractChange')}</Button>
 
               )}
 
               {['已生效', '执行中', '已到期'].includes(detail.status || '') && (
 
-                <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>关闭合同</Button>
+                <Button icon={<StopOutlined />} onClick={() => setCloseModalOpen(true)}>{t('app.kuaizhizao.salesContract.closeContract')}</Button>
 
               )}
 
@@ -2984,15 +2970,15 @@ const SalesContractsPage: React.FC = () => {
 
             <Descriptions column={3} size="small" bordered>
 
-              <Descriptions.Item label="合同总额">¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.totalContractAmount')}>¥{Number(paymentSummary.total_amount ?? 0).toFixed(2)}</Descriptions.Item>
 
-              <Descriptions.Item label="计划里程碑">¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.plannedMilestones')}>¥{Number(paymentSummary.planned_milestone_amount ?? 0).toFixed(2)}</Descriptions.Item>
 
-              <Descriptions.Item label="已开票">¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.invoiced')}>¥{Number(paymentSummary.invoiced_amount ?? 0).toFixed(2)}</Descriptions.Item>
 
-              <Descriptions.Item label="已收款">¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.collected')}>¥{Number(paymentSummary.collected_amount ?? 0).toFixed(2)}</Descriptions.Item>
 
-              <Descriptions.Item label="待开票">¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.salesContract.pendingInvoice')}>¥{Number(paymentSummary.pending_amount ?? 0).toFixed(2)}</Descriptions.Item>
 
             </Descriptions>
 
@@ -3008,7 +2994,13 @@ const SalesContractsPage: React.FC = () => {
 
               {detailLifecycle?.mainStages?.length ? (
 
-                <UniLifecycleStepper steps={detailLifecycle.mainStages} />
+                <UniLifecycleStepper
+                  steps={detailLifecycle.mainStages}
+                  status={detailLifecycle.status}
+                  showLabels
+                  nextStepSuggestions={detailLifecycle.nextStepSuggestions}
+                  hideNextStepSuggestions
+                />
 
               ) : null}
 
@@ -3056,17 +3048,17 @@ const SalesContractsPage: React.FC = () => {
 
                   columns={[
 
-                    { title: '物料编码', dataIndex: 'material_code', width: 120 },
+                    { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
 
-                    { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+                    { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
 
-                    { title: '合同数量', dataIndex: 'contract_quantity', width: 100, align: 'right' as const },
+                    { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 100, align: 'right' as const },
 
-                    { title: '已释放', dataIndex: 'released_quantity', width: 100, align: 'right' as const },
+                    { title: t('app.kuaizhizao.salesContract.released'), dataIndex: 'released_quantity', width: 100, align: 'right' as const },
 
                     {
 
-                      title: '剩余',
+                      title: t('app.kuaizhizao.salesContract.remaining'),
 
                       width: 100,
                       align: 'right' as const,
@@ -3075,9 +3067,9 @@ const SalesContractsPage: React.FC = () => {
 
                     },
 
-                    { title: '单价', dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
+                    { title: t('app.kuaizhizao.salesContract.unitPrice'), dataIndex: 'unit_price', width: 100, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
 
-                    { title: '金额', dataIndex: 'total_amount', width: 120, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
+                    { title: t('app.kuaizhizao.salesContract.amount'), dataIndex: 'total_amount', width: 120, align: 'right' as const, render: (v) => `¥${Number(v).toFixed(2)}` },
 
                   ]}
 
@@ -3091,7 +3083,7 @@ const SalesContractsPage: React.FC = () => {
 
                   <Typography.Title level={5} style={{ marginBottom: 8 }}>
 
-                    收款里程碑
+                    {t('app.kuaizhizao.salesContract.paymentMilestones')}
 
                   </Typography.Title>
 
@@ -3107,19 +3099,19 @@ const SalesContractsPage: React.FC = () => {
 
                     columns={[
 
-                      { title: '里程碑', dataIndex: 'milestone_name' },
+                      { title: t('app.kuaizhizao.salesContract.milestone'), dataIndex: 'milestone_name' },
 
-                      { title: '计划日期', dataIndex: 'planned_date', render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—') },
+                      { title: t('app.kuaizhizao.salesContract.plannedDate'), dataIndex: 'planned_date', render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—') },
 
-                      { title: '计划金额', dataIndex: 'planned_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
+                      { title: t('app.kuaizhizao.salesContract.plannedAmount'), dataIndex: 'planned_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
 
-                      { title: '状态', dataIndex: 'status' },
+                      { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status' },
 
-                      { title: '应收单', dataIndex: 'receivable_code', render: (v) => v || '—' },
+                      { title: t('app.kuaizhizao.salesContract.receivableDoc'), dataIndex: 'receivable_code', render: (v) => v || '—' },
 
                       {
 
-                        title: '操作',
+                        title: t('common.actions'),
 
                         width: 100,
 
@@ -3129,7 +3121,7 @@ const SalesContractsPage: React.FC = () => {
 
                             <Button type="link" size="small" onClick={() => handleGenerateReceivable(r.id!)}>
 
-                              生成应收
+                              {t('app.kuaizhizao.salesContract.generateReceivable')}
 
                             </Button>
 
@@ -3171,7 +3163,7 @@ const SalesContractsPage: React.FC = () => {
 
           ) : (
 
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesContract.noOperationRecords')} />
 
           )
 
@@ -3183,7 +3175,11 @@ const SalesContractsPage: React.FC = () => {
 
       <Drawer
 
-        title={detail?.contract_code ? `合同变更 · ${detail.contract_code}` : '合同变更'}
+        title={
+          detail?.contract_code
+            ? t('app.kuaizhizao.salesContract.changeTitleWithCode', { code: detail.contract_code })
+            : t('app.kuaizhizao.salesContract.changeTitle')
+        }
 
         open={changeDrawerOpen}
 
@@ -3203,7 +3199,7 @@ const SalesContractsPage: React.FC = () => {
 
           submitter={{
 
-            searchConfig: { submitText: '创建变更' },
+            searchConfig: { submitText: t('app.kuaizhizao.salesContract.createChange') },
 
             submitButtonProps: { loading: changeSubmitting },
 
@@ -3217,15 +3213,15 @@ const SalesContractsPage: React.FC = () => {
 
             name="change_type"
 
-            label="变更类型"
+            label={t('app.kuaizhizao.salesContract.changeType')}
 
             options={[
 
-              { label: '合同修订', value: 'amendment' },
+              { label: t('app.kuaizhizao.salesContract.changeTypeAmendment'), value: 'amendment' },
 
-              { label: '金额调整', value: 'amount_change' },
+              { label: t('app.kuaizhizao.salesContract.changeTypeAmount'), value: 'amount_change' },
 
-              { label: '延期', value: 'extension' },
+              { label: t('app.kuaizhizao.salesContract.changeTypeExtension'), value: 'extension' },
 
             ]}
 
@@ -3233,17 +3229,17 @@ const SalesContractsPage: React.FC = () => {
 
           />
 
-          <ProForm.Item name="delta_amount" label="金额变动" initialValue={0}>
+          <ProForm.Item name="delta_amount" label={t('app.kuaizhizao.salesContract.deltaAmount')} initialValue={0}>
             <InputNumber style={{ width: '100%' }} precision={2} />
           </ProForm.Item>
 
-          <ProFormDatePicker name="new_valid_to" label="新失效日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="new_valid_to" label={t('app.kuaizhizao.salesContract.newValidTo')} fieldProps={{ style: { width: '100%' } }} />
 
-          <ProFormTextArea name="reason" label="变更原因" fieldProps={{ rows: 3 }} />
+          <ProFormTextArea name="reason" label={t('app.kuaizhizao.salesContract.changeReason')} fieldProps={{ rows: 3 }} />
 
         </ProForm>
 
-        <Typography.Title level={5} style={{ marginTop: 24 }}>变更记录</Typography.Title>
+        <Typography.Title level={5} style={{ marginTop: 24 }}>{t('app.kuaizhizao.salesContract.changeRecords')}</Typography.Title>
 
         <Table
 
@@ -3259,17 +3255,17 @@ const SalesContractsPage: React.FC = () => {
 
           columns={[
 
-            { title: '变更单号', dataIndex: 'change_code', width: 140 },
+            { title: t('app.kuaizhizao.salesContract.changeCode'), dataIndex: 'change_code', width: 140 },
 
-            { title: '类型', dataIndex: 'change_type', width: 100 },
+            { title: t('app.kuaizhizao.salesContract.changeTypeCol'), dataIndex: 'change_type', width: 100, render: (v) => changeTypeLabels[v as keyof typeof changeTypeLabels] ?? v },
 
-            { title: '金额变动', dataIndex: 'delta_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
+            { title: t('app.kuaizhizao.salesContract.deltaAmount'), dataIndex: 'delta_amount', render: (v) => `¥${Number(v ?? 0).toFixed(2)}` },
 
-            { title: '状态', dataIndex: 'status', width: 90 },
+            { title: t('app.kuaizhizao.salesOrder.status'), dataIndex: 'status', width: 90, render: (v) => renderContractStatus(v) },
 
             {
 
-              title: '操作',
+              title: t('common.actions'),
 
               width: 160,
 
@@ -3279,7 +3275,7 @@ const SalesContractsPage: React.FC = () => {
 
                   {r.status === '草稿' ? (
 
-                    <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'submit')}>提交</Button>
+                    <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'submit')}>{t('app.kuaizhizao.salesOrder.submitOrder')}</Button>
 
                   ) : null}
 
@@ -3287,9 +3283,9 @@ const SalesContractsPage: React.FC = () => {
 
                     <>
 
-                      <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'approve')}>通过</Button>
+                      <Button type="link" size="small" onClick={() => handleChangeAction(r.id, 'approve')}>{t('app.kuaizhizao.salesContract.approve')}</Button>
 
-                      <Button type="link" size="small" danger onClick={() => handleChangeAction(r.id, 'reject')}>驳回</Button>
+                      <Button type="link" size="small" danger onClick={() => handleChangeAction(r.id, 'reject')}>{t('app.kuaizhizao.salesContract.reject')}</Button>
 
                     </>
 
@@ -3311,13 +3307,13 @@ const SalesContractsPage: React.FC = () => {
 
       <Modal
 
-        title="下推销售订单"
+        title={t('app.kuaizhizao.salesContract.releaseOrder')}
 
         open={releaseModalOpen}
 
         width={MODAL_CONFIG.LARGE_WIDTH}
 
-        okText="确认下推"
+        okText={t('app.kuaizhizao.salesContract.confirmRelease')}
 
         confirmLoading={releaseSubmitting}
 
@@ -3339,7 +3335,7 @@ const SalesContractsPage: React.FC = () => {
 
         <Typography.Paragraph type="secondary">
 
-          合同：{releaseTarget?.contract_code} · 勾选明细并填写本次释放数量
+          {t('app.kuaizhizao.salesContract.releaseHint', { code: releaseTarget?.contract_code })}
 
         </Typography.Paragraph>
 
@@ -3357,7 +3353,7 @@ const SalesContractsPage: React.FC = () => {
 
             {
 
-              title: '选择',
+              title: t('app.kuaizhizao.salesContract.select'),
 
               width: 60,
 
@@ -3383,19 +3379,19 @@ const SalesContractsPage: React.FC = () => {
 
             },
 
-            { title: '物料编码', dataIndex: 'material_code', width: 120 },
+            { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
 
-            { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
+            { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', ellipsis: true },
 
-            { title: '合同数量', dataIndex: 'contract_quantity', width: 90, align: 'right' as const },
+            { title: t('app.kuaizhizao.salesContract.contractQuantity'), dataIndex: 'contract_quantity', width: 90, align: 'right' as const },
 
-            { title: '已释放', dataIndex: 'released_quantity', width: 80, align: 'right' as const },
+            { title: t('app.kuaizhizao.salesContract.released'), dataIndex: 'released_quantity', width: 80, align: 'right' as const },
 
-            { title: '剩余', dataIndex: 'remaining_quantity', width: 80, align: 'right' as const },
+            { title: t('app.kuaizhizao.salesContract.remaining'), dataIndex: 'remaining_quantity', width: 80, align: 'right' as const },
 
             {
 
-              title: '本次释放',
+              title: t('app.kuaizhizao.salesContract.thisRelease'),
 
               width: 120,
 
@@ -3431,7 +3427,7 @@ const SalesContractsPage: React.FC = () => {
 
             },
 
-            { title: '单位', dataIndex: 'material_unit', width: 60 },
+            { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
 
           ]}
 
@@ -3443,11 +3439,11 @@ const SalesContractsPage: React.FC = () => {
 
       <Modal
 
-        title="关闭合同"
+        title={t('app.kuaizhizao.salesContract.closeContract')}
 
         open={closeModalOpen}
 
-        okText="确认关闭"
+        okText={t('app.kuaizhizao.salesContract.confirmClose')}
 
         onOk={handleCloseContract}
 
@@ -3465,7 +3461,7 @@ const SalesContractsPage: React.FC = () => {
 
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
 
-          合同：{detail?.contract_code ?? detail?.id ?? '-'}
+          {t('app.kuaizhizao.salesContract.contractLabel', { code: detail?.contract_code ?? detail?.id ?? '-' })}
 
         </Typography.Paragraph>
 
@@ -3477,7 +3473,7 @@ const SalesContractsPage: React.FC = () => {
 
           onChange={(e) => setCloseReason(e.target.value)}
 
-          placeholder="可选：关闭原因"
+          placeholder={t('app.kuaizhizao.salesContract.closeReasonPlaceholder')}
 
           maxLength={500}
 
@@ -3489,55 +3485,8 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-      <Modal
-        open={printModalVisible}
-        title="选择打印模板"
-        width={MODAL_CONFIG.TINY_WIDTH}
-        onCancel={() => {
-          if (printSubmitting) return;
-          setPrintModalVisible(false);
-          setPrintingRecord(null);
-        }}
-        onOk={handleConfirmPrint}
-        okText="预览打印"
-        okButtonProps={{ icon: <PrinterOutlined /> }}
-        confirmLoading={printSubmitting}
-        destroyOnHidden
-      >
-        <Space orientation="vertical" style={{ width: '100%' }} size={12}>
-          <Typography.Text type="secondary">
-            合同：{printingRecord?.contract_code ?? printingRecord?.id ?? '-'}
-          </Typography.Text>
-          {printTemplates.length === 0 ? (
-            <Typography.Text type="secondary">暂无可用模板，请先在系统设置中配置 sales_contract 打印模板。</Typography.Text>
-          ) : (
-            printTemplates.map((tpl) => (
-              <Button
-                key={tpl.uuid}
-                block
-                type={selectedPrintTemplateUuid === tpl.uuid ? 'primary' : 'default'}
-                onClick={() => setSelectedPrintTemplateUuid(tpl.uuid)}
-              >
-                {tpl.name}
-                {tpl.is_default ? '（默认）' : ''}
-              </Button>
-            ))
-          )}
-        </Space>
-      </Modal>
+      {PrintModal}
 
-      <UniPdfPreview
-        open={pdfPreviewVisible}
-        blobUrl={pdfPreviewBlobUrl}
-        fileName={pdfPreviewFileName}
-        onClose={() => {
-          setPdfPreviewVisible(false);
-          if (pdfPreviewBlobUrl) {
-            URL.revokeObjectURL(pdfPreviewBlobUrl);
-            setPdfPreviewBlobUrl(null);
-          }
-        }}
-      />
 
       <UniMaterialBatchPicker
 

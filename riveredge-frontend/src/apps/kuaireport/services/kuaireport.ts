@@ -59,10 +59,18 @@ export async function getMyReports(params?: { skip?: number; limit?: number }) {
 
 /** 执行报表查询，返回数据 */
 export async function executeReport(id: string | number, filters: any = {}) {
-    return apiRequest<{ data: any[]; total?: number; success: boolean }>(`/apps/kuaireport/reports/${id}/execute`, {
+    return apiRequest<{ data: any[]; total?: number; success: boolean; summary?: Record<string, number> }>(`/apps/kuaireport/reports/${id}/execute`, {
         method: 'POST',
         data: filters,
     });
+}
+
+/** 获取数据集字段元数据（ReportDesigner） */
+export async function getDatasetFields(params: { dataset_uuid?: string; dataset_code?: string }) {
+    return apiRequest<{ fields: Array<{ field: string; label: string; visible?: boolean; format?: string }>; success: boolean }>(
+        '/apps/kuaireport/reports/datasets/fields',
+        { method: 'GET', params },
+    );
 }
 
 /** @deprecated 使用 executeReport */

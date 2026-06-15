@@ -62,7 +62,7 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
   avatarUrl
 }) => {
   const { token } = theme.useToken();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
 
   // 格式化工具
@@ -133,7 +133,10 @@ export const MobileWorkplace: React.FC<MobileWorkplaceProps> = ({
             <Title level={4} style={{ margin: 0, fontSize: 20 }}>
               {greeting}, {userInfo?.full_name || userInfo?.username || userInfo?.name || t('pages.dashboard.userFallback')}
             </Title>
-            <Text type="secondary" style={{ fontSize: 13 }}>{currentTime.format('YYYY-MM-DD')} · {lunarDateStr}</Text>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {currentTime.format('YYYY-MM-DD')}
+              {i18n.language?.startsWith('zh') ? ` · ${lunarDateStr}` : ''}
+            </Text>
           </div>
         </Space>
         <Badge dot color={token.colorError}>

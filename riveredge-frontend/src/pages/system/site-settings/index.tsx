@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography } from 'antd';
+import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
@@ -116,6 +116,8 @@ const syncNormalizeColor = (color: any, defaultVal: string): string =>
 const SiteSettingsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { token } = theme.useToken();
+  const cardRadius = token.borderRadiusLG;
   const fetchConfigs = useConfigStore((s) => s.fetchConfigs);
   const configs = useConfigStore((s) => s.configs);
   const initialized = useConfigStore((s) => s.initialized);
@@ -1279,12 +1281,12 @@ const SiteSettingsPage: React.FC = () => {
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
-        <Card size="small" style={{ borderRadius: 10 }}>
+        <Card size="small" style={{ borderRadius: cardRadius }}>
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <div
               style={{
-                border: '1px solid #e5e6eb',
-                borderRadius: 10,
+                border: `1px solid ${token.colorBorderSecondary}`,
+                borderRadius: cardRadius,
                 padding: '12px 14px',
                 background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
               }}
@@ -1426,13 +1428,14 @@ const SiteSettingsPage: React.FC = () => {
                     size="small"
                     title={t('common.languages.zhCN')}
                     style={{
-                      borderRadius: 10,
+                      borderRadius: cardRadius,
                       height: '100%',
-                      border: '1px solid #e5e6eb',
+                      border: `1px solid ${token.colorBorderSecondary}`,
                       background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
+                      overflow: 'hidden',
                     }}
                     styles={{
-                      header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
+                      header: { background: 'transparent', borderBottom: `1px solid ${token.colorBorderSecondary}` },
                       body: { background: 'transparent' },
                     }}
                   >
@@ -1455,13 +1458,14 @@ const SiteSettingsPage: React.FC = () => {
                     size="small"
                     title={t('common.languages.enUS')}
                     style={{
-                      borderRadius: 10,
+                      borderRadius: cardRadius,
                       height: '100%',
-                      border: '1px solid #e5e6eb',
+                      border: `1px solid ${token.colorBorderSecondary}`,
                       background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
+                      overflow: 'hidden',
                     }}
                     styles={{
-                      header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
+                      header: { background: 'transparent', borderBottom: `1px solid ${token.colorBorderSecondary}` },
                       body: { background: 'transparent' },
                     }}
                   >

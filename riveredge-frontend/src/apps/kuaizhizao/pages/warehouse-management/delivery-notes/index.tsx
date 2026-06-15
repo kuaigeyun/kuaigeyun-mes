@@ -34,8 +34,6 @@ import { UniTableDetailHeader } from '../../../../../components/uni-table-detail
 import { deliveryNoticeApi } from '../../../services/delivery-notice';
 import { getDeliveryNoticeLifecycle } from '../../../utils/deliveryNoticeLifecycle';
 import { useTranslation } from 'react-i18next';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
 import { warehouseApi } from '../../../services/production';
 import { listSalesOrders, getSalesOrder } from '../../../services/sales-order';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -48,6 +46,10 @@ import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from 
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
+import { resolveDeliveryNoticeQualityCertificates } from '../../../services/print';
+import { SafetyCertificateOutlined } from '@ant-design/icons';
 
 interface DeliveryNotice {
   id?: number;
@@ -91,25 +93,6 @@ type PullSalesDeliveryCandidate = {
   converted?: boolean;
 };
 
-function buildDeliveryNoticePrintHtml(d: DeliveryNoticeDetail): string {
-  const esc = escapeHtml;
-  const rows = (d.items || [])
-    .map(
-      (it) =>
-        `<tr><td>${esc(it.material_code)}</td><td>${esc(it.material_name)}</td><td>${esc(it.material_unit)}</td><td style="text-align:right">${esc(it.notice_quantity)}</td><td style="text-align:right">${esc(it.unit_price)}</td></tr>`,
-    )
-    .join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>发货通知 ${esc(d.notice_code)}</title><style>body{font-family:system-ui,sans-serif;padding:24px;}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#f0f0f0;text-align:left}</style></head><body>
-<h2>发货通知单</h2>
-<p><strong>通知单号</strong> ${esc(d.notice_code)} &nbsp; <strong>客户</strong> ${esc(d.customer_name)}</p>
-<p><strong>销售出库</strong> ${esc(d.sales_delivery_code)} &nbsp; <strong>销售订单</strong> ${esc(d.sales_order_code)}</p>
-<p><strong>预计送达</strong> ${esc(d.planned_delivery_date)} &nbsp; <strong>承运商</strong> ${esc(d.carrier)} &nbsp; <strong>运单号</strong> ${esc(d.tracking_number)}</p>
-<p><strong>收货地址</strong> ${esc(d.shipping_address)}</p>
-<table><thead><tr><th>物料编码</th><th>物料名称</th><th>单位</th><th>数量</th><th>单价</th></tr></thead><tbody>${rows || '<tr><td colspan="5">无明细</td></tr>'}</tbody></table>
-<p style="margin-top:16px;color:#666;font-size:12px">由系统生成（未配置打印模板时的兜底）</p>
-</body></html>`;
-}
-
 const STATUS_MAP: Record<string, { text: string; color: string }> = {
   待发送: { text: '待发送', color: 'default' },
   已发送: { text: '已发送', color: 'processing' },
@@ -118,6 +101,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 
 const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const pullFromSalesDeliveryAction = getKuaizhizaoDocumentAction('delivery_note.pull_from_sales_delivery');
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -141,6 +125,9 @@ const DeliveryNotesPage: React.FC = () => {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [syncModalVisible, setSyncModalVisible] = useState(false);
+  const { canPrint: canPrintQualityCertificate } = useResourcePermissions(
+    'kuaizhizao:quality-management-finished-goods-inspection',
+  );
   const formRef = useRef<any>(null);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
   const [customerList, setCustomerList] = useState<any[]>([]);
@@ -245,6 +232,14 @@ const DeliveryNotesPage: React.FC = () => {
             ? [{ key: 'send', label: '发送', icon: <SendOutlined />, onClick: () => handleSend(record) }]
             : []),
           { key: 'print', label: '打印', icon: <PrinterOutlined />, onClick: () => handlePrint(record) },
+          ...(canPrintQualityCertificate
+            ? [{
+                key: 'print-certificate',
+                label: '打印合格证',
+                icon: <SafetyCertificateOutlined />,
+                onClick: () => void handlePrintCertificate(record),
+              }]
+            : []),
         ]
         return (
           <Space>
@@ -385,26 +380,32 @@ const DeliveryNotesPage: React.FC = () => {
     }
   };
 
-  const handlePrint = async (record: DeliveryNotice) => {
+  const handlePrintCertificate = async (record: DeliveryNotice) => {
+    if (!record.id) return;
     try {
-      const result = (await deliveryNoticeApi.print(record.id!.toString())) as DocumentPrintApiResult;
-      if (result?.success && result?.content) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(result.content);
-          printWindow.document.close();
-          printWindow.onload = () => printWindow.print();
-        }
-      } else {
-        const detail = (await deliveryNoticeApi.get(record.id!.toString())) as DeliveryNoticeDetail;
-        const w = openPrintHtmlWindow(buildDeliveryNoticePrintHtml(detail), `发货通知 ${detail.notice_code || ''}`);
-        if (!w) {
-          messageApi.warning(result?.message || '无法打开打印窗口，请检查浏览器拦截设置');
-        }
+      const res = await resolveDeliveryNoticeQualityCertificates(record.id);
+      const certs = res?.certificates ?? [];
+      if (!certs.length) {
+        messageApi.warning('未找到已出具合格证的成品检验单，请先完成成品检验并出具合格证');
+        return;
       }
-    } catch {
-      messageApi.error('打印失败');
+      const first = certs[0];
+      openPrint({
+        documentType: 'product_quality_certificate',
+        documentId: first.inspection_id,
+        title: '打印产品合格证',
+      });
+      if (certs.length > 1) {
+        messageApi.info(`找到 ${certs.length} 份合格证，已打开第一份（${first.material_name || first.release_certificate || ''}）`);
+      }
+    } catch (e: any) {
+      messageApi.error(e?.message || '解析合格证失败');
     }
+  };
+
+  const handlePrint = (record: DeliveryNotice) => {
+    if (!record.id) return;
+    openPrint({ documentType: 'delivery_notice', documentId: record.id });
   };
 
   /** 参考销售订单：先打开弹窗，再执行其他逻辑 */
@@ -1195,6 +1196,8 @@ const DeliveryNotesPage: React.FC = () => {
         onConfirm={handleSyncConfirm}
         title="从数据集同步送货单"
       />
+
+      {PrintModal}
     </>
   );
 };

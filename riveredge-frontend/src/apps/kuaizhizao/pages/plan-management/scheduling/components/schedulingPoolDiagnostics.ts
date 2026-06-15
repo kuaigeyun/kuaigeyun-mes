@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import type { VisualSchedulingBoardScan } from '../../../../services/production';
 import type { WorkOrderForGantt } from '../../../../components/GanttSchedulingChart/types';
 import {
@@ -13,28 +14,35 @@ export interface WorkOrderDiagnosticIssue {
   label: string;
 }
 
-const CONFLICT_TYPE_LABELS: Record<string, string> = {
-  station_overlap: '工位重叠',
-  equipment_overlap: '设备重叠',
-  mold_overlap: '模具冲突',
-  tool_overlap: '工装冲突',
-  sequence_violation: '工序顺序',
-  frozen: '已冻结',
-  freeze_window: '冻结窗',
+const CONFLICT_TYPE_KEYS: Record<string, string> = {
+  station_overlap: 'app.kuaizhizao.scheduling.diagnostics.conflict.stationOverlap',
+  equipment_overlap: 'app.kuaizhizao.scheduling.diagnostics.conflict.equipmentOverlap',
+  mold_overlap: 'app.kuaizhizao.scheduling.diagnostics.conflict.moldOverlap',
+  tool_overlap: 'app.kuaizhizao.scheduling.diagnostics.conflict.toolOverlap',
+  sequence_violation: 'app.kuaizhizao.scheduling.diagnostics.conflict.sequenceViolation',
+  frozen: 'app.kuaizhizao.scheduling.diagnostics.conflict.frozen',
+  freeze_window: 'app.kuaizhizao.scheduling.diagnostics.conflict.freezeWindow',
 };
 
-export function conflictTypeLabel(type: string): string {
-  return CONFLICT_TYPE_LABELS[type] || type;
+export function conflictTypeLabel(type: string, t?: TFunction): string {
+  const key = CONFLICT_TYPE_KEYS[type];
+  return key && t ? t(key) : type;
 }
 
-function missingFieldLabel(field: 'planned_start_date' | 'planned_end_date'): string {
-  return field === 'planned_start_date' ? '未设计划开始' : '未设计划结束';
+function missingFieldLabel(
+  field: 'planned_start_date' | 'planned_end_date',
+  t: TFunction
+): string {
+  return field === 'planned_start_date'
+    ? t('app.kuaizhizao.scheduling.diagnostics.missingPlannedStart')
+    : t('app.kuaizhizao.scheduling.diagnostics.missingPlannedEnd');
 }
 
 /** 汇总工单在待排表格中展示的排产问题（本地校验 + board-scan 诊断） */
 export function collectWorkOrderDiagnosticIssues(
   wo: WorkOrderForGantt,
-  boardScan: VisualSchedulingBoardScan | null | undefined
+  boardScan: VisualSchedulingBoardScan | null | undefined,
+  t: TFunction
 ): WorkOrderDiagnosticIssue[] {
   const issues: WorkOrderDiagnosticIssue[] = [];
   const seen = new Set<string>();
@@ -49,7 +57,7 @@ export function collectWorkOrderDiagnosticIssues(
     push({
       key: `missing-${field}`,
       severity: 'warning',
-      label: missingFieldLabel(field),
+      label: missingFieldLabel(field, t),
     });
   }
 
@@ -58,7 +66,7 @@ export function collectWorkOrderDiagnosticIssues(
     push({
       key: 'missing-station',
       severity: 'warning',
-      label: `${missingStations.length} 道工序缺工位`,
+      label: t('app.kuaizhizao.scheduling.diagnostics.missingStations', { count: missingStations.length }),
     });
   }
 
@@ -70,7 +78,7 @@ export function collectWorkOrderDiagnosticIssues(
     push({
       key: 'unscheduled',
       severity: 'warning',
-      label: item.reason || '未设置计划起止时间',
+      label: item.reason || t('app.kuaizhizao.scheduling.diagnostics.unscheduledFallback'),
     });
   }
 
@@ -79,7 +87,7 @@ export function collectWorkOrderDiagnosticIssues(
     push({
       key: `conflict-${conflict.type}-${conflict.task_id ?? conflict.operation_id ?? conflict.message}`,
       severity: 'error',
-      label: `${conflictTypeLabel(conflict.type)}`,
+      label: conflictTypeLabel(conflict.type, t),
     });
   }
 
@@ -88,7 +96,7 @@ export function collectWorkOrderDiagnosticIssues(
     push({
       key: 'material',
       severity: 'warning',
-      label: material.message || '齐套不足',
+      label: material.message || t('app.kuaizhizao.scheduling.diagnostics.materialShortageFallback'),
     });
   }
 

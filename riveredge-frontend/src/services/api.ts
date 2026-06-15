@@ -453,8 +453,12 @@ export async function apiRequest<T = any>(
       if (data && typeof data === 'object') {
         // 如果是统一错误格式 { success: false, error: ... }
         if (data.success === false && data.error) {
+          const detailMsg =
+            typeof data.error.details?.message === 'string' ? data.error.details.message : '';
           const errorMessage = data.error.message || data.error.details || '请求失败';
-          const error = new Error(errorMessage) as any;
+          const error = new Error(
+            import.meta.env.DEV && detailMsg ? `${errorMessage}: ${detailMsg}` : errorMessage,
+          ) as any;
           error.response = { data, status: response.status };
           throw error;
         }

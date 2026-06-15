@@ -86,8 +86,8 @@ import { getTenantById, TenantPlan } from '../services/tenant';
 import { getToken, clearAuth, getUserInfo, getTenantId, isInfraSuperAdminUser, isInfraSuperAdminFromToken } from '../utils/auth';
 import { useGlobalStore } from '../stores';
 import { getLanguageList, Language } from '../services/language';
-import { LANGUAGE_MAP } from '../config/i18n';
-import i18n, { refreshTranslations } from '../config/i18n';
+import { LANGUAGE_MAP, applyLanguageWithPersist } from '../config/i18n';
+import i18n from '../config/i18n';
 import {
   MenuTree,
   getEffectiveHome,
@@ -2381,25 +2381,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
    */
   const handleLanguageChange = React.useCallback(async (languageCode: string) => {
     try {
-      // 切换到新语言
-      await i18n.changeLanguage(languageCode);
-
-      // 从后端加载翻译内容
-      await refreshTranslations();
-
-      // 通过 store 更新用户偏好，保持与 userPreferenceStore 同步
-      try {
-        await updatePreferences({ language: languageCode });
-      } catch (error) {
-        console.warn(t('ui.error.updatePreferences'), error);
-      }
-
+      await applyLanguageWithPersist(languageCode);
       message.success(t('common.switchLanguageSuccess', { language: LANGUAGE_MAP[languageCode] || languageCode }));
     } catch (error: any) {
       console.error(t('common.switchLanguageFailed'), error);
       message.error(error?.message || t('common.switchLanguageFailed'));
     }
-  }, [updatePreferences]);
+  }, [t]);
 
   /**
    * 构建语言切换下拉菜单
@@ -2828,6 +2816,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           --ant-colorPrimary: ${token.colorPrimary};
           --ant-colorBgLayout: ${token.colorBgLayout || (isDarkMode ? '#141414' : '#f5f5f5')};
           --ant-colorBorder: ${token.colorBorder};
+          --ant-colorBorderSecondary: ${token.colorBorderSecondary ?? token.colorBorder};
           --ant-borderRadius: ${token.borderRadius}px;
           --ant-borderRadiusLG: ${token.borderRadiusLG ?? token.borderRadius + 2}px;
         }

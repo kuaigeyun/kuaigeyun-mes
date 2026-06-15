@@ -119,7 +119,7 @@ const CustomerPoolPage: React.FC = () => {
       await loadRules();
       setRulesOpen(true);
     } catch {
-      message.error('加载客户池规则失败');
+      message.error(t('app.kuaizhizao.customerPool.loadRulesFailed'));
     }
   };
 
@@ -164,28 +164,28 @@ const CustomerPoolPage: React.FC = () => {
   const confirmReleaseCustomer = useCallback(
     (row: CustomerPoolItem) => {
       modal.confirm({
-        title: '确认释放客户',
-        content: `确定将「${row.name}」释放回公共客户池吗？释放后将不再归属当前业务员。`,
-        okText: '确认释放',
-        cancelText: '取消',
+        title: t('app.kuaizhizao.customerPool.confirmReleaseTitle'),
+        content: t('app.kuaizhizao.customerPool.confirmReleaseContent', { name: row.name }),
+        okText: t('app.kuaizhizao.customerPool.confirmReleaseOk'),
+        cancelText: t('common.cancel'),
         onOk: async () => {
           try {
             await customerPoolApi.release(row.id);
-            message.success('已释放回公海');
+            message.success(t('app.kuaizhizao.customerPool.releasedSuccess'));
             actionRef.current?.reload();
           } catch (error: any) {
-            message.error(error?.message || '释放失败');
+            message.error(error?.message || t('app.kuaizhizao.customerPool.releaseFailed'));
             throw error;
           }
         },
       });
     },
-    [message, modal],
+    [message, modal, t],
   );
 
   const claimCustomers = async (rows: CustomerPoolItem[]) => {
     if (!rows.length) {
-      message.warning('请选择公共客户池客户');
+      message.warning(t('app.kuaizhizao.customerPool.selectPublicPoolCustomers'));
       return;
     }
     try {
@@ -193,15 +193,19 @@ const CustomerPoolPage: React.FC = () => {
       const success = results.filter((item) => item.status === 'fulfilled').length;
       const failed = rows.length - success;
       if (success > 0) {
-        message.success(success === 1 ? '领取成功' : `已领取 ${success} 个客户`);
+        message.success(
+          success === 1
+            ? t('app.kuaizhizao.customerPool.claimSuccess')
+            : t('app.kuaizhizao.customerPool.claimSuccessBatch', { count: success }),
+        );
       }
       if (failed > 0) {
-        message.warning(`${failed} 个客户领取失败`);
+        message.warning(t('app.kuaizhizao.customerPool.claimPartialFailed', { count: failed }));
       }
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      message.error(error?.message || '领取失败');
+      message.error(error?.message || t('app.kuaizhizao.customerPool.claimFailed'));
     }
   };
 
@@ -247,23 +251,23 @@ const CustomerPoolPage: React.FC = () => {
 
   const handleDeleteCustomer = useCallback(async (row: CustomerPoolItem) => {
     if (!row.uuid) {
-      message.warning('当前客户缺少唯一标识，无法删除');
+      message.warning(t('app.kuaizhizao.customerPool.missingUuidForDelete'));
       return;
     }
     try {
       await customerApi.delete(row.uuid);
-      message.success('删除成功');
+      message.success(t('common.deleteSuccess'));
       setSelectedRowKeys((prev) => prev.filter((key) => String(key) !== String(row.id)));
       actionRef.current?.reload();
     } catch (error: any) {
-      message.error(error?.message || '删除失败');
+      message.error(error?.message || t('common.deleteFailed'));
     }
-  }, [message]);
+  }, [message, t]);
 
   const columns: ProColumns<CustomerPoolItem>[] = useMemo(
     () => [
       {
-        title: '关键词',
+        title: t('app.kuaizhizao.customerPool.keyword'),
         dataIndex: 'keyword',
         hideInTable: true,
         valueType: 'text',
@@ -273,7 +277,7 @@ const CustomerPoolPage: React.FC = () => {
         },
       },
       {
-        title: t('field.customer.nameCode', '客户名称/编号'),
+        title: t('field.customer.nameCode'),
         dataIndex: 'nameCode',
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         minWidth: 260,
@@ -337,21 +341,21 @@ const CustomerPoolPage: React.FC = () => {
         ),
       },
       {
-        title: '最近跟进',
+        title: t('field.customer.lastFollowUpAt'),
         dataIndex: 'last_follow_up_at',
         width: 165,
         hideInSearch: true,
         render: (_, row) => (row.last_follow_up_at ? dayjs(row.last_follow_up_at).format('YYYY-MM-DD HH:mm') : '—'),
       },
       {
-        title: '预计回收',
+        title: t('field.customer.recycleAt'),
         dataIndex: 'recycle_at',
         width: 165,
         hideInSearch: true,
         render: (_, row) => (row.recycle_at ? dayjs(row.recycle_at).format('YYYY-MM-DD HH:mm') : '—'),
       },
       {
-        title: '操作',
+        title: t('common.actions'),
         dataIndex: 'option',
         fixed: 'right',
         minWidth: 260,
@@ -387,12 +391,14 @@ const CustomerPoolPage: React.FC = () => {
                 <Popconfirm
                   {...rowActionKind('delete')}
                   key="delete"
-                  title="确认删除客户？"
-                  description={`删除后不可恢复：${row.name || row.code || '该客户'}`}
+                  title={t('app.kuaizhizao.customerPool.confirmDeleteCustomer')}
+                  description={t('app.kuaizhizao.customerPool.confirmDeleteCustomerDesc', {
+                    name: row.name || row.code || t('app.kuaizhizao.customerPool.customerFallback'),
+                  })}
                   onConfirm={() => handleDeleteCustomer(row)}
                 >
                   <Button type="link" size="small" danger>
-                    删除
+                    {t('common.delete')}
                   </Button>
                 </Popconfirm>,
               );
@@ -402,12 +408,12 @@ const CustomerPoolPage: React.FC = () => {
           } else {
             actions.push(
               <Button {...rowActionKind('create')} key="follow-up" onClick={() => openFollowUp(row.id)}>
-                新建跟进
+                {t('app.kuaizhizao.customerPool.newFollowUp')}
               </Button>
             );
             actions.push(
               <Button {...rowActionKind('create')} key="quote" onClick={() => toQuotation(row.id)}>
-                去报价
+                {t('app.kuaizhizao.customerPool.goToQuotation')}
               </Button>
             );
             if (canRelease) {
@@ -421,7 +427,7 @@ const CustomerPoolPage: React.FC = () => {
                     confirmReleaseCustomer(row);
                   }}
                 >
-                  释放
+                  {t('components.uniAction.release')}
                 </Button>
               );
             }
@@ -435,14 +441,14 @@ const CustomerPoolPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       await customerPoolApi.recycle(row.id);
-                      message.success('已强制回收到公海');
+                      message.success(t('app.kuaizhizao.customerPool.recycledSuccess'));
                       actionRef.current?.reload();
                     } catch (error: any) {
-                      message.error(error?.message || '回收失败');
+                      message.error(error?.message || t('app.kuaizhizao.customerPool.recycleFailed'));
                     }
                   }}
                 >
-                  强制回收
+                  {t('app.kuaizhizao.customerPool.forceRecycle')}
                 </Button>
               );
             }
@@ -456,7 +462,7 @@ const CustomerPoolPage: React.FC = () => {
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择需要删除的客户');
+      message.warning(t('app.kuaizhizao.customerPool.selectCustomersToDelete'));
       return;
     }
     const rowMap = new Map(tableRowsRef.current.map((row) => [String(row.id), row]));
@@ -475,11 +481,11 @@ const CustomerPoolPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已删除 ${success} 个客户`);
-    if (failed > 0) message.warning(`${failed} 个客户删除失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.customerPool.batchDeleteSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.customerPool.batchDeletePartialFailed', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message]);
+  }, [message, t]);
 
   const selectedPoolRows = useMemo(() => {
     const selectedSet = new Set(selectedRowKeys.map((key) => String(key)));
@@ -584,7 +590,16 @@ const CustomerPoolPage: React.FC = () => {
       return;
     }
 
-    const headers = ['客户编号', '客户名称', '联系人', '电话', '归属业务员', '池状态', '最近跟进', '预计回收'];
+    const headers = [
+      t('field.customer.code'),
+      t('field.customer.name'),
+      t('field.customer.contactPerson'),
+      t('field.customer.phone'),
+      t('field.customer.salesman'),
+      t('field.customer.poolStatus'),
+      t('field.customer.lastFollowUpAt'),
+      t('field.customer.recycleAt'),
+    ];
     const csvRows = [headers.join(',')];
     for (const row of exportData) {
       const status = row.pool_status === 'pool' ? t('app.kuaizhizao.customerPool.scopePublic') : t('app.kuaizhizao.customerPool.scopePrivate');
@@ -601,7 +616,7 @@ const CustomerPoolPage: React.FC = () => {
       csvRows.push(cells.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(','));
     }
     const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    downloadFile(blob, `客户池_${dayjs().format('YYYY-MM-DD')}.csv`);
+    downloadFile(blob, t('app.kuaizhizao.customerPool.exportFileName', { date: dayjs().format('YYYY-MM-DD') }));
     message.success(t('common.exportSuccess', { count: exportData.length }));
   }, [message, t]);
 
@@ -615,7 +630,7 @@ const CustomerPoolPage: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           columns={columns}
-          headerTitle="客户池"
+          headerTitle={t('app.kuaizhizao.menu.sales-management.customer-pool')}
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.customer-pool"
           tanstackQuery={{ queryKeyPrefix: ['apps.kuaizhizao.pages.sales-management.customer-pool', scope] }}
           onTableDataChange={(data) => {
@@ -667,14 +682,14 @@ const CustomerPoolPage: React.FC = () => {
               });
               return { data: res.items || [], total: res.total || 0, success: true };
             } catch {
-              message.error('加载客户池失败');
+              message.error(t('app.kuaizhizao.customerPool.loadFailed'));
               tableRowsRef.current = [];
               return { data: [], total: 0, success: false };
             }
           }}
           showDeleteButton={canDeleteCustomer}
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 个客户？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.customerPool.confirmBatchDeleteCustomers', { count })}
           toolBarActionsAfterDelete={[
             ...(canClaim
               ? [
@@ -684,13 +699,15 @@ const CustomerPoolPage: React.FC = () => {
                     disabled={selectedPoolRows.length === 0}
                     onClick={() => {
                       if (selectedPoolRows.length === 0) {
-                        message.warning('仅公共客户池客户支持领取');
+                        message.warning(t('app.kuaizhizao.customerPool.publicPoolClaimOnly'));
                         return;
                       }
                       void claimCustomers(selectedPoolRows);
                     }}
                   >
-                    {selectedPoolRows.length > 1 ? '批量领取' : '领取'}
+                    {selectedPoolRows.length > 1
+                      ? t('app.kuaizhizao.customerPool.batchClaim')
+                      : t('app.kuaizhizao.customerPool.claim')}
                   </Button>,
                 ]
               : []),
@@ -702,13 +719,15 @@ const CustomerPoolPage: React.FC = () => {
                     disabled={selectedPoolRows.length === 0}
                     onClick={async () => {
                       if (selectedPoolRows.length === 0) {
-                        message.warning('仅公共客户池客户支持分配');
+                        message.warning(t('app.kuaizhizao.customerPool.publicPoolAssignOnly'));
                         return;
                       }
                       await openAssignModal(selectedPoolRows);
                     }}
                   >
-                    {selectedPoolRows.length > 1 ? '批量分配' : '分配'}
+                    {selectedPoolRows.length > 1
+                      ? t('app.kuaizhizao.customerPool.batchAssign')
+                      : t('app.kuaizhizao.customerPool.assign')}
                   </Button>,
                 ]
               : []),
@@ -717,7 +736,7 @@ const CustomerPoolPage: React.FC = () => {
             canUpdateRules
               ? [
                   <Button {...rowActionKind('update')} key="rules" onClick={openRules}>
-                    回收规则
+                    {t('app.kuaizhizao.customerPool.recycleRules')}
                   </Button>,
                 ]
               : undefined
@@ -726,7 +745,11 @@ const CustomerPoolPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={assignTargets.length > 1 ? '批量分配客户' : '分配客户'}
+        title={
+          assignTargets.length > 1
+            ? t('app.kuaizhizao.customerPool.batchAssignTitle')
+            : t('app.kuaizhizao.customerPool.assignTitle')
+        }
         open={assignOpen}
         onCancel={() => {
           setAssignOpen(false);
@@ -744,32 +767,40 @@ const CustomerPoolPage: React.FC = () => {
             const success = results.filter((item) => item.status === 'fulfilled').length;
             const failed = assignTargets.length - success;
             if (success > 0) {
-              message.success(success === 1 ? '分配成功' : `已分配 ${success} 个客户`);
+              message.success(
+                success === 1
+                  ? t('common.assignSuccess')
+                  : t('app.kuaizhizao.customerPool.assignSuccessBatch', { count: success }),
+              );
             }
             if (failed > 0) {
-              message.warning(`${failed} 个客户分配失败`);
+              message.warning(t('app.kuaizhizao.customerPool.assignPartialFailed', { count: failed }));
             }
             setAssignOpen(false);
             setAssignTargets([]);
             setSelectedRowKeys([]);
             actionRef.current?.reload();
           } catch (error: any) {
-            if (!error?.errorFields) message.error(error?.message || '分配失败');
+            if (!error?.errorFields) message.error(error?.message || t('app.kuaizhizao.customerPool.assignFailed'));
           }
         }}
       >
         <Form form={assignForm} layout="vertical">
-          <Form.Item name="salesman_id" label="分配给业务员" rules={[{ required: true, message: '请选择业务员' }]}>
+          <Form.Item
+            name="salesman_id"
+            label={t('app.kuaizhizao.customerPool.assignToSalesman')}
+            rules={[{ required: true, message: t('common.selectField', { field: t('field.customer.salesman') }) }]}
+          >
             <Select showSearch options={assignUsers} optionFilterProp="label" />
           </Form.Item>
-          <Form.Item name="reason" label="原因">
-            <Input placeholder="可选，记录分配原因" />
+          <Form.Item name="reason" label={t('app.kuaizhizao.customerPool.assignReason')}>
+            <Input placeholder={t('app.kuaizhizao.customerPool.assignReasonPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <UniDetail
-        title="客户池规则"
+        title={t('app.kuaizhizao.customerPool.rulesTitle')}
         open={rulesOpen}
         width={420}
         onClose={() => setRulesOpen(false)}
@@ -783,35 +814,43 @@ const CustomerPoolPage: React.FC = () => {
                 setRulesSaving(true);
                 const saved = await customerPoolApi.updateRules(values);
                 setRules(saved);
-                message.success('规则保存成功');
+                message.success(t('app.kuaizhizao.customerPool.rulesSaved'));
                 setRulesOpen(false);
               } catch (error: any) {
-                if (!error?.errorFields) message.error(error?.message || '规则保存失败');
+                if (!error?.errorFields) message.error(error?.message || t('app.kuaizhizao.customerPool.rulesSaveFailed'));
               } finally {
                 setRulesSaving(false);
               }
             }}
           >
-            保存
+            {t('common.save')}
           </Button>
         }
         basic={
           <Form form={rulesForm} layout="vertical" initialValues={rules || undefined}>
-            <Form.Item name="recycle_enabled" label="启用自动回收" valuePropName="checked">
+            <Form.Item name="recycle_enabled" label={t('app.kuaizhizao.customerPool.autoRecycleEnabled')} valuePropName="checked">
               <Switch />
             </Form.Item>
-            <Form.Item name="recycle_after_days" label="未跟进回收天数" rules={[{ required: true, message: '请输入天数' }]}>
+            <Form.Item
+              name="recycle_after_days"
+              label={t('app.kuaizhizao.customerPool.recycleAfterDays')}
+              rules={[{ required: true, message: t('app.kuaizhizao.customerPool.recycleAfterDaysRequired') }]}
+            >
               <InputNumber min={1} max={365} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="max_owned_customers" label="个人持有上限（0=不限制）" rules={[{ required: true, message: '请输入上限' }]}>
+            <Form.Item
+              name="max_owned_customers"
+              label={t('app.kuaizhizao.customerPool.maxOwnedCustomers')}
+              rules={[{ required: true, message: t('app.kuaizhizao.customerPool.maxOwnedCustomersRequired') }]}
+            >
               <InputNumber min={0} style={{ width: '100%' }} />
             </Form.Item>
-            <Form.Item name="allow_claim_others" label="允许领取他人名下客户" valuePropName="checked">
+            <Form.Item name="allow_claim_others" label={t('app.kuaizhizao.customerPool.allowClaimOthers')} valuePropName="checked">
               <Switch />
             </Form.Item>
           </Form>
         }
-        basicTitle="回收规则"
+        basicTitle={t('app.kuaizhizao.customerPool.rulesSectionTitle')}
       >
       </UniDetail>
 

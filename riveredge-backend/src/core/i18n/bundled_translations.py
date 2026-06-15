@@ -1,0 +1,63 @@
+"""内置 i18n 文案（与前端 locales 的 documentStatus / operationStatus / reviewStatus 对齐）。"""
+
+from __future__ import annotations
+
+# 租户语言库未覆盖时的兜底；key 与 riveredge-frontend/src/locales/*.ts 保持一致。
+BUNDLED_TRANSLATIONS: dict[str, dict[str, str]] = {
+    "zh-CN": {
+        "documentStatus.draft": "草稿",
+        "documentStatus.pending_review": "待审核",
+        "documentStatus.audited": "已审核",
+        "documentStatus.rejected": "已驳回",
+        "documentStatus.approved": "已通过",
+        "documentStatus.confirmed": "已确认",
+        "documentStatus.cancelled": "已取消",
+        "documentStatus.effective": "已生效",
+        "documentStatus.in_progress": "执行中",
+        "documentStatus.delivered": "已交货",
+        "documentStatus.completed": "已完成",
+        "documentStatus.pending": "待审核",
+        "documentStatus.submitted": "已提交",
+        "documentStatus.released": "已下达",
+        "documentStatus.split": "已拆分",
+        "documentStatus.closed": "已关闭",
+        "documentStatus.partial_converted": "部分转单",
+        "documentStatus.full_converted": "全部转单",
+        "reviewStatus.pending": "待审核",
+        "reviewStatus.approved": "已审核",
+        "reviewStatus.rejected": "已驳回",
+        "operationStatus.pending": "待开始",
+        "operationStatus.in_progress": "进行中",
+        "operationStatus.completed": "已完成",
+        "operationStatus.cancelled": "已取消",
+    },
+    "en-US": {
+        "documentStatus.draft": "Draft",
+        "documentStatus.pending_review": "Pending Review",
+        "documentStatus.audited": "Audited",
+        "documentStatus.rejected": "Rejected",
+        "documentStatus.approved": "Approved",
+        "documentStatus.confirmed": "Confirmed",
+        "documentStatus.cancelled": "Cancelled",
+        "documentStatus.effective": "Effective",
+        "documentStatus.in_progress": "In Progress",
+        "documentStatus.delivered": "Delivered",
+        "documentStatus.completed": "Completed",
+        "documentStatus.pending": "Pending",
+        "documentStatus.submitted": "Submitted",
+        "documentStatus.released": "Released",
+        "documentStatus.split": "Split",
+        "documentStatus.closed": "Closed",
+        "documentStatus.partial_converted": "Partially Converted",
+        "documentStatus.full_converted": "Fully Converted",
+        "reviewStatus.pending": "Pending",
+        "reviewStatus.approved": "Approved",
+        "reviewStatus.rejected": "Rejected",
+        "operationStatus.pending": "Pending Start",
+        "operationStatus.in_progress": "In Progress",
+        "operationStatus.completed": "Completed",
+        "operationStatus.cancelled": "Cancelled",
+    },
+}
+
+DEFAULT_LANGUAGE_CODE = "zh-CN"

@@ -7,11 +7,12 @@
 import os
 import uuid
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException as FastAPIHTTPException, Body
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException as FastAPIHTTPException, Body, Request
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
+from core.api.deps.access import require_permission_codes
 from core.services.authorization.data_scope_service import DataScopeService
 from infra.models.user import User
 from infra.exceptions.exceptions import ValidationError, BusinessLogicError, NotFoundError
@@ -1033,6 +1034,77 @@ async def issue_certificate(
         certificate_number=certificate_number,
         issued_by=current_user.id
     )
+
+
+@router.get(
+    "/finished-goods-inspections/{inspection_id}/print-certificate",
+    summary="Print product quality certificate",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:print"))],
+)
+async def print_product_quality_certificate(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from infra.exceptions.exceptions import BusinessLogicError
+
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="product_quality_certificate",
+            document_id=inspection_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise FastAPIHTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
+
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
+
+
+@router.get(
+    "/finished-goods-inspections/{inspection_id}/print-certificate-variables",
+    summary="Product quality certificate print variables",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:quality-management-finished-goods-inspection:print"))],
+)
+async def get_product_quality_certificate_variables(
+    inspection_id: int = Path(..., description="成品检验单ID"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+
+    await _assert_finished_goods_inspection_visible(
+        tenant_id=tenant_id,
+        current_user=current_user,
+        inspection_id=inspection_id,
+    )
+    try:
+        variables = await DocumentPrintService().get_document_variables_for_print(
+            tenant_id,
+            "product_quality_certificate",
+            inspection_id,
+        )
+        return {"success": True, "variables": variables}
+    except NotFoundError as e:
+        raise FastAPIHTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except BusinessLogicError as e:
+        raise FastAPIHTTPException(status_code=http_status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(e)) from e
 
 
 @router.post("/finished-goods-inspections/from-work-order", response_model=FinishedGoodsInspectionResponse, summary="Create finished goods inspection from work order")

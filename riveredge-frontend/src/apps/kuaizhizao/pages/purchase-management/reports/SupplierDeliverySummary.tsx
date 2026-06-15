@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const SupplierDeliverySummary: React.FC = () => {
   const { t } = useTranslation();
@@ -15,7 +15,8 @@ const SupplierDeliverySummary: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.SupplierDeliverySummary"
       title={t('app.kuaizhizao.menu.reports.supplier-delivery-summary')}
       reportType="supplier_delivery"
       columns={columns}

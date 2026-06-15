@@ -9,19 +9,65 @@ import {
   getAppDisplayName,
   translateAppMenuItemName,
   translateMenuName,
+  translatePathTitle,
 } from '../../utils/menuTranslation';
 import type { QuickEntryItem } from './QuickEntryGrid';
 import { getQuickEntryIconByPath, renderQuickEntryMenuIcon } from './renderQuickEntryMenuIcon';
 
 export function findMenuInTree(menus: MenuTree[], uuid: string): MenuTree | null {
+  const target = String(uuid);
   for (const menu of menus) {
-    if (menu.uuid === uuid) return menu;
+    if (String(menu.uuid) === target) return menu;
     if (menu.children?.length) {
       const found = findMenuInTree(menu.children, uuid);
       if (found) return found;
     }
   }
   return null;
+}
+
+/** 按 path 在菜单树中查找（uuid 漂移或收藏时仅存 path 时的回退） */
+export function findMenuInTreeByPath(menus: MenuTree[], path: string): MenuTree | null {
+  const normalized = path.replace(/\/$/, '');
+  if (!normalized) return null;
+  for (const menu of menus) {
+    if (menu.path && menu.path.replace(/\/$/, '') === normalized) return menu;
+    if (menu.children?.length) {
+      const found = findMenuInTreeByPath(menu.children, path);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * 快捷入口展示名：始终按当前语言 + 菜单 path 解析，不直接使用偏好里缓存的中文 menu_name。
+ * 与侧栏 translateAppMenuItemName 策略一致。
+ */
+export function resolveQuickEntryMenuLabel(
+  entry: Pick<QuickEntryItem, 'menu_name'>,
+  resolvedPath: string,
+  t: (key: string, options?: any) => string,
+  menu?: MenuTree | null,
+): string {
+  const path = resolvedPath.trim();
+  if (menu) {
+    const fromMenu = getTranslatedMenuTitle(menu, t);
+    if (fromMenu) return fromMenu;
+  }
+
+  if (path.startsWith('/apps/')) {
+    const fromAppPath = translateAppMenuItemName(entry.menu_name, path, t, menu?.children);
+    if (fromAppPath) return fromAppPath;
+  }
+
+  const fromPath = translatePathTitle(path, t);
+  if (fromPath && fromPath !== path) return fromPath;
+
+  const fromName = translateMenuName(entry.menu_name, t, path);
+  if (fromName && fromName !== entry.menu_name) return fromName;
+
+  return entry.menu_name || fromPath || path;
 }
 
 export function getTranslatedMenuTitle(
@@ -129,13 +175,14 @@ export function resolveQuickEntryDisplayItems(
       .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
       .slice(0, limit)
       .map((entry) => {
-        const menu = menuTree.length ? findMenuInTree(menuTree, entry.menu_uuid) : null;
+        let menu = menuTree.length ? findMenuInTree(menuTree, entry.menu_uuid) : null;
         const resolvedPath = entry.menu_path || menu?.path || '';
         if (!resolvedPath) return null;
+        if (!menu && menuTree.length) {
+          menu = findMenuInTreeByPath(menuTree, resolvedPath);
+        }
 
-        const menuName =
-          entry.menu_name ||
-          (menu ? getTranslatedMenuTitle(menu, t) : translateMenuName(entry.menu_name, t, resolvedPath));
+        const menuName = resolveQuickEntryMenuLabel(entry, resolvedPath, t, menu);
 
         return {
           ...entry,

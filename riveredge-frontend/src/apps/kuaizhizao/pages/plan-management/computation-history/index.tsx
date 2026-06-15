@@ -2,71 +2,67 @@
  * 需求计算历史记录查询页面
  *
  * 提供需求计算历史记录查询、结果对比、计算差异分析等功能。
- *
- * @author Luigi Lu
- * @date 2025-01-14
  */
 
-import React, { useRef, useState } from 'react';
-import { ActionType, ProColumns, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } from 'antd';
-import { EyeOutlined, DiffOutlined, DownloadOutlined } from '@ant-design/icons';
+import React, { useMemo, useRef, useState } from 'react';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Tag, Space, Modal, Table, Card, Row, Col, Statistic, Divider } from 'antd';
+import { DiffOutlined, DownloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { MaterialStackedCell } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
-import { 
-  listComputationHistory, 
+import {
+  listComputationHistory,
   getDemandComputation,
   compareComputations,
   deleteDemandComputation,
   DemandComputation,
-  ComputationCompareResult
+  ComputationCompareResult,
 } from '../../../services/demand-computation';
 import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
 
 const ComputationHistoryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
-  
-  // 对比Modal状态
+
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const [compareResult, setCompareResult] = useState<ComputationCompareResult | null>(null);
-  const [selectedComputation1, setSelectedComputation1] = useState<number | null>(null);
-  const [selectedComputation2, setSelectedComputation2] = useState<number | null>(null);
-  
-  // 选中的行
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  /**
-   * 处理对比
-   */
+  const statusMap = useMemo(
+    () => ({
+      进行中: { text: t('app.kuaizhizao.computationHistory.status.inProgress'), color: 'processing' },
+      计算中: { text: t('app.kuaizhizao.computationHistory.status.computing'), color: 'processing' },
+      完成: { text: t('app.kuaizhizao.computationHistory.status.completed'), color: 'success' },
+      失败: { text: t('app.kuaizhizao.computationHistory.status.failed'), color: 'error' },
+    }),
+    [t]
+  );
+
   const handleCompare = async (keys: React.Key[]) => {
     if (keys.length !== 2) {
-      messageApi.warning('请选择两个计算结果进行对比');
+      messageApi.warning(t('app.kuaizhizao.computationHistory.compareSelectTwo'));
       return;
     }
-    
+
     const id1 = Number(keys[0]);
     const id2 = Number(keys[1]);
-    
+
     try {
       const result = await compareComputations(id1, id2);
       setCompareResult(result);
-      setSelectedComputation1(id1);
-      setSelectedComputation2(id2);
       setCompareModalVisible(true);
-    } catch (error: any) {
-      messageApi.error('对比失败');
+    } catch {
+      messageApi.error(t('app.kuaizhizao.computationHistory.compareFailed'));
     }
   };
 
-  /**
-   * 处理导出
-   */
   const handleExport = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要导出的记录');
+      messageApi.warning(t('app.kuaizhizao.computationHistory.exportSelect'));
       return;
     }
     try {
@@ -78,11 +74,11 @@ const ComputationHistoryPage: React.FC = () => {
           const detail = await getDemandComputation(id, true);
           items.push(detail);
         } catch {
-          // 跳过获取失败的记录
+          // skip failed records
         }
       }
       if (items.length === 0) {
-        messageApi.warning('无有效数据可导出');
+        messageApi.warning(t('app.kuaizhizao.computationHistory.exportNoData'));
         return;
       }
       const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -92,9 +88,9 @@ const ComputationHistoryPage: React.FC = () => {
       a.download = `computation-history-${new Date().toISOString().slice(0, 10)}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      messageApi.success(`已导出 ${items.length} 条记录`);
+      messageApi.success(t('app.kuaizhizao.computationHistory.exportSuccess', { count: items.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || '导出失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.computationHistory.exportFailed'));
     }
   };
 
@@ -115,85 +111,76 @@ const ComputationHistoryPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已删除 ${success} 条记录`);
-    if (failed > 0) messageApi.warning(`${failed} 条删除失败`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.computationHistory.deleteSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.computationHistory.deleteFailed', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<DemandComputation>[] = [
-    {
-      title: '计算编号',
-      dataIndex: 'computation_code',
-      width: 150,
-      fixed: 'left',
-    },
-    {
-      title: '来源单号',
-      dataIndex: 'demand_code',
-      width: 150,
-    },
-    {
-      title: '业务模式',
-      dataIndex: 'business_mode',
-      width: 110,
-      valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' }, ATO: { text: 'ATO' } },
-      render: (_, record) => (
-        <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
-          {getDemandBusinessModeLabel(record.business_mode)}
-        </Tag>
-      ),
-    },
-    {
-      title: '计算状态',
-      dataIndex: 'computation_status',
-      width: 100,
-      valueEnum: {
-        进行中: { text: '进行中', status: 'Processing' },
-        计算中: { text: '计算中', status: 'Processing' },
-        完成: { text: '完成', status: 'Success' },
-        失败: { text: '失败', status: 'Error' },
+  const columns: ProColumns<DemandComputation>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.computationHistory.col.computationCode'),
+        dataIndex: 'computation_code',
+        width: 150,
+        fixed: 'left',
       },
-      render: (_, record) => {
-        const statusMap: Record<string, { text: string; color: string }> = {
-          进行中: { text: '进行中', color: 'processing' },
-          计算中: { text: '计算中', color: 'processing' },
-          完成: { text: '完成', color: 'success' },
-          失败: { text: '失败', color: 'error' },
-        };
-        const status = statusMap[record.computation_status || '进行中'];
-        return <Tag color={status.color}>{status.text}</Tag>;
+      {
+        title: t('app.kuaizhizao.computationHistory.col.demandCode'),
+        dataIndex: 'demand_code',
+        width: 150,
       },
-    },
-    {
-      title: '计算开始时间',
-      dataIndex: 'computation_start_time',
-      width: 180,
-      valueType: 'dateTime',
-      sorter: true,
-    },
-    {
-      title: '计算结束时间',
-      dataIndex: 'computation_end_time',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 180,
-      valueType: 'dateTime',
-      hideInSearch: true,
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.computationHistory.col.businessMode'),
+        dataIndex: 'business_mode',
+        width: 110,
+        valueEnum: { MTS: { text: 'MTS' }, MTO: { text: 'MTO' }, ATO: { text: 'ATO' } },
+        render: (_, record) => (
+          <Tag color={getDemandBusinessModeTagColor(record.business_mode)}>
+            {getDemandBusinessModeLabel(record.business_mode)}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.computationHistory.col.computationStatus'),
+        dataIndex: 'computation_status',
+        width: 100,
+        valueEnum: {
+          进行中: { text: statusMap['进行中'].text, status: 'Processing' },
+          计算中: { text: statusMap['计算中'].text, status: 'Processing' },
+          完成: { text: statusMap['完成'].text, status: 'Success' },
+          失败: { text: statusMap['失败'].text, status: 'Error' },
+        },
+        render: (_, record) => {
+          const status = statusMap[record.computation_status as keyof typeof statusMap] || statusMap['进行中'];
+          return <Tag color={status.color}>{status.text}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.computationHistory.col.computationStartTime'),
+        dataIndex: 'computation_start_time',
+        width: 180,
+        valueType: 'dateTime',
+        sorter: true,
+      },
+      {
+        title: t('app.kuaizhizao.computationHistory.col.computationEndTime'),
+        dataIndex: 'computation_end_time',
+        width: 180,
+        valueType: 'dateTime',
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.computationHistory.col.createdAt'),
+        dataIndex: 'created_at',
+        width: 180,
+        valueType: 'dateTime',
+        hideInSearch: true,
+      },
+    ],
+    [statusMap, t]
+  );
 
-  /**
-   * 处理表格请求
-   */
   const handleRequest = async (params: any) => {
     try {
       const response = await listComputationHistory({
@@ -209,7 +196,7 @@ const ComputationHistoryPage: React.FC = () => {
         success: true,
         total: response.total,
       };
-    } catch (error) {
+    } catch {
       return {
         data: [],
         success: false,
@@ -218,111 +205,75 @@ const ComputationHistoryPage: React.FC = () => {
     }
   };
 
-  /**
-   * 对比结果表格列定义
-   */
-  const compareColumns = [
-    {
-      title: '物料',
-      key: 'material',
-      width: 220,
-      render: (_: unknown, record: { material_name?: string; material_code?: string }) => (
-        <MaterialStackedCell material_name={record.material_name} material_code={record.material_code} />
-      ),
-    },
-    {
-      title: '需求数量',
-      key: 'required_quantity',
-      width: 120,
-      render: (_: any, record: any) => {
-        if (!record.exists_in_both) {
-          return <Tag color="warning">仅存在于{record.only_in === 'computation1' ? '计算1' : '计算2'}</Tag>;
-        }
-        const diff = record.differences?.required_quantity;
-        if (diff) {
-          return (
-            <div>
-              <div>计算1: {diff.value1}</div>
-              <div>计算2: {diff.value2}</div>
-              <div style={{ color: diff.diff && diff.diff > 0 ? 'red' : 'green' }}>
-                差异: {diff.diff && diff.diff > 0 ? '+' : ''}{diff.diff}
-              </div>
-            </div>
-          );
-        }
-        return <Tag color="success">相同</Tag>;
+  const renderDiffCell = (record: any, field: string) => {
+    if (!record.exists_in_both) {
+      return (
+        <Tag color="warning">
+          {t('app.kuaizhizao.computationHistory.compare.onlyIn', {
+            which:
+              record.only_in === 'computation1'
+                ? t('app.kuaizhizao.computationHistory.compare.computation1')
+                : t('app.kuaizhizao.computationHistory.compare.computation2'),
+          })}
+        </Tag>
+      );
+    }
+    const diff = record.differences?.[field];
+    if (diff) {
+      const diffValue = diff.diff && diff.diff > 0 ? `+${diff.diff}` : String(diff.diff ?? '');
+      return (
+        <div>
+          <div>{t('app.kuaizhizao.computationHistory.compare.value1', { value: diff.value1 })}</div>
+          <div>{t('app.kuaizhizao.computationHistory.compare.value2', { value: diff.value2 })}</div>
+          <div style={{ color: diff.diff && diff.diff > 0 ? 'red' : 'green' }}>
+            {t('app.kuaizhizao.computationHistory.compare.diff', { diff: diffValue })}
+          </div>
+        </div>
+      );
+    }
+    return <Tag color="success">{t('app.kuaizhizao.computationHistory.compare.same')}</Tag>;
+  };
+
+  const compareColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.computationHistory.compareCol.material'),
+        key: 'material',
+        width: 220,
+        render: (_: unknown, record: { material_name?: string; material_code?: string }) => (
+          <MaterialStackedCell material_name={record.material_name} material_code={record.material_code} />
+        ),
       },
-    },
-    {
-      title: '净需求',
-      key: 'net_requirement',
-      width: 120,
-      render: (_: any, record: any) => {
-        if (!record.exists_in_both) {
-          return '-';
-        }
-        const diff = record.differences?.net_requirement;
-        if (diff) {
-          return (
-            <div>
-              <div>计算1: {diff.value1}</div>
-              <div>计算2: {diff.value2}</div>
-              <div style={{ color: diff.diff && diff.diff > 0 ? 'red' : 'green' }}>
-                差异: {diff.diff && diff.diff > 0 ? '+' : ''}{diff.diff}
-              </div>
-            </div>
-          );
-        }
-        return <Tag color="success">相同</Tag>;
+      {
+        title: t('app.kuaizhizao.computationHistory.compareCol.requiredQuantity'),
+        key: 'required_quantity',
+        width: 120,
+        render: (_: any, record: any) => renderDiffCell(record, 'required_quantity'),
       },
-    },
-    {
-      title: '建议工单数量',
-      key: 'suggested_work_order_quantity',
-      width: 150,
-      render: (_: any, record: any) => {
-        if (!record.exists_in_both) {
-          return '-';
-        }
-        const diff = record.differences?.suggested_work_order_quantity;
-        if (diff) {
-          return (
-            <div>
-              <div>计算1: {diff.value1}</div>
-              <div>计算2: {diff.value2}</div>
-              <div style={{ color: diff.diff && diff.diff > 0 ? 'red' : 'green' }}>
-                差异: {diff.diff && diff.diff > 0 ? '+' : ''}{diff.diff}
-              </div>
-            </div>
-          );
-        }
-        return <Tag color="success">相同</Tag>;
+      {
+        title: t('app.kuaizhizao.computationHistory.compareCol.netRequirement'),
+        key: 'net_requirement',
+        width: 120,
+        render: (_: any, record: any) =>
+          !record.exists_in_both ? '—' : renderDiffCell(record, 'net_requirement'),
       },
-    },
-    {
-      title: '建议采购数量',
-      key: 'suggested_purchase_order_quantity',
-      width: 150,
-      render: (_: any, record: any) => {
-        if (!record.exists_in_both) {
-          return '-';
-        }
-        const diff = record.differences?.suggested_purchase_order_quantity;
-        if (diff) {
-          return (
-            <div>
-              <div>计算1: {diff.value1}</div>
-              <div>计算2: {diff.value2}</div>
-              <div style={{ color: diff.diff && diff.diff > 0 ? 'red' : 'green' }}>
-                差异: {diff.diff && diff.diff > 0 ? '+' : ''}{diff.diff}
-              </div>
-            </div>
-          );
-        }
-        return <Tag color="success">相同</Tag>;
+      {
+        title: t('app.kuaizhizao.computationHistory.compareCol.suggestedWorkOrderQty'),
+        key: 'suggested_work_order_quantity',
+        width: 150,
+        render: (_: any, record: any) =>
+          !record.exists_in_both ? '—' : renderDiffCell(record, 'suggested_work_order_quantity'),
       },
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.computationHistory.compareCol.suggestedPurchaseQty'),
+        key: 'suggested_purchase_order_quantity',
+        width: 150,
+        render: (_: any, record: any) =>
+          !record.exists_in_both ? '—' : renderDiffCell(record, 'suggested_purchase_order_quantity'),
+      },
+    ],
+    [t]
+  );
 
   return (
     <>
@@ -339,7 +290,7 @@ const ComputationHistoryPage: React.FC = () => {
           onRowSelectionChange={(keys) => setSelectedRowKeys(keys)}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条计算记录吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.computationHistory.deleteConfirm', { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="computation-history-batch-menu"
@@ -347,14 +298,14 @@ const ComputationHistoryPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'compare',
-                  label: '对比选中记录',
+                  label: t('app.kuaizhizao.computationHistory.action.compareSelected'),
                   icon: <DiffOutlined />,
                   disabled: selectedRowKeys.length !== 2,
                   onClick: (keys) => void handleCompare(keys),
                 },
                 {
                   key: 'export',
-                  label: '导出选中记录',
+                  label: t('app.kuaizhizao.computationHistory.action.exportSelected'),
                   icon: <DownloadOutlined />,
                   disabled: selectedRowKeys.length === 0,
                   onClick: (keys) => void handleExport(keys),
@@ -366,64 +317,93 @@ const ComputationHistoryPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 对比结果Modal */}
       <Modal
         open={compareModalVisible}
         onCancel={() => setCompareModalVisible(false)}
-        title="计算结果对比"
+        title={t('app.kuaizhizao.computationHistory.compareModal.title')}
         width={MODAL_CONFIG.LARGE_WIDTH}
         footer={null}
       >
         {compareResult && (
           <div>
-            {/* 基本信息对比 */}
-            <Card title="基本信息对比" style={{ marginBottom: 16 }}>
+            <Card title={t('app.kuaizhizao.computationHistory.compareModal.basicInfo')} style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <Card size="small" title={`计算1: ${compareResult.computation1.computation_code}`}>
+                  <Card
+                    size="small"
+                    title={t('app.kuaizhizao.computationHistory.compareModal.computation1', {
+                      code: compareResult.computation1.computation_code,
+                    })}
+                  >
                     <Statistic
-                      title="业务模式"
-                      value={compareResult.basic_diff.business_mode?.value1 ?? compareResult.basic_diff.computation_type.value1}
-                      styles={{ content: {color:
-                          (compareResult.basic_diff.business_mode?.same ??
-                            compareResult.basic_diff.computation_type.same)
-                            ? '#3f8600'
-                            : '#cf1322', } }}
+                      title={t('app.kuaizhizao.computationHistory.compareModal.businessMode')}
+                      value={
+                        compareResult.basic_diff.business_mode?.value1 ??
+                        compareResult.basic_diff.computation_type.value1
+                      }
+                      styles={{
+                        content: {
+                          color:
+                            (compareResult.basic_diff.business_mode?.same ??
+                              compareResult.basic_diff.computation_type.same)
+                              ? '#3f8600'
+                              : '#cf1322',
+                        },
+                      }}
                     />
                     <Divider />
                     <div>
-                      <strong>计算开始时间:</strong> {compareResult.computation1.computation_start_time || '-'}
+                      <strong>{t('app.kuaizhizao.computationHistory.compareModal.startTime')}</strong>{' '}
+                      {compareResult.computation1.computation_start_time || '-'}
                     </div>
                     <div>
-                      <strong>计算结束时间:</strong> {compareResult.computation1.computation_end_time || '-'}
+                      <strong>{t('app.kuaizhizao.computationHistory.compareModal.endTime')}</strong>{' '}
+                      {compareResult.computation1.computation_end_time || '-'}
                     </div>
                   </Card>
                 </Col>
                 <Col span={12}>
-                  <Card size="small" title={`计算2: ${compareResult.computation2.computation_code}`}>
+                  <Card
+                    size="small"
+                    title={t('app.kuaizhizao.computationHistory.compareModal.computation2', {
+                      code: compareResult.computation2.computation_code,
+                    })}
+                  >
                     <Statistic
-                      title="业务模式"
-                      value={compareResult.basic_diff.business_mode?.value2 ?? compareResult.basic_diff.computation_type.value2}
-                      styles={{ content: {color:
-                          (compareResult.basic_diff.business_mode?.same ??
-                            compareResult.basic_diff.computation_type.same)
-                            ? '#3f8600'
-                            : '#cf1322', } }}
+                      title={t('app.kuaizhizao.computationHistory.compareModal.businessMode')}
+                      value={
+                        compareResult.basic_diff.business_mode?.value2 ??
+                        compareResult.basic_diff.computation_type.value2
+                      }
+                      styles={{
+                        content: {
+                          color:
+                            (compareResult.basic_diff.business_mode?.same ??
+                              compareResult.basic_diff.computation_type.same)
+                              ? '#3f8600'
+                              : '#cf1322',
+                        },
+                      }}
                     />
                     <Divider />
                     <div>
-                      <strong>计算开始时间:</strong> {compareResult.computation2.computation_start_time || '-'}
+                      <strong>{t('app.kuaizhizao.computationHistory.compareModal.startTime')}</strong>{' '}
+                      {compareResult.computation2.computation_start_time || '-'}
                     </div>
                     <div>
-                      <strong>计算结束时间:</strong> {compareResult.computation2.computation_end_time || '-'}
+                      <strong>{t('app.kuaizhizao.computationHistory.compareModal.endTime')}</strong>{' '}
+                      {compareResult.computation2.computation_end_time || '-'}
                     </div>
                   </Card>
                 </Col>
               </Row>
             </Card>
 
-            {/* 明细项差异 */}
-            <Card title={`明细项差异 (共${compareResult.total_differences}项)`}>
+            <Card
+              title={t('app.kuaizhizao.computationHistory.compareModal.itemsDiff', {
+                count: compareResult.total_differences,
+              })}
+            >
               <Table
                 columns={compareColumns}
                 dataSource={compareResult.items_diff}

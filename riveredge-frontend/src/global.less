@@ -1457,9 +1457,15 @@ code {
 }
 
 /* 工作台首行便当：列等高、子块撑满宽度 */
-/* 快捷入口图标下标签：固定 12px，不随主题 fontSize 缩放 */
+/* 快捷入口图标下标签：固定 12px，不随主题 fontSize 缩放；限宽换行，避免顶栏托盘溢出 */
 .quick-entry-icon__title {
   font-size: 12px !important;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 /* 配置中心：参数分类侧栏使用内容区背景，不受主题「左侧菜单栏」siderBgColor 影响 */

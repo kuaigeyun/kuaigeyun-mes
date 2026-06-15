@@ -5,15 +5,11 @@ import { useQuery } from '@tanstack/react-query';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import {
-  buildQuickEntriesFromMenuTree,
+  resolveQuickEntryDisplayItems,
   findMenuInTree,
-  getTranslatedMenuTitle,
 } from '../quick-entry/quickEntryItems';
 import { convertMenuTreeToTreeData } from '../quick-entry/convertMenuTreeToTreeData';
-import {
-  getQuickEntryIconByPath,
-  renderQuickEntryMenuIcon,
-} from '../quick-entry/renderQuickEntryMenuIcon';
+import { renderQuickEntryMenuIcon } from '../quick-entry/renderQuickEntryMenuIcon';
 import type { QuickEntryItem } from '../quick-entry/QuickEntryGrid';
 import { useNavigationMenuTreeQuery } from '../../hooks/useNavigationMenuTreeQuery';
 import type { UserPreference } from '../../services/userPreference';
@@ -103,30 +99,7 @@ export function useUniDashboardSidebar() {
       return [];
     }
     const quickEntriesFromPref = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
-
-    if (Array.isArray(quickEntriesFromPref) && quickEntriesFromPref.length > 0) {
-      return quickEntriesFromPref
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((entry) => {
-          const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
-          const resolvedPath = entry.menu_path || menu?.path || '';
-          if (!resolvedPath) return null;
-
-          return {
-            ...entry,
-            menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
-            menu_path: resolvedPath,
-            menu_icon: menu ? renderQuickEntryMenuIcon(menu) : getQuickEntryIconByPath(resolvedPath, entry.menu_name),
-          };
-        })
-        .filter((item) => item !== null) as QuickEntryItem[];
-    }
-
-    if (!quickEntryMenuTree.length) {
-      return [];
-    }
-
-    return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderQuickEntryMenuIcon, t, 10);
+    return resolveQuickEntryDisplayItems(quickEntryMenuTree, quickEntriesFromPref, t, 10);
   }, [quickEntryLoading, userPreference, quickEntryMenuTree, t]);
 
   const quickEntryMenuTreeData = useMemo(() => {

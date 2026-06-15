@@ -9,9 +9,11 @@ import {
   SettingOutlined,
   UnlockOutlined,
 } from '@ant-design/icons';
+import type { TFunction } from 'i18next';
 import type { ViewMode } from '../../../../components/GanttSchedulingChart/types';
 
 interface SchedulingGanttToolbarProps {
+  t: TFunction;
   ganttViewMode: ViewMode;
   resourceViewStats: { stationCount: number; taskCount: number };
   shiftDays: number;
@@ -40,6 +42,7 @@ export interface SchedulingGanttToolbarNodes {
 }
 
 function buildSchedulingGanttToolbar({
+  t,
   ganttViewMode,
   resourceViewStats,
   shiftDays,
@@ -64,22 +67,32 @@ function buildSchedulingGanttToolbar({
   const title = (
     <Space wrap>
       <ReloadOutlined onClick={onRefresh} style={{ cursor: 'pointer' }} />
-      可视排产
-      <Tooltip title="建议点击 UniTab 右上角全屏按钮，扩大排产可操作区域（甘特拖拽与资源调度更顺畅）">
+      {t('app.kuaizhizao.scheduling.ganttToolbar.title')}
+      <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.fullscreenTip')}>
         <QuestionCircleOutlined style={{ color: '#8c8c8c', cursor: 'help' }} />
       </Tooltip>
       <Typography.Text type="secondary">
-        工位 {resourceViewStats.stationCount}｜工序 {resourceViewStats.taskCount}
+        {t('app.kuaizhizao.scheduling.ganttToolbar.stationOpStats', {
+          stations: resourceViewStats.stationCount,
+          operations: resourceViewStats.taskCount,
+        })}
         {selectedWorkOrderCount > 0
-          ? `｜已选 ${selectedWorkOrderCount} 工单${selectedOperationCount > 0 ? ` / ${selectedOperationCount} 工序` : ''}`
+          ? selectedOperationCount > 0
+            ? t('app.kuaizhizao.scheduling.ganttToolbar.selectedStats', {
+                workOrders: selectedWorkOrderCount,
+                operations: selectedOperationCount,
+              })
+            : t('app.kuaizhizao.scheduling.ganttToolbar.selectedWorkOrdersOnly', {
+                workOrders: selectedWorkOrderCount,
+              })
           : ''}
       </Typography.Text>
       {canUpdate ? (
         <>
-          <Tooltip title="开启后，仅甘特条拖拽调整会先暂存；从待排区排入并在弹窗点「更新」会立即保存">
+          <Tooltip title={t('app.kuaizhizao.scheduling.ganttToolbar.draftTooltip')}>
             <Space size={4}>
               <Switch size="small" checked={draftMode} onChange={onDraftModeChange} />
-              <Typography.Text type="secondary">暂存</Typography.Text>
+              <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.ganttToolbar.draft')}</Typography.Text>
             </Space>
           </Tooltip>
           {draftMode ? (
@@ -87,8 +100,8 @@ function buildSchedulingGanttToolbar({
               <Tooltip
                 title={
                   draftPendingCount > 0
-                    ? '将暂存的拖拽调整校验后写入数据库'
-                    : '暂无待保存的拖拽调整；从待排区排入的数据已在弹窗「更新」时保存'
+                    ? t('app.kuaizhizao.scheduling.ganttToolbar.applyChangesTooltip')
+                    : t('app.kuaizhizao.scheduling.ganttToolbar.applyChangesTooltipEmpty')
                 }
               >
                 <Button
@@ -98,16 +111,17 @@ function buildSchedulingGanttToolbar({
                   disabled={draftPendingCount === 0}
                   onClick={onApplyDraft}
                 >
-                  应用更改{draftPendingCount > 0 ? ` (${draftPendingCount})` : ''}
+                  {t('app.kuaizhizao.scheduling.ganttToolbar.applyChanges')}
+                  {draftPendingCount > 0 ? ` (${draftPendingCount})` : ''}
                 </Button>
               </Tooltip>
               <Button size="small" icon={<RollbackOutlined />} onClick={onUndoDraft}>
-                撤销
+                {t('app.kuaizhizao.scheduling.ganttToolbar.undo')}
               </Button>
             </>
           ) : null}
           <Button size="small" icon={<SettingOutlined />} onClick={onOpenConfig}>
-            排产设置
+            {t('app.kuaizhizao.scheduling.ganttToolbar.settings')}
           </Button>
           <Button
             size="small"
@@ -116,7 +130,7 @@ function buildSchedulingGanttToolbar({
             loading={batchActionLoading}
             onClick={onBatchFreeze}
           >
-            批量冻结
+            {t('app.kuaizhizao.scheduling.ganttToolbar.batchFreeze')}
           </Button>
           <Button
             size="small"
@@ -125,7 +139,7 @@ function buildSchedulingGanttToolbar({
             loading={batchActionLoading}
             onClick={onBatchUnfreeze}
           >
-            批量解冻
+            {t('app.kuaizhizao.scheduling.ganttToolbar.batchUnfreeze')}
           </Button>
           <Space.Compact>
             <InputNumber
@@ -142,7 +156,7 @@ function buildSchedulingGanttToolbar({
               loading={batchActionLoading}
               onClick={() => onBatchShift(shiftDays)}
             >
-              平移选中
+              {t('app.kuaizhizao.scheduling.ganttToolbar.shiftSelected')}
             </Button>
           </Space.Compact>
         </>
@@ -153,18 +167,18 @@ function buildSchedulingGanttToolbar({
   const extra = (
     <Space>
       <Button size="small" onClick={onScrollToToday}>
-        今天
+        {t('app.kuaizhizao.scheduling.ganttToolbar.today')}
       </Button>
-      <span>视图：</span>
+      <span>{t('app.kuaizhizao.scheduling.ganttToolbar.viewLabel')}</span>
       <Space.Compact>
         <Button type={ganttViewMode === 'day' ? 'primary' : 'default'} size="small" onClick={() => onViewModeChange('day')}>
-          日
+          {t('app.kuaizhizao.scheduling.ganttToolbar.viewDay')}
         </Button>
         <Button type={ganttViewMode === 'week' ? 'primary' : 'default'} size="small" onClick={() => onViewModeChange('week')}>
-          周
+          {t('app.kuaizhizao.scheduling.ganttToolbar.viewWeek')}
         </Button>
         <Button type={ganttViewMode === 'month' ? 'primary' : 'default'} size="small" onClick={() => onViewModeChange('month')}>
-          月
+          {t('app.kuaizhizao.scheduling.ganttToolbar.viewMonth')}
         </Button>
       </Space.Compact>
     </Space>

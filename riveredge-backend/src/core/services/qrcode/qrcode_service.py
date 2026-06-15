@@ -52,6 +52,7 @@ QRCODE_TYPE_EQ = "EQ"  # 设备码
 QRCODE_TYPE_EMP = "EMP"  # 人员码
 QRCODE_TYPE_BOX = "BOX"  # 装箱码
 QRCODE_TYPE_TRACE = "TRACE"  # 追溯码
+QRCODE_TYPE_DOC = "DOC"  # 业务单据码（出入库等）
 
 VALID_QRCODE_TYPES = [
     QRCODE_TYPE_MAT,
@@ -61,6 +62,7 @@ VALID_QRCODE_TYPES = [
     QRCODE_TYPE_EMP,
     QRCODE_TYPE_BOX,
     QRCODE_TYPE_TRACE,
+    QRCODE_TYPE_DOC,
 ]
 
 
@@ -71,6 +73,13 @@ class QRCodeService:
     提供二维码生成、解析、验证等功能。
     """
     
+    @staticmethod
+    def build_qrcode_text(qrcode_type: str, data: Dict[str, Any]) -> str:
+        """构建二维码 JSON 文本（供打印模板 Jinja 过滤器渲染，无需生成图片）。"""
+        if qrcode_type not in VALID_QRCODE_TYPES:
+            raise ValidationError(f"无效的二维码类型: {qrcode_type}")
+        return json.dumps({"type": qrcode_type, "data": data}, ensure_ascii=False)
+
     @staticmethod
     def generate_qrcode(
         data: Dict[str, Any],
@@ -99,11 +108,7 @@ class QRCodeService:
             raise ValidationError(f"无效的二维码类型: {qrcode_type}")
         
         # 构建二维码内容（JSON格式）
-        qrcode_content = {
-            "type": qrcode_type,
-            "data": data,
-        }
-        qrcode_text = json.dumps(qrcode_content, ensure_ascii=False)
+        qrcode_text = QRCodeService.build_qrcode_text(qrcode_type, data)
         
         # 配置二维码参数
         error_correction_map = {
@@ -392,3 +397,21 @@ class QRCodeService:
             "trace_data": trace_data,
         }
         return QRCodeService.generate_qrcode(data, QRCODE_TYPE_TRACE, **kwargs)
+
+    @staticmethod
+    def generate_document_qrcode(
+        document_type: str,
+        document_uuid: str,
+        document_code: str,
+        document_id: Optional[int] = None,
+        **kwargs,
+    ) -> Dict[str, Any]:
+        """生成业务单据二维码（出入库等，供手机端扫描）。"""
+        data: Dict[str, Any] = {
+            "document_type": document_type,
+            "document_uuid": document_uuid,
+            "document_code": document_code,
+        }
+        if document_id is not None:
+            data["document_id"] = document_id
+        return QRCodeService.generate_qrcode(data, QRCODE_TYPE_DOC, **kwargs)

@@ -11,6 +11,7 @@ import type { SalesOrder } from '../services/sales-order';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { deriveLifecycleRingPercent } from '../../../utils/lifecycleRingPercent';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
@@ -509,8 +510,27 @@ function applyShippableLifecycleHint(record: SalesOrder, result: LifecycleResult
   };
 }
 
-export function getSalesOrderLifecycle(record: SalesOrder, auditRequired = true): LifecycleResult {
-  return applyShippableLifecycleHint(record, computeSalesOrderLifecycle(record, auditRequired));
+const SALES_ORDER_STAGE_I18N_BY_KEY: Record<string, string> = {
+  draft: 'app.kuaizhizao.salesOrder.lifecycleDraft',
+  pending_review: 'app.kuaizhizao.salesOrder.lifecyclePendingReview',
+  audited: 'app.kuaizhizao.salesOrder.lifecycleAudited',
+  effective: 'app.kuaizhizao.salesOrder.lifecycleEffective',
+  executing: 'app.kuaizhizao.salesOrder.lifecycleInProgress',
+  delivered: 'app.kuaizhizao.salesOrder.lifecycleDelivered',
+  invoicing: 'app.kuaizhizao.salesOrder.lifecycleInvoicing',
+  completed: 'app.kuaizhizao.salesOrder.lifecycleCompleted',
+};
+
+export function getSalesOrderLifecycle(
+  record: SalesOrder,
+  auditRequired = true,
+  t?: LifecycleTranslateFn,
+): LifecycleResult {
+  let result = applyShippableLifecycleHint(record, computeSalesOrderLifecycle(record, auditRequired));
+  if (t) {
+    result = applyLifecycleI18n(result, t, SALES_ORDER_STAGE_I18N_BY_KEY);
+  }
+  return result;
 }
 
 /** 批量撤回：撤销提交（生命周期「待审核」「已生效」） */

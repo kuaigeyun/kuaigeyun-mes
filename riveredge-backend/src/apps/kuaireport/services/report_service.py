@@ -8,6 +8,39 @@ from apps.kuaireport.constants import ReportCategory
 from infra.exceptions.exceptions import NotFoundError, AuthorizationError
 
 
+def _coerce_float(value: Any) -> float:
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    try:
+        return float(str(value))
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _compute_uni_report_summary(config: Dict[str, Any], rows: List[Any]) -> Dict[str, float]:
+    """根据 report_config.extra.uni_report 与 fields 聚合 summary"""
+    if not rows:
+        return {}
+    extra = config.get("extra") or {}
+    uni = extra.get("uni_report") or {}
+    summary_fields: List[str] = list(uni.get("summaryFields") or [])
+    if not summary_fields:
+        for f in config.get("fields") or []:
+            if isinstance(f, dict) and f.get("aggregate") == "sum":
+                summary_fields.append(str(f.get("field")))
+    if not summary_fields:
+        return {}
+    summary: Dict[str, float] = {}
+    for field in summary_fields:
+        summary[field] = sum(
+            _coerce_float(row.get(field) if isinstance(row, dict) else getattr(row, field, None))
+            for row in rows
+        )
+    return summary
+
+
 class ReportService(AppBaseService[Report]):
     def __init__(self):
         super().__init__(Report)
@@ -144,11 +177,79 @@ class ReportService(AppBaseService[Report]):
                 "success": result.success,
                 "columns": result.columns,
                 "error": result.error,
+                "summary": _compute_uni_report_summary(config, result.data or []),
             }
         except ImportError:
             return {"data": [], "total": 0, "success": True, "message": "数据集服务未配置"}
         except Exception as e:
             return {"data": [], "total": 0, "success": False, "message": str(e)}
+
+    async def get_dataset_fields(
+        self,
+        tenant_id: int,
+        *,
+        dataset_uuid: Optional[str] = None,
+        dataset_code: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """获取数据集字段元数据（供 ReportDesigner 配置字段映射）"""
+        from uuid import UUID
+        from core.services.data.dataset_service import DatasetService
+        from core.schemas.dataset import ExecuteQueryRequest
+
+        if not dataset_uuid and not dataset_code:
+            return {"fields": [], "success": True}
+
+        dataset_service = DatasetService()
+        display_columns: List[Dict[str, Any]] = []
+
+        try:
+            if dataset_uuid:
+                dataset = await dataset_service.get_dataset_by_uuid(
+                    tenant_id=tenant_id, dataset_uuid=UUID(str(dataset_uuid))
+                )
+                display = getattr(dataset, "display_config", None) or {}
+                raw_cols = display.get("columns") if isinstance(display, dict) else None
+                if isinstance(raw_cols, list) and raw_cols:
+                    for col in raw_cols:
+                        if isinstance(col, dict) and col.get("field"):
+                            display_columns.append({
+                                "field": col["field"],
+                                "label": col.get("label") or col["field"],
+                                "visible": col.get("visible", True),
+                                "format": col.get("format"),
+                            })
+                        elif isinstance(col, str):
+                            display_columns.append({"field": col, "label": col, "visible": True})
+                    return {"fields": display_columns, "success": True}
+        except Exception:
+            pass
+
+        execute_request = ExecuteQueryRequest(parameters={}, limit=1, offset=0)
+        try:
+            if dataset_uuid:
+                result = await dataset_service.execute_query(
+                    tenant_id=tenant_id,
+                    dataset_uuid=UUID(str(dataset_uuid)),
+                    execute_request=execute_request,
+                )
+            elif dataset_code:
+                result = await dataset_service.query_dataset_by_code(
+                    tenant_id=tenant_id,
+                    dataset_code=str(dataset_code),
+                    parameters={},
+                    limit=1,
+                    offset=0,
+                )
+            else:
+                return {"fields": [], "success": True}
+
+            columns = result.columns or []
+            if not columns and result.data and isinstance(result.data[0], dict):
+                columns = list(result.data[0].keys())
+            fields = [{"field": c, "label": c, "visible": True} for c in columns]
+            return {"fields": fields, "success": True}
+        except Exception as e:
+            return {"fields": [], "success": False, "message": str(e)}
 
     # ── 分享 ─────────────────────────────────────────────────────
 

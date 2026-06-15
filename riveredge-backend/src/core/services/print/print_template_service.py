@@ -279,6 +279,29 @@ class PrintTemplateService:
                 except Exception as e:
                     logger.warning(f"创建打印模板 {item['code']} 失败: {e}")
         return created
+
+    @staticmethod
+    async def load_all_preset_print_templates(tenant_id: int) -> int:
+        """
+        加载全部打印模板预设：核心通用模板 + 已安装应用的业务模板。
+        与租户初始化 print_template_preset 步骤一致。
+        """
+        from core.services.system.installed_feature_scope import get_installed_application_codes
+
+        installed = await get_installed_application_codes(tenant_id)
+        count = await PrintTemplateService.load_preset_sme(
+            tenant_id,
+            installed_app_codes=installed,
+        )
+        if "kuaizhizao" in installed:
+            from apps.kuaizhizao.services.print_template_presets import load_kuaizhizao_print_template_presets
+
+            count += await load_kuaizhizao_print_template_presets(tenant_id)
+        if "haoligo" in installed:
+            from apps.haoligo.services.print_template_presets import load_haoligo_print_template_presets
+
+            count += await load_haoligo_print_template_presets(tenant_id)
+        return count
     
     @staticmethod
     async def get_print_template_by_uuid(

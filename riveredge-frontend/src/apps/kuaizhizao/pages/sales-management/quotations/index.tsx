@@ -46,8 +46,8 @@ import {
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
 import { parseVariantAttributesValue } from '../../../../master-data/components/VariantAttributeFields';
 import { ListPageTemplate, DetailDrawerTemplate, DetailDrawerInlineFullChain, DRAWER_CONFIG, MODAL_CONFIG, MODAL_ABOVE_DETAIL_SIDECHAIN_OFFSET, MODAL_NESTED_ABOVE_PARENT_OFFSET, PAGE_SPACING, DocumentFormPageLayout, DOCUMENT_DETAIL_PAGE_TITLE_STYLE } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
-import type { SubStage } from '../../../../../components/uni-lifecycle/types';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { AmountDisplay } from '../../../../../components/permission';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import {
@@ -66,7 +66,6 @@ import {
   reopenQuotation,
   revokePushQuotation,
   createQuotationRevision,
-  printQuotation,
   recordQuotationPrint,
   Quotation,
 } from '../../../services/quotation';
@@ -79,9 +78,8 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { apiRequest } from '../../../../../services/api';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { getPrintTemplateList, type PrintTemplate } from '../../../../../services/printTemplate';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import dayjs from 'dayjs';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
@@ -112,11 +110,10 @@ import {
   getDocumentFormDraft,
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
-import { UniPdfPreview } from '../../../../../components/uni-preview';
 import {
   alignDescriptionColumns,
   alignProColumns,
-  SALES_COMMON_FORM_LABELS,
+  getSalesCommonFormLabels,
   SALES_DOC_DETAIL_BASIC_FIELD_RANK,
   SALES_DOC_LIST_FIELD_RANK,
 } from '../shared/documentFieldAlignment';
@@ -133,7 +130,7 @@ const LazySyncFromDatasetModal = lazy(() => import('../../../../../components/sy
 
 /** 详情/列表状态 Tag：与生命周期主轴文案一致（含待审核等子态） */
 function getQuotationStatusTagProps(record: Quotation, auditRequired: boolean): { text: string; color: string } {
-  const lc = getQuotationLifecycle(record, auditRequired);
+  const lc = getQuotationLifecycle(record, auditRequired, t);
   if (lc.status === 'exception') return { text: lc.stageName, color: 'error' };
   if (lc.status === 'success') return { text: lc.stageName, color: 'success' };
   const activeKey = lc.mainStages?.find((s) => s.status === 'active')?.key;
@@ -143,13 +140,15 @@ function getQuotationStatusTagProps(record: Quotation, auditRequired: boolean): 
 }
 
 /** 列表快速筛选：DB status → 生命周期展示（筛选值仍为后端 status） */
-const QUOTATION_STATUS_FILTER_ENUM = {
-  草稿: { text: '草稿' },
-  已发送: { text: '已报价' },
-  已接受: { text: '客户确认' },
-  已转订单: { text: '已转订单' },
-  已拒绝: { text: '已驳回' },
-} as const;
+function getQuotationStatusFilterEnum(t: (key: string) => string) {
+  return {
+    草稿: { text: t('app.kuaizhizao.quotation.statusFilter.draft') },
+    已发送: { text: t('app.kuaizhizao.quotation.statusFilter.sent') },
+    已接受: { text: t('app.kuaizhizao.quotation.statusFilter.accepted') },
+    已转订单: { text: t('app.kuaizhizao.quotation.statusFilter.converted') },
+    已拒绝: { text: t('app.kuaizhizao.quotation.statusFilter.rejected') },
+  } as const;
+}
 
 type QuotationListScope = 'all' | 'mine' | 'department';
 
@@ -272,23 +271,26 @@ function resolveQuotationDateBase(formRef: React.RefObject<{ getFieldValue?: (na
   return dayjs().startOf('day');
 }
 
-const QUOTATION_DATE_SHORTCUTS: { label: string; resolve: (base: dayjs.Dayjs) => dayjs.Dayjs }[] = [
-  { label: '7天', resolve: (base) => base.add(7, 'day') },
-  { label: '15天', resolve: (base) => base.add(15, 'day') },
-  { label: '一个月', resolve: (base) => base.add(1, 'month') },
-  { label: '月底', resolve: (base) => base.endOf('month') },
-];
+function getQuotationDateShortcuts(t: (key: string) => string): { label: string; resolve: (base: dayjs.Dayjs) => dayjs.Dayjs }[] {
+  return [
+    { label: t('app.kuaizhizao.quotation.dateShortcut.7days'), resolve: (base) => base.add(7, 'day') },
+    { label: t('app.kuaizhizao.quotation.dateShortcut.15days'), resolve: (base) => base.add(15, 'day') },
+    { label: t('app.kuaizhizao.quotation.dateShortcut.1month'), resolve: (base) => base.add(1, 'month') },
+    { label: t('app.kuaizhizao.quotation.dateShortcut.monthEnd'), resolve: (base) => base.endOf('month') },
+  ];
+}
 
 function buildQuotationDateShortcutPickerProps(
   formRef: React.RefObject<{ setFieldsValue?: (v: Record<string, unknown>) => void; getFieldValue?: (name: string) => unknown } | null>,
   fieldName: 'valid_until' | 'delivery_date',
+  t: (key: string) => string,
 ) {
   return {
     style: { width: '100%' },
     showToday: false,
     renderExtraFooter: () => (
       <Space wrap size={[0, 0]} style={{ padding: '6px 4px', width: '100%', justifyContent: 'center' }}>
-        {QUOTATION_DATE_SHORTCUTS.map(({ label, resolve }) => (
+        {getQuotationDateShortcuts(t).map(({ label, resolve }) => (
           <Button
             key={label}
             type="link"
@@ -479,6 +481,7 @@ const convertUnitPriceByPriceType = (
 
 /** 归属业务员：与销售订单一致，用 display API 选项并在无匹配时用 salesman_name 回显 */
 const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> = ({ userList, loading }) => {
+  const { t } = useTranslation();
   const form = Form.useFormInstance();
   const salesmanId = Form.useWatch('salesman_id', form);
   const salesmanName = Form.useWatch('salesman_name', form);
@@ -493,7 +496,7 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
         ? Number(salesmanId)
         : NaN;
     if (Number.isFinite(sid) && !base.some((o) => o.value === sid)) {
-      const label = String(salesmanName || '').trim() || `用户#${sid}`;
+      const label = String(salesmanName || '').trim() || t('app.kuaizhizao.quotation.userFallback', { id: sid });
       return [{ value: sid, label }, ...base];
     }
     return base;
@@ -503,13 +506,13 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
     <>
       <ProForm.Item
         name="salesman_id"
-        label="归属业务员"
+        label={t('field.customer.salesman')}
         normalize={(v) =>
           v != null && v !== '' && Number.isFinite(Number(v)) ? Number(v) : undefined
         }
       >
         <UniDropdown
-          placeholder="请选择归属业务员"
+          placeholder={t('field.customer.salesmanPlaceholder')}
           showSearch
           allowClear
           loading={loading}
@@ -528,6 +531,7 @@ const QuotationSalesmanField: React.FC<{ userList: User[]; loading: boolean }> =
 };
 
 const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
+  const { t } = useTranslation();
   const form = Form.useFormInstance();
   const row = Form.useWatch(['items', index]);
   const mid =
@@ -573,7 +577,7 @@ const QuotationMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => 
         <UniMaterialSelect
           name={[index, 'material_id']}
           label=""
-          placeholder="请选择物料（支持名称/编号搜索）"
+          placeholder={t('app.kuaizhizao.quotation.form.selectMaterial')}
           required
           size="small"
           listFieldKey={index}
@@ -652,6 +656,7 @@ function mapQuotationSubmitItem(it: any, materialList: any[]) {
 }
 
 const QuotationFormSummary: React.FC = () => {
+  const { t } = useTranslation();
   const rawItems = Form.useWatch('items');
   const items = normalizeFormListItems<any>(rawItems);
   const priceType = Form.useWatch('price_type') ?? 'tax_exclusive';
@@ -679,18 +684,18 @@ const QuotationFormSummary: React.FC = () => {
         gap: 24,
       }}
     >
-      <span>总数量: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      <span>{t('app.kuaizhizao.quotation.summary.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
       {priceType === 'tax_exclusive' ? (
         <>
           <span>
-            未税总额:{' '}
+            {t('app.kuaizhizao.quotation.summary.totalExcl')}:{' '}
             <Typography.Text strong>
               <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_without_tax" value={totalExcl} />
             </Typography.Text>
           </span>
           {Math.abs(totalIncl - totalExcl) > 0.005 && (
             <span>
-              价税合计(含税):{' '}
+              {t('app.kuaizhizao.quotation.summary.totalInclWithTax')}:{' '}
               <Typography.Text strong type="danger">
                 <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
               </Typography.Text>
@@ -699,7 +704,7 @@ const QuotationFormSummary: React.FC = () => {
         </>
       ) : (
         <span>
-          价税合计:{' '}
+          {t('app.kuaizhizao.quotation.summary.totalIncl')}:{' '}
           <Typography.Text strong type="danger">
             <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="amount_with_tax" value={totalIncl} />
           </Typography.Text>
@@ -713,6 +718,8 @@ const QUOTATION_RESOURCE = 'kuaizhizao:quotation';
 
 const QuotationsPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const salesCommonFormLabels = useMemo(() => getSalesCommonFormLabels(t), [t]);
+  const quotationStatusFilterEnum = useMemo(() => getQuotationStatusFilterEnum(t), [t]);
   const { token } = AntdTheme.useToken();
   const quotationDetailDrawerZIndex = token.zIndexPopupBase;
   const linkedSalesOrderDrawerZIndex = token.zIndexPopupBase + 50;
@@ -729,6 +736,11 @@ const QuotationsPage: React.FC = () => {
   const formPageInitializedRef = useRef(false);
   const quotationCreateDraftRestoredRef = useRef(false);
   const { message: messageApi } = App.useApp();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal({
+    onAfterPrint: async (target) => {
+      await recordQuotationPrint(target.documentId).catch(() => undefined);
+    },
+  });
   const defaultQuotationCurrency = useConfigStore((s) => {
     const c = s.configs.default_currency;
     return typeof c === 'string' && c.trim() !== '' ? c.trim() : 'CNY';
@@ -796,22 +808,14 @@ const QuotationsPage: React.FC = () => {
   const quotationAuditRequired = useAuditRequired('quotation', false);
   const salesOrderAuditRequired = useAuditRequired('sales_order', false);
   const quotationLifecycleDetail = useMemo(
-    () => (quotationDetail ? getQuotationLifecycle(quotationDetail, quotationAuditRequired) : null),
-    [quotationDetail, quotationAuditRequired],
+    () => (quotationDetail ? getQuotationLifecycle(quotationDetail, quotationAuditRequired, t) : null),
+    [quotationDetail, quotationAuditRequired, t],
   );
   const quotationNextSteps = quotationLifecycleDetail?.nextStepSuggestions;
   const hideQuotationStepperNextRow = Boolean(quotationNextSteps?.length);
   const showQuotationLifecycleNextInTitle =
     Boolean(quotationNextSteps?.length) && !quotationDetail?.conversion_downstream_missing;
   const [syncModalVisible, setSyncModalVisible] = useState(false);
-  const [pdfPreviewVisible, setPdfPreviewVisible] = useState(false);
-  const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState<string | null>(null);
-  const [pdfPreviewFileName, setPdfPreviewFileName] = useState<string>('报价单.pdf');
-  const [printModalVisible, setPrintModalVisible] = useState(false);
-  const [printingRecord, setPrintingRecord] = useState<Quotation | null>(null);
-  const [printTemplates, setPrintTemplates] = useState<PrintTemplate[]>([]);
-  const [selectedPrintTemplateUuid, setSelectedPrintTemplateUuid] = useState<string | undefined>(undefined);
-  const [printSubmitting, setPrintSubmitting] = useState(false);
 
   const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -1054,13 +1058,13 @@ const QuotationsPage: React.FC = () => {
   /** 高级搜索与列表列统一定义，避免 dataIndex 重复 */
   const columns: ProColumns<Quotation>[] = [
     {
-      title: '客户 / 报价单',
+      title: t('app.kuaizhizao.quotation.colCustomerQuotation'),
       key: 'quotation_code',
       dataIndex: 'quotation_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
       fixed: 'left',
       order: 10,
-      fieldProps: { placeholder: '支持模糊匹配' },
+      fieldProps: { placeholder: t('app.kuaizhizao.quotation.fuzzyMatchPlaceholder') },
       render: (_, r) => (
         <UniTableStackedPrimaryCell
           primary={String(r.customer_name ?? '')}
@@ -1087,38 +1091,38 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => t('app.kuaizhizao.quotation.versionDisplay', { n: r.version_no ?? 1 }),
     },
     {
-      title: '客户',
+      title: t('app.kuaizhizao.customerFollowUp.colCustomer'),
       dataIndex: 'customer_name',
       width: 260,
       ellipsis: true,
       hideInTable: true,
       order: 20,
-      fieldProps: { placeholder: '客户名称' },
+      fieldProps: { placeholder: t('field.customer.name') },
     },
     {
-      title: '报价日期',
+      title: t('app.kuaizhizao.quotation.colQuotationDate'),
       dataIndex: 'quotation_date',
       width: 110,
       valueType: 'date',
       hideInSearch: true,
     },
     {
-      title: '报价日期范围',
+      title: t('app.kuaizhizao.quotation.colDateRange'),
       dataIndex: 'date_range',
       valueType: 'dateRange',
       hideInTable: true,
-      fieldProps: { placeholder: ['开始日期', '结束日期'] },
+      fieldProps: { placeholder: [t('app.kuaizhizao.quotation.dateRangeStart'), t('app.kuaizhizao.quotation.dateRangeEnd')] },
       order: 30,
     },
     {
-      title: '销售员',
+      title: t('app.kuaizhizao.quotation.colSalesman'),
       dataIndex: 'salesman_name',
       width: 100,
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '总金额',
+      title: t('app.kuaizhizao.quotation.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 110,
       align: 'right',
@@ -1126,15 +1130,15 @@ const QuotationsPage: React.FC = () => {
       render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       valueType: 'select',
       hideInTable: true,
-      valueEnum: QUOTATION_STATUS_FILTER_ENUM,
+      valueEnum: quotationStatusFilterEnum,
       order: 40,
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
       width: 168,
@@ -1143,48 +1147,39 @@ const QuotationsPage: React.FC = () => {
       defaultSortOrder: 'descend',
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
+      title: t('app.kuaizhizao.quotation.colLifecycle'),
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getQuotationLifecycle(record, quotationAuditRequired);
-        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
-        const displayLabel = activeStage?.label ?? lifecycle.stageName;
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={displayLabel}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell
+          lifecycle={getQuotationLifecycle(record, quotationAuditRequired, t)}
+          withSubStages
+        />
+      ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       minWidth: 120,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) => {
         const parts: React.ReactNode[] = [
           <Button {...rowActionKind('read')} key="d" onClick={() => handleDetail(record.id!)}>
-            详情
+            {t('common.detail')}
           </Button>,
         ];
         const canEdit = record.status === '草稿' && quotationPerms.canUpdate;
         const deletable = canDeleteQuotation(record) && quotationPerms.canDelete;
         parts.push(
           <Button {...rowActionKind('update')} key="e" disabled={!canEdit} onClick={() => canEdit && handleEdit(record)}>
-            编辑
+            {t('common.edit')}
           </Button>
         );
         parts.push(
           <Button {...rowActionKind('delete')} key="del" disabled={!deletable} onClick={() => deletable && handleDelete(record)}>
-            删除
+            {t('common.delete')}
           </Button>
         );
         parts.push(
@@ -1192,7 +1187,7 @@ const QuotationsPage: React.FC = () => {
             key="quotation-workflow"
             {...rowActionKind('skip')}
             record={record}
-            entityName="报价单"
+            entityName={t('app.kuaizhizao.quotation.entityName')}
             auditNodeKey="quotation"
             resourcePrefix="kuaizhizao:quotation"
             unifiedAudit
@@ -1212,14 +1207,14 @@ const QuotationsPage: React.FC = () => {
         if (canReopenQuotation(record)) {
           parts.push(
             <Button {...rowActionKind('read')} key="ro" onClick={() => handleReopen(record)}>
-              重新编辑
+              {t('app.kuaizhizao.quotation.reopenEdit')}
             </Button>
           );
         }
         if (canRevokePushQuotation(record)) {
           parts.push(
             <Button {...rowActionKind('print')} key="rp" onClick={() => handleRevokePush(record)}>
-              撤回下推
+              {t('app.kuaizhizao.quotation.revokePush')}
             </Button>
           );
         }
@@ -1244,7 +1239,7 @@ const QuotationsPage: React.FC = () => {
         setDetailDrawerVisible(true);
       }
     } catch (e: any) {
-      messageApi.error('获取报价单详情失败');
+      messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
     }
   };
 
@@ -1262,7 +1257,7 @@ const QuotationsPage: React.FC = () => {
           setDetailDrawerVisible(true);
         }
       } catch {
-        messageApi.error('获取报价单详情失败');
+        messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
       }
     })();
   }, [location.state, location.pathname, location.search, navigate, messageApi]);
@@ -1288,17 +1283,17 @@ const QuotationsPage: React.FC = () => {
 
   const handleDelete = (record: Quotation) => {
     Modal.confirm({
-      title: '删除报价单',
-      content: `确定要删除报价单 "${record.quotation_code}" 吗？`,
+      title: t('app.kuaizhizao.quotation.deleteModalTitle'),
+      content: t('app.kuaizhizao.quotation.confirmDelete', { code: record.quotation_code }),
       onOk: async () => {
         try {
           await deleteQuotation(record.id!);
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -1341,7 +1336,7 @@ const QuotationsPage: React.FC = () => {
       .filter((it): it is NonNullable<typeof it> => it !== null && (it.material_id !== undefined || it.material_code !== ''));
 
     if (newItems.length === 0) {
-      messageApi.warning('未检测到有效数据（请确保物料编号不为空）');
+      messageApi.warning(t('app.kuaizhizao.salesOrder.noValidData'));
       return;
     }
 
@@ -1349,7 +1344,7 @@ const QuotationsPage: React.FC = () => {
     formRef.current?.setFieldsValue({
       items: [...currentItems, ...newItems],
     });
-    messageApi.success(`成功导入 ${newItems.length} 条明细`);
+    messageApi.success(t('app.kuaizhizao.salesOrder.importSuccessItems', { count: newItems.length }));
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
@@ -1358,12 +1353,12 @@ const QuotationsPage: React.FC = () => {
       for (const k of keys) {
         await deleteQuotation(Number(k));
       }
-      messageApi.success(`已删除 ${keys.length} 条报价单`);
+      messageApi.success(t('app.kuaizhizao.quotation.batchDeleteSuccess', { count: keys.length }));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       setSelectedRowKeys([]);
     } catch (error: any) {
-      messageApi.error(error.message || '批量删除失败');
+      messageApi.error(error.message || t('common.batchDeleteFailed'));
       throw error;
     }
   };
@@ -1384,13 +1379,13 @@ const QuotationsPage: React.FC = () => {
         successCount += 1;
       } catch (error: any) {
         failedCount += 1;
-        failedItems.push({ id, error: error?.message || `${actionName}失败` });
+        failedItems.push({ id, error: error?.message || t('app.kuaizhizao.quotation.batchOperationFailed', { action: actionName }) });
       }
     }
     if (failedCount === 0) {
-      messageApi.success(`${actionName}成功：${successCount} 条`);
+      messageApi.success(t('app.kuaizhizao.quotation.batchOperationSuccess', { action: actionName, count: successCount }));
     } else {
-      messageApi.warning(`${actionName}完成：成功 ${successCount} 条，失败 ${failedCount} 条`);
+      messageApi.warning(t('app.kuaizhizao.quotation.batchOperationPartial', { action: actionName, success: successCount, failed: failedCount }));
       if (failedItems.length > 0) {
         console.error(`${actionName}失败详情:`, failedItems);
       }
@@ -1402,9 +1397,9 @@ const QuotationsPage: React.FC = () => {
   };
 
   const handleBatchApprove = (keys: React.Key[]) =>
-    handleBatchOperation(keys, '批量审核通过', (id) => approveQuotation(id));
+    handleBatchOperation(keys, t('app.kuaizhizao.quotation.batchApprove'), (id) => approveQuotation(id));
   const handleBatchConfirmCustomer = (keys: React.Key[]) =>
-    handleBatchOperation(keys, '批量客户确认', (id) => confirmCustomerQuotation(id));
+    handleBatchOperation(keys, t('app.kuaizhizao.quotation.batchConfirmCustomer'), (id) => confirmCustomerQuotation(id));
 
   const handleSyncConfirm = async (rows: Record<string, any>[]) => {
     try {
@@ -1423,12 +1418,12 @@ const QuotationsPage: React.FC = () => {
         });
         successCount += 1;
       }
-      messageApi.success(`已同步 ${successCount} 条报价单`);
+      messageApi.success(t('app.kuaizhizao.quotation.syncSuccess', { count: successCount }));
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '同步失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.syncFailed'));
     }
   };
 
@@ -1439,14 +1434,14 @@ const QuotationsPage: React.FC = () => {
    */
   const handleListImport = async (data: any[][]) => {
     if (!data || data.length < 2) {
-      messageApi.warning('导入数据为空或格式不正确');
+      messageApi.warning(t('app.kuaizhizao.quotation.importDataInvalid'));
       return;
     }
     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
     const rows = data.slice(2).filter((row: any[]) => row?.some((c: any) => c != null && String(c).trim() !== ''));
 
     if (rows.length === 0) {
-      messageApi.warning('没有可导入的数据行（请从第3行开始填写）');
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportRows'));
       return;
     }
 
@@ -1466,7 +1461,7 @@ const QuotationsPage: React.FC = () => {
     };
 
     if (idx.customer < 0 || idx.date < 0 || idx.material < 0 || idx.qty < 0) {
-      messageApi.error('缺少必需列：客户名称、报价日期、物料编号、数量');
+      messageApi.error(t('app.kuaizhizao.quotation.missingRequiredColumns'));
       return;
     }
 
@@ -1481,25 +1476,25 @@ const QuotationsPage: React.FC = () => {
       const qtyVal = row[idx.qty];
       const qty = Number(qtyVal);
       if (!customerName) {
-        errors.push({ row: rowNum, message: '客户名称不能为空' });
+        errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.customerRequired') });
         return;
       }
       if (!dateVal) {
-        errors.push({ row: rowNum, message: '报价日期不能为空' });
+        errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.dateRequired') });
         return;
       }
       if (!materialCode) {
-        errors.push({ row: rowNum, message: '物料编号不能为空' });
+        errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.materialRequired') });
         return;
       }
       if (isNaN(qty) || qty <= 0) {
-        errors.push({ row: rowNum, message: '数量必须大于0' });
+        errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.qtyPositive') });
         return;
       }
 
       const mat = materialList.find((m: any) => (m.mainCode || m.code || '').toUpperCase() === materialCode.toUpperCase());
       if (!mat) {
-        errors.push({ row: rowNum, message: `未找到物料：${materialCode}` });
+        errors.push({ row: rowNum, message: t('app.kuaizhizao.quotation.validation.materialNotFound', { code: materialCode }) });
         return;
       }
 
@@ -1529,17 +1524,17 @@ const QuotationsPage: React.FC = () => {
 
     if (errors.length > 0) {
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.kuaizhizao.quotation.validationFailed'),
         width: 600,
         content: (
           <div>
-            <p>以下行存在错误，请修正后重新导入：</p>
+            <p>{t('app.master-data.validationFailedIntro')}</p>
             <List
               size="small"
               dataSource={errors}
               renderItem={(item) => (
                 <List.Item>
-                  <Typography.Text type="danger">第 {item.row} 行：{item.message}</Typography.Text>
+                  <Typography.Text type="danger">{t('app.kuaizhizao.quotation.importRowError', { row: item.row, message: item.message })}</Typography.Text>
                 </List.Item>
               )}
             />
@@ -1563,7 +1558,7 @@ const QuotationsPage: React.FC = () => {
     });
 
     if (toImport.length === 0) {
-      messageApi.warning('没有可导入的数据');
+      messageApi.warning(t('app.kuaizhizao.quotation.noImportData'));
       return;
     }
 
@@ -1574,23 +1569,23 @@ const QuotationsPage: React.FC = () => {
           createQuotation(item, {
             autoSubmit: (item.status || '草稿') !== '草稿',
           }),
-        title: '正在导入报价单',
+        title: t('app.kuaizhizao.quotation.importing'),
         concurrency: 3,
       });
 
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.kuaizhizao.quotation.importPartialTitle'),
           width: 600,
           content: (
             <div>
-              <p><strong>导入结果：成功 {result.successCount} 条，失败 {result.failureCount} 条</strong></p>
+              <p><strong>{t('app.kuaizhizao.quotation.importResult', { success: result.successCount, failed: result.failureCount })}</strong></p>
               {result.errors.length > 0 && (
                 <List
                   size="small"
                   dataSource={result.errors}
                   renderItem={(e) => (
-                    <List.Item><Typography.Text type="danger">第 {e.row} 行：{e.error}</Typography.Text></List.Item>
+                    <List.Item><Typography.Text type="danger">{t('app.kuaizhizao.quotation.importRowError', { row: e.row, message: e.error })}</Typography.Text></List.Item>
                   )}
                 />
               )}
@@ -1598,7 +1593,7 @@ const QuotationsPage: React.FC = () => {
           ),
         });
       } else {
-        messageApi.success(`成功导入 ${result.successCount} 条报价单`);
+        messageApi.success(t('app.kuaizhizao.quotation.importSuccess', { count: result.successCount }));
       }
       if (result.successCount > 0) {
         invalidateMenuBadgeCounts();
@@ -1606,14 +1601,14 @@ const QuotationsPage: React.FC = () => {
         actionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '导入失败');
+      messageApi.error(error?.message || t('common.importFailed'));
     }
   };
 
   const handleConvert = (record: Quotation) => {
     Modal.confirm({
-      title: '转为销售订单',
-      content: `确定要将报价单 "${record.quotation_code}" 转为销售订单吗？转换后将创建新的销售订单并建立关联。`,
+      title: t('app.kuaizhizao.quotation.convertToSalesOrder'),
+      content: t('app.kuaizhizao.quotation.convertConfirm', { code: record.quotation_code }),
       onOk: async () => {
         try {
           const res = await convertQuotationToOrder(record.id!);
@@ -1622,7 +1617,7 @@ const QuotationsPage: React.FC = () => {
           messageApi.success({
             content: (
               <span>
-                已转为销售订单：
+                {t('app.kuaizhizao.quotation.convertedToSalesOrder')}
                 {salesOrderId ? (
                   <Button
                     type="link"
@@ -1636,7 +1631,7 @@ const QuotationsPage: React.FC = () => {
                         const data = await getSalesOrder(salesOrderId, true, true);
                         setLinkedSalesOrder(data);
                       } catch (e: any) {
-                        messageApi.error(e?.message || e?.detail || '加载销售订单失败');
+                        messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
                         setLinkedSalesOrderDrawerOpen(false);
                       } finally {
                         setLinkedSalesOrderLoading(false);
@@ -1658,7 +1653,7 @@ const QuotationsPage: React.FC = () => {
           actionRef.current?.reload();
           closeQuotationDetailDrawer();
         } catch (error: any) {
-          messageApi.error(error.message || '转订单失败');
+          messageApi.error(error.message || t('app.kuaizhizao.quotation.convertFailed'));
         }
       },
     });
@@ -1668,18 +1663,18 @@ const QuotationsPage: React.FC = () => {
 
   const handleConfirmCustomer = (record: Quotation) => {
     Modal.confirm({
-      title: '客户确认',
-      content: '标记为「客户确认」，表示报价已获客户认可，可继续下推销售订单。',
+      title: t('app.kuaizhizao.quotation.customerConfirm'),
+      content: t('app.kuaizhizao.quotation.customerConfirmContent'),
       onOk: async () => {
         try {
           const updated = await confirmCustomerQuotation(record.id!);
-          messageApi.success('已标记客户确认');
+          messageApi.success(t('app.kuaizhizao.quotation.customerConfirmSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
+          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
       },
     });
@@ -1687,18 +1682,18 @@ const QuotationsPage: React.FC = () => {
 
   const handleReopen = (record: Quotation) => {
     Modal.confirm({
-      title: '重新编辑',
-      content: '将报价单恢复为草稿，修改后可再次提交。',
+      title: t('app.kuaizhizao.quotation.reopenEdit'),
+      content: t('app.kuaizhizao.quotation.reopenContent'),
       onOk: async () => {
         try {
           const updated = await reopenQuotation(record.id!);
-          messageApi.success('已恢复草稿');
+          messageApi.success(t('app.kuaizhizao.quotation.reopenSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
+          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
       },
     });
@@ -1706,18 +1701,18 @@ const QuotationsPage: React.FC = () => {
 
   const handleRevokePush = (record: Quotation) => {
     Modal.confirm({
-      title: '撤回下推',
-      content: '解除与已删除销售订单的关联，恢复为「客户确认」，可再次转销售订单。',
+      title: t('app.kuaizhizao.quotation.revokePush'),
+      content: t('app.kuaizhizao.quotation.revokePushContent'),
       onOk: async () => {
         try {
           const updated = await revokePushQuotation(record.id!);
-          messageApi.success('已撤回下推');
+          messageApi.success(t('app.kuaizhizao.quotation.revokePushSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
           setQuotationDetail((prev) => (prev?.id === record.id ? updated : prev));
         } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
+          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
       },
     });
@@ -1731,7 +1726,9 @@ const QuotationsPage: React.FC = () => {
         try {
           const created = await createQuotationRevision(record.id!);
           messageApi.success(
-            `已创建新版本${created.quotation_code ? `：${created.quotation_code}` : ''}`
+            created.quotation_code
+              ? t('app.kuaizhizao.quotation.revisionCreatedWithCode', { code: created.quotation_code })
+              : t('app.kuaizhizao.quotation.revisionCreated')
           );
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
@@ -1741,40 +1738,18 @@ const QuotationsPage: React.FC = () => {
             navigate(quotationEditPath(created.id));
           }
         } catch (e: any) {
-          messageApi.error(e?.message || e?.detail || '操作失败');
+          messageApi.error(e?.message || e?.detail || t('common.operationFailed'));
         }
       },
     });
   };
 
-  const handlePrint = async (record: Quotation) => {
-    try {
-      const templates = await getPrintTemplateList({
-        is_active: true,
-        document_type: 'quotation',
-      });
-      setPrintTemplates(templates || []);
-      const defaultTpl = templates.find((t) => t.is_default) ?? templates[0];
-      setSelectedPrintTemplateUuid(defaultTpl?.uuid);
-    } catch {
-      setPrintTemplates([]);
-      setSelectedPrintTemplateUuid(undefined);
-    }
-    setPrintingRecord(record);
-    setPrintModalVisible(true);
-  };
-
-  const handleOpenPrintTemplateDesign = () => {
-    if (selectedPrintTemplateUuid) {
-      navigate(`/system/print-templates/design/${selectedPrintTemplateUuid}`);
-      return;
-    }
-    navigate('/system/print-templates');
-  };
-
-  const selectedPrintTemplate = useMemo(
-    () => printTemplates.find((tpl) => tpl.uuid === selectedPrintTemplateUuid),
-    [printTemplates, selectedPrintTemplateUuid],
+  const handlePrint = useCallback(
+    (record: Quotation) => {
+      if (!record.id) return;
+      openPrint({ documentType: 'quotation', documentId: record.id });
+    },
+    [openPrint],
   );
 
   const handleToolbarPrint = useCallback(
@@ -1782,7 +1757,7 @@ const QuotationsPage: React.FC = () => {
       if (!keys || keys.length !== 1) return;
       const numericId = Number(keys[0]);
       if (!Number.isFinite(numericId) || numericId <= 0) {
-        messageApi.warning('请选择一条有效记录');
+        messageApi.warning(t('app.kuaizhizao.quotation.selectOneValid'));
         return;
       }
       try {
@@ -1793,10 +1768,10 @@ const QuotationsPage: React.FC = () => {
         }
         await handlePrint(latest);
       } catch (error: any) {
-        messageApi.error(error?.message || '加载报价单失败');
+        messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
       }
     },
-    [handlePrint, messageApi, quotationAuditRequired, t]
+    [handlePrint, messageApi, quotationAuditRequired, t],
   );
 
   const handleToolbarRevision = useCallback(
@@ -1804,18 +1779,18 @@ const QuotationsPage: React.FC = () => {
       if (!keys || keys.length !== 1) return;
       const numericId = Number(keys[0]);
       if (!Number.isFinite(numericId) || numericId <= 0) {
-        messageApi.warning('请选择一条有效记录');
+        messageApi.warning(t('app.kuaizhizao.quotation.selectOneValid'));
         return;
       }
       try {
         const latest = await getQuotation(numericId);
         if (!canCreateRevision(latest)) {
-          messageApi.warning('仅系列最新且非草稿的报价单可创建新版');
+          messageApi.warning(t('app.kuaizhizao.quotation.revisionOnlyLatest'));
           return;
         }
         handleRevision(latest);
       } catch (error: any) {
-        messageApi.error(error?.message || '加载报价单失败');
+        messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
       }
     },
     [handleRevision, messageApi]
@@ -1835,10 +1810,10 @@ const QuotationsPage: React.FC = () => {
       return buildUniPushMenuItems([
         {
           key: 'sales-order',
-          label: '转销售订单',
+          label: t('app.kuaizhizao.quotation.convertToSalesOrder'),
           icon: <SwapOutlined />,
           disabled: superseded || !convertible,
-          title: superseded ? '该报价单已有修订版，请从最新修订版转销售订单' : undefined,
+          title: superseded ? t('app.kuaizhizao.quotation.supersededConvertHint') : undefined,
           onClick: () => {
             if (superseded || !convertible) return;
             void (async () => {
@@ -1846,7 +1821,7 @@ const QuotationsPage: React.FC = () => {
                 const latest = await getQuotation(record.id!);
                 handleConvert(latest);
               } catch (error: any) {
-                messageApi.error(error?.message || '加载报价单失败');
+                messageApi.error(error?.message || t('app.kuaizhizao.quotation.loadFailed'));
               }
             })();
           },
@@ -1860,62 +1835,6 @@ const QuotationsPage: React.FC = () => {
     () => (selectedQuotationForToolbar ? buildToolbarPushMenuItems(selectedQuotationForToolbar) : []),
     [buildToolbarPushMenuItems, selectedQuotationForToolbar],
   );
-
-  const handleConfirmPrint = async () => {
-    const record = printingRecord;
-    if (!record) return;
-    const qid = record.id;
-    if (qid == null) {
-      messageApi.warning('报价单 ID 无效');
-      return;
-    }
-
-    const safeCode = String(record.quotation_code || record.id || 'quotation').replace(
-      /[/\\?%*:|"<>]/g,
-      '-',
-    );
-    const fileName = `生成PDF_${safeCode}.pdf`;
-
-    const openPdfPreview = (blobUrl: string) => {
-      setPdfPreviewBlobUrl(blobUrl);
-      setPdfPreviewFileName(fileName);
-      setPdfPreviewVisible(true);
-    };
-
-    try {
-      setPrintSubmitting(true);
-      const result: DocumentPrintApiResult = await printQuotation(qid, {
-        templateUuid: selectedPrintTemplateUuid,
-        outputFormat: 'pdf',
-        responseFormat: 'json',
-      });
-      const raw = result?.content || '';
-      if (
-        result?.content_encoding === 'base64' &&
-        result?.mime_type === 'application/pdf' &&
-        raw
-      ) {
-        const binary = atob(raw);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i += 1) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const blobUrl = URL.createObjectURL(blob);
-        openPdfPreview(blobUrl);
-        setPrintModalVisible(false);
-        setPrintingRecord(null);
-        void recordQuotationPrint(qid).catch(() => undefined);
-        messageApi.success('已打开预览');
-        return;
-      }
-      messageApi.warning('打印内容为空');
-    } catch (error: any) {
-      messageApi.error(error.message || '打印失败');
-    } finally {
-      setPrintSubmitting(false);
-    }
-  };
 
   /**
    * 处理新建报价单
@@ -1965,13 +1884,13 @@ const QuotationsPage: React.FC = () => {
         formRef.current?.setFieldsValue(cachedDraft);
         if (!quotationCreateDraftRestoredRef.current) {
           quotationCreateDraftRestoredRef.current = true;
-          messageApi.info('已恢复暂存内容');
+          messageApi.info(t('app.kuaizhizao.quotation.draftRestored'));
         }
       }
       if (prefillCustomerId != null) {
         const applied = applyCustomerById(prefillCustomerId);
         if (!applied) {
-          messageApi.info('客户信息加载中，稍后自动回填');
+          messageApi.info(t('app.kuaizhizao.quotation.customerLoading'));
         } else {
           setPendingCreateCustomerId(null);
         }
@@ -2064,7 +1983,7 @@ const QuotationsPage: React.FC = () => {
           editValues.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
       }, 100);
     } catch {
-      messageApi.error('获取报价单详情失败');
+      messageApi.error(t('app.kuaizhizao.quotation.detailFailed'));
       navigate(QUOTATION_LIST_PATH);
     }
   }
@@ -2089,8 +2008,8 @@ const QuotationsPage: React.FC = () => {
     const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
-      messageApi.error('明细行缺少物料编号或名称，请重新选择物料');
-      throw new Error('明细行缺少物料编号或名称，请重新选择物料');
+      messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
+      throw new Error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
     }
     let quotationCode = values.quotation_code;
     const submitRuleCode = effectiveRuleCode || getPageRuleCode('kuaizhizao-quotation');
@@ -2100,7 +2019,7 @@ const QuotationsPage: React.FC = () => {
         const codeResponse = await generateCode({ rule_code: submitRuleCode });
         quotationCode = codeResponse.code;
       } catch (e) {
-        const msg = getApiErrorMessage(e, '生成报价单编号失败');
+        const msg = getApiErrorMessage(e, t('app.kuaizhizao.quotation.generateCodeFailed'));
         messageApi.error(msg);
         throw e;
       }
@@ -2130,7 +2049,7 @@ const QuotationsPage: React.FC = () => {
       },
       { autoSubmit: !options?.asDraft },
     );
-    messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : '创建成功');
+    messageApi.success(options?.asDraft ? t('app.kuaizhizao.quotation.savedDraft') : t('common.createSuccess'));
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
     clearQuotationCreateDraft();
@@ -2172,7 +2091,7 @@ const QuotationsPage: React.FC = () => {
       if (err?.message === t('app.kuaizhizao.quotation.validLineHint')) {
         return;
       }
-      messageApi.error(getApiErrorMessage(err, isCreatePage ? '创建报价单失败' : '更新报价单失败'));
+      messageApi.error(getApiErrorMessage(err, isCreatePage ? t('app.kuaizhizao.quotation.createFailed') : t('app.kuaizhizao.quotation.updateFailed')));
     }
   };
 
@@ -2189,8 +2108,8 @@ const QuotationsPage: React.FC = () => {
     const submitItems = validItems.map((it: any) => mapQuotationSubmitItem(it, materialList));
     const missingMaterialMeta = submitItems.find((it) => !it.material_code || !it.material_name);
     if (missingMaterialMeta) {
-      messageApi.error('明细行缺少物料编号或名称，请重新选择物料');
-      throw new Error('明细行缺少物料编号或名称，请重新选择物料');
+      messageApi.error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
+      throw new Error(t('app.kuaizhizao.quotation.lineMaterialMissing'));
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
     const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
@@ -2213,7 +2132,7 @@ const QuotationsPage: React.FC = () => {
       price_type: values.price_type === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive',
       items: submitItems,
     });
-    messageApi.success('更新成功');
+    messageApi.success(t('common.updateSuccess'));
     setEditingId(null);
     setEffectiveRuleCode(null);
     setEffectiveAutoGen(null);
@@ -2228,7 +2147,7 @@ const QuotationsPage: React.FC = () => {
   /** 详情-基本信息：顺序按相近职能分组（单据标识 → 客户 → 商务条款 → 交货 → 关联 → 系统） */
   const detailBasicColumns: ProDescriptionsItemProps<Quotation>[] = [
     // —— 单据标识与状态 ——
-    { title: '报价单编号', dataIndex: 'quotation_code' },
+    { title: t('app.kuaizhizao.quotation.import.code'), dataIndex: 'quotation_code' },
     {
       title: t('app.kuaizhizao.quotation.colVersion'),
       dataIndex: 'version_no',
@@ -2244,7 +2163,7 @@ const QuotationsPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, r) => {
         const c = getQuotationStatusTagProps(r, quotationAuditRequired);
@@ -2252,32 +2171,32 @@ const QuotationsPage: React.FC = () => {
       },
     },
     // —— 客户信息 ——
-    { title: '客户', dataIndex: 'customer_name' },
-    { title: SALES_COMMON_FORM_LABELS.contact, dataIndex: 'customer_contact' },
-    { title: SALES_COMMON_FORM_LABELS.phone, dataIndex: 'customer_phone' },
+    { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name' },
+    { title: salesCommonFormLabels.contact, dataIndex: 'customer_contact' },
+    { title: salesCommonFormLabels.phone, dataIndex: 'customer_phone' },
     // —— 商务条款（日期、金额、支付、本方责任人）——
-    { title: '报价日期', dataIndex: 'quotation_date', valueType: 'date' },
-    { title: '有效期至', dataIndex: 'valid_until', valueType: 'date' },
+    { title: t('app.kuaizhizao.quotation.colQuotationDate'), dataIndex: 'quotation_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.quotation.form.validUntil'), dataIndex: 'valid_until', valueType: 'date' },
     {
-      title: '是否含税',
+      title: t('app.kuaizhizao.quotation.form.isTaxInclusive'),
       dataIndex: 'price_type',
       render: (_: unknown, r: Quotation) =>
-        r.price_type === 'tax_inclusive' ? '含税单价' : '不含税单价',
+        r.price_type === 'tax_inclusive' ? t('app.kuaizhizao.salesOrder.taxInclusive') : t('app.kuaizhizao.salesOrder.taxExclusive'),
     },
     {
-      title: '总金额',
+      title: t('app.kuaizhizao.quotation.colTotalAmount'),
       dataIndex: 'total_amount',
       render: (_, r) => <AmountDisplay resource={QUOTATION_FIELD_RESOURCE} fieldName="total_amount" value={r.total_amount} />,
     },
     {
-      title: '币种',
+      title: t('app.kuaizhizao.quotation.form.currency'),
       dataIndex: 'currency_code',
       render: (_: unknown, record: Quotation) => (
         <DictionaryLabel dictionaryCode="CURRENCY" value={record.currency_code || defaultQuotationCurrency} />
       ),
     },
     {
-      title: '付款条件',
+      title: t('app.kuaizhizao.salesOrder.paymentTerms'),
       dataIndex: 'payment_terms',
       render: (_, record) => {
         const val = record.payment_terms;
@@ -2285,11 +2204,11 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
-    { title: SALES_COMMON_FORM_LABELS.salesman, dataIndex: 'salesman_name' },
+    { title: salesCommonFormLabels.salesman, dataIndex: 'salesman_name' },
     // —— 交货履约 ——
-    { title: '预计交货日期', dataIndex: 'delivery_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.quotation.form.expectedDeliveryDate'), dataIndex: 'delivery_date', valueType: 'date' },
     {
-      title: '发货方式',
+      title: t('app.kuaizhizao.salesOrder.shippingMethod'),
       dataIndex: 'shipping_method',
       render: (_, record) => {
         const val = record.shipping_method;
@@ -2297,12 +2216,12 @@ const QuotationsPage: React.FC = () => {
         return opt?.label ?? val ?? '-';
       },
     },
-    { title: '收货地址', dataIndex: 'shipping_address', span: 3 },
+    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 3 },
     // —— 关联与其它 ——
-    { title: '关联销售订单', dataIndex: 'sales_order_code' },
-    { title: '备注', dataIndex: 'notes', span: 3 },
+    { title: t('app.kuaizhizao.quotation.form.linkedSalesOrder'), dataIndex: 'sales_order_code' },
+    { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', span: 3 },
     // —— 系统信息 ——
-    { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+    { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
   ];
   const alignedDetailBasicColumns = alignDescriptionColumns(
     detailBasicColumns,
@@ -2318,7 +2237,7 @@ const QuotationsPage: React.FC = () => {
         const data = await getSalesOrder(id, true, true);
         setLinkedSalesOrder(data);
       } catch (e: any) {
-        messageApi.error(e?.message || e?.detail || '加载销售订单失败');
+        messageApi.error(e?.message || e?.detail || t('app.kuaizhizao.quotation.loadSalesOrderFailed'));
         setLinkedSalesOrderDrawerOpen(false);
       } finally {
         setLinkedSalesOrderLoading(false);
@@ -2516,17 +2435,17 @@ const QuotationsPage: React.FC = () => {
         <Col span={12}>
           <ProFormText
             name="quotation_code"
-            label="报价单编号"
-            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? '编号将根据编号规则自动生成，可修改' : '请输入报价单编号'}
+            label={t('app.kuaizhizao.quotation.import.code')}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-quotation') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.quotation.form.codeRequired')}
             fieldProps={{ disabled: !!editingId }}
-            rules={[{ required: true, whitespace: true, message: '请输入报价单编号' }]}
+            rules={[{ required: true, whitespace: true, message: t('app.kuaizhizao.quotation.form.codeRequired') }]}
           />
         </Col>
         <Col span={12}>
-          <ProForm.Item name="customer_id" label="客户名称" rules={[{ required: true, message: '请选择客户' }]}>
+          <ProForm.Item name="customer_id" label={t('field.customer.name')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
             <CustomerSelectDropdown
               hostResource="kuaizhizao:quotation"
-              placeholder="请选择客户"
+              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
               style={{ width: '100%' }}
               customers={customerList.length > 0 ? customerList : undefined}
               loading={customersLoading}
@@ -2559,7 +2478,7 @@ const QuotationsPage: React.FC = () => {
         <Col flex={1} style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="quotation_date"
-            label="报价日期"
+            label={t('app.kuaizhizao.quotation.colQuotationDate')}
             rules={[{ required: true }]}
             fieldProps={{ style: { width: '100%' } }}
           />
@@ -2567,23 +2486,23 @@ const QuotationsPage: React.FC = () => {
         <Col flex={1} style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="valid_until"
-            label="有效期至"
-            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'valid_until')}
+            label={t('app.kuaizhizao.quotation.form.validUntil')}
+            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'valid_until', t)}
           />
         </Col>
         <Col flex={1} style={{ minWidth: 0 }}>
           <ProFormDatePicker
             name="delivery_date"
-            label="预计交货日期"
-            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'delivery_date')}
+            label={t('app.kuaizhizao.quotation.form.expectedDeliveryDate')}
+            fieldProps={buildQuotationDateShortcutPickerProps(formRef, 'delivery_date', t)}
           />
         </Col>
         <Col flex={1} style={{ minWidth: 0 }}>
           <DictionarySelect
             dictionaryCode="SHIPPING_METHOD"
             name="shipping_method"
-            label="发货方式"
-            placeholder="请选择发货方式"
+            label={t('app.kuaizhizao.salesOrder.shippingMethod')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectShippingMethod')}
             formRef={formRef}
             simpleQuickCreate
             quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
@@ -2593,20 +2512,20 @@ const QuotationsPage: React.FC = () => {
       {/* 联系人 1/6 · 电话 1/6 · 地址 1/3 · 付款条件 1/6 · 币种 1/6 */}
       <Row gutter={16}>
         <Col span={4}>
-          <ProFormText name="customer_contact" label={SALES_COMMON_FORM_LABELS.contact} />
+          <ProFormText name="customer_contact" label={salesCommonFormLabels.contact} />
         </Col>
         <Col span={4}>
-          <ProFormText name="customer_phone" label={SALES_COMMON_FORM_LABELS.phone} />
+          <ProFormText name="customer_phone" label={salesCommonFormLabels.phone} />
         </Col>
         <Col span={8}>
-          <ProFormText name="shipping_address" label="收货地址" placeholder="请输入收货地址" />
+          <ProFormText name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} />
         </Col>
         <Col span={4}>
           <DictionarySelect
             dictionaryCode="PAYMENT_TERMS"
             name="payment_terms"
-            label="付款条件"
-            placeholder="请选择付款条件"
+            label={t('app.kuaizhizao.salesOrder.paymentTerms')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectPaymentTerms')}
             formRef={formRef}
             simpleQuickCreate
             quickCreatePopoverZIndex={quotationNestedElevatedPopupZIndex}
@@ -2616,8 +2535,8 @@ const QuotationsPage: React.FC = () => {
           <DictionarySelect
             dictionaryCode="CURRENCY"
             name="currency_code"
-            label="币种"
-            placeholder="请选择币种"
+            label={t('app.kuaizhizao.quotation.form.currency')}
+            placeholder={t('app.kuaizhizao.quotation.form.selectCurrency')}
             formRef={formRef}
             initialValue={defaultQuotationCurrency}
             valueEqualsLabel={false}
@@ -2633,7 +2552,7 @@ const QuotationsPage: React.FC = () => {
           const showTaxColumns = priceType === 'tax_inclusive';
           const quotationDetailColumns = [
                       {
-                        title: '物料',
+                        title: t('app.kuaizhizao.salesOrder.material'),
                         dataIndex: 'material_id',
                         width: 260,
                         render: (_: unknown, __: unknown, index: number) => (
@@ -2657,17 +2576,17 @@ const QuotationsPage: React.FC = () => {
                           ) : null,
                       },
                       {
-                        title: '规格',
+                        title: t('app.kuaizhizao.salesOrder.spec'),
                         dataIndex: 'material_spec',
                         width: 120,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                            <Input placeholder="规格" size="small" />
+                            <Input placeholder={t('app.kuaizhizao.salesOrder.spec')} size="small" />
                           </Form.Item>
                         ),
                       },
                       {
-                        title: '单位',
+                        title: t('app.kuaizhizao.salesOrder.unit'),
                         dataIndex: 'material_unit',
                         width: 100,
                         render: (_: unknown, __: unknown, index: number) => (
@@ -2689,18 +2608,18 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: '数量',
+                        title: t('app.kuaizhizao.salesOrder.quantity'),
                         dataIndex: 'quote_quantity',
                         width: 100,
                         align: 'right' as const,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item
                             name={[index, 'quote_quantity']}
-                            rules={[{ required: true, message: '必填' }]}
+                            rules={[{ required: true, message: t('common.required') }]}
                             style={{ margin: 0 }}
                           >
                             <InputNumber
-                              placeholder="数量"
+                              placeholder={t('app.kuaizhizao.salesOrder.quantity')}
                               min={0.01}
                               precision={2}
                               style={{ width: '100%' }}
@@ -2920,7 +2839,7 @@ const QuotationsPage: React.FC = () => {
                           ),
                       },
                       {
-                        title: '交货日期',
+                        title: t('app.kuaizhizao.salesOrder.deliveryDate'),
                         dataIndex: 'delivery_date',
                         width: 130,
                         render: (_: unknown, __: unknown, index: number) => (
@@ -2930,12 +2849,12 @@ const QuotationsPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: '备注',
+                        title: t('app.kuaizhizao.salesOrder.notes'),
                         dataIndex: 'notes',
                         width: 120,
                         render: (_: unknown, __: unknown, index: number) => (
                           <Form.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                            <Input placeholder="备注" size="small" />
+                            <Input placeholder={t('app.kuaizhizao.salesOrder.notes')} size="small" />
                           </Form.Item>
                         ),
                       },
@@ -2960,7 +2879,7 @@ const QuotationsPage: React.FC = () => {
                   `}</style>
               <UniTableDetail
                 name="items"
-                title="物料明细"
+                title={t('app.kuaizhizao.quotation.form.itemsTitle')}
                 required
                 leftExtra={(
                   <ProForm.Item
@@ -2985,14 +2904,14 @@ const QuotationsPage: React.FC = () => {
                       icon={<ImportOutlined />}
                       onClick={() => setImportModalVisible(true)}
                     >
-                      导入明细
+                      {t('common.importDetail')}
                     </Button>
                     <Button
                       type="default"
                       icon={<PlusOutlined />}
                       onClick={appendEmptyQuotationItem}
                     >
-                      添加明细
+                      {t('common.addDetail')}
                     </Button>
                     <Button
                       type="default"
@@ -3003,7 +2922,7 @@ const QuotationsPage: React.FC = () => {
                     </Button>
                   </Space>
                 )}
-                requiredMessage="请至少添加一条明细"
+                requiredMessage={t('app.kuaizhizao.quotation.form.itemsRequired')}
                 columns={quotationDetailColumns}
                 disabledAdd
                 initialValue={{
@@ -3030,7 +2949,7 @@ const QuotationsPage: React.FC = () => {
       </Form.Item>
       <QuotationFormSummary />
       <DocumentAttachmentsField category="quotation_attachments" />
-      <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
       <UniMaterialBatchPicker
         hostResource="kuaizhizao:quotation"
         open={materialPickerOpen}
@@ -3048,8 +2967,8 @@ const QuotationsPage: React.FC = () => {
           visible={importModalVisible}
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleItemImport}
-          title="导入报价明细"
-          headers={['物料编号', '规格', '单位', '数量', '单价', '交货日期']}
+          title={t('app.kuaizhizao.quotation.importItemsTitle')}
+          headers={[t('app.kuaizhizao.salesOrder.materialCode'), t('app.kuaizhizao.salesOrder.spec'), t('app.kuaizhizao.salesOrder.unit'), t('app.kuaizhizao.salesOrder.quantity'), t('app.kuaizhizao.salesOrder.unitPrice'), t('app.kuaizhizao.salesOrder.deliveryDate')]}
           exampleRow={['MAT001', 'Spec X', 'PCS', '100', '1.5', '2026-03-01']}
         />
       </Suspense>
@@ -3135,7 +3054,7 @@ const QuotationsPage: React.FC = () => {
           }}
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
-          headerTitle="报价单"
+          headerTitle={t('app.kuaizhizao.quotation.title')}
           formRef={tableSearchFormRef}
           actionRef={actionRef}
           rowKey="id"
@@ -3157,7 +3076,7 @@ const QuotationsPage: React.FC = () => {
           }
           toolBarButtonSize="middle"
           showCreateButton
-          createButtonText="新建报价单"
+          createButtonText={t('app.kuaizhizao.quotation.createButton')}
           onCreate={handleCreate}
           toolBarActionsAfterCreate={[
             <UniPushToolbarButton
@@ -3169,7 +3088,7 @@ const QuotationsPage: React.FC = () => {
           enableRowSelection
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条报价单吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.quotation.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="quotation-batch-menu"
@@ -3177,19 +3096,19 @@ const QuotationsPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'confirmCustomer',
-                  label: '批量客户确认',
+                  label: t('app.kuaizhizao.quotation.batchConfirmCustomer'),
                   icon: <CommentOutlined />,
                   requireConfirm: true,
-                  confirmTitle: '批量客户确认',
+                  confirmTitle: t('app.kuaizhizao.quotation.batchConfirmCustomer'),
                   confirmDescription: (count) =>
-                    `确定将选中的 ${count} 条报价单标记为「客户确认」吗？仅「已报价」且符合确认条件的单据会成功。`,
+                    t('app.kuaizhizao.quotation.batchConfirmCustomerConfirm', { count }),
                   onClick: handleBatchConfirmCustomer,
                 },
                 ...(quotationAuditRequired
                   ? [
                       {
                         key: 'approve',
-                        label: '批量审核通过',
+                        label: t('app.kuaizhizao.quotation.batchApprove'),
                         icon: <CheckOutlined />,
                         onClick: handleBatchApprove,
                       },
@@ -3214,7 +3133,7 @@ const QuotationsPage: React.FC = () => {
               disabled={selectedRowKeys.length !== 1}
               onClick={() => void handleToolbarPrint(selectedRowKeys)}
             >
-              生成PDF
+              {t('app.kuaizhizao.quotation.formalPrint')}
             </Button>,
           ]}
           showImportButton={true}
@@ -3239,7 +3158,7 @@ const QuotationsPage: React.FC = () => {
                 items = items.filter((d) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -3249,9 +3168,9 @@ const QuotationsPage: React.FC = () => {
               a.download = `quotations-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           showSyncButton
@@ -3285,7 +3204,7 @@ const QuotationsPage: React.FC = () => {
                 total: response.total ?? 0,
               };
             } catch {
-              messageApi.error('获取报价单列表失败');
+              messageApi.error(t('app.kuaizhizao.quotation.listFailed'));
               setListTotal(0);
               return { data: [], success: false, total: 0 };
             }
@@ -3298,7 +3217,7 @@ const QuotationsPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={`报价单详情${quotationDetail?.quotation_code ? ` - ${quotationDetail.quotation_code}` : ''}`}
+        title={quotationDetail?.quotation_code ? t('app.kuaizhizao.quotation.detailTitleWithCode', { code: quotationDetail.quotation_code }) : t('app.kuaizhizao.quotation.detailTitle')}
         open={detailDrawerVisible}
         zIndex={quotationDetailDrawerZIndex}
         onClose={closeQuotationDetailDrawer}
@@ -3307,12 +3226,12 @@ const QuotationsPage: React.FC = () => {
           quotationDetail && (
             <Space wrap>
               {canDeleteQuotation(quotationDetail) && quotationPerms.canDelete && (
-                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>删除</Button>
+                <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(quotationDetail)}>{t('common.delete')}</Button>
               )}
               <UniWorkflowActions
                 {...rowActionKind('skip')}
                 record={quotationDetail}
-                entityName="报价单"
+                entityName={t('app.kuaizhizao.quotation.entityName')}
                 auditNodeKey="quotation"
                 resourcePrefix="kuaizhizao:quotation"
                 unifiedAudit
@@ -3327,16 +3246,16 @@ const QuotationsPage: React.FC = () => {
                 }}
               />
               {canConfirmCustomerQuotation(quotationDetail, quotationAuditRequired) && (
-                <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>客户确认</Button>
+                <Button icon={<SendOutlined />} onClick={() => handleConfirmCustomer(quotationDetail)}>{t('app.kuaizhizao.quotation.customerConfirm')}</Button>
               )}
               {canReopenQuotation(quotationDetail) && (
-                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>重新编辑</Button>
+                <Button icon={<EditOutlined />} onClick={() => handleReopen(quotationDetail)}>{t('app.kuaizhizao.quotation.reopenEdit')}</Button>
               )}
               {canConvertQuotation(quotationDetail, quotationAuditRequired) && (
-                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>转销售订单</Button>
+                <Button type="primary" icon={<SwapOutlined />} onClick={() => handleConvert(quotationDetail)}>{t('app.kuaizhizao.quotation.convertToSalesOrder')}</Button>
               )}
               {canRevokePushQuotation(quotationDetail) && (
-                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>撤回下推</Button>
+                <Button icon={<RollbackOutlined />} onClick={() => handleRevokePush(quotationDetail)}>{t('app.kuaizhizao.quotation.revokePush')}</Button>
               )}
               {canCreateRevision(quotationDetail) && (
                 <Button icon={<BranchesOutlined />} onClick={() => handleRevision(quotationDetail)}>
@@ -3435,19 +3354,19 @@ const QuotationsPage: React.FC = () => {
                       const showTax = pt === 'tax_inclusive';
                       type LineIt = NonNullable<Quotation['items']>[number];
                       return [
-                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true },
                         {
-                          title: '单位',
+                          title: t('app.kuaizhizao.salesOrder.unit'),
                           dataIndex: 'material_unit',
                           width: 72,
                           ellipsis: true,
                           render: (v: string) => <DictionaryLabel dictionaryCode="MATERIAL_UNIT" value={v} />,
                         },
-                        { title: '报价数量', dataIndex: 'quote_quantity', width: 100, align: 'right' as const },
+                        { title: t('app.kuaizhizao.quotation.form.quoteQuantity'), dataIndex: 'quote_quantity', width: 100, align: 'right' as const },
                         {
-                          title: '单价',
+                          title: t('app.kuaizhizao.salesOrder.unitPrice'),
                           dataIndex: 'unit_price',
                           width: 100,
                           align: 'right' as const,
@@ -3462,7 +3381,7 @@ const QuotationsPage: React.FC = () => {
                         ...(showTax
                           ? [
                               {
-                                title: '不含税金额',
+                                title: t('app.kuaizhizao.salesOrder.exclAmount'),
                                 key: 'line_excl',
                                 width: 100,
                                 align: 'right' as const,
@@ -3483,13 +3402,13 @@ const QuotationsPage: React.FC = () => {
                                 },
                               },
                               {
-                                title: '税率(%)',
+                                title: t('app.kuaizhizao.salesOrder.taxRate'),
                                 dataIndex: 'tax_rate',
                                 width: 72,
                                 align: 'right' as const,
                               },
                               {
-                                title: '税额',
+                                title: t('app.kuaizhizao.salesOrder.taxAmount'),
                                 key: 'line_tax',
                                 width: 90,
                                 align: 'right' as const,
@@ -3512,7 +3431,7 @@ const QuotationsPage: React.FC = () => {
                             ]
                           : []),
                         {
-                          title: showTax ? '价税合计' : '未税金额',
+                          title: showTax ? t('app.kuaizhizao.salesOrder.inclAmount') : t('app.kuaizhizao.salesOrder.exclAmount'),
                           key: 'line_amount_display',
                           width: 100,
                           align: 'right' as const,
@@ -3532,15 +3451,15 @@ const QuotationsPage: React.FC = () => {
                             );
                           },
                         },
-                        { title: '交货日期', dataIndex: 'delivery_date', width: 120, ellipsis: true },
-                        { title: '备注', dataIndex: 'notes', width: 160, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes', width: 160, ellipsis: true },
                       ];
                     })()}
                     dataSource={quotationDetail.items}
                     pagination={false}
                   />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quotation.noDetailItems')} />
               )}
             </>
           ) : undefined
@@ -3565,7 +3484,7 @@ const QuotationsPage: React.FC = () => {
       />
 
       <DetailDrawerTemplate
-        title={`销售订单详情${linkedSalesOrder?.order_code ? ` - ${linkedSalesOrder.order_code}` : ''}`}
+        title={linkedSalesOrder?.order_code ? t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitleWithCode', { code: linkedSalesOrder.order_code }) : t('app.kuaizhizao.quotation.linkedSalesOrderDetailTitle')}
         open={linkedSalesOrderDrawerOpen}
         onClose={closeLinkedSalesOrderDrawer}
         width={LINKED_DOCUMENT_DRAWER_WIDTH}
@@ -3579,7 +3498,7 @@ const QuotationsPage: React.FC = () => {
               navigate('/apps/kuaizhizao/sales-management/sales-orders');
             }}
           >
-            前往销售订单管理
+            {t('app.kuaizhizao.quotation.gotoSalesOrders')}
           </Button>
         }
         plainBody={
@@ -3604,7 +3523,7 @@ const QuotationsPage: React.FC = () => {
           zIndex={quotationElevatedModalZIndex}
           onClose={() => setSyncModalVisible(false)}
           onConfirm={handleSyncConfirm}
-          title="从数据集同步报价单"
+          title={t('app.kuaizhizao.quotation.syncFromDataset')}
         />
       </Suspense>
 
@@ -3619,301 +3538,8 @@ const QuotationsPage: React.FC = () => {
         }}
       />
 
-      <Modal
-        open={printModalVisible}
-        title="选择打印模板"
-        width={MODAL_CONFIG.TINY_WIDTH}
-        zIndex={quotationElevatedModalZIndex}
-        onCancel={() => {
-          if (printSubmitting) return;
-          setPrintModalVisible(false);
-          setPrintingRecord(null);
-        }}
-        onOk={handleConfirmPrint}
-        okText="预览打印"
-        okButtonProps={{ icon: <PrinterOutlined /> }}
-        confirmLoading={printSubmitting}
-        destroyOnHidden
-        styles={{ body: { paddingTop: 4, paddingBottom: 8 } }}
-      >
-        <Space orientation="vertical" style={{ width: '100%' }} size={16}>
-          <div
-            style={{
-              position: 'relative',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 12,
-              padding: '14px 16px',
-              borderRadius: token.borderRadiusLG,
-              border: `1px solid ${token.colorBorderSecondary}`,
-              background: `linear-gradient(135deg, ${token.colorPrimaryBg} 0%, ${token.colorFillAlter} 100%)`,
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              aria-hidden
-              style={{
-                position: 'absolute',
-                right: -24,
-                top: -24,
-                width: 88,
-                height: 88,
-                borderRadius: '50%',
-                background: `${token.colorPrimary}12`,
-                pointerEvents: 'none',
-              }}
-            />
-            <div
-              style={{
-                width: 42,
-                height: 42,
-                borderRadius: token.borderRadius,
-                background: token.colorBgContainer,
-                border: `1px solid ${token.colorBorderSecondary}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: token.colorPrimary,
-                fontSize: 18,
-                flexShrink: 0,
-                boxShadow: token.boxShadowTertiary,
-              }}
-            >
-              <FileTextOutlined />
-            </div>
-            <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
-              <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 2 }}>
-                当前报价单
-              </Typography.Text>
-              <Typography.Text
-                strong
-                style={{
-                  fontSize: 16,
-                  letterSpacing: 0.4,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: token.colorText,
-                }}
-              >
-                {printingRecord?.quotation_code ?? printingRecord?.id ?? '-'}
-              </Typography.Text>
-            </div>
-          </div>
+      {PrintModal}
 
-          <div
-            style={{
-              padding: '14px 16px 12px',
-              borderRadius: token.borderRadiusLG,
-              border: `1px solid ${token.colorBorderSecondary}`,
-              background: token.colorBgContainer,
-              boxShadow: token.boxShadowTertiary,
-            }}
-          >
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-                marginBottom: 10,
-              }}
-            >
-              <Space size={6}>
-                <PrinterOutlined style={{ color: token.colorPrimary, fontSize: 14 }} />
-                <Typography.Text strong>打印模板</Typography.Text>
-              </Space>
-              <Button
-                type="link"
-                size="small"
-                icon={<FormOutlined />}
-                onClick={handleOpenPrintTemplateDesign}
-                style={{
-                  padding: '0 8px',
-                  height: 26,
-                  borderRadius: token.borderRadiusSM,
-                  background: token.colorPrimaryBg,
-                  flexShrink: 0,
-                }}
-              >
-                {t('app.kuaizhizao.quotation.printTemplateDesign')}
-              </Button>
-            </div>
-            {printTemplates.length === 0 ? (
-              <Empty
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="暂无可用打印模板"
-                style={{ margin: '8px 0 4px' }}
-              />
-            ) : (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 8,
-                  maxHeight: 260,
-                  overflowY: 'auto',
-                  paddingRight: 2,
-                }}
-              >
-                <div
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setSelectedPrintTemplateUuid(undefined)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      setSelectedPrintTemplateUuid(undefined);
-                    }
-                  }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    padding: '10px 12px',
-                    borderRadius: token.borderRadius,
-                    border: `1px solid ${selectedPrintTemplateUuid == null ? token.colorPrimary : token.colorBorderSecondary}`,
-                    background: selectedPrintTemplateUuid == null ? token.colorPrimaryBg : token.colorFillAlter,
-                    cursor: 'pointer',
-                    transition: 'border-color 0.2s, background 0.2s',
-                  }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: token.borderRadiusSM,
-                      background: token.colorBgContainer,
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: token.colorTextSecondary,
-                      flexShrink: 0,
-                    }}
-                  >
-                    <PrinterOutlined />
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Typography.Text strong>系统默认模板</Typography.Text>
-                    <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
-                      由后端自动匹配报价单默认模板
-                    </Typography.Text>
-                  </div>
-                  {selectedPrintTemplateUuid == null ? (
-                    <CheckOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} />
-                  ) : null}
-                </div>
-                {printTemplates.map((tpl) => {
-                  const selected = selectedPrintTemplateUuid === tpl.uuid;
-                  return (
-                    <div
-                      key={tpl.uuid}
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setSelectedPrintTemplateUuid(tpl.uuid)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setSelectedPrintTemplateUuid(tpl.uuid);
-                        }
-                      }}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 10,
-                        padding: '10px 12px',
-                        borderRadius: token.borderRadius,
-                        border: `1px solid ${selected ? token.colorPrimary : token.colorBorderSecondary}`,
-                        background: selected ? token.colorPrimaryBg : token.colorFillAlter,
-                        cursor: 'pointer',
-                        transition: 'border-color 0.2s, background 0.2s',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 32,
-                          height: 32,
-                          borderRadius: token.borderRadiusSM,
-                          background: token.colorBgContainer,
-                          border: `1px solid ${token.colorBorderSecondary}`,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: selected ? token.colorPrimary : token.colorTextSecondary,
-                          flexShrink: 0,
-                        }}
-                      >
-                        <FileTextOutlined />
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <Space size={6} wrap>
-                          <Typography.Text strong ellipsis style={{ maxWidth: 280 }}>
-                            {tpl.name}
-                          </Typography.Text>
-                          {tpl.is_default ? <Tag color="blue" style={{ margin: 0 }}>默认</Tag> : null}
-                        </Space>
-                        {tpl.description ? (
-                          <Typography.Text
-                            type="secondary"
-                            ellipsis
-                            style={{ fontSize: 12, display: 'block', marginTop: 2 }}
-                          >
-                            {tpl.description}
-                          </Typography.Text>
-                        ) : (
-                          <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }}>
-                            {tpl.code}
-                          </Typography.Text>
-                        )}
-                      </div>
-                      {selected ? <CheckOutlined style={{ color: token.colorPrimary, flexShrink: 0 }} /> : null}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-            <Typography.Text
-              type="secondary"
-              style={{ fontSize: 12, marginTop: 10, display: 'block', lineHeight: 1.5 }}
-            >
-              {selectedPrintTemplate
-                ? `已选「${selectedPrintTemplate.name}」，预览后将生成 PDF 报价文件`
-                : '将使用系统默认报价单模板生成 PDF'}
-            </Typography.Text>
-          </div>
-        </Space>
-      </Modal>
-
-      <UniPdfPreview
-        open={pdfPreviewVisible}
-        title={pdfPreviewFileName}
-        src={pdfPreviewBlobUrl || undefined}
-        inset={16}
-        onDownload={() => {
-          if (pdfPreviewBlobUrl) {
-            const a = document.createElement('a');
-            a.href = pdfPreviewBlobUrl;
-            a.download = pdfPreviewFileName;
-            a.rel = 'noopener';
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-          }
-        }}
-        onPrint={() => {
-          try {
-            window.print();
-          } catch {
-            // no-op
-          }
-        }}
-        onClose={() => {
-          setPdfPreviewVisible(false);
-          if (pdfPreviewBlobUrl) {
-            URL.revokeObjectURL(pdfPreviewBlobUrl);
-            setPdfPreviewBlobUrl(null);
-          }
-        }}
-      />
     </>
   );
 };

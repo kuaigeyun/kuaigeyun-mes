@@ -13,6 +13,7 @@ from .qrcode_service import (
     QRCODE_TYPE_EMP,
     QRCODE_TYPE_BOX,
     QRCODE_TYPE_TRACE,
+    QRCODE_TYPE_DOC,
     VALID_QRCODE_TYPES,
 )
 
@@ -25,5 +26,6 @@ __all__ = [
     "QRCODE_TYPE_EMP",
     "QRCODE_TYPE_BOX",
     "QRCODE_TYPE_TRACE",
+    "QRCODE_TYPE_DOC",
     "VALID_QRCODE_TYPES",
 ]

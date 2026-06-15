@@ -1,136 +1,125 @@
 /**
  * 销售合同执行报表
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Progress, Tag } from 'antd';
-import SalesBaseReport from '../BaseReport';
-import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../../services/reports';
+import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../../components/KuaizhizaoReport';
 
 const ContractExecutionReport: React.FC = () => {
-  const columns: ProColumns[] = [
-    {
-      title: '签订日期',
-      dataIndex: 'date_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      search: { order: 9 } as any,
-    },
-    {
-      title: '合同编号',
-      dataIndex: 'contract_code',
-      copyable: true,
-      fixed: 'left',
-      width: 150,
-    },
-    {
-      title: '合同类型',
-      dataIndex: 'contract_type',
-      width: 100,
-      render: (_, r) => (r.contract_type === 'framework' ? '框架合同' : '单次合同'),
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      ellipsis: true,
-      width: 160,
-    },
-    {
-      title: '签订日期',
-      dataIndex: 'contract_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '有效期至',
-      dataIndex: 'valid_to',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '合同金额',
-      dataIndex: 'total_amount',
-      valueType: 'money',
-      width: 120,
-      align: 'right',
-    },
-    {
-      title: '已释放金额',
-      dataIndex: 'released_amount',
-      valueType: 'money',
-      width: 120,
-      align: 'right',
-    },
-    {
-      title: '剩余金额',
-      dataIndex: 'remaining_amount',
-      valueType: 'money',
-      width: 120,
-      align: 'right',
-    },
-    {
-      title: '执行率',
-      dataIndex: 'execution_rate',
-      width: 160,
-      render: (_, record) => (
-        <Progress
-          percent={Math.round(Number(record.execution_rate) || 0)}
-          size="small"
-          status={Number(record.execution_rate) >= 100 ? 'success' : 'active'}
-        />
-      ),
-    },
-    {
-      title: '收款执行率',
-      dataIndex: 'payment_collection_rate',
-      width: 160,
-      render: (_, record) => (
-        <Progress
-          percent={Math.round(Number(record.payment_collection_rate) || 0)}
-          size="small"
-          status={Number(record.payment_collection_rate) >= 100 ? 'success' : 'active'}
-        />
-      ),
-    },
-    {
-      title: '释放订单数',
-      dataIndex: 'release_order_count',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (_, r) => <Tag>{r.status}</Tag>,
-    },
-  ];
+  const { t } = useTranslation();
+  const columns: ProColumns[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.reports.signDate'),
+        dataIndex: 'date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        search: { order: 9 } as any,
+      },
+      {
+        title: t('app.kuaizhizao.reports.contractCode'),
+        dataIndex: 'contract_code',
+        copyable: true,
+        fixed: 'left',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.contractType'),
+        dataIndex: 'contract_type',
+        width: 100,
+        render: (_, r) =>
+          r.contract_type === 'framework'
+            ? t('app.kuaizhizao.reports.contractTypeFramework')
+            : t('app.kuaizhizao.reports.contractTypeSingle'),
+      },
+      {
+        title: t('app.kuaizhizao.reports.customerName'),
+        dataIndex: 'customer_name',
+        ellipsis: true,
+        width: 160,
+      },
+      {
+        title: t('app.kuaizhizao.reports.signDate'),
+        dataIndex: 'contract_date',
+        valueType: 'date',
+        width: 120,
+      },
+      {
+        title: t('app.kuaizhizao.reports.validTo'),
+        dataIndex: 'valid_to',
+        valueType: 'date',
+        width: 120,
+      },
+      {
+        title: t('app.kuaizhizao.reports.contractAmount'),
+        dataIndex: 'total_amount',
+        valueType: 'money',
+        width: 120,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.releasedAmount'),
+        dataIndex: 'released_amount',
+        valueType: 'money',
+        width: 120,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.remainingAmount'),
+        dataIndex: 'remaining_amount',
+        valueType: 'money',
+        width: 120,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.executionRate'),
+        dataIndex: 'execution_rate',
+        width: 160,
+        render: (_, record) => (
+          <Progress
+            percent={Math.round(Number(record.execution_rate) || 0)}
+            size="small"
+            status={Number(record.execution_rate) >= 100 ? 'success' : 'active'}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.reports.paymentCollectionRate'),
+        dataIndex: 'payment_collection_rate',
+        width: 160,
+        render: (_, record) => (
+          <Progress
+            percent={Math.round(Number(record.payment_collection_rate) || 0)}
+            size="small"
+            status={Number(record.payment_collection_rate) >= 100 ? 'success' : 'active'}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.reports.releaseOrderCount'),
+        dataIndex: 'release_order_count',
+        width: 100,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.reports.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (_, r) => <Tag>{r.status}</Tag>,
+      },
+    ],
+    [t],
+  );
 
   return (
-    <SalesBaseReport
-      title="销售合同执行报表"
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.contract-execution.index"
+      title={t('app.kuaizhizao.menu.reports.contract-execution')}
       reportType="contract-execution"
       columns={columns}
-      request={async (params, _s, _f, searchFormValues) => {
-        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
-          'date_range',
-          'contract_date_range',
-        ]);
-        const { skip, limit } = salesReportPageParams(params);
-        const res = await getSalesReport({
-          report_type: 'contract-execution',
-          date_start,
-          date_end,
-          customer_keyword: searchFormValues?.customer_name,
-          skip,
-          limit,
-        });
-        return {
-          data: res.data,
-          success: res.success,
-          total: res.total ?? res.data?.length ?? 0,
-        };
-      }}
+      dateRangeKeys={['date_range', 'contract_date_range']}
     />
   );
 };

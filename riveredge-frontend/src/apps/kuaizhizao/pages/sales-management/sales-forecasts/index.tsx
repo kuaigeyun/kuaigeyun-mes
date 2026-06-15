@@ -11,7 +11,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react'
 import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormInstance, ProFormSelect } from '@ant-design/pro-components'
 import { App, Button, Space, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Typography, Modal, Descriptions, Tooltip, Card } from 'antd'
-import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined } from '@ant-design/icons'
+import { PlusOutlined, DeleteOutlined, EyeOutlined, EditOutlined, AppstoreAddOutlined, ImportOutlined, ArrowLeftOutlined, PrinterOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,6 +20,7 @@ import { useDeferAfterPaint } from '../../../../../hooks/useDeferAfterPaint'
 import { theme as AntdTheme } from 'antd'
 import { StatCardTrendArea } from '../../../../../components/common/StatCardTrendArea'
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired'
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import {
   ListPageTemplate,
   DetailDrawerTemplate,
@@ -87,8 +88,9 @@ import {
 } from '../../../../../services/codeRule'
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage'
 import { getSalesForecastLifecycle } from '../../../utils/salesForecastLifecycle'
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
-import type { SubStage } from '../../../../../components/uni-lifecycle/types'
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle'
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage'
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell'
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions'
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel'
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter'
@@ -108,8 +110,7 @@ function getSalesForecastPushComputationUiState(
   opts: { demandComputationEnabled: boolean; auditEnabled: boolean; t: (key: string) => string },
 ): { visible: boolean; clickable: boolean; disabledTip?: string } {
   if (!opts.demandComputationEnabled || !record) return { visible: false, clickable: false }
-  const lifecycle = getSalesForecastLifecycle(record as SalesForecast, opts.auditEnabled)
-  const stage = lifecycle.stageName ?? ''
+  const status = String((record as SalesForecast).status ?? '').trim()
   const blockedStages = ['草稿', '待审核', '已驳回', '已取消', '已完成']
   if (isForecastComputationPushed(record)) {
     return {
@@ -118,7 +119,7 @@ function getSalesForecastPushComputationUiState(
       disabledTip: opts.t('app.kuaizhizao.salesForecast.pushDisabledAlreadyPushed'),
     }
   }
-  if (blockedStages.includes(stage)) {
+  if (blockedStages.includes(status)) {
     return {
       visible: true,
       clickable: false,
@@ -130,6 +131,7 @@ function getSalesForecastPushComputationUiState(
 
 export default function SalesForecastsPage() {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi, modal: modalApi } = App.useApp()
   const navigate = useNavigate();
   const location = useLocation();
@@ -254,17 +256,21 @@ export default function SalesForecastsPage() {
    * 处理新建销售预测
    * 参考销售订单：先打开弹窗，再请求 testGenerateCode 预填编号（不占用序号）
    */
-  const defaultForecastItem = {
-    material_id: undefined,
-    material_code: '',
-    material_name: '',
-    material_spec: '',
-    material_unit: '件',
-    forecast_quantity: 0,
-    forecast_date: dayjs(),
-    confidence_level: 1.0,
-    forecast_method: 'MANUAL',
-  }
+  const defaultUnit = t('app.kuaizhizao.salesForecast.defaultUnit')
+  const defaultForecastItem = useMemo(
+    () => ({
+      material_id: undefined,
+      material_code: '',
+      material_name: '',
+      material_spec: '',
+      material_unit: defaultUnit,
+      forecast_quantity: 0,
+      forecast_date: dayjs(),
+      confidence_level: 1.0,
+      forecast_method: 'MANUAL',
+    }),
+    [defaultUnit],
+  )
 
   const appendForecastItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -275,7 +281,7 @@ export default function SalesForecastsPage() {
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
         material_spec: m.specification ?? '',
-        material_unit: m.baseUnit ?? '件',
+        material_unit: m.baseUnit ?? defaultUnit,
       }))
       // 如果当前只有一行且未选择物料，则替换该行
       if (current.length === 1 && !current[0].material_id && !current[0].material_code) {
@@ -285,7 +291,7 @@ export default function SalesForecastsPage() {
       }
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }))
     },
-    [messageApi, t]
+    [defaultForecastItem, defaultUnit, messageApi, t]
   )
 
   const handleItemImport = useCallback(
@@ -306,7 +312,7 @@ export default function SalesForecastsPage() {
             ...defaultForecastItem,
             material_code: materialCode,
             material_spec: spec,
-            material_unit: unit || '件',
+            material_unit: unit || defaultUnit,
             forecast_quantity: quantity || 1,
             forecast_date: forecastDate && dayjs(forecastDate).isValid() ? dayjs(forecastDate) : dayjs(),
             notes: notes || undefined,
@@ -315,16 +321,16 @@ export default function SalesForecastsPage() {
         .filter((it): it is NonNullable<typeof it> => it !== null);
 
       if (newItems.length === 0) {
-        messageApi.warning(t('app.kuaizhizao.salesForecast.noValidImportData', '未检测到有效数据（请确保物料编号不为空）'));
+        messageApi.warning(t('app.kuaizhizao.salesForecast.noValidImportData'));
         return;
       }
 
       const currentItems = formRef.current?.getFieldValue('items') || [];
       formRef.current?.setFieldsValue({ items: [...currentItems, ...newItems] });
-      messageApi.success(t('app.kuaizhizao.salesForecast.importItemsSuccess', { count: newItems.length, defaultValue: `成功导入 ${newItems.length} 条明细` }));
+      messageApi.success(t('app.kuaizhizao.salesForecast.importItemsSuccess', { count: newItems.length }));
       setImportModalVisible(false);
     },
-    [messageApi, t],
+    [defaultForecastItem, defaultUnit, messageApi, t],
   );
 
 
@@ -348,7 +354,7 @@ export default function SalesForecastsPage() {
         formRef.current?.setFieldsValue(cachedDraft);
         if (!salesForecastCreateDraftRestoredRef.current) {
           salesForecastCreateDraftRestoredRef.current = true;
-          messageApi.info('已恢复暂存内容');
+          messageApi.info(t('app.kuaizhizao.salesForecast.draftRestored'));
         }
       }
     }, 100);
@@ -387,7 +393,7 @@ export default function SalesForecastsPage() {
 
   const handleCreate = () => {
     if (!salesNodesEnabled.sales_forecast) {
-      messageApi.warning('销售预测节点未启用，无法新建')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.nodeDisabledCreate'))
       return
     }
     navigate(SALES_FORECAST_CREATE_PATH)
@@ -422,7 +428,7 @@ export default function SalesForecastsPage() {
   useEffect(() => {
     if (!isFormPage || formPageInitializedRef.current) return;
     if (isCreatePage && !salesNodesEnabled.sales_forecast) {
-      messageApi.warning('销售预测节点未启用，无法新建');
+      messageApi.warning(t('app.kuaizhizao.salesForecast.nodeDisabledCreate'));
       navigate(SALES_FORECAST_LIST_PATH);
       return;
     }
@@ -438,7 +444,7 @@ export default function SalesForecastsPage() {
     const rawItems = formRef.current?.getFieldValue('items') ?? []
     const currentItems = Array.isArray(rawItems) ? rawItems : []
     if (!currentItems.length) {
-      messageApi.warning('请先添加至少一个物料明细')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.addItemsFirst'))
       return
     }
 
@@ -457,7 +463,7 @@ export default function SalesForecastsPage() {
           material_code: it.material_code ?? '',
           material_name: it.material_name ?? '',
           material_spec: it.material_spec ?? '',
-          material_unit: it.material_unit ?? '件',
+          material_unit: it.material_unit ?? defaultUnit,
           values: {},
         })
       }
@@ -470,7 +476,7 @@ export default function SalesForecastsPage() {
 
     const rows = Array.from(materialMap.values())
     if (!rows.length) {
-      messageApi.warning('当前明细缺少有效物料，无法矩阵录入')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.matrixNoValidMaterial'))
       return
     }
 
@@ -482,7 +488,7 @@ export default function SalesForecastsPage() {
   const applyMatrixEntry = () => {
     const rows = Array.isArray(matrixRows) ? matrixRows : []
     if (!rows.length) {
-      messageApi.warning('矩阵为空，无法应用')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.matrixEmpty'))
       return
     }
     const nextItems: any[] = []
@@ -496,7 +502,7 @@ export default function SalesForecastsPage() {
           material_code: row.material_code,
           material_name: row.material_name,
           material_spec: row.material_spec,
-          material_unit: row.material_unit || '件',
+          material_unit: row.material_unit || defaultUnit,
           forecast_quantity: qty,
           forecast_date: month.startOf('month'),
           confidence_level: 1.0,
@@ -505,12 +511,12 @@ export default function SalesForecastsPage() {
       })
     })
     if (!nextItems.length) {
-      messageApi.warning('请至少录入一个大于0的预测数量')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.matrixQtyRequired'))
       return
     }
     formRef.current?.setFieldsValue({ items: nextItems })
     setMatrixModalVisible(false)
-    messageApi.success(`已从矩阵生成 ${nextItems.length} 条预测明细`)
+    messageApi.success(t('app.kuaizhizao.salesForecast.matrixApplySuccess', { count: nextItems.length }))
   }
 
   async function initSalesForecastEditForm(forecastId: number) {
@@ -606,7 +612,7 @@ export default function SalesForecastsPage() {
     try {
       if (type === 'all') {
         const blob = await exportSalesForecasts()
-        const filename = `销售预测_${new Date().toISOString().slice(0, 10)}.xlsx`
+        const filename = `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.xlsx`
         downloadFile(blob, filename)
         messageApi.success(t('common.exportSuccess'))
       } else {
@@ -622,7 +628,7 @@ export default function SalesForecastsPage() {
         const url = URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = `销售预测_${new Date().toISOString().slice(0, 10)}.json`
+        a.download = `${t('app.kuaizhizao.salesForecast.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.json`
         a.click()
         URL.revokeObjectURL(url)
         messageApi.success(t('common.exportCountSuccess', { count: toExport.length }))
@@ -736,7 +742,7 @@ export default function SalesForecastsPage() {
   const handleSaveInternal = async (values: any, isDraft: boolean = false) => {
     try {
       if (!isEdit && !salesNodesEnabled.sales_forecast) {
-        messageApi.warning('销售预测节点未启用，无法创建')
+        messageApi.warning(t('app.kuaizhizao.salesForecast.nodeDisabledSave'))
         return
       }
       const rawItems = values.items ?? []
@@ -822,7 +828,7 @@ export default function SalesForecastsPage() {
 
   const handlePushToComputation = async (id: number) => {
     if (!salesNodesEnabled.demand_computation) {
-      messageApi.warning('需求计算节点未启用，无法下推')
+      messageApi.warning(t('app.kuaizhizao.salesForecast.demandComputationDisabled'))
       return
     }
     modalApi.confirm({
@@ -891,13 +897,13 @@ export default function SalesForecastsPage() {
     if (lifecycle?.stageName) return lifecycle.stageName;
     if (!status) return '-';
     const statusMap: Record<string, string> = {
-      DRAFT: '草稿',
-      PENDING_REVIEW: '待审核',
-      AUDITED: '已审核',
-      APPROVED: '已审核',
-      REJECTED: '已驳回',
-      PUSHED: '已下推',
-      CANCELLED: '已取消',
+      DRAFT: t('app.kuaizhizao.salesForecast.statusDraft'),
+      PENDING_REVIEW: t('app.kuaizhizao.salesForecast.statusPending'),
+      AUDITED: t('app.kuaizhizao.salesForecast.statusApproved'),
+      APPROVED: t('app.kuaizhizao.salesForecast.statusApproved'),
+      REJECTED: t('app.kuaizhizao.salesForecast.statusRejected'),
+      PUSHED: t('app.kuaizhizao.salesForecast.statusPushed'),
+      CANCELLED: t('documentStatus.cancelled'),
     };
     return statusMap[status] || status;
   };
@@ -1075,9 +1081,8 @@ export default function SalesForecastsPage() {
     },
     {
       title: t('app.kuaizhizao.salesForecast.lifecycleColumn'),
-      dataIndex: 'lifecycle_stage',
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       valueType: 'select',
-      width: 108,
       align: 'left' as const,
       fixed: 'right' as const,
       valueEnum: {
@@ -1091,22 +1096,12 @@ export default function SalesForecastsPage() {
         已驳回: { text: t('app.kuaizhizao.salesForecast.statusRejected') },
         已取消: { text: t('documentStatus.cancelled') },
       },
-      ...orderLevelCellProps((_text, record) => {
-        const lifecycle = getSalesForecastLifecycle(record, auditEnabled);
-        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
-        const displayLabel = activeStage?.label ?? lifecycle.stageName;
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={displayLabel}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      }),
+      ...orderLevelCellProps((_text, record) => (
+        <ListUniLifecycleCell
+          lifecycle={getSalesForecastLifecycle(record, auditEnabled, t)}
+          withSubStages
+        />
+      )),
     },
     {
       title: t('common.actions'),
@@ -1167,6 +1162,19 @@ export default function SalesForecastsPage() {
             }}
           />
         );
+        if (record.id) {
+          parts.push(
+            <Button
+              key="print"
+              type="link"
+              size="small"
+              icon={<PrinterOutlined />}
+              onClick={() => openPrint({ documentType: 'sales_forecast', documentId: record.id! })}
+            >
+              {t('components.uniAction.print')}
+            </Button>,
+          );
+        }
         parts.push(
           <Tooltip {...rowActionKind('skip')}
             key="del-tip"
@@ -1236,7 +1244,7 @@ export default function SalesForecastsPage() {
     const text = diff > 0 ? `+${diff}` : diff < 0 ? `${diff}` : '0';
     return (
       <span style={{ marginLeft: 8, fontSize: 13, color }}>
-        <span style={{ color: 'rgba(0,0,0,0.45)' }}>较昨日</span> {text}
+        <span style={{ color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.workOrder.statVsYesterday')}</span> {text}
       </span>
     );
   };
@@ -1249,22 +1257,22 @@ export default function SalesForecastsPage() {
 
   const statCards: StatCard[] = [
         {
-          title: t('app.kuaizhizao.salesForecast.statTodayNew', '今日新增'),
+          title: t('app.kuaizhizao.salesForecast.statTodayNew'),
           key: 'today_new_count',
           value: statistics?.today_new_count ?? 0,
           description: statistics?.today_new_count !== undefined && statistics?.yesterday_today_new !== undefined ? (
-            <div>今日: {statistics.today_new_count} {renderDOD(statistics.today_new_count, statistics.yesterday_today_new)}</div>
+            <div>{t('app.kuaizhizao.workOrder.statTodayPrefix')}: {statistics.today_new_count} {renderDOD(statistics.today_new_count, statistics.yesterday_today_new)}</div>
           ) : undefined,
           valueStyle: { color: token.colorPrimary },
           backgroundChart: renderTrendChart(statistics?.trend_today_new ?? [], token.colorPrimary),
         },
         ...(auditEnabled
           ? [{
-              title: t('app.kuaizhizao.salesForecast.statPending', '待审核'),
+              title: t('app.kuaizhizao.salesForecast.statPending'),
               key: 'pending_review_count',
               value: statistics?.pending_review_count ?? 0,
               valueStyle: { color: '#faad14' },
-              description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>需即时处理</div> : undefined,
+              description: (statistics?.pending_review_count ?? 0) > 0 ? <div style={{ color: '#faad14' }}>{t('app.kuaizhizao.salesForecast.statPendingAction')}</div> : undefined,
               backgroundChart: renderTrendChart(statistics?.trend_pending_review ?? [], '#faad14'),
               onClick: (statistics?.pending_review_count ?? 0) > 0 ? () => {
                 tableSearchFormRef.current?.setFieldsValue?.({ lifecycle: '待审核' });
@@ -1273,7 +1281,7 @@ export default function SalesForecastsPage() {
             }]
           : []),
         {
-          title: t('app.kuaizhizao.salesForecast.statInProgress', '执行中'),
+          title: t('app.kuaizhizao.salesForecast.statInProgress'),
           key: 'in_progress_count',
           value: statistics?.in_progress_count ?? 0,
           valueStyle: { color: '#52c41a' },
@@ -1284,7 +1292,7 @@ export default function SalesForecastsPage() {
           } : undefined,
         },
         {
-          title: t('app.kuaizhizao.salesForecast.statOverdue', '逾期未交'),
+          title: t('app.kuaizhizao.salesForecast.statOverdue'),
           key: 'overdue_count',
           value: statistics?.overdue_count ?? 0,
           valueStyle: { color: '#f5222d' },
@@ -1363,7 +1371,7 @@ export default function SalesForecastsPage() {
                 icon={<ImportOutlined />}
                 onClick={() => setImportModalVisible(true)}
               >
-                导入明细
+                {t('app.kuaizhizao.salesForecast.importItems')}
               </Button>
               <Button
                 type="dashed"
@@ -1374,7 +1382,7 @@ export default function SalesForecastsPage() {
                   formRef.current?.setFieldsValue({ items })
                 }}
               >
-                添加明细
+                {t('app.kuaizhizao.salesForecast.addItem')}
               </Button>
               <Button
                 type="default"
@@ -1388,7 +1396,7 @@ export default function SalesForecastsPage() {
                 icon={<AppstoreAddOutlined />}
                 onClick={openMatrixEntry}
               >
-                矩阵录入
+                {t('app.kuaizhizao.salesForecast.matrixEntry')}
               </Button>
             </Space>
           )}
@@ -1432,17 +1440,17 @@ export default function SalesForecastsPage() {
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.salesForecast.spec', '规格'),
+                    title: t('app.kuaizhizao.salesForecast.spec'),
                     dataIndex: 'material_spec',
                     width: 120,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                        <Input placeholder="规格" size="small" />
+                        <Input placeholder={t('app.kuaizhizao.salesForecast.specPlaceholder')} size="small" />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: t('app.kuaizhizao.salesForecast.unit', '单位'),
+                    title: t('app.kuaizhizao.salesForecast.unit'),
                     dataIndex: 'material_unit',
                     width: 100,
                     render: (_: any, __: any, index: number) => (
@@ -1497,7 +1505,7 @@ export default function SalesForecastsPage() {
                     dataIndex: 'notes',
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'notes']} style={{ margin: 0 }}>
-                        <Input placeholder="-" size="small" />
+                        <Input placeholder={t('app.kuaizhizao.salesForecast.notes')} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -1511,7 +1519,7 @@ export default function SalesForecastsPage() {
         />
         <SalesForecastFormSummary />
         <DocumentAttachmentsField category="sales_forecast_attachments" />
-        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder="-" />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesForecast.notes')} placeholder={t('app.kuaizhizao.salesForecast.notesPlaceholder')} />
     </>
   );
 
@@ -1524,12 +1532,12 @@ export default function SalesForecastsPage() {
       />
 
       <Modal
-        title="销售预测矩阵录入"
+        title={t('app.kuaizhizao.salesForecast.matrixTitle')}
         open={matrixModalVisible}
         width={980}
         onCancel={() => setMatrixModalVisible(false)}
         onOk={applyMatrixEntry}
-        okText="应用到明细"
+        okText={t('app.kuaizhizao.salesForecast.matrixApplyOk')}
       >
         <Table
           size="small"
@@ -1539,7 +1547,7 @@ export default function SalesForecastsPage() {
           scroll={{ x: 900 }}
           columns={[
             {
-              title: '物料',
+              title: t('app.kuaizhizao.salesForecast.material'),
               dataIndex: 'material_name',
               width: 240,
               fixed: 'left',
@@ -1593,9 +1601,37 @@ export default function SalesForecastsPage() {
           visible={importModalVisible}
           onCancel={() => setImportModalVisible(false)}
           onConfirm={handleImportConfirm}
-          title={isFormPage ? (t('app.kuaizhizao.salesForecast.importItemsTitle') || '导入预测明细') : (t('app.kuaizhizao.salesForecast.importTitle') || '导入销售预测明细')}
-          headers={isFormPage ? ['物料编号', '规格', '单位', '预测数量', '预测日期', '备注'] : ['物料编号', '预测数量', '预测日期', '备注']}
-          exampleRow={isFormPage ? ['MAT001', 'Spec X', '件', '100', '2026-03-01', '备注说明'] : ['MAT001', '100', '2026-03-01', '备注说明']}
+          title={isFormPage ? t('app.kuaizhizao.salesForecast.importItemsTitle') : t('app.kuaizhizao.salesForecast.importTitle')}
+          headers={isFormPage
+            ? [
+                t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
+                t('app.kuaizhizao.salesForecast.importHeaderSpec'),
+                t('app.kuaizhizao.salesForecast.importHeaderUnit'),
+                t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
+                t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
+                t('app.kuaizhizao.salesForecast.importHeaderNotes'),
+              ]
+            : [
+                t('app.kuaizhizao.salesForecast.importHeaderMaterialCode'),
+                t('app.kuaizhizao.salesForecast.importHeaderForecastQuantity'),
+                t('app.kuaizhizao.salesForecast.importHeaderForecastDate'),
+                t('app.kuaizhizao.salesForecast.importHeaderNotes'),
+              ]}
+          exampleRow={isFormPage
+            ? [
+                t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),
+                t('app.kuaizhizao.salesForecast.importExampleSpec'),
+                t('app.kuaizhizao.salesForecast.importExampleUnit'),
+                t('app.kuaizhizao.salesForecast.importExampleQuantity'),
+                t('app.kuaizhizao.salesForecast.importExampleDate'),
+                t('app.kuaizhizao.salesForecast.importExampleNotes'),
+              ]
+            : [
+                t('app.kuaizhizao.salesForecast.importExampleMaterialCode'),
+                t('app.kuaizhizao.salesForecast.importExampleQuantity'),
+                t('app.kuaizhizao.salesForecast.importExampleDate'),
+                t('app.kuaizhizao.salesForecast.importExampleNotes'),
+              ]}
         />
       </Suspense>
 
@@ -1689,8 +1725,8 @@ export default function SalesForecastsPage() {
           helpViewConfig={{
             content: (
               <div style={{ lineHeight: 1.8 }}>
-                <p><strong>表格视图</strong>：按预测单据维度展示。</p>
-                <p><strong>明细表格</strong>：按每条预测明细展开，便于核对物料、数量与预测日期。</p>
+                <p><strong>{t('app.kuaizhizao.salesForecast.helpViewTable')}</strong>: {t('app.kuaizhizao.salesForecast.helpViewTableDesc')}</p>
+                <p><strong>{t('app.kuaizhizao.salesForecast.helpViewDetail')}</strong>: {t('app.kuaizhizao.salesForecast.helpViewDetailDesc')}</p>
               </div>
             ),
           }}
@@ -1771,7 +1807,7 @@ export default function SalesForecastsPage() {
                   label: t('app.kuaizhizao.salesForecast.pushToComputation'),
                   onClick: () => {
                     if (!selectedForecastForToolbar?.id) {
-                      messageApi.warning('请先选择一条销售预测');
+                      messageApi.warning(t('app.kuaizhizao.salesForecast.selectOne'));
                       return;
                     }
                     void handlePushToComputation(selectedForecastForToolbar.id);
@@ -1790,7 +1826,7 @@ export default function SalesForecastsPage() {
               menuItems={[
                 {
                   key: 'submit',
-                  label: '批量提交',
+                  label: t('app.kuaizhizao.salesForecast.batchSubmit'),
                   onClick: async () => {
                     if (selectedRowKeys.length === 0) return;
                     let success = 0;
@@ -1809,8 +1845,8 @@ export default function SalesForecastsPage() {
                         failed += 1;
                       }
                     }
-                    if (success > 0) messageApi.success(`已提交 ${success} 条`);
-                    if (failed > 0) messageApi.warning(`提交失败 ${failed} 条`);
+                    if (success > 0) messageApi.success(t('app.kuaizhizao.salesForecast.batchSubmitSuccess', { count: success }));
+                    if (failed > 0) messageApi.warning(t('app.kuaizhizao.salesForecast.batchSubmitFailed', { count: failed }));
                     setSelectedRowKeys([]);
                     invalidateForecastCache();
                     actionRef.current?.reload();
@@ -1903,6 +1939,14 @@ export default function SalesForecastsPage() {
                   setDrawerVisible(false);
                 }}
               />
+              {currentForecast.id != null && (
+                <Button
+                  icon={<PrinterOutlined />}
+                  onClick={() => openPrint({ documentType: 'sales_forecast', documentId: currentForecast.id! })}
+                >
+                  {t('components.uniAction.print')}
+                </Button>
+              )}
             </Space>
           )
         }
@@ -1929,7 +1973,7 @@ export default function SalesForecastsPage() {
             <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
-                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled);
+                  const lifecycle = getSalesForecastLifecycle(currentForecast, auditEnabled, t);
                   const mainStages = lifecycle.mainStages ?? [];
                   if (mainStages.length === 0) return null;
                   return (
@@ -1982,7 +2026,7 @@ export default function SalesForecastsPage() {
                   />
                 </div>
               ) : (
-                <Typography.Text type="secondary">暂无明细</Typography.Text>
+                <Typography.Text type="secondary">{t('app.kuaizhizao.salesForecast.emptyItems')}</Typography.Text>
               )}
             </DetailDrawerSection>
 
@@ -1990,12 +2034,13 @@ export default function SalesForecastsPage() {
               {forecastTracking.data ? (
                 <DocumentTrackingTimelineBody data={forecastTracking.data} />
               ) : (
-                <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+                <Typography.Text type="secondary">{t('app.kuaizhizao.salesForecast.emptyTimeline')}</Typography.Text>
               )}
             </DetailDrawerSection>
           </>
         )}
       </DetailDrawerTemplate>
+      {PrintModal}
     </>
   )
 }
@@ -2010,7 +2055,7 @@ const SalesForecastFormSummary: React.FC = () => {
 
   return (
     <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end' }}>
-      <span>{t('app.kuaizhizao.salesForecast.totalQuantity') || '总预测数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+      <span>{t('app.kuaizhizao.salesForecast.totalForecastQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
     </div>
   );
 };

@@ -117,8 +117,10 @@ export const SALES_DOC_DETAIL_BASIC_FIELD_RANK = {
   updated_at: 90,
 } satisfies FieldRankMap
 
-export const SALES_COMMON_FORM_LABELS = {
-  contact: '联系人',
-  phone: '电话',
-  salesman: '销售员',
-} as const
+export function getSalesCommonFormLabels(t: (key: string) => string) {
+  return {
+    contact: t('app.kuaizhizao.salesOrder.customerContact'),
+    phone: t('app.kuaizhizao.salesOrder.customerPhone'),
+    salesman: t('app.kuaizhizao.salesOrder.salesman'),
+  } as const
+}

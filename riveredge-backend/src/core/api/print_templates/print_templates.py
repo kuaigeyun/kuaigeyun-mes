@@ -223,11 +223,7 @@ async def load_preset_print_templates(
 
     为当前组织加载系统打印模板预设；预设项会按已安装应用自动过滤。
     """
-    installed_app_codes = await get_installed_application_codes(tenant_id)
-    count = await PrintTemplateService.load_preset_sme(
-        tenant_id,
-        installed_app_codes=installed_app_codes,
-    )
+    count = await PrintTemplateService.load_all_preset_print_templates(tenant_id)
     return {"created": count, "message": f"成功加载 {count} 个打印模板预设"}
 
 

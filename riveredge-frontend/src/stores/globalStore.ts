@@ -10,6 +10,7 @@ import { CurrentUser } from '../types/api';
 import { clearAuth } from '../utils/auth';
 import { useUserPreferenceStore } from './userPreferenceStore';
 import { useThemeStore } from './themeStore';
+import { clearLanguageForLogout } from '../config/i18n';
 
 /**
  * 全局状态接口
@@ -86,6 +87,7 @@ export const useGlobalStore = create<GlobalState>()(
         // 清空用户偏好和主题缓存，避免下一账户读到当前账户的偏好（账户与租户隔离）
         useUserPreferenceStore.getState().clearForLogout();
         useThemeStore.getState().clearForLogout();
+        clearLanguageForLogout();
         // ⚠️ 关键修复：不在这里直接跳转，由调用方使用 navigate 进行跳转，避免页面刷新
         // 路由守卫会自动处理重定向到登录页
       },

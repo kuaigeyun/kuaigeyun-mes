@@ -9,11 +9,11 @@
  * @date 2025-01-14
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
+import { useTranslation, type TFunction } from 'react-i18next';
 import { ActionType, ProColumns, ProForm, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProDescriptions, ProFormInstance } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Input, InputNumber, Alert, Spin, Form as AntForm, DatePicker, Typography, Tooltip, Dropdown, Empty, Tabs, theme as AntdTheme } from 'antd';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, MODAL_CONFIG, DRAWER_CONFIG, type StatCard } from '../../../../../components/layout-templates';
@@ -66,8 +66,8 @@ import {
   UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
 } from '../../../../../components/uni-table/stackedPrimaryColumn';
 import { getDemandLifecycle } from '../../../utils/demandLifecycle';
-import { getDemandBusinessModeLabel, getDemandBusinessModeTagColor } from '../../../utils/businessMode';
-import { getDemandTypeLabel, getDemandTypeTagProps } from '../../../utils/demandType';
+import { getDemandBusinessModeTagColor } from '../../../utils/businessMode';
+import { getDemandTypeTagProps, normalizeDemandTypeKey } from '../../../utils/demandType';
 import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import dayjs from 'dayjs';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
@@ -92,15 +92,15 @@ function formatDateTime(t: string | undefined): string {
 }
 
 /** 详情「生命周期」区块标题：主标题 + 来源文案（无圆环、无单独来源子轨） */
-function buildDemandLifecycleSectionTitle(record: Demand) {
+function buildDemandLifecycleSectionTitle(record: Demand, t: TFunction) {
   const lifecycle = getDemandLifecycle(record);
   const originLabel = (lifecycle.subStages ?? []).find((s: any) => DEMAND_ORIGIN_SUB_KEYS.has(s.key))?.label;
   if (!originLabel) {
-    return '生命周期';
+    return t('app.kuaizhizao.salesOrder.lifecycle');
   }
   return (
     <span style={{ display: 'inline-flex', alignItems: 'baseline', flexWrap: 'wrap', columnGap: 8, rowGap: 0 }}>
-      <span>生命周期</span>
+      <span>{t('app.kuaizhizao.salesOrder.lifecycle')}</span>
       <Typography.Text type="secondary" style={{ fontWeight: 400 }}>
         {originLabel}
       </Typography.Text>
@@ -138,6 +138,46 @@ function isDemandRejected(d: Demand): boolean {
 const DemandManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+
+  const formatDemandTypeLabel = useCallback(
+    (v: string | undefined | null) => {
+      const k = normalizeDemandTypeKey(v);
+      if (k === 'sales_forecast') return t('app.kuaizhizao.salesForecast.title');
+      if (k === 'sales_order') return t('app.kuaizhizao.salesOrder.entityName');
+      if (k === 'demand_plan') return t('app.kuaizhizao.demandManagement.demandTypePlan');
+      return v?.trim() || '-';
+    },
+    [t]
+  );
+
+  const formatBusinessModeLabel = useCallback(
+    (mode: string | undefined | null) => {
+      const m = (mode ?? '').trim();
+      if (m === 'MTS') return t('app.kuaizhizao.demandManagement.businessModeMtsShort');
+      if (m === 'MTO') return t('app.kuaizhizao.demandManagement.businessModeMtoShort');
+      if (m === 'ATO') return t('app.kuaizhizao.demandManagement.businessModeAtoShort');
+      return m || '-';
+    },
+    [t]
+  );
+
+  const priorityOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.demandManagement.priorityHigh'), value: 1 },
+      { label: t('app.kuaizhizao.demandManagement.priorityMedium'), value: 5 },
+      { label: t('app.kuaizhizao.demandManagement.priorityLow'), value: 10 },
+    ],
+    [t]
+  );
+
+  const businessModeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.demandManagement.businessModeMts'), value: 'MTS' },
+      { label: t('app.kuaizhizao.demandManagement.businessModeMto'), value: 'MTO' },
+      { label: t('app.kuaizhizao.demandManagement.businessModeAto'), value: 'ATO' },
+    ],
+    [t]
+  );
 
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -211,8 +251,8 @@ const DemandManagementPage: React.FC = () => {
     (text: string) => {
       if (!text?.trim()) return;
       void navigator.clipboard.writeText(text).then(
-        () => messageApi.success(t('field.invitationCode.copySuccess', { defaultValue: '已复制' })),
-        () => messageApi.error(t('field.invitationCode.copyFailed', { defaultValue: '复制失败' }))
+        () => messageApi.success(t('common.copySuccess')),
+        () => messageApi.error(t('common.copyFailed'))
       );
     },
     [messageApi, t]
@@ -230,7 +270,7 @@ const DemandManagementPage: React.FC = () => {
         delivery_date: it.delivery_date ? dayjs(it.delivery_date).format('YYYY-MM-DD') : undefined,
       })).filter((it: any) => it.material_id && it.required_quantity > 0);
       if (items.length === 0) {
-        messageApi.warning('请至少添加一行明细并填写需求数量');
+        messageApi.warning(t('app.kuaizhizao.demandManagement.planItemsQtyRequired'));
         return;
       }
       await createDemand({
@@ -247,13 +287,13 @@ const DemandManagementPage: React.FC = () => {
         notes: values.notes,
         items,
       });
-      messageApi.success('计划创建成功');
+      messageApi.success(t('app.kuaizhizao.demandManagement.planCreated'));
       setCreatePlanModalVisible(false);
       createPlanFormRef.current?.resetFields();
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (err: any) {
-      messageApi.error(getApiErrorMessage(err) || '提交失败');
+      messageApi.error(getApiErrorMessage(err) || t('app.kuaizhizao.demandManagement.submitFailed'));
     } finally {
       setCreatePlanLoading(false);
     }
@@ -270,7 +310,7 @@ const DemandManagementPage: React.FC = () => {
         setIsEditingDraft(isDemandDraft(data));
         formRef.current?.setFieldsValue(data);
       } catch (error: any) {
-        messageApi.error('获取需求详情失败');
+        messageApi.error(t('app.kuaizhizao.demandManagement.detailFailed'));
       }
     }
   };
@@ -282,12 +322,12 @@ const DemandManagementPage: React.FC = () => {
     if (!isEdit || !currentId) return;
     try {
       await updateDemand(currentId, values);
-      messageApi.success('需求更新成功');
+      messageApi.success(t('app.kuaizhizao.demandManagement.updated'));
       setModalVisible(false);
       invalidateStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -301,7 +341,7 @@ const DemandManagementPage: React.FC = () => {
         const history = await listDemandRecalcHistory(currentDemand.id!, { limit: 50 });
         setRecalcHistory(history);
       } catch {
-        messageApi.error('获取重算历史失败');
+        messageApi.error(t('app.kuaizhizao.demandManagement.recalcHistoryFailed'));
       } finally {
         setRecalcHistoryLoading(false);
       }
@@ -311,7 +351,7 @@ const DemandManagementPage: React.FC = () => {
         const list = await listDemandSnapshots(currentDemand.id!, { limit: 20 });
         setSnapshots(list);
       } catch {
-        messageApi.error('获取快照列表失败');
+        messageApi.error(t('app.kuaizhizao.demandManagement.snapshotsFailed'));
       } finally {
         setSnapshotsLoading(false);
       }
@@ -329,14 +369,14 @@ const DemandManagementPage: React.FC = () => {
         setDrawerVisible(true);
         setDemandTrackingRefreshKey((k) => k + 1);
       } catch (error: any) {
-        messageApi.error('获取需求详情失败');
+        messageApi.error(t('app.kuaizhizao.demandManagement.detailFailed'));
       }
     }
   };
 
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要删除的需求');
+      messageApi.warning(t('app.kuaizhizao.demandManagement.selectToDelete'));
       return;
     }
     const allowedKeys = keys.filter((k) => {
@@ -349,12 +389,10 @@ const DemandManagementPage: React.FC = () => {
     });
     const skipped = keys.length - allowedKeys.length;
     if (skipped > 0) {
-      messageApi.warning(
-        `已跳过 ${skipped} 条（非手工需求计划或状态不可删）。仅「需求计划」且草稿/待审核可在此删除。`
-      );
+      messageApi.warning(t('app.kuaizhizao.demandManagement.deleteSkipped', { skipped }));
     }
     if (allowedKeys.length === 0) {
-      if (skipped === 0) messageApi.warning('没有符合删除条件的手工需求计划');
+      if (skipped === 0) messageApi.warning(t('app.kuaizhizao.demandManagement.noDeletablePlans'));
       return;
     }
     let successCount = 0;
@@ -370,33 +408,36 @@ const DemandManagementPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`成功删除 ${successCount} 个需求`);
+      messageApi.success(t('app.kuaizhizao.demandManagement.deleteSuccess', { count: successCount }));
       invalidateStatistics();
       actionRef.current?.reload();
       setSelectedRowKeys((prev) => prev.filter((pk) => !allowedKeys.includes(pk)));
     }
     if (errors.length > 0) {
-      messageApi.error(errors.slice(0, 3).join('；') + (errors.length > 3 ? ` 等${errors.length}条` : ''));
+      messageApi.error(
+        errors.slice(0, 3).join(t('common.listSeparator')) +
+          (errors.length > 3 ? ` ${t('app.kuaizhizao.demandManagement.errorsAndMore', { count: errors.length })}` : '')
+      );
     }
   };
 
   const handleMergeComputation = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要合并计算的需求');
+      messageApi.warning(t('app.kuaizhizao.demandManagement.mergeSelectFirst'));
       return;
     }
     const ids = selectedRowKeys.map(k => Number(k)).filter(n => !isNaN(n));
     if (ids.length === 0) return;
     Modal.confirm({
-      title: '合并需求计算',
-      content: `确定将选中的 ${ids.length} 个需求合并进行需求计算吗？合并计算将保留各需求来源追溯。`,
+      title: t('app.kuaizhizao.demandManagement.mergeTitle'),
+      content: t('app.kuaizhizao.demandManagement.mergeConfirm', { count: ids.length }),
       onOk: async () => {
         try {
           const payload = ids.length === 1
             ? { demand_id: ids[0], computation_type: 'MRP' as const, computation_params: {} }
             : { demand_ids: ids, computation_type: 'MRP' as const, computation_params: {} };
           const computation = await createDemandComputation(payload);
-          messageApi.success('合并计算任务已创建');
+          messageApi.success(t('app.kuaizhizao.demandManagement.mergeCreated'));
           setSelectedRowKeys([]);
           invalidateStatistics();
           actionRef.current?.reload();
@@ -404,7 +445,7 @@ const DemandManagementPage: React.FC = () => {
             window.location.href = `/apps/kuaizhizao/plan-management/demand-computation?highlight=${computation.id}`;
           }
         } catch (error: any) {
-          messageApi.error(error?.message || '创建合并计算失败');
+          messageApi.error(error?.message || t('app.kuaizhizao.demandManagement.mergeFailed'));
         }
       },
     });
@@ -412,12 +453,12 @@ const DemandManagementPage: React.FC = () => {
 
   const handlePushToComputation = async (id: number) => {
     Modal.confirm({
-      title: '下推到物料需求运算',
-      content: '确定要将此需求下推到物料需求运算吗？下推后将创建需求计算任务。',
+      title: t('app.kuaizhizao.demandManagement.pushToMrpTitle'),
+      content: t('app.kuaizhizao.demandManagement.pushToMrpConfirm'),
       onOk: async () => {
         try {
           const result = await pushDemandToComputation(id);
-          messageApi.success(result.message || '需求下推成功');
+          messageApi.success(result.message || t('app.kuaizhizao.demandManagement.pushSuccess'));
           invalidateStatistics();
           actionRef.current?.reload();
           if (currentDemand?.id === id) {
@@ -427,7 +468,7 @@ const DemandManagementPage: React.FC = () => {
             setDemandTrackingRefreshKey((k) => k + 1);
           }
         } catch (error: any) {
-          messageApi.error(error.message || '下推失败');
+          messageApi.error(error.message || t('app.kuaizhizao.salesOrder.pushFailed'));
           throw error;
         }
       },
@@ -436,12 +477,12 @@ const DemandManagementPage: React.FC = () => {
 
   const handleWithdrawFromComputation = async (id: number) => {
     Modal.confirm({
-      title: '撤回下推',
-      content: '确定要撤回此需求的下推吗？撤回后将尝试删除关联的计算任务，若下游已执行则不允许撤回。',
+      title: t('app.kuaizhizao.demandManagement.withdrawTitle'),
+      content: t('app.kuaizhizao.demandManagement.withdrawConfirm'),
       onOk: async () => {
         try {
           await withdrawDemandFromComputation(id);
-          messageApi.success('撤回成功');
+          messageApi.success(t('app.kuaizhizao.salesOrder.withdrawSuccess'));
           invalidateStatistics();
           actionRef.current?.reload();
           if (currentDemand?.id === id) {
@@ -451,16 +492,17 @@ const DemandManagementPage: React.FC = () => {
             setDemandTrackingRefreshKey((k) => k + 1);
           }
         } catch (error: any) {
-          messageApi.error(error.message || '撤回失败');
+          messageApi.error(error.message || t('app.kuaizhizao.salesOrder.withdrawFailed'));
           throw error;
         }
       },
     });
   };
 
-  const columns: ProColumns<Demand>[] = [
+  const columns: ProColumns<Demand>[] = useMemo(
+    () => [
     {
-      title: '需求名称 / 编号',
+      title: t('app.kuaizhizao.demandManagement.colDemandPrimary'),
       key: 'demand_code',
       dataIndex: 'demand_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -473,42 +515,42 @@ const DemandManagementPage: React.FC = () => {
       ),
     },
     {
-      title: '需求编号',
+      title: t('app.kuaizhizao.demandManagement.demandCode'),
       dataIndex: 'demand_code',
       hideInTable: true,
     },
     {
-      title: '需求名称',
+      title: t('app.kuaizhizao.demandManagement.demandName'),
       dataIndex: 'demand_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '需求类型',
+      title: t('app.kuaizhizao.demandManagement.demandType'),
       dataIndex: 'demand_type',
       width: 120,
       render: (_: unknown, record: Demand) => (
-        <Tag {...getDemandTypeTagProps(record.demand_type)}>{getDemandTypeLabel(record.demand_type)}</Tag>
+        <Tag {...getDemandTypeTagProps(record.demand_type)}>{formatDemandTypeLabel(record.demand_type)}</Tag>
       ),
     },
     {
-      title: '总数量',
+      title: t('app.kuaizhizao.salesOrder.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '业务模式',
+      title: t('app.kuaizhizao.demandManagement.businessMode'),
       dataIndex: 'business_mode',
       width: 100,
       valueEnum: {
-        MTS: { text: '按库存生产', status: 'Processing' },
-        MTO: { text: '按订单生产', status: 'Success' },
-        ATO: { text: '按订单组装 (ATO)', status: 'Warning' },
+        MTS: { text: t('app.kuaizhizao.demandManagement.businessModeMtsShort'), status: 'Processing' },
+        MTO: { text: t('app.kuaizhizao.demandManagement.businessModeMtoShort'), status: 'Success' },
+        ATO: { text: t('app.kuaizhizao.demandManagement.businessModeAtoShort'), status: 'Warning' },
       },
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.salesOrder.lifecycle'),
       dataIndex: 'lifecycle_stage',
       align: 'center' as const,
       fixed: 'right' as const,
@@ -528,7 +570,7 @@ const DemandManagementPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 300,
       fixed: 'right' as const,
       hideInSearch: true,
@@ -545,7 +587,7 @@ const DemandManagementPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail([record.id!])}
           >
-            详情
+            {t('common.detail')}
           </Button>,
         ];
         if (canEdit) {
@@ -557,7 +599,7 @@ const DemandManagementPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit([record.id!])}
             >
-              编辑
+              {t('common.edit')}
             </Button>
           );
         }
@@ -571,7 +613,7 @@ const DemandManagementPage: React.FC = () => {
               icon={<DeleteOutlined />}
               onClick={() => handleDelete([record.id!])}
             >
-              删除
+              {t('common.delete')}
             </Button>
           );
         }
@@ -584,7 +626,7 @@ const DemandManagementPage: React.FC = () => {
               icon={<RollbackOutlined />}
               onClick={() => handleWithdrawFromComputation(record.id!)}
             >
-              撤回下推
+              {t('app.kuaizhizao.demandManagement.withdrawPush')}
             </Button>
           );
         } else if (isDemandAuditedAndApproved(record)) {
@@ -596,7 +638,7 @@ const DemandManagementPage: React.FC = () => {
               icon={<ArrowDownOutlined />}
               onClick={() => handlePushToComputation(record.id!)}
             >
-              下推
+              {t('app.kuaizhizao.salesOrder.push')}
             </Button>
           );
         }
@@ -605,7 +647,7 @@ const DemandManagementPage: React.FC = () => {
           <UniWorkflowActions {...rowActionKind('skip')}
             key="workflow-actions"
             record={record}
-            entityName="需求"
+            entityName={t('app.kuaizhizao.demandManagement.entityName')}
             statusField="status"
             reviewStatusField="review_status"
             draftStatuses={[DemandStatus.DRAFT, '草稿']}
@@ -623,13 +665,17 @@ const DemandManagementPage: React.FC = () => {
         return parts;
       },
     },
-  ];
+  ],
+    [t, formatDemandTypeLabel, handleDelete, handleDetail, handleEdit, handlePushToComputation, handleWithdrawFromComputation]
+  );
 
-  const statCards: StatCard[] = statistics
+  const statCards: StatCard[] = useMemo(
+    () =>
+      statistics
     ? [
-        { title: '活动需求', value: statistics.active_count },
+        { title: t('app.kuaizhizao.demandManagement.statActive'), value: statistics.active_count },
         {
-          title: '待审核',
+          title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'),
           value: statistics.pending_review_count,
           valueStyle: statistics.pending_review_count > 0 ? { color: '#faad14' } : undefined,
           onClick:
@@ -640,27 +686,29 @@ const DemandManagementPage: React.FC = () => {
                 }
               : undefined,
         },
-        { title: '已审核', value: statistics.audited_count },
-        { title: '已下推计算', value: statistics.pushed_count },
+        { title: t('app.kuaizhizao.salesOrder.lifecycleAudited'), value: statistics.audited_count },
+        { title: t('app.kuaizhizao.demandManagement.statPushed'), value: statistics.pushed_count },
         {
-          title: '总金额',
+          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
           value: statistics.total_amount ?? 0,
           prefix: '¥',
           precision: 2,
         },
       ]
     : [
-        { title: '活动需求', value: 0 },
-        { title: '待审核', value: 0 },
-        { title: '已审核', value: 0 },
-        { title: '已下推计算', value: 0 },
+        { title: t('app.kuaizhizao.demandManagement.statActive'), value: 0 },
+        { title: t('app.kuaizhizao.salesOrder.lifecyclePendingReview'), value: 0 },
+        { title: t('app.kuaizhizao.salesOrder.lifecycleAudited'), value: 0 },
+        { title: t('app.kuaizhizao.demandManagement.statPushed'), value: 0 },
         {
-          title: '总金额',
+          title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
           value: 0,
           prefix: '¥',
           precision: 2,
         },
-      ];
+      ],
+    [statistics, t]
+  );
  
   const appendDemandPlanItemsFromMaterials = useCallback(
     (selected: Material[]) => {
@@ -679,12 +727,190 @@ const DemandManagementPage: React.FC = () => {
     [messageApi, t]
   );
 
+  const createPlanItemColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.salesOrder.material'),
+        dataIndex: 'material_id',
+        width: 280,
+        render: (_: unknown, __: unknown, index: number) => (
+          <>
+            <div className="uni-detail-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <UniMaterialSelect
+                  name={[index, 'material_id']}
+                  label=""
+                  placeholder={t('app.kuaizhizao.salesOrder.selectMaterial')}
+                  required
+                  size="small"
+                  listFieldKey={index}
+                  listFieldName="items"
+                  fillMapping={{
+                    material_code: 'mainCode',
+                    material_name: 'name',
+                    material_unit: 'baseUnit',
+                  }}
+                  formItemProps={{ style: { margin: 0 } }}
+                />
+              </div>
+            </div>
+            <AntForm.Item name={[index, 'material_code']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'material_name']} hidden>
+              <Input />
+            </AntForm.Item>
+            <AntForm.Item name={[index, 'material_unit']} hidden>
+              <Input />
+            </AntForm.Item>
+          </>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.quantity'),
+        dataIndex: 'required_quantity',
+        width: 110,
+        align: 'right' as const,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            name={[index, 'required_quantity']}
+            rules={[
+              { required: true, message: t('common.required') },
+              { type: 'number', min: 0.0001, message: t('app.kuaizhizao.salesOrder.quantityMinHint') },
+            ]}
+            style={{ margin: 0 }}
+          >
+            <InputNumber placeholder={t('app.kuaizhizao.demandManagement.quantityPlaceholder')} min={0} precision={4} style={{ width: '100%' }} size="small" />
+          </AntForm.Item>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.planReports.colRequirementDate'),
+        dataIndex: 'delivery_date',
+        width: 130,
+        render: (_: unknown, __: unknown, index: number) => (
+          <AntForm.Item
+            name={[index, 'delivery_date']}
+            rules={[{ required: true, message: t('common.required') }]}
+            style={{ margin: 0 }}
+          >
+            <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
+          </AntForm.Item>
+        ),
+      },
+    ],
+    [t]
+  );
+
+  const detailItemColumns = useMemo(
+    () => (demandType: Demand['demand_type']) => [
+      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.salesOrder.materialSpec'), dataIndex: 'material_spec', width: 120 },
+      {
+        title: t('app.kuaizhizao.salesForecast.variantAttributes'),
+        dataIndex: 'variant_attributes',
+        width: 140,
+        ellipsis: true,
+        render: (v: Record<string, unknown> | string | undefined) => {
+          if (v == null) return '-';
+          if (typeof v === 'string') return v || '-';
+          return Object.keys(v).length > 0 ? JSON.stringify(v) : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.salesOrder.unit'),
+        dataIndex: 'material_unit',
+        width: 80,
+        render: (v: string) => getDictLabel(dictLabelMap, 'MATERIAL_UNIT', v) || v || '-',
+      },
+      { title: t('app.kuaizhizao.planReports.colRequirementQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+      ...(demandType === 'sales_forecast'
+        ? [
+            { title: t('app.kuaizhizao.salesForecast.forecastDate'), dataIndex: 'forecast_date', width: 120 },
+            { title: t('app.kuaizhizao.demandManagement.forecastMonth'), dataIndex: 'forecast_month', width: 100 },
+          ]
+        : [
+            { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 120 },
+            { title: t('app.kuaizhizao.salesOrder.deliveredQty'), dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
+            { title: t('app.kuaizhizao.salesOrder.remainingQty'), dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
+          ]),
+    ],
+    [dictLabelMap, t]
+  );
+
+  const recalcHistoryColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.demandManagement.colRecalcAt'), dataIndex: 'recalc_at', width: 180, render: (val: string) => formatDateTime(val) },
+      {
+        title: t('app.kuaizhizao.demandManagement.colTriggerType'),
+        dataIndex: 'trigger_type',
+        width: 100,
+        render: (v: string) =>
+          v === 'upstream_change'
+            ? t('app.kuaizhizao.demandManagement.triggerUpstreamChange')
+            : v === 'manual'
+              ? t('app.kuaizhizao.demandManagement.triggerManual')
+              : v || '-',
+      },
+      {
+        title: t('app.kuaizhizao.demandManagement.colSourceType'),
+        dataIndex: 'source_type',
+        width: 100,
+        render: (v: string) =>
+          v === 'sales_order'
+            ? t('app.kuaizhizao.salesOrder.entityName')
+            : v === 'sales_forecast'
+              ? t('app.kuaizhizao.salesForecast.title')
+              : v || '-',
+      },
+      { title: t('app.kuaizhizao.demandManagement.colChangeReason'), dataIndex: 'trigger_reason', ellipsis: true, render: (v: string) => v || '-' },
+      {
+        title: t('app.kuaizhizao.demandManagement.colResult'),
+        dataIndex: 'result',
+        width: 90,
+        render: (v: string) =>
+          v === 'success'
+            ? t('app.kuaizhizao.demandManagement.resultSuccess')
+            : v === 'failed'
+              ? t('app.kuaizhizao.demandManagement.resultFailed')
+              : v || '-',
+      },
+      { title: t('app.kuaizhizao.demandManagement.colDescription'), dataIndex: 'message', ellipsis: true, render: (v: string) => v || '-' },
+    ],
+    [t]
+  );
+
+  const snapshotColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.demandManagement.colSnapshotAt'), dataIndex: 'snapshot_at', width: 180, render: (val: string) => formatDateTime(val) },
+      {
+        title: t('app.kuaizhizao.demandManagement.colSnapshotType'),
+        dataIndex: 'snapshot_type',
+        width: 100,
+        render: (v: string) => (v === 'before_recalc' ? t('app.kuaizhizao.demandManagement.snapshotBeforeRecalc') : v || '-'),
+      },
+      {
+        title: t('app.kuaizhizao.demandManagement.colChangeReason'),
+        dataIndex: 'trigger_reason',
+        ellipsis: true,
+        render: (v: string) => {
+          if (!v) return '-';
+          if (v.includes('sales_order')) return t('app.kuaizhizao.demandManagement.changeSalesOrder');
+          if (v.includes('sales_forecast')) return t('app.kuaizhizao.demandManagement.changeSalesForecast');
+          return v;
+        },
+      },
+    ],
+    [t]
+  );
+
   return (
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<Demand>
           columnPersistenceId="apps.kuaizhizao.pages.plan-management.demand-management"
-          headerTitle="需求管理"
+          headerTitle={t('app.kuaizhizao.demandManagement.title')}
           formRef={tableSearchFormRef}
           actionRef={actionRef}
           columns={columns}
@@ -731,7 +957,7 @@ const DemandManagementPage: React.FC = () => {
                 total: response.total || 0,
               };
             } catch (error: any) {
-              messageApi.error(error?.message || '获取列表失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.salesOrder.getListFailed'));
               return {
                 data: [],
                 success: false,
@@ -743,7 +969,7 @@ const DemandManagementPage: React.FC = () => {
           showAdvancedSearch={true}
           selectedRowKeys={selectedRowKeys}
           showCreateButton
-          createButtonText="新建需求计划"
+          createButtonText={t('app.kuaizhizao.demandManagement.createPlan')}
           onCreate={() => setCreatePlanModalVisible(true)}
           showEditButton={false}
           showDeleteButton={true}
@@ -760,7 +986,7 @@ const DemandManagementPage: React.FC = () => {
                 items = items.filter((d: Demand) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new window.Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -770,9 +996,9 @@ const DemandManagementPage: React.FC = () => {
               a.download = `demands-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               window.URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           enableRowSelection={true}
@@ -785,7 +1011,7 @@ const DemandManagementPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'merge-computation',
-                  label: '合并计算',
+                  label: t('app.kuaizhizao.demandManagement.mergeComputation'),
                   icon: <MergeCellsOutlined />,
                   onClick: () => void handleMergeComputation(),
                 },
@@ -795,7 +1021,7 @@ const DemandManagementPage: React.FC = () => {
           toolBarActionsAfterBatch={[
             <Tooltip {...rowActionKind('skip')}
               key="merge-computation-tip"
-              title="合并选中需求进入统一需求计算，随后在计算单中下推半成品工单等下游单据"
+              title={t('app.kuaizhizao.demandManagement.mergeComputationTooltip')}
             >
               <QuestionCircleOutlined style={{ color: 'var(--ant-color-text-tertiary)' }} />
             </Tooltip>,
@@ -805,7 +1031,7 @@ const DemandManagementPage: React.FC = () => {
 
       {/* 新建计划：FormModalTemplate + 两栏表头 + 销售订单式明细 Table */}
       <FormModalTemplate
-        title="新建需求计划"
+        title={t('app.kuaizhizao.demandManagement.createPlanTitle')}
         open={createPlanModalVisible}
         onClose={() => {
           setCreatePlanModalVisible(false);
@@ -823,23 +1049,23 @@ const DemandManagementPage: React.FC = () => {
           <Col span={24}>
             <ProFormText
               name="demand_name"
-              label="计划名称"
-              placeholder="请输入计划名称"
-              rules={[{ required: true, message: '请输入计划名称' }]}
+              label={t('app.kuaizhizao.salesOrder.planName')}
+              placeholder={t('app.kuaizhizao.demandManagement.planNamePlaceholder')}
+              rules={[{ required: true, message: t('app.kuaizhizao.demandManagement.planNameRequired') }]}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="start_date"
-              label="开始日期"
-              rules={[{ required: true, message: '请选择开始日期' }]}
+              label={t('app.kuaizhizao.salesForecast.startDate')}
+              rules={[{ required: true, message: t('app.kuaizhizao.demandManagement.startDateRequired') }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="end_date"
-              label="结束日期（选填）"
+              label={t('app.kuaizhizao.demandManagement.endDateOptional')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -848,31 +1074,21 @@ const DemandManagementPage: React.FC = () => {
               name="business_mode"
               label={
                 <Space size={6} align="center">
-                  <span>业务模式</span>
-                  <Tooltip
-                    title="下推「需求计算」时计算类型统一为 MRP；MTS / MTO / ATO 写入计算头；ATO 下推工单时与 MTO 同为按单驱动（工单生产模式为 MTO）。"
-                  >
-                    <Button type="text" size="small" icon={<QuestionCircleOutlined />} aria-label="业务模式说明" style={{ padding: 0, height: 'auto', color: 'var(--ant-color-text-tertiary)' }} />
+                  <span>{t('app.kuaizhizao.demandManagement.businessMode')}</span>
+                  <Tooltip title={t('app.kuaizhizao.demandManagement.businessModeTooltip')}>
+                    <Button type="text" size="small" icon={<QuestionCircleOutlined />} aria-label={t('app.kuaizhizao.demandManagement.businessModeAriaLabel')} style={{ padding: 0, height: 'auto', color: 'var(--ant-color-text-tertiary)' }} />
                   </Tooltip>
                 </Space>
               }
-              options={[
-                { label: '按库存生产 (MTS)', value: 'MTS' },
-                { label: '按订单生产 (MTO)', value: 'MTO' },
-                { label: '按订单组装 (ATO)', value: 'ATO' },
-              ]}
+              options={businessModeOptions}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="priority"
-              label="优先级"
-              options={[
-                { label: '高 (1)', value: 1 },
-                { label: '中 (5)', value: 5 },
-                { label: '低 (10)', value: 10 },
-              ]}
+              label={t('app.kuaizhizao.demandManagement.priority')}
+              options={priorityOptions}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -880,9 +1096,9 @@ const DemandManagementPage: React.FC = () => {
 
         <UniTableDetail
           name="items"
-          title="计划明细"
+          title={t('app.kuaizhizao.demandManagement.planItems')}
           required
-          requiredMessage="请至少添加一行明细"
+          requiredMessage={t('app.kuaizhizao.demandManagement.planItemsRequired')}
           headerExtra={(
             <Space size={8}>
               <Button
@@ -901,7 +1117,7 @@ const DemandManagementPage: React.FC = () => {
                   createPlanFormRef.current?.setFieldsValue({ items });
                 }}
               >
-                添加明细
+                {t('app.kuaizhizao.demandManagement.addPlanItem')}
               </Button>
               <Button
                 type="default"
@@ -912,77 +1128,7 @@ const DemandManagementPage: React.FC = () => {
               </Button>
             </Space>
           )}
-          columns={[
-                  {
-                    title: '物料',
-                    dataIndex: 'material_id',
-                    width: 280,
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <>
-                        <div className="uni-detail-material-cell" style={{ display: 'flex', alignItems: 'center', width: '100%', gap: 8 }}>
-                          <div style={{ flex: 1, minWidth: 200 }}>
-                            <UniMaterialSelect
-                              name={[index, 'material_id']}
-                              label=""
-                              placeholder="请选择物料"
-                              required
-                              size="small"
-                              listFieldKey={index}
-                              listFieldName="items"
-                              fillMapping={{
-                                material_code: 'mainCode',
-                                material_name: 'name',
-                                material_unit: 'baseUnit',
-                              }}
-                              formItemProps={{ style: { margin: 0 } }}
-                            />
-                          </div>
-                        </div>
-                        <AntForm.Item name={[index, 'material_code']} hidden>
-                          <Input />
-                        </AntForm.Item>
-                        <AntForm.Item name={[index, 'material_name']} hidden>
-                          <Input />
-                        </AntForm.Item>
-                        <AntForm.Item name={[index, 'material_unit']} hidden>
-                          <Input />
-                        </AntForm.Item>
-                      </>
-                    ),
-                  },
-                  {
-                    title: '数量',
-                    dataIndex: 'required_quantity',
-                    width: 110,
-                    align: 'right' as const,
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <AntForm.Item
-                        name={[index, 'required_quantity']}
-                        rules={[
-                          { required: true, message: '必填' },
-                          { type: 'number', min: 0.0001, message: '>0' },
-                        ]}
-                        style={{ margin: 0 }}
-                      >
-                        <InputNumber placeholder="数量" min={0} precision={4} style={{ width: '100%' }} size="small" />
-                      </AntForm.Item>
-                    ),
-                  },
-                  {
-                    title: '需求日期',
-                    dataIndex: 'delivery_date',
-                    width: 130,
-                    render: (_: unknown, __: unknown, index: number) => (
-                      <AntForm.Item
-                        name={[index, 'delivery_date']}
-                        rules={[{ required: true, message: '必填' }]}
-                        style={{ margin: 0 }}
-                      >
-                        <DatePicker size="small" style={{ width: '100%' }} format="YYYY-MM-DD" />
-                      </AntForm.Item>
-                    ),
-                  },
-                ]}
+          columns={createPlanItemColumns}
           disabledAdd
           initialValue={{
             material_id: undefined,
@@ -1000,7 +1146,7 @@ const DemandManagementPage: React.FC = () => {
 
         <Row gutter={16}>
           <Col span={24}>
-            <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="notes" label={t('app.kuaizhizao.salesOrder.notes')} fieldProps={{ rows: 2 }} />
           </Col>
         </Row>
       </FormModalTemplate>
@@ -1015,7 +1161,7 @@ const DemandManagementPage: React.FC = () => {
       <Modal
         open={modalVisible}
         onCancel={() => setModalVisible(false)}
-        title={isEditingDraft ? '编辑需求' : '修改需求'}
+        title={isEditingDraft ? t('app.kuaizhizao.demandManagement.editDemand') : t('app.kuaizhizao.demandManagement.modifyDemand')}
         width={MODAL_CONFIG.SMALL_WIDTH}
         footer={null}
         destroyOnHidden
@@ -1028,9 +1174,9 @@ const DemandManagementPage: React.FC = () => {
             render: () => (
               <div style={{ textAlign: 'right', marginTop: 16 }}>
                 <Space>
-                  <Button onClick={() => setModalVisible(false)}>取消</Button>
+                  <Button onClick={() => setModalVisible(false)}>{t('common.cancel')}</Button>
                   <Button type="primary" onClick={() => formRef.current?.submit()}>
-                    更新
+                    {t('app.kuaizhizao.demandManagement.update')}
                   </Button>
                 </Space>
               </div>
@@ -1043,19 +1189,15 @@ const DemandManagementPage: React.FC = () => {
               <Col span={24}>
                 <ProFormSelect
                   name="priority"
-                  label="优先级"
-                  options={[
-                    { label: '高 (1)', value: 1 },
-                    { label: '中 (5)', value: 5 },
-                    { label: '低 (10)', value: 10 },
-                  ]}
+                  label={t('app.kuaizhizao.demandManagement.priority')}
+                  options={priorityOptions}
                   fieldProps={{ style: { width: 200 } }}
                 />
               </Col>
               <Col span={24}>
                 <ProFormTextArea
                   name="notes"
-                  label="备注"
+                  label={t('app.kuaizhizao.salesOrder.notes')}
                   fieldProps={{ rows: 3 }}
                 />
               </Col>
@@ -1067,23 +1209,19 @@ const DemandManagementPage: React.FC = () => {
               <Col span={12}>
                 <ProFormSelect
                   name="priority"
-                  label="优先级"
-                  options={[
-                    { label: '高 (1)', value: 1 },
-                    { label: '中 (5)', value: 5 },
-                    { label: '低 (10)', value: 10 },
-                  ]}
+                  label={t('app.kuaizhizao.demandManagement.priority')}
+                  options={priorityOptions}
                   fieldProps={{ style: { width: '100%' } }}
                 />
               </Col>
               <Col span={12}>
                 <ProFormSelect
                   name="demand_type"
-                  label="需求类型"
+                  label={t('app.kuaizhizao.demandManagement.demandType')}
                   options={[
-                    { label: '需求计划', value: 'demand_plan' },
+                    { label: t('app.kuaizhizao.demandManagement.demandTypePlan'), value: 'demand_plan' },
                   ]}
-                  rules={[{ required: true, message: '请选择需求类型' }]}
+                  rules={[{ required: true, message: t('app.kuaizhizao.demandManagement.selectDemandType') }]}
                   fieldProps={{
                     style: { width: '100%' },
                   }}
@@ -1092,30 +1230,30 @@ const DemandManagementPage: React.FC = () => {
               <Col span={12}>
                 <ProFormText
                   name="demand_name"
-                  label="需求名称"
-                  placeholder="请输入需求名称"
-                  rules={[{ required: true, message: '请输入需求名称' }]}
+                  label={t('app.kuaizhizao.demandManagement.demandName')}
+                  placeholder={t('app.kuaizhizao.demandManagement.demandNamePlaceholder')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.demandManagement.demandNameRequired') }]}
                 />
               </Col>
               <Col span={12}>
                 <ProFormDatePicker
                   name="start_date"
-                  label="开始日期"
-                  rules={[{ required: true, message: '请选择开始日期' }]}
+                  label={t('app.kuaizhizao.salesForecast.startDate')}
+                  rules={[{ required: true, message: t('app.kuaizhizao.demandManagement.startDateRequired') }]}
                   width="100%"
                 />
               </Col>
               <Col span={12}>
                 <ProFormDatePicker
                   name="end_date"
-                  label="结束日期"
+                  label={t('app.kuaizhizao.salesForecast.endDate')}
                   width="100%"
                 />
               </Col>
               <Col span={24}>
                 <ProFormTextArea
                   name="notes"
-                  label="备注"
+                  label={t('app.kuaizhizao.salesOrder.notes')}
                   fieldProps={{ rows: 3 }}
                 />
               </Col>
@@ -1128,8 +1266,8 @@ const DemandManagementPage: React.FC = () => {
         title={
           currentDemand?.demand_code ? (
             <Space align="center" size={8}>
-              <span>{`需求详情 - ${currentDemand.demand_code}`}</span>
-              <Tooltip title={t('field.invitationCode.copy', { defaultValue: '复制' })}>
+              <span>{t('app.kuaizhizao.demandManagement.detailTitleWithCode', { code: currentDemand.demand_code })}</span>
+              <Tooltip title={t('field.invitationCode.copy')}>
                 <Button
                   type="text"
                   size="small"
@@ -1139,7 +1277,7 @@ const DemandManagementPage: React.FC = () => {
               </Tooltip>
             </Space>
           ) : (
-            '需求详情'
+            t('app.kuaizhizao.demandManagement.detailTitle')
           )
         }
         open={drawerVisible}
@@ -1153,7 +1291,7 @@ const DemandManagementPage: React.FC = () => {
             <Space>
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={currentDemand}
-                entityName="需求"
+                entityName={t('app.kuaizhizao.demandManagement.entityName')}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={[DemandStatus.DRAFT, '草稿']}
@@ -1179,14 +1317,14 @@ const DemandManagementPage: React.FC = () => {
                   handleEdit([currentDemand.id!]);
                 }}
               >
-                编辑
+                {t('common.edit')}
               </Button>
               {currentDemand.pushed_to_computation ? (
                 <Button
                   icon={<RollbackOutlined />}
                   onClick={() => handleWithdrawFromComputation(currentDemand.id!)}
                 >
-                  撤回下推
+                  {t('app.kuaizhizao.demandManagement.withdrawPush')}
                 </Button>
               ) : (
                 isDemandAuditedAndApproved(currentDemand) && (
@@ -1195,7 +1333,7 @@ const DemandManagementPage: React.FC = () => {
                     icon={<ArrowDownOutlined />}
                     onClick={() => handlePushToComputation(currentDemand.id!)}
                   >
-                    下推到物料需求运算
+                    {t('app.kuaizhizao.demandManagement.pushToMrp')}
                   </Button>
                 )
               )}
@@ -1209,12 +1347,12 @@ const DemandManagementPage: React.FC = () => {
               <Alert
                 type="info"
                 showIcon
-                message="需求已变更时，请前往需求计算重新执行计算"
+                message={t('app.kuaizhizao.demandManagement.alertChangedMessage')}
                 description={
                   <span>
-                    本需求已下推至需求计算
+                    {t('app.kuaizhizao.demandManagement.alertPushedDescription')}
                     {currentDemand.computation_code && `（${currentDemand.computation_code}）`}
-                    。若上游已修改并同步，请
+                    {t('app.kuaizhizao.demandManagement.alertPushedMiddle')}
                     <Button
                       type="link"
                       size="small"
@@ -1224,22 +1362,22 @@ const DemandManagementPage: React.FC = () => {
                         navigate(`/apps/kuaizhizao/plan-management/demand-computation?highlight=${currentDemand.computation_id}`);
                       }}
                     >
-                      前往需求计算
+                      {t('app.kuaizhizao.demandManagement.goToComputation')}
                     </Button>
-                    重新执行计算。
+                    {t('app.kuaizhizao.demandManagement.recomputeSuffix')}
                   </span>
                 }
                 style={{ marginBottom: 16 }}
               />
             )}
 
-            <DetailDrawerSection title="基本信息">
+            <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
               <ProDescriptions column={3} dataSource={currentDemand}>
-                <ProDescriptions.Item label="需求编号" dataIndex="demand_code">
+                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandCode')} dataIndex="demand_code">
                   <Space size={4}>
                     <span>{currentDemand.demand_code ?? '-'}</span>
                     {currentDemand.demand_code ? (
-                      <Tooltip title={t('field.invitationCode.copy', { defaultValue: '复制' })}>
+                      <Tooltip title={t('field.invitationCode.copy')}>
                         <Button
                           type="link"
                           size="small"
@@ -1250,41 +1388,41 @@ const DemandManagementPage: React.FC = () => {
                     ) : null}
                   </Space>
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="需求类型">
-                  <Tag {...getDemandTypeTagProps(currentDemand.demand_type)}>{getDemandTypeLabel(currentDemand.demand_type)}</Tag>
+                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandType')}>
+                  <Tag {...getDemandTypeTagProps(currentDemand.demand_type)}>{formatDemandTypeLabel(currentDemand.demand_type)}</Tag>
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="需求名称" dataIndex="demand_name" />
-                <ProDescriptions.Item label="业务模式" dataIndex="business_mode">
+                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.demandName')} dataIndex="demand_name" />
+                <ProDescriptions.Item label={t('app.kuaizhizao.demandManagement.businessMode')} dataIndex="business_mode">
                   <Tag color={getDemandBusinessModeTagColor(currentDemand.business_mode)}>
-                    {getDemandBusinessModeLabel(currentDemand.business_mode)}
+                    {formatBusinessModeLabel(currentDemand.business_mode)}
                   </Tag>
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="开始日期" dataIndex="start_date" valueType="date" />
-                <ProDescriptions.Item label="结束日期" dataIndex="end_date" valueType="date" />
+                <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.startDate')} dataIndex="start_date" valueType="date" />
+                <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.endDate')} dataIndex="end_date" valueType="date" />
                 {currentDemand.demand_type === 'sales_forecast' && (
-                  <ProDescriptions.Item label="预测周期" dataIndex="forecast_period" />
+                  <ProDescriptions.Item label={t('app.kuaizhizao.salesForecast.forecastPeriod')} dataIndex="forecast_period" />
                 )}
                 {currentDemand.demand_type === 'sales_order' && (
                   <>
-                    <ProDescriptions.Item label="订单日期" dataIndex="order_date" valueType="date" />
-                    <ProDescriptions.Item label="交货日期" dataIndex="delivery_date" valueType="date" />
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.orderDate')} dataIndex="order_date" valueType="date" />
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.deliveryDate')} dataIndex="delivery_date" valueType="date" />
                   </>
                 )}
-                <ProDescriptions.Item label="客户名称" dataIndex="customer_name" />
+                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.customerName')} dataIndex="customer_name" />
                 {currentDemand.demand_type === 'sales_order' && (
                   <>
-                    <ProDescriptions.Item label="销售员" dataIndex="salesman_name" />
-                    <ProDescriptions.Item label="收货地址" dataIndex="shipping_address" span={3} />
-                    <ProDescriptions.Item label="发货方式">
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.salesman')} dataIndex="salesman_name" />
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.shippingAddress')} dataIndex="shipping_address" span={3} />
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.shippingMethod')}>
                       {getDictLabel(dictLabelMap, 'SHIPPING_METHOD', currentDemand.shipping_method)}
                     </ProDescriptions.Item>
-                    <ProDescriptions.Item label="付款条件">
+                    <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.paymentTerms')}>
                       {getDictLabel(dictLabelMap, 'PAYMENT_TERMS', currentDemand.payment_terms)}
                     </ProDescriptions.Item>
                   </>
                 )}
-                <ProDescriptions.Item label="总数量" dataIndex="total_quantity" />
-                <ProDescriptions.Item label="状态">
+                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.totalQuantity')} dataIndex="total_quantity" />
+                <ProDescriptions.Item label={t('common.status')}>
                   {(() => {
                     const lifecycle = getDemandLifecycle(currentDemand);
                     return (
@@ -1294,11 +1432,11 @@ const DemandManagementPage: React.FC = () => {
                     );
                   })()}
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="备注" dataIndex="notes" span={3} />
+                <ProDescriptions.Item label={t('app.kuaizhizao.salesOrder.notes')} dataIndex="notes" span={3} />
               </ProDescriptions>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title={buildDemandLifecycleSectionTitle(currentDemand)}>
+            <DetailDrawerSection title={buildDemandLifecycleSectionTitle(currentDemand, t)}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
                   const lifecycle = getDemandLifecycle(currentDemand);
@@ -1316,7 +1454,7 @@ const DemandManagementPage: React.FC = () => {
                         />
                       )}
                       {!hasStepper && (
-                        <Typography.Text type="secondary">暂无可展示的生命周期步骤</Typography.Text>
+                        <Typography.Text type="secondary">{t('app.kuaizhizao.demandManagement.lifecycleEmpty')}</Typography.Text>
                       )}
                     </>
                   );
@@ -1342,7 +1480,7 @@ const DemandManagementPage: React.FC = () => {
               </div>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="明细信息">
+            <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
               <style>{`
                 .demand-detail-items .ant-table-wrapper .ant-table-body,
                 .demand-detail-items .ant-table-wrapper .ant-table-content {
@@ -1361,39 +1499,7 @@ const DemandManagementPage: React.FC = () => {
                     size="small"
                     tableLayout="fixed"
                     style={{ minWidth: 1100 }}
-                    columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '物料规格', dataIndex: 'material_spec', width: 120 },
-                      {
-                        title: '属性',
-                        dataIndex: 'variant_attributes',
-                        width: 140,
-                        ellipsis: true,
-                        render: (v: Record<string, unknown> | string | undefined) => {
-                          if (v == null) return '-';
-                          if (typeof v === 'string') return v || '-';
-                          return Object.keys(v).length > 0 ? JSON.stringify(v) : '-';
-                        },
-                      },
-                      {
-                        title: '单位',
-                        dataIndex: 'material_unit',
-                        width: 80,
-                        render: (v: string) => getDictLabel(dictLabelMap, 'MATERIAL_UNIT', v) || v || '-',
-                      },
-                      { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
-                      ...(currentDemand.demand_type === 'sales_forecast'
-                        ? [
-                            { title: '预测日期', dataIndex: 'forecast_date', width: 120 },
-                            { title: '预测月份', dataIndex: 'forecast_month', width: 100 },
-                          ]
-                        : [
-                            { title: '交货日期', dataIndex: 'delivery_date', width: 120 },
-                            { title: '已交货数量', dataIndex: 'delivered_quantity', width: 100, align: 'right' as const },
-                            { title: '剩余数量', dataIndex: 'remaining_quantity', width: 100, align: 'right' as const },
-                          ]),
-                    ]}
+                    columns={detailItemColumns(currentDemand.demand_type)}
                     dataSource={currentDemand.items}
                     pagination={false}
                     bordered
@@ -1401,11 +1507,11 @@ const DemandManagementPage: React.FC = () => {
                   />
                 </div>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.salesOrder.emptyItems')} />
               )}
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="操作记录">
+            <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
               <Tabs
                 tabPosition="left"
                 size="small"
@@ -1413,7 +1519,7 @@ const DemandManagementPage: React.FC = () => {
                 items={[
                   {
                     key: 'timeline',
-                    label: '操作记录',
+                    label: t('app.uniDetail.sectionTimeline'),
                     children: (
                       <div style={{ paddingLeft: 8, minHeight: 80 }}>
                         {demandTracking.loading && <Spin size="small" />}
@@ -1424,7 +1530,7 @@ const DemandManagementPage: React.FC = () => {
                   },
                   {
                     key: 'recalc',
-                    label: '重算历史',
+                    label: t('app.kuaizhizao.demandManagement.recalcHistory'),
                     children: (
                       <div style={{ paddingLeft: 8, overflowX: 'auto' }}>
                         <Table<DemandRecalcHistoryItem>
@@ -1432,29 +1538,7 @@ const DemandManagementPage: React.FC = () => {
                           loading={recalcHistoryLoading}
                           dataSource={recalcHistory}
                           rowKey="id"
-                          columns={[
-                            { title: '操作时间', dataIndex: 'recalc_at', width: 180, render: (val) => formatDateTime(val) },
-                            {
-                              title: '触发方式',
-                              dataIndex: 'trigger_type',
-                              width: 100,
-                              render: (v) => (v === 'upstream_change' ? '上游变更' : v === 'manual' ? '手动触发' : v || '-'),
-                            },
-                            {
-                              title: '数据来源',
-                              dataIndex: 'source_type',
-                              width: 100,
-                              render: (v) => (v === 'sales_order' ? '销售订单' : v === 'sales_forecast' ? '销售预测' : v || '-'),
-                            },
-                            { title: '变更说明', dataIndex: 'trigger_reason', ellipsis: true, render: (v) => v || '-' },
-                            {
-                              title: '执行结果',
-                              dataIndex: 'result',
-                              width: 90,
-                              render: (v) => (v === 'success' ? '成功' : v === 'failed' ? '失败' : v || '-'),
-                            },
-                            { title: '说明', dataIndex: 'message', ellipsis: true, render: (v) => v || '-' },
-                          ]}
+                          columns={recalcHistoryColumns}
                           pagination={false}
                         />
                       </div>
@@ -1462,7 +1546,7 @@ const DemandManagementPage: React.FC = () => {
                   },
                   {
                     key: 'snapshots',
-                    label: '变更快照',
+                    label: t('app.kuaizhizao.demandManagement.changeSnapshots'),
                     children: (
                       <div style={{ paddingLeft: 8, overflowX: 'auto' }}>
                         <Table<DemandSnapshotItem>
@@ -1475,7 +1559,7 @@ const DemandManagementPage: React.FC = () => {
                               <div style={{ padding: 8 }}>
                                 {record.demand_snapshot && (
                                   <div style={{ marginBottom: 12 }}>
-                                    <strong>变更前需求数据：</strong>
+                                    <strong>{t('app.kuaizhizao.demandManagement.snapshotBeforeDemand')}</strong>
                                     <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
                                       {JSON.stringify(record.demand_snapshot, null, 2)}
                                     </pre>
@@ -1483,38 +1567,19 @@ const DemandManagementPage: React.FC = () => {
                                 )}
                                 {record.demand_items_snapshot && record.demand_items_snapshot.length > 0 && (
                                   <>
-                                    <strong>变更前明细数据：</strong>
+                                    <strong>{t('app.kuaizhizao.demandManagement.snapshotBeforeItems')}</strong>
                                     <pre style={{ margin: '4px 0 0', fontSize: 12, maxHeight: 200, overflow: 'auto' }}>
                                       {JSON.stringify(record.demand_items_snapshot, null, 2)}
                                     </pre>
                                   </>
                                 )}
                                 {!record.demand_snapshot && (!record.demand_items_snapshot || record.demand_items_snapshot.length === 0) && (
-                                  <span style={{ color: '#999' }}>暂无详细数据</span>
+                                  <span style={{ color: '#999' }}>{t('app.kuaizhizao.demandManagement.noDetailData')}</span>
                                 )}
                               </div>
                             ),
                           }}
-                          columns={[
-                            { title: '记录时间', dataIndex: 'snapshot_at', width: 180, render: (val) => formatDateTime(val) },
-                            {
-                              title: '变更类型',
-                              dataIndex: 'snapshot_type',
-                              width: 100,
-                              render: (v) => (v === 'before_recalc' ? '重算前' : v || '-'),
-                            },
-                            {
-                              title: '变更说明',
-                              dataIndex: 'trigger_reason',
-                              ellipsis: true,
-                              render: (v) => {
-                                if (!v) return '-';
-                                if (v.includes('sales_order')) return '销售订单变更';
-                                if (v.includes('sales_forecast')) return '销售预测变更';
-                                return v;
-                              },
-                            },
-                          ]}
+                          columns={snapshotColumns}
                           pagination={false}
                         />
                       </div>

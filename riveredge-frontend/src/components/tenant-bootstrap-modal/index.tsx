@@ -21,24 +21,12 @@ import {
 import { NAVIGATION_MENU_TREE_QUERY_KEY } from '../../hooks/useUnifiedMenuData';
 import { useGlobalStore } from '../../stores/globalStore';
 
-const INIT_ITEM_NAME_I18N: Record<string, string> = {
-  application: 'components.tenantBootstrap.step.application',
-  data_dictionary: 'pages.system.configCenter.tenantInit.item.data_dictionary',
-  language: 'pages.system.configCenter.tenantInit.item.language',
-  system_parameter: 'pages.system.configCenter.tenantInit.item.system_parameter',
-  code_rule: 'pages.system.configCenter.tenantInit.item.code_rule',
-  approval_process_preset: 'pages.system.configCenter.tenantInit.item.approval_process_preset',
-  message_template_preset: 'pages.system.configCenter.tenantInit.item.message_template_preset',
-  print_template_preset: 'pages.system.configCenter.tenantInit.item.print_template_preset',
-  menu_sync: 'pages.system.configCenter.tenantInit.item.menu_sync',
-};
+import {
+  tenantBootstrapStepDescription,
+  tenantBootstrapStepLabel,
+} from '../../utils/tenantInitI18n';
 
 type StepStatus = 'pending' | 'running' | 'success' | 'error';
-
-function stepLabel(t: (k: string) => string, step: BootstrapStep): string {
-  const key = INIT_ITEM_NAME_I18N[step.key];
-  return key ? t(key) : step.name;
-}
 
 const TenantBootstrapModal: React.FC = () => {
   const { t } = useTranslation();
@@ -178,9 +166,9 @@ const TenantBootstrapModal: React.FC = () => {
             <div key={step.key} style={{ display: 'flex', alignItems: 'center', padding: '8px 0' }}>
               <div style={{ marginRight: 8 }}>{icon}</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div>{stepLabel(t, step)}</div>
+                <div>{tenantBootstrapStepLabel(t, step)}</div>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {step.description}
+                  {tenantBootstrapStepDescription(t, step)}
                 </Typography.Text>
               </div>
             </div>

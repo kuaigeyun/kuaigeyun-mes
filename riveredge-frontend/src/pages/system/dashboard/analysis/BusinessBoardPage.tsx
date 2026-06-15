@@ -27,6 +27,7 @@ import { getBusinessBoardTitle, putBusinessBoardTitle } from '../../../../servic
 import { getFilePreview, uploadFile } from '../../../../services/file';
 import { useConfigStore } from '../../../../stores/configStore';
 import { useSiteLogoUrl } from '../../../../hooks/useSiteLogoUrl';
+import i18n from '../../../../config/i18n';
 import {
   getSalesSummary,
   getPurchaseSummary,
@@ -79,10 +80,21 @@ const chartHost: React.CSSProperties = {
 const formatCompact = (value: number): string => {
   if (!Number.isFinite(value)) return '0';
   const abs = Math.abs(value);
-  if (abs >= 1e8) return `${(value / 1e8).toFixed(2)}亿`;
-  if (abs >= 1e4) return `${(value / 1e4).toFixed(1)}万`;
+  const lang = i18n.language || 'zh-CN';
+  const isZh = lang.startsWith('zh');
+  if (isZh) {
+    if (abs >= 1e8) {
+      return i18n.t('dashboard.businessBoard.format.yi', { value: (value / 1e8).toFixed(2) });
+    }
+    if (abs >= 1e4) {
+      return i18n.t('dashboard.businessBoard.format.wan', { value: (value / 1e4).toFixed(1) });
+    }
+  } else {
+    if (abs >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+    if (abs >= 1e6) return `${(value / 1e6).toFixed(1)}M`;
+  }
   if (abs >= 1e3) return `${(value / 1e3).toFixed(1)}k`;
-  return Math.round(value).toLocaleString();
+  return Math.round(value).toLocaleString(lang);
 };
 
 /** ===== HUD 面板：科幻斜切角外框 + 粗壮发光边框 ===== */
@@ -921,7 +933,7 @@ const BusinessBoardPage: React.FC = () => {
   const siteName = (useConfigStore((state) => state.configs['site_name']) as string) || 'RiverEdge SaaS';
   const siteLogoUrl = useSiteLogoUrl();
 
-  const defaultBoardTitle = `${siteName}运营看板`;
+  const defaultBoardTitle = t('dashboard.businessBoard.siteTitle', { siteName });
   const displayBoardTitle = customBoardTitle || defaultBoardTitle;
 
   useEffect(() => {
@@ -1018,7 +1030,7 @@ const BusinessBoardPage: React.FC = () => {
         });
         setHeroImageUuidDraft(res.uuid);
       } catch (e: unknown) {
-        message.error((e as Error)?.message || '上传失败');
+        message.error((e as Error)?.message || t('dashboard.businessBoard.error.uploadFailed'));
       }
       return false;
     },
@@ -1036,7 +1048,7 @@ const BusinessBoardPage: React.FC = () => {
       setCustomHeroImageUuid(data.hero_image_uuid ?? null);
       setTitleModalOpen(false);
     } catch (e: unknown) {
-      message.error((e as Error)?.message || '保存失败，请稍后重试');
+      message.error((e as Error)?.message || t('dashboard.businessBoard.error.saveFailed'));
     }
   }, [titleDraft, heroImageUuidDraft]);
 
@@ -1050,7 +1062,7 @@ const BusinessBoardPage: React.FC = () => {
       setCustomHeroImageUuid(data.hero_image_uuid ?? null);
       setTitleDraft(defaultBoardTitle);
     } catch (e: unknown) {
-      message.error((e as Error)?.message || '恢复默认失败，请稍后重试');
+      message.error((e as Error)?.message || t('dashboard.businessBoard.error.resetFailed'));
     }
   }, [defaultBoardTitle, customHeroImageUuid]);
 
@@ -1203,8 +1215,8 @@ const BusinessBoardPage: React.FC = () => {
 
   const heroLabels = useMemo(
     () => ({
-      woPlatform: '工单',
-      opPlatform: '工序',
+      woPlatform: t('dashboard.businessBoard.hero.woPlatform'),
+      opPlatform: t('dashboard.businessBoard.hero.opPlatform'),
       todayOutput: t('dashboard.businessBoard.hero.todayOutput'),
       qualifiedRate: t('dashboard.businessBoard.hero.qualifiedRate'),
       inProgressWo: t('dashboard.businessBoard.hero.inProgressWo'),
@@ -1345,9 +1357,9 @@ const BusinessBoardPage: React.FC = () => {
               onChange={(e) => setTimeRange(e.target.value)}
               buttonStyle="solid"
             >
-              <Radio.Button value="today">当天</Radio.Button>
-              <Radio.Button value="week">本周</Radio.Button>
-              <Radio.Button value="month">本月</Radio.Button>
+              <Radio.Button value="today">{t('dashboard.businessBoard.timeRange.today')}</Radio.Button>
+              <Radio.Button value="week">{t('dashboard.businessBoard.timeRange.week')}</Radio.Button>
+              <Radio.Button value="month">{t('dashboard.businessBoard.timeRange.month')}</Radio.Button>
             </Radio.Group>
           </div>
           <div
@@ -1717,7 +1729,7 @@ const BusinessBoardPage: React.FC = () => {
 
           <HudPanel variant="middleBottom" style={{ flex: '0.75 1 0' }}>
             <HudTitle 
-              title="执行中工单实时监控" 
+              title={t('dashboard.businessBoard.section.activeWorkOrders')} 
               right={
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
                    <span style={{ fontSize: 10, color: getBoardHud().cyan, opacity: 0.8, fontFamily: clockFont }}>PAGE {woPage + 1}/{Math.ceil(allWorkOrders.length / WO_PAGE_SIZE)}</span>
@@ -1749,7 +1761,13 @@ const BusinessBoardPage: React.FC = () => {
                     <span style={{ fontSize: 13, background: getBoardHud().cyan, color: getBoardHud().bgDeep, fontWeight: 'bold', padding: '2px 6px', borderRadius: 2, fontFamily: clockFont, whiteSpace: 'nowrap' }}>{wo.id}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
                       <span style={{ fontSize: 13, color: getBoardHud().textPrimary, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{wo.product}</span>
-                      <span style={{ fontSize: 13, color: getBoardHud().textDim, whiteSpace: 'nowrap' }}>[ 计划: <span style={{ color: getBoardHud().cyan, fontWeight: 'bold', fontFamily: clockFont }}>{wo.planned}</span> ]</span>
+                      <span style={{ fontSize: 13, color: getBoardHud().textDim, whiteSpace: 'nowrap' }}>
+                        [ {t('dashboard.businessBoard.workOrder.planned')}:{' '}
+                        <span style={{ color: getBoardHud().cyan, fontWeight: 'bold', fontFamily: clockFont }}>
+                          {wo.planned}
+                        </span>{' '}
+                        ]
+                      </span>
                     </div>
                   </div>
 
@@ -1868,17 +1886,17 @@ const BusinessBoardPage: React.FC = () => {
         >
           <HudPanel variant="right">
             <HudTitle
-              title="仓储物流动态中心"
-              suffix="本月走势"
+              title={t('dashboard.businessBoard.section.warehouseLogistics')}
+              suffix={t('dashboard.businessBoard.warehouse.monthTrend')}
               right={
                 <div style={{ display: 'flex', gap: 10, fontSize: 13, alignItems: 'center' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <div style={{ width: 10, height: 2, background: '#0095ff' }} />
-                    <span style={{ color: '#0095ff' }}>入</span>
+                    <span style={{ color: '#0095ff' }}>{t('dashboard.businessBoard.warehouse.inboundShort')}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                     <div style={{ width: 10, height: 2, background: '#fb7185' }} />
-                    <span style={{ color: '#fb7185' }}>出</span>
+                    <span style={{ color: '#fb7185' }}>{t('dashboard.businessBoard.warehouse.outboundShort')}</span>
                   </div>
                   <span style={{ fontSize: 13, color: getBoardHud().cyan, fontFamily: clockFont, marginLeft: 4 }}>LO_TREND</span>
                 </div>
@@ -1894,26 +1912,26 @@ const BusinessBoardPage: React.FC = () => {
               }}
             >
               <StatTile
-                label="总库存"
+                label={t('dashboard.businessBoard.warehouse.totalStock')}
                 value={warehouseSummary ? formatCompact(warehouseSummary.total_stock) : '—'}
                 color={getBoardHud().cyan}
               />
               <StatTile
-                label="在库批次"
+                label={t('dashboard.businessBoard.warehouse.inStockBatches')}
                 value={warehouseSummary?.in_stock_batches ?? '—'}
-                unit="批"
+                unit={t('dashboard.businessBoard.unit.batch')}
                 color={getBoardHud().emerald}
               />
               <StatTile
-                label="待入库"
+                label={t('dashboard.businessBoard.warehouse.pendingInbound')}
                 value={warehouseSummary?.pending_inbound ?? '—'}
-                unit="单"
+                unit={t('dashboard.businessBoard.unit.order')}
                 color={getBoardHud().amber}
               />
               <StatTile
-                label="待出库"
+                label={t('dashboard.businessBoard.warehouse.pendingOutbound')}
                 value={warehouseSummary?.pending_outbound ?? '—'}
-                unit="单"
+                unit={t('dashboard.businessBoard.unit.order')}
                 color={getBoardHud().rose}
               />
             </div>

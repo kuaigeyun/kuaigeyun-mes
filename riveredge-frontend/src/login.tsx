@@ -20,15 +20,19 @@ import { initReactI18next } from 'react-i18next';
 import zhCNLocale from './locales/zh-CN.login';
 import enUSLocale from './locales/en-US.login';
 import LoginPage from './pages/login';
+import { getLanguageFromPreferenceCache } from './stores/userPreferenceStore';
 
-// 语言检测逻辑
+const GUEST_LANGUAGE_KEY = 'riveredge-guest-language';
+
+// 语言检测：优先当前账户偏好缓存，其次本会话临时选择，与主应用策略一致
 const getInitialLang = () => {
-  const saved = localStorage.getItem('i18nextLng');
-  if (saved && (saved === 'zh-CN' || saved === 'en-US')) return saved;
-  
-  const navLang = navigator.language;
-  if (navLang.startsWith('zh')) return 'zh-CN';
-  return 'en-US';
+  const cached = getLanguageFromPreferenceCache();
+  if (cached === 'zh-CN' || cached === 'en-US') return cached;
+
+  const guest = sessionStorage.getItem(GUEST_LANGUAGE_KEY);
+  if (guest === 'zh-CN' || guest === 'en-US') return guest;
+
+  return 'zh-CN';
 };
 
 const initialLang = getInitialLang();
@@ -74,7 +78,7 @@ function LoginRoot() {
   useEffect(() => {
     const handleLanguageChange = (lng: string) => {
       setLocale(lng === 'zh-CN' ? zhCN : enUS);
-      localStorage.setItem('i18nextLng', lng);
+      sessionStorage.setItem(GUEST_LANGUAGE_KEY, lng);
     };
     i18n.on('languageChanged', handleLanguageChange);
     return () => {

@@ -151,8 +151,20 @@ export default function LoginPage() {
     applySessionUserAfterLogin(userInfo);
     clearSessionScopedQueries(queryClient);
     void import('../../stores/userPreferenceStore')
-      .then(({ useUserPreferenceStore }) => {
+      .then(async ({ useUserPreferenceStore }) => {
         useUserPreferenceStore.getState().rehydrateFromStorage();
+        const guestLang = sessionStorage.getItem('riveredge-guest-language');
+        if (guestLang === 'zh-CN' || guestLang === 'en-US') {
+          const currentLang = useUserPreferenceStore.getState().preferences?.language;
+          if (currentLang !== guestLang) {
+            try {
+              await useUserPreferenceStore.getState().updatePreferences({ language: guestLang });
+            } catch {
+              // 不阻塞登录跳转
+            }
+          }
+          sessionStorage.removeItem('riveredge-guest-language');
+        }
       })
       .catch(() => {});
   }, [queryClient]);

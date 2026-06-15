@@ -244,8 +244,28 @@ export interface InventoryStatistics {
 /**
  * 报表响应包装：apiRequest 对形如 `{ success: true, data: [...] }` 但缺少 `total`
  * 字段的响应会自动解包成数组，导致上层组件读取 `res.data / res.success` 时拿到 undefined。
- * 这里把后端报表响应统一规整回 `{ data, success, summary }` 形态，保证 BaseReport 列表正常显示。
+ * 这里把后端报表响应统一规整回 `{ data, success, summary }` 形态，供 UniReport / KuaizhizaoReport 列表正常显示。
  */
+function buildReportQueryParams(
+  params: ReportParams & { report_type?: string; reportType?: string },
+  defaults?: { report_type?: string },
+): Record<string, unknown> {
+  const query: Record<string, unknown> = {
+    report_type: params.report_type ?? params.reportType ?? defaults?.report_type,
+    date_start: params.date_start ?? params.startDate,
+    date_end: params.date_end ?? params.endDate,
+  };
+  if (params.skip != null) query.skip = params.skip;
+  if (params.limit != null) query.limit = params.limit;
+  if (params.customer_keyword) query.customer_keyword = params.customer_keyword;
+  if (params.customer_id != null) query.customer_id = params.customer_id;
+  if (params.filters?.customer_id != null) query.customer_id = params.filters.customer_id;
+  if (params.filters?.warehouse_id != null) query.warehouse_id = params.filters.warehouse_id;
+  if (params.filters?.material_id != null) query.material_id = params.filters.material_id;
+  if (params.filters?.work_center_id != null) query.work_center_id = params.filters.work_center_id;
+  return query;
+}
+
 function normalizeReportResponse<T extends { data: any[]; success: boolean; summary?: any }>(
   res: any,
 ): T {
@@ -277,13 +297,7 @@ export async function getInventoryStatistics(warehouseId?: number): Promise<Inve
 export async function getInventoryReport(params: ReportParams & { report_type?: string } = {}): Promise<InventoryReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/inventory', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'summary',
-      date_start: params.date_start,
-      date_end: params.date_end,
-      warehouse_id: params.filters?.warehouse_id,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'summary' }),
   });
   return normalizeReportResponse<InventoryReportResponse>(res);
 }
@@ -300,13 +314,7 @@ export async function exportInventoryReport(params: ReportParams = {}): Promise<
 export async function getProductionReport(params: ReportParams & { report_type?: string } = {}): Promise<ProductionReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/production', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || params.reportType || 'efficiency',
-      date_start: params.date_start,
-      date_end: params.date_end,
-      work_center_id: params.filters?.work_center_id,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'efficiency' }),
   });
   return normalizeReportResponse<ProductionReportResponse>(res);
 }
@@ -323,13 +331,7 @@ export async function exportProductionReport(params: ReportParams = {}): Promise
 export async function getQualityReport(params: ReportParams & { report_type?: string } = {}): Promise<QualityReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/quality', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'analysis',
-      date_start: params.date_start,
-      date_end: params.date_end,
-      material_id: params.filters?.material_id,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'analysis' }),
   });
   return normalizeReportResponse<QualityReportResponse>(res);
 }
@@ -379,13 +381,7 @@ export function salesReportPageParams(params: any): { skip: number; limit: numbe
 export async function getSalesReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/sales', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'summary',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      customer_id: params.filters?.customer_id,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'summary' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -394,12 +390,7 @@ export async function getSalesReport(params: ReportParams & { report_type?: stri
 export async function getPlanReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/plans', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'fulfillment',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'fulfillment' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -408,12 +399,7 @@ export async function getPlanReport(params: ReportParams & { report_type?: strin
 export async function getPurchaseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/purchases', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'requisition_tracking',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'requisition_tracking' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -422,12 +408,7 @@ export async function getPurchaseReport(params: ReportParams & { report_type?: s
 export async function getEquipmentReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/equipment', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'maintenance',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'maint_plan' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -436,12 +417,7 @@ export async function getEquipmentReport(params: ReportParams & { report_type?: 
 export async function getWarehouseReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/warehouse', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'inbound_summary',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'inventory_ledger' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -450,12 +426,7 @@ export async function getWarehouseReport(params: ReportParams & { report_type?: 
 export async function getPerformanceReport(params: ReportParams & { report_type?: string } = {}): Promise<SalesReportResponse> {
   const res = await apiRequest<any>('/apps/kuaizhizao/reports/performance', {
     method: 'GET',
-    params: {
-      report_type: params.report_type || 'efficiency_ranking',
-      date_start: params.date_start || params.startDate,
-      date_end: params.date_end || params.endDate,
-      ...params,
-    },
+    params: buildReportQueryParams(params, { report_type: 'employee-efficiency-ranking' }),
   });
   return normalizeReportResponse<SalesReportResponse>(res);
 }
@@ -493,19 +464,44 @@ export const inventoryAnalysisApi = {
   },
 };
 
+function normalizeExportBody(params: ReportParams): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    report_type: params.report_type || params.reportType,
+    date_start: params.date_start || params.startDate,
+    date_end: params.date_end || params.endDate,
+    customer_keyword: params.customer_keyword,
+    warehouse_id: params.filters?.warehouse_id,
+    customer_id: params.filters?.customer_id,
+    material_id: params.filters?.material_id,
+    ...params,
+  };
+  if (!body.date_start || !body.date_end) {
+    const { date_start, date_end } = parseSalesReportDateRange(params as Record<string, unknown>, [
+      'order_date_range',
+      'date_range',
+      'dateRange',
+    ]);
+    if (date_start) body.date_start = date_start;
+    if (date_end) body.date_end = date_end;
+  }
+  return body;
+}
+
 /**
- * 通用报表导出功能
+ * 按域导出报表（POST /reports/{domain}/export，携带与列表相同的 filter body）
  */
-export async function exportReport(reportType: string, params: ReportParams = {}): Promise<void> {
+export async function exportDomainReport(domain: string, params: ReportParams = {}): Promise<void> {
   updateLastActivity(true);
   incrementPendingRequests();
   try {
-    const response = await fetch(`/api/v1/apps/kuaizhizao/reports/${reportType}/export?${new URLSearchParams(params as any)}`, {
-      method: 'GET',
+    const response = await fetch(`/api/v1/apps/kuaizhizao/reports/${encodeURIComponent(domain)}/export`, {
+      method: 'POST',
       headers: {
-        'Authorization': `Bearer ${getToken()}`,
+        Authorization: `Bearer ${getToken()}`,
+        'Content-Type': 'application/json',
         'X-Tenant-ID': localStorage.getItem('tenant_id') || '',
       },
+      body: JSON.stringify(normalizeExportBody(params)),
     });
 
     if (!response.ok) {
@@ -516,7 +512,8 @@ export async function exportReport(reportType: string, params: ReportParams = {}
     const url = window.URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `${reportType}-report-${new Date().toISOString().split('T')[0]}.xlsx`;
+    const reportType = params.report_type || params.reportType || 'report';
+    link.download = `${domain}-${reportType}-${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -527,4 +524,13 @@ export async function exportReport(reportType: string, params: ReportParams = {}
     updateLastActivity(true);
     decrementPendingRequests();
   }
+}
+
+/**
+ * 通用报表导出功能
+ * @deprecated 请使用 exportDomainReport(domain, params)
+ */
+export async function exportReport(reportType: string, params: ReportParams = {}): Promise<void> {
+  const domain = (params as ReportParams & { domain?: string }).domain || 'sales';
+  return exportDomainReport(domain, { ...params, report_type: reportType });
 }

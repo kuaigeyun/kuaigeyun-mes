@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Empty, Tag, Typography } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { useThemeStore } from '../../../../stores/themeStore';
 import type { ModuleTodoItem } from './types';
 import { isModuleDashboardPlain } from './moduleDashboardTheme';
+import { localizeDashboardTodoItem } from '../../../../utils/dashboardTodoI18n';
 
 const { Text } = Typography;
 
@@ -23,15 +25,21 @@ export function ModuleTodoList({
   emptyText?: string;
 }) {
   const navigate = useNavigate();
+  const { t, i18n } = useTranslation();
   const plain = isModuleDashboardPlain(useThemeStore((s) => s.resolved.themeStyle));
 
-  if (!items.length) {
+  const localizedItems = useMemo(
+    () => items.map((item) => localizeDashboardTodoItem(item, t)),
+    [items, t, i18n.language],
+  );
+
+  if (!localizedItems.length) {
     return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={emptyText} />;
   }
 
   return (
     <div>
-      {items.map((item) => (
+      {localizedItems.map((item) => (
         <div
           key={item.id}
           style={{ cursor: item.link ? 'pointer' : 'default', padding: '8px 4px' }}
@@ -45,7 +53,9 @@ export function ModuleTodoList({
               color={plain ? 'default' : (PRIORITY_COLOR[item.priority?.toLowerCase()] ?? 'default')}
               variant="filled"
             >
-              {item.priority === 'high' || item.priority === 'critical' ? '紧急' : '待办'}
+              {item.priority === 'high' || item.priority === 'critical'
+                ? t('pages.dashboard.todo.priorityUrgent')
+                : t('pages.dashboard.todo.priorityPending')}
             </Tag>
           </span>
           <div>
@@ -57,7 +67,9 @@ export function ModuleTodoList({
             {item.due_date ? (
               <div>
                 <Text type="secondary" style={{ fontSize: 11 }}>
-                  截止 {dayjs(item.due_date).format('MM-DD')}
+                  {t('pages.dashboard.todo.dueDateShort', {
+                    date: dayjs(item.due_date).format('MM-DD'),
+                  })}
                 </Text>
               </div>
             ) : null}

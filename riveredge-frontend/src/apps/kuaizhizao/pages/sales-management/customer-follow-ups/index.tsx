@@ -21,8 +21,9 @@ import {
   DRAWER_CONFIG,
   detailDrawerDescriptionItems,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
-import type { SubStage } from '../../../../../components/uni-lifecycle/types';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { rowActionKind, rowActionAddFollowUpFromDocument } from '../../../../../components/uni-action';
 import { useNewShortcut } from '../../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../../utils/globalNewShortcut';
@@ -84,8 +85,8 @@ const CustomerFollowUpsPage: React.FC = () => {
   }, [activityOptions]);
 
   const detailLifecycle = useMemo(
-    () => (detailRecord ? getCustomerFollowUpLifecycle(detailRecord) : null),
-    [detailRecord],
+    () => (detailRecord ? getCustomerFollowUpLifecycle(detailRecord, t) : null),
+    [detailRecord, t],
   );
   const detailNextSteps = detailLifecycle?.nextStepSuggestions;
   const hideDetailStepperNextRow = Boolean(detailNextSteps?.length);
@@ -356,26 +357,14 @@ const CustomerFollowUpsPage: React.FC = () => {
       hideInSearch: true,
     },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
+      title: t('app.kuaizhizao.quotation.colLifecycle'),
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getCustomerFollowUpLifecycle(record);
-        const activeStage = lifecycle.mainStages?.find((s: SubStage) => s.status === 'active');
-        const displayLabel = activeStage?.label ?? lifecycle.stageName;
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={displayLabel}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getCustomerFollowUpLifecycle(record, t)} />
+      ),
     },
     {
       title: t('common.actions'),
@@ -472,7 +461,9 @@ const CustomerFollowUpsPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={`客户跟进详情${detailRecord?.customer_name ? ` - ${detailRecord.customer_name}` : ''}`}
+        title={t('app.kuaizhizao.customerFollowUp.detailTitle', {
+          suffix: detailRecord?.customer_name ? ` - ${detailRecord.customer_name}` : '',
+        })}
         open={detailDrawerVisible}
         onClose={closeDetailDrawer}
         width={DRAWER_CONFIG.HALF_WIDTH}

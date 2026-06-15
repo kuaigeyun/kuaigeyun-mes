@@ -24,7 +24,26 @@ class FieldMapping(BaseSchema):
     y_axis: bool = Field(False, description="是否为 Y 轴（图表）")
     visible: bool = Field(True, description="是否显示（表格列）")
     width: Optional[int] = Field(None, description="列宽（表格）")
-    format: Optional[str] = Field(None, description="格式化: number/percent/date 等")
+    format: Optional[str] = Field(None, description="格式化: number/percent/date/money 等")
+    aggregate: Optional[str] = Field(None, description="聚合: sum/count/avg（供 UniReport 合计）")
+
+
+class UniReportKpiBinding(BaseSchema):
+    """UniReport KPI 卡片绑定（report_config.extra.uni_report.kpiBindings）"""
+    key: str = Field(..., description="summary 字段 key")
+    title: str = Field(..., description="卡片标题")
+    aggregate: Optional[str] = Field("sum", description="聚合方式")
+    precision: Optional[int] = Field(None, description="小数精度")
+    suffix: Optional[str] = Field(None, description="后缀单位")
+
+
+class UniReportExtraConfig(BaseSchema):
+    """中国式报表壳层配置（嵌于 report_config.extra.uni_report）"""
+    templateId: Optional[str] = Field(None, description="预设模板: queryTable/inventoryLedger/salesAnalysisTable/kuaireportTable")
+    showIndexColumn: bool = Field(True, description="显示序号列")
+    showSummaryRow: bool = Field(True, description="显示表尾合计行")
+    summaryFields: Optional[List[str]] = Field(None, description="合计字段列表")
+    kpiBindings: Optional[List[UniReportKpiBinding]] = Field(None, description="KPI 卡片绑定")
 
 
 class ReportConfigSchema(BaseSchema):

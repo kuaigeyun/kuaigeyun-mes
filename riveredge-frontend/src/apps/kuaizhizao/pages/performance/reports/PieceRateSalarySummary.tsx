@@ -1,8 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
-import ReportBase from '../../../components/ReportBase';
-import { getPerformanceReport } from '../../../services/reports';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const PieceRateSalarySummary: React.FC = () => {
   const { t } = useTranslation();
@@ -19,22 +18,11 @@ const PieceRateSalarySummary: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.piece-rate-salary-summary')}
       reportType="piece-rate-salary-summary"
       columnPersistenceId="apps.kuaizhizao.pages.performance.reports.PieceRateSalarySummary"
       columns={columns}
-      request={async (params: any) => {
-        const res = await getPerformanceReport({
-          ...params,
-          report_type: 'piece-rate-salary-summary',
-        });
-        return {
-          data: res.data || [],
-          success: res.success,
-          total: res.data?.length || 0,
-        };
-      }}
     />
   );
 };

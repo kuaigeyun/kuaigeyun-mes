@@ -2,19 +2,40 @@ import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { createLifecycleResolver } from './createLifecycleResolver';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
 import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
 
+const P = 'app.kuaizhizao.salesOrder';
+const OC = 'app.kuaizhizao.salesOrderChange';
+
+/** 列表 API / 钉住 Tab 使用的阶段键（中文，与后端 lifecycle_stage 一致） */
 export const ORDER_CHANGE_STAGE_LABELS = ['草稿', '待审核', '已审核', '已生效', '已驳回'] as const;
+
+const ORDER_CHANGE_STAGE_I18N: Record<string, string> = {
+  草稿: `${P}.lifecycleDraft`,
+  待审核: `${P}.lifecyclePendingReview`,
+  已审核: `${P}.lifecycleAudited`,
+  已生效: `${P}.lifecycleEffective`,
+  已驳回: `${P}.lifecycleRejected`,
+};
+
+const ORDER_CHANGE_STAGE_I18N_BY_KEY: Record<string, string> = {
+  draft: `${P}.lifecycleDraft`,
+  pending_review: `${P}.lifecyclePendingReview`,
+  audited: `${P}.lifecycleAudited`,
+  applied: `${P}.lifecycleEffective`,
+  rejected: `${P}.lifecycleRejected`,
+};
 
 const baseResolver = createLifecycleResolver({
   stageDefs: [
-    { key: 'draft', label: '草稿' },
-    { key: 'pending_review', label: '待审核' },
-    { key: 'audited', label: '已审核' },
-    { key: 'applied', label: '已生效' },
+    { key: 'draft', label: '草稿', labelKey: `${P}.lifecycleDraft` },
+    { key: 'pending_review', label: '待审核', labelKey: `${P}.lifecyclePendingReview` },
+    { key: 'audited', label: '已审核', labelKey: `${P}.lifecycleAudited` },
+    { key: 'applied', label: '已生效', labelKey: `${P}.lifecycleEffective` },
   ],
   statusToKey: {
     草稿: 'draft',
@@ -38,31 +59,46 @@ const baseResolver = createLifecycleResolver({
     applied: [],
     rejected: ['修改后重新提交'],
   },
+  nextStepSuggestionKeys: {
+    draft: [`${OC}.lifecycleNextSubmitReview`],
+    pending_review: [`${OC}.lifecycleNextApprove`, `${OC}.lifecycleNextReject`],
+    audited: [`${OC}.lifecycleNextApply`],
+    applied: [],
+    rejected: [`${OC}.lifecycleNextResubmit`],
+  },
 });
+
+function buildAppliedLifecycleBackend(t?: LifecycleTranslateFn): BackendLifecycle {
+  const label = (key: string, fallback: string) =>
+    t && ORDER_CHANGE_STAGE_I18N_BY_KEY[key] ? t(ORDER_CHANGE_STAGE_I18N_BY_KEY[key]) : fallback;
+  return {
+    current_stage_key: 'applied',
+    current_stage_name: label('applied', '已生效'),
+    status: 'success',
+    main_stages: [
+      { key: 'draft', label: label('draft', '草稿'), status: 'done' },
+      { key: 'pending_review', label: label('pending_review', '待审核'), status: 'done' },
+      { key: 'audited', label: label('audited', '已审核'), status: 'done' },
+      { key: 'applied', label: label('applied', '已生效'), status: 'active' },
+    ],
+    next_step_suggestions: [],
+  };
+}
 
 export function getOrderChangeLifecycle(
   record: Record<string, unknown> | null | undefined,
+  t?: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   if (record.applied_at) {
-    const backend: BackendLifecycle = {
-      current_stage_key: 'applied',
-      current_stage_name: '已生效',
-      status: 'success',
-      main_stages: [
-        { key: 'draft', label: '草稿', status: 'done' },
-        { key: 'pending_review', label: '待审核', status: 'done' },
-        { key: 'audited', label: '已审核', status: 'done' },
-        { key: 'applied', label: '已生效', status: 'active' },
-      ],
-      next_step_suggestions: [],
-    };
-    return parseBackendLifecycle(backend);
+    return parseBackendLifecycle(buildAppliedLifecycleBackend(t));
   }
-  return baseResolver(record);
+  return baseResolver(record, t);
 }
 
-export function buildOrderChangeLifecycleValueEnum(): Record<
+export function buildOrderChangeLifecycleValueEnum(
+  t?: LifecycleTranslateFn,
+): Record<
   string,
   { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }
 > {
@@ -74,7 +110,13 @@ export function buildOrderChangeLifecycleValueEnum(): Record<
     已驳回: 'Error',
   };
   return Object.fromEntries(
-    ORDER_CHANGE_STAGE_LABELS.map((stage) => [stage, { text: stage, status: statusByStage[stage] ?? 'Default' }]),
+    ORDER_CHANGE_STAGE_LABELS.map((stage) => [
+      stage,
+      {
+        text: t ? t(ORDER_CHANGE_STAGE_I18N[stage] ?? stage) : stage,
+        status: statusByStage[stage] ?? 'Default',
+      },
+    ]),
   );
 }
 
@@ -99,10 +141,9 @@ export function resolveOrderChangeListLifecycleParams(
   return api;
 }
 
-export function isOrderChangeDraft(record: { status?: string; lifecycle?: BackendLifecycle } | null | undefined): boolean {
+export function isOrderChangeDraft(record: { status?: string } | null | undefined): boolean {
   if (!record) return false;
-  const lc = getOrderChangeLifecycle(record as Record<string, unknown>);
-  return lc.stageName === '草稿' || record.status === 'DRAFT' || record.status === '草稿';
+  return record.status === 'DRAFT' || record.status === '草稿';
 }
 
 export function isOrderChangePendingReview(record: { status?: string } | null | undefined): boolean {

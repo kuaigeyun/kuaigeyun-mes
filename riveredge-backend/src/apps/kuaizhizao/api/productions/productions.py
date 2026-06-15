@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from decimal import Decimal
 import uuid
 from fastapi import APIRouter, Depends, Query, status as http_status, Path, HTTPException, Body
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
 from loguru import logger
 
 from core.api.deps import get_current_user, get_current_tenant
@@ -859,6 +859,41 @@ async def get_sales_forecast(
         tenant_id=tenant_id,
         forecast_id=forecast_id
     )
+
+
+@router.get(
+    "/sales-forecasts/{forecast_id}/print",
+    summary="Print sales forecast",
+    dependencies=[Depends(require_permission_codes("kuaizhizao:sales-forecast:print"))],
+)
+async def print_sales_forecast(
+    forecast_id: int = Path(..., description="销售预测ID"),
+    template_code: Optional[str] = Query(None),
+    template_uuid: Optional[str] = Query(None),
+    output_format: str = Query("html"),
+    response_format: str = Query("json"),
+    current_user: User = Depends(get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    from apps.kuaizhizao.services.print_service import DocumentPrintService
+    from infra.exceptions.exceptions import NotFoundError, ValidationError
+
+    try:
+        result = await DocumentPrintService().print_document(
+            tenant_id=tenant_id,
+            document_type="sales_forecast",
+            document_id=forecast_id,
+            template_code=template_code,
+            template_uuid=template_uuid,
+            output_format=output_format,
+        )
+    except NotFoundError as e:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+    except ValidationError as e:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+    if response_format == "html":
+        return HTMLResponse(content=result.get("content", ""), status_code=200)
+    return JSONResponse(content=result, status_code=200)
 
 
 @router.post("/sales-forecasts/{forecast_id}/push-to-computation", summary="Push to demand computation")

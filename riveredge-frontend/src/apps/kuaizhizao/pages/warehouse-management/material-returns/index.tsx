@@ -21,11 +21,10 @@ import { detailDrawerDescriptionItems, DetailDrawerTemplate, DRAWER_CONFIG, Form
 import { warehouseApi } from '../../../services/production';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getMaterialReturnLifecycle } from '../../../utils/materialReturnLifecycle';
-import type { DocumentPrintApiResult } from '../../../../../utils/printResponseHelpers';
-import { openPrintHtmlWindow, escapeHtml } from '../../../../../utils/printResponseHelpers';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 interface MaterialReturn {
   id?: number;
@@ -71,25 +70,8 @@ interface BorrowItemForReturn {
   warehouse_name: string;
 }
 
-function buildMaterialReturnPrintHtml(d: MaterialReturnDetail): string {
-  const esc = escapeHtml;
-  const rows = (d.items || [])
-    .map(
-      (it) =>
-        `<tr><td>${esc(it.material_code)}</td><td>${esc(it.material_name)}</td><td>${esc(it.material_unit)}</td><td style="text-align:right">${esc(it.return_quantity)}</td></tr>`,
-    )
-    .join('');
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>还料单 ${esc(d.return_code)}</title><style>body{font-family:system-ui,sans-serif;padding:24px;}table{border-collapse:collapse;width:100%;margin-top:16px}th,td{border:1px solid #ccc;padding:8px;font-size:13px}th{background:#f0f0f0;text-align:left}</style></head><body>
-<h2>还料单</h2>
-<p><strong>单号</strong> ${esc(d.return_code)} &nbsp; <strong>关联借料单</strong> ${esc(d.borrow_code)} &nbsp; <strong>仓库</strong> ${esc(d.warehouse_name)}</p>
-<p><strong>归还人</strong> ${esc(d.returner_name)} &nbsp; <strong>归还时间</strong> ${esc(d.return_time)}</p>
-<p><strong>备注</strong> ${esc(d.notes)}</p>
-<table><thead><tr><th>物料编码</th><th>物料名称</th><th>单位</th><th>归还数量</th></tr></thead><tbody>${rows || '<tr><td colspan="4">无明细</td></tr>'}</tbody></table>
-<p style="margin-top:16px;color:#666;font-size:12px">未配置打印模板时的系统兜底</p>
-</body></html>`;
-}
-
 const MaterialReturnsPage: React.FC = () => {
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -311,26 +293,9 @@ const MaterialReturnsPage: React.FC = () => {
     });
   };
 
-  const handlePrint = async (record: MaterialReturn) => {
-    try {
-      const result = (await warehouseApi.materialReturn.print(record.id!.toString())) as DocumentPrintApiResult;
-      if (result?.success && result?.content) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(result.content);
-          printWindow.document.close();
-          printWindow.onload = () => printWindow.print();
-        }
-      } else {
-        const detail = (await warehouseApi.materialReturn.get(record.id!.toString())) as MaterialReturnDetail;
-        const w = openPrintHtmlWindow(buildMaterialReturnPrintHtml(detail), `还料单 ${detail.return_code || ''}`);
-        if (!w) {
-          messageApi.warning(result?.message || '无法打开打印窗口，请检查浏览器拦截设置');
-        }
-      }
-    } catch {
-      messageApi.error('打印失败');
-    }
+  const handlePrint = (record: MaterialReturn) => {
+    if (!record.id) return;
+    openPrint({ documentType: 'material_return', documentId: record.id });
   };
 
   /** 参考销售订单：先打开弹窗，再让 CodeField 自动生成编号 */
@@ -583,6 +548,7 @@ const MaterialReturnsPage: React.FC = () => {
         <DocumentAttachmentsField category="material_return_attachments" />
         <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
+      {PrintModal}
     </>
   );
 };

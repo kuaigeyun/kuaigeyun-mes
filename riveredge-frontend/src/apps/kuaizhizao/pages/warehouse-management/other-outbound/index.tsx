@@ -42,6 +42,7 @@ import { useWarehouseLocationOptions } from '../../../hooks/useWarehouseLocation
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 
 const REASON_TYPES_FALLBACK = [
   { value: '盘亏', label: '盘亏' },
@@ -93,6 +94,7 @@ const OTHER_OUTBOUND_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_other_outbounds';
 
 const OtherOutboundPage: React.FC = () => {
   const { t } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
@@ -329,14 +331,9 @@ const OtherOutboundPage: React.FC = () => {
     });
   };
 
-  const handlePrint = async (record: OtherOutbound) => {
+  const handlePrint = (record: OtherOutbound) => {
     if (!record.id) return;
-    try {
-      await warehouseApi.otherOutbound.print(String(record.id));
-      messageApi.success('已发送打印请求');
-    } catch (error: any) {
-      messageApi.error(error.message || '打印失败');
-    }
+    openPrint({ documentType: 'other_outbound', documentId: record.id });
   };
 
   const handleDelete = async (record: OtherOutbound) => {
@@ -799,6 +796,7 @@ const OtherOutboundPage: React.FC = () => {
         onCancel={() => setMaterialPickerOpen(false)}
         onConfirm={appendOtherOutboundItemsFromMaterials}
       />
+      {PrintModal}
     </>
   );
 };

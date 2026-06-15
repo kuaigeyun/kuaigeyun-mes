@@ -11,6 +11,7 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { localizeDashboardTodos } from '../../../utils/dashboardTodoI18n';
 import {
   Card,
   Row,
@@ -38,15 +39,11 @@ import { DashboardTemplate } from '../../../components/layout-templates';
 import { PAGE_SPACING } from '../../../components/layout-templates/constants';
 import { QuickEntryGrid, type QuickEntryItem } from '../../../components/quick-entry/QuickEntryGrid';
 import {
-  buildQuickEntriesFromMenuTree,
+  resolveQuickEntryDisplayItems,
   findMenuInTree,
-  getTranslatedMenuTitle,
 } from '../../../components/quick-entry/quickEntryItems';
 import { convertMenuTreeToTreeData } from '../../../components/quick-entry/convertMenuTreeToTreeData';
-import {
-  getQuickEntryIconByPath,
-  renderQuickEntryMenuIcon,
-} from '../../../components/quick-entry/renderQuickEntryMenuIcon';
+import { renderQuickEntryMenuIcon } from '../../../components/quick-entry/renderQuickEntryMenuIcon';
 import { 
   getTodos, 
   getStatistics, 
@@ -205,7 +202,7 @@ function renderDashboardSimpleTodoList(
  * 工作台页面组件
  */
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message } = App.useApp();
   const navigate = useNavigate();
   const { token } = useToken();
@@ -367,14 +364,21 @@ export default function DashboardPage() {
   });
 
   const todos = useMemo(() => todosResult?.items || [], [todosResult]);
-  const todosWorkOrder = useMemo(() => todos.filter((x) => x.type === 'work_order'), [todos]);
-  const todosQualityInspection = useMemo(() => todos.filter((x) => x.type === 'quality_inspection'), [todos]);
-  const todosWarehouse = useMemo(() => todos.filter((x) => x.type === 'warehouse'), [todos]);
-  const todosOutbound = useMemo(() => todos.filter((x) => x.type === 'outbound'), [todos]);
-  const todosPurchase = useMemo(() => todos.filter((x) => x.type === 'purchase'), [todos]);
-  const todosSales = useMemo(() => todos.filter((x) => x.type === 'sales'), [todos]);
-  const todosEquipment = useMemo(() => todos.filter((x) => x.type === 'equipment'), [todos]);
-  const todosException = useMemo(() => todos.filter((x) => x.type === 'exception'), [todos]);
+  const localizedTodos = useMemo(
+    () => localizeDashboardTodos(todos, t),
+    [todos, t, i18n.language],
+  );
+  const todosWorkOrder = useMemo(() => localizedTodos.filter((x) => x.type === 'work_order'), [localizedTodos]);
+  const todosQualityInspection = useMemo(
+    () => localizedTodos.filter((x) => x.type === 'quality_inspection'),
+    [localizedTodos],
+  );
+  const todosWarehouse = useMemo(() => localizedTodos.filter((x) => x.type === 'warehouse'), [localizedTodos]);
+  const todosOutbound = useMemo(() => localizedTodos.filter((x) => x.type === 'outbound'), [localizedTodos]);
+  const todosPurchase = useMemo(() => localizedTodos.filter((x) => x.type === 'purchase'), [localizedTodos]);
+  const todosSales = useMemo(() => localizedTodos.filter((x) => x.type === 'sales'), [localizedTodos]);
+  const todosEquipment = useMemo(() => localizedTodos.filter((x) => x.type === 'equipment'), [localizedTodos]);
+  const todosException = useMemo(() => localizedTodos.filter((x) => x.type === 'exception'), [localizedTodos]);
 
   const dashboardTodoTabCountByKey = useMemo(
     () => ({
@@ -513,30 +517,12 @@ export default function DashboardPage() {
       return [];
     }
     const quickEntriesFromPref = userPreference?.preferences?.dashboard_quick_entries as QuickEntryItem[] | undefined;
-
-    if (Array.isArray(quickEntriesFromPref) && quickEntriesFromPref.length > 0) {
-      return quickEntriesFromPref
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map((entry) => {
-          const menu = quickEntryMenuTree.length ? findMenuInTree(quickEntryMenuTree, entry.menu_uuid) : null;
-          const resolvedPath = entry.menu_path || menu?.path || '';
-          if (!resolvedPath) return null;
-
-          return {
-            ...entry,
-            menu_name: entry.menu_name || (menu ? getTranslatedMenuTitle(menu, t) : ''),
-            menu_path: resolvedPath,
-            menu_icon: menu ? renderQuickEntryMenuIcon(menu) : getQuickEntryIconByPath(resolvedPath, entry.menu_name),
-          };
-        })
-        .filter((item): item is any => item !== null);
-    }
-
-    if (!quickEntryMenuTree.length) {
-      return [];
-    }
-
-    return buildQuickEntriesFromMenuTree(quickEntryMenuTree, renderQuickEntryMenuIcon, t, 10);
+    return resolveQuickEntryDisplayItems(
+      quickEntryMenuTree,
+      quickEntriesFromPref,
+      t,
+      10,
+    );
   }, [quickEntryLoading, userPreference, quickEntryMenuTree, t]);
 
   // 快捷入口菜单树数据
@@ -556,7 +542,7 @@ export default function DashboardPage() {
         currentTime={currentTime}
         lunarDateStr={lunarDateStr}
         statistics={statistics}
-        todos={todos}
+        todos={localizedTodos}
         quickEntries={quickEntryItems}
         isDark={isDark}
         onTodoHandle={(id) => handleTodoMutation.mutate({ todoId: id, action: 'handle' })}
@@ -821,11 +807,11 @@ export default function DashboardPage() {
                 [
                 {
                   key: 'all',
-                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabAll'), todos.length),
+                  label: formatDashboardTodoTabLabel(t('pages.dashboard.tabAll'), localizedTodos.length),
                   children: (
                     <div className="dashboard-feed-list">
-                      {todos.length > 0 ? (
-                        todos.map((item) => (
+                      {localizedTodos.length > 0 ? (
+                        localizedTodos.map((item) => (
                           <div
                             key={item.id}
                             className="dashboard-todo-item"
@@ -842,7 +828,9 @@ export default function DashboardPage() {
                               ) : null}
                               {item.due_date ? (
                                 <span className="dashboard-todo-item__desc">
-                                  {t('pages.dashboard.dueDate')}：{dayjs(item.due_date).format('YYYY-MM-DD')}
+                                  {t('pages.dashboard.dueDateShort', {
+                                    date: dayjs(item.due_date).format('YYYY-MM-DD'),
+                                  })}
                                 </span>
                               ) : null}
                             </div>

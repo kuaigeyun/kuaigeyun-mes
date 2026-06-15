@@ -64,6 +64,8 @@ STATE_ALIASES: dict[str, str] = {
     "completed": DocumentStatus.COMPLETED.value,
     "cancelled": DocumentStatus.CANCELLED.value,
     "closed": DocumentStatus.CLOSED.value,
+    "split": "SPLIT",
+    "已拆分": "SPLIT",
 }
 
 # review_status 别名：中文 <-> ReviewStatus 枚举

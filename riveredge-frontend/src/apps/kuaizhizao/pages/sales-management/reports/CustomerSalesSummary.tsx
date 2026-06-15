@@ -1,93 +1,82 @@
 /**
  * 客户销售业绩汇总报表
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import SalesBaseReport from './BaseReport';
-import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
+import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const CustomerSalesSummary: React.FC = () => {
-  const columns: ProColumns[] = [
-    {
-      title: '统计期间',
-      dataIndex: 'date_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      search: { order: 10 } as any,
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      copyable: true,
-      fixed: 'left',
-      width: 200,
-    },
-    {
-      title: '客户编号',
-      dataIndex: 'customer_code',
-      width: 150,
-    },
-    {
-      title: '订单总数',
-      dataIndex: 'order_count',
-      valueType: 'digit',
-      sorter: true,
-      width: 120,
-    },
-    {
-      title: '订单总额',
-      dataIndex: 'total_amount',
-      valueType: 'money',
-      sorter: true,
-      width: 150,
-    },
-    {
-      title: '已完成金额',
-      dataIndex: 'completed_amount',
-      valueType: 'money',
-      width: 150,
-    },
-    {
-      title: '回款总额',
-      dataIndex: 'received_amount',
-      valueType: 'money',
-      width: 150,
-    },
-    {
-      title: '最近交易日',
-      dataIndex: 'last_order_date',
-      valueType: 'date',
-      width: 150,
-    },
-    {
-      title: '客户负责人',
-      dataIndex: 'salesman_name',
-      width: 150,
-    },
-  ];
+  const { t } = useTranslation();
+  const columns: ProColumns[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.reports.statPeriod'),
+        dataIndex: 'date_range',
+        valueType: 'dateRange',
+        hideInTable: true,
+        search: { order: 10 } as any,
+      },
+      {
+        title: t('app.kuaizhizao.reports.customerName'),
+        dataIndex: 'customer_name',
+        copyable: true,
+        fixed: 'left',
+        width: 200,
+      },
+      {
+        title: t('app.kuaizhizao.reports.customerCode'),
+        dataIndex: 'customer_code',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.orderCount'),
+        dataIndex: 'order_count',
+        valueType: 'digit',
+        sorter: true,
+        width: 120,
+      },
+      {
+        title: t('app.kuaizhizao.reports.salesTotalAmount'),
+        dataIndex: 'total_amount',
+        valueType: 'money',
+        sorter: true,
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.completedAmount'),
+        dataIndex: 'completed_amount',
+        valueType: 'money',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.receivedAmount'),
+        dataIndex: 'received_amount',
+        valueType: 'money',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.lastOrderDate'),
+        dataIndex: 'last_order_date',
+        valueType: 'date',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.reports.accountManager'),
+        dataIndex: 'salesman_name',
+        width: 150,
+      },
+    ],
+    [t],
+  );
 
   return (
-    <SalesBaseReport
-      title="客户销售业绩汇总"
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.CustomerSalesSummary"
+      title={t('app.kuaizhizao.menu.reports.customer-sales-summary')}
       reportType="customer_summary"
       columns={columns}
-      request={async (params, _s, _f, searchFormValues) => {
-        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
-        const { skip, limit } = salesReportPageParams(params);
-        const res = await getSalesReport({
-          report_type: 'customer_summary',
-          date_start,
-          date_end,
-          customer_keyword: searchFormValues?.customer_name,
-          skip,
-          limit,
-        });
-        return {
-          data: res.data,
-          success: res.success,
-          total: res.total ?? res.data?.length ?? 0,
-        };
-      }}
+      dateRangeKeys={['date_range', 'dateRange']}
     />
   );
 };

@@ -11,6 +11,7 @@ import { App, Button, Tag, Space, Card, Modal, Switch, Spin, Typography, Alert, 
 import type { ThemeConfig } from 'antd/es/theme/interface';
 import { useRequest } from 'ahooks';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import {
@@ -165,6 +166,7 @@ function applyOperationDateUpdates(
 }
 
 const SchedulingPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -304,11 +306,11 @@ const SchedulingPage: React.FC = () => {
   const workOrderDiagnosticsById = useMemo(() => {
     const map = new Map<number, ReturnType<typeof collectWorkOrderDiagnosticIssues>>();
     for (const wo of ganttWorkOrders) {
-      const issues = collectWorkOrderDiagnosticIssues(wo, boardScan);
+      const issues = collectWorkOrderDiagnosticIssues(wo, boardScan, t);
       if (issues.length > 0) map.set(wo.id, issues);
     }
     return map;
-  }, [boardScan, ganttWorkOrders]);
+  }, [boardScan, ganttWorkOrders, t]);
 
   const poolWorkOrdersRef = useRef(poolWorkOrders);
   poolWorkOrdersRef.current = poolWorkOrders;
@@ -511,16 +513,18 @@ const SchedulingPage: React.FC = () => {
         operation_updates: opUpdates,
       });
       const doSave = async () => {
+        const woLabel = t('app.kuaizhizao.scheduling.batch.label.workOrderDates');
+        const opLabel = t('app.kuaizhizao.scheduling.batch.label.operationDates');
         if (woUpdates.length > 0) {
           const woResult = await workOrderApi.batchUpdateDates(woUpdates);
-          ensureBatchUpdatesPersisted(woResult, woUpdates.length, '工单日期');
-          reportBatchUpdateResult(messageApi, '工单日期', woResult);
+          ensureBatchUpdatesPersisted(woResult, woUpdates.length, woLabel, t);
+          reportBatchUpdateResult(messageApi, woLabel, woResult, t);
           mutateGanttWorkOrders((prev) => applyWorkOrderDateUpdates(prev ?? [], woUpdates));
         }
         if (opUpdates.length > 0) {
           const opResult = await workOrderApi.batchUpdateOperationDates(opUpdates);
-          ensureBatchUpdatesPersisted(opResult, opUpdates.length, '工序日期');
-          reportBatchUpdateResult(messageApi, '工序日期', opResult);
+          ensureBatchUpdatesPersisted(opResult, opUpdates.length, opLabel, t);
+          reportBatchUpdateResult(messageApi, opLabel, opResult, t);
           mutateGanttWorkOrders((prev) => applyOperationDateUpdates(prev ?? [], opUpdates));
         }
         actionRef.current?.reload();
@@ -534,15 +538,15 @@ const SchedulingPage: React.FC = () => {
       const preview = (validation.conflicts || []).slice(0, 5).map((c) => c.message).join('\n');
       await new Promise<void>((resolve, reject) => {
         modal.confirm({
-          title: '排程存在冲突',
+          title: t('app.kuaizhizao.scheduling.msg.conflictTitle'),
           content: (
             <div>
-              <p>检测到 {validation.conflict_count} 项冲突，仍要保存吗？</p>
+              <p>{t('app.kuaizhizao.scheduling.msg.conflictContent', { count: validation.conflict_count })}</p>
               <pre style={{ whiteSpace: 'pre-wrap', fontSize: 12 }}>{preview}</pre>
             </div>
           ),
-          okText: '仍要保存',
-          cancelText: '取消',
+          okText: t('app.kuaizhizao.scheduling.msg.saveAnyway'),
+          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
           onOk: async () => {
             try {
               await doSave();
@@ -555,14 +559,14 @@ const SchedulingPage: React.FC = () => {
         });
       });
     },
-    [messageApi, modal, mutateGanttWorkOrders, refreshBoardScan, refreshPlanReliability]
+    [messageApi, modal, mutateGanttWorkOrders, refreshBoardScan, refreshPlanReliability, t]
   );
 
   const handleApplyDraft = useCallback(async () => {
     const woUpdates = [...draftWoUpdatesRef.current.values()];
     const opUpdates = [...draftOpUpdatesRef.current.values()];
     if (woUpdates.length === 0 && opUpdates.length === 0) {
-      messageApi.info('暂无待应用的更改');
+      messageApi.info(t('app.kuaizhizao.scheduling.msg.noDraftChanges'));
       return;
     }
     try {
@@ -574,24 +578,24 @@ const SchedulingPage: React.FC = () => {
       refreshGantt();
     } catch (e: any) {
       if (e?.message !== 'cancelled') {
-        messageApi.error(e?.message || '应用更改失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.applyFailed'));
         refreshGantt();
       }
     }
-  }, [confirmAndPersist, messageApi, refreshGantt, syncDraftPendingCount]);
+  }, [confirmAndPersist, messageApi, refreshGantt, syncDraftPendingCount, t]);
 
   const handleUndoDraft = useCallback(() => {
     const prev = undoStackRef.current.pop();
     if (!prev) {
-      messageApi.info('无可撤销的暂存步骤');
+      messageApi.info(t('app.kuaizhizao.scheduling.msg.noUndoStep'));
       return;
     }
     mutateGanttWorkOrders(prev);
     draftWoUpdatesRef.current.clear();
     draftOpUpdatesRef.current.clear();
     syncDraftPendingCount();
-    messageApi.success('已撤销上一步暂存');
-  }, [messageApi, mutateGanttWorkOrders, syncDraftPendingCount]);
+    messageApi.success(t('app.kuaizhizao.scheduling.msg.undoSuccess'));
+  }, [messageApi, mutateGanttWorkOrders, syncDraftPendingCount, t]);
 
   const handleGanttBatchUpdate = useCallback(
     async (updates: Array<{ work_order_id: number; planned_start_date: string; planned_end_date: string }>) => {
@@ -610,7 +614,7 @@ const SchedulingPage: React.FC = () => {
         await confirmAndPersist(validUpdates, []);
       } catch (e: any) {
         if (e?.message !== 'cancelled') {
-          messageApi.error(e?.message || '排程更新失败');
+          messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.scheduleUpdateFailed'));
           refreshGantt();
         }
         throw e;
@@ -624,6 +628,7 @@ const SchedulingPage: React.FC = () => {
       pushUndoSnapshot,
       refreshGantt,
       syncDraftPendingCount,
+      t,
     ]
   );
 
@@ -644,7 +649,7 @@ const SchedulingPage: React.FC = () => {
         await confirmAndPersist([], validUpdates);
       } catch (e: any) {
         if (e?.message !== 'cancelled') {
-          messageApi.error(e?.message || '工序排程更新失败');
+          messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.operationUpdateFailed'));
           refreshGantt();
         }
         throw e;
@@ -658,6 +663,7 @@ const SchedulingPage: React.FC = () => {
       pushUndoSnapshot,
       refreshGantt,
       syncDraftPendingCount,
+      t,
     ]
   );
 
@@ -678,7 +684,7 @@ const SchedulingPage: React.FC = () => {
           planned_end_date: dayjs(wo.planned_end_date).add(days, 'day').toISOString(),
         }));
       if (updates.length === 0) {
-        messageApi.warning('选中工单无有效计划日期或处于冻结状态');
+        messageApi.warning(t('app.kuaizhizao.scheduling.msg.batchShiftNoValid'));
         return;
       }
       setBatchActionLoading(true);
@@ -686,12 +692,12 @@ const SchedulingPage: React.FC = () => {
         await confirmAndPersist(updates, []);
         refreshGantt();
       } catch (e: any) {
-        if (e?.message !== 'cancelled') messageApi.error(e?.message || '批量平移失败');
+        if (e?.message !== 'cancelled') messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.batchShiftFailed'));
       } finally {
         setBatchActionLoading(false);
       }
     },
-    [confirmAndPersist, freezeAnchor, ganttWorkOrders, messageApi, refreshGantt, schedulingConstraints.freeze_horizon_days, selectedWorkOrderIds]
+    [confirmAndPersist, freezeAnchor, ganttWorkOrders, messageApi, refreshGantt, schedulingConstraints.freeze_horizon_days, selectedWorkOrderIds, t]
   );
 
   const handleGanttWorkOrderSelect = useCallback((workOrderId: number | null) => {
@@ -715,25 +721,26 @@ const SchedulingPage: React.FC = () => {
         });
         if (!validation.valid) {
           const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
-          messageApi.error(preview || '改派工位校验未通过');
+          messageApi.error(preview || t('app.kuaizhizao.scheduling.msg.stationValidationFailed'));
           refreshGantt();
           return;
         }
         const result = await workOrderApi.batchUpdateOperationStations(updates);
-        reportBatchUpdateResult(messageApi, '工序工位', {
+        const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
+        reportBatchUpdateResult(messageApi, stationLabel, {
           updated: result.updated,
           skipped_frozen: result.skipped_frozen,
           skipped_freeze_window: [],
           failed: result.failed,
-        });
+        }, t);
         refreshGantt();
         refreshBoardScan();
       } catch (e: any) {
-        messageApi.error(e?.message || '改派工位失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.stationReassignFailed'));
         refreshGantt();
       }
     },
-    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt]
+    [canScheduleUpdate, messageApi, refreshBoardScan, refreshGantt, t]
   );
 
   const handleSchedulingQuickAction = useCallback(
@@ -753,10 +760,13 @@ const SchedulingPage: React.FC = () => {
           title,
           content:
             overdueCount > 0
-              ? `已选 ${ids.length} 张工单，其中 ${overdueCount} 张已逾期。是否继续？`
-              : `已选 ${ids.length} 张工单，是否继续？`,
-          okText: '确认',
-          cancelText: '取消',
+              ? t('app.kuaizhizao.scheduling.msg.quickActionConfirmOverdue', {
+                  count: ids.length,
+                  overdue: overdueCount,
+                })
+              : t('app.kuaizhizao.scheduling.msg.quickActionConfirm', { count: ids.length }),
+          okText: t('app.kuaizhizao.scheduling.common.confirm'),
+          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
           onOk: () => resolve(),
           onCancel: () => reject(new Error('cancelled')),
         });
@@ -775,35 +785,58 @@ const SchedulingPage: React.FC = () => {
         const convertedCount = result.converted_to_exception?.length ?? 0;
         const unfreezedCount = result.unfreezed?.length ?? 0;
         messageApi.success(
-          `${successPrefix}：顺延 ${updatedCount}，转异常 ${convertedCount}，解冻 ${unfreezedCount}，跳过 ${skippedCount}${
-            failCount > 0 ? `，失败 ${failCount}` : ''
-          }`
+          t('app.kuaizhizao.scheduling.msg.quickActionResult', {
+            prefix: successPrefix,
+            updated: updatedCount,
+            converted: convertedCount,
+            unfreezed: unfreezedCount,
+            skipped: skippedCount,
+            failedPart:
+              failCount > 0
+                ? t('app.kuaizhizao.scheduling.msg.quickActionResultFailed', { count: failCount })
+                : '',
+          })
         );
         refreshGantt();
         refreshBoardScan();
         actionRef.current?.reload();
       } catch (e: any) {
         if (e?.message !== 'cancelled') {
-          messageApi.error(e?.message || '快捷处置失败');
+          messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.quickActionFailed'));
         }
       } finally {
         setQuickActionLoading(false);
       }
     },
-    [canScheduleUpdate, messageApi, modal, refreshBoardScan, refreshGantt, selectedWorkOrderIds, selectedWorkOrders]
+    [canScheduleUpdate, messageApi, modal, refreshBoardScan, refreshGantt, selectedWorkOrderIds, selectedWorkOrders, t]
   );
 
   const handleConfirmDelay = useCallback(async () => {
-    await handleSchedulingQuickAction('confirm_delay', '延期确认', '可视排产延期确认', '已完成延期确认');
-  }, [handleSchedulingQuickAction]);
+    await handleSchedulingQuickAction(
+      'confirm_delay',
+      t('app.kuaizhizao.scheduling.msg.confirmDelayTitle'),
+      t('app.kuaizhizao.scheduling.msg.confirmDelayReason'),
+      t('app.kuaizhizao.scheduling.msg.confirmDelaySuccess')
+    );
+  }, [handleSchedulingQuickAction, t]);
 
   const handleToException = useCallback(async () => {
-    await handleSchedulingQuickAction('to_exception', '转异常工单', '可视排产转异常', '已转入异常池');
-  }, [handleSchedulingQuickAction]);
+    await handleSchedulingQuickAction(
+      'to_exception',
+      t('app.kuaizhizao.scheduling.msg.toExceptionTitle'),
+      t('app.kuaizhizao.scheduling.msg.toExceptionReason'),
+      t('app.kuaizhizao.scheduling.msg.toExceptionSuccess')
+    );
+  }, [handleSchedulingQuickAction, t]);
 
   const handleApplyUnfreeze = useCallback(async () => {
-    await handleSchedulingQuickAction('apply_unfreeze', '解冻申请', '可视排产解冻申请', '已处理解冻申请');
-  }, [handleSchedulingQuickAction]);
+    await handleSchedulingQuickAction(
+      'apply_unfreeze',
+      t('app.kuaizhizao.scheduling.msg.applyUnfreezeTitle'),
+      t('app.kuaizhizao.scheduling.msg.applyUnfreezeReason'),
+      t('app.kuaizhizao.scheduling.msg.applyUnfreezeSuccess')
+    );
+  }, [handleSchedulingQuickAction, t]);
 
   const persistOperationScheduling = useCallback(
     async (
@@ -817,9 +850,10 @@ const SchedulingPage: React.FC = () => {
         });
         if (!validation.valid) {
           const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
-          throw new Error(preview || '排产校验未通过');
+          throw new Error(preview || t('app.kuaizhizao.scheduling.msg.validationFailed'));
         }
         const stationResult = await workOrderApi.batchUpdateOperationStations(operationStationUpdates);
+        const stationLabel = t('app.kuaizhizao.scheduling.batch.label.operationStations');
         ensureBatchUpdatesPersisted(
           {
             updated: stationResult.updated,
@@ -828,14 +862,15 @@ const SchedulingPage: React.FC = () => {
             failed: stationResult.failed,
           },
           operationStationUpdates.length,
-          '工序工位'
+          stationLabel,
+          t
         );
-        reportBatchUpdateResult(messageApi, '工序工位', {
+        reportBatchUpdateResult(messageApi, stationLabel, {
           updated: stationResult.updated,
           skipped_frozen: stationResult.skipped_frozen,
           skipped_freeze_window: [],
           failed: stationResult.failed,
-        });
+        }, t);
       }
       if (operationDateUpdates.length > 0) {
         const validation = await visualSchedulingApi.validateAdjustments({
@@ -843,14 +878,15 @@ const SchedulingPage: React.FC = () => {
         });
         if (!validation.valid) {
           const preview = (validation.conflicts || []).slice(0, 3).map((c) => c.message).join('\n');
-          throw new Error(preview || '排产校验未通过');
+          throw new Error(preview || t('app.kuaizhizao.scheduling.msg.validationFailed'));
         }
+        const opLabel = t('app.kuaizhizao.scheduling.batch.label.operationDates');
         const opResult = await workOrderApi.batchUpdateOperationDates(operationDateUpdates);
-        ensureBatchUpdatesPersisted(opResult, operationDateUpdates.length, '工序日期');
-        reportBatchUpdateResult(messageApi, '工序日期', opResult);
+        ensureBatchUpdatesPersisted(opResult, operationDateUpdates.length, opLabel, t);
+        reportBatchUpdateResult(messageApi, opLabel, opResult, t);
       }
     },
-    [messageApi]
+    [messageApi, t]
   );
 
   const refreshGanttPreservingWorkOrder = useCallback(
@@ -897,12 +933,22 @@ const SchedulingPage: React.FC = () => {
 
       if (result.pendingOperations.length > 0) {
         messageApi.warning(
-          `工位已保存，${result.pendingOperations.length} 道工序仍缺工位；${result.operationDateUpdates.length > 0 ? `已排入 ${result.operationDateUpdates.length} 道工序，` : ''}请继续补充`
+          t('app.kuaizhizao.scheduling.msg.stationsSavedPending', {
+            pending: result.pendingOperations.length,
+            scheduledPart:
+              result.operationDateUpdates.length > 0
+                ? t('app.kuaizhizao.scheduling.msg.stationsSavedScheduledPart', {
+                    count: result.operationDateUpdates.length,
+                  })
+                : '',
+          })
         );
       } else if (result.operationDateUpdates.length > 0) {
-        messageApi.success(`已保存并排入甘特图 ${result.operationDateUpdates.length} 道工序`);
+        messageApi.success(
+          t('app.kuaizhizao.scheduling.msg.savedToGantt', { count: result.operationDateUpdates.length })
+        );
       } else {
-        messageApi.success('工位已保存，工序将按工单计划时间展示在甘特图');
+        messageApi.success(t('app.kuaizhizao.scheduling.msg.stationsSavedDisplay'));
       }
 
       refreshBoardScan();
@@ -916,6 +962,7 @@ const SchedulingPage: React.FC = () => {
       refreshBoardScan,
       refreshGanttPreservingWorkOrder,
       workstationResources,
+      t,
     ]
   );
 
@@ -937,7 +984,7 @@ const SchedulingPage: React.FC = () => {
         setPrepModalOperationsNeedingStation(getOperationsForStationPrep(woWithOps));
         setPrepModalOpen(true);
       } catch (e: any) {
-        messageApi.error(e?.message || '加载工序失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.loadOperationsFailed'));
         setPrepModalOpen(false);
         setPrepModalWorkOrder(null);
         setPrepModalMissing([]);
@@ -946,7 +993,7 @@ const SchedulingPage: React.FC = () => {
         setPrepModalLoading(false);
       }
     },
-    [messageApi]
+    [messageApi, t]
   );
 
   const handleDropWorkOrderToBoard = useCallback(
@@ -954,12 +1001,12 @@ const SchedulingPage: React.FC = () => {
       if (!canScheduleUpdate) return;
       const wo = ganttWorkOrders.find((item) => item.id === workOrderId);
       if (!wo) {
-        messageApi.warning('未找到该工单');
+        messageApi.warning(t('app.kuaizhizao.scheduling.msg.workOrderNotFound'));
         return;
       }
       const alreadyOnBoard = isWorkOrderScheduledOnBoard(wo);
       if (alreadyOnBoard && !workOrderNeedsSchedulingPrep(wo)) {
-        messageApi.info('该工单已在排产区');
+        messageApi.info(t('app.kuaizhizao.scheduling.msg.alreadyOnBoard'));
         return;
       }
       if (workOrderNeedsSchedulingPrep(wo)) {
@@ -969,7 +1016,7 @@ const SchedulingPage: React.FC = () => {
       try {
         await completeDropWorkOrderToBoard(wo);
       } catch (e: any) {
-        messageApi.error(e?.message || '拖入排产失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.dropFailed'));
         refreshGantt();
       }
     },
@@ -980,6 +1027,7 @@ const SchedulingPage: React.FC = () => {
       messageApi,
       openSchedulingPrepModal,
       refreshGantt,
+      t,
     ]
   );
 
@@ -1055,7 +1103,11 @@ const SchedulingPage: React.FC = () => {
         if (focusTask) {
           setFocusTaskId(focusTask);
         }
-        messageApi.success(`已保存并排入甘特图 ${values.operationDates.length || updatedOps.length} 道工序`);
+        messageApi.success(
+          t('app.kuaizhizao.scheduling.msg.savedToGantt', {
+            count: values.operationDates.length || updatedOps.length,
+          })
+        );
         refreshBoardScan();
         actionRef.current?.reload();
         await refreshGanttPreservingWorkOrder(updatedWo);
@@ -1065,7 +1117,7 @@ const SchedulingPage: React.FC = () => {
         setPrepModalMissing([]);
         setPrepModalOperationsNeedingStation([]);
       } catch (e: any) {
-        messageApi.error(e?.message || '保存排产信息失败');
+        messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.savePrepFailed'));
       } finally {
         setPrepModalSaving(false);
       }
@@ -1077,6 +1129,7 @@ const SchedulingPage: React.FC = () => {
       prepModalWorkOrder,
       refreshBoardScan,
       refreshGanttPreservingWorkOrder,
+      t,
     ]
   );
 
@@ -1085,32 +1138,34 @@ const SchedulingPage: React.FC = () => {
     setBatchActionLoading(true);
     try {
       await Promise.all(
-        selectedWorkOrderIds.slice(0, 50).map((id) => workOrderApi.freeze(String(id), { freeze_reason: '可视排产锁定' }))
+        selectedWorkOrderIds
+          .slice(0, 50)
+          .map((id) => workOrderApi.freeze(String(id), { freeze_reason: t('app.kuaizhizao.scheduling.msg.freezeReason') }))
       );
-      messageApi.success('已批量冻结选中工单');
+      messageApi.success(t('app.kuaizhizao.scheduling.msg.batchFreezeSuccess'));
       refreshGantt();
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '批量冻结失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.batchFreezeFailed'));
     } finally {
       setBatchActionLoading(false);
     }
-  }, [messageApi, refreshGantt, selectedWorkOrderIds]);
+  }, [messageApi, refreshGantt, selectedWorkOrderIds, t]);
 
   const handleBatchUnfreeze = useCallback(async () => {
     if (selectedWorkOrderIds.length === 0) return;
     setBatchActionLoading(true);
     try {
       await Promise.all(selectedWorkOrderIds.slice(0, 50).map((id) => workOrderApi.unfreeze(String(id))));
-      messageApi.success('已批量解冻选中工单');
+      messageApi.success(t('app.kuaizhizao.scheduling.msg.batchUnfreezeSuccess'));
       refreshGantt();
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '批量解冻失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.batchUnfreezeFailed'));
     } finally {
       setBatchActionLoading(false);
     }
-  }, [messageApi, refreshGantt, selectedWorkOrderIds]);
+  }, [messageApi, refreshGantt, selectedWorkOrderIds, t]);
 
   const handleRefreshAll = useCallback(() => {
     refreshGantt();
@@ -1118,115 +1173,135 @@ const SchedulingPage: React.FC = () => {
     refreshPlanReliability();
   }, [refreshBoardScan, refreshGantt, refreshPlanReliability]);
 
-  const columns: ProColumns<WorkOrderForGantt>[] = [
-    { title: '工单编号', dataIndex: 'code', width: 130, ellipsis: true, fixed: 'left' },
-    {
-      title: '工序数',
-      width: 64,
-      align: 'center',
-      render: (_: unknown, record) => {
-        const count = countWorkOrderOperations(record);
-        return count > 0 ? count : <Typography.Text type="secondary">0</Typography.Text>;
+  const columns: ProColumns<WorkOrderForGantt>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.scheduling.col.workOrderCode'), dataIndex: 'code', width: 130, ellipsis: true, fixed: 'left' },
+      {
+        title: t('app.kuaizhizao.scheduling.col.operationCount'),
+        width: 64,
+        align: 'center',
+        render: (_: unknown, record) => {
+          const count = countWorkOrderOperations(record);
+          return count > 0 ? count : <Typography.Text type="secondary">0</Typography.Text>;
+        },
       },
-    },
-    {
-      title: '已排工序数',
-      width: 88,
-      align: 'center',
-      render: (_: unknown, record) => {
-        const total = countWorkOrderOperations(record);
-        const scheduled = countScheduledOperations(record);
-        if (total <= 0) {
-          return <Typography.Text type="secondary">0</Typography.Text>;
-        }
-        const label = String(scheduled);
-        if (scheduled >= total) {
+      {
+        title: t('app.kuaizhizao.scheduling.col.scheduledOpCount'),
+        width: 88,
+        align: 'center',
+        render: (_: unknown, record) => {
+          const total = countWorkOrderOperations(record);
+          const scheduled = countScheduledOperations(record);
+          if (total <= 0) {
+            return <Typography.Text type="secondary">0</Typography.Text>;
+          }
+          const label = String(scheduled);
+          const tooltip = t('app.kuaizhizao.scheduling.col.scheduledOpsTooltip', { scheduled, total });
+          if (scheduled >= total) {
+            return (
+              <Tooltip title={tooltip}>
+                <Typography.Text>{label}</Typography.Text>
+              </Tooltip>
+            );
+          }
           return (
-            <Tooltip title={`${scheduled}/${total} 道工序已排产`}>
-              <Typography.Text>{label}</Typography.Text>
+            <Tooltip title={tooltip}>
+              <Typography.Text type={scheduled > 0 ? undefined : 'secondary'}>{label}</Typography.Text>
             </Tooltip>
           );
-        }
-        return (
-          <Tooltip title={`${scheduled}/${total} 道工序已排产`}>
-            <Typography.Text type={scheduled > 0 ? undefined : 'secondary'}>{label}</Typography.Text>
-          </Tooltip>
-        );
+        },
       },
-    },
-    { title: '产品名称', dataIndex: 'product_name', width: 120, ellipsis: true },
-    { title: '数量', dataIndex: 'quantity', width: 72, align: 'right' },
-    { title: '计划开始时间', dataIndex: 'planned_start_date', valueType: 'dateTime', width: 148 },
-    { title: '计划结束时间', dataIndex: 'planned_end_date', valueType: 'dateTime', width: 148 },
-    {
-      title: '逾期',
-      width: 72,
-      align: 'center',
-      render: (_: unknown, record) => {
-        if (!record.planned_end_date) return <Typography.Text type="secondary">—</Typography.Text>;
-        const overdue = dayjs(record.planned_end_date).isBefore(dayjs());
-        return overdue ? <Tag color="error">逾期</Tag> : <Typography.Text type="secondary">—</Typography.Text>;
+      { title: t('app.kuaizhizao.scheduling.col.productName'), dataIndex: 'product_name', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.scheduling.col.quantity'), dataIndex: 'quantity', width: 72, align: 'right' },
+      { title: t('app.kuaizhizao.scheduling.col.plannedStart'), dataIndex: 'planned_start_date', valueType: 'dateTime', width: 148 },
+      { title: t('app.kuaizhizao.scheduling.col.plannedEnd'), dataIndex: 'planned_end_date', valueType: 'dateTime', width: 148 },
+      {
+        title: t('app.kuaizhizao.scheduling.col.overdue'),
+        width: 72,
+        align: 'center',
+        render: (_: unknown, record) => {
+          if (!record.planned_end_date) {
+            return <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.common.dash')}</Typography.Text>;
+          }
+          const overdue = dayjs(record.planned_end_date).isBefore(dayjs());
+          return overdue ? (
+            <Tag color="error">{t('app.kuaizhizao.scheduling.col.overdueTag')}</Tag>
+          ) : (
+            <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.common.dash')}</Typography.Text>
+          );
+        },
       },
-    },
-    {
-      title: '排产问题',
-      width: 180,
-      ellipsis: true,
-      render: (_: unknown, record) => {
-        const issues = workOrderDiagnosticsById.get(record.id);
-        if (!issues?.length) {
-          return <Typography.Text type="secondary">—</Typography.Text>;
-        }
-        const visible = issues.slice(0, 2);
-        const rest = issues.length - visible.length;
-        const tooltip = issues.map((item) => item.label).join('；');
-        return (
-          <Tooltip title={tooltip}>
-            <Space size={4} wrap>
-              {visible.map((item) => (
-                <Tag key={item.key} color={item.severity === 'error' ? 'error' : 'warning'}>
-                  {item.label}
-                </Tag>
-              ))}
-              {rest > 0 ? <Tag>+{rest}</Tag> : null}
-            </Space>
-          </Tooltip>
-        );
+      {
+        title: t('app.kuaizhizao.scheduling.col.schedulingIssues'),
+        width: 180,
+        ellipsis: true,
+        render: (_: unknown, record) => {
+          const issues = workOrderDiagnosticsById.get(record.id);
+          if (!issues?.length) {
+            return <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.common.dash')}</Typography.Text>;
+          }
+          const visible = issues.slice(0, 2);
+          const rest = issues.length - visible.length;
+          const tooltip = issues.map((item) => item.label).join('；');
+          return (
+            <Tooltip title={tooltip}>
+              <Space size={4} wrap>
+                {visible.map((item) => (
+                  <Tag key={item.key} color={item.severity === 'error' ? 'error' : 'warning'}>
+                    {item.label}
+                  </Tag>
+                ))}
+                {rest > 0 ? <Tag>+{rest}</Tag> : null}
+              </Space>
+            </Tooltip>
+          );
+        },
       },
-    },
-    {
-      title: '冻结',
-      dataIndex: 'is_frozen',
-      width: 72,
-      align: 'center',
-      render: (_: unknown, record: { is_frozen?: boolean }) =>
-        record.is_frozen ? <Tag color="purple">冻结</Tag> : <Typography.Text type="secondary">—</Typography.Text>,
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      width: 80,
-      align: 'center',
-      render: (priority: any) => {
-        const val = String(priority || '');
-        const colorMap: Record<string, string> = { urgent: 'red', high: 'orange', normal: 'blue', low: 'default' };
-        const textMap: Record<string, string> = { urgent: '紧急', high: '高', normal: '普通', low: '低' };
-        return <Tag color={colorMap[val] || 'default'}>{textMap[val] || val}</Tag>;
+      {
+        title: t('app.kuaizhizao.scheduling.col.frozen'),
+        dataIndex: 'is_frozen',
+        width: 72,
+        align: 'center',
+        render: (_: unknown, record: { is_frozen?: boolean }) =>
+          record.is_frozen ? (
+            <Tag color="purple">{t('app.kuaizhizao.scheduling.col.frozenTag')}</Tag>
+          ) : (
+            <Typography.Text type="secondary">{t('app.kuaizhizao.scheduling.common.dash')}</Typography.Text>
+          ),
       },
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      valueEnum: {
-        draft: { text: '草稿', status: 'default' },
-        released: { text: '已下达', status: 'processing' },
-        in_progress: { text: '生产中', status: 'processing' },
+      {
+        title: t('app.kuaizhizao.scheduling.col.priority'),
+        dataIndex: 'priority',
+        width: 80,
+        align: 'center',
+        render: (priority: any) => {
+          const val = String(priority || '');
+          const colorMap: Record<string, string> = { urgent: 'red', high: 'orange', normal: 'blue', low: 'default' };
+          const textMap: Record<string, string> = {
+            urgent: t('app.kuaizhizao.scheduling.priority.urgent'),
+            high: t('app.kuaizhizao.scheduling.priority.high'),
+            normal: t('app.kuaizhizao.scheduling.priority.normal'),
+            low: t('app.kuaizhizao.scheduling.priority.low'),
+          };
+          return <Tag color={colorMap[val] || 'default'}>{textMap[val] || val}</Tag>;
+        },
       },
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.scheduling.col.status'),
+        dataIndex: 'status',
+        width: 100,
+        valueEnum: {
+          draft: { text: t('app.kuaizhizao.scheduling.status.draft'), status: 'default' },
+          released: { text: t('app.kuaizhizao.scheduling.status.released'), status: 'processing' },
+          in_progress: { text: t('app.kuaizhizao.scheduling.status.inProgress'), status: 'processing' },
+        },
+      },
+    ],
+    [t, workOrderDiagnosticsById]
+  );
 
   const ganttToolbarNodes = buildSchedulingGanttToolbar({
+    t,
     ganttViewMode,
     resourceViewStats,
     shiftDays,
@@ -1239,10 +1314,10 @@ const SchedulingPage: React.FC = () => {
     onDraftModeChange: (on) => {
       if (!on && draftPendingCount > 0) {
         modal.confirm({
-          title: '关闭暂存模式',
-          content: `仍有 ${draftPendingCount} 项未应用更改，关闭将丢弃本地暂存。`,
-          okText: '丢弃并关闭',
-          cancelText: '取消',
+          title: t('app.kuaizhizao.scheduling.draft.closeTitle'),
+          content: t('app.kuaizhizao.scheduling.draft.closeContent', { count: draftPendingCount }),
+          okText: t('app.kuaizhizao.scheduling.draft.discardAndClose'),
+          cancelText: t('app.kuaizhizao.scheduling.common.cancel'),
           onOk: () => {
             draftWoUpdatesRef.current.clear();
             draftOpUpdatesRef.current.clear();
@@ -1283,8 +1358,8 @@ const SchedulingPage: React.FC = () => {
         placement="left"
         steps={[
           {
-            title: '建议全屏排产',
-            description: '拖拽甘特条调整计划 → 查看冲突与负荷 → 冻结锁定本周计划。',
+            title: t('app.kuaizhizao.scheduling.tour.fullscreenTitle'),
+            description: t('app.kuaizhizao.scheduling.tour.fullscreenDescription'),
             target: () => document.querySelector('.uni-tabs-fullscreen-button') as HTMLElement,
           },
         ]}
@@ -1302,10 +1377,10 @@ const SchedulingPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          title={`已从协调中心带入 ${filterWorkOrderIds.length} 个工单进行可视排产`}
+          title={t('app.kuaizhizao.scheduling.alert.fromCoordinationCenter', { count: filterWorkOrderIds.length })}
           action={
             <Button size="small" onClick={() => navigate('/apps/kuaizhizao/plan-management/dashboard')}>
-              返回协调中心
+              {t('app.kuaizhizao.scheduling.alert.returnCoordinationCenter')}
             </Button>
           }
         />
@@ -1316,13 +1391,13 @@ const SchedulingPage: React.FC = () => {
           showIcon
           closable
           style={{ marginBottom: 12 }}
-          title={`已按滚动计划日 ${filterPlanDate} 过滤待排池`}
+          title={t('app.kuaizhizao.scheduling.alert.filterByPlanDate', { date: filterPlanDate })}
           action={
             <Button
               size="small"
               onClick={() => navigate(`/apps/kuaizhizao/plan-management/rolling-scheduling?plan_date=${filterPlanDate}`)}
             >
-              返回滚动计划
+              {t('app.kuaizhizao.scheduling.alert.returnRollingPlan')}
             </Button>
           }
         />
@@ -1332,7 +1407,7 @@ const SchedulingPage: React.FC = () => {
           type="warning"
           showIcon
           style={{ marginBottom: 12 }}
-          title={`甘特图仅展示前 ${GANTT_WORK_ORDER_LIMIT} 条工单，请用筛选或深链缩小范围`}
+          title={t('app.kuaizhizao.scheduling.alert.ganttLimitWarning', { limit: GANTT_WORK_ORDER_LIMIT })}
         />
       ) : null}
       <div className="aps-main-layout">
@@ -1343,7 +1418,7 @@ const SchedulingPage: React.FC = () => {
                 fallback={
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 48, gap: 16 }}>
                     <Spin size="large" />
-                    <div style={{ color: 'var(--ant-color-primary)' }}>加载甘特图…</div>
+                    <div style={{ color: 'var(--ant-color-primary)' }}>{t('app.kuaizhizao.scheduling.pool.loadingGantt')}</div>
                   </div>
                 }
               >
@@ -1371,7 +1446,7 @@ const SchedulingPage: React.FC = () => {
                     const text = String(taskId);
                     if (text === lastBlockedTaskId) return;
                     setLastBlockedTaskId(text);
-                    messageApi.warning('冻结窗内或已冻结工单禁止拖拽，请先解冻或移出冻结窗');
+                    messageApi.warning(t('app.kuaizhizao.scheduling.msg.freezeDragBlocked'));
                   }}
                 />
               </Suspense>
@@ -1380,16 +1455,19 @@ const SchedulingPage: React.FC = () => {
               <div className="scheduling-pending-pool__main">
                 <span className="scheduling-pending-pool__title-wrap">
                   <Typography.Text strong className="scheduling-pending-pool__title">
-                    待排工单区
+                    {t('app.kuaizhizao.scheduling.pool.title')}
                   </Typography.Text>
-                  <span className="scheduling-pending-pool__count" aria-label={`共 ${poolWorkOrders.length} 条`}>
+                  <span
+                    className="scheduling-pending-pool__count"
+                    aria-label={t('app.kuaizhizao.scheduling.pool.countAriaLabel', { count: poolWorkOrders.length })}
+                  >
                     {poolWorkOrders.length}
                   </span>
                 </span>
                 {canScheduleUpdate ? (
                   <>
                     <Typography.Text type="secondary" className="scheduling-pending-pool__hint">
-                      拖拽工单至上方排产区；排产问题列中的缺项可通过补充排产对话框填写
+                      {t('app.kuaizhizao.scheduling.pool.hint')}
                     </Typography.Text>
                     <span className="scheduling-pending-pool__sep" aria-hidden>
                       ·
@@ -1487,7 +1565,7 @@ const SchedulingPage: React.FC = () => {
       />
 
       <Modal
-        title="可视排产设置"
+        title={t('app.kuaizhizao.scheduling.config.title')}
         width={400}
         open={configDrawerOpen}
         onCancel={() => setConfigDrawerOpen(false)}
@@ -1498,7 +1576,7 @@ const SchedulingPage: React.FC = () => {
                 setSchedulingConstraints(DEFAULT_SCHEDULING_CONSTRAINTS);
               }}
             >
-              恢复默认
+              {t('app.kuaizhizao.scheduling.config.restoreDefault')}
             </Button>
             <Button
               type="primary"
@@ -1508,17 +1586,17 @@ const SchedulingPage: React.FC = () => {
                 try {
                   setConfigSaving(true);
                   await schedulingConfigApi.upsertDefault(pickVisualSchedulingConstraints(schedulingConstraints));
-                  messageApi.success('排产设置已保存');
+                  messageApi.success(t('app.kuaizhizao.scheduling.msg.configSaved'));
                   setConfigDrawerOpen(false);
                   refreshBoardScan();
                 } catch (e: any) {
-                  messageApi.error(e?.message || '保存失败');
+                  messageApi.error(e?.message || t('app.kuaizhizao.scheduling.msg.configSaveFailed'));
                 } finally {
                   setConfigSaving(false);
                 }
               }}
             >
-              确定
+              {t('app.kuaizhizao.scheduling.common.ok')}
             </Button>
           </Space>
         }
@@ -1526,7 +1604,7 @@ const SchedulingPage: React.FC = () => {
         <div style={{ padding: '12px 0' }}>
           <Space orientation="vertical" size={16} style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>冻结窗口（天）</span>
+              <span>{t('app.kuaizhizao.scheduling.config.freezeWindowDays')}</span>
               <InputNumber
                 size="small"
                 min={0}
@@ -1538,10 +1616,10 @@ const SchedulingPage: React.FC = () => {
               />
             </div>
             <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: -8 }}>
-              窗口内工单不可拖拽调整，甘特图左侧紫色区域为冻结窗
+              {t('app.kuaizhizao.scheduling.config.freezeWindowHint')}
             </Typography.Text>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>诊断扫描范围（天）</span>
+              <span>{t('app.kuaizhizao.scheduling.config.scanHorizonDays')}</span>
               <InputNumber
                 size="small"
                 min={1}
@@ -1553,14 +1631,14 @@ const SchedulingPage: React.FC = () => {
               />
             </div>
             <Divider style={{ margin: '4px 0' }} />
-            <div style={{ fontWeight: 500 }}>拖拽校验（冲突检测）</div>
+            <div style={{ fontWeight: 500 }}>{t('app.kuaizhizao.scheduling.config.dragValidationTitle')}</div>
             {(['consider_human', 'consider_equipment', 'consider_material', 'consider_mold_tool'] as const).map((key) => (
               <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>
-                  {key === 'consider_human' && '工位时间重叠'}
-                  {key === 'consider_equipment' && '设备时间重叠'}
-                  {key === 'consider_material' && '缺料齐套提示'}
-                  {key === 'consider_mold_tool' && '模具/工装重叠'}
+                  {key === 'consider_human' && t('app.kuaizhizao.scheduling.config.considerHuman')}
+                  {key === 'consider_equipment' && t('app.kuaizhizao.scheduling.config.considerEquipment')}
+                  {key === 'consider_material' && t('app.kuaizhizao.scheduling.config.considerMaterial')}
+                  {key === 'consider_mold_tool' && t('app.kuaizhizao.scheduling.config.considerMoldTool')}
                 </span>
                 <Switch
                   checked={schedulingConstraints[key]}

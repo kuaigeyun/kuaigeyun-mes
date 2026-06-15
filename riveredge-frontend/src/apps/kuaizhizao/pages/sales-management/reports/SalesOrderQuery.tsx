@@ -1,117 +1,216 @@
 /**
+
  * 销售订单综合查询报表
+
  */
-import React from 'react';
+
+import React, { useMemo } from 'react';
+
 import { ProColumns } from '@ant-design/pro-components';
+
 import { Tag } from 'antd';
-import SalesBaseReport from './BaseReport';
-import { getSalesReport, parseSalesReportDateRange, salesReportPageParams } from '../../../services/reports';
+
+import { useTranslation } from 'react-i18next';
+
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+
+
 
 const SalesOrderQuery: React.FC = () => {
-  const columns: ProColumns[] = [
-    {
-      title: '订单日期',
-      dataIndex: 'order_date_range',
-      valueType: 'dateRange',
-      hideInTable: true,
-      search: { order: 10 } as any,
-    },
-    {
-      title: '订单编号',
-      dataIndex: 'order_code',
-      copyable: true,
-      fixed: 'left',
-      width: 150,
-    },
-    {
-      title: '订单日期',
-      dataIndex: 'order_date',
-      valueType: 'date',
-      sorter: true,
-      width: 120,
-    },
-    {
-      title: '客户名称',
-      dataIndex: 'customer_name',
-      ellipsis: true,
-      width: 150,
-    },
-    {
-      title: '交货日期',
-      dataIndex: 'delivery_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '总金额',
-      dataIndex: 'total_amount',
-      valueType: 'money',
-      width: 120,
-    },
-    {
-      title: '订单状态',
-      dataIndex: 'status',
-      width: 100,
-      valueEnum: {
-        DRAFT: { text: '草稿', status: 'Default' },
-        CONFIRMED: { text: '已确认', status: 'Processing' },
-        AUDITED: { text: '已审核', status: 'Success' },
-        COMPLETED: { text: '已完成', status: 'Success' },
-        CANCELLED: { text: '已取消', status: 'Error' },
+
+  const { t } = useTranslation();
+
+  const columns: ProColumns[] = useMemo(
+
+    () => [
+
+      {
+
+        title: t('app.kuaizhizao.reports.orderDateRange'),
+
+        dataIndex: 'order_date_range',
+
+        valueType: 'dateRange',
+
+        hideInTable: true,
+
+        search: { order: 10 } as any,
+
       },
-    },
-    {
-      title: '审核状态',
-      dataIndex: 'review_status',
-      width: 100,
-      render: (_, record) => {
-        const status = record.review_status;
-        if (status === 'APPROVED' || status === '审核通过') return <Tag color="success">通过</Tag>;
-        if (status === 'REJECTED' || status === '驳回') return <Tag color="error">驳回</Tag>;
-        if (status === 'PENDING' || status === '待审核') return <Tag color="warning">待审核</Tag>;
-        return <Tag>{status}</Tag>;
+
+      {
+
+        title: t('app.kuaizhizao.reports.orderCode'),
+
+        dataIndex: 'order_code',
+
+        copyable: true,
+
+        fixed: 'left',
+
+        width: 150,
+
       },
-    },
-    {
-      title: '销售人',
-      dataIndex: 'salesman_name',
-      width: 100,
-    },
-    {
-      title: '备注',
-      dataIndex: 'notes',
-      ellipsis: true,
-    },
-  ];
+
+      {
+
+        title: t('app.kuaizhizao.reports.orderDate'),
+
+        dataIndex: 'order_date',
+
+        valueType: 'date',
+
+        sorter: true,
+
+        width: 120,
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.reports.customerName'),
+
+        dataIndex: 'customer_name',
+
+        ellipsis: true,
+
+        width: 150,
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.reports.deliveryDateCol'),
+
+        dataIndex: 'delivery_date',
+
+        valueType: 'date',
+
+        width: 120,
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
+
+        dataIndex: 'total_amount',
+
+        valueType: 'money',
+
+        width: 120,
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.salesOrder.status'),
+
+        dataIndex: 'status',
+
+        width: 100,
+
+        valueEnum: {
+
+          DRAFT: { text: t('app.kuaizhizao.reports.orderStatusDraft'), status: 'Default' },
+
+          CONFIRMED: { text: t('app.kuaizhizao.reports.orderStatusConfirmed'), status: 'Processing' },
+
+          AUDITED: { text: t('app.kuaizhizao.reports.orderStatusAudited'), status: 'Success' },
+
+          COMPLETED: { text: t('app.kuaizhizao.reports.orderStatusCompleted'), status: 'Success' },
+
+          CANCELLED: { text: t('app.kuaizhizao.reports.orderStatusCancelled'), status: 'Error' },
+
+        },
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.salesOrder.reviewStatus'),
+
+        dataIndex: 'review_status',
+
+        width: 100,
+
+        render: (_, record) => {
+
+          const status = record.review_status;
+
+          if (status === 'APPROVED' || status === '审核通过') {
+
+            return <Tag color="success">{t('reviewStatus.approved')}</Tag>;
+
+          }
+
+          if (status === 'REJECTED' || status === '驳回') {
+
+            return <Tag color="error">{t('reviewStatus.rejected')}</Tag>;
+
+          }
+
+          if (status === 'PENDING' || status === '待审核') {
+
+            return <Tag color="warning">{t('reviewStatus.pending')}</Tag>;
+
+          }
+
+          return <Tag>{status}</Tag>;
+
+        },
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.reports.salesman'),
+
+        dataIndex: 'salesman_name',
+
+        width: 100,
+
+      },
+
+      {
+
+        title: t('app.kuaizhizao.reports.notes'),
+
+        dataIndex: 'notes',
+
+        ellipsis: true,
+
+      },
+
+    ],
+
+    [t],
+
+  );
+
+
 
   return (
-    <SalesBaseReport
-      title="销售订单综合查询"
+
+    <KuaizhizaoReport
+
+      title={t('app.kuaizhizao.menu.reports.sales-order-query')}
+
       reportType="summary"
+
+      dateRangeKeys={['order_date_range', 'date_range', 'dateRange']}
+
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.SalesOrderQuery"
+
       columns={columns}
-      request={async (params, _s, _f, searchFormValues) => {
-        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues, [
-          'order_date_range',
-          'date_range',
-          'dateRange',
-        ]);
-        const { skip, limit } = salesReportPageParams(params);
-        const res = await getSalesReport({
-          report_type: 'summary',
-          date_start,
-          date_end,
-          customer_keyword: searchFormValues?.customer_name,
-          skip,
-          limit,
-        });
-        return {
-          data: res.data,
-          success: res.success,
-          total: res.total ?? res.data?.length ?? 0,
-        };
-      }}
+
     />
+
   );
+
 };
 
+
+
 export default SalesOrderQuery;
+

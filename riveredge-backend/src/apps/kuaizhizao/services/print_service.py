@@ -22,6 +22,8 @@ from urllib.parse import urlsplit, parse_qs
 
 from core.services.print.print_template_service import PrintTemplateService
 from core.schemas.print_template import PrintTemplateRenderRequest
+from core.services.i18n.print_localization import PrintLocalization
+from apps.kuaizhizao.print.document_qrcode import attach_document_qrcode_fields
 from infra.exceptions.exceptions import NotFoundError, ValidationError, BusinessLogicError
 from apps.kuaizhizao.services.document_lifecycle_service import _is_approved
 
@@ -538,7 +540,7 @@ class DocumentPrintService:
         "production_picking": "PRODUCTION_PICKING_PRINT",
         "production_return": "PRODUCTION_RETURN_PRINT",
         "finished_goods_receipt": "FINISHED_GOODS_RECEIPT_PRINT",
-        "semi_finished_goods_receipt": "FINISHED_GOODS_RECEIPT_PRINT",
+        "semi_finished_goods_receipt": "SEMI_FINISHED_GOODS_RECEIPT_PRINT",
         "sales_delivery": "SALES_DELIVERY_PRINT",
         "purchase_order": "PURCHASE_ORDER_PRINT",
         "purchase_receipt": "PURCHASE_RECEIPT_PRINT",
@@ -551,7 +553,79 @@ class DocumentPrintService:
         "material_borrow": "MATERIAL_BORROW_PRINT",
         "material_return": "MATERIAL_RETURN_PRINT",
         "delivery_notice": "DELIVERY_NOTICE_PRINT",
+        "product_quality_certificate": "PRODUCT_QUALITY_CERTIFICATE_PRINT",
     }
+
+    @staticmethod
+    async def _find_print_template(
+        tenant_id: int,
+        *,
+        template_uuid: Optional[str] = None,
+        template_code: Optional[str] = None,
+        document_type: Optional[str] = None,
+    ):
+        """按 uuid / base code / document_type 解析模板（兼容 _001 后缀）。"""
+        from core.models.print_template import PrintTemplate
+
+        if template_uuid:
+            return await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                uuid=template_uuid,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).first()
+
+        base_codes: list[str] = []
+        if template_code:
+            base_codes.append(str(template_code).strip().upper())
+        elif document_type:
+            mapped = DocumentPrintService.DOCUMENT_TEMPLATE_CODES.get(document_type)
+            if mapped:
+                base_codes.append(mapped)
+
+        for base in base_codes:
+            exact = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                code=base,
+                is_active=True,
+                deleted_at__isnull=True,
+            ).first()
+            if exact:
+                return exact
+            prefixed = (
+                await PrintTemplate.filter(
+                    tenant_id=tenant_id,
+                    code__startswith=f"{base}_",
+                    is_active=True,
+                    deleted_at__isnull=True,
+                )
+                .order_by("-is_default", "-created_at")
+                .first()
+            )
+            if prefixed:
+                return prefixed
+
+        if document_type:
+            default_tpl = await PrintTemplate.filter(
+                tenant_id=tenant_id,
+                config__contains={"document_type": document_type},
+                is_active=True,
+                deleted_at__isnull=True,
+                is_default=True,
+            ).first()
+            if default_tpl:
+                return default_tpl
+            return (
+                await PrintTemplate.filter(
+                    tenant_id=tenant_id,
+                    config__contains={"document_type": document_type},
+                    is_active=True,
+                    deleted_at__isnull=True,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+        return None
 
     async def _finalize_print_payload(
         self,
@@ -616,7 +690,9 @@ class DocumentPrintService:
             Dict: 打印结果
         """
         # 获取单据数据
-        document_data = await self._get_document_data(tenant_id, document_type, document_id)
+        i18n = await PrintLocalization.for_tenant(tenant_id)
+        document_data = await self._get_document_data(tenant_id, document_type, document_id, i18n=i18n)
+        document_data["print_time"] = i18n.format_datetime(datetime.now()) or datetime.now().strftime("%Y-%m-%d %H:%M")
         # 补充通用模板变量：company_logo（供设计器 Logo 组件/字段引用）
         if not document_data.get("company_logo"):
             document_data["company_logo"] = await _resolve_company_logo_for_print(tenant_id)
@@ -626,26 +702,24 @@ class DocumentPrintService:
 
         # 查找打印模板：优先 template_uuid，其次 template_code，最后默认模板
         try:
-            from core.models.print_template import PrintTemplate
-            
-            if template_uuid:
-                template = await PrintTemplate.filter(
-                    tenant_id=tenant_id,
-                    uuid=template_uuid,
-                    is_active=True,
-                    deleted_at__isnull=True
-                ).first()
+            if template_uuid or template_code:
+                template = await self._find_print_template(
+                    tenant_id,
+                    template_uuid=template_uuid,
+                    template_code=template_code,
+                    document_type=document_type,
+                )
             else:
-                if not template_code:
+                template = await self._find_print_template(
+                    tenant_id,
+                    document_type=document_type,
+                )
+                if template:
+                    template_code = template.code
+                else:
                     template_code = self.DOCUMENT_TEMPLATE_CODES.get(document_type)
                     if not template_code:
                         raise ValidationError(f"未找到单据类型 {document_type} 的默认打印模板")
-                template = await PrintTemplate.filter(
-                    tenant_id=tenant_id,
-                    code=template_code,
-                    is_active=True,
-                    deleted_at__isnull=True
-                ).first()
 
             if not template:
                 # 如果没有找到模板，返回基础HTML格式
@@ -746,48 +820,75 @@ class DocumentPrintService:
         """与 `print_document` / HTML 模板渲染共用 `_get_document_data`，供 print-variables API 调试预览。"""
         return await self._get_document_data(tenant_id, document_type, document_id)
 
+    @staticmethod
+    def _finalize_print_context(
+        document_type: str,
+        document: Any,
+        data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        return attach_document_qrcode_fields(
+            document_type=document_type,
+            document=document,
+            data=data,
+        )
+
     async def _get_document_data(
         self,
         tenant_id: int,
         document_type: str,
-        document_id: int
+        document_id: int,
+        *,
+        i18n: PrintLocalization | None = None,
     ) -> Dict[str, Any]:
         """获取单据数据"""
+        loc = i18n or await PrintLocalization.for_tenant(tenant_id)
         if document_type == "work_order":
             document = await WorkOrder.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"工单不存在: {document_id}")
-            return await self._format_work_order_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_work_order_data(document, loc)
+            )
         
         elif document_type == "production_picking":
             document = await ProductionPicking.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"生产领料单不存在: {document_id}")
-            return await self._format_production_picking_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_production_picking_data(document)
+            )
         
         elif document_type == "production_return":
             document = await ProductionReturn.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"生产退料单不存在: {document_id}")
-            return await self._format_production_return_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_production_return_data(document)
+            )
         
         elif document_type == "finished_goods_receipt":
             document = await FinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"成品入库单不存在: {document_id}")
-            return await self._format_finished_goods_receipt_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_finished_goods_receipt_data(document)
+            )
 
         elif document_type == "semi_finished_goods_receipt":
             document = await SemiFinishedGoodsReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"半成品入库单不存在: {document_id}")
-            return await self._format_semi_finished_goods_receipt_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_semi_finished_goods_receipt_data(document)
+            )
         
         elif document_type == "sales_delivery":
             document = await SalesDelivery.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"销售出库单不存在: {document_id}")
-            return await self._format_sales_delivery_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_sales_delivery_data(document)
+            )
         
         elif document_type == "purchase_order":
             document = await PurchaseOrder.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -799,7 +900,9 @@ class DocumentPrintService:
             document = await PurchaseReceipt.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"采购入库单不存在: {document_id}")
-            return await self._format_purchase_receipt_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_purchase_receipt_data(document)
+            )
         
         elif document_type == "sales_forecast":
             document = await SalesForecast.get_or_none(tenant_id=tenant_id, id=document_id)
@@ -817,13 +920,17 @@ class DocumentPrintService:
             document = await OtherInbound.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"其他入库单不存在: {document_id}")
-            return await self._format_other_inbound_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_other_inbound_data(document)
+            )
         
         elif document_type == "other_outbound":
             document = await OtherOutbound.get_or_none(tenant_id=tenant_id, id=document_id)
             if not document:
                 raise NotFoundError(f"其他出库单不存在: {document_id}")
-            return await self._format_other_outbound_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_other_outbound_data(document)
+            )
         
         elif document_type == "quotation":
             document = await Quotation.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
@@ -849,26 +956,44 @@ class DocumentPrintService:
             document = await MaterialBorrow.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"借料单不存在: {document_id}")
-            return await self._format_material_borrow_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_material_borrow_data(document)
+            )
         
         elif document_type == "material_return":
             document = await MaterialReturn.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"还料单不存在: {document_id}")
-            return await self._format_material_return_data(document)
+            return self._finalize_print_context(
+                document_type, document, await self._format_material_return_data(document)
+            )
         
         elif document_type == "delivery_notice":
             from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
-            from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
             document = await DeliveryNotice.get_or_none(tenant_id=tenant_id, id=document_id, deleted_at__isnull=True)
             if not document:
                 raise NotFoundError(f"送货单不存在: {document_id}")
-            return await self._format_delivery_notice_data(document)
-        
+            return self._finalize_print_context(
+                document_type, document, await self._format_delivery_notice_data(document)
+            )
+
+        elif document_type == "product_quality_certificate":
+            from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+            inspection = await FinishedGoodsInspection.get_or_none(
+                tenant_id=tenant_id, id=document_id, deleted_at__isnull=True
+            )
+            if not inspection:
+                raise NotFoundError(f"成品检验单不存在: {document_id}")
+            if inspection.quality_status != "合格":
+                raise BusinessLogicError("只有合格的成品检验单才能打印合格证")
+            if not inspection.certificate_issued:
+                raise BusinessLogicError("请先出具合格证后再打印")
+            return await self._format_product_quality_certificate_data(inspection)
+
         else:
             raise ValidationError(f"不支持的单据类型: {document_type}")
 
-    async def _format_work_order_data(self, work_order: WorkOrder) -> Dict[str, Any]:
+    async def _format_work_order_data(self, work_order: WorkOrder, i18n: PrintLocalization) -> Dict[str, Any]:
         """格式化工单数据，包含工序列表"""
         operations = await WorkOrderOperation.filter(
             work_order_id=work_order.id, deleted_at__isnull=True
@@ -881,16 +1006,17 @@ class DocumentPrintService:
             "product_code": work_order.product_code,
             "product_name": work_order.product_name,
             "quantity": str(work_order.quantity),
-            "status": work_order.status,
+            "status": i18n.document_status(work_order.status),
+            "status_code": work_order.status,
             "production_mode": work_order.production_mode,
             "workshop_name": work_order.workshop_name,
             "work_center_name": work_order.work_center_name,
-            "planned_start_date": work_order.planned_start_date.isoformat() if work_order.planned_start_date else None,
-            "planned_end_date": work_order.planned_end_date.isoformat() if work_order.planned_end_date else None,
+            "planned_start_date": i18n.format_datetime(work_order.planned_start_date),
+            "planned_end_date": i18n.format_datetime(work_order.planned_end_date),
             "priority": work_order.priority,
             "remarks": work_order.remarks,
             "created_by_name": work_order.created_by_name,
-            "created_at": work_order.created_at.isoformat() if work_order.created_at else None,
+            "created_at": i18n.format_datetime(work_order.created_at),
         }
 
         ops_list = []
@@ -899,13 +1025,14 @@ class DocumentPrintService:
                 "operation_code": op.operation_code,
                 "operation_name": op.operation_name,
                 "sequence": op.sequence,
-                "status": op.status,
+                "status": i18n.operation_status(op.status),
+                "status_code": op.status,
                 "workshop_name": op.workshop_name,
                 "work_center_name": op.work_center_name,
-                "planned_start_date": op.planned_start_date.isoformat() if op.planned_start_date else None,
-                "planned_end_date": op.planned_end_date.isoformat() if op.planned_end_date else None,
-                "actual_start_date": op.actual_start_date.isoformat() if op.actual_start_date else None,
-                "actual_end_date": op.actual_end_date.isoformat() if op.actual_end_date else None,
+                "planned_start_date": i18n.format_datetime(op.planned_start_date),
+                "planned_end_date": i18n.format_datetime(op.planned_end_date),
+                "actual_start_date": i18n.format_datetime(op.actual_start_date),
+                "actual_end_date": i18n.format_datetime(op.actual_end_date),
                 "completed_quantity": str(op.completed_quantity) if op.completed_quantity is not None else "",
                 "qualified_quantity": str(op.qualified_quantity) if op.qualified_quantity is not None else "",
                 "unqualified_quantity": str(op.unqualified_quantity) if op.unqualified_quantity is not None else "",
@@ -1592,6 +1719,80 @@ class DocumentPrintService:
             "created_at": notice.created_at.isoformat() if notice.created_at else None,
             "items": items_data,
         }
+
+    async def _format_product_quality_certificate_data(self, inspection) -> Dict[str, Any]:
+        """格式化产品合格证打印变量（来源：成品检验单）。"""
+        return {
+            "document_type": "product_quality_certificate",
+            "code": inspection.inspection_code,
+            "inspection_code": inspection.inspection_code,
+            "release_certificate": inspection.release_certificate,
+            "certificate_issued": inspection.certificate_issued,
+            "material_code": inspection.material_code,
+            "material_name": inspection.material_name,
+            "material_spec": inspection.material_spec,
+            "batch_number": inspection.batch_number,
+            "inspection_quantity": str(inspection.inspection_quantity),
+            "qualified_quantity": str(inspection.qualified_quantity),
+            "quality_status": inspection.quality_status,
+            "inspection_result": inspection.inspection_result,
+            "inspector_name": inspection.inspector_name,
+            "inspection_time": inspection.inspection_time.isoformat() if inspection.inspection_time else None,
+            "work_order_code": inspection.work_order_code,
+            "sales_order_code": inspection.sales_order_code,
+            "customer_name": inspection.customer_name,
+            "inspection_standard": inspection.inspection_standard,
+            "notes": inspection.notes,
+        }
+
+    @staticmethod
+    async def resolve_quality_certificates_for_delivery_notice(
+        tenant_id: int,
+        notice_id: int,
+    ) -> list[Dict[str, Any]]:
+        """按送货单明细关联已出具合格证的成品检验单。"""
+        from apps.kuaizhizao.models.delivery_notice import DeliveryNotice
+        from apps.kuaizhizao.models.delivery_notice_item import DeliveryNoticeItem
+        from apps.kuaizhizao.models.finished_goods_inspection import FinishedGoodsInspection
+
+        notice = await DeliveryNotice.get_or_none(
+            tenant_id=tenant_id, id=notice_id, deleted_at__isnull=True
+        )
+        if not notice:
+            raise NotFoundError(f"送货单不存在: {notice_id}")
+
+        items = await DeliveryNoticeItem.filter(tenant_id=tenant_id, notice_id=notice_id).all()
+        material_ids = {i.material_id for i in items if i.material_id}
+        if not material_ids:
+            return []
+
+        query = FinishedGoodsInspection.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            material_id__in=list(material_ids),
+            certificate_issued=True,
+            quality_status="合格",
+        )
+        if notice.sales_order_id:
+            query = query.filter(sales_order_id=notice.sales_order_id)
+
+        inspections = await query.order_by("-inspection_time", "-id").all()
+        seen_materials: set[int] = set()
+        results: list[Dict[str, Any]] = []
+        for insp in inspections:
+            if insp.material_id in seen_materials:
+                continue
+            seen_materials.add(insp.material_id)
+            results.append(
+                {
+                    "inspection_id": insp.id,
+                    "inspection_code": insp.inspection_code,
+                    "material_code": insp.material_code,
+                    "material_name": insp.material_name,
+                    "release_certificate": insp.release_certificate,
+                }
+            )
+        return results
 
     async def _generate_default_print(
         self,

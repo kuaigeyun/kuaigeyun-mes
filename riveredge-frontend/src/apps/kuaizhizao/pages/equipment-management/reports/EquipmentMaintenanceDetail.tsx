@@ -1,8 +1,8 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Typography } from 'antd';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const EquipmentMaintenanceDetail: React.FC = () => {
   const { t } = useTranslation();
@@ -25,7 +25,7 @@ const EquipmentMaintenanceDetail: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.equipment-maintenance-detail')}
       reportType="equip_maint_detail"
       columns={columns}

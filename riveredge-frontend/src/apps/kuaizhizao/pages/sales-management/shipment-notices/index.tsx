@@ -36,7 +36,9 @@ import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { shipmentNoticeApi } from '../../../services/shipment-notice';
 import { LinkedOqcPanel } from '../../quality-management/components/LinkedInspectionPanel';
 import { getShipmentNoticeLifecycle } from '../../../utils/shipmentNoticeLifecycle';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
+import { ListUniLifecycleCell } from '../shared/ListUniLifecycleCell';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { WarehouseTraceBriefPrimaryActions } from '../../warehouse-management/WarehouseTraceBriefFooter';
 import { customerApi } from '../../../../master-data/services/supply-chain';
@@ -45,7 +47,7 @@ import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
 import { buildFactoryImportTemplate } from '../../../../../utils/spreadsheetImportTemplate';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
@@ -88,14 +90,6 @@ type PullSalesOrderCandidate = {
   converted?: boolean;
 };
 
-const STATUS_MAP: Record<string, { text: string; color: string }> = {
-  待发货: { text: '待发货', color: 'default' },
-  已通知: { text: '已通知', color: 'processing' },
-  已出库: { text: '已出库', color: 'success' },
-};
-
-const defaultNoticeItem = { material_id: undefined, material_code: '', material_name: '', material_spec: '', material_unit: '件', notice_quantity: 1, unit_price: 0 };
-
 const ShipmentNoticesPage: React.FC = () => {
   const { t, i18n } = useTranslation();
 
@@ -123,9 +117,31 @@ const ShipmentNoticesPage: React.FC = () => {
     [t, i18n.language],
   );
   const navigate = useNavigate();
-  const { message: messageApi } = App.useApp();
-  const pullFromSalesOrderAction = getKuaizhizaoDocumentAction('shipment_notice.pull_from_sales_order');
+  const salesOrderEntityName = t('app.kuaizhizao.salesOrder.entityName');
+  const shipmentNoticeEntityName = t('app.kuaizhizao.shipmentNotice.entityName');
+  const statusMap = useMemo(
+    () => ({
+      待发货: { text: t('app.kuaizhizao.shipmentNotice.statusPending'), color: 'default' },
+      已通知: { text: t('app.kuaizhizao.shipmentNotice.statusNotified'), color: 'processing' },
+      已出库: { text: t('app.kuaizhizao.shipmentNotice.statusShipped'), color: 'success' },
+    }),
+    [t, i18n.language],
+  );
+  const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
+  const defaultNoticeItem = useMemo(
+    () => ({
+      material_id: undefined,
+      material_code: '',
+      material_name: '',
+      material_spec: '',
+      material_unit: defaultUnit,
+      notice_quantity: 1,
+      unit_price: 0,
+    }),
+    [defaultUnit],
+  );
   const actionRef = useRef<ActionType>(null);
+  const { message: messageApi } = App.useApp();
   const { token } = AntdTheme.useToken();
   const noticeDetailDrawerZIndex = token.zIndexPopupBase;
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -169,7 +185,7 @@ const ShipmentNoticesPage: React.FC = () => {
         setCustomerList(Array.isArray(cust) ? cust : (cust as any)?.data || (cust as any)?.items || []);
         setSalesOrderList(ordersRes?.data || []);
       } catch (e) {
-        console.error('加载客户/销售订单失败', e);
+        console.error(t('app.kuaizhizao.shipmentNotice.loadCustomersFailed'), e);
       }
     };
     load();
@@ -183,7 +199,7 @@ const ShipmentNoticesPage: React.FC = () => {
         material_code: m.mainCode ?? m.code ?? '',
         material_name: m.name ?? '',
         material_spec: m.specification ?? '',
-        material_unit: m.baseUnit ?? '件',
+        material_unit: m.baseUnit ?? defaultUnit,
         notice_quantity: 1,
         unit_price: (m as any).defaults?.defaultSalePrice ?? (m as any).defaults?.default_sale_price ?? 0,
       }));
@@ -195,7 +211,7 @@ const ShipmentNoticesPage: React.FC = () => {
       }
       messageApi.success(t('app.kuaizhizao.common.materialBatchAdded', { count: selected.length }));
     },
-    [messageApi, t]
+    [defaultUnit, messageApi, t]
   );
 
   /**
@@ -208,8 +224,8 @@ const ShipmentNoticesPage: React.FC = () => {
 
     return (
       <div style={{ marginTop: 12, padding: '12px', background: '#fafafa', borderRadius: '4px', display: 'flex', justifyContent: 'flex-end', gap: 24 }}>
-        <span>{t('app.kuaizhizao.shipmentNotice.totalQuantity') || '总通知数量'}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
-        <span>{t('app.kuaizhizao.shipmentNotice.totalAmount') || '总预计金额'}: <Typography.Text strong>¥{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography.Text></span>
+        <span>{t('app.kuaizhizao.shipmentNotice.totalQuantity')}: <Typography.Text strong>{totalQuantity}</Typography.Text></span>
+        <span>{t('app.kuaizhizao.shipmentNotice.totalAmount')}: <Typography.Text strong>¥{totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Typography.Text></span>
       </div>
     );
   };
@@ -220,7 +236,7 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const columns: ProColumns<ShipmentNotice>[] = [
     {
-      title: '客户 / 通知单号',
+      title: t('app.kuaizhizao.shipmentNotice.colCustomerNotice'),
       key: 'notice_code',
       dataIndex: 'notice_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -232,43 +248,38 @@ const ShipmentNoticesPage: React.FC = () => {
         />
       ),
     },
-    { title: '通知单号', dataIndex: 'notice_code', hideInTable: true },
-    { title: '客户', dataIndex: 'customer_name', hideInTable: true },
-    { title: '销售订单号', dataIndex: 'sales_order_code', width: 140, ellipsis: true },
-    { title: '出库仓库', dataIndex: 'warehouse_name', width: 120 },
-    { title: '计划发货日期', dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
-    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
+    { title: t('app.kuaizhizao.shipmentNotice.colNoticeCode'), dataIndex: 'notice_code', hideInTable: true },
+    { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', hideInTable: true },
+    { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'sales_order_code', width: 140, ellipsis: true },
+    { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name', width: 120 },
+    { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date', width: 120 },
+    { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime', width: 160 },
+    { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 160 },
     {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
+      title: t('app.kuaizhizao.salesOrder.lifecycle'),
+      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'center',
       fixed: 'right',
       render: (_, record) => (
-        <UniLifecycle
-          {...getShipmentNoticeLifecycle(record as any)}
-          showLabel
-          showCircleTooltip={false}
-          size="small"
-        />
+        <ListUniLifecycleCell lifecycle={getShipmentNoticeLifecycle(record as any, t)} />
       ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => renderShipmentNoticeRowActions([
-        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>详情</Button>,
+        <Button {...rowActionKind('read')} key="detail" onClick={() => handleDetail(record)}>{t('common.detail')}</Button>,
         ...(record.status === '待发货'
           ? [
-              <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>编辑</Button>,
-              <Button {...rowActionKind('dispatch')} key="notify" onClick={() => handleNotify(record as any)}>通知仓库</Button>,
-              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as any)}>删除</Button>,
+              <Button {...rowActionKind('update')} key="edit" onClick={() => handleEdit(record)}>{t('common.edit')}</Button>,
+              <Button {...rowActionKind('dispatch')} key="notify" onClick={() => handleNotify(record as any)}>{t('app.kuaizhizao.shipmentNotice.notifyWarehouse')}</Button>,
+              <Button {...rowActionKind('delete')} key="delete" onClick={() => handleDelete(record as any)}>{t('common.delete')}</Button>,
             ]
           : []),
         ...(record.status === '已通知'
           ? [
-              <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record as any)}>撤回通知</Button>,
+              <Button {...rowActionKind('revoke')} key="withdraw" onClick={() => handleWithdraw(record as any)}>{t('app.kuaizhizao.shipmentNotice.withdrawNotify')}</Button>,
             ]
           : []),
       ]),
@@ -282,7 +293,7 @@ const ShipmentNoticesPage: React.FC = () => {
       setDetailDrawerVisible(true);
       setTrackingRefreshKey((k) => k + 1);
     } catch {
-      messageApi.error('获取发货通知单详情失败');
+      messageApi.error(t('app.kuaizhizao.shipmentNotice.detailFailed'));
     }
   };
 
@@ -316,23 +327,23 @@ const ShipmentNoticesPage: React.FC = () => {
       setEditingId(record.id!);
       setEditModalVisible(true);
     } catch {
-      messageApi.error('获取详情失败');
+      messageApi.error(t('app.kuaizhizao.shipmentNotice.loadDetailFailed'));
     }
   };
 
   const handleNotify = (record: ShipmentNotice) => {
     Modal.confirm({
-      title: '通知仓库',
-      content: `确定要通知仓库发货 "${record.notice_code}" 吗？`,
+      title: t('app.kuaizhizao.shipmentNotice.notifyWarehouse'),
+      content: t('app.kuaizhizao.shipmentNotice.notifyConfirmContent', { code: record.notice_code }),
       onOk: async () => {
         try {
           await shipmentNoticeApi.notify(record.id!.toString());
-          messageApi.success('已通知仓库');
+          messageApi.success(t('app.kuaizhizao.shipmentNotice.notifySuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '通知失败');
+          messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.notifyFailed'));
         }
       },
     });
@@ -340,17 +351,17 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handleWithdraw = (record: ShipmentNotice) => {
     Modal.confirm({
-      title: '撤回通知',
-      content: `确定将 "${record.notice_code}" 撤回到待发货吗？`,
+      title: t('app.kuaizhizao.shipmentNotice.withdrawNotify'),
+      content: t('app.kuaizhizao.shipmentNotice.withdrawConfirmContent', { code: record.notice_code }),
       onOk: async () => {
         try {
           await shipmentNoticeApi.withdraw(record.id!.toString());
-          messageApi.success('已撤回到待发货');
+          messageApi.success(t('app.kuaizhizao.shipmentNotice.withdrawSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '撤回失败');
+          messageApi.error(error.message || t('app.kuaizhizao.shipmentNotice.withdrawFailed'));
         }
       },
     });
@@ -358,17 +369,17 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handleDelete = (record: ShipmentNotice) => {
     Modal.confirm({
-      title: '删除发货通知单',
-      content: `确定要删除 "${record.notice_code}" 吗？`,
+      title: t('app.kuaizhizao.shipmentNotice.deleteModalTitle'),
+      content: t('app.kuaizhizao.shipmentNotice.deleteConfirmContent', { code: record.notice_code }),
       onOk: async () => {
         try {
           await shipmentNoticeApi.delete(record.id!.toString());
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -380,17 +391,17 @@ const ShipmentNoticesPage: React.FC = () => {
       for (const k of keys) {
         await shipmentNoticeApi.delete(String(k));
       }
-      messageApi.success(`已删除 ${keys.length} 条发货通知单`);
+      messageApi.success(t('app.kuaizhizao.shipmentNotice.batchDeleteSuccess', { count: keys.length }));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
     }
   };
 
   const handleBatchNotify = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择发货通知单');
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectNoticeFirst'));
       return;
     }
     let success = 0;
@@ -408,8 +419,8 @@ const ShipmentNoticesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已通知 ${success} 条发货通知单`);
-    if (failed > 0) messageApi.warning(`${failed} 条通知失败（仅待发货状态可通知）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.shipmentNotice.batchNotifySuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.shipmentNotice.batchNotifyPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
@@ -417,7 +428,7 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handleBatchWithdraw = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      messageApi.warning('请先选择发货通知单');
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectNoticeFirst'));
       return;
     }
     let success = 0;
@@ -435,8 +446,8 @@ const ShipmentNoticesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) messageApi.success(`已撤回 ${success} 条发货通知单`);
-    if (failed > 0) messageApi.warning(`${failed} 条撤回失败（仅已通知状态可撤回）`);
+    if (success > 0) messageApi.success(t('app.kuaizhizao.shipmentNotice.batchWithdrawSuccess', { count: success }));
+    if (failed > 0) messageApi.warning(t('app.kuaizhizao.shipmentNotice.batchWithdrawPartial', { count: failed }));
     setSelectedRowKeys([]);
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
@@ -470,7 +481,7 @@ const ShipmentNoticesPage: React.FC = () => {
           }, 100);
         })
         .catch((e) => {
-          console.warn('发货通知单编号预生成失败:', e);
+          console.warn(t('app.kuaizhizao.shipmentNotice.codePreviewFailed'), e);
           setPreviewCode(null);
         });
     } else {
@@ -522,12 +533,15 @@ const ShipmentNoticesPage: React.FC = () => {
 
   const handlePullFromSalesOrderConfirm = useCallback(async () => {
     if (!selectedPullSalesOrderId) {
-      messageApi.warning(`请选择${pullFromSalesOrderAction.sourceLabel}`);
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.selectSource', { source: salesOrderEntityName }));
       return;
     }
     const selected = pullSalesOrderCandidates.find((i) => i.id === selectedPullSalesOrderId);
     if (selected?.converted) {
-      messageApi.warning(`该${pullFromSalesOrderAction.sourceLabel}已创建${pullFromSalesOrderAction.targetLabel}，请勿重复创建`);
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.sourceAlreadyConverted', {
+        source: salesOrderEntityName,
+        target: shipmentNoticeEntityName,
+      }));
       return;
     }
     setPullSalesOrderSubmitting(true);
@@ -542,12 +556,15 @@ const ShipmentNoticesPage: React.FC = () => {
           material_code: it.material_code || it.materialCode || '',
           material_name: it.material_name || it.materialName || '',
           material_spec: it.material_spec || '',
-          material_unit: it.material_unit || it.materialUnit || '件',
+          material_unit: it.material_unit || it.materialUnit || defaultUnit,
           notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
           unit_price: Number((it.unit_price ?? it.unitPrice) || detail.items?.[index]?.unit_price || 0),
         }));
       if (!custId || validItems.length === 0) {
-        throw new Error(`该${pullFromSalesOrderAction.sourceLabel}缺少客户或有效明细，无法创建${pullFromSalesOrderAction.targetLabel}`);
+        throw new Error(t('app.kuaizhizao.shipmentNotice.sourceMissingData', {
+          source: salesOrderEntityName,
+          target: shipmentNoticeEntityName,
+        }));
       }
       await shipmentNoticeApi.create({
         sales_order_id: detail.id ?? selectedPullSalesOrderId,
@@ -560,17 +577,34 @@ const ShipmentNoticesPage: React.FC = () => {
         planned_ship_date: detail.delivery_date,
         items: validItems,
       });
-      messageApi.success(`已从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}`);
+      messageApi.success(t('app.kuaizhizao.shipmentNotice.createFromSourceSuccess', {
+        source: salesOrderEntityName,
+        target: shipmentNoticeEntityName,
+      }));
       setPullFromSalesOrderVisible(false);
       setSelectedPullSalesOrderId(null);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || `从${pullFromSalesOrderAction.sourceLabel}创建${pullFromSalesOrderAction.targetLabel}失败`);
+      messageApi.error(error?.message || t('app.kuaizhizao.shipmentNotice.createFromSourceFailed', {
+        source: salesOrderEntityName,
+        target: shipmentNoticeEntityName,
+      }));
     } finally {
       setPullSalesOrderSubmitting(false);
     }
-  }, [actionRef, customerList, invalidateMenuBadgeCounts, messageApi, pullSalesOrderCandidates, selectedPullSalesOrderId]);
+  }, [
+    actionRef,
+    customerList,
+    defaultUnit,
+    invalidateMenuBadgeCounts,
+    messageApi,
+    pullSalesOrderCandidates,
+    salesOrderEntityName,
+    selectedPullSalesOrderId,
+    shipmentNoticeEntityName,
+    t,
+  ]);
 
   const onSalesOrderSelect = async (orderId: number) => {
     let order = salesOrderList.find((o: any) => (o.id ?? o.sales_order_id) === orderId);
@@ -600,14 +634,14 @@ const ShipmentNoticesPage: React.FC = () => {
           material_code: it.material_code || it.materialCode || '',
           material_name: it.material_name || it.materialName || '',
           material_spec: it.material_spec || '',
-          material_unit: it.material_unit || it.materialUnit || '件',
+          material_unit: it.material_unit || it.materialUnit || defaultUnit,
           notice_quantity: Number(it.required_quantity ?? it.quantity ?? it.order_quantity) || 0,
           unit_price: Number((it.unit_price ?? it.unitPrice) || (order.items && order.items[index]?.unit_price)) || 0,
         }))
         .filter((it: any) => Number(it.material_id) > 0 && Number(it.notice_quantity) > 0);
       createFormRef.current?.setFieldsValue({ items: items.length ? items : [defaultNoticeItem] });
       if (!items.length) {
-        messageApi.warning(`该${pullFromSalesOrderAction.sourceLabel}无可用物料明细，请手动补充通知明细`);
+        messageApi.warning(t('app.kuaizhizao.shipmentNotice.noMaterialItemsFromSource', { source: salesOrderEntityName }));
       }
     }
   };
@@ -615,12 +649,12 @@ const ShipmentNoticesPage: React.FC = () => {
   const handleCreateSubmit = async (values: any) => {
     const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.notice_quantity) || 0) > 0);
     if (!validItems.length) {
-      messageApi.error('请至少添加一条有效明细');
-      throw new Error('请至少添加一条有效明细');
+      messageApi.error(t('app.kuaizhizao.shipmentNotice.itemsRequired'));
+      throw new Error(t('app.kuaizhizao.shipmentNotice.itemsRequired'));
     }
     if (!values.sales_order_id || !values.sales_order_code) {
-      messageApi.error('请选择销售订单');
-      throw new Error('请选择销售订单');
+      messageApi.error(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
+      throw new Error(t('app.kuaizhizao.salesOrderChange.selectSalesOrder'));
     }
     const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id) || { name: values.customer_name };
     let noticeCode = values.notice_code;
@@ -634,7 +668,7 @@ const ShipmentNoticesPage: React.FC = () => {
         const res = await generateCode({ rule_code: ruleCodeToUse });
         noticeCode = res.code;
       } catch (e) {
-        console.warn('发货通知单编号正式生成失败，使用当前值:', e);
+        console.warn(t('app.kuaizhizao.shipmentNotice.codeGenerateFailed'), e);
       }
     }
     try {
@@ -657,19 +691,19 @@ const ShipmentNoticesPage: React.FC = () => {
           material_code: it.material_code,
           material_name: it.material_name,
           material_spec: it.material_spec,
-          material_unit: it.material_unit || '件',
+          material_unit: it.material_unit || defaultUnit,
           notice_quantity: Number(it.notice_quantity) || 0,
           unit_price: Number(it.unit_price) || 0,
         })),
       });
-      messageApi.success('创建成功');
+      messageApi.success(t('common.createSuccess'));
       setCreateModalVisible(false);
       setEffectiveRuleCode(null);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建失败');
+      messageApi.error(error.message || t('common.createFailed'));
       throw error;
     }
   };
@@ -690,36 +724,36 @@ const ShipmentNoticesPage: React.FC = () => {
         notes: values.notes,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('更新成功');
+      messageApi.success(t('common.updateSuccess'));
       setEditModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '更新失败');
+      messageApi.error(error.message || t('common.updateFailed'));
       throw error;
     }
   };
 
   const detailColumns: ProDescriptionsItemProps<ShipmentNoticeDetail>[] = [
-    { title: '通知单号', dataIndex: 'notice_code' },
-    { title: '销售订单号', dataIndex: 'sales_order_code' },
-    { title: '客户', dataIndex: 'customer_name' },
-    { title: '联系人', dataIndex: 'customer_contact' },
-    { title: '电话', dataIndex: 'customer_phone' },
-    { title: '出库仓库', dataIndex: 'warehouse_name' },
-    { title: '计划发货日期', dataIndex: 'planned_ship_date', valueType: 'date' },
-    { title: '收货地址', dataIndex: 'shipping_address', span: 2 },
+    { title: t('app.kuaizhizao.shipmentNotice.noticeCode'), dataIndex: 'notice_code' },
+    { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'sales_order_code' },
+    { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name' },
+    { title: t('field.customer.contactPerson'), dataIndex: 'customer_contact' },
+    { title: t('field.customer.phone'), dataIndex: 'customer_phone' },
+    { title: t('app.kuaizhizao.shipmentNotice.outboundWarehouse'), dataIndex: 'warehouse_name' },
+    { title: t('app.kuaizhizao.shipmentNotice.plannedShipDate'), dataIndex: 'planned_ship_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.salesOrder.shippingAddress'), dataIndex: 'shipping_address', span: 2 },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       render: (s) => {
-        const c = STATUS_MAP[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
+        const c = statusMap[(s as string) || ''] || { text: (s as string) || '-', color: 'default' };
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
-    { title: '通知时间', dataIndex: 'notified_at', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
+    { title: t('app.kuaizhizao.shipmentNotice.notifiedAt'), dataIndex: 'notified_at', valueType: 'dateTime' },
+    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 2 },
   ];
 
   /** 将 Excel 行写入当前表单「通知明细」（新建弹窗内导入或列表工具栏导入共用） */
@@ -731,11 +765,11 @@ const ShipmentNoticesPage: React.FC = () => {
       unit_price: Number(row[2]) || 0,
       material_name: String(row[3] || ''),
       material_spec: String(row[4] || ''),
-      material_unit: String(row[5] || '件'),
+      material_unit: String(row[5] || defaultUnit),
     }));
 
     if (items.length === 0) {
-      messageApi.warning('未发现有效数据');
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.importNoValidData'));
       return;
     }
 
@@ -744,7 +778,7 @@ const ShipmentNoticesPage: React.FC = () => {
     createFormRef.current?.setFieldsValue({
       items: [...filteredCurrent, ...items],
     });
-    messageApi.success(`成功导入 ${items.length} 条数据`);
+    messageApi.success(t('app.kuaizhizao.shipmentNotice.importSuccessCount', { count: items.length }));
   };
 
   const handleFormLineImport = (data: any[][]) => {
@@ -754,7 +788,7 @@ const ShipmentNoticesPage: React.FC = () => {
   /** 列表工具栏导入：打开新建弹窗并写入明细（与 UniTable 内置导入弹窗配合） */
   const handleListToolbarImport = (data: any[][]) => {
     if (editModalVisible) {
-      messageApi.warning('请先关闭编辑窗口，或在「新建发货通知单」弹窗内使用「导入明细」');
+      messageApi.warning(t('app.kuaizhizao.shipmentNotice.closeEditBeforeImport'));
       return;
     }
     setCreateModalVisible(true);
@@ -767,15 +801,15 @@ const ShipmentNoticesPage: React.FC = () => {
         <Col span={8}>
           <ProFormText
             name="notice_code"
-            label="通知单号"
-            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? '编号将根据编号规则自动生成，可修改' : '请输入通知单号'}
-            rules={[{ required: true, message: '请输入通知单号' }]}
+            label={t('app.kuaizhizao.shipmentNotice.noticeCode')}
+            placeholder={isAutoGenerateEnabled('kuaizhizao-shipment-notice') ? t('app.kuaizhizao.quotation.form.codeAutoGenerate') : t('app.kuaizhizao.shipmentNotice.codeRequired')}
+            rules={[{ required: true, message: t('app.kuaizhizao.shipmentNotice.codeRequired') }]}
           />
         </Col>
         <Col span={8}>
-          <ProForm.Item name="sales_order_id" label="销售订单" rules={[{ required: true, message: '请选择销售订单' }]}>
+          <ProForm.Item name="sales_order_id" label={t('app.kuaizhizao.salesOrderChange.salesOrderLabel')} rules={[{ required: true, message: t('app.kuaizhizao.salesOrderChange.selectSalesOrder') }]}>
             <Select
-              placeholder="请选择销售订单"
+              placeholder={t('app.kuaizhizao.salesOrderChange.selectSalesOrder')}
               showSearch
               optionFilterProp="label"
               options={salesOrderList.map((o: any) => ({
@@ -787,9 +821,9 @@ const ShipmentNoticesPage: React.FC = () => {
           </ProForm.Item>
         </Col>
         <Col span={8}>
-          <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
             <Select
-              placeholder="请选择客户"
+              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
               showSearch
               optionFilterProp="label"
               options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
@@ -810,16 +844,16 @@ const ShipmentNoticesPage: React.FC = () => {
       <ProFormText name="customer_name" hidden />
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
+          <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
         </Col>
         <Col span={8}>
-          <ProFormText name="customer_phone" label="电话" placeholder="电话" />
+          <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
         </Col>
         <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
-            label="出库仓库"
-            placeholder="请选择出库仓库"
+            label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
+            placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
             onChange={(_, wh) => createFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
@@ -827,15 +861,15 @@ const ShipmentNoticesPage: React.FC = () => {
       <ProFormText name="warehouse_name" hidden />
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={{ style: { width: '100%' } }} />
         </Col>
       </Row>
-      <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
+      <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
       <UniTableDetail
         name="items"
-        title="通知明细"
+        title={t('app.kuaizhizao.shipmentNotice.noticeItems')}
         required
-        requiredMessage="请至少添加一条通知明细"
+        requiredMessage={t('app.kuaizhizao.shipmentNotice.noticeItemsRequired')}
         headerExtra={(
           <Space size={8}>
             <Button
@@ -843,7 +877,7 @@ const ShipmentNoticesPage: React.FC = () => {
               icon={<ImportOutlined />}
               onClick={() => setImportVisible(true)}
             >
-              导入明细
+              {t('common.importDetail')}
             </Button>
             <Button
               type="dashed"
@@ -854,7 +888,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 createFormRef.current?.setFieldsValue({ items });
               }}
             >
-              添加明细
+              {t('app.kuaizhizao.salesOrder.addItem')}
             </Button>
             <Button
               type="default"
@@ -867,7 +901,7 @@ const ShipmentNoticesPage: React.FC = () => {
         )}
         columns={[
                 {
-                  title: '物料',
+                  title: t('app.kuaizhizao.salesOrder.material'),
                   dataIndex: 'material_id',
                   width: 220,
                   render: (_: any, __: any, index: number) => (
@@ -883,7 +917,7 @@ const ShipmentNoticesPage: React.FC = () => {
                             <UniMaterialSelect
                               name={[index, 'material_id']}
                               label=""
-                              placeholder="请选择物料"
+                              placeholder={t('app.kuaizhizao.quotation.form.selectMaterial')}
                               required
                               size="small"
                               listFieldKey={index}
@@ -907,38 +941,38 @@ const ShipmentNoticesPage: React.FC = () => {
                   ),
                 },
                 {
-                  title: '规格',
+                  title: t('app.kuaizhizao.shipmentNotice.import.specification'),
                   dataIndex: 'material_spec',
                   width: 120,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                      <Input placeholder="规格" size="small" />
+                      <Input placeholder={t('app.kuaizhizao.shipmentNotice.import.specification')} size="small" />
                     </AntForm.Item>
                   ),
                 },
                 {
-                  title: '单位',
+                  title: t('app.kuaizhizao.salesOrder.unit'),
                   dataIndex: 'material_unit',
                   width: 80,
                   render: (_: any, __: any, index: number) => (
                     <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                      <Input placeholder="单位" size="small" />
+                      <Input placeholder={t('app.kuaizhizao.salesOrder.unit')} size="small" />
                     </AntForm.Item>
                   ),
                 },
                 {
-                  title: '数量',
+                  title: t('app.kuaizhizao.salesOrder.quantity'),
                   dataIndex: 'notice_quantity',
                   width: 100,
                   align: 'right' as const,
                   render: (_: any, __: any, index: number) => (
-                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                      <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                    <AntForm.Item name={[index, 'notice_quantity']} rules={[{ required: true, message: t('common.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.shipmentNotice.quantityPositive') }]} style={{ margin: 0 }}>
+                      <InputNumber placeholder={t('app.kuaizhizao.salesOrder.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                     </AntForm.Item>
                   ),
                 },
                 {
-                  title: '单价',
+                  title: t('app.kuaizhizao.salesOrder.unitPrice'),
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right' as const,
@@ -958,7 +992,7 @@ const ShipmentNoticesPage: React.FC = () => {
         }}
       />
       <ShipmentNoticeFormSummary />
-      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
@@ -967,12 +1001,12 @@ const ShipmentNoticesPage: React.FC = () => {
     <>
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormText name="sales_order_code" label="销售订单号" disabled />
+          <ProFormText name="sales_order_code" label={t('app.kuaizhizao.shipmentNotice.salesOrderCode')} disabled />
         </Col>
         <Col span={8}>
-          <ProForm.Item name="customer_id" label="客户" rules={[{ required: true, message: '请选择客户' }]}>
+          <ProForm.Item name="customer_id" label={t('app.kuaizhizao.quotation.form.customer')} rules={[{ required: true, message: t('app.kuaizhizao.quotation.form.selectCustomer') }]}>
             <Select
-              placeholder="请选择客户"
+              placeholder={t('app.kuaizhizao.quotation.form.selectCustomer')}
               showSearch
               optionFilterProp="label"
               options={customerList.map((c: any) => ({ value: c.id ?? c.customer_id, label: c.name || c.customer_name || c.code }))}
@@ -988,29 +1022,29 @@ const ShipmentNoticesPage: React.FC = () => {
           </ProForm.Item>
         </Col>
         <Col span={8}>
-          <ProFormText name="customer_contact" label="联系人" placeholder="联系人" />
+          <ProFormText name="customer_contact" label={t('field.customer.contactPerson')} placeholder={t('field.customer.contactPersonPlaceholder')} />
         </Col>
       </Row>
       <Row gutter={16}>
         <Col span={8}>
-          <ProFormText name="customer_phone" label="电话" placeholder="电话" />
+          <ProFormText name="customer_phone" label={t('field.customer.phone')} placeholder={t('field.customer.phonePlaceholder')} />
         </Col>
         <Col span={8}>
           <UniWarehouseSelect
             name="warehouse_id"
-            label="出库仓库"
-            placeholder="请选择出库仓库"
+            label={t('app.kuaizhizao.shipmentNotice.outboundWarehouse')}
+            placeholder={t('app.kuaizhizao.shipmentNotice.selectOutboundWarehouse')}
             onChange={(_, wh) => editFormRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
           />
         </Col>
         <Col span={8}>
-          <ProFormDatePicker name="planned_ship_date" label="计划发货日期" fieldProps={{ style: { width: '100%' } }} />
+          <ProFormDatePicker name="planned_ship_date" label={t('app.kuaizhizao.shipmentNotice.plannedShipDate')} fieldProps={{ style: { width: '100%' } }} />
         </Col>
       </Row>
       <ProFormText name="warehouse_name" hidden />
       <ProFormText name="customer_name" hidden />
-      <ProFormTextArea name="shipping_address" label="收货地址" placeholder="收货地址" fieldProps={{ rows: 2 }} />
-      <ProFormItem label="通知明细">
+      <ProFormTextArea name="shipping_address" label={t('app.kuaizhizao.salesOrder.shippingAddress')} placeholder={t('app.kuaizhizao.quotation.form.shippingAddressPlaceholder')} fieldProps={{ rows: 2 }} />
+      <ProFormItem label={t('app.kuaizhizao.shipmentNotice.noticeItems')}>
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.items !== curr?.items}>
           {({ getFieldValue }: any) => {
             const items = getFieldValue('items') ?? [];
@@ -1021,11 +1055,11 @@ const ShipmentNoticesPage: React.FC = () => {
                 rowKey="key"
                 pagination={false}
                 columns={[
-                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                  { title: '单位', dataIndex: 'material_unit', width: 60 },
-                  { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
-                  { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+                  { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+                  { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                  { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
                 ]}
               />
             );
@@ -1033,7 +1067,7 @@ const ShipmentNoticesPage: React.FC = () => {
         </AntForm.Item>
         <ShipmentNoticeFormSummary />
       </ProFormItem>
-      <ProFormTextArea name="notes" label="备注" placeholder="备注" fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
+      <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.common.fieldNotes')} fieldProps={{ rows: 2 }} colProps={{ span: 24 }} />
       <DocumentAttachmentsField category="shipment_notice_attachments" />
     </>
   );
@@ -1043,19 +1077,19 @@ const ShipmentNoticesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable
           columnPersistenceId="apps.kuaizhizao.pages.sales-management.shipment-notices"
-          headerTitle="发货通知单"
+          headerTitle={t('app.kuaizhizao.shipmentNotice.title')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton={false}
-          createButtonText="新建发货通知单"
+          createButtonText={t('app.kuaizhizao.shipmentNotice.create')}
           onCreate={handleCreate}
           toolBarRender={() => [
             <UniPullCreateToolbar
               compactKey="create-shipment-notice-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel="新建发货通知单"
+              createLabel={t('app.kuaizhizao.shipmentNotice.create')}
               onCreate={() => {
                 void handleCreate();
               }}
@@ -1075,7 +1109,7 @@ const ShipmentNoticesPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条发货通知单？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.shipmentNotice.confirmBatchDelete', { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="shipment-notice-batch-menu"
@@ -1083,13 +1117,13 @@ const ShipmentNoticesPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'notify',
-                  label: '批量通知仓库',
+                  label: t('app.kuaizhizao.shipmentNotice.batchNotifyWarehouse'),
                   icon: <SendOutlined />,
                   onClick: handleBatchNotify,
                 },
                 {
                   key: 'withdraw',
-                  label: '批量撤回通知',
+                  label: t('app.kuaizhizao.shipmentNotice.batchWithdrawNotify'),
                   icon: <AppstoreAddOutlined />,
                   onClick: handleBatchWithdraw,
                 },
@@ -1112,7 +1146,7 @@ const ShipmentNoticesPage: React.FC = () => {
                 items = rawData.filter((d: ShipmentNotice) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.exportNoData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -1122,9 +1156,9 @@ const ShipmentNoticesPage: React.FC = () => {
               a.download = `shipment-notices-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           request={async (params) => {
@@ -1140,7 +1174,7 @@ const ShipmentNoticesPage: React.FC = () => {
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
-              messageApi.error('获取列表失败');
+              messageApi.error(t('app.kuaizhizao.shipmentNotice.listFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -1149,7 +1183,7 @@ const ShipmentNoticesPage: React.FC = () => {
       </ListPageTemplate>
 
       <Modal
-        title={pullFromSalesOrderAction.label}
+        title={t('app.kuaizhizao.shipmentNotice.pullFromSalesOrder')}
         open={pullFromSalesOrderVisible}
         width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => {
@@ -1160,21 +1194,21 @@ const ShipmentNoticesPage: React.FC = () => {
         onOk={() => {
           void handlePullFromSalesOrderConfirm();
         }}
-        okText={`创建${pullFromSalesOrderAction.targetLabel}`}
+        okText={t('app.kuaizhizao.shipmentNotice.createTarget', { target: shipmentNoticeEntityName })}
         confirmLoading={pullSalesOrderSubmitting}
         destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
-            placeholder="按销售订单号/客户搜索"
+            placeholder={t('app.kuaizhizao.shipmentNotice.pullSearchPlaceholder')}
             value={pullSalesOrderKeyword}
             onChange={(e) => setPullSalesOrderKeyword(e.target.value)}
             onSearch={(value) => {
               setPullSalesOrderKeyword(value);
               void loadPullSalesOrderCandidates(value);
             }}
-            enterButton="搜索"
+            enterButton={t('components.uniQuery.search')}
           />
           <Table<PullSalesOrderCandidate>
             rowKey="id"
@@ -1199,17 +1233,17 @@ const ShipmentNoticesPage: React.FC = () => {
               },
             })}
             columns={[
-              { title: '销售订单号', dataIndex: 'order_code', width: 190, ellipsis: true },
-              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
-              { title: '订单状态', dataIndex: 'status', width: 130, align: 'center' },
-              { title: '交期', dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
+              { title: t('app.kuaizhizao.shipmentNotice.salesOrderCode'), dataIndex: 'order_code', width: 190, ellipsis: true },
+              { title: t('app.kuaizhizao.quotation.form.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
+              { title: t('app.kuaizhizao.shipmentNotice.orderStatus'), dataIndex: 'status', width: 130, align: 'center' },
+              { title: t('app.kuaizhizao.salesOrder.deliveryDate'), dataIndex: 'delivery_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+              { title: t('common.updatedAt'), dataIndex: 'updated_at', width: 180, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-') },
               {
-                title: '转单状态',
+                title: t('app.kuaizhizao.shipmentNotice.convertStatus'),
                 key: 'convert_status',
                 width: 150,
                 align: 'center',
-                render: (_, r) => (r.converted ? <Tag color="gold">{`已创建${pullFromSalesOrderAction.targetLabel}`}</Tag> : <Tag color="success">可创建</Tag>),
+                render: (_, r) => (r.converted ? <Tag color="gold">{t('app.kuaizhizao.shipmentNotice.alreadyCreated', { target: shipmentNoticeEntityName })}</Tag> : <Tag color="success">{t('app.kuaizhizao.shipmentNotice.canCreate')}</Tag>),
               },
             ]}
           />
@@ -1217,7 +1251,7 @@ const ShipmentNoticesPage: React.FC = () => {
       </Modal>
 
       <DetailDrawerTemplate
-        title={`发货通知单详情${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
+        title={`${t('app.kuaizhizao.shipmentNotice.detailTitle')}${noticeDetail?.notice_code ? ` - ${noticeDetail.notice_code}` : ''}`}
         open={detailDrawerVisible}
         zIndex={noticeDetailDrawerZIndex}
         onClose={() => {
@@ -1231,7 +1265,7 @@ const ShipmentNoticesPage: React.FC = () => {
         customContent={
           noticeDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -1258,10 +1292,10 @@ const ShipmentNoticesPage: React.FC = () => {
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getShipmentNoticeLifecycle(noticeDetail as Record<string, unknown>);
+                    const lc = getShipmentNoticeLifecycle(noticeDetail as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
@@ -1297,7 +1331,7 @@ const ShipmentNoticesPage: React.FC = () => {
               </DetailDrawerSection>
 
               {noticeDetail.id != null ? (
-                <DetailDrawerSection title="出货检验 (OQC)">
+                <DetailDrawerSection title={t('app.kuaizhizao.shipmentNotice.oqcSection')}>
                   <LinkedOqcPanel
                     shipmentNoticeId={noticeDetail.id}
                     active={detailDrawerVisible}
@@ -1310,28 +1344,28 @@ const ShipmentNoticesPage: React.FC = () => {
                 </DetailDrawerSection>
               ) : null}
 
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
                 {noticeDetail.items && noticeDetail.items.length > 0 ? (
                   <Table
                     size="small"
                     rowKey={(record: any) => record.id || record.material_code}
                     columns={[
-                      { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                      { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                      { title: '单位', dataIndex: 'material_unit', width: 60 },
-                      { title: '数量', dataIndex: 'notice_quantity', width: 90, align: 'right' },
-                      { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' },
-                      { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' },
+                      { title: t('app.kuaizhizao.salesOrder.materialCode'), dataIndex: 'material_code', width: 120 },
+                      { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 150 },
+                      { title: t('app.kuaizhizao.salesOrder.unit'), dataIndex: 'material_unit', width: 60 },
+                      { title: t('app.kuaizhizao.salesOrder.quantity'), dataIndex: 'notice_quantity', width: 90, align: 'right' },
+                      { title: t('app.kuaizhizao.salesOrder.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' },
+                      { title: t('app.kuaizhizao.shipmentNotice.amount'), dataIndex: 'total_amount', width: 100, align: 'right' },
                     ]}
                     dataSource={noticeDetail.items}
                     pagination={false}
                   />
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noDetailItems')} />
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
                 {shipmentTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -1344,7 +1378,7 @@ const ShipmentNoticesPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={shipmentTracking.data} />
                 )}
                 {!shipmentTracking.loading && !shipmentTracking.data && !shipmentTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.shipmentNotice.noOperationRecords')} />
                 )}
               </DetailDrawerSection>
             </>
@@ -1353,7 +1387,7 @@ const ShipmentNoticesPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建发货通知单"
+        title={t('app.kuaizhizao.shipmentNotice.create')}
         open={createModalVisible}
         onClose={() => { setCreateModalVisible(false); setEffectiveRuleCode(null); }}
         formRef={createFormRef}
@@ -1366,7 +1400,7 @@ const ShipmentNoticesPage: React.FC = () => {
       </FormModalTemplate>
 
       <FormModalTemplate
-        title="编辑发货通知单"
+        title={t('app.kuaizhizao.shipmentNotice.edit')}
         open={editModalVisible}
         onClose={() => setEditModalVisible(false)}
         afterOpenChange={(open) => {
@@ -1401,7 +1435,7 @@ const ShipmentNoticesPage: React.FC = () => {
           visible={importVisible}
           onCancel={() => setImportVisible(false)}
           onConfirm={handleFormLineImport}
-          title="导入通知明细"
+          title={t('app.kuaizhizao.shipmentNotice.importItemsTitle')}
           headers={noticeItemImportTemplate.importHeaders}
           exampleRow={noticeItemImportTemplate.importExampleRow}
         />

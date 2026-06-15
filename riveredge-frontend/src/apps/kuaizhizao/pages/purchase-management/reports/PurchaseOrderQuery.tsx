@@ -1,7 +1,7 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const PurchaseOrderQuery: React.FC = () => {
   const { t } = useTranslation();
@@ -15,7 +15,8 @@ const PurchaseOrderQuery: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
+      columnPersistenceId="apps.kuaizhizao.pages.purchase-management.reports.PurchaseOrderQuery"
       title={t('app.kuaizhizao.menu.reports.purchase-order-query')}
       reportType="po_query"
       columns={columns}

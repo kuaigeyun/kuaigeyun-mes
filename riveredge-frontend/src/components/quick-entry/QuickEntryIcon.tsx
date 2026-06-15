@@ -59,6 +59,7 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
       style={{
         position: 'relative',
         width: '100%',
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -162,10 +163,8 @@ export const QuickEntryIcon: React.FC<QuickEntryIconProps> = ({
           fontWeight: 400,
           textAlign: 'center',
           lineHeight: 1.3,
-          maxWidth: '100%',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          width: '100%',
+          minWidth: 0,
           padding: '0 2px',
         }}
       >

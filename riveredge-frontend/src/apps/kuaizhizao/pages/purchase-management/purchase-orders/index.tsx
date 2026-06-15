@@ -20,7 +20,7 @@ import {
   buildFactoryImportTemplate,
   resolveFactoryImportHeaderIndexMap,
 } from '../../../../../utils/spreadsheetImportTemplate';
-import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined } from '@ant-design/icons';
+import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
@@ -117,6 +117,7 @@ import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleSt
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
 import type { SubStage } from '../../../../../components/uni-lifecycle/types';
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
+import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal';
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
@@ -427,6 +428,7 @@ const purchaseOrderEditPath = (id: number) => `${PURCHASE_ORDER_LIST_PATH}/${id}
 
 const PurchaseOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
   const purchaseOrderAuditEnabled = useAuditRequired('purchase_order', false);
   const { token } = theme.useToken();
   const purchaseOrderDetailDrawerZIndex = token.zIndexPopupBase;
@@ -945,6 +947,15 @@ const PurchaseOrdersPage: React.FC = () => {
             }}
           />
         );
+        if (record.id) {
+          parts.push(
+            <Button
+              {...rowActionKind('print')}
+              key="print"
+              onClick={() => openPrint({ documentType: 'purchase_order', documentId: record.id! })}
+            />,
+          );
+        }
         return parts;
       },
     },
@@ -3064,6 +3075,19 @@ const PurchaseOrdersPage: React.FC = () => {
                   ),
                 },
                 {
+                  key: 'print',
+                  render: () => (
+                    <Button
+                      type="link"
+                      size="small"
+                      icon={<PrinterOutlined />}
+                      onClick={() => openPrint({ documentType: 'purchase_order', documentId: orderDetail.id! })}
+                    >
+                      打印
+                    </Button>
+                  ),
+                },
+                {
                   key: 'push',
                   visible: isAuditedStatus(orderDetail.status),
                   render: () => (
@@ -3690,6 +3714,7 @@ const PurchaseOrdersPage: React.FC = () => {
           </div>
         )}
       </Modal>
+      {PrintModal}
     </>
   );
 };

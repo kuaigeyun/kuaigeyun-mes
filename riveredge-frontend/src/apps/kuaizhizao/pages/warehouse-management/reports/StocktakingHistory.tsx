@@ -1,8 +1,8 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const StocktakingHistory: React.FC = () => {
   const { t } = useTranslation();
@@ -16,7 +16,7 @@ const StocktakingHistory: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.stocktaking-history')}
       reportType="stocktaking_history"
       columns={columns}

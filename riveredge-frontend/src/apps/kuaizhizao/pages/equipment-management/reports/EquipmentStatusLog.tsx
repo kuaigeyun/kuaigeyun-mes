@@ -1,8 +1,8 @@
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Typography } from 'antd';
-import ReportBase from '../../../components/ReportBase';
 import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const EquipmentStatusLog: React.FC = () => {
   const { t } = useTranslation();
@@ -24,7 +24,7 @@ const EquipmentStatusLog: React.FC = () => {
   ];
 
   return (
-    <ReportBase
+    <KuaizhizaoReport
       title={t('app.kuaizhizao.menu.reports.equipment-status-log')}
       reportType="equip_status_log"
       columns={columns}

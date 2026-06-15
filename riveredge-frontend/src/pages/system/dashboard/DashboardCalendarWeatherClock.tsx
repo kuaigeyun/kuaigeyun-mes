@@ -7,6 +7,7 @@ import { Button, Card, Typography, theme } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import { type Dayjs } from 'dayjs';
 import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import WeatherWidget from '../../../components/weather/WeatherWidget';
 import type { WeatherData } from '../../../services/weather';
 
@@ -68,6 +69,7 @@ export function DashboardCalendarWeatherClock({
   t,
   onWeatherChange,
 }: DashboardCalendarWeatherClockProps) {
+  const { i18n } = useTranslation();
   const { token } = theme.useToken();
   const [viewMonth, setViewMonth] = useState(() => currentTime.startOf('month'));
 
@@ -200,7 +202,9 @@ export function DashboardCalendarWeatherClock({
       </div>
 
       <Text ellipsis className="dashboard-cwc-lunar">
-        {t('pages.dashboard.lunarLabel')} {lunarDateStr}
+        {i18n.language?.startsWith('zh')
+          ? `${t('pages.dashboard.lunarLabel')} ${lunarDateStr}`
+          : null}
       </Text>
       </div>
     </Card>

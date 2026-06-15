@@ -2,17 +2,10 @@ import React, { useMemo } from 'react';
 import { Button, DatePicker, InputNumber, Space, Table, Tag } from 'antd';
 import { DeleteOutlined, PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../components/uni-material-select';
 import type { Material } from '../../../master-data/types/material';
 import type { OrderChangeItem } from '../../services/sales-order-change';
-
-const CHANGE_TYPE_LABEL: Record<string, string> = {
-  QUANTITY: '数量',
-  DELIVERY_DATE: '交期',
-  UNIT_PRICE: '单价',
-  LINE_CANCEL: '取消行',
-  LINE_ADD: '新增行',
-};
 
 interface OrderChangeItemsTableProps {
   items: OrderChangeItem[];
@@ -33,6 +26,19 @@ function calcDelta(row: OrderChangeItem): number {
 }
 
 export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ items, editable, onChange }) => {
+  const { t } = useTranslation();
+
+  const changeTypeLabel = (value: string) => {
+    const labels: Record<string, string> = {
+      QUANTITY: t('app.kuaizhizao.orderChange.changeTypeQuantity'),
+      DELIVERY_DATE: t('app.kuaizhizao.orderChange.changeTypeDeliveryDate'),
+      UNIT_PRICE: t('app.kuaizhizao.orderChange.changeTypeUnitPrice'),
+      LINE_CANCEL: t('app.kuaizhizao.orderChange.changeTypeLineCancel'),
+      LINE_ADD: t('app.kuaizhizao.orderChange.changeTypeLineAdd'),
+    };
+    return labels[value] ?? value ?? '-';
+  };
+
   const updateItem = (index: number, patch: Partial<OrderChangeItem>) => {
     if (!onChange) return;
     const next = items.map((row, i) => {
@@ -99,9 +105,9 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
 
   const columns = useMemo(() => {
     const cols: any[] = [
-      { title: '行号', dataIndex: 'line_no', width: 56 },
+      { title: t('app.kuaizhizao.orderChange.colLineNo'), dataIndex: 'line_no', width: 56 },
       {
-        title: '物料',
+        title: t('app.kuaizhizao.orderChange.colMaterial'),
         width: 220,
         render: (_: unknown, row: OrderChangeItem, index: number) => {
           if (row.change_type === 'LINE_ADD' && editable) {
@@ -122,19 +128,19 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         },
       },
       {
-        title: '变更类型',
+        title: t('app.kuaizhizao.orderChange.colChangeType'),
         dataIndex: 'change_type',
         width: 88,
-        render: (v: string) => <Tag>{CHANGE_TYPE_LABEL[v] ?? v ?? '-'}</Tag>,
+        render: (v: string) => <Tag>{changeTypeLabel(v)}</Tag>,
       },
       {
-        title: '变更前数量',
+        title: t('app.kuaizhizao.orderChange.colBeforeQuantity'),
         dataIndex: 'before_quantity',
         width: 96,
         render: (v: number) => v ?? '-',
       },
       {
-        title: '变更后数量',
+        title: t('app.kuaizhizao.orderChange.colAfterQuantity'),
         dataIndex: 'after_quantity',
         width: 110,
         render: (v: number, row: OrderChangeItem, index: number) => {
@@ -150,13 +156,13 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         },
       },
       {
-        title: '变更前单价',
+        title: t('app.kuaizhizao.orderChange.colBeforeUnitPrice'),
         dataIndex: 'before_unit_price',
         width: 96,
         render: (v: number) => v ?? '-',
       },
       {
-        title: '变更后单价',
+        title: t('app.kuaizhizao.orderChange.colAfterUnitPrice'),
         dataIndex: 'after_unit_price',
         width: 110,
         render: (v: number, row: OrderChangeItem, index: number) => {
@@ -172,7 +178,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         },
       },
       {
-        title: '变更后交期',
+        title: t('app.kuaizhizao.orderChange.colAfterDeliveryDate'),
         dataIndex: 'after_delivery_date',
         width: 130,
         render: (v: string, row: OrderChangeItem, index: number) => {
@@ -186,7 +192,7 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
         },
       },
       {
-        title: '差额',
+        title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'),
         dataIndex: 'delta_amount',
         width: 88,
         render: (_: number, row: OrderChangeItem) => calcDelta(row).toFixed(2),
@@ -195,22 +201,22 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
 
     if (editable) {
       cols.push({
-        title: '操作',
+        title: t('common.actions'),
         width: 120,
         fixed: 'right' as const,
         render: (_: unknown, row: OrderChangeItem, index: number) => (
           <Space size={4}>
             {row.change_type === 'LINE_ADD' ? (
               <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => removeNewLine(index)}>
-                删除
+                {t('common.delete')}
               </Button>
             ) : row.change_type === 'LINE_CANCEL' ? (
               <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => restoreLine(index)}>
-                恢复
+                {t('app.kuaizhizao.orderChange.restore')}
               </Button>
             ) : (
               <Button type="link" size="small" danger onClick={() => cancelLine(index)}>
-                取消行
+                {t('app.kuaizhizao.orderChange.cancelLine')}
               </Button>
             )}
           </Space>
@@ -219,14 +225,14 @@ export const OrderChangeItemsTable: React.FC<OrderChangeItemsTableProps> = ({ it
     }
 
     return cols;
-  }, [editable, items]);
+  }, [editable, items, t]);
 
   return (
     <>
       {editable && (
         <div style={{ marginBottom: 8 }}>
           <Button type="dashed" icon={<PlusOutlined />} onClick={addLine}>
-            新增明细
+            {t('app.kuaizhizao.orderChange.addLine')}
           </Button>
         </div>
       )}

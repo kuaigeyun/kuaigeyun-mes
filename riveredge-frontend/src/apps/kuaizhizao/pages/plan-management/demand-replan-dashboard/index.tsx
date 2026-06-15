@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { App, Button, Empty, Modal, Space, Spin, Table, Tag, Typography } from 'antd'
-import { EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons'
-import type { ProColumns } from '@ant-design/pro-components'
-import { ListPageTemplate, TwoColumnLayout, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates'
-import { UniTable } from '../../../../../components/uni-table'
+import React, { useEffect, useMemo, useState } from 'react';
+import { App, Button, Empty, Modal, Space, Spin, Table, Tag, Typography } from 'antd';
+import { EyeOutlined, PlayCircleOutlined, ReloadOutlined } from '@ant-design/icons';
+import type { ProColumns } from '@ant-design/pro-components';
+import { useTranslation } from 'react-i18next';
+import { ListPageTemplate, TwoColumnLayout, type StatCard, MODAL_CONFIG } from '../../../../../components/layout-templates';
+import { UniTable } from '../../../../../components/uni-table';
 import {
   executeDemandReplanTask,
   getDemandChangeImpact,
@@ -13,13 +14,13 @@ import {
   type DemandChangeEventItem,
   type DemandChangeImpactDetail,
   type DemandReplanTaskItem,
-} from '../../../services/demand-computation'
+} from '../../../services/demand-computation';
 
 const riskColor: Record<string, string> = {
   low: 'success',
   medium: 'warning',
   high: 'error',
-}
+};
 
 const taskStatusColor: Record<string, string> = {
   pending: 'default',
@@ -27,162 +28,178 @@ const taskStatusColor: Record<string, string> = {
   completed: 'success',
   failed: 'error',
   cancelled: 'default',
-}
+};
 
 const approvalStatusColor: Record<string, string> = {
   not_required: 'default',
   pending: 'warning',
   approved: 'success',
   rejected: 'error',
-}
-
-const modeText: Record<string, string> = {
-  net_change: '净变更',
-  full_regen: '全量重算',
-  what_if: '模拟',
-}
-
-const eventTypeText: Record<string, string> = {
-  order: '订单变更',
-  design: '设计变更',
-  route: '工艺路线变更',
-  manual: '手工触发',
-}
-
-const sourceTypeText: Record<string, string> = {
-  sales_order: '销售订单',
-  sales_forecast: '销售预测',
-  bom_change: 'BOM变更',
-  process_route_change: '工艺路线变更',
-}
+};
 
 const DemandReplanDashboardPage: React.FC = () => {
-  const { message, modal } = App.useApp()
-  const [stats, setStats] = useState<StatCard[]>([])
-  const [eventsLoading, setEventsLoading] = useState(false)
-  const [tasksLoading, setTasksLoading] = useState(false)
-  const [eventKeyword, setEventKeyword] = useState('')
-  const [eventRows, setEventRows] = useState<DemandChangeEventItem[]>([])
-  const [taskRows, setTaskRows] = useState<DemandReplanTaskItem[]>([])
-  const [selectedEventId, setSelectedEventId] = useState<number | null>(null)
-  const [selectedEventCode, setSelectedEventCode] = useState<string>('')
-  const [impactLoading, setImpactLoading] = useState(false)
-  const [impactOpen, setImpactOpen] = useState(false)
-  const [impactDetail, setImpactDetail] = useState<DemandChangeImpactDetail | null>(null)
-  const [executingTaskId, setExecutingTaskId] = useState<number | null>(null)
-  const [refreshSeed, setRefreshSeed] = useState(0)
+  const { t } = useTranslation();
+  const { message, modal } = App.useApp();
+  const [stats, setStats] = useState<StatCard[]>([]);
+  const [eventsLoading, setEventsLoading] = useState(false);
+  const [tasksLoading, setTasksLoading] = useState(false);
+  const [eventKeyword, setEventKeyword] = useState('');
+  const [eventRows, setEventRows] = useState<DemandChangeEventItem[]>([]);
+  const [taskRows, setTaskRows] = useState<DemandReplanTaskItem[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState<number | null>(null);
+  const [selectedEventCode, setSelectedEventCode] = useState<string>('');
+  const [impactLoading, setImpactLoading] = useState(false);
+  const [impactOpen, setImpactOpen] = useState(false);
+  const [impactDetail, setImpactDetail] = useState<DemandChangeImpactDetail | null>(null);
+  const [executingTaskId, setExecutingTaskId] = useState<number | null>(null);
+  const [refreshSeed, setRefreshSeed] = useState(0);
 
-  const refreshAll = () => setRefreshSeed((v) => v + 1)
+  const modeText = useMemo(
+    () => ({
+      net_change: t('app.kuaizhizao.demandReplan.mode.netChange'),
+      full_regen: t('app.kuaizhizao.demandReplan.mode.fullRegen'),
+      what_if: t('app.kuaizhizao.demandReplan.mode.whatIf'),
+    }),
+    [t]
+  );
+
+  const eventTypeText = useMemo(
+    () => ({
+      order: t('app.kuaizhizao.demandReplan.eventType.order'),
+      design: t('app.kuaizhizao.demandReplan.eventType.design'),
+      route: t('app.kuaizhizao.demandReplan.eventType.route'),
+      manual: t('app.kuaizhizao.demandReplan.eventType.manual'),
+    }),
+    [t]
+  );
+
+  const sourceTypeText = useMemo(
+    () => ({
+      sales_order: t('app.kuaizhizao.demandReplan.sourceType.salesOrder'),
+      sales_forecast: t('app.kuaizhizao.demandReplan.sourceType.salesForecast'),
+      bom_change: t('app.kuaizhizao.demandReplan.sourceType.bomChange'),
+      process_route_change: t('app.kuaizhizao.demandReplan.sourceType.processRouteChange'),
+    }),
+    [t]
+  );
+
+  const refreshAll = () => setRefreshSeed((v) => v + 1);
 
   const loadStats = async () => {
-    const d = await getDemandReplanDashboard()
+    const d = await getDemandReplanDashboard();
     setStats([
-      { key: 'pending_events', title: '待处理变更事件', value: d.pending_events, valueStyle: { color: '#1677ff' } },
-      { key: 'running_tasks', title: '执行中任务', value: d.running_tasks, valueStyle: { color: '#722ed1' } },
-      { key: 'failed_tasks', title: '失败任务', value: d.failed_tasks, valueStyle: { color: '#cf1322' } },
-      { key: 'pending_approval_tasks', title: '待审批任务', value: d.pending_approval_tasks, valueStyle: { color: '#d48806' } },
-    ])
-  }
+      { key: 'pending_events', title: t('app.kuaizhizao.demandReplan.stat.pendingEvents'), value: d.pending_events, valueStyle: { color: '#1677ff' } },
+      { key: 'running_tasks', title: t('app.kuaizhizao.demandReplan.stat.runningTasks'), value: d.running_tasks, valueStyle: { color: '#722ed1' } },
+      { key: 'failed_tasks', title: t('app.kuaizhizao.demandReplan.stat.failedTasks'), value: d.failed_tasks, valueStyle: { color: '#cf1322' } },
+      { key: 'pending_approval_tasks', title: t('app.kuaizhizao.demandReplan.stat.pendingApprovalTasks'), value: d.pending_approval_tasks, valueStyle: { color: '#d48806' } },
+    ]);
+  };
 
   const loadEvents = async () => {
-    setEventsLoading(true)
+    setEventsLoading(true);
     try {
-      const rows = await listPendingDemandChangeEvents(200)
-      setEventRows(rows || [])
+      const rows = await listPendingDemandChangeEvents(200);
+      setEventRows(rows || []);
     } catch (e: any) {
-      message.error(e?.message || '加载变更事件失败')
-      setEventRows([])
+      message.error(e?.message || t('app.kuaizhizao.demandReplan.loadEventsFailed'));
+      setEventRows([]);
     } finally {
-      setEventsLoading(false)
+      setEventsLoading(false);
     }
-  }
+  };
 
   const loadTasks = async () => {
-    setTasksLoading(true)
+    setTasksLoading(true);
     try {
-      const rows = await listDemandReplanTasks(200)
-      setTaskRows(rows || [])
+      const rows = await listDemandReplanTasks(200);
+      setTaskRows(rows || []);
     } catch (e: any) {
-      message.error(e?.message || '加载重算任务失败')
-      setTaskRows([])
+      message.error(e?.message || t('app.kuaizhizao.demandReplan.loadTasksFailed'));
+      setTaskRows([]);
     } finally {
-      setTasksLoading(false)
+      setTasksLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    void Promise.all([loadStats(), loadEvents(), loadTasks()])
-  }, [refreshSeed])
+    void Promise.all([loadStats(), loadEvents(), loadTasks()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh on seed only
+  }, [refreshSeed]);
 
   const openImpact = async (eventId: number) => {
-    setImpactLoading(true)
+    setImpactLoading(true);
     try {
-      const detail = await getDemandChangeImpact(eventId)
-      setImpactDetail(detail)
-      setImpactOpen(true)
+      const detail = await getDemandChangeImpact(eventId);
+      setImpactDetail(detail);
+      setImpactOpen(true);
     } catch (e: any) {
-      message.error(e?.message || '获取影响详情失败')
+      message.error(e?.message || t('app.kuaizhizao.demandReplan.loadImpactFailed'));
     } finally {
-      setImpactLoading(false)
+      setImpactLoading(false);
     }
-  }
+  };
 
   const executeTask = async (row: DemandReplanTaskItem) => {
-    const requireForce = row.approval_status === 'pending'
+    const requireForce = row.approval_status === 'pending';
     modal.confirm({
-      title: requireForce ? '该任务待审批，确认审批并执行？' : '确认执行重算任务？',
+      title: requireForce
+        ? t('app.kuaizhizao.demandReplan.executeConfirmApproval')
+        : t('app.kuaizhizao.demandReplan.executeConfirm'),
       content: (
         <Typography.Text type={requireForce ? 'warning' : undefined}>
-          任务 {row.task_code}（{modeText[row.mode] || row.mode}）
+          {row.task_code}（{modeText[row.mode as keyof typeof modeText] || row.mode}）
         </Typography.Text>
       ),
       onOk: async () => {
-        setExecutingTaskId(row.id)
+        setExecutingTaskId(row.id);
         try {
-          await executeDemandReplanTask(row.id, requireForce ? { force: true, approval_comment: '前端看板执行' } : {})
-          message.success('任务执行已触发')
-          refreshAll()
+          await executeDemandReplanTask(
+            row.id,
+            requireForce ? { force: true, approval_comment: t('app.kuaizhizao.demandReplan.approvalComment') } : {}
+          );
+          message.success(t('app.kuaizhizao.demandReplan.executeSuccess'));
+          refreshAll();
         } catch (e: any) {
-          message.error(e?.message || '任务执行失败')
+          message.error(e?.message || t('app.kuaizhizao.demandReplan.executeFailed'));
         } finally {
-          setExecutingTaskId(null)
+          setExecutingTaskId(null);
         }
       },
-    })
-  }
+    });
+  };
 
   const taskColumns: ProColumns<DemandReplanTaskItem>[] = useMemo(
     () => [
-      { title: '任务编码', dataIndex: 'task_code', width: 180, fixed: 'left' },
+      { title: t('app.kuaizhizao.demandReplan.col.taskCode'), dataIndex: 'task_code', width: 180, fixed: 'left' },
       {
-        title: '模式',
+        title: t('app.kuaizhizao.demandReplan.col.mode'),
         dataIndex: 'mode',
         width: 120,
-        render: (_, row) => <Tag>{modeText[row.mode] || row.mode}</Tag>,
+        render: (_, row) => <Tag>{modeText[row.mode as keyof typeof modeText] || row.mode}</Tag>,
       },
       {
-        title: '风险等级',
+        title: t('app.kuaizhizao.demandReplan.col.riskLevel'),
         dataIndex: 'risk_level',
         width: 110,
         render: (_, row) => <Tag color={riskColor[row.risk_level] || 'default'}>{row.risk_level}</Tag>,
       },
       {
-        title: '审批状态',
+        title: t('app.kuaizhizao.demandReplan.col.approvalStatus'),
         dataIndex: 'approval_status',
         width: 130,
         render: (_, row) => <Tag color={approvalStatusColor[row.approval_status] || 'default'}>{row.approval_status}</Tag>,
       },
       {
-        title: '任务状态',
+        title: t('app.kuaizhizao.demandReplan.col.taskStatus'),
         dataIndex: 'status',
         width: 110,
         render: (_, row) => <Tag color={taskStatusColor[row.status] || 'default'}>{row.status}</Tag>,
       },
-      { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
-      { title: '开始时间', dataIndex: 'started_at', valueType: 'dateTime', width: 180, hideInSearch: true },
-      { title: '结束时间', dataIndex: 'finished_at', valueType: 'dateTime', width: 180, hideInSearch: true },
+      { title: t('app.kuaizhizao.demandReplan.col.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
+      { title: t('app.kuaizhizao.demandReplan.col.startedAt'), dataIndex: 'started_at', valueType: 'dateTime', width: 180, hideInSearch: true },
+      { title: t('app.kuaizhizao.demandReplan.col.finishedAt'), dataIndex: 'finished_at', valueType: 'dateTime', width: 180, hideInSearch: true },
       {
-        title: '操作',
+        title: t('app.kuaizhizao.demandReplan.col.actions'),
         key: 'action',
         fixed: 'right',
         width: 140,
@@ -195,35 +212,35 @@ const DemandReplanDashboardPage: React.FC = () => {
             disabled={!(row.status === 'pending' || row.status === 'failed')}
             onClick={() => executeTask(row)}
           >
-            执行
+            {t('app.kuaizhizao.demandReplan.action.execute')}
           </Button>
         ),
       },
     ],
-    [executingTaskId],
-  )
+    [executingTaskId, modeText, t]
+  );
 
   const filteredEventRows = useMemo(() => {
-    const kw = eventKeyword.trim().toLowerCase()
-    if (!kw) return eventRows
+    const kw = eventKeyword.trim().toLowerCase();
+    if (!kw) return eventRows;
     return eventRows.filter((row) => {
       const fullText = [
         row.event_code,
         row.source_code,
-        eventTypeText[row.event_type] || row.event_type,
-        sourceTypeText[row.source_type] || row.source_type,
+        eventTypeText[row.event_type as keyof typeof eventTypeText] || row.event_type,
+        sourceTypeText[row.source_type as keyof typeof sourceTypeText] || row.source_type,
       ]
         .filter(Boolean)
         .join(' ')
-        .toLowerCase()
-      return fullText.includes(kw)
-    })
-  }, [eventRows, eventKeyword])
+        .toLowerCase();
+      return fullText.includes(kw);
+    });
+  }, [eventRows, eventKeyword, eventTypeText, sourceTypeText]);
 
   const filteredTaskRows = useMemo(
     () => (selectedEventId ? taskRows.filter((x) => Number(x.event_id) === selectedEventId) : taskRows),
-    [taskRows, selectedEventId],
-  )
+    [taskRows, selectedEventId]
+  );
 
   const leftEventList = (
     <div style={{ padding: 8 }}>
@@ -232,17 +249,17 @@ const DemandReplanDashboardPage: React.FC = () => {
           <Spin />
         </div>
       ) : filteredEventRows.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无需重算单据" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.demandReplan.emptyEvents')} />
       ) : (
         filteredEventRows.map((row) => {
-          const active = selectedEventId === row.id
+          const active = selectedEventId === row.id;
           return (
             <button
               key={row.id}
               type="button"
               onClick={() => {
-                setSelectedEventId(row.id)
-                setSelectedEventCode(row.event_code || '')
+                setSelectedEventId(row.id);
+                setSelectedEventCode(row.event_code || '');
               }}
               style={{
                 width: '100%',
@@ -257,35 +274,38 @@ const DemandReplanDashboardPage: React.FC = () => {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <Typography.Text strong style={{ fontSize: 13 }}>
-                  {row.source_code || row.event_code || `单据#${row.id}`}
+                  {row.source_code || row.event_code || t('app.kuaizhizao.demandReplan.docFallback', { id: row.id })}
                 </Typography.Text>
                 <Tag color={row.event_status === 'analyzed' ? 'success' : 'default'}>{row.event_status}</Tag>
               </div>
               <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  {eventTypeText[row.event_type] || row.event_type} · {sourceTypeText[row.source_type] || row.source_type}
+                  {eventTypeText[row.event_type as keyof typeof eventTypeText] || row.event_type} ·{' '}
+                  {sourceTypeText[row.source_type as keyof typeof sourceTypeText] || row.source_type}
                 </Typography.Text>
                 <Button
                   size="small"
                   type="link"
                   icon={<EyeOutlined />}
                   onClick={(e) => {
-                    e.stopPropagation()
-                    void openImpact(row.id)
+                    e.stopPropagation();
+                    void openImpact(row.id);
                   }}
                 >
-                  影响
+                  {t('app.kuaizhizao.demandReplan.action.impact')}
                 </Button>
               </div>
               <div style={{ marginTop: 2 }}>
-                <Typography.Text style={{ fontSize: 12 }}>事件：{row.event_code || '-'}</Typography.Text>
+                <Typography.Text style={{ fontSize: 12 }}>
+                  {t('app.kuaizhizao.demandReplan.eventLabel', { code: row.event_code || '-' })}
+                </Typography.Text>
               </div>
             </button>
-          )
+          );
         })
       )}
     </div>
-  )
+  );
 
   return (
     <>
@@ -296,14 +316,14 @@ const DemandReplanDashboardPage: React.FC = () => {
             width: 320,
             minWidth: 260,
             search: {
-              placeholder: '搜索需重算单据号',
+              placeholder: t('app.kuaizhizao.demandReplan.searchPlaceholder'),
               value: eventKeyword,
               onChange: setEventKeyword,
               allowClear: true,
             },
             actions: [
               <Button key="refresh-left" icon={<ReloadOutlined />} onClick={refreshAll} block>
-                刷新
+                {t('app.kuaizhizao.demandReplan.refresh')}
               </Button>,
             ],
             leftContent: leftEventList,
@@ -313,11 +333,15 @@ const DemandReplanDashboardPage: React.FC = () => {
               left: (
                 <Space>
                   {selectedEventId ? (
-                    <Tag color="blue">当前单据：{selectedEventCode || selectedEventId}</Tag>
+                    <Tag color="blue">
+                      {t('app.kuaizhizao.demandReplan.currentDoc', {
+                        code: selectedEventCode || String(selectedEventId),
+                      })}
+                    </Tag>
                   ) : (
-                    <Tag>当前单据：全部</Tag>
+                    <Tag>{t('app.kuaizhizao.demandReplan.currentDocAll')}</Tag>
                   )}
-                  {tasksLoading ? <Tag color="processing">任务加载中</Tag> : null}
+                  {tasksLoading ? <Tag color="processing">{t('app.kuaizhizao.demandReplan.tasksLoading')}</Tag> : null}
                 </Space>
               ),
             },
@@ -327,14 +351,14 @@ const DemandReplanDashboardPage: React.FC = () => {
                 columns={taskColumns}
                 rowKey="id"
                 request={async (params) => {
-                  const current = Number(params.current || 1)
-                  const pageSize = Number(params.pageSize || 20)
-                  const start = (current - 1) * pageSize
+                  const current = Number(params.current || 1);
+                  const pageSize = Number(params.pageSize || 20);
+                  const start = (current - 1) * pageSize;
                   return {
                     data: filteredTaskRows.slice(start, start + pageSize),
                     total: filteredTaskRows.length,
                     success: true,
-                  }
+                  };
                 }}
                 params={{ refreshSeed, selectedEventId: selectedEventId || 0, taskRowsCount: filteredTaskRows.length }}
               />
@@ -346,19 +370,24 @@ const DemandReplanDashboardPage: React.FC = () => {
 
       <Modal
         open={impactOpen}
-        title="变更影响详情"
+        title={t('app.kuaizhizao.demandReplan.impactModal.title')}
         width={MODAL_CONFIG.LARGE_WIDTH}
         onCancel={() => setImpactOpen(false)}
         footer={null}
       >
         {impactLoading ? (
-          <Typography.Text>加载中...</Typography.Text>
+          <Typography.Text>{t('app.kuaizhizao.demandReplan.impactModal.loading')}</Typography.Text>
         ) : !impactDetail ? (
-          <Typography.Text type="secondary">暂无详情</Typography.Text>
+          <Typography.Text type="secondary">{t('app.kuaizhizao.demandReplan.impactModal.noDetail')}</Typography.Text>
         ) : (
           <Space direction="vertical" style={{ width: '100%' }} size={16}>
             <Typography.Text>
-              事件：{impactDetail.event.event_code} / {eventTypeText[impactDetail.event.event_type] || impactDetail.event.event_type}
+              {t('app.kuaizhizao.demandReplan.impactModal.event', {
+                code: impactDetail.event.event_code,
+                type:
+                  eventTypeText[impactDetail.event.event_type as keyof typeof eventTypeText] ||
+                  impactDetail.event.event_type,
+              })}
             </Typography.Text>
             <Table
               size="small"
@@ -366,22 +395,27 @@ const DemandReplanDashboardPage: React.FC = () => {
               pagination={false}
               dataSource={impactDetail.impacts}
               columns={[
-                { title: '影响对象', dataIndex: 'impact_type', width: 120 },
-                { title: '对象ID', dataIndex: 'impact_id', width: 100 },
-                { title: '对象编码', dataIndex: 'impact_code', width: 160 },
+                { title: t('app.kuaizhizao.demandReplan.impactCol.impactType'), dataIndex: 'impact_type', width: 120 },
+                { title: t('app.kuaizhizao.demandReplan.impactCol.impactId'), dataIndex: 'impact_id', width: 100 },
+                { title: t('app.kuaizhizao.demandReplan.impactCol.impactCode'), dataIndex: 'impact_code', width: 160 },
                 {
-                  title: '风险',
+                  title: t('app.kuaizhizao.demandReplan.impactCol.risk'),
                   dataIndex: 'risk_level',
                   width: 90,
                   render: (v) => <Tag color={riskColor[String(v)] || 'default'}>{String(v)}</Tag>,
                 },
                 {
-                  title: '审批',
+                  title: t('app.kuaizhizao.demandReplan.impactCol.approval'),
                   dataIndex: 'needs_approval',
                   width: 80,
-                  render: (v) => (v ? <Tag color="warning">是</Tag> : <Tag>否</Tag>),
+                  render: (v) =>
+                    v ? (
+                      <Tag color="warning">{t('app.kuaizhizao.demandReplan.yes')}</Tag>
+                    ) : (
+                      <Tag>{t('app.kuaizhizao.demandReplan.no')}</Tag>
+                    ),
                 },
-                { title: '原因', dataIndex: 'impact_reason' },
+                { title: t('app.kuaizhizao.demandReplan.impactCol.reason'), dataIndex: 'impact_reason' },
               ]}
               scroll={{ y: 320 }}
             />
@@ -389,7 +423,7 @@ const DemandReplanDashboardPage: React.FC = () => {
         )}
       </Modal>
     </>
-  )
-}
+  );
+};
 
-export default DemandReplanDashboardPage
+export default DemandReplanDashboardPage;

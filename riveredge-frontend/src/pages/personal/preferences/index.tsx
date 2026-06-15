@@ -12,8 +12,6 @@ import SafeProFormSelect from '../../../components/safe-pro-form-select';
 import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography, Space } from 'antd';
 import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
-import { loadUserLanguage, refreshTranslations } from '../../../config/i18n';
-import i18n from '../../../config/i18n';
 import type { Color } from 'antd/es/color-picker';
 
 
@@ -224,12 +222,6 @@ const UserPreferencesPage: React.FC = () => {
       await updatePreferences(values);
 
       messageApi.success(t('pages.personal.preferences.updateSuccess'));
-
-      // 如果语言变更，重新加载用户语言和翻译内容
-      if (values.language && values.language !== i18n.language) {
-        await loadUserLanguage();
-        await refreshTranslations();
-      }
     } catch (error: any) {
       messageApi.error(error.message || t('pages.personal.preferences.updateFailed'));
     }

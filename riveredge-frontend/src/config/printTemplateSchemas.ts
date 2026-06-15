@@ -19,6 +19,13 @@ export interface TemplateSchema {
   fields: FieldSchema[];
 }
 
+/** 手机端扫描用单据二维码（打印页眉右上角） */
+export const DOCUMENT_QRCODE_FIELD: FieldSchema = {
+  key: 'document_qrcode',
+  label: '单据二维码',
+  type: 'string',
+};
+
 export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
   work_order: {
     type: 'work_order',
@@ -73,6 +80,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '生产领料单',
     fields: [
       { key: 'code', label: '领料单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'workshop_name', label: '车间名称', type: 'string' },
       { key: 'status', label: '状态', type: 'string' },
@@ -105,6 +113,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '生产退料单',
     fields: [
       { key: 'code', label: '退料单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'picking_code', label: '领料单号', type: 'string' },
       { key: 'workshop_name', label: '车间名称', type: 'string' },
@@ -137,6 +146,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '其他入库单',
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'reason_type', label: '原因类型', type: 'string' },
       { key: 'reason_desc', label: '原因说明', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -217,6 +227,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '借料单',
     fields: [
       { key: 'borrow_code', label: '借料单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
       { key: 'borrower_name', label: '借料人', type: 'string' },
       { key: 'department', label: '部门', type: 'string' },
@@ -248,6 +259,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '还料单',
     fields: [
       { key: 'return_code', label: '还料单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'borrow_code', label: '借料单号', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
       { key: 'returner_name', label: '归还人', type: 'string' },
@@ -277,6 +289,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '其他出库单',
     fields: [
       { key: 'code', label: '出库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'reason_type', label: '原因类型', type: 'string' },
       { key: 'reason_desc', label: '原因说明', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -309,6 +322,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '成品入库单',
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
       { key: 'total_quantity', label: '总数量', type: 'number' },
@@ -342,6 +356,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '半成品入库单',
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'work_order_code', label: '工单编号', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
       { key: 'total_quantity', label: '总数量', type: 'number' },
@@ -375,6 +390,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '销售出库单',
     fields: [
       { key: 'code', label: '出库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'sales_order_code', label: '销售订单号', type: 'string' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -441,6 +457,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '采购入库单',
     fields: [
       { key: 'code', label: '入库单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'purchase_order_code', label: '采购订单号', type: 'string' },
       { key: 'supplier_name', label: '供应商名称', type: 'string' },
       { key: 'warehouse_name', label: '仓库名称', type: 'string' },
@@ -479,6 +496,7 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
     name: '送货单',
     fields: [
       { key: 'code', label: '通知单号', type: 'string' },
+      DOCUMENT_QRCODE_FIELD,
       { key: 'sales_delivery_code', label: '销售出库单号', type: 'string' },
       { key: 'sales_order_code', label: '销售订单号', type: 'string' },
       { key: 'customer_name', label: '客户名称', type: 'string' },
@@ -549,6 +567,79 @@ export const PRINT_TEMPLATE_SCHEMAS: Record<string, TemplateSchema> = {
           { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
         ],
       },
+    ],
+  },
+  sales_contract: {
+    type: 'sales_contract',
+    name: '销售合同',
+    fields: [
+      { key: 'code', label: '合同编号', type: 'string' },
+      { key: 'contract_code', label: '合同编号', type: 'string' },
+      { key: 'contract_type', label: '合同类型', type: 'string' },
+      { key: 'version_no', label: '版本号', type: 'number' },
+      { key: 'review_status', label: '审核状态', type: 'string' },
+      { key: 'currency_code', label: '币别', type: 'string' },
+      { key: 'customer_name', label: '客户名称', type: 'string' },
+      { key: 'customer_contact', label: '客户联系人', type: 'string' },
+      { key: 'customer_phone', label: '客户电话', type: 'string' },
+      { key: 'contract_date', label: '合同日期', type: 'date' },
+      { key: 'valid_from', label: '有效期起', type: 'date' },
+      { key: 'valid_to', label: '有效期止', type: 'date' },
+      { key: 'total_quantity', label: '总数量', type: 'number' },
+      { key: 'total_amount', label: '总金额', type: 'number' },
+      { key: 'released_quantity', label: '已释放数量', type: 'number' },
+      { key: 'released_amount', label: '已释放金额', type: 'number' },
+      { key: 'remaining_quantity', label: '剩余数量', type: 'number' },
+      { key: 'remaining_amount', label: '剩余金额', type: 'number' },
+      { key: 'salesman_name', label: '销售员', type: 'string' },
+      { key: 'shipping_address', label: '收货地址', type: 'string' },
+      { key: 'shipping_method', label: '发货方式', type: 'string' },
+      { key: 'payment_terms', label: '付款条件', type: 'string' },
+      { key: 'quotation_code', label: '报价单号', type: 'string' },
+      { key: 'contract_terms', label: '合同条款', type: 'string' },
+      { key: 'notes', label: '备注', type: 'string' },
+      { key: 'created_at', label: '创建时间', type: 'date' },
+      { key: 'print_time', label: '打印时间', type: 'date' },
+      {
+        key: 'items',
+        label: '明细列表',
+        type: 'array',
+        children: [
+          { key: 'items.0.material_code', label: '物料编号（第1项）', type: 'string' },
+          { key: 'items.0.material_name', label: '物料名称（第1项）', type: 'string' },
+          { key: 'items.0.material_spec', label: '规格（第1项）', type: 'string' },
+          { key: 'items.0.material_unit', label: '单位（第1项）', type: 'string' },
+          { key: 'items.0.order_quantity', label: '数量（第1项）', type: 'number' },
+          { key: 'items.0.unit_price', label: '单价（第1项）', type: 'number' },
+          { key: 'items.0.total_amount', label: '金额（第1项）', type: 'number' },
+          { key: 'items.0.notes', label: '行备注（第1项）', type: 'string' },
+        ],
+      },
+    ],
+  },
+  product_quality_certificate: {
+    type: 'product_quality_certificate',
+    name: '产品合格证',
+    fields: [
+      { key: 'code', label: '检验单号', type: 'string' },
+      { key: 'inspection_code', label: '检验单号', type: 'string' },
+      { key: 'release_certificate', label: '证书编号', type: 'string' },
+      { key: 'material_code', label: '产品编号', type: 'string' },
+      { key: 'material_name', label: '产品名称', type: 'string' },
+      { key: 'material_spec', label: '规格型号', type: 'string' },
+      { key: 'batch_number', label: '生产批次', type: 'string' },
+      { key: 'inspection_quantity', label: '检验数量', type: 'number' },
+      { key: 'qualified_quantity', label: '合格数量', type: 'number' },
+      { key: 'quality_status', label: '质量状态', type: 'string' },
+      { key: 'inspection_result', label: '检验结果', type: 'string' },
+      { key: 'inspector_name', label: '检验员', type: 'string' },
+      { key: 'inspection_time', label: '检验时间', type: 'date' },
+      { key: 'work_order_code', label: '工单编号', type: 'string' },
+      { key: 'sales_order_code', label: '销售订单', type: 'string' },
+      { key: 'customer_name', label: '客户名称', type: 'string' },
+      { key: 'inspection_standard', label: '检验标准', type: 'string' },
+      { key: 'notes', label: '备注', type: 'string' },
+      { key: 'print_time', label: '打印时间', type: 'date' },
     ],
   },
   equipment_spot_check: {
@@ -684,14 +775,16 @@ export const DOCUMENT_TYPE_TO_CODE: Record<string, string> = {
   material_borrow: 'MATERIAL_BORROW_PRINT',
   material_return: 'MATERIAL_RETURN_PRINT',
   finished_goods_receipt: 'FINISHED_GOODS_RECEIPT_PRINT',
-  semi_finished_goods_receipt: 'FINISHED_GOODS_RECEIPT_PRINT',
+  semi_finished_goods_receipt: 'SEMI_FINISHED_GOODS_RECEIPT_PRINT',
   sales_delivery: 'SALES_DELIVERY_PRINT',
   purchase_order: 'PURCHASE_ORDER_PRINT',
   purchase_receipt: 'PURCHASE_RECEIPT_PRINT',
   sales_forecast: 'SALES_FORECAST_PRINT',
   sales_order: 'SALES_ORDER_PRINT',
   quotation: 'QUOTATION_PRINT',
+  sales_contract: 'SALES_CONTRACT_PRINT',
   delivery_notice: 'DELIVERY_NOTICE_PRINT',
+  product_quality_certificate: 'PRODUCT_QUALITY_CERTIFICATE_PRINT',
   equipment_spot_check: 'HAOLIGO_EQUIPMENT_SPOT_CHECK_PRINT',
   equipment_upkeep_complete: 'HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_PRINT',
   mold_maintenance_complete: 'HAOLIGO_MOLD_MAINTENANCE_COMPLETE_PRINT',

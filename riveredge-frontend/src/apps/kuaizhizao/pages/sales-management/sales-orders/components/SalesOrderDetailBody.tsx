@@ -29,9 +29,8 @@ import type { CustomField } from '../../../../../../services/customField';
 import { getSalesOrderLifecycle } from '../../../../utils/salesOrderLifecycle';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary';
 import type { SalesOrder, SalesOrderItem } from '../../../../services/sales-order';
-import { apiRequest } from '../../../../../../services/api';
-import type { DocumentPrintApiResult } from '../../../../../../utils/printResponseHelpers';
 import { listSalesOrderChangesByOrder, type SalesOrderChange } from '../../../../services/sales-order-change';
+import { useKuaizhizaoPrintModal } from '../../../../hooks/useKuaizhizaoPrintModal';
 
 export interface SalesOrderDetailBodyProps {
   order: SalesOrder;
@@ -78,6 +77,7 @@ export const SalesOrderDetailProvider: React.FC<
 }) => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
 
   const [internalFee, setInternalFee] = useState<any[]>([]);
   const [internalShipping, setInternalShipping] = useState<Array<{ label: string; value: string }>>([]);
@@ -146,37 +146,15 @@ export const SalesOrderDetailProvider: React.FC<
     };
   }, [feeProp, shippingProp, paymentProp]);
 
-  const handlePrintSalesOrder = useCallback(async () => {
+  const handlePrintSalesOrder = useCallback(() => {
     if (order.id == null) return;
-    try {
-      const result = await apiRequest<DocumentPrintApiResult>(
-        `/apps/kuaizhizao/sales-orders/${order.id}/print`,
-        {
-          method: 'GET',
-          params: { response_format: 'json', output_format: 'html' },
-        },
-      );
-      const html = result?.content || '';
-      if (html) {
-        const printWindow = window.open('', '_blank');
-        if (printWindow) {
-          printWindow.document.write(
-            `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.salesOrder.detail')}</title></head><body>${html}</body></html>`,
-          );
-          printWindow.document.close();
-          printWindow.onload = () => printWindow.print();
-        } else {
-          messageApi.warning('无法打开打印窗口，请检查浏览器弹窗设置');
-        }
-      } else {
-        messageApi.warning('打印内容为空');
-      }
-    } catch (e: any) {
-      messageApi.error(e?.message || '打印失败');
-    }
-  }, [order.id, t, messageApi]);
+    openPrint({ documentType: 'sales_order', documentId: order.id });
+  }, [order.id, openPrint]);
 
-  const lifecycle = useMemo(() => getSalesOrderLifecycle(order, auditRequired), [order, auditRequired]);
+  const lifecycle = useMemo(
+    () => getSalesOrderLifecycle(order, auditRequired, t),
+    [order, auditRequired, t],
+  );
 
   const ctxValue = useMemo<SalesOrderDetailContextValue>(
     () => ({
@@ -203,7 +181,12 @@ export const SalesOrderDetailProvider: React.FC<
     ],
   );
 
-  return <SalesOrderDetailContext.Provider value={ctxValue}>{children}</SalesOrderDetailContext.Provider>;
+  return (
+    <SalesOrderDetailContext.Provider value={ctxValue}>
+      {children}
+      {PrintModal}
+    </SalesOrderDetailContext.Provider>
+  );
 };
 
 /** DetailDrawerTemplate.collaborationTitleSuffix（须在 Provider 内） */
@@ -291,7 +274,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         { key: 'customer_phone', label: t('app.kuaizhizao.salesOrder.customerPhone'), children: order.customer_phone || '-' },
         {
           key: 'contract_code',
-          label: t('app.kuaizhizao.salesContract.linkedContract', { defaultValue: '关联合同' }),
+          label: t('app.kuaizhizao.salesContract.linkedContract'),
           children: order.contract_code ? (
             <Button
               type="link"
@@ -343,7 +326,7 @@ export const SalesOrderDetailBasicPane: React.FC = () => {
         },
         {
           key: 'total_fee_amount',
-          label: '总费用金额',
+          label: t('app.kuaizhizao.salesOrder.totalFeeAmount'),
           children: <AmountDisplay resource={SO} fieldName="amount" value={order.total_fee_amount ?? 0} />,
         },
       ]}
@@ -492,32 +475,35 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
     <>
       {order.fee_details && order.fee_details.length > 0 && (
         <div style={{ marginBottom: 12 }}>
-          <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>费用明细</div>
+          <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13 }}>{t('app.kuaizhizao.salesOrder.feeDetailsTitle')}</div>
           <Table
             size="small"
             tableLayout="fixed"
             style={{ minWidth: 560 }}
             columns={[
                 {
-                  title: '费用类型',
+                  title: t('app.kuaizhizao.salesOrder.feeType'),
                   dataIndex: 'type',
                   width: 120,
                   render: (val: string) => feeTypeOptions.find((o: any) => o.value === val)?.label ?? val,
                 },
                 {
-                  title: '金额',
+                  title: t('app.kuaizhizao.salesOrder.totalAmountLabel'),
                   dataIndex: 'amount',
                   width: 120,
                   align: 'right',
                   render: (val: number) => <AmountDisplay resource={SO} fieldName="amount" value={val} />,
                 },
                 {
-                  title: '承担方',
+                  title: t('app.kuaizhizao.salesOrder.feeBearer'),
                   dataIndex: 'bearer',
                   width: 100,
-                  render: (val: string) => (val === 'our_side' ? '我方' : '对方'),
+                  render: (val: string) =>
+                    val === 'our_side'
+                      ? t('app.kuaizhizao.salesOrder.feeBearerOurSide')
+                      : t('app.kuaizhizao.salesOrder.feeBearerCounterparty'),
                 },
-                { title: '备注', dataIndex: 'notes' },
+                { title: t('app.kuaizhizao.salesOrder.notes'), dataIndex: 'notes' },
               ]}
               dataSource={order.fee_details}
               rowKey={(_: any, i?: number) => i ?? 0}
@@ -601,13 +587,14 @@ export const SalesOrderDetailLinesPane: React.FC = () => {
             pagination={false}
           />
       ) : (
-        <Typography.Text type="secondary">暂无明细</Typography.Text>
+        <Typography.Text type="secondary">{t('app.kuaizhizao.salesOrder.emptyItems')}</Typography.Text>
       )}
     </>
   );
 };
 
 export const SalesOrderDetailTimelinePane: React.FC = () => {
+  const { t } = useTranslation();
   const { tracking, order } = useSalesOrderDetailContext();
   const [changes, setChanges] = useState<SalesOrderChange[]>([]);
 
@@ -621,9 +608,9 @@ export const SalesOrderDetailTimelinePane: React.FC = () => {
       {tracking.data ? (
         <DocumentTrackingTimelineBody data={tracking.data} />
       ) : (
-        <Typography.Text type="secondary">暂无操作记录</Typography.Text>
+        <Typography.Text type="secondary">{t('app.kuaizhizao.salesOrder.emptyTimeline')}</Typography.Text>
       )}
-      <Typography.Title level={5} style={{ marginTop: 24 }}>变更历史</Typography.Title>
+      <Typography.Title level={5} style={{ marginTop: 24 }}>{t('app.kuaizhizao.salesOrder.changeHistoryTitle')}</Typography.Title>
       {changes.length ? (
         <Table
           size="small"
@@ -631,12 +618,12 @@ export const SalesOrderDetailTimelinePane: React.FC = () => {
           pagination={false}
           dataSource={changes}
           columns={[
-            { title: '变更单号', dataIndex: 'change_code' },
-            { title: '版本', dataIndex: 'change_version', width: 70 },
-            { title: '差额', dataIndex: 'delta_amount', width: 100 },
-            { title: '状态', dataIndex: 'status', width: 100 },
+            { title: t('app.kuaizhizao.salesOrderChange.colChangeCode'), dataIndex: 'change_code' },
+            { title: t('app.kuaizhizao.salesOrderChange.colVersion'), dataIndex: 'change_version', width: 70 },
+            { title: t('app.kuaizhizao.salesOrderChange.colDeltaAmount'), dataIndex: 'delta_amount', width: 100 },
+            { title: t('common.status'), dataIndex: 'status', width: 100 },
             {
-              title: '生效时间',
+              title: t('app.kuaizhizao.salesOrderChange.colAppliedAt'),
               dataIndex: 'applied_at',
               width: 160,
               render: (v: string) => v || '-',
@@ -644,7 +631,7 @@ export const SalesOrderDetailTimelinePane: React.FC = () => {
           ]}
         />
       ) : (
-        <Typography.Text type="secondary">暂无变更单</Typography.Text>
+        <Typography.Text type="secondary">{t('app.kuaizhizao.salesOrder.emptyChanges')}</Typography.Text>
       )}
     </>
   );

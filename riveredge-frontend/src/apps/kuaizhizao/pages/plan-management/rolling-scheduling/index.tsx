@@ -32,6 +32,7 @@ import {
 } from '@ant-design/icons';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useRequest } from 'ahooks';
+import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
@@ -41,14 +42,6 @@ import {
 } from '../../../services/rolling-scheduling';
 
 const RESOURCE = 'kuaizhizao:plan-management-rolling-scheduling';
-
-const SOURCE_LABELS: Record<string, string> = {
-  carry_forward: '结转',
-  backlog: '积压',
-  already_scheduled: '已排',
-  pool: '待排',
-  manual: '手工',
-};
 
 const STATUS_COLORS: Record<string, string> = {
   draft: 'default',
@@ -62,10 +55,22 @@ function formatDate(d: Dayjs | string | undefined | null): string {
 }
 
 const RollingSchedulingPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const perms = useResourcePermissions(RESOURCE);
+
+  const sourceLabels = useMemo(
+    () => ({
+      carry_forward: t('app.kuaizhizao.rollingScheduling.source.carryForward'),
+      backlog: t('app.kuaizhizao.rollingScheduling.source.backlog'),
+      already_scheduled: t('app.kuaizhizao.rollingScheduling.source.alreadyScheduled'),
+      pool: t('app.kuaizhizao.rollingScheduling.source.pool'),
+      manual: t('app.kuaizhizao.rollingScheduling.source.manual'),
+    }),
+    [t]
+  );
 
   const initialPlanDate = searchParams.get('plan_date');
   const [baseDate, setBaseDate] = useState<Dayjs>(() =>
@@ -138,36 +143,36 @@ const RollingSchedulingPage: React.FC = () => {
       const plan = await rollingSchedulingApi.generate({ base_date: formatDate(baseDate) });
       const count = plan.lines?.length ?? 0;
       if (count > 0) {
-        message.success(`已生成下一工作日计划草稿（${count} 单）`);
+        message.success(t('app.kuaizhizao.rollingScheduling.generateSuccess', { count }));
       } else {
-        message.warning('已生成空计划：工单池无结转/已排明日/可排工单');
+        message.warning(t('app.kuaizhizao.rollingScheduling.generateEmpty'));
       }
       setLines(plan.lines ?? []);
       setDirty(false);
       refreshTargetPlan();
       refreshClosePlan();
     } catch (e: unknown) {
-      message.error((e as Error)?.message || '生成失败');
+      message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.generateFailed'));
     }
-  }, [baseDate, message, refreshClosePlan, refreshTargetPlan]);
+  }, [baseDate, message, refreshClosePlan, refreshTargetPlan, t]);
 
   const handleCloseDay = useCallback(() => {
     const closeDate = formatDate(baseDate);
     modal.confirm({
-      title: `关账 ${closeDate}`,
-      content: '关账将锁定当日已发布计划并统计完成实绩，是否继续？',
+      title: t('app.kuaizhizao.rollingScheduling.closeDayTitle', { date: closeDate }),
+      content: t('app.kuaizhizao.rollingScheduling.closeDayContent'),
       onOk: async () => {
         try {
           await rollingSchedulingApi.closeDay(closeDate);
-          message.success('关账完成');
+          message.success(t('app.kuaizhizao.rollingScheduling.closeDaySuccess'));
           refreshClosePlan();
           refreshTargetPlan();
         } catch (e: unknown) {
-          message.error((e as Error)?.message || '关账失败');
+          message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.closeDayFailed'));
         }
       },
     });
-  }, [baseDate, message, modal, refreshClosePlan, refreshTargetPlan]);
+  }, [baseDate, message, modal, refreshClosePlan, refreshTargetPlan, t]);
 
   const saveLines = useCallback(async () => {
     if (!targetPlan?.id) return;
@@ -182,36 +187,36 @@ const RollingSchedulingPage: React.FC = () => {
           remarks: ln.remarks ?? undefined,
         })),
       );
-      message.success('计划行已保存');
+      message.success(t('app.kuaizhizao.rollingScheduling.saveLinesSuccess'));
       setDirty(false);
       refreshTargetPlan();
     } catch (e: unknown) {
-      message.error((e as Error)?.message || '保存失败');
+      message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.saveFailed'));
     }
-  }, [lines, message, refreshTargetPlan, targetPlan?.id]);
+  }, [lines, message, refreshTargetPlan, targetPlan?.id, t]);
 
   const handlePublish = useCallback(() => {
     if (!targetPlan?.id) return;
     modal.confirm({
-      title: '发布日计划',
-      content: `将 ${nextWorkday} 计划写入工单计划开始日（不下达），是否继续？`,
+      title: t('app.kuaizhizao.rollingScheduling.publishTitle'),
+      content: t('app.kuaizhizao.rollingScheduling.publishContent', { date: nextWorkday }),
       onOk: async () => {
         try {
           if (dirty) await saveLines();
           const result = await rollingSchedulingApi.publish(targetPlan.id);
           const updated = result.batch_update?.updated?.length ?? 0;
-          message.success(`发布成功，已更新 ${updated} 个工单计划日`);
+          message.success(t('app.kuaizhizao.rollingScheduling.publishSuccess', { count: updated }));
           refreshTargetPlan();
           const woIds = (result.plan.lines ?? []).map((l) => l.work_order_id).join(',');
           navigate(
             `/apps/kuaizhizao/plan-management/scheduling?plan_date=${nextWorkday}&work_order_ids=${woIds}`,
           );
         } catch (e: unknown) {
-          message.error((e as Error)?.message || '发布失败');
+          message.error((e as Error)?.message || t('app.kuaizhizao.rollingScheduling.publishFailed'));
         }
       },
     });
-  }, [dirty, message, modal, navigate, nextWorkday, refreshTargetPlan, saveLines, targetPlan?.id]);
+  }, [dirty, message, modal, navigate, nextWorkday, refreshTargetPlan, saveLines, targetPlan?.id, t]);
 
   const moveLine = useCallback((index: number, direction: -1 | 1) => {
     setLines((prev) => {
@@ -235,12 +240,12 @@ const RollingSchedulingPage: React.FC = () => {
   const columns = useMemo(
     () => [
       {
-        title: '序',
+        title: t('app.kuaizhizao.rollingScheduling.col.sequence'),
         width: 48,
         render: (_: unknown, __: RollingScheduleLine, index: number) => index + 1,
       },
       {
-        title: '工单',
+        title: t('app.kuaizhizao.rollingScheduling.col.workOrder'),
         dataIndex: 'work_order_code',
         render: (_: unknown, row: RollingScheduleLine) => (
           <Space direction="vertical" size={0}>
@@ -252,19 +257,19 @@ const RollingSchedulingPage: React.FC = () => {
         ),
       },
       {
-        title: '来源',
+        title: t('app.kuaizhizao.rollingScheduling.col.source'),
         dataIndex: 'source_type',
         width: 72,
-        render: (v: string) => <Tag>{SOURCE_LABELS[v] || v}</Tag>,
+        render: (v: string) => <Tag>{sourceLabels[v as keyof typeof sourceLabels] || v}</Tag>,
       },
       {
-        title: '齐套%',
+        title: t('app.kuaizhizao.rollingScheduling.col.readiness'),
         dataIndex: 'readiness_rate_snapshot',
         width: 72,
         render: (v: number | string | null) => (v != null ? `${Number(v).toFixed(0)}%` : '—'),
       },
       {
-        title: '评分',
+        title: t('app.kuaizhizao.rollingScheduling.col.score'),
         dataIndex: 'scheduling_score',
         width: 64,
         render: (v: number | null, row: RollingScheduleLine) =>
@@ -278,12 +283,12 @@ const RollingSchedulingPage: React.FC = () => {
           ),
       },
       {
-        title: '状态',
+        title: t('app.kuaizhizao.rollingScheduling.col.status'),
         dataIndex: 'work_order_status',
         width: 80,
       },
       {
-        title: '操作',
+        title: t('app.kuaizhizao.rollingScheduling.col.actions'),
         width: 120,
         render: (_: unknown, row: RollingScheduleLine, index: number) =>
           targetPlan?.status === 'draft' && perms.canUpdate ? (
@@ -303,13 +308,13 @@ const RollingSchedulingPage: React.FC = () => {
                 onClick={() => moveLine(index, 1)}
               />
               <Button type="link" size="small" danger onClick={() => removeLine(row.work_order_id)}>
-                移除
+                {t('app.kuaizhizao.rollingScheduling.remove')}
               </Button>
             </Space>
           ) : null,
       },
     ],
-    [lines.length, moveLine, perms.canUpdate, removeLine, targetPlan?.status],
+    [lines.length, moveLine, perms.canUpdate, removeLine, sourceLabels, t, targetPlan?.status],
   );
 
   const canClose = perms.canAction?.('close') ?? false;
@@ -329,7 +334,7 @@ const RollingSchedulingPage: React.FC = () => {
       <Space wrap>
         {canGenerate ? (
           <Button type="primary" onClick={handleGenerate}>
-            生成次日计划
+            {t('app.kuaizhizao.rollingScheduling.generateNextDay')}
           </Button>
         ) : null}
         {canPublish ? (
@@ -339,12 +344,12 @@ const RollingSchedulingPage: React.FC = () => {
             disabled={!targetPlan || targetPlan.status !== 'draft' || lines.length === 0}
             onClick={handlePublish}
           >
-            发布
+            {t('app.kuaizhizao.rollingScheduling.publish')}
           </Button>
         ) : null}
         {perms.canUpdate && targetPlan?.status === 'draft' ? (
           <Button onClick={saveLines} disabled={!dirty}>
-            保存调序
+            {t('app.kuaizhizao.rollingScheduling.saveOrder')}
           </Button>
         ) : null}
       </Space>
@@ -363,11 +368,11 @@ const RollingSchedulingPage: React.FC = () => {
             refreshClosePlan();
           }}
         >
-          刷新
+          {t('app.kuaizhizao.rollingScheduling.refresh')}
         </Button>
         {canClose ? (
           <Button onClick={handleCloseDay} disabled={closePlan?.status !== 'published'}>
-            关账当日
+            {t('app.kuaizhizao.rollingScheduling.closeDay')}
           </Button>
         ) : null}
       </Space>
@@ -379,7 +384,7 @@ const RollingSchedulingPage: React.FC = () => {
       <Row gutter={16}>
         <Col xs={24} lg={7}>
           <Card
-            title={`当日关账统计（${formatDate(baseDate)}）`}
+            title={t('app.kuaizhizao.rollingScheduling.closeSummaryTitle', { date: formatDate(baseDate) })}
             loading={closeLoading}
             size="small"
             extra={
@@ -392,33 +397,35 @@ const RollingSchedulingPage: React.FC = () => {
               <Space direction="vertical" style={{ width: '100%' }} size="middle">
                 <Row gutter={8}>
                   <Col span={12}>
-                    <Statistic title="计划工单" value={closeSummary.planned_count ?? 0} />
+                    <Statistic title={t('app.kuaizhizao.rollingScheduling.stat.plannedWorkOrders')} value={closeSummary.planned_count ?? 0} />
                   </Col>
                   <Col span={12}>
-                    <Statistic title="完成率" value={closeSummary.completion_rate ?? 0} suffix="%" />
+                    <Statistic title={t('app.kuaizhizao.rollingScheduling.stat.completionRate')} value={closeSummary.completion_rate ?? 0} suffix="%" />
                   </Col>
                 </Row>
                 <Descriptions column={1} size="small">
-                  <Descriptions.Item label="完成">{closeSummary.completed_count ?? 0}</Descriptions.Item>
-                  <Descriptions.Item label="部分完成">{closeSummary.partial_count ?? 0}</Descriptions.Item>
-                  <Descriptions.Item label="未开工">{closeSummary.not_started_count ?? 0}</Descriptions.Item>
-                  <Descriptions.Item label="延期">{closeSummary.delayed_count ?? 0}</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.stat.completed')}>{closeSummary.completed_count ?? 0}</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.stat.partial')}>{closeSummary.partial_count ?? 0}</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.stat.notStarted')}>{closeSummary.not_started_count ?? 0}</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.stat.delayed')}>{closeSummary.delayed_count ?? 0}</Descriptions.Item>
                 </Descriptions>
                 {(closeSummary.incomplete_items?.length ?? 0) > 0 ? (
                   <Alert
                     type="warning"
                     showIcon
-                    message={`未完 ${closeSummary.incomplete_items?.length} 单将结转候选`}
+                    message={t('app.kuaizhizao.rollingScheduling.incompleteCarryForward', {
+                      count: closeSummary.incomplete_items?.length,
+                    })}
                   />
                 ) : (
-                  <Alert type="success" showIcon icon={<CheckCircleOutlined />} message="当日计划已全部完成" />
+                  <Alert type="success" showIcon icon={<CheckCircleOutlined />} message={t('app.kuaizhizao.rollingScheduling.allCompleted')} />
                 )}
               </Space>
             ) : (
               <Typography.Text type="secondary">
                 {closePlan?.status === 'published'
-                  ? '当日计划已发布，下班后可关账'
-                  : '当日无已发布计划或无数据'}
+                  ? t('app.kuaizhizao.rollingScheduling.closeHintPublished')
+                  : t('app.kuaizhizao.rollingScheduling.closeHintNoData')}
               </Typography.Text>
             )}
           </Card>
@@ -426,7 +433,7 @@ const RollingSchedulingPage: React.FC = () => {
 
         <Col xs={24} lg={11}>
           <Card
-            title={`次日计划（${nextWorkday || '—'}）`}
+            title={t('app.kuaizhizao.rollingScheduling.nextDayPlanTitle', { date: nextWorkday || '—' })}
             loading={planLoading}
             size="small"
             extra={
@@ -446,8 +453,8 @@ const RollingSchedulingPage: React.FC = () => {
               columns={columns}
               locale={{
                 emptyText: targetPlan
-                  ? '计划已生成，但候选池为空（无结转/已排明日/可排工单）'
-                  : '请先生成次日计划',
+                  ? t('app.kuaizhizao.rollingScheduling.emptyGenerated')
+                  : t('app.kuaizhizao.rollingScheduling.emptyGenerateFirst'),
               }}
               scroll={{ y: 420 }}
             />
@@ -456,15 +463,15 @@ const RollingSchedulingPage: React.FC = () => {
                 type="info"
                 showIcon
                 style={{ marginTop: 12 }}
-                message="候选池为空"
-                description="请确认存在草稿/已下达/进行中工单，或先发布并关账当日计划以结转未完单据。"
+                message={t('app.kuaizhizao.rollingScheduling.poolEmptyTitle')}
+                description={t('app.kuaizhizao.rollingScheduling.poolEmptyDesc')}
               />
             ) : null}
           </Card>
         </Col>
 
         <Col xs={24} lg={6}>
-          <Card title="粗产能提示" size="small">
+          <Card title={t('app.kuaizhizao.rollingScheduling.capacityTitle')} size="small">
             {capacity ? (
               <Space direction="vertical" style={{ width: '100%' }}>
                 <Progress
@@ -472,16 +479,16 @@ const RollingSchedulingPage: React.FC = () => {
                   status={capacity.overloaded ? 'exception' : 'normal'}
                 />
                 <Descriptions column={1} size="small">
-                  <Descriptions.Item label="可用工时">{capacity.available_hours}h</Descriptions.Item>
-                  <Descriptions.Item label="候选工时">{capacity.required_hours}h</Descriptions.Item>
-                  <Descriptions.Item label="工位数">{capacity.station_count}</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.capacity.availableHours')}>{capacity.available_hours}h</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.capacity.requiredHours')}>{capacity.required_hours}h</Descriptions.Item>
+                  <Descriptions.Item label={t('app.kuaizhizao.rollingScheduling.capacity.stationCount')}>{capacity.station_count}</Descriptions.Item>
                 </Descriptions>
                 <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
                   {capacity.message}
                 </Typography.Paragraph>
               </Space>
             ) : (
-              <Typography.Text type="secondary">生成计划后显示</Typography.Text>
+              <Typography.Text type="secondary">{t('app.kuaizhizao.rollingScheduling.capacity.generateFirst')}</Typography.Text>
             )}
           </Card>
           <Card size="small" style={{ marginTop: 16 }}>
@@ -496,7 +503,7 @@ const RollingSchedulingPage: React.FC = () => {
                 );
               }}
             >
-              跳转可视排产细排
+              {t('app.kuaizhizao.rollingScheduling.goToScheduling')}
             </Button>
           </Card>
         </Col>

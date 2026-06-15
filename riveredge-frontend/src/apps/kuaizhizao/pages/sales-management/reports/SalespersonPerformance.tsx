@@ -1,90 +1,60 @@
 /**
- * 销售员业绩排行榜
+ * 职员销汇总（传统表格报表）
  */
 import React from 'react';
 import { ProColumns } from '@ant-design/pro-components';
-import { Bar } from '@ant-design/charts';
-import SalesBaseReport from './BaseReport';
-import { getSalesReport, parseSalesReportDateRange } from '../../../services/reports';
+import { useTranslation } from 'react-i18next';
+import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const SalespersonPerformance: React.FC = () => {
-  const [data, setData] = React.useState<any[]>([]);
-
+  const { t } = useTranslation();
   const columns: ProColumns[] = [
     {
-      title: '统计期间',
+      title: t('app.kuaizhizao.reports.dateRange'),
       dataIndex: 'date_range',
       valueType: 'dateRange',
       hideInTable: true,
-      search: { order: 10 } as any,
+      search: { order: 10 } as ProColumns['search'],
     },
     {
-      title: '排名',
+      title: t('app.kuaizhizao.reports.rank'),
       dataIndex: 'rank',
       width: 80,
+      hideInSearch: true,
       render: (text) => <b>{text}</b>,
     },
     {
-      title: '销售员',
+      title: t('app.kuaizhizao.reports.salesmanName'),
       dataIndex: 'salesman_name',
       width: 150,
+      hideInSearch: true,
     },
     {
-      title: '订单总数',
+      title: t('app.kuaizhizao.reports.orderCount'),
       dataIndex: 'order_count',
       valueType: 'digit',
       sorter: true,
       width: 120,
+      hideInSearch: true,
     },
     {
-      title: '总销售金额',
+      title: t('app.kuaizhizao.reports.totalRevenue'),
       dataIndex: 'total_revenue',
       valueType: 'money',
       sorter: true,
       width: 150,
+      hideInSearch: true,
     },
   ];
 
   return (
-    <SalesBaseReport
-      title="销售员业绩排行"
+    <KuaizhizaoReport
+      title={t('app.kuaizhizao.menu.reports.salesperson-performance')}
       reportType="salesman"
+      dateRangeKeys={['date_range', 'dateRange']}
+      columnPersistenceId="apps.kuaizhizao.pages.sales-management.reports.SalespersonPerformance"
       columns={columns}
-      request={async (params, _s, _f, searchFormValues) => {
-        const { date_start, date_end } = parseSalesReportDateRange(searchFormValues);
-        const res = await getSalesReport({
-          report_type: 'salesman',
-          date_start,
-          date_end,
-        });
-        const rows = res.data || [];
-        if (res.success) {
-          setData(rows);
-        }
-        return {
-          data: rows,
-          success: res.success,
-          total: res.total ?? rows.length ?? 0,
-        };
-      }}
-    >
-      <div style={{ marginBottom: 16, height: 400 }}>
-        <Bar
-          data={data}
-          xField="total_revenue"
-          yField="salesman_name"
-          seriesField="salesman_name"
-          legend={false}
-          label={{
-            position: 'center',
-            style: {
-              fill: '#FFFFFF',
-              opacity: 0.6,
-            },
-          }}
-        />
-      </div>
-    </SalesBaseReport>
+    />
   );
 };
 
