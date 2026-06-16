@@ -34,6 +34,7 @@ _PLATFORM_FALLBACK_KEYS = {
     "login_content": "login_content",
     "login_content_en": "login_content_en",
     "login_decoration_image": "login_decoration_image",
+    "login_background_image": "login_background_image",
     "icp_license": "icp_license",
     "icp_license_en": "icp_license_en",
     "login_theme_color": "theme_color",
@@ -52,6 +53,8 @@ _PLATFORM_FALLBACK_BOOL_KEYS = {
     "login_guest_enabled",
     "login_client_win_enabled",
     "login_client_android_enabled",
+    "login_decoration_enabled",
+    "login_background_enabled",
 }
 
 _LOGO_UUID_RE = re.compile(

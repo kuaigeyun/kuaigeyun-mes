@@ -4,4 +4,4 @@ export {
   translateLifecycleStageByKey,
   buildGlobalLifecycleValueEnum,
   getGlobalLifecycleStageLabelKeys,
-} from '../../utils/globalLifecycleI18n';
+} from '../../../utils/globalLifecycleI18n';

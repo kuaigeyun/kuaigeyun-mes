@@ -73,6 +73,9 @@ _LOGIN_PAGE_SETTING_KEYS = {
     "login_content",
     "login_content_en",
     "login_decoration_image",
+    "login_background_image",
+    "login_decoration_enabled",
+    "login_background_enabled",
     "icp_license",
     "icp_license_en",
     "login_theme_color",
@@ -172,6 +175,17 @@ async def update_settings(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="分支组织不允许单独设置登录页配置",
             )
+
+    if _LOGIN_PAGE_SETTING_KEYS & settings_payload.keys():
+        from core.utils.login_page_settings import resolve_login_visual_layers, validate_login_visual_layers
+
+        merged_current = await SiteSettingService.get_settings_with_platform_fallback(tenant_id)
+        merged_preview = {**merged_current, **settings_payload}
+        decoration_enabled, background_enabled = resolve_login_visual_layers(merged_preview)
+        try:
+            validate_login_visual_layers(decoration_enabled, background_enabled)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     if tenant_domain is not None:
         normalized_domain = _normalize_tenant_domain(str(tenant_domain))

@@ -14,7 +14,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
-import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
+import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
 import { useTranslation } from 'react-i18next';
 import {
   buildFactoryImportTemplate,
@@ -22,7 +22,8 @@ import {
 } from '../../../../../utils/spreadsheetImportTemplate';
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
+import { mapSystemDictionaryItemOptions, resolveSystemDictionaryItemLabel } from '../../../../../utils/systemDictionaryI18n';
 import { getFileDownloadUrl } from '../../../../../services/file';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { UniTable } from '../../../../../components/uni-table';
@@ -71,6 +72,8 @@ import { UniMaterialBatchPicker } from '../../../../../components/uni-material-b
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import type { Material } from '../../../../master-data/types/material';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import dayjs from 'dayjs';
 import {
   listPurchaseOrders, getPurchaseOrder, createPurchaseOrder, updatePurchaseOrder,
@@ -418,9 +421,9 @@ const PurchaseOrderFeeTotalsSummary: React.FC<{
   );
 };
 
-const buildOrderTypeFallback = (tr: (key: string) => string): Array<{ label: string; value: string }> => [
-  { label: tr('app.kuaizhizao.purchaseOrder.orderTypeStandard'), value: '标准采购' },
-  { label: tr('app.kuaizhizao.purchaseOrder.orderTypeFramework'), value: '框架协议' },
+const ORDER_TYPE_FALLBACK_ITEMS: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
+  { value: '标准采购', label: '标准采购', is_system_managed: true, sort_order: 0 },
+  { value: '框架协议', label: '框架协议', is_system_managed: true, sort_order: 1 },
 ];
 
 const PURCHASE_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_orders';
@@ -582,7 +585,9 @@ const PurchaseOrdersPage: React.FC = () => {
   // 供应商列表、订单类型、币种
   const [supplierList, setSupplierList] = useState<any[]>([]);
   const [suppliersLoading, setSuppliersLoading] = useState(false);
-  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(buildOrderTypeFallback(t));
+  const [orderTypeOptions, setOrderTypeOptions] = useState<Array<{ label: string; value: string }>>(() =>
+    mapSystemDictionaryItemOptions('ORDER_TYPE', ORDER_TYPE_FALLBACK_ITEMS as DictionaryItem[], t),
+  );
   const [orderTypeLoading, setOrderTypeLoading] = useState(false);
   const [currencyOptions, setCurrencyOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [currencyLoading, setCurrencyLoading] = useState(false);
@@ -645,11 +650,12 @@ const PurchaseOrdersPage: React.FC = () => {
       try {
         const dict = await getDataDictionaryByCode('ORDER_TYPE');
         const items = await getDictionaryItemList(dict.uuid, true);
-        setOrderTypeOptions(
-          items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })),
-        );
+        const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+        setOrderTypeOptions(mapSystemDictionaryItemOptions('ORDER_TYPE', sorted, t));
       } catch {
-        setOrderTypeOptions(buildOrderTypeFallback(t));
+        setOrderTypeOptions(
+          mapSystemDictionaryItemOptions('ORDER_TYPE', ORDER_TYPE_FALLBACK_ITEMS as DictionaryItem[], t),
+        );
         messageApi.info(t('app.kuaizhizao.purchaseOrder.orderTypeFallback'));
       } finally {
         setOrderTypeLoading(false);
@@ -669,7 +675,7 @@ const PurchaseOrdersPage: React.FC = () => {
     };
     loadOrderType();
     loadCurrency();
-  }, []);
+  }, [t, messageApi]);
 
   const { data: statistics } = useQuery({
     queryKey: ['purchaseOrderStatistics'],
@@ -1983,6 +1989,12 @@ const PurchaseOrdersPage: React.FC = () => {
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderType'),
       dataIndex: 'order_type',
+      render: (_: unknown, entity: PurchaseOrderDetail) =>
+        resolveSystemDictionaryItemLabel(
+          'ORDER_TYPE',
+          { value: entity.order_type ?? '', label: entity.order_type ?? '', is_system_managed: true },
+          t,
+        ) || '—',
     },
     {
       title: t('app.kuaizhizao.purchaseOrder.col.orderDate'),
@@ -2280,11 +2292,6 @@ const PurchaseOrdersPage: React.FC = () => {
           <Col span={12} />
         </Row>
 
-        {/* 已生效/执行中订单须通过变更单修改，不再支持直改填写变更原因 */}
-        <AntForm.Item name="price_type" hidden initialValue="tax_exclusive">
-          <Input />
-        </AntForm.Item>
-
         <CustomFieldsFormSection
           customFields={purchaseOrderFormCustomFields}
           customFieldValues={purchaseOrderFormCustomFieldValues}
@@ -2303,14 +2310,12 @@ const PurchaseOrdersPage: React.FC = () => {
                 required
                 requiredMessage={t('app.kuaizhizao.purchaseOrder.form.itemsRequired')}
                 leftExtra={(
-                  <Switch
+                  <PriceTypeSwitch
                     checked={priceType === 'tax_inclusive'}
                     checkedChildren={t('app.kuaizhizao.purchaseOrder.form.taxIncl')}
                     unCheckedChildren={t('app.kuaizhizao.purchaseOrder.form.taxExcl')}
-                    onChange={(checked) => {
-                      formRef.current?.setFieldsValue({
-                        price_type: checked ? 'tax_inclusive' : 'tax_exclusive',
-                      });
+                    onChange={(nextChecked) => {
+                      setFormPriceType(formRef.current, nextChecked ? 'tax_inclusive' : 'tax_exclusive');
                     }}
                   />
                 )}

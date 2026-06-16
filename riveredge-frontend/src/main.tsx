@@ -8,7 +8,7 @@ import './styles/theme-plain.less'
 import { useGlobalStore } from './stores/globalStore'
 import { seedCurrentUserFromAuthStorage } from './utils/restoredUser'
 
-import './config/i18n'
+import './initSpinIndicator'
 import './config/dayjs'
 
 // ⚠️ 抑制 Three.js / R3F 已知的不兼容警告 (THREE.Clock 弃用)
@@ -100,6 +100,10 @@ async function mountApp() {
     // 持久化损坏时不阻塞挂载
   }
   seedCurrentUserFromAuthStorage()
+
+  const { prepareInitialLanguageBundle } = await import('./config/i18n')
+  await prepareInitialLanguageBundle()
+
   ReactDOM.createRoot(document.getElementById('root')!).render(AppWrapper)
 }
 

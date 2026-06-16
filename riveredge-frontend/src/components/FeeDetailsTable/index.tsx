@@ -7,22 +7,32 @@ import {
   ProFormText,
   ProFormItem,
 } from '@ant-design/pro-components';
-import { getDictionaryItemList, getDataDictionaryByCode } from '../../services/dataDictionary';
+import { useTranslation } from 'react-i18next';
+import { getDictionaryItemList, getDataDictionaryByCode, type DictionaryItem } from '../../services/dataDictionary';
 import { Card, theme } from 'antd';
 import { ThemedSegmented } from '../themed-segmented';
+import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
 
 interface FeeDetailsTableProps {
   name?: string;
   label?: string;
 }
 
+const FEE_TYPE_FALLBACK_ITEMS: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed'>[] = [
+  { value: 'LOGISTICS', label: '物流费', is_system_managed: true },
+  { value: 'PACKAGING', label: '包装费', is_system_managed: true },
+  { value: 'OTHER', label: '其他', is_system_managed: true },
+];
+
 const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
   name = 'fee_details',
-  label = '费用明细',
+  label: labelProp,
 }) => {
+  const { t, i18n } = useTranslation();
   const { token } = theme.useToken();
   const [feeTypeOptions, setFeeTypeOptions] = useState<{ label: string; value: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const label = labelProp ?? t('app.kuaizhizao.salesOrder.feeDetailsFormLabel');
 
   useEffect(() => {
     const loadDict = async () => {
@@ -30,28 +40,17 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
       try {
         const dict = await getDataDictionaryByCode('FEE_TYPE');
         const items = await getDictionaryItemList(dict.uuid, true);
-        setFeeTypeOptions(
-          items
-            .sort((a, b) => a.sort_order - b.sort_order)
-            .map((it) => ({
-              label: it.label,
-              value: it.value,
-            }))
-        );
+        const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+        setFeeTypeOptions(mapSystemDictionaryItemOptions('FEE_TYPE', sorted, t));
       } catch (error) {
         console.error('Failed to load FEE_TYPE dictionary:', error);
-        // Fallback options
-        setFeeTypeOptions([
-          { label: '物流费', value: 'LOGISTICS' },
-          { label: '包装费', value: 'PACKAGING' },
-          { label: '其他', value: 'OTHER' },
-        ]);
+        setFeeTypeOptions(mapSystemDictionaryItemOptions('FEE_TYPE', FEE_TYPE_FALLBACK_ITEMS as DictionaryItem[], t));
       } finally {
         setLoading(false);
       }
     };
     loadDict();
-  }, []);
+  }, [t, i18n.language]);
 
   return (
     <Card
@@ -94,7 +93,7 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
         name={name}
         copyIconProps={false}
         creatorButtonProps={{
-          creatorButtonText: '添加费用项目',
+          creatorButtonText: t('app.kuaizhizao.salesOrder.addFeeItem'),
           type: 'dashed',
           block: true,
         }}
@@ -140,9 +139,9 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
         <ProFormGroup size={8}>
           <ProFormSelect
             name="type"
-            label="费用类型"
+            label={t('app.kuaizhizao.salesOrder.feeType')}
             width="sm"
-            placeholder="请选择"
+            placeholder={t('app.kuaizhizao.salesOrder.selectFeeType')}
             options={feeTypeOptions}
             fieldProps={{
               loading: loading,
@@ -151,7 +150,7 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
           />
           <ProFormDigit
             name="amount"
-            label="金额"
+            label={t('app.kuaizhizao.salesOrder.feeAmount')}
             width="xs"
             min={0}
             placeholder="0.00"
@@ -163,22 +162,22 @@ const FeeDetailsTable: React.FC<FeeDetailsTableProps> = ({
           />
           <ProFormItem
             name="bearer"
-            label="承担方"
+            label={t('app.kuaizhizao.salesOrder.feeBearer')}
             initialValue="our_side"
             style={{ marginBottom: 0 }}
           >
             <ThemedSegmented
               options={[
-                { label: '我方', value: 'our_side' },
-                { label: '对方', value: 'other_side' },
+                { label: t('app.kuaizhizao.salesOrder.feeBearerOurSide'), value: 'our_side' },
+                { label: t('app.kuaizhizao.salesOrder.feeBearerCounterparty'), value: 'other_side' },
               ]}
             />
           </ProFormItem>
           <ProFormText
             name="notes"
-            label="备注"
+            label={t('app.kuaizhizao.salesOrder.notes')}
             width="md"
-            placeholder="备注说明"
+            placeholder={t('app.kuaizhizao.salesOrder.notesPlaceholder')}
           />
         </ProFormGroup>
       </ProFormList>

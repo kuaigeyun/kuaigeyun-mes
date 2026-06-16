@@ -90,6 +90,14 @@ async def get_platform_settings_public(
                         "login_content_en": site_settings.get("login_content_en") or merged.get("login_content_en"),
                         "login_decoration_image": site_settings.get("login_decoration_image")
                         or merged.get("login_decoration_image"),
+                        "login_background_image": site_settings.get("login_background_image")
+                        or merged.get("login_background_image"),
+                        "login_decoration_enabled": site_settings.get("login_decoration_enabled")
+                        if site_settings.get("login_decoration_enabled") is not None
+                        else merged.get("login_decoration_enabled"),
+                        "login_background_enabled": site_settings.get("login_background_enabled")
+                        if site_settings.get("login_background_enabled") is not None
+                        else merged.get("login_background_enabled"),
                         "icp_license": site_settings.get("icp_license") or merged.get("icp_license"),
                         "icp_license_en": site_settings.get("icp_license_en") or merged.get("icp_license_en"),
                         "theme_color": site_settings.get("login_theme_color")

@@ -51,6 +51,29 @@ const REASON_TYPES_FALLBACK = [
   { value: '其他', label: '其他' },
 ];
 
+const REASON_TYPE_I18N: Record<string, string> = {
+  '盘亏': 'app.kuaizhizao.otherOutbound.reason.loss',
+  '样品': 'app.kuaizhizao.otherOutbound.reason.sample',
+  '报废': 'app.kuaizhizao.otherOutbound.reason.scrap',
+  '其他': 'app.kuaizhizao.otherOutbound.reason.other',
+};
+
+function translateReasonTypeLabel(t: (key: string) => string, value: string | undefined): string {
+  if (!value) return '-';
+  const key = REASON_TYPE_I18N[value];
+  return key ? t(key) : value;
+}
+
+function mapReasonTypeOptions(
+  items: Array<{ label: string; value: string }>,
+  t: (key: string) => string,
+): Array<{ label: string; value: string }> {
+  return items.map(({ value, label }) => ({
+    value,
+    label: REASON_TYPE_I18N[value] ? t(REASON_TYPE_I18N[value]) : label,
+  }));
+}
+
 interface OtherOutbound {
   id?: number;
   tenant_id?: number;
@@ -141,7 +164,7 @@ const OtherOutboundPage: React.FC = () => {
     updateSelectedWarehouseId,
     resetSelectedWarehouseId,
   } = useWarehouseLocationOptions();
-  const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>(REASON_TYPES_FALLBACK);
+  const [reasonTypeOptions, setReasonTypeOptions] = useState<Array<{ label: string; value: string }>>([]);
 
   const defaultOutboundItem = {
     material_id: undefined,
@@ -166,6 +189,15 @@ const OtherOutboundPage: React.FC = () => {
     load();
   }, []);
 
+  const fallbackReasonTypeOptions = useMemo(
+    () => mapReasonTypeOptions(REASON_TYPES_FALLBACK, t),
+    [t],
+  );
+
+  useEffect(() => {
+    setReasonTypeOptions(fallbackReasonTypeOptions);
+  }, [fallbackReasonTypeOptions]);
+
   useEffect(() => {
     const loadReasonType = async () => {
       setReasonTypeLoading(true);
@@ -177,19 +209,20 @@ const OtherOutboundPage: React.FC = () => {
         });
         const dict = dictList.items?.[0];
         if (!dict) {
-          setReasonTypeOptions(REASON_TYPES_FALLBACK);
+          setReasonTypeOptions(fallbackReasonTypeOptions);
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
-        setReasonTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+        const sorted = items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value }));
+        setReasonTypeOptions(mapReasonTypeOptions(sorted, t));
       } catch {
-        setReasonTypeOptions(REASON_TYPES_FALLBACK);
+        setReasonTypeOptions(fallbackReasonTypeOptions);
       } finally {
         setReasonTypeLoading(false);
       }
     };
     loadReasonType();
-  }, []);
+  }, [fallbackReasonTypeOptions, t]);
 
   const otherOutboundCustomFieldColumns = generateOtherOutboundCustomFieldColumns();
 
@@ -211,7 +244,7 @@ const OtherOutboundPage: React.FC = () => {
       title: t('app.kuaizhizao.otherOutbound.col.reasonType'),
       dataIndex: 'reason_type',
       width: 100,
-      render: (v) => <Tag>{v || '-'}</Tag>,
+      render: (v) => <Tag>{translateReasonTypeLabel(t, v as string | undefined)}</Tag>,
     },
     { title: t('app.kuaizhizao.otherOutbound.col.deliverer'), dataIndex: 'deliverer_name', width: 100 },
     { title: t('app.kuaizhizao.otherOutbound.col.deliveryTime'), dataIndex: 'delivery_time', valueType: 'dateTime', width: 160 },
@@ -430,7 +463,7 @@ const OtherOutboundPage: React.FC = () => {
 
   const detailColumns: ProDescriptionsItemProps<OtherOutboundDetail>[] = useMemo(() => [
     { title: t('app.kuaizhizao.otherOutbound.col.outboundCode'), dataIndex: 'outbound_code' },
-    { title: t('app.kuaizhizao.otherOutbound.col.reasonType'), dataIndex: 'reason_type' },
+    { title: t('app.kuaizhizao.otherOutbound.col.reasonType'), dataIndex: 'reason_type', render: (_, record) => translateReasonTypeLabel(t, record.reason_type) },
     { title: t('app.kuaizhizao.otherOutbound.field.reasonDesc'), dataIndex: 'reason_desc', span: 2 },
     { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
     {

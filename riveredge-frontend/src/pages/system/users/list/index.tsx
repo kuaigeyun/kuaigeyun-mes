@@ -36,6 +36,7 @@ import {
   resolvePresetPositionName,
   resolvePresetRoleName,
 } from '../../../../utils/presetEntityI18n';
+import { downloadFile } from '../../../../utils';
 
 /**
  * 账户管理列表页面组件
@@ -371,17 +372,70 @@ const UserListPage: React.FC = () => {
   /**
    * 处理导出数据
    */
-  const handleExport = async (params: any) => {
+  const handleExport = async (
+    type: 'selected' | 'currentPage' | 'all',
+    selectedRowKeys?: React.Key[],
+    currentPageData?: User[],
+  ) => {
+    const escapeCsvCell = (value: unknown) => {
+      const s = String(value ?? '');
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+
+    const exportUsersToCsv = (users: User[]) => {
+      const headers = [
+        t('field.user.username'),
+        t('field.user.email'),
+        t('field.user.fullName'),
+        t('field.user.phone'),
+        t('field.user.department'),
+        t('field.user.position'),
+        t('field.user.roles'),
+        t('field.role.status'),
+        t('field.user.isTenantAdmin'),
+        t('field.user.lastLogin'),
+        t('field.user.createdAt'),
+      ];
+      const csvRows = [headers.join(',')];
+      users.forEach((user) => {
+        const row = [
+          user.username || '',
+          user.email || '',
+          user.full_name || '',
+          user.phone || '',
+          user.department ? resolvePresetDepartmentName(user.department, t) : '',
+          user.position ? resolvePresetPositionName(user.position, t) : '',
+          user.roles?.map((role) => resolvePresetRoleName(role, t)).join(', ') || '',
+          user.is_active ? t('field.role.enabled') : t('field.role.disabled'),
+          user.is_tenant_admin ? t('field.customField.yes') : t('field.customField.no'),
+          user.last_login ? new Date(user.last_login).toLocaleString() : '',
+          user.created_at ? new Date(user.created_at).toLocaleString() : '',
+        ];
+        csvRows.push(row.map(escapeCsvCell).join(','));
+      });
+      const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
+      downloadFile(blob, `users_${new Date().toISOString().slice(0, 10)}.csv`);
+    };
+
     try {
-      const blob = await exportUsers(params);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `users_${new Date().getTime()}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      if (type === 'all') {
+        const blob = await exportUsers();
+        downloadFile(blob, `users_${new Date().toISOString().slice(0, 10)}.csv`);
+      } else {
+        let toExport: User[] = [];
+        if (type === 'selected' && selectedRowKeys?.length && currentPageData) {
+          toExport = currentPageData.filter((user) => selectedRowKeys.includes(user.uuid));
+        } else if (type === 'currentPage' && currentPageData?.length) {
+          toExport = currentPageData;
+        }
+        if (toExport.length === 0) {
+          messageApi.warning(t('app.master-data.noExportData'));
+          return;
+        }
+        exportUsersToCsv(toExport);
+      }
       messageApi.success(t('field.user.exportSuccess'));
     } catch (error: any) {
       messageApi.error(error.message || t('field.user.exportFailed'));

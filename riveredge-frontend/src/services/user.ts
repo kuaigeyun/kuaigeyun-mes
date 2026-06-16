@@ -6,7 +6,7 @@
  */
 
 // 使用 apiRequest 统一处理 HTTP 请求
-import { getToken } from '../utils/auth';
+import { getToken, getTenantId } from '../utils/auth';
 import { updateLastActivity, incrementPendingRequests, decrementPendingRequests } from '../utils/activityUtils';
 import { apiRequest } from './api';
 import { requestDisplayResolve, requestDisplaySearch } from './displayContract';
@@ -300,6 +300,14 @@ export async function exportUsers(params?: UserListParams): Promise<Blob> {
   updateLastActivity(true);
   incrementPendingRequests();
   try {
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${getToken()}`,
+    };
+    const tenantId = getTenantId();
+    if (tenantId != null) {
+      headers['X-Tenant-ID'] = String(tenantId);
+    }
+
     const response = await fetch(
       `/api/v1/core/users/export?${new URLSearchParams(
         Object.entries(params || {}).reduce((acc, [key, value]) => {
@@ -311,9 +319,7 @@ export async function exportUsers(params?: UserListParams): Promise<Blob> {
       ).toString()}`,
       {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${getToken()}`,
-        },
+        headers,
       }
     );
 

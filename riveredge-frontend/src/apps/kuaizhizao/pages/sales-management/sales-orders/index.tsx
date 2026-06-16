@@ -30,6 +30,8 @@ import { MaterialUnitSelect } from '../../../../../components/material-unit-sele
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { DictionaryLabel } from '../../../../../components/dictionary-label';
 import FeeDetailsTable from '../../../../../components/FeeDetailsTable';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import { CustomerSelectDropdown } from '../../../../master-data/components/CustomerSelectDropdown';
 import { MaterialInventoryIndicator } from '../../../components/MaterialInventoryIndicator';
 import { MaterialBomIndicator } from '../../../components/MaterialBomIndicator';
@@ -987,35 +989,15 @@ const SalesOrdersPage: React.FC = () => {
     }
   };
 
-  const handlePriceTypeToggle = (checked: boolean) => {
-    const nextType: 'tax_exclusive' | 'tax_inclusive' = checked ? 'tax_inclusive' : 'tax_exclusive';
-    const currentTypeRaw = formRef.current?.getFieldValue?.('price_type') ?? lastPriceTypeRef.current;
-    const currentType: 'tax_exclusive' | 'tax_inclusive' =
-      currentTypeRaw === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
-    if (currentType === nextType) {
-      lastPriceTypeRef.current = nextType;
-      return;
-    }
-
-    const items = formRef.current?.getFieldValue?.('items') ?? [];
-    if (Array.isArray(items) && items.length > 0) {
-      const convertedItems = items.map((row: any) => ({
-        ...row,
-        unit_price: convertUnitPriceByPriceType(
-          row?.unit_price,
-          row?.tax_rate,
-          currentType,
-          nextType,
-        ),
-      }));
-      formRef.current?.setFieldsValue({ items: convertedItems, price_type: nextType });
-    } else {
-      formRef.current?.setFieldsValue({ price_type: nextType });
-    }
+  const handlePriceTypeChange = useCallback((nextChecked: boolean) => {
+    const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
+    const fromType: PriceTypeValue = nextChecked ? 'tax_exclusive' : 'tax_inclusive';
+    setFormPriceType(formRef.current, nextType);
+    lastPriceTypeRef.current = nextType;
     setEditingIncl(null);
     editingInclValueRef.current = null;
-    lastPriceTypeRef.current = nextType;
-  };
+    deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, convertUnitPriceByPriceType);
+  }, []);
 
   const openFollowUpFromSalesOrder = (record: SalesOrder) => {
     const cid = record.customer_id;
@@ -3372,20 +3354,10 @@ const SalesOrdersPage: React.FC = () => {
                   required
                   requiredMessage={t('app.kuaizhizao.salesOrder.itemsRequired')}
                   leftExtra={(
-                    <ProForm.Item
-                      name="price_type"
-                      initialValue="tax_exclusive"
-                      noStyle
-                      valuePropName="checked"
-                      getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                      getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-                    >
-                      <Switch
-                        checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
-                        unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
-                        onChange={handlePriceTypeToggle}
-                      />
-                    </ProForm.Item>
+                    <PriceTypeSwitch
+                      checked={priceType === 'tax_inclusive'}
+                      onChange={handlePriceTypeChange}
+                    />
                   )}
                   headerExtra={(
                     <Space size={8}>

@@ -11,11 +11,15 @@ import React, { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useLocation, useNavigate, Navigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { setNavigateRef } from './utils/navigation';
-import { App as AntdApp, ConfigProvider, message } from 'antd';
+import { App as AntdApp, ConfigProvider, message, Spin } from 'antd';
 import PageSkeleton, { PageSkeletonProps } from './components/page-skeleton';
 import { PageLoadingFullscreen } from './components/page-loading-lottie';
+import { GLOBAL_SPIN_INDICATOR } from './initSpinIndicator';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
+import zhTW from 'antd/locale/zh_TW';
+import jaJP from 'antd/locale/ja_JP';
+import viVN from 'antd/locale/vi_VN';
 import { useQuery } from '@tanstack/react-query';
 import { getCurrentUser } from './services/auth';
 import { getCurrentInfraSuperAdmin } from './services/infraAdmin';
@@ -26,11 +30,8 @@ import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
 import { ENGLISH_UI_FONT_FAMILY } from './constants/fonts';
 import { useGlobalStore } from './stores';
-import {
-  initLanguageFromApi,
-  isLanguageInitialized,
-  syncLanguageFromPreferences,
-} from './config/i18n';
+import { syncLanguageFromPreferences } from './config/i18n';
+import { useAppShellReady } from './hooks/useAppShellReady';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
 import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
@@ -469,19 +470,20 @@ const AuthGuard = React.memo<{ children: React.ReactNode }>(({ children }) => {
 
   const shouldBypassAuth = isMasterDataPath || isDebugPath;
   const hasAuthenticatedUser = currentUser || buildRestoredUserFromStorage();
-  const shouldShowLoading = !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
+  const shouldShowLoading =
+    hasToken && !isPublicPath && !hasAuthenticatedUser && (loading || isLoading);
   const shouldRedirect = redirectTarget !== null;
 
   if (shouldBypassAuth) {
     return <>{children}</>;
   }
 
-  if (shouldShowLoading) {
-    return <DelayedFallback delayMs={0} fullHeight />;
-  }
-
   if (shouldRedirect) {
     return <Navigate to={redirectTarget} replace />;
+  }
+
+  if (shouldShowLoading) {
+    return <DelayedFallback delayMs={0} fullHeight />;
   }
 
   return (
@@ -525,6 +527,23 @@ const DelayedFallback: React.FC<{
  * 若定义在 App 内部，每次 App 重渲染时 React 会认为这是一个全新的组件类型，
  * 导致整个子树卸载并重挂载，引发无限循环。
  */
+/** 主题与语言就绪前的全屏 Spin，避免英文界面先渲染中文文案 */
+const AppShellLoading: React.FC<{ isDark: boolean }> = ({ isDark }) => (
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      zIndex: 1100,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: isDark ? '#141414' : '#f5f5f5',
+    }}
+  >
+    <Spin indicator={GLOBAL_SPIN_INDICATOR} size="large" />
+  </div>
+);
+
 const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
   const { message } = AntdApp.useApp();
   const navigate = useNavigate();
@@ -572,8 +591,13 @@ const AppContent: React.FC<{ touchScreen: any }> = ({ touchScreen }) => {
 const ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
   'zh-CN': zhCN,
   'zh': zhCN,
+  'zh-Hant': zhTW,
   'en-US': enUS,
   'en': enUS,
+  'ja-JP': jaJP,
+  'ja': jaJP,
+  'vi-VN': viVN,
+  'vi': viVN,
 };
 
 // 主应用组件
@@ -587,24 +611,17 @@ export default function App() {
     document.querySelector('[data-app-first-paint]')?.remove();
   }, []);
 
-  const currentUser = useGlobalStore((s) => s.currentUser);
-  const initFromApi = useThemeStore((s) => s.initFromApi);
-  const themeInitialized = useThemeStore((s) => s.initialized);
+  const appShellReady = useAppShellReady();
   const subscribeToSystemTheme = useThemeStore((s) => s.subscribeToSystemTheme);
   const themeMode = useThemeStore((s) => s.theme);
 
-  // 主题与语言初始化（挂载时执行一次）
+  // 壳层就绪后预取头像 URL，缩短顶栏头像显示延迟
   useEffect(() => {
-    useUserPreferenceStore.getState().rehydrateFromStorage();
-    initFromApi();
-    initLanguageFromApi().catch((err) => {
-      console.warn('Failed to init user language during app init:', err);
-    });
-    // 尽早预取头像 URL，缩短顶栏头像显示延迟
+    if (!appShellReady) return;
     const userInfo = getUserInfo();
     const avatarUuid = (userInfo as any)?.avatar;
     if (avatarUuid) prefetchAvatarUrl(avatarUuid);
-  }, [initFromApi]);
+  }, [appShellReady]);
 
   // 当 language 偏好变化时同步 i18n（与 theme 订阅策略一致）
   useEffect(() => {
@@ -643,22 +660,6 @@ export default function App() {
     });
     return unsub;
   }, []);
-
-  // 退出后重新登录时，clearForLogout 会将 initialized 置为 false，
-  // 需在用户登录成功后重新拉取主题与语言偏好，无需刷新页面
-  useEffect(() => {
-    if (currentUser && getToken() && !themeInitialized) {
-      initFromApi();
-    }
-  }, [currentUser, themeInitialized, initFromApi]);
-
-  useEffect(() => {
-    if (currentUser && getToken() && !isLanguageInitialized()) {
-      initLanguageFromApi().catch((err) => {
-        console.warn('Failed to re-init user language after login:', err);
-      });
-    }
-  }, [currentUser]);
 
   // 监听系统主题变化（当 theme=auto 时）
   useEffect(() => {
@@ -766,9 +767,14 @@ export default function App() {
       theme={responsiveThemeConfig} 
       locale={antLocale}
       componentSize={componentSize}
+      spin={{ indicator: GLOBAL_SPIN_INDICATOR }}
     >
       <AntdApp>
-        <AppContent touchScreen={touchScreen} />
+        {appShellReady ? (
+          <AppContent touchScreen={touchScreen} />
+        ) : (
+          <AppShellLoading isDark={resolved.isDark} />
+        )}
       </AntdApp>
     </ConfigProvider>
   );

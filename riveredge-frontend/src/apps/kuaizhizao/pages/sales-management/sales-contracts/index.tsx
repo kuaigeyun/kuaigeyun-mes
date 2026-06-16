@@ -23,6 +23,8 @@ import {
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
+import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 
 import type { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
 
@@ -699,26 +701,11 @@ const SalesContractsPage: React.FC = () => {
 
 
 
-  const handleContractPriceTypeToggle = useCallback((checked: boolean) => {
-
-    const nextType = checked ? 'tax_inclusive' : 'tax_exclusive';
-
-    const currentType = formRef.current?.getFieldValue('price_type') ?? 'tax_exclusive';
-
-    if (nextType === currentType) return;
-
-    const items = normalizeFormListItems<any>(formRef.current?.getFieldValue('items'));
-
-    const next = items.map((row: any) => ({
-
-      ...row,
-
-      unit_price: convertUnitPriceByPriceType(row?.unit_price, row?.tax_rate, currentType, nextType),
-
-    }));
-
-    formRef.current?.setFieldsValue({ price_type: nextType, items: next });
-
+  const handleContractPriceTypeChange = useCallback((nextChecked: boolean) => {
+    const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
+    const fromType: PriceTypeValue = nextChecked ? 'tax_exclusive' : 'tax_inclusive';
+    setFormPriceType(formRef.current, nextType);
+    deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, convertUnitPriceByPriceType);
   }, []);
 
 
@@ -1464,7 +1451,7 @@ const SalesContractsPage: React.FC = () => {
         }}
         showImportButton={contractPerms.canImport}
 
-        onPriceTypeToggle={handleContractPriceTypeToggle}
+        onPriceTypeChange={handleContractPriceTypeChange}
 
         onRefreshLinePriceByVariant={refreshContractLinePriceByVariant}
 

@@ -63,6 +63,20 @@
       display: none;
     }
 
+    .login-left-bg-image {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+
+      img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+    }
+
     .login-left-bg-lottie {
       position: absolute;
       left: 0;
@@ -146,7 +160,7 @@
       .login-decoration-lottie {
         position: relative;
         width: 100%;
-        max-width: 520px;
+        max-width: 420px;
         margin: 0 auto 32px;
         display: flex;
         align-items: center;
@@ -154,7 +168,7 @@
 
         > div {
           width: 100% !important;
-          max-width: 520px;
+          max-width: 420px;
           display: flex;
           justify-content: center;
 
@@ -167,15 +181,15 @@
 
       .login-decoration-lottie-placeholder {
         width: 100%;
-        max-width: 520px;
-        aspect-ratio: 946 / 892;
+        max-width: 420px;
+        aspect-ratio: 1 / 1;
       }
 
       .login-decoration-image {
         display: block;
         width: 100%;
         max-width: 420px;
-        max-height: 360px;
+        aspect-ratio: 1 / 1;
         margin: 0 auto;
         object-fit: contain;
       }
@@ -196,6 +210,33 @@
           display: block; /* 确保是块级元素 */
           text-align: justify; /* 默认两端对齐 */
           word-spacing: 0.1em; /* 增加单词间距，改善对齐效果 */
+
+          p {
+            margin: 0 0 0.75em;
+
+            &:last-child {
+              margin-bottom: 0;
+            }
+          }
+
+          h1,
+          h2,
+          h3 {
+            color: #fff !important;
+            margin: 0 0 0.5em;
+          }
+
+          ul,
+          ol {
+            text-align: left;
+            padding-left: 1.25em;
+            margin: 0 0 0.75em;
+          }
+
+          a {
+            color: rgba(255, 255, 255, 0.95);
+            text-decoration: underline;
+          }
         }
       }
     }

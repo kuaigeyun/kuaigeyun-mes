@@ -270,25 +270,23 @@ export const useThemeStore = create<ThemeState>((set, get) => {
 
       set({ loading: true });
       try {
-        const [siteSetting] = await Promise.all([
-          getSiteSetting().catch(() => null),
-          useUserPreferenceStore.getState().fetchPreferences(),
-        ]);
-
+        const siteSetting = await getSiteSetting().catch(() => null);
         const siteSettings =
           siteSetting?.settings && typeof siteSetting.settings === 'object'
             ? siteSetting.settings
             : null;
 
-        // 复用同一份 siteSetting 给 configStore，避免 app.tsx 再触发一次 /site-setting 请求；
-        // 失败（siteSetting 为 null）时不 hydrate，保留 configStore.fetchConfigs 独立重试能力。
         if (siteSettings) {
+          set({ siteThemeSettings: siteSettings });
           try {
             useConfigStore.getState().hydrateFromSettings(siteSettings);
           } catch {
             // 不阻塞主题流程
           }
         }
+
+        // 先写入 siteThemeSettings，再拉偏好，避免 subscribe 用空站点配置覆盖主题
+        await useUserPreferenceStore.getState().fetchPreferences();
 
         const prefs = useUserPreferenceStore.getState().preferences || {};
         const { theme, config } = resolveThemeFromCloud(prefs, siteSettings);
@@ -365,7 +363,8 @@ export const useThemeStore = create<ThemeState>((set, get) => {
         theme: 'light',
         config: { ...DEFAULT_CONFIG },
         resolved: computeResolved('light', DEFAULT_CONFIG),
-        initialized: false,
+        // 保持 initialized，避免登出时 App 壳层全屏 Spin 阻塞跳转登录页
+        initialized: true,
         siteThemeSettings: null,
       });
       doApplyTheme('light', DEFAULT_CONFIG);

@@ -770,6 +770,7 @@ export const OutsourceOrdersTable: React.FC = () => {
             label={t('app.kuaizhizao.outsourceOrder.fieldCode')}
             required={!isEdit}
             autoGenerateOnCreate={!isEdit}
+            showGenerateButton={false}
             context={{}}
             disabled={isEdit}
           />

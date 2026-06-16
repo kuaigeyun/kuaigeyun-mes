@@ -6,6 +6,7 @@
  * 登录成功后 window.location.href 跳转主应用。
  */
 
+import './initSpinIndicator';
 import './pages/login/index.less';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -14,17 +15,39 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ConfigProvider } from 'antd';
 import zhCN from 'antd/locale/zh_CN';
 import enUS from 'antd/locale/en_US';
+import zhTW from 'antd/locale/zh_TW';
+import jaJP from 'antd/locale/ja_JP';
+import viVN from 'antd/locale/vi_VN';
 import { App } from 'antd';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import zhCNLocale from './locales/zh-CN.login';
 import enUSLocale from './locales/en-US.login';
+import zhHantLocale from './locales/zh-Hant.login';
+import jaJPLocale from './locales/ja-JP.login';
+import viVNLocale from './locales/vi-VN.login';
 import LoginPage from './pages/login';
 import { getGuestLanguageStorageKey, resolveLoginInitialLanguage } from './utils/localeBootstrap';
 
 const initialLang = resolveLoginInitialLanguage();
 
-// 登录页最小 i18n：加载 zh-CN 和 en-US
+const LOGIN_LOCALE_BUNDLES: Record<string, Record<string, string>> = {
+  'zh-CN': zhCNLocale,
+  'en-US': enUSLocale,
+  'zh-Hant': zhHantLocale,
+  'ja-JP': jaJPLocale,
+  'vi-VN': viVNLocale,
+};
+
+const LOGIN_ANT_LOCALE_MAP: Record<string, typeof zhCN> = {
+  'zh-CN': zhCN,
+  'zh-Hant': zhTW,
+  'en-US': enUS,
+  'ja-JP': jaJP,
+  'vi-VN': viVN,
+};
+
+// 登录页最小 i18n
 i18n.use(initReactI18next).init({
   lng: initialLang,
   fallbackLng: 'zh-CN',
@@ -32,10 +55,9 @@ i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false },
   keySeparator: false,
   nsSeparator: false,
-  resources: { 
-    'zh-CN': { translation: zhCNLocale },
-    'en-US': { translation: enUSLocale }
-  },
+  resources: Object.fromEntries(
+    Object.entries(LOGIN_LOCALE_BUNDLES).map(([code, translation]) => [code, { translation }]),
+  ),
 });
 
 const loginQueryClient = new QueryClient({
@@ -60,11 +82,11 @@ function RedirectToApp() {
 }
 
 function LoginRoot() {
-  const [locale, setLocale] = useState(initialLang === 'zh-CN' ? zhCN : enUS);
+  const [locale, setLocale] = useState(LOGIN_ANT_LOCALE_MAP[initialLang] ?? zhCN);
 
   useEffect(() => {
     const handleLanguageChange = (lng: string) => {
-      setLocale(lng === 'zh-CN' ? zhCN : enUS);
+      setLocale(LOGIN_ANT_LOCALE_MAP[lng] ?? zhCN);
       sessionStorage.setItem(getGuestLanguageStorageKey(), lng);
     };
     i18n.on('languageChanged', handleLanguageChange);

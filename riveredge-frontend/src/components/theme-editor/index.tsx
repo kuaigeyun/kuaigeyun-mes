@@ -13,6 +13,7 @@ import { getSiteSetting, updateSiteSetting } from '../../services/siteSetting';
 import { useUserPreferenceStore } from '../../stores/userPreferenceStore';
 import { getToken } from '../../utils/auth';
 import { useThemeStore, resolveThemeFromCloud, type ThemeStyle } from '../../stores/themeStore';
+import { useConfigStore } from '../../stores/configStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
 import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
@@ -565,6 +566,25 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
   };
 
   /**
+   * 同步主色到表单、预览与 themeStore（预设色与自定义色共用）
+   */
+  const applyColorPrimaryChange = (color: string, allValues?: Record<string, unknown>) => {
+    const colorPrimaryValue = colorFieldToHex(color, '#1890ff');
+    form.setFieldValue('colorPrimary', colorPrimaryValue);
+    setColorPrimaryValue(colorPrimaryValue);
+    const mergedValues = {
+      ...(allValues ?? form.getFieldsValue()),
+      colorPrimary: colorPrimaryValue,
+    };
+    const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
+      mergedValues,
+      (mergedValues.colorMode as 'light' | 'dark' | 'auto') || colorMode,
+    );
+    useThemeStore.getState().applyTheme(themeMode, themeConfigForPreference, { persist: false });
+    applyPreviewTheme(mergedValues, themeMode);
+  };
+
+  /**
    * 处理保存
    */
   const handleSave = async () => {
@@ -573,6 +593,10 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
       // 获取表单的最终值（用户选择的结果）
       const values = await form.validateFields();
+      values.colorPrimary = colorFieldToHex(
+        form.getFieldValue('colorPrimary') ?? values.colorPrimary,
+        '#1890ff',
+      );
 
 
       // 重要：在 validateFields 之后，直接从表单获取当前值
@@ -628,10 +652,21 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
       };
 
       try {
-        await updateSiteSetting({ settings });
+        const updatedSiteSetting = await updateSiteSetting({ settings });
+        if (updatedSiteSetting?.settings) {
+          useThemeStore.setState({ siteThemeSettings: updatedSiteSetting.settings });
+          useConfigStore.getState().hydrateFromSettings(updatedSiteSetting.settings);
+        }
       } catch (error) {
         // 站点设置保存失败（如无权限或无租户上下文），仅记录日志，不阻断流程
         console.warn('Failed to save site theme settings:', error);
+      }
+
+      if (hasToken) {
+        await useUserPreferenceStore.getState().fetchPreferences({ force: true });
+        useThemeStore.getState().syncFromPreferences(
+          useUserPreferenceStore.getState().preferences || {},
+        );
       }
 
       message.success(t('components.themeEditor.message.applied'));
@@ -995,7 +1030,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                               : 'none',
                           }}
                           onClick={() => {
-                            form.setFieldValue('colorPrimary', preset.color);
+                            applyColorPrimaryChange(preset.color);
                           }}
                           onMouseEnter={(e) => {
                             if (form.getFieldValue('colorPrimary') !== preset.color) {
@@ -1031,8 +1066,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                     format="hex"
                     value={normalizedColorPrimary}
                     onChange={(color) => {
-                      const colorValue = normalizeColorValue(color, token.colorPrimary || '#1890ff');
-                      form.setFieldValue('colorPrimary', colorValue);
+                      applyColorPrimaryChange(color);
                     }}
                   />
                 </Form.Item>

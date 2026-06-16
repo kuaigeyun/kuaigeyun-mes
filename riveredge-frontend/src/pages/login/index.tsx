@@ -49,6 +49,8 @@ import { theme } from 'antd';
 import { getPlatformSettingsPublic, type PlatformSettings } from '../../services/publicPlatformSettings';
 import { getLoginClientDownloads } from '../../services/clientRelease';
 import { applyFavicon } from '../../utils/favicon';
+import { LoginDescriptionContent } from '../../components/login-page-editor';
+import { isLoginVisualLayerEnabled } from '../../utils/loginVisualLayers';
 import {
   DEFAULT_SITE_LOGO_URL,
   EMBEDDED_FRAMEWORK_LOGO_DATA_URI,
@@ -349,6 +351,7 @@ export default function LoginPage() {
   // 装饰画 Lottie：保持原始配色，不跟随主题
   const [animationData, setAnimationData] = useState<object | null>(null);
   const [decorationImageUrl, setDecorationImageUrl] = useState<string | null>(null);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return () => {};
     if (window.matchMedia('(max-width: 992px)').matches) {
@@ -505,6 +508,37 @@ export default function LoginPage() {
     };
     void loadDecorationImage();
   }, [platformSettings?.login_decoration_image, isLoadingPlatformSettings]);
+
+  const loginDecorationEnabled = isLoginVisualLayerEnabled(platformSettings?.login_decoration_enabled);
+  const loginBackgroundEnabled = isLoginVisualLayerEnabled(platformSettings?.login_background_enabled);
+
+  // 加载登录页背景图
+  useEffect(() => {
+    const loadBackgroundImage = async () => {
+      if (isLoadingPlatformSettings) return;
+      const rawValue = typeof platformSettings?.login_background_image === 'string'
+        ? platformSettings.login_background_image.trim()
+        : '';
+      if (!rawValue) {
+        setBackgroundImageUrl(null);
+        return;
+      }
+      if (!isUUID(rawValue)) {
+        setBackgroundImageUrl(rawValue);
+        return;
+      }
+      try {
+        const response = await fetchWithRetry(
+          `/api/v1/core/files/${rawValue}/preview/public?category=site-logo`
+        );
+        const previewInfo = await response.json();
+        setBackgroundImageUrl(previewInfo?.preview_url || null);
+      } catch {
+        setBackgroundImageUrl(null);
+      }
+    };
+    void loadBackgroundImage();
+  }, [platformSettings?.login_background_image, isLoadingPlatformSettings]);
 
   // 更新平台设置缓存（包含platform_name）
   useEffect(() => {
@@ -1669,7 +1703,12 @@ export default function LoginPage() {
           ['--login-theme-color' as string]: themeColor,
         }}
       >
-        {backgroundAnimationData ? (
+        {loginBackgroundEnabled && backgroundImageUrl ? (
+          <div className="login-left-bg-image" aria-hidden>
+            <img src={backgroundImageUrl} alt="" />
+          </div>
+        ) : null}
+        {loginBackgroundEnabled && backgroundAnimationData && !backgroundImageUrl ? (
           <>
             <div className="login-left-bg-lottie" aria-hidden>
               <Suspense fallback={null}>
@@ -1681,9 +1720,9 @@ export default function LoginPage() {
                 />
               </Suspense>
             </div>
-            <div className="login-left-bg-overlay" aria-hidden />
           </>
         ) : null}
+        {loginBackgroundEnabled ? <div className="login-left-bg-overlay" aria-hidden /> : null}
 
         {/* LOGO 和框架名称放在左上角（桌面端） */}
         <div className="logo-top-left" style={{
@@ -1722,7 +1761,8 @@ export default function LoginPage() {
         </div>
 
         <div className="login-left-content">
-          {/* Lottie 动画装饰显示在左侧上方（懒加载，未加载时显示占位） */}
+          {/* 装饰画显示在左侧上方（懒加载，未加载时显示占位） */}
+          {loginDecorationEnabled ? (
           <div className="login-decoration-lottie">
             {decorationImageUrl ? (
               <img
@@ -1742,6 +1782,7 @@ export default function LoginPage() {
               <div className="login-decoration-lottie-placeholder" />
             )}
           </div>
+          ) : null}
 
           {/* 框架简介显示在图片下方 */}
           <div className="login-description">
@@ -1753,11 +1794,13 @@ export default function LoginPage() {
                     : (platformSettings.login_title || platformSettings.platform_name)}
                 </Title>
                 {(platformSettings.login_content || platformSettings.login_content_en) && (
-                  <Text className="description-text">
-                    {i18n.language === 'en-US' 
-                      ? (platformSettings.login_content_en || platformSettings.login_content) 
-                      : platformSettings.login_content}
-                  </Text>
+                  <LoginDescriptionContent
+                    content={
+                      i18n.language === 'en-US'
+                        ? (platformSettings.login_content_en || platformSettings.login_content)
+                        : platformSettings.login_content
+                    }
+                  />
                 )}
               </>
             ) : (

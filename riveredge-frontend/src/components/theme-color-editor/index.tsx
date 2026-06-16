@@ -129,7 +129,10 @@ const ThemeColorEditor: React.FC<ThemeColorEditorProps> = ({ children, onThemeUp
             theme_config: themeConfig,
           };
           
-          await updateSiteSetting({ settings });
+          const updatedSiteSetting = await updateSiteSetting({ settings });
+          if (updatedSiteSetting?.settings) {
+            useThemeStore.setState({ siteThemeSettings: updatedSiteSetting.settings });
+          }
 
           const currentConfig = useThemeStore.getState().config;
           useThemeStore.getState().applyTheme(

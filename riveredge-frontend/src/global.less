@@ -231,6 +231,26 @@
     overflow: visible !important;
     overflow-x: visible !important;
   }
+
+  /*
+   * antd 6：ConfirmDialog 将 title 同时写入 Modal header 与 body。
+   * 全局 `.ant-modal-header { display: flex !important }` 会强制显示 header，
+   * 导致标题重复。保留 header（含左侧竖条），隐藏 body 内重复 title。
+   */
+  .ant-modal-confirm-title {
+    display: none;
+  }
+
+  /* 含输入控件的确认弹窗（命名/重命名等）：body 不展示默认警示图标，内容区占满宽度 */
+  .ant-modal-confirm-body:has(.ant-input, .ant-input-number, .ant-select, textarea, .ant-picker) {
+    > .anticon {
+      display: none;
+    }
+
+    .ant-modal-confirm-paragraph {
+      max-width: 100% !important;
+    }
+  }
 }
 
 /* 批量建位预览：内容随行数自适应，不产生多余滚动条 */

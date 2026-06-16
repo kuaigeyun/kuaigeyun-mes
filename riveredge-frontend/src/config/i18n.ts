@@ -69,6 +69,9 @@ function mergeTranslationsWithMenuPriority(
 export const LANGUAGE_MAP: Record<string, string> = {
   'zh-CN': '简体中文',
   'en-US': 'English',
+  'zh-Hant': '繁體中文',
+  'ja-JP': '日本語',
+  'vi-VN': 'Tiếng Việt',
 };
 
 function resolveTenantDefaultFromCloud(
@@ -127,29 +130,41 @@ function buildInitResources(languageCode: SupportedUiLanguage): Record<string, {
   const resources: Record<string, { translation: Record<string, string> }> = {
     'zh-CN': { translation: zhCN },
   };
-  if (languageCode === 'en-US' && LOCALE_BUNDLES['en-US']) {
-    resources['en-US'] = { translation: LOCALE_BUNDLES['en-US'] };
+  if (languageCode !== 'zh-CN' && LOCALE_BUNDLES[languageCode]) {
+    resources[languageCode] = { translation: LOCALE_BUNDLES[languageCode] };
   }
   return resources;
 }
 
 async function ensureLanguageLoaded(languageCode: string): Promise<void> {
-  if (languageCode === 'en-US' && !LOCALE_BUNDLES['en-US']) {
-    const { default: enUS } = await import('../locales/en-US');
-    LOCALE_BUNDLES['en-US'] = enUS;
-    if (i18n.isInitialized) {
-      i18n.addResourceBundle('en-US', 'translation', enUS, true, true);
-    }
+  if (languageCode === 'zh-CN' || LOCALE_BUNDLES[languageCode]) return;
+
+  const loaders: Record<string, () => Promise<{ default: Record<string, string> }>> = {
+    'en-US': () => import('../locales/en-US'),
+    'zh-Hant': () => import('../locales/zh-Hant'),
+    'ja-JP': () => import('../locales/ja-JP'),
+    'vi-VN': () => import('../locales/vi-VN'),
+  };
+
+  const load = loaders[languageCode];
+  if (!load) return;
+
+  const { default: bundle } = await load();
+  LOCALE_BUNDLES[languageCode] = bundle;
+  if (i18n.isInitialized) {
+    i18n.addResourceBundle(languageCode, 'translation', bundle, true, true);
   }
 }
 
-function preloadLanguageBundleIfNeeded(languageCode: SupportedUiLanguage): void {
-  if (languageCode === 'en-US') {
-    void ensureLanguageLoaded('en-US').then(() => {
-      if (i18n.language !== 'en-US') {
-        void i18n.changeLanguage('en-US');
-      }
-    });
+/** 首屏挂载前：确保初始语言包已加载（避免 en-US 异步 chunk 导致中文 fallback 闪烁） */
+export async function prepareInitialLanguageBundle(): Promise<void> {
+  const lang = resolveInitialLanguage();
+  await ensureLanguageLoaded(lang);
+  if (lang !== 'zh-CN' && LOCALE_BUNDLES[lang] && i18n.isInitialized) {
+    i18n.addResourceBundle(lang, 'translation', LOCALE_BUNDLES[lang], true, true);
+    if (i18n.language !== lang) {
+      await i18n.changeLanguage(lang);
+    }
   }
 }
 
@@ -176,7 +191,6 @@ i18n.use(initReactI18next).init({
   },
 });
 
-preloadLanguageBundleIfNeeded(initialLang);
 syncEnglishUiFont(initialLang);
 
 const originalChangeLanguage = i18n.changeLanguage.bind(i18n);
@@ -220,12 +234,9 @@ export async function syncLanguageFromPreferences(
   await applyLanguage(languageCode);
 }
 
-/**
- * 登录后初始化语言：先租户默认，再个人偏好（与 themeStore.initFromApi 并行挂载，不阻塞 React）
- */
-export async function initLanguageFromApi(): Promise<void> {
-  if (languageInitialized || languageLoading) return;
+let languageInitInFlight: Promise<void> | null = null;
 
+async function runInitLanguageFromApi(): Promise<void> {
   if (!getToken()) {
     await applyLanguage(resolveInitialLanguage(), { loadBackendTranslations: false });
     languageInitialized = true;
@@ -279,6 +290,19 @@ export async function initLanguageFromApi(): Promise<void> {
   } finally {
     languageLoading = false;
   }
+}
+
+/**
+ * 登录后初始化语言：先租户默认，再个人偏好（与 themeStore.initFromApi 并行，供 App 壳层等待）
+ */
+export async function initLanguageFromApi(): Promise<void> {
+  if (languageInitialized) return;
+  if (!languageInitInFlight) {
+    languageInitInFlight = runInitLanguageFromApi().finally(() => {
+      languageInitInFlight = null;
+    });
+  }
+  return languageInitInFlight;
 }
 
 export async function applyLanguageWithPersist(languageCode: string): Promise<void> {

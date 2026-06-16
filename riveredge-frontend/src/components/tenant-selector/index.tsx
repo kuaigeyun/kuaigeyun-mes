@@ -88,11 +88,11 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
   }, [isInfraSuperAdmin, currentTenantId, tenantOptions, t]);
 
   const canSwitch = isInfraSuperAdmin || tenantOptions.length > 1;
-  const stableFontSize = 16;
-  const stableTenantTextStyle: React.CSSProperties = {
-    fontSize: stableFontSize,
+  const textFontSize = token.fontSize;
+  const tenantTextStyle: React.CSSProperties = {
+    fontSize: textFontSize,
     fontWeight: 500,
-    lineHeight: '24px',
+    lineHeight: `${Math.max(32, textFontSize + 8)}px`,
   };
 
   if (canSwitch) {
@@ -112,7 +112,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
               maxWidth: 240,
               height: 32,
               padding: '0 12px',
-              fontSize: stableFontSize,
+              fontSize: textFontSize,
             }}
             size="small"
             className="tenant-selector-select"
@@ -122,7 +122,7 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
           >
             {tenantOptions.map((tenant) => (
               <Option key={tenant.id} value={String(tenant.id)}>
-                <span style={stableTenantTextStyle}>{tenant.name}</span>
+                <span style={tenantTextStyle}>{tenant.name}</span>
               </Option>
             ))}
           </Select>
@@ -149,10 +149,10 @@ const TenantSelector: React.FC<TenantSelectorProps> = ({ headerLightText }) => {
         borderRadius: '16px',
         backgroundColor: token.colorFillTertiary,
         color: spanColor,
-        fontSize: stableFontSize,
+        fontSize: textFontSize,
         fontWeight: 500,
         height: 32,
-        lineHeight: '24px',
+        lineHeight: '32px',
         verticalAlign: 'middle',
       }}
     >

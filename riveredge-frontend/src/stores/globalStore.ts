@@ -83,7 +83,7 @@ export const useGlobalStore = create<GlobalState>()(
       },
       logout: () => {
         clearAuth();
-        set({ currentUser: undefined, isLocked: false, lockedPath: undefined });
+        set({ currentUser: undefined, isLocked: false, lockedPath: undefined, loading: false });
         // 清空用户偏好和主题缓存，避免下一账户读到当前账户的偏好（账户与租户隔离）
         useUserPreferenceStore.getState().clearForLogout();
         useThemeStore.getState().clearForLogout();

@@ -26,6 +26,7 @@ import {
   ProFormDigit,
   ProFormTextArea,
   ProFormDependency,
+  ProFormItem,
 } from '@ant-design/pro-components';
 import {
   App,
@@ -37,14 +38,14 @@ import {
   Dropdown,
   Empty,
   Spin,
-  Form,
   theme as AntdTheme,
 } from 'antd';
 import { EditOutlined, EyeOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniWarehouseSelect } from '../../../../../components/uni-warehouse-select';
 import CodeField from '../../../../../components/code-field';
-import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
+import { getDataDictionaryByCode, getDictionaryItemList, type DictionaryItem } from '../../../../../services/dataDictionary';
+import { mapSystemDictionaryItemOptions } from '../../../../../utils/systemDictionaryI18n';
 import {
   ListPageTemplate,
   FormModalTemplate,
@@ -322,19 +323,22 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
   useEffect(() => {
     const loadPriority = async () => {
-      const fallback = [
-        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityLow'), value: 'low' },
-        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityNormal'), value: 'normal' },
-        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityHigh'), value: 'high' },
-        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityUrgent'), value: 'urgent' },
+      const fallbackItems: Pick<DictionaryItem, 'value' | 'label' | 'is_system_managed' | 'sort_order'>[] = [
+        { value: 'low', label: '低', is_system_managed: true, sort_order: 0 },
+        { value: 'normal', label: '正常', is_system_managed: true, sort_order: 1 },
+        { value: 'high', label: '高', is_system_managed: true, sort_order: 2 },
+        { value: 'urgent', label: '紧急', is_system_managed: true, sort_order: 3 },
       ];
       setPriorityLoading(true);
       try {
         const dict = await getDataDictionaryByCode('WORK_ORDER_PRIORITY');
         const items = await getDictionaryItemList(dict.uuid, true);
-        setPriorityOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
+        const sorted = [...items].sort((a, b) => a.sort_order - b.sort_order);
+        setPriorityOptions(mapSystemDictionaryItemOptions('WORK_ORDER_PRIORITY', sorted, t));
       } catch {
-        setPriorityOptions(fallback);
+        setPriorityOptions(
+          mapSystemDictionaryItemOptions('WORK_ORDER_PRIORITY', fallbackItems as DictionaryItem[], t),
+        );
       } finally {
         setPriorityLoading(false);
       }
@@ -1346,6 +1350,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             name="code"
             label={t('app.kuaizhizao.outsourceWorkOrder.fieldCode')}
             autoGenerateOnCreate={true}
+            showGenerateButton={false}
             context={{}}
             colProps={{ span: 12 }}
           />
@@ -1486,13 +1491,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         <ProFormDigit name="totalAmount" hidden />
         <ProFormDependency name={['quantity', 'unitPrice']}>
           {({ quantity, unitPrice }) => (
-            <Form.Item label={t('app.kuaizhizao.outsourceWorkOrder.fieldTotalAmount')} style={{ marginBottom: 24 }}>
+            <ProFormItem
+              label={t('app.kuaizhizao.outsourceWorkOrder.fieldTotalAmount')}
+              colProps={{ span: 12 }}
+            >
               <AmountDisplay
                 resource={OO}
                 fieldName="total_amount"
                 value={(Number(quantity) || 0) * (Number(unitPrice) || 0)}
               />
-            </Form.Item>
+            </ProFormItem>
           )}
         </ProFormDependency>
 

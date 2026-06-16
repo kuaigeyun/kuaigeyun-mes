@@ -70,6 +70,18 @@ interface MaterialBorrowItem {
   status?: string;
 }
 
+const MATERIAL_BORROW_STATUS_I18N: Record<string, string> = {
+  '待借出': 'app.kuaizhizao.materialBorrow.status.pending',
+  '已借出': 'app.kuaizhizao.materialBorrow.status.borrowed',
+  '已取消': 'app.kuaizhizao.materialBorrow.status.cancelled',
+};
+
+function translateMaterialBorrowStatus(t: (key: string) => string, status?: string): string {
+  if (!status) return '-';
+  const key = MATERIAL_BORROW_STATUS_I18N[status];
+  return key ? t(key) : status;
+}
+
 const MaterialBorrowsPage: React.FC = () => {
   const { t } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
@@ -178,7 +190,7 @@ const MaterialBorrowsPage: React.FC = () => {
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getMaterialBorrowLifecycle(record as Record<string, unknown>);
+        const lifecycle = getMaterialBorrowLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -426,13 +438,13 @@ const MaterialBorrowsPage: React.FC = () => {
       title: t('app.kuaizhizao.warehouseOutbound.col.status'),
       dataIndex: 'status',
       render: (s) => {
-        const map: Record<string, { text: string; color: string }> = {
-          '待借出': { text: '待借出', color: 'default' },
-          '已借出': { text: '已借出', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
+        const status = (s as string) || '';
+        const colorMap: Record<string, string> = {
+          '待借出': 'default',
+          '已借出': 'success',
+          '已取消': 'error',
         };
-        const c = map[(s as any) || ''] || { text: (s as any) || '-', color: 'default' };
-        return <Tag color={c.color}>{c.text}</Tag>;
+        return <Tag color={colorMap[status] || 'default'}>{translateMaterialBorrowStatus(t, status)}</Tag>;
       },
     },
     { title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'), dataIndex: 'expected_return_date', valueType: 'date' },

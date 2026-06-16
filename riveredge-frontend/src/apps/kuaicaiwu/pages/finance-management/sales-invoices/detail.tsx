@@ -480,7 +480,7 @@ const SalesInvoiceDetailPage: React.FC = () => {
               {data.invoice_number?.trim() ? data.invoice_number : '—'}
             </ProDescriptions.Item>
             <ProDescriptions.Item label={t('app.kuaicaiwu.common.invoiceDate')}>{data.invoice_date}</ProDescriptions.Item>
-            <ProDescriptions.Item label={t(`${P}.col.invoiceType`}>{formatChineseInvoiceType(data.invoice_type, t)}</ProDescriptions.Item>
+            <ProDescriptions.Item label={t(`${P}.col.invoiceType`)}>{formatChineseInvoiceType(data.invoice_type, t)}</ProDescriptions.Item>
             <ProDescriptions.Item label={t(`${P}.col.taxRate`)}>{data.tax_rate}%</ProDescriptions.Item>
             <ProDescriptions.Item label={t(`${P}.col.exclTax`)}>¥{moneyCell(data.invoice_amount)}</ProDescriptions.Item>
             <ProDescriptions.Item label={t(`${P}.col.taxAmount`)}>¥{moneyCell(data.tax_amount)}</ProDescriptions.Item>

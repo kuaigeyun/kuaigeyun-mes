@@ -237,9 +237,10 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   );
   const defaultLanguageOptions = [
     { label: '简体中文 (zh-CN)', value: 'zh-CN' },
-    { label: '繁体中文 (zh-TW)', value: 'zh-TW' },
+    { label: '繁体中文 (zh-Hant)', value: 'zh-Hant' },
     { label: 'English (en-US)', value: 'en-US' },
     { label: '日本語 (ja-JP)', value: 'ja-JP' },
+    { label: 'Tiếng Việt (vi-VN)', value: 'vi-VN' },
     { label: '한국어 (ko-KR)', value: 'ko-KR' },
   ];
   const dateFormatOptions = [

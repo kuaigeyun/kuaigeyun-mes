@@ -17,6 +17,9 @@ export interface PlatformSettings {
   login_content?: string;
   login_content_en?: string;
   login_decoration_image?: string;
+  login_background_image?: string;
+  login_decoration_enabled?: boolean;
+  login_background_enabled?: boolean;
   icp_license?: string;
   icp_license_en?: string;
   theme_color?: string;

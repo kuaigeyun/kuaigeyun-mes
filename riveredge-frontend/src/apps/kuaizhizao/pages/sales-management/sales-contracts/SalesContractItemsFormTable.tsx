@@ -5,8 +5,9 @@ import React from 'react';
 import type { ProFormInstance } from '@ant-design/pro-components';
 import { ProForm } from '@ant-design/pro-components';
 import { AppstoreAddOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
-import { Button, DatePicker, Form, Input, InputNumber, Space, Switch } from 'antd';
+import { Button, DatePicker, Form, Input, InputNumber, Space } from 'antd';
 import { useTranslation } from 'react-i18next';
+import PriceTypeSwitch from '../../../../../components/price-type-switch/PriceTypeSwitch';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { OrderLineVariantAttributesCell } from '../../../../master-data/components/OrderLineVariantAttributesCell';
@@ -28,7 +29,7 @@ export type ContractItemsFormTableProps = {
   onOpenMaterialPicker: () => void;
   onOpenImport: () => void;
   showImportButton?: boolean;
-  onPriceTypeToggle: (checked: boolean) => void;
+  onPriceTypeChange: (checked: boolean) => void;
   onRefreshLinePriceByVariant: (index: number, attrs?: Record<string, unknown>) => void | Promise<void>;
   editingIncl: { index: number; value: number | null } | null;
   setEditingIncl: React.Dispatch<React.SetStateAction<{ index: number; value: number | null } | null>>;
@@ -41,7 +42,7 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
   onOpenMaterialPicker,
   onOpenImport,
   showImportButton = true,
-  onPriceTypeToggle,
+  onPriceTypeChange,
   onRefreshLinePriceByVariant,
   editingIncl,
   setEditingIncl,
@@ -371,20 +372,10 @@ export const SalesContractItemsFormTable: React.FC<ContractItemsFormTableProps> 
                 required
                 requiredMessage={t('app.kuaizhizao.salesContract.itemsRequired')}
                 leftExtra={(
-                  <ProForm.Item
-                    name="price_type"
-                    initialValue="tax_exclusive"
-                    noStyle
-                    valuePropName="checked"
-                    getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                    getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-                  >
-                    <Switch
-                      checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
-                      unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
-                      onChange={onPriceTypeToggle}
-                    />
-                  </ProForm.Item>
+                  <PriceTypeSwitch
+                    checked={priceType === 'tax_inclusive'}
+                    onChange={onPriceTypeChange}
+                  />
                 )}
                 headerExtra={(
                   <Space size={8}>

@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
 import { SaveOutlined, ReloadOutlined, UploadOutlined, DeleteOutlined, InfoCircleOutlined, SettingOutlined, CloudDownloadOutlined, ApartmentOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
+import { ThemedSegmented } from '../../../components/themed-segmented';
 import { MultiTabListPageTemplate } from '../../../components/layout-templates';
 import type { UploadFile, UploadProps } from 'antd';
 import {
@@ -43,6 +44,15 @@ import {
   mapTimezoneDictionaryOptions,
 } from '../../../utils/systemDictionaryLabels';
 import { TenantInitDataPanel } from '../config-center/TenantInitDataPanel';
+import {
+  LoginLeftColumnPreview,
+  LoginPageEditorSplitPanel,
+  LoginLocaleSettingsFields,
+  LoginLogoSettingsBlock,
+  LoginDecorationSettingsBlock,
+  LoginBackgroundSettingsBlock,
+} from '../../../components/login-page-editor';
+import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../utils/loginVisualLayers';
 
 /**
  * 站点设置页面组件
@@ -85,6 +95,9 @@ function getInitialValuesFromConfigStore(
     login_content: configs.login_content ?? '',
     login_content_en: configs.login_content_en ?? '',
     login_decoration_image: configs.login_decoration_image ?? '',
+    login_background_image: configs.login_background_image ?? '',
+    login_decoration_enabled: configs.login_decoration_enabled !== false,
+    login_background_enabled: configs.login_background_enabled !== false,
     icp_license: configs.icp_license ?? '',
     icp_license_en: configs.icp_license_en ?? '',
     login_theme_color: configs.login_theme_color ?? undefined,
@@ -144,6 +157,8 @@ const SiteSettingsPage: React.FC = () => {
   const [useCustomLoginLogo, setUseCustomLoginLogo] = useState(false);
   const [decorationFileList, setDecorationFileList] = useState<UploadFile[]>([]);
   const [decorationImageUrl, setDecorationImageUrl] = useState<string | undefined>(undefined);
+  const [backgroundFileList, setBackgroundFileList] = useState<UploadFile[]>([]);
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState<string | undefined>(undefined);
   const [cropModalVisible, setCropModalVisible] = useState(false);
   const [selectedImageFile, setSelectedImageFile] = useState<File | null>(null);
   const [activeTabKey, setActiveTabKey] = useState('basic');
@@ -177,6 +192,17 @@ const SiteSettingsPage: React.FC = () => {
   const tenantDomainValue = Form.useWatch('tenant_domain', form);
   const loginLogoValue = Form.useWatch('login_logo', form);
   const loginDecorationValue = Form.useWatch('login_decoration_image', form);
+  const loginBackgroundValue = Form.useWatch('login_background_image', form);
+  const loginDecorationEnabledValue = Form.useWatch('login_decoration_enabled', form);
+  const loginBackgroundEnabledValue = Form.useWatch('login_background_enabled', form);
+  const platformNameValue = Form.useWatch('platform_name', form);
+  const platformNameEnValue = Form.useWatch('platform_name_en', form);
+  const loginTitleValue = Form.useWatch('login_title', form);
+  const loginTitleEnValue = Form.useWatch('login_title_en', form);
+  const loginContentValue = Form.useWatch('login_content', form);
+  const loginContentEnValue = Form.useWatch('login_content_en', form);
+  const loginThemeColorValue = Form.useWatch('login_theme_color', form);
+  const [loginPreviewLocale, setLoginPreviewLocale] = useState<'zh-CN' | 'en-US'>('zh-CN');
   const currentTenantDomain = String(tenantDomainValue || '').trim().toLowerCase();
   const tenantPathAccessUrl = (() => {
     if (!currentTenantDomain) return '';
@@ -262,6 +288,39 @@ const SiteSettingsPage: React.FC = () => {
     setDecorationFileList([{
       uid: imageValue.trim(),
       name: t('pages.system.siteSettings.loginDecorationImage'),
+      status: 'done',
+      url: normalized,
+    }]);
+  };
+
+  const loadBackgroundPreview = async (imageValue: string | undefined) => {
+    if (!imageValue || !imageValue.trim()) {
+      setBackgroundImageUrl(undefined);
+      setBackgroundFileList([]);
+      return;
+    }
+    if (isUUID(imageValue.trim())) {
+      const previewInfo = await getSiteLogoPreview(imageValue.trim());
+      if (!previewInfo?.preview_url) {
+        setBackgroundImageUrl(undefined);
+        setBackgroundFileList([]);
+        return;
+      }
+      const previewUrl = toRelativeIfLocalhost(previewInfo.preview_url);
+      setBackgroundImageUrl(previewUrl);
+      setBackgroundFileList([{
+        uid: imageValue.trim(),
+        name: t('pages.system.siteSettings.loginBackgroundImage'),
+        status: 'done',
+        url: previewUrl,
+      }]);
+      return;
+    }
+    const normalized = toRelativeIfLocalhost(imageValue.trim());
+    setBackgroundImageUrl(normalized);
+    setBackgroundFileList([{
+      uid: imageValue.trim(),
+      name: t('pages.system.siteSettings.loginBackgroundImage'),
       status: 'done',
       url: normalized,
     }]);
@@ -357,6 +416,35 @@ const SiteSettingsPage: React.FC = () => {
     if (value.length !== 36) return;
     void loadDecorationPreview(value);
   }, [loginDecorationValue]);
+
+  useEffect(() => {
+    const value = String(loginBackgroundValue || '').trim();
+    if (!value) {
+      setBackgroundImageUrl(undefined);
+      setBackgroundFileList([]);
+      return;
+    }
+    if (!isUUID(value)) {
+      const normalized = toRelativeIfLocalhost(value);
+      setBackgroundImageUrl(normalized);
+      setBackgroundFileList([{
+        uid: value,
+        name: t('pages.system.siteSettings.loginBackgroundImage'),
+        status: 'done',
+        url: normalized,
+      }]);
+      return;
+    }
+    if (value.length !== 36) return;
+    void loadBackgroundPreview(value);
+  }, [loginBackgroundValue]);
+
+  const decorationLayerEnabled = isLoginVisualLayerEnabled(loginDecorationEnabledValue);
+  const backgroundLayerEnabled = isLoginVisualLayerEnabled(loginBackgroundEnabledValue);
+
+  const warnLoginVisualLayerAtLeastOne = () => {
+    messageApi.warning(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+  };
 
   const loadBranchOrganizationCapability = async () => {
     try {
@@ -567,6 +655,9 @@ const SiteSettingsPage: React.FC = () => {
         login_content: setting.settings?.login_content || '',
         login_content_en: setting.settings?.login_content_en || '',
         login_decoration_image: setting.settings?.login_decoration_image || '',
+        login_background_image: setting.settings?.login_background_image || '',
+        login_decoration_enabled: setting.settings?.login_decoration_enabled !== false,
+        login_background_enabled: setting.settings?.login_background_enabled !== false,
         icp_license: setting.settings?.icp_license || '',
         icp_license_en: setting.settings?.icp_license_en || '',
         login_theme_color: setting.settings?.login_theme_color || undefined,
@@ -616,6 +707,7 @@ const SiteSettingsPage: React.FC = () => {
       await loadLogoPreview(siteLogoValue);
       await loadLoginLogoPreview(setting.settings?.login_logo || '');
       await loadDecorationPreview(setting.settings?.login_decoration_image || '');
+      await loadBackgroundPreview(setting.settings?.login_background_image || '');
     } catch (error: any) {
       messageApi.error(error?.message || t('pages.system.siteSettings.loadFailed'));
     } finally {
@@ -805,6 +897,36 @@ const SiteSettingsPage: React.FC = () => {
     setDecorationFileList([]);
   };
 
+  const handleBackgroundUpload: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      if (!file.type.startsWith('image/')) {
+        messageApi.error(t('pages.system.siteSettings.selectImage'));
+        return Upload.LIST_IGNORE;
+      }
+      const response = await uploadFile(file as File, {
+        category: 'site-logo',
+        description: t('pages.system.siteSettings.loginBackgroundImage'),
+      });
+      if (!response.uuid) {
+        messageApi.error(t('pages.system.siteSettings.uploadFailed'));
+        return Upload.LIST_IGNORE;
+      }
+      form.setFieldsValue({ login_background_image: response.uuid });
+      await loadBackgroundPreview(response.uuid);
+      messageApi.success(t('pages.system.siteSettings.loginBackgroundUploadSuccess'));
+      return Upload.LIST_IGNORE;
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.system.siteSettings.loginBackgroundUploadFailed'));
+      return Upload.LIST_IGNORE;
+    }
+  };
+
+  const handleClearBackgroundImage = () => {
+    form.setFieldsValue({ login_background_image: '' });
+    setBackgroundImageUrl(undefined);
+    setBackgroundFileList([]);
+  };
+
   /**
    * 处理保存
    */
@@ -812,38 +934,51 @@ const SiteSettingsPage: React.FC = () => {
     try {
       setSaving(true);
       const values = await form.validateFields();
-      const allValues = { ...systemSettingsRef.current, ...values };
+      const mergedValues = { ...form.getFieldsValue(true), ...values };
+      try {
+        validateLoginVisualLayers(
+          isLoginVisualLayerEnabled(mergedValues.login_decoration_enabled),
+          isLoginVisualLayerEnabled(mergedValues.login_background_enabled),
+        );
+      } catch {
+        messageApi.error(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+        return;
+      }
+      const allValues = { ...systemSettingsRef.current, ...mergedValues };
 
       const settings: Record<string, any> = {
-        site_name: values.site_name,
-        site_logo: values.site_logo,
-        organization_name: values.organization_name,
-        organization_address: values.organization_address,
-        contact_info: values.contact_info,
-        default_currency: values.default_currency,
-        date_format: values.date_format,
-        default_language: values.default_language,
-        timezone: values.timezone,
-        enable_invitation: values.enable_invitation,
-        enable_register: values.enable_register,
-        enable_launch_wizard: values.enable_launch_wizard,
-        enable_system_dashboard: values.enable_system_dashboard,
-        tenant_domain: values.tenant_domain,
-        platform_name: values.platform_name,
-        platform_name_en: values.platform_name_en,
-        login_logo: values.login_logo,
-        login_title: values.login_title,
-        login_title_en: values.login_title_en,
-        login_content: values.login_content,
-        login_content_en: values.login_content_en,
-        login_decoration_image: values.login_decoration_image,
-        icp_license: values.icp_license,
-        icp_license_en: values.icp_license_en,
-        login_theme_color: values.login_theme_color,
-        login_guest_enabled: values.login_guest_enabled,
-        login_client_win_enabled: values.login_client_win_enabled,
-        login_client_android_enabled: values.login_client_android_enabled,
-        description: values.description,
+        site_name: mergedValues.site_name,
+        site_logo: mergedValues.site_logo,
+        organization_name: mergedValues.organization_name,
+        organization_address: mergedValues.organization_address,
+        contact_info: mergedValues.contact_info,
+        default_currency: mergedValues.default_currency,
+        date_format: mergedValues.date_format,
+        default_language: mergedValues.default_language,
+        timezone: mergedValues.timezone,
+        enable_invitation: mergedValues.enable_invitation,
+        enable_register: mergedValues.enable_register,
+        enable_launch_wizard: mergedValues.enable_launch_wizard,
+        enable_system_dashboard: mergedValues.enable_system_dashboard,
+        tenant_domain: mergedValues.tenant_domain,
+        platform_name: mergedValues.platform_name,
+        platform_name_en: mergedValues.platform_name_en,
+        login_logo: mergedValues.login_logo,
+        login_title: mergedValues.login_title,
+        login_title_en: mergedValues.login_title_en,
+        login_content: mergedValues.login_content,
+        login_content_en: mergedValues.login_content_en,
+        login_decoration_image: mergedValues.login_decoration_image,
+        login_background_image: mergedValues.login_background_image,
+        login_decoration_enabled: mergedValues.login_decoration_enabled,
+        login_background_enabled: mergedValues.login_background_enabled,
+        icp_license: mergedValues.icp_license,
+        icp_license_en: mergedValues.icp_license_en,
+        login_theme_color: mergedValues.login_theme_color,
+        login_guest_enabled: mergedValues.login_guest_enabled,
+        login_client_win_enabled: mergedValues.login_client_win_enabled,
+        login_client_android_enabled: mergedValues.login_client_android_enabled,
+        description: mergedValues.description,
       };
 
       // 系统设置
@@ -920,6 +1055,9 @@ const SiteSettingsPage: React.FC = () => {
           login_content: '',
           login_content_en: '',
           login_decoration_image: '',
+          login_background_image: '',
+          login_decoration_enabled: null,
+          login_background_enabled: null,
           icp_license: '',
           icp_license_en: '',
           login_theme_color: '',
@@ -1294,251 +1432,158 @@ const SiteSettingsPage: React.FC = () => {
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
-        <Card size="small" style={{ borderRadius: cardRadius }}>
-          <Space direction="vertical" size={12} style={{ width: '100%' }}>
-            <div
-              style={{
-                border: `1px solid ${token.colorBorderSecondary}`,
-                borderRadius: cardRadius,
-                padding: '12px 14px',
-                background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
-              }}
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, width: '100%' }}>
+          <div style={{ flex: '0 0 320px', minWidth: 280 }}>
+            <Form.Item
+              name="tenant_domain"
+              label={t('pages.system.siteSettings.currentTenantDomain')}
+              rules={[
+                { required: true, message: t('pages.system.siteSettings.tenantDomainRequired') },
+                { min: 3, message: t('pages.system.siteSettings.tenantDomainMinLength') },
+                { max: 12, message: t('pages.system.siteSettings.tenantDomainMaxLength') },
+                { pattern: TENANT_DOMAIN_PATTERN, message: t('pages.system.siteSettings.tenantDomainPattern') },
+                {
+                  validator: async (_, value) => {
+                    const domain = String(value || '').trim().toLowerCase();
+                    if (!domain) return;
+                    if (domain.length < 3 || domain.length > 12) return;
+                    if (!TENANT_DOMAIN_PATTERN.test(domain)) return;
+                    const hit = RESERVED_DOMAIN_KEYWORDS.find((kw) => domain.includes(kw));
+                    if (hit) {
+                      throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: hit }));
+                    }
+                    const result = await checkTenantDomainAvailability(domain);
+                    if (!result.available) {
+                      throw new Error(result.message || t('pages.system.siteSettings.tenantDomainDuplicate'));
+                    }
+                  },
+                },
+              ]}
+              normalize={(v) => String(v || '').trim().toLowerCase()}
+              style={{ marginBottom: 0 }}
             >
-              <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, width: '100%' }}>
-                <div style={{ flex: '0 0 320px', minWidth: 280 }}>
-                  <Form.Item
-                    name="tenant_domain"
-                    label={t('pages.system.siteSettings.currentTenantDomain')}
-                    rules={[
-                      { required: true, message: t('pages.system.siteSettings.tenantDomainRequired') },
-                      { min: 3, message: t('pages.system.siteSettings.tenantDomainMinLength') },
-                      { max: 12, message: t('pages.system.siteSettings.tenantDomainMaxLength') },
-                      { pattern: TENANT_DOMAIN_PATTERN, message: t('pages.system.siteSettings.tenantDomainPattern') },
-                      {
-                        validator: async (_, value) => {
-                          const domain = String(value || '').trim().toLowerCase();
-                          if (!domain) return;
-                          if (domain.length < 3 || domain.length > 12) return;
-                          if (!TENANT_DOMAIN_PATTERN.test(domain)) return;
-                          const hit = RESERVED_DOMAIN_KEYWORDS.find((kw) => domain.includes(kw));
-                          if (hit) {
-                            throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: hit }));
-                          }
-                          const result = await checkTenantDomainAvailability(domain);
-                          if (!result.available) {
-                            throw new Error(result.message || t('pages.system.siteSettings.tenantDomainDuplicate'));
-                          }
-                        },
-                      },
-                    ]}
-                    normalize={(v) => String(v || '').trim().toLowerCase()}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Input placeholder={t('pages.system.siteSettings.tenantDomainPlaceholder')} />
-                  </Form.Item>
-                </div>
-                <div
-                  style={{
-                    width: 1,
-                    background: '#d9e0ea',
-                    alignSelf: 'stretch',
-                    margin: '0 10px',
-                  }}
-                />
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                  <Space size={6} style={{ marginBottom: 4 }}>
-                    <LinkOutlined style={{ color: '#1677ff' }} />
-                    <Typography.Text type="secondary">
-                      {t('pages.system.siteSettings.tenantPathAccessUrl')}
-                    </Typography.Text>
-                  </Space>
-                  <Typography.Paragraph
-                    style={{
-                      marginBottom: 0,
-                      fontSize: 20,
-                      lineHeight: 1.45,
-                      fontWeight: 600,
-                      color: '#1f2329',
-                      wordBreak: 'break-all',
-                    }}
-                    copyable={tenantPathAccessUrl ? { text: tenantPathAccessUrl } : false}
-                  >
-                    {tenantPathAccessUrl || '-'}
-                  </Typography.Paragraph>
-                </div>
-              </div>
-            </div>
-          </Space>
-        </Card>
+              <Input placeholder={t('pages.system.siteSettings.tenantDomainPlaceholder')} />
+            </Form.Item>
+          </div>
+          <div
+            style={{
+              width: 1,
+              background: token.colorBorderSecondary,
+              alignSelf: 'stretch',
+              margin: '0 10px',
+            }}
+          />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <Space size={6} style={{ marginBottom: 4 }}>
+              <LinkOutlined style={{ color: token.colorPrimary }} />
+              <Typography.Text type="secondary">
+                {t('pages.system.siteSettings.tenantPathAccessUrl')}
+              </Typography.Text>
+            </Space>
+            <Typography.Paragraph
+              style={{
+                marginBottom: 0,
+                fontSize: 20,
+                lineHeight: 1.45,
+                fontWeight: 600,
+                wordBreak: 'break-all',
+              }}
+              copyable={tenantPathAccessUrl ? { text: tenantPathAccessUrl } : false}
+            >
+              {tenantPathAccessUrl || '-'}
+            </Typography.Paragraph>
+          </div>
+        </div>
       </Col>
       <Col span={24}>
         <Card title={t('pages.infra.platform.loginConfig')} size="small">
           <Row gutter={[16, 16]}>
             <Col span={24}>
-              {!useCustomLoginLogo ? (
-                <Form.Item label={t('pages.system.siteSettings.loginLogo')}>
-                  <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                    <Typography.Text type="secondary">
-                      {t('pages.system.siteSettings.loginLogoFollowingSiteLogo')}
-                    </Typography.Text>
-                    <Button onClick={() => setUseCustomLoginLogo(true)}>
-                      {t('pages.system.siteSettings.enableCustomLoginLogo')}
-                    </Button>
-                  </Space>
-                </Form.Item>
-              ) : (
-                <>
-                  <Form.Item name="login_logo" label={t('pages.system.siteSettings.loginLogo')}>
-                    <Input placeholder={t('pages.system.siteSettings.loginLogoPlaceholder')} />
-                  </Form.Item>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
-                    {t('pages.system.siteSettings.loginLogoFollowSiteLogo')}
-                  </Typography.Text>
-                  <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
-                    {loginLogoUrl && (
-                      <img
-                        src={loginLogoUrl}
-                        alt={t('pages.system.siteSettings.loginLogo')}
-                        style={{
-                          width: '100%',
-                          maxWidth: 200,
-                          maxHeight: 100,
-                          objectFit: 'contain',
-                          border: '1px solid var(--river-border-color)',
-                          borderRadius: 8,
-                          background: '#fff',
-                          padding: 8,
-                        }}
+              <LoginPageEditorSplitPanel
+                preview={
+                  <>
+                    <div className="login-page-editor-split-preview-header">
+                      <Typography.Text strong>{t('pages.system.siteSettings.loginLeftPreview')}</Typography.Text>
+                      <ThemedSegmented
+                        size="small"
+                        value={loginPreviewLocale}
+                        onChange={(value) => setLoginPreviewLocale(value as 'zh-CN' | 'en-US')}
+                        options={[
+                          { label: t('common.languages.zhCN'), value: 'zh-CN' },
+                          { label: t('common.languages.enUS'), value: 'en-US' },
+                        ]}
                       />
-                    )}
-                    <Space style={{ marginBottom: 8 }}>
-                      <Upload
-                        beforeUpload={handleLoginLogoUpload}
-                        fileList={loginLogoFileList}
-                        maxCount={1}
-                        accept="image/*"
-                        showUploadList={false}
-                      >
-                        <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadLoginLogo')}</Button>
-                      </Upload>
-                      {(loginLogoUrl || String(form.getFieldValue('login_logo') || '').trim()) && (
-                        <Button icon={<DeleteOutlined />} onClick={handleClearLoginLogo} danger>
-                          {t('pages.system.siteSettings.clearLoginLogo')}
-                        </Button>
-                      )}
-                      <Button onClick={handleDisableCustomLoginLogo}>
-                        {t('pages.system.siteSettings.disableCustomLoginLogo')}
-                      </Button>
-                    </Space>
-                  </Space>
-                </>
-              )}
-            </Col>
-            <Col span={24}>
-              <Row gutter={16}>
-                <Col xs={24} lg={12}>
-                  <Card
-                    size="small"
-                    title={t('common.languages.zhCN')}
-                    style={{
-                      borderRadius: cardRadius,
-                      height: '100%',
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                      background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
-                      overflow: 'hidden',
-                    }}
-                    styles={{
-                      header: { background: 'transparent', borderBottom: `1px solid ${token.colorBorderSecondary}` },
-                      body: { background: 'transparent' },
-                    }}
-                  >
-                    <Form.Item name="platform_name" label={t('pages.infra.platform.platformName')}>
-                      <Input placeholder={t('pages.infra.platform.platformNamePlaceholder')} />
-                    </Form.Item>
-                    <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
-                      <Input.TextArea rows={3} />
-                    </Form.Item>
-                    <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')} style={{ marginBottom: 0 }}>
-                      <Input />
-                    </Form.Item>
-                  </Card>
-                </Col>
-                <Col xs={24} lg={12}>
-                  <Card
-                    size="small"
-                    title={t('common.languages.enUS')}
-                    style={{
-                      borderRadius: cardRadius,
-                      height: '100%',
-                      border: `1px solid ${token.colorBorderSecondary}`,
-                      background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
-                      overflow: 'hidden',
-                    }}
-                    styles={{
-                      header: { background: 'transparent', borderBottom: `1px solid ${token.colorBorderSecondary}` },
-                      body: { background: 'transparent' },
-                    }}
-                  >
-                    <Form.Item name="platform_name_en" label={t('pages.infra.platform.platformNameEn')}>
-                      <Input placeholder={t('pages.infra.platform.platformNameEnPlaceholder')} />
-                    </Form.Item>
-                    <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
-                      <Input />
-                    </Form.Item>
-                    <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
-                      <Input.TextArea rows={3} />
-                    </Form.Item>
-                    <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')} style={{ marginBottom: 0 }}>
-                      <Input />
-                    </Form.Item>
-                  </Card>
-                </Col>
-              </Row>
-            </Col>
-            <Col span={24}>
-              <Form.Item name="login_decoration_image" label={t('pages.system.siteSettings.loginDecorationImage')}>
-                <Input placeholder={t('pages.system.siteSettings.loginDecorationImagePlaceholder')} />
-              </Form.Item>
-              <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
-                {t('pages.system.siteSettings.loginDecorationRecommendedSize')}
-              </Typography.Text>
-              <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
-                {decorationImageUrl && (
-                  <img
-                    src={decorationImageUrl}
-                    alt={t('pages.system.siteSettings.loginDecorationImage')}
-                    style={{
-                      width: '100%',
-                      maxWidth: 320,
-                      maxHeight: 220,
-                      objectFit: 'contain',
-                      border: '1px solid var(--river-border-color)',
-                      borderRadius: 8,
-                      background: '#fff',
-                      padding: 8,
-                    }}
-                  />
-                )}
-                <Space style={{ marginBottom: 8 }}>
-                  <Upload
-                    beforeUpload={handleDecorationUpload}
-                    fileList={decorationFileList}
-                    maxCount={1}
-                    accept="image/*"
-                    showUploadList={false}
-                  >
-                    <Button icon={<UploadOutlined />}>{t('pages.system.siteSettings.uploadDecorationImage')}</Button>
-                  </Upload>
-                  {(decorationImageUrl || String(form.getFieldValue('login_decoration_image') || '').trim()) && (
-                    <Button icon={<DeleteOutlined />} onClick={handleClearDecorationImage} danger>
-                      {t('pages.system.siteSettings.clearDecorationImage')}
-                    </Button>
-                  )}
-                </Space>
-              </Space>
+                    </div>
+                    <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                      {t('pages.system.siteSettings.loginLeftPreviewHint')}
+                    </Typography.Text>
+                    <div className="login-page-editor-split-preview-body">
+                      <LoginLeftColumnPreview
+                        variant="editor-fill"
+                        themeColor={loginThemeColorValue || '#1890ff'}
+                        locale={loginPreviewLocale}
+                        platformName={
+                          loginPreviewLocale === 'en-US' ? platformNameEnValue : platformNameValue
+                        }
+                        loginTitle={
+                          loginPreviewLocale === 'en-US' ? loginTitleEnValue : loginTitleValue
+                        }
+                        loginContent={
+                          loginPreviewLocale === 'en-US' ? loginContentEnValue : loginContentValue
+                        }
+                        logoUrl={useCustomLoginLogo ? loginLogoUrl : logoUrl}
+                        decorationUrl={decorationLayerEnabled ? decorationImageUrl : undefined}
+                        backgroundUrl={backgroundLayerEnabled ? backgroundImageUrl : undefined}
+                        decorationEnabled={decorationLayerEnabled}
+                        backgroundEnabled={backgroundLayerEnabled}
+                      />
+                    </div>
+                  </>
+                }
+                settings={
+                  <div className="login-page-editor-split-settings-stack">
+                    <LoginLogoSettingsBlock
+                      useCustomLoginLogo={useCustomLoginLogo}
+                      onEnableCustomLoginLogo={() => setUseCustomLoginLogo(true)}
+                      onDisableCustomLoginLogo={handleDisableCustomLoginLogo}
+                      loginLogoUrl={loginLogoUrl}
+                      loginLogoFileList={loginLogoFileList}
+                      onLoginLogoUpload={handleLoginLogoUpload}
+                      onClearLoginLogo={handleClearLoginLogo}
+                      hasLoginLogoValue={
+                        Boolean(loginLogoUrl || String(loginLogoValue || '').trim())
+                      }
+                    />
+                    <LoginLocaleSettingsFields
+                      key={loginPreviewLocale}
+                      locale={loginPreviewLocale}
+                      variant="site"
+                    />
+                    <LoginDecorationSettingsBlock
+                      variant="site"
+                      onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                      decorationUrl={decorationImageUrl}
+                      decorationFileList={decorationFileList}
+                      onDecorationUpload={handleDecorationUpload}
+                      onClearDecoration={handleClearDecorationImage}
+                      hasDecorationValue={
+                        Boolean(decorationImageUrl || String(loginDecorationValue || '').trim())
+                      }
+                    />
+                    <LoginBackgroundSettingsBlock
+                      variant="site"
+                      onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                      backgroundUrl={backgroundImageUrl}
+                      backgroundFileList={backgroundFileList}
+                      onBackgroundUpload={handleBackgroundUpload}
+                      onClearBackground={handleClearBackgroundImage}
+                      hasBackgroundValue={
+                        Boolean(backgroundImageUrl || String(loginBackgroundValue || '').trim())
+                      }
+                    />
+                  </div>
+                }
+              />
             </Col>
             <Col xs={24} sm={12}>
               <Form.Item

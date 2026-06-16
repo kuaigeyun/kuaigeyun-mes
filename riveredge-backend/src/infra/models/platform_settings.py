@@ -117,6 +117,19 @@ class PlatformSettings(Model):
         null=True,
         description="登录页装饰图（URL或文件UUID）"
     )
+    login_background_image = fields.CharField(
+        max_length=500,
+        null=True,
+        description="登录页左栏背景图（URL或文件UUID）"
+    )
+    login_decoration_enabled = fields.BooleanField(
+        default=True,
+        description="是否启用登录页装饰图"
+    )
+    login_background_enabled = fields.BooleanField(
+        default=True,
+        description="是否启用登录页背景图"
+    )
     icp_license = fields.CharField(
         max_length=100,
         null=True,

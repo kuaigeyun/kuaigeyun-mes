@@ -1,0 +1,34 @@
+@keyframes river-spin-ring-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.river-spin-ring {
+  display: inline-block;
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--ant-color-fill-secondary, rgba(0, 0, 0, 0.06));
+  border-top-color: var(--ant-color-primary, #1677ff);
+  border-radius: 50%;
+  animation: river-spin-ring-rotate 0.75s linear infinite;
+  vertical-align: middle;
+}
+
+.ant-spin-sm .river-spin-ring {
+  width: 14px;
+  height: 14px;
+  border-width: 2px;
+}
+
+.ant-spin-lg .river-spin-ring {
+  width: 32px;
+  height: 32px;
+  border-width: 3px;
+}
+
+.ant-spin-fullscreen .river-spin-ring {
+  border-color: rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+}

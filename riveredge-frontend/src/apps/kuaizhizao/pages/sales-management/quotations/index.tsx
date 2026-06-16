@@ -14,7 +14,7 @@ import { useInvalidateSalesOrderList } from '../../../../../hooks/useInvalidateS
 import { useAuditRequired } from '../../../../../hooks/useAuditRequired';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Switch, Card } from 'antd';
+import { App, Button, Tag, Space, Modal, Table, Form, InputNumber, Input, Row, Col, DatePicker, List, Typography, theme as AntdTheme, Descriptions, Empty, Spin, Tooltip, Card } from 'antd';
 import type { DescriptionsProps } from 'antd';
 import { PlusOutlined, EyeOutlined, EditOutlined, DeleteOutlined, SwapOutlined, PrinterOutlined, ImportOutlined, AppstoreAddOutlined, SendOutlined, CommentOutlined, RollbackOutlined, CheckOutlined, CloseCircleOutlined, UndoOutlined, BranchesOutlined, ReloadOutlined, FileTextOutlined, FormOutlined, ArrowLeftOutlined } from '@ant-design/icons';
 import { ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
@@ -31,6 +31,8 @@ import { UniDropdown } from '../../../../../components/uni-dropdown';
 import { MaterialUnitSelect } from '../../../../../components/material-unit-select';
 import { DictionarySelect } from '../../../../../components/dictionary-select';
 import { UniTableDetail } from '../../../../../components/uni-table-detail';
+import PriceTypeSwitch, { type PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
+import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
@@ -830,29 +832,14 @@ const QuotationsPage: React.FC = () => {
   );
   const quotationEditingInclValueRef = useRef<number | null>(null);
 
-  const handleQuotationPriceTypeToggle = useCallback((checked: boolean) => {
-    const nextType: 'tax_exclusive' | 'tax_inclusive' = checked ? 'tax_inclusive' : 'tax_exclusive';
-    const currentTypeRaw = formRef.current?.getFieldValue?.('price_type') ?? lastPriceTypeRef.current;
-    const currentType: 'tax_exclusive' | 'tax_inclusive' =
-      currentTypeRaw === 'tax_inclusive' ? 'tax_inclusive' : 'tax_exclusive';
-    if (currentType === nextType) {
-      lastPriceTypeRef.current = nextType;
-      return;
-    }
-
-    const items = formRef.current?.getFieldValue?.('items') ?? [];
-    if (Array.isArray(items) && items.length > 0) {
-      const convertedItems = items.map((row: any) => ({
-        ...row,
-        unit_price: convertUnitPriceByPriceType(row?.unit_price, row?.tax_rate, currentType, nextType),
-      }));
-      formRef.current?.setFieldsValue({ items: convertedItems, price_type: nextType });
-    } else {
-      formRef.current?.setFieldsValue({ price_type: nextType });
-    }
+  const handleQuotationPriceTypeChange = useCallback((nextChecked: boolean) => {
+    const nextType: PriceTypeValue = nextChecked ? 'tax_inclusive' : 'tax_exclusive';
+    const fromType: PriceTypeValue = nextChecked ? 'tax_exclusive' : 'tax_inclusive';
+    setFormPriceType(formRef.current, nextType);
+    lastPriceTypeRef.current = nextType;
     setQuotationEditingIncl(null);
     quotationEditingInclValueRef.current = null;
-    lastPriceTypeRef.current = nextType;
+    deferConvertLineItemsByPriceType(formRef.current, fromType, nextType, convertUnitPriceByPriceType);
   }, []);
 
   const [customerList, setCustomerList] = useState<any[]>([]);
@@ -2882,20 +2869,10 @@ const QuotationsPage: React.FC = () => {
                 title={t('app.kuaizhizao.quotation.form.itemsTitle')}
                 required
                 leftExtra={(
-                  <ProForm.Item
-                    name="price_type"
-                    initialValue="tax_exclusive"
-                    noStyle
-                    valuePropName="checked"
-                    getValueProps={(v: string) => ({ checked: v === 'tax_inclusive' })}
-                    getValueFromEvent={(checked: boolean) => (checked ? 'tax_inclusive' : 'tax_exclusive')}
-                  >
-                    <Switch
-                      checkedChildren={t('app.kuaizhizao.salesOrder.taxInclusive')}
-                      unCheckedChildren={t('app.kuaizhizao.salesOrder.taxExclusive')}
-                      onChange={handleQuotationPriceTypeToggle}
-                    />
-                  </ProForm.Item>
+                  <PriceTypeSwitch
+                    checked={priceType === 'tax_inclusive'}
+                    onChange={handleQuotationPriceTypeChange}
+                  />
                 )}
                 headerExtra={(
                   <Space size={8}>

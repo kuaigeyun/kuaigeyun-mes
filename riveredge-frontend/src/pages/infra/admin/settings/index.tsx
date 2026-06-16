@@ -16,6 +16,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { UploadFile, UploadProps } from 'antd';
 import { ListPageTemplate } from '../../../../components/layout-templates';
+import { ThemedSegmented } from '../../../../components/themed-segmented';
 import {
   getPlatformSettings,
   updatePlatformSettings,
@@ -25,6 +26,14 @@ import {
 import { uploadFile, getFilePreview, getSiteLogoPreview, FileUploadResponse } from '../../../../services/file';
 import ImageCropper from '../../../../components/image-cropper';
 import { applyFavicon } from '../../../../utils/favicon';
+import {
+  LoginLeftColumnPreview,
+  LoginPageEditorSplitPanel,
+  LoginLocaleSettingsFields,
+  LoginDecorationSettingsBlock,
+  LoginBackgroundSettingsBlock,
+} from '../../../../components/login-page-editor';
+import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../../utils/loginVisualLayers';
 
 /**
  * 平台设置页面组件
@@ -54,6 +63,22 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
   const [selectedFaviconFile, setSelectedFaviconFile] = useState<File | null>(null);
   const [decorationFileList, setDecorationFileList] = useState<UploadFile[]>([]);
   const [decorationUrl, setDecorationUrl] = useState<string | undefined>(undefined);
+  const [backgroundFileList, setBackgroundFileList] = useState<UploadFile[]>([]);
+  const [backgroundUrl, setBackgroundUrl] = useState<string | undefined>(undefined);
+  const [loginPreviewLocale, setLoginPreviewLocale] = useState<'zh-CN' | 'en-US'>('zh-CN');
+  const platformNameValue = Form.useWatch('platform_name', form);
+  const platformNameEnValue = Form.useWatch('platform_name_en', form);
+  const loginTitleValue = Form.useWatch('login_title', form);
+  const loginTitleEnValue = Form.useWatch('login_title_en', form);
+  const loginContentValue = Form.useWatch('login_content', form);
+  const loginContentEnValue = Form.useWatch('login_content_en', form);
+  const themeColorValue = Form.useWatch('theme_color', form);
+  const loginDecorationValue = Form.useWatch('login_decoration_image', form);
+  const loginBackgroundValue = Form.useWatch('login_background_image', form);
+  const loginDecorationEnabledValue = Form.useWatch('login_decoration_enabled', form);
+  const loginBackgroundEnabledValue = Form.useWatch('login_background_enabled', form);
+  const decorationLayerEnabled = isLoginVisualLayerEnabled(loginDecorationEnabledValue);
+  const backgroundLayerEnabled = isLoginVisualLayerEnabled(loginBackgroundEnabledValue);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['platformSettings'],
@@ -78,6 +103,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_content: data.login_content,
         login_content_en: data.login_content_en,
         login_decoration_image: data.login_decoration_image,
+        login_background_image: data.login_background_image,
+        login_decoration_enabled: data.login_decoration_enabled ?? true,
+        login_background_enabled: data.login_background_enabled ?? true,
         icp_license: data.icp_license,
         icp_license_en: data.icp_license_en,
         theme_color: data.theme_color || '#1890ff',
@@ -213,6 +241,46 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     }]);
   };
 
+  const loadBackgroundPreview = async (imageValue: string | undefined) => {
+    if (!imageValue || !imageValue.trim()) {
+      setBackgroundUrl(undefined);
+      setBackgroundFileList([]);
+      return;
+    }
+    if (isUUID(imageValue.trim())) {
+      try {
+        const previewInfo = await getSiteLogoPreview(imageValue.trim());
+        if (!previewInfo?.preview_url) {
+          setBackgroundUrl(undefined);
+          setBackgroundFileList([]);
+          return;
+        }
+        setBackgroundUrl(previewInfo.preview_url);
+        setBackgroundFileList([{
+          uid: imageValue.trim(),
+          name: t('pages.infra.platform.loginBackgroundImage'),
+          status: 'done',
+          url: previewInfo.preview_url,
+        }]);
+      } catch {
+        setBackgroundUrl(undefined);
+        setBackgroundFileList([]);
+      }
+      return;
+    }
+    setBackgroundUrl(imageValue.trim());
+    setBackgroundFileList([{
+      uid: imageValue.trim(),
+      name: t('pages.infra.platform.loginBackgroundImage'),
+      status: 'done',
+      url: imageValue.trim(),
+    }]);
+  };
+
+  const warnLoginVisualLayerAtLeastOne = () => {
+    messageApi.warning(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+  };
+
   // 当设置数据加载完成时，填充表单
   useEffect(() => {
     if (settings) {
@@ -226,6 +294,9 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_content: settings.login_content,
         login_content_en: settings.login_content_en,
         login_decoration_image: settings.login_decoration_image,
+        login_background_image: settings.login_background_image,
+        login_decoration_enabled: settings.login_decoration_enabled !== false,
+        login_background_enabled: settings.login_background_enabled !== false,
         icp_license: settings.icp_license,
         icp_license_en: settings.icp_license_en,
         theme_color: settings.theme_color || '#1890ff',
@@ -241,6 +312,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
       // 加载 Favicon 预览
       loadFaviconPreview(settings.favicon);
       loadDecorationPreview(settings.login_decoration_image);
+      loadBackgroundPreview(settings.login_background_image);
     }
   }, [settings, form]);
 
@@ -454,13 +526,53 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
     messageApi.success(t('pages.infra.platform.loginDecorationCleared'));
   };
 
+  const handleBackgroundUpload: UploadProps['beforeUpload'] = async (file) => {
+    try {
+      if (!file.type.startsWith('image/')) {
+        messageApi.error(t('pages.infra.platform.selectImage'));
+        return Upload.LIST_IGNORE;
+      }
+      const response: FileUploadResponse = await uploadFile(file as File, {
+        category: 'platform-logo',
+        description: t('pages.infra.platform.loginBackgroundImage'),
+      });
+      if (response.uuid) {
+        form.setFieldsValue({ login_background_image: response.uuid });
+        await loadBackgroundPreview(response.uuid);
+        messageApi.success(t('pages.infra.platform.loginBackgroundUploadSuccess'));
+      } else {
+        messageApi.error(t('pages.infra.platform.loginBackgroundUploadFailed'));
+      }
+    } catch (error: any) {
+      messageApi.error(error?.message || t('pages.infra.platform.loginBackgroundUploadFailed'));
+    }
+    return Upload.LIST_IGNORE;
+  };
+
+  const handleClearBackground = () => {
+    form.setFieldsValue({ login_background_image: undefined });
+    setBackgroundUrl(undefined);
+    setBackgroundFileList([]);
+    messageApi.success(t('pages.infra.platform.loginBackgroundCleared'));
+  };
+
   /**
    * 处理保存
    */
   const handleSave = async (values: PlatformSettingsUpdateRequest) => {
+    const mergedValues = { ...form.getFieldsValue(true), ...values };
+    try {
+      validateLoginVisualLayers(
+        isLoginVisualLayerEnabled(mergedValues.login_decoration_enabled),
+        isLoginVisualLayerEnabled(mergedValues.login_background_enabled),
+      );
+    } catch {
+      messageApi.error(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+      return;
+    }
     await updateMutation.mutateAsync({
-      ...values,
-      platform_name: values.platform_name?.trim(),
+      ...mergedValues,
+      platform_name: mergedValues.platform_name?.trim(),
     });
   };
 
@@ -624,105 +736,79 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
             <>
               <Row gutter={[16, 16]}>
                 <Col span={24}>
-                  <Row gutter={16}>
-                    <Col xs={24} lg={12}>
-                      <Card
-                        size="small"
-                        title={t('common.languages.zhCN')}
-                        style={{
-                          borderRadius: 10,
-                          height: '100%',
-                          border: '1px solid #e5e6eb',
-                          background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
-                        }}
-                        styles={{
-                          header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
-                          body: { background: 'transparent' },
-                        }}
-                      >
-                        <Form.Item name="login_title" label={t('pages.infra.platform.loginTitle')}>
-                          <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitlePlaceholder')} />
-                        </Form.Item>
-                        <Form.Item name="login_content" label={t('pages.infra.platform.loginContent')}>
-                          <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentPlaceholder')} />
-                        </Form.Item>
-                        <Form.Item name="icp_license" label={t('pages.infra.platform.icpLicense')} style={{ marginBottom: 0 }}>
-                          <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicensePlaceholder')} />
-                        </Form.Item>
-                      </Card>
-                    </Col>
-                    <Col xs={24} lg={12}>
-                      <Card
-                        size="small"
-                        title={t('common.languages.enUS')}
-                        style={{
-                          borderRadius: 10,
-                          height: '100%',
-                          border: '1px solid #e5e6eb',
-                          background: 'linear-gradient(180deg, #fafcff 0%, #f5f8ff 100%)',
-                        }}
-                        styles={{
-                          header: { background: 'transparent', borderBottom: '1px solid #e8edf5' },
-                          body: { background: 'transparent' },
-                        }}
-                      >
-                        <Form.Item name="login_title_en" label={t('pages.infra.platform.loginTitleEn')}>
-                          <Input maxLength={200} placeholder={t('pages.infra.platform.loginTitleEnPlaceholder')} />
-                        </Form.Item>
-                        <Form.Item name="login_content_en" label={t('pages.infra.platform.loginContentEn')}>
-                          <Input.TextArea rows={3} maxLength={1000} placeholder={t('pages.infra.platform.loginContentEnPlaceholder')} />
-                        </Form.Item>
-                        <Form.Item name="icp_license_en" label={t('pages.infra.platform.icpLicenseEn')} style={{ marginBottom: 0 }}>
-                          <Input maxLength={100} placeholder={t('pages.infra.platform.icpLicenseEnPlaceholder')} />
-                        </Form.Item>
-                      </Card>
-                    </Col>
-                  </Row>
-                </Col>
-                <Col span={24}>
-                  <Form.Item name="login_decoration_image" label={t('pages.infra.platform.loginDecorationImage')}>
-                    <Input
-                      maxLength={500}
-                      placeholder={t('pages.infra.platform.loginDecorationImagePlaceholder')}
-                    />
-                  </Form.Item>
-                  <Typography.Text type="secondary" style={{ display: 'block', marginTop: -8, marginBottom: 8 }}>
-                    {t('pages.infra.platform.loginDecorationRecommendedSize')}
-                  </Typography.Text>
-                  <Space direction="vertical" style={{ width: '100%', marginBottom: 8 }}>
-                    {decorationUrl && (
-                      <img
-                        src={decorationUrl}
-                        alt={t('pages.infra.platform.loginDecorationImage')}
-                        style={{
-                          width: '100%',
-                          maxWidth: 320,
-                          maxHeight: 220,
-                          objectFit: 'contain',
-                          border: '1px solid var(--river-border-color)',
-                          borderRadius: 8,
-                          background: '#fff',
-                          padding: 8,
-                        }}
-                      />
-                    )}
-                    <Space style={{ marginBottom: 8 }}>
-                      <Upload
-                        beforeUpload={handleDecorationUpload}
-                        fileList={decorationFileList}
-                        maxCount={1}
-                        accept="image/*"
-                        showUploadList={false}
-                      >
-                        <Button icon={<UploadOutlined />}>{t('pages.infra.platform.uploadDecorationImage')}</Button>
-                      </Upload>
-                      {(decorationUrl || String(form.getFieldValue('login_decoration_image') || '').trim()) && (
-                        <Button icon={<DeleteOutlined />} danger onClick={handleClearDecoration}>
-                          {t('pages.infra.platform.clearDecorationImage')}
-                        </Button>
-                      )}
-                    </Space>
-                  </Space>
+                  <LoginPageEditorSplitPanel
+                    preview={
+                      <>
+                        <div className="login-page-editor-split-preview-header">
+                          <Typography.Text strong>{t('pages.system.siteSettings.loginLeftPreview')}</Typography.Text>
+                          <ThemedSegmented
+                            size="small"
+                            value={loginPreviewLocale}
+                            onChange={(value) => setLoginPreviewLocale(value as 'zh-CN' | 'en-US')}
+                            options={[
+                              { label: t('common.languages.zhCN'), value: 'zh-CN' },
+                              { label: t('common.languages.enUS'), value: 'en-US' },
+                            ]}
+                          />
+                        </div>
+                        <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+                          {t('pages.system.siteSettings.loginLeftPreviewHint')}
+                        </Typography.Text>
+                        <div className="login-page-editor-split-preview-body">
+                          <LoginLeftColumnPreview
+                            variant="editor-fill"
+                            themeColor={themeColorValue || '#1890ff'}
+                            locale={loginPreviewLocale}
+                            platformName={
+                              loginPreviewLocale === 'en-US' ? platformNameEnValue : platformNameValue
+                            }
+                            loginTitle={
+                              loginPreviewLocale === 'en-US' ? loginTitleEnValue : loginTitleValue
+                            }
+                            loginContent={
+                              loginPreviewLocale === 'en-US' ? loginContentEnValue : loginContentValue
+                            }
+                            logoUrl={logoUrl}
+                            decorationUrl={decorationLayerEnabled ? decorationUrl : undefined}
+                            backgroundUrl={backgroundLayerEnabled ? backgroundUrl : undefined}
+                            decorationEnabled={decorationLayerEnabled}
+                            backgroundEnabled={backgroundLayerEnabled}
+                          />
+                        </div>
+                      </>
+                    }
+                    settings={
+                      <div className="login-page-editor-split-settings-stack">
+                        <LoginLocaleSettingsFields
+                          key={loginPreviewLocale}
+                          locale={loginPreviewLocale}
+                          variant="platform"
+                        />
+                        <LoginDecorationSettingsBlock
+                          variant="platform"
+                          onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                          decorationUrl={decorationUrl}
+                          decorationFileList={decorationFileList}
+                          onDecorationUpload={handleDecorationUpload}
+                          onClearDecoration={handleClearDecoration}
+                          hasDecorationValue={
+                            Boolean(decorationUrl || String(loginDecorationValue || '').trim())
+                          }
+                        />
+                        <LoginBackgroundSettingsBlock
+                          variant="platform"
+                          onAtLeastOneRequired={warnLoginVisualLayerAtLeastOne}
+                          backgroundUrl={backgroundUrl}
+                          backgroundFileList={backgroundFileList}
+                          onBackgroundUpload={handleBackgroundUpload}
+                          onClearBackground={handleClearBackground}
+                          hasBackgroundValue={
+                            Boolean(backgroundUrl || String(loginBackgroundValue || '').trim())
+                          }
+                        />
+                      </div>
+                    }
+                  />
                 </Col>
                 <Col xs={24} sm={12}>
                   <Form.Item

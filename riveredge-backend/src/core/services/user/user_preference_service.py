@@ -129,12 +129,12 @@ class UserPreferenceService:
             except IntegrityError:
                 raise NotFoundError("当前用户无法创建偏好设置（可能非租户用户）")
         else:
-            # 更新偏好设置（合并）
+            # 更新偏好设置（合并）；须赋新 dict，避免 JSONField 原地修改导致 save 未落库
             if data.preferences:
-                current_preferences = user_preference.preferences or {}
-                current_preferences.update(data.preferences)
-                user_preference.preferences = current_preferences
-                await user_preference.save()
+                merged = dict(user_preference.preferences or {})
+                merged.update(data.preferences)
+                user_preference.preferences = merged
+                await user_preference.save(update_fields=["preferences", "updated_at"])
         
         # 清除缓存
         cache_key = UserPreferenceService._get_cache_key(tenant_id, user_id)

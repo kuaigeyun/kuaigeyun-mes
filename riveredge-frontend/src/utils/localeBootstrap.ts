@@ -10,16 +10,18 @@ import { getPersistedConfigs } from '../stores/configStore';
 import { getLanguageFromPreferenceCache } from '../stores/userPreferenceStore';
 import { getTenantId, getUserInfo } from './auth';
 
-export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'en-US'] as const;
+export const SUPPORTED_UI_LANGUAGES = ['zh-CN', 'en-US', 'zh-Hant', 'ja-JP', 'vi-VN'] as const;
 export type SupportedUiLanguage = (typeof SUPPORTED_UI_LANGUAGES)[number];
 
 const FALLBACK_LANGUAGE: SupportedUiLanguage = 'zh-CN';
 const GUEST_LANGUAGE_KEY = 'riveredge-guest-language';
 const TENANT_DEFAULT_LANGUAGE_KEY_PREFIX = 'riveredge-tenant-default-language';
 
+const SUPPORTED_LANGUAGE_SET = new Set<string>(SUPPORTED_UI_LANGUAGES);
+
 export function normalizeUiLanguage(code: unknown): SupportedUiLanguage | null {
-  if (code === 'zh-CN' || code === 'en-US') return code;
-  return null;
+  if (typeof code !== 'string' || !SUPPORTED_LANGUAGE_SET.has(code)) return null;
+  return code as SupportedUiLanguage;
 }
 
 function getTenantDefaultLanguageStorageKey(): string | null {

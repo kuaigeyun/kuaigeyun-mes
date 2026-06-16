@@ -363,6 +363,27 @@ class LanguageService:
                 "is_default": False,
                 "sort_order": 1,
             },
+            {
+                "code": "zh-Hant",
+                "name": "繁體中文",
+                "native_name": "繁體中文",
+                "is_default": False,
+                "sort_order": 2,
+            },
+            {
+                "code": "ja-JP",
+                "name": "Japanese",
+                "native_name": "日本語",
+                "is_default": False,
+                "sort_order": 3,
+            },
+            {
+                "code": "vi-VN",
+                "name": "Vietnamese",
+                "native_name": "Tiếng Việt",
+                "is_default": False,
+                "sort_order": 4,
+            },
         ]
 
         created_count = 0

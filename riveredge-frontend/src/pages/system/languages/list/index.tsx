@@ -41,6 +41,9 @@ import {
 import { cacheTenantDefaultLanguage } from '../../../../utils/localeBootstrap';
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
+import zhHant from '../../../../locales/zh-Hant';
+import jaJP from '../../../../locales/ja-JP';
+import viVN from '../../../../locales/vi-VN';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
 
 /**
@@ -275,6 +278,9 @@ const LanguageListPage: React.FC = () => {
     const localeMap: Record<string, Record<string, string>> = {
       'zh-CN': zhCN as Record<string, string>,
       'en-US': enUS as Record<string, string>,
+      'zh-Hant': zhHant as Record<string, string>,
+      'ja-JP': jaJP as Record<string, string>,
+      'vi-VN': viVN as Record<string, string>,
     };
     const localeContent = localeMap[currentLanguageForTranslation.code];
     if (!localeContent) {
@@ -713,6 +719,9 @@ const LanguageListPage: React.FC = () => {
           options={[
             { label: t('field.language.codeZhCN'), value: 'zh-CN' },
             { label: t('field.language.codeEnUS'), value: 'en-US' },
+            { label: t('field.language.codeZhTW'), value: 'zh-Hant' },
+            { label: t('field.language.codeJaJP'), value: 'ja-JP' },
+            { label: t('field.language.codeViVN'), value: 'vi-VN' },
           ]}
         />
         <ProFormText

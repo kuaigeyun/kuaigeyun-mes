@@ -12,6 +12,7 @@ import { ProFormText } from '@ant-design/pro-components';
 import { Button, Form, Space } from 'antd';
 import { ReloadOutlined } from '@ant-design/icons';
 import { App } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { getCodeRulePageConfig, generateCode, testGenerateCode } from '../../services/codeRule';
 import type { CodeRulePageConfig } from '../../services/codeRule';
 
@@ -52,10 +53,11 @@ const CodeField: React.FC<CodeFieldProps> = ({
   disabled = false,
   context = {},
   autoGenerateOnCreate = true,
-  showGenerateButton = true,
+  showGenerateButton = false,
   colProps,
   fieldProps = {},
 }) => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const form = Form.useFormInstance();
   const [pageConfig, setPageConfig] = useState<CodeRulePageConfig | null>(null);
@@ -75,7 +77,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
    */
   const handleGenerateCode = React.useCallback(async (config: CodeRulePageConfig, isTest = false) => {
     if (!config?.ruleCode) {
-      message.warning('未配置编号规则');
+      message.warning(t('components.codeField.ruleNotConfigured'));
       return;
     }
 
@@ -113,11 +115,11 @@ const CodeField: React.FC<CodeFieldProps> = ({
       }
     } catch (error: any) {
       console.error('生成编号失败:', error);
-      message.error(error.message || '生成编号失败');
+      message.error(error.message || t('components.codeField.generateFailed'));
     } finally {
       setLoading(false);
     }
-  }, [context, message, updateFormValue]);
+  }, [context, message, t, updateFormValue]);
 
   // 生成编号的辅助函数
   const generateCodeWithContext = React.useCallback(async (config: CodeRulePageConfig, currentContext: Record<string, any>) => {
@@ -222,12 +224,13 @@ const CodeField: React.FC<CodeFieldProps> = ({
 
   // 如果未配置编号规则，使用普通文本输入框
   if (!pageConfig || !pageConfig.autoGenerate) {
+    const fieldLabel = label || pageConfig?.codeFieldLabel || t('components.codeField.defaultLabel');
     return (
       <ProFormText
         name={name}
-        label={label || pageConfig?.codeFieldLabel || '编号'}
-        rules={required ? [{ required: true, message: `请输入${label || '编号'}` }] : []}
-        placeholder={`请输入${label || '编号'}`}
+        label={fieldLabel}
+        rules={required ? [{ required: true, message: t('components.codeField.required', { label: fieldLabel }) }] : []}
+        placeholder={t('components.codeField.enterPlaceholder', { label: fieldLabel })}
         disabled={disabled}
         colProps={colProps}
         fieldProps={{
@@ -241,6 +244,8 @@ const CodeField: React.FC<CodeFieldProps> = ({
 
   // 是否允许手动编辑
   const canEdit = pageConfig.allowManualEdit !== false;
+
+  const fieldLabel = label || pageConfig.codeFieldLabel || t('components.codeField.defaultLabel');
 
   // 合并 fieldProps，如果 showGenerateButton 为 false，则不添加生成按钮
   const mergedFieldProps = {
@@ -256,7 +261,7 @@ const CodeField: React.FC<CodeFieldProps> = ({
             onClick={() => handleGenerateCode(pageConfig, false)}
             disabled={disabled}
           >
-            生成
+            {t('components.codeField.generate')}
           </Button>
         </Space>
       ),
@@ -266,9 +271,9 @@ const CodeField: React.FC<CodeFieldProps> = ({
   return (
     <ProFormText
       name={name}
-      label={label || pageConfig.codeFieldLabel}
-      rules={required ? [{ required: true, message: `请输入${label || pageConfig.codeFieldLabel}` }] : []}
-      placeholder={`请输入${label || pageConfig.codeFieldLabel}`}
+      label={fieldLabel}
+      rules={required ? [{ required: true, message: t('components.codeField.required', { label: fieldLabel }) }] : []}
+      placeholder={t('components.codeField.enterPlaceholder', { label: fieldLabel })}
       disabled={disabled || (!canEdit && !!value)}
       colProps={colProps}
       fieldProps={{

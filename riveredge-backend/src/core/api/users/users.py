@@ -422,6 +422,68 @@ async def get_user_list(
     )
 
 
+@router.get("/export", response_class=FileResponse)
+async def export_users(
+    keyword: Optional[str] = Query(None, description="关键词搜索"),
+    department_uuid: Optional[str] = Query(None, description="部门UUID筛选"),
+    position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
+    is_active: Optional[bool] = Query(None, description="是否激活筛选"),
+    is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
+    _auth: object = Depends(require_access("system:user", "export")),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """
+    导出用户到 Excel
+
+    根据筛选条件导出用户列表到 Excel 文件。
+
+    Args:
+        keyword: 关键词搜索
+        department_uuid: 部门UUID筛选
+        position_uuid: 职位UUID筛选
+        is_active: 是否激活筛选
+        is_tenant_admin: 是否组织管理员筛选
+        current_user: 当前用户（依赖注入）
+        tenant_id: 当前组织ID（依赖注入）
+
+    Returns:
+        FileResponse: Excel 文件下载响应
+
+    Raises:
+        HTTPException: 当导出失败时抛出
+    """
+    try:
+        # 导出用户
+        file_path = await UserService.export_users_to_excel(
+            tenant_id=tenant_id,
+            keyword=keyword,
+            department_uuid=department_uuid,
+            position_uuid=position_uuid,
+            is_active=is_active,
+            is_tenant_admin=is_tenant_admin,
+            current_user_id=current_user.id
+        )
+
+        # 生成文件名
+        filename = os.path.basename(file_path)
+
+        # 返回文件下载响应
+        return FileResponse(
+            path=file_path,
+            filename=filename,
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}"
+            }
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"导出失败: {str(e)}"
+        )
+
+
 @router.get("/{user_uuid}", response_model=UserResponse)
 async def get_user_detail(
     user_uuid: str,
@@ -653,68 +715,6 @@ async def import_users(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"导入失败: {str(e)}"
-        )
-
-
-@router.get("/export", response_class=FileResponse)
-async def export_users(
-    keyword: Optional[str] = Query(None, description="关键词搜索"),
-    department_uuid: Optional[str] = Query(None, description="部门UUID筛选"),
-    position_uuid: Optional[str] = Query(None, description="职位UUID筛选"),
-    is_active: Optional[bool] = Query(None, description="是否激活筛选"),
-    is_tenant_admin: Optional[bool] = Query(None, description="是否组织管理员筛选"),
-    _auth: object = Depends(require_access("system:user", "export")),
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    导出用户到 Excel
-    
-    根据筛选条件导出用户列表到 Excel 文件。
-    
-    Args:
-        keyword: 关键词搜索
-        department_uuid: 部门UUID筛选
-        position_uuid: 职位UUID筛选
-        is_active: 是否激活筛选
-        is_tenant_admin: 是否组织管理员筛选
-        current_user: 当前用户（依赖注入）
-        tenant_id: 当前组织ID（依赖注入）
-        
-    Returns:
-        FileResponse: Excel 文件下载响应
-        
-    Raises:
-        HTTPException: 当导出失败时抛出
-    """
-    try:
-        # 导出用户
-        file_path = await UserService.export_users_to_excel(
-            tenant_id=tenant_id,
-            keyword=keyword,
-            department_uuid=department_uuid,
-            position_uuid=position_uuid,
-            is_active=is_active,
-            is_tenant_admin=is_tenant_admin,
-            current_user_id=current_user.id
-        )
-        
-        # 生成文件名
-        filename = os.path.basename(file_path)
-        
-        # 返回文件下载响应
-        return FileResponse(
-            path=file_path,
-            filename=filename,
-            media_type="text/csv",
-            headers={
-                "Content-Disposition": f"attachment; filename={filename}"
-            }
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"导出失败: {str(e)}"
         )
 
 

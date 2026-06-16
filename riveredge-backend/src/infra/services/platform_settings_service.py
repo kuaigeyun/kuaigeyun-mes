@@ -113,6 +113,9 @@ class PlatformSettingsService:
                 login_content=data.login_content,
                 login_content_en=data.login_content_en,
                 login_decoration_image=data.login_decoration_image,
+                login_background_image=data.login_background_image,
+                login_decoration_enabled=data.login_decoration_enabled if data.login_decoration_enabled is not None else True,
+                login_background_enabled=data.login_background_enabled if data.login_background_enabled is not None else True,
                 icp_license=data.icp_license,
                 icp_license_en=data.icp_license_en,
                 theme_color=data.theme_color,
@@ -126,7 +129,22 @@ class PlatformSettingsService:
         else:
             # 更新现有设置
             from datetime import datetime
+            from core.utils.login_page_settings import resolve_login_visual_layers, validate_login_visual_layers
+
             update_data = data.model_dump(exclude_unset=True)
+            visual_layer_keys = {
+                "login_decoration_enabled",
+                "login_background_enabled",
+                "login_decoration_image",
+                "login_background_image",
+            }
+            if visual_layer_keys & update_data.keys():
+                current = {
+                    "login_decoration_enabled": settings.login_decoration_enabled,
+                    "login_background_enabled": settings.login_background_enabled,
+                }
+                decoration_enabled, background_enabled = resolve_login_visual_layers(update_data, current)
+                validate_login_visual_layers(decoration_enabled, background_enabled)
             for key, value in update_data.items():
                 setattr(settings, key, value)
             settings.updated_at = now_utc()
