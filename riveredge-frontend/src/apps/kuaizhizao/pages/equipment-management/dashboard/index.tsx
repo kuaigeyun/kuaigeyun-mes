@@ -112,8 +112,14 @@ const EquipmentDashboard: React.FC = () => {
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         progress: s?.average_oee ?? 0,
         sideMetrics: [
-          { label: t('app.kuaizhizao.equipmentDashboard.kpi.availability'), value: '88.2%' },
-          { label: t('app.kuaizhizao.equipmentDashboard.kpi.failureRate'), value: '1.5%' },
+          {
+            label: t('app.kuaizhizao.equipmentDashboard.kpi.availability'),
+            value: `${s?.availability_rate ?? 0}%`,
+          },
+          {
+            label: t('app.kuaizhizao.equipmentDashboard.kpi.failureRate'),
+            value: `${s?.failure_rate ?? 0}%`,
+          },
         ],
       },
     ],

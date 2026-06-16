@@ -238,7 +238,15 @@ const PurchaseDashboard: React.FC = () => {
           >
             <Table
               size="small"
-              dataSource={recentOrders.slice(0, 6)}
+              dataSource={recentOrders
+                .filter((r: { status?: string }) => {
+                  const st = String(r.status ?? '');
+                  return [
+                    'approved', 'partial_received', '已审核', '部分收货',
+                    'APPROVED', 'AUDITED', 'CONFIRMED', 'RELEASED', 'IN_PROGRESS',
+                  ].includes(st);
+                })
+                .slice(0, 6)}
               pagination={false}
               rowKey="id"
               columns={orderColumns}

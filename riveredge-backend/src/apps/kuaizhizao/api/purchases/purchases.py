@@ -146,13 +146,32 @@ async def get_purchase_order_statistics(
         year_vals = await base.filter(order_date__gte=year_start).exclude(status__in=["CANCELLED","已取消","cancelled"]).values_list("total_amount", flat=True)
         annual_total_amount = _sum(year_vals)
 
-        # 本月到货率（简化：本月已审核/活跃订单 / 全部活跃订单，mock 合理值）
+        # 本月到货率：订购行已到货数量 / 订购数量
         month_start = date(today.year, today.month, 1)
-        month_total = await base.filter(order_date__gte=month_start).count() or 1
-        month_arrived = await base.filter(order_date__gte=month_start, status__in=list(audited)).count()
-        monthly_arrival_rate = round(month_arrived / month_total * 100, 1)
+        month_order_ids = await base.filter(order_date__gte=month_start).exclude(
+            status__in=["CANCELLED", "已取消", "cancelled"]
+        ).values_list("id", flat=True)
+        month_order_id_list = list(month_order_ids)
+        if month_order_id_list:
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+            item_rows = await PurchaseOrderItem.filter(
+                order_id__in=month_order_id_list,
+            ).values_list("ordered_quantity", "received_quantity")
+            month_total_qty = sum(float(q or 0) for q, _ in item_rows)
+            month_received_qty = sum(float(r or 0) for _, r in item_rows)
+            if month_total_qty > 0:
+                monthly_arrival_rate = round(min(100.0, month_received_qty / month_total_qty * 100), 1)
+            else:
+                month_total = len(month_order_id_list)
+                month_arrived = await base.filter(
+                    id__in=month_order_id_list,
+                    status__in=list(audited) + ["received", "partial_received", "completed", "已收货", "部分收货", "已完成"],
+                ).count()
+                monthly_arrival_rate = round(month_arrived / month_total * 100, 1) if month_total else 0.0
+        else:
+            monthly_arrival_rate = 0.0
 
-        # 供应商准时率（已审核且未逾期 / 已审核总数）
+        # 供应商准时率：已审核且要求到货日未逾期 / 已审核总数（当年）
         audited_total = await base.filter(status__in=list(audited), order_date__gte=year_start).count() or 1
         on_time = await base.filter(status__in=list(audited), order_date__gte=year_start, delivery_date__gte=today).count()
         supplier_on_time_rate = round(on_time / audited_total * 100, 1)

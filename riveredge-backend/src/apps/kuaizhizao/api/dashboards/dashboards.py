@@ -2210,15 +2210,10 @@ async def get_menu_badge_counts(
 # ==========================================
 # 看板 KPI 可配置项（租户级 TenantConfig）
 # ==========================================
-# 说明：以下 3 个 KPI 以前为硬编码（销售目标、采购到货率、设备 OEE），
-# 现改为从 TenantConfig 读取，缺省时使用兜底值。
+# 销售目标可从 TenantConfig 配置；采购到货率与设备 OEE 由业务数据计算。
 CONFIG_KEY_SALES_MONTHLY_TARGET = "dashboard.kpi.sales_monthly_target"
-CONFIG_KEY_PURCHASE_ARRIVAL_RATE = "dashboard.kpi.purchase_arrival_rate"
-CONFIG_KEY_EQUIPMENT_OEE = "dashboard.kpi.equipment_oee"
 
-DEFAULT_SALES_MONTHLY_TARGET = 1_000_000.0
-DEFAULT_PURCHASE_ARRIVAL_RATE = 92.5
-DEFAULT_EQUIPMENT_OEE = 85.6
+DEFAULT_SALES_MONTHLY_TARGET = 0.0
 
 
 async def _read_dashboard_kpi(
@@ -2292,6 +2287,13 @@ PURCHASE_ORDER_PENDING_RECEIPT_STATUS = [
     "APPROVED", "AUDITED", "CONFIRMED", "RELEASED", "IN_PROGRESS",
 ]
 
+# 待处理申购（草稿/待审核）
+PURCHASE_REQUISITION_PENDING_STATUS = [
+    "草稿", "待审核",
+    "draft", "pending", "pending_review",
+    "DRAFT", "PENDING_REVIEW",
+]
+
 # 有效申购单（未被驳回/取消的）
 PURCHASE_REQUISITION_ACTIVE_STATUS = [
     "草稿", "待审核", "已通过", "部分转单",
@@ -2299,11 +2301,55 @@ PURCHASE_REQUISITION_ACTIVE_STATUS = [
     "DRAFT", "PENDING_REVIEW", "AUDITED", "APPROVED", "CONFIRMED",
 ]
 
+PURCHASE_ORDER_CANCELLED_STATUS = [
+    "cancelled", "CANCELLED", "已取消",
+]
+
+PURCHASE_ORDER_RECEIVED_STATUS = [
+    "received", "partial_received", "completed",
+    "已收货", "部分收货", "已完成",
+    "RECEIVED", "COMPLETED",
+]
+
 # 执行中工单
 WORK_ORDER_IN_PROGRESS_STATUS = [
     "in_progress", "进行中", "released", "已下达", "执行中",
     "IN_PROGRESS", "RELEASED",
 ]
+
+
+async def _compute_purchase_arrival_rate(
+    tenant_id: int,
+    range_start_date,
+    range_end_date,
+) -> float:
+    """区间内采购订单行：已到货数量 / 订购数量（无订单或无数量时返回 0）。"""
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrder, PurchaseOrderItem
+
+    order_ids = await PurchaseOrder.filter(
+        tenant_id=tenant_id,
+        order_date__gte=range_start_date,
+        order_date__lte=range_end_date,
+    ).exclude(status__in=PURCHASE_ORDER_CANCELLED_STATUS).values_list("id", flat=True)
+    order_id_list = list(order_ids)
+    if not order_id_list:
+        return 0.0
+
+    rows = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id__in=order_id_list,
+    ).values_list("ordered_quantity", "received_quantity")
+
+    total_qty = sum(float(q or 0) for q, _ in rows)
+    received_qty = sum(float(r or 0) for _, r in rows)
+    if total_qty > 0:
+        return round(min(100.0, received_qty / total_qty * 100), 2)
+
+    received_orders = await PurchaseOrder.filter(
+        id__in=order_id_list,
+        status__in=PURCHASE_ORDER_RECEIVED_STATUS,
+    ).count()
+    return round(received_orders / len(order_id_list) * 100, 2) if order_id_list else 0.0
 
 
 @router.get("/sales-summary", summary="Sales center summary")
@@ -2417,10 +2463,14 @@ async def get_purchase_summary(
 
     now = datetime.now()
     now_date = now.date()
-    range_start_dt, range_end_dt, _range_start_date, _range_end_date = _resolve_month_range(date_start, date_end)
+    range_start_dt, range_end_dt, range_start_date, range_end_date = _resolve_month_range(date_start, date_end)
 
-    # 1. 待处理申购
-    q1 = PurchaseRequisition.filter(tenant_id=tenant_id, status__in=PURCHASE_REQUISITION_ACTIVE_STATUS, deleted_at__isnull=True).count()
+    # 1. 待处理申购（草稿/待审核）
+    q1 = PurchaseRequisition.filter(
+        tenant_id=tenant_id,
+        status__in=PURCHASE_REQUISITION_PENDING_STATUS,
+        deleted_at__isnull=True,
+    ).count()
     
     # 2. 待收货订单
     q2 = PurchaseOrder.filter(tenant_id=tenant_id, status__in=PURCHASE_ORDER_PENDING_RECEIPT_STATUS).count()
@@ -2444,11 +2494,8 @@ async def get_purchase_summary(
         q1, q2, q2_overdue, q3
     )
 
-    arrival_rate = await _read_dashboard_kpi(
-        tenant_id,
-        CONFIG_KEY_PURCHASE_ARRIVAL_RATE,
-        DEFAULT_PURCHASE_ARRIVAL_RATE,
-        inner_key="percent",
+    arrival_rate = await _compute_purchase_arrival_rate(
+        tenant_id, range_start_date, range_end_date
     )
 
     return {
@@ -2528,7 +2575,7 @@ async def get_manufacturing_summary(
     total_qualified = sum(float(r[0] or 0) for r in prod_records)
     total_unqualified = sum(float(r[1] or 0) for r in prod_records)
     total_reported = total_qualified + total_unqualified
-    qualified_rate = (total_qualified / total_reported * 100) if total_reported > 0 else 100.0
+    qualified_rate = (total_qualified / total_reported * 100) if total_reported > 0 else 0.0
 
     return {
         "pending_scheduling": pending_scheduling,
@@ -2548,13 +2595,13 @@ async def get_equipment_summary(
     date_start: Optional[str] = Query(None, description="起始日期 YYYY-MM-DD；缺省为今日"),
     date_end: Optional[str] = Query(None, description="结束日期 YYYY-MM-DD；缺省为今日"),
 ):
-    """设备看板汇总数据：报修中设备、区间保养任务、设备综合效率 OEE。"""
+    """设备看板汇总：报修中设备、待校验、综合效率（由台账状态推算）。"""
     from apps.kuaizhizao.models.equipment import Equipment
     from apps.kuaizhizao.models.maintenance_plan import MaintenanceExecution
-    from datetime import datetime
     import asyncio
 
     now = datetime.now()
+    now_date = now.date()
     if date_start:
         range_start_dt = datetime.strptime(date_start, "%Y-%m-%d").replace(hour=0, minute=0, second=0, microsecond=0)
     else:
@@ -2564,29 +2611,53 @@ async def get_equipment_summary(
     else:
         range_end_dt = now.replace(hour=23, minute=59, second=59, microsecond=0)
 
-    # 1. 报修中设备（状态快照，不随区间变化）
-    q1 = Equipment.filter(tenant_id=tenant_id, status__in=["维修中", "故障"], deleted_at__isnull=True).count()
-    # 2. 区间内保养任务
-    q2 = MaintenanceExecution.filter(
+    equipment_base = Equipment.filter(tenant_id=tenant_id, deleted_at__isnull=True, is_active=True).exclude(
+        status__in=["报废", "停用", "scrapped", "disabled"]
+    )
+    faulty_statuses = ["维修中", "故障", "maintenance", "fault"]
+
+    q_total = equipment_base.count()
+    q_faulty = equipment_base.filter(status__in=faulty_statuses).count()
+    q_calibration = equipment_base.filter(
+        needs_calibration=True,
+        next_calibration_date__isnull=False,
+        next_calibration_date__lte=now_date,
+    ).count()
+    q_maintenance = MaintenanceExecution.filter(
         tenant_id=tenant_id,
         execution_date__gte=range_start_dt,
         execution_date__lte=range_end_dt,
         deleted_at__isnull=True,
     ).count()
-    
-    repairing_count, maintenance_tasks = await asyncio.gather(q1, q2)
 
-    oee = await _read_dashboard_kpi(
-        tenant_id,
-        CONFIG_KEY_EQUIPMENT_OEE,
-        DEFAULT_EQUIPMENT_OEE,
-        inner_key="percent",
+    total_count, faulty_count, calibration_needed, maintenance_tasks = await asyncio.gather(
+        q_total, q_faulty, q_calibration, q_maintenance
     )
 
+    total_count = int(total_count or 0)
+    faulty_count = int(faulty_count or 0)
+    calibration_needed = int(calibration_needed or 0)
+
+    if total_count > 0:
+        availability_rate = round((total_count - faulty_count) / total_count * 100, 2)
+        failure_rate = round(faulty_count / total_count * 100, 2)
+    else:
+        availability_rate = 0.0
+        failure_rate = 0.0
+
+    # 无独立 OEE 采集时，以可用率作为看板展示值（与 availability 一致，避免假数据）
+    average_oee = availability_rate
+
     return {
-        "repairing_count": repairing_count,
-        "today_maintenance_tasks": maintenance_tasks,
-        "oee": round(oee, 2),
+        "total_count": total_count,
+        "faulty_count": faulty_count,
+        "calibration_needed": calibration_needed,
+        "average_oee": average_oee,
+        "availability_rate": availability_rate,
+        "failure_rate": failure_rate,
+        "repairing_count": faulty_count,
+        "today_maintenance_tasks": int(maintenance_tasks or 0),
+        "oee": average_oee,
     }
 
 

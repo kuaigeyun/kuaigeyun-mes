@@ -3,8 +3,9 @@
  * 支持拖拽排序、添加、删除步骤
  */
 
-import React, { useState } from 'react';
-import { Button, Table, Empty, Modal, Form, Input, Select, message } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Button, Table, Empty, Modal, Form, Input, Select, message, theme } from 'antd';
 import { PlusOutlined, HolderOutlined, DeleteOutlined } from '@ant-design/icons';
 import {
   DndContext,
@@ -34,19 +35,24 @@ export interface InspectionPlanStepEditorProps {
   disabled?: boolean;
 }
 
-const SamplingTypeOptions = [
-  { label: '全检', value: 'full' },
-  { label: '抽检', value: 'sampling' },
-];
-
 export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> = ({
   value = [],
   onChange,
   disabled = false,
 }) => {
+  const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [steps, setSteps] = useState<InspectionPlanStepItem[]>(value);
   const [addModalVisible, setAddModalVisible] = useState(false);
   const [addForm] = Form.useForm();
+
+  const samplingTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.quality.plans.step.fullInspection'), value: 'full' },
+      { label: t('app.kuaizhizao.quality.plans.step.sampling'), value: 'sampling' },
+    ],
+    [t],
+  );
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -85,7 +91,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
       syncChange([...steps, newStep]);
       addForm.resetFields();
       setAddModalVisible(false);
-      message.success('已添加检验步骤');
+      message.success(t('app.kuaizhizao.quality.plans.stepEditor.addSuccess'));
     });
   };
 
@@ -114,7 +120,7 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         ? React.cloneElement(firstCell as React.ReactElement<{ children?: React.ReactNode }>, {
             children: (
               <span {...attributes} {...listeners} style={{ cursor: disabled ? 'default' : 'move', display: 'inline-flex', alignItems: 'center' }}>
-                <HolderOutlined style={{ marginRight: 8, color: '#1890ff' }} />
+                <HolderOutlined style={{ marginRight: 8, color: token.colorPrimary }} />
                 {index + 1}
               </span>
             ),
@@ -128,27 +134,30 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
   };
 
   const columns = [
-    { title: '序号', key: 'index', width: 80 },
-    { title: '检验项目', dataIndex: 'inspection_item', key: 'inspection_item', ellipsis: true },
-    { title: '检验方法', dataIndex: 'inspection_method', key: 'inspection_method', width: 120, ellipsis: true },
-    { title: '合格标准', dataIndex: 'acceptance_criteria', key: 'acceptance_criteria', width: 150, ellipsis: true },
+    { title: t('app.kuaizhizao.quality.plans.step.sequence'), key: 'index', width: 80 },
+    { title: t('app.kuaizhizao.quality.plans.step.inspectionItem'), dataIndex: 'inspection_item', key: 'inspection_item', ellipsis: true },
+    { title: t('app.kuaizhizao.quality.plans.step.inspectionMethod'), dataIndex: 'inspection_method', key: 'inspection_method', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'), dataIndex: 'acceptance_criteria', key: 'acceptance_criteria', width: 150, ellipsis: true },
     {
-      title: '抽样方式',
+      title: t('app.kuaizhizao.quality.plans.step.samplingType'),
       dataIndex: 'sampling_type',
       key: 'sampling_type',
       width: 90,
-      render: (v: string) => (v === 'sampling' ? '抽检' : '全检'),
+      render: (v: string) =>
+        v === 'sampling'
+          ? t('app.kuaizhizao.quality.plans.step.sampling')
+          : t('app.kuaizhizao.quality.plans.step.fullInspection'),
     },
     ...(disabled
       ? []
       : [
           {
-            title: '操作',
+            title: t('common.actions'),
             key: 'action',
             width: 80,
             render: (_: any, __: InspectionPlanStepItem, index: number) => (
               <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => handleRemove(index)}>
-                删除
+                {t('common.delete')}
               </Button>
             ),
           },
@@ -158,10 +167,12 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ color: '#666', fontSize: 12 }}>支持拖拽排序，点击删除移除步骤</span>
+        <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>
+          {t('app.kuaizhizao.quality.plans.stepEditor.dragHint')}
+        </span>
         {!disabled && (
           <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
-            添加步骤
+            {t('app.kuaizhizao.quality.plans.stepEditor.addStep')}
           </Button>
         )}
       </div>
@@ -186,23 +197,26 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         <div
           style={{
             padding: 24,
-            background: '#fafafa',
-            borderRadius: 4,
+            background: token.colorFillAlter,
+            borderRadius: token.borderRadius,
             border: '1px dashed var(--river-border-color)',
             textAlign: 'center',
-            color: '#999',
+            color: token.colorTextSecondary,
           }}
         >
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检验步骤，点击下方按钮添加" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={t('app.kuaizhizao.quality.plans.stepEditor.emptyHint')}
+          />
           {!disabled && (
             <Button type="primary" ghost icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} style={{ marginTop: 12 }}>
-              添加步骤
+              {t('app.kuaizhizao.quality.plans.stepEditor.addStep')}
             </Button>
           )}
         </div>
       )}
       <Modal
-        title="添加检验步骤"
+        title={t('app.kuaizhizao.quality.plans.stepEditor.modalTitle')}
         open={addModalVisible}
         onOk={handleAdd}
         onCancel={() => {
@@ -213,20 +227,24 @@ export const InspectionPlanStepEditor: React.FC<InspectionPlanStepEditorProps> =
         width={500}
       >
         <Form form={addForm} layout="vertical" initialValues={{ sampling_type: 'full' }}>
-          <Form.Item name="inspection_item" label="检验项目" rules={[{ required: true, message: '请输入检验项目' }]}>
-            <Input placeholder="请输入检验项目名称" />
+          <Form.Item
+            name="inspection_item"
+            label={t('app.kuaizhizao.quality.plans.step.inspectionItem')}
+            rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.stepEditor.validation.requiredInspectionItem') }]}
+          >
+            <Input placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.inspectionItem')} />
           </Form.Item>
-          <Form.Item name="inspection_method" label="检验方法">
-            <Input placeholder="请输入检验方法" />
+          <Form.Item name="inspection_method" label={t('app.kuaizhizao.quality.plans.step.inspectionMethod')}>
+            <Input placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.inspectionMethod')} />
           </Form.Item>
-          <Form.Item name="acceptance_criteria" label="合格标准">
-            <Input.TextArea rows={2} placeholder="请输入合格标准" />
+          <Form.Item name="acceptance_criteria" label={t('app.kuaizhizao.quality.plans.step.acceptanceCriteria')}>
+            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.acceptanceCriteria')} />
           </Form.Item>
-          <Form.Item name="sampling_type" label="抽样方式">
-            <Select options={SamplingTypeOptions} placeholder="请选择" />
+          <Form.Item name="sampling_type" label={t('app.kuaizhizao.quality.plans.step.samplingType')}>
+            <Select options={samplingTypeOptions} placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.selectSamplingType')} />
           </Form.Item>
-          <Form.Item name="remarks" label="备注">
-            <Input placeholder="备注（可选）" />
+          <Form.Item name="remarks" label={t('app.kuaizhizao.quality.common.form.remarks')}>
+            <Input placeholder={t('app.kuaizhizao.quality.plans.stepEditor.placeholder.remarksOptional')} />
           </Form.Item>
         </Form>
       </Modal>
