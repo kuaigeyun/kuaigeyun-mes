@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { initLanguageFromApi, isLanguageInitialized } from '../config/i18n';
+import { initLanguageFromApi, isLanguageInitialized, resetLanguageInitState } from '../config/i18n';
 import { useGlobalStore } from '../stores/globalStore';
 import { useThemeStore } from '../stores/themeStore';
 import { useUserPreferenceStore } from '../stores/userPreferenceStore';
@@ -30,6 +30,7 @@ export function useAppShellReady(): boolean {
       // 登录或切换账户：强制重新拉取主题/偏好，避免沿用上一会话
       if (currentUserId != null && prevUserId !== currentUserId) {
         useThemeStore.setState({ initialized: false, siteThemeSettings: null });
+        resetLanguageInitState();
       }
 
       useUserPreferenceStore.getState().rehydrateFromStorage();

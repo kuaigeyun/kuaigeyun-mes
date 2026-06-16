@@ -311,13 +311,19 @@ export async function applyLanguageWithPersist(languageCode: string): Promise<vo
   await useUserPreferenceStore.getState().updatePreferences({ language: languageCode });
 }
 
-export function clearLanguageForLogout(): void {
+/** 登录或切换账户前调用，强制重新拉取租户/个人语言偏好 */
+export function resetLanguageInitState(): void {
   languageInitialized = false;
+  languageLoading = false;
+}
+
+export function clearLanguageForLogout(): void {
   languageLoading = false;
   siteLanguageSettings = null;
   tenantDefaultLanguage = null;
   const lang = resolveTenantDefaultFromCache() ?? FALLBACK_LANGUAGE;
   void i18n.changeLanguage(lang);
+  // 保持 languageInitialized，避免登出时 App 壳层全屏 Spin 阻塞跳转登录页（与 themeStore.clearForLogout 一致）
 }
 
 /** @deprecated 请使用 initLanguageFromApi */
