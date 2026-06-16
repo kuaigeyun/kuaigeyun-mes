@@ -30,7 +30,7 @@ class MaterialVariantAttributeService:
     # 中国中小制造业常见属性定义预设（颜色、规格、材质、等级、表面处理等）；枚举类型默认支持多选
     PRESET_ATTRIBUTE_DEFINITIONS = [
         {
-            "attribute_name": "颜色",
+            "attribute_name": "color",
             "display_name": "颜色",
             "attribute_type": "enum",
             "enum_values": ["红色", "蓝色", "白色", "黑色", "灰色", "黄色", "绿色", "银色", "其他"],
@@ -40,7 +40,7 @@ class MaterialVariantAttributeService:
             "description": "产品颜色",
         },
         {
-            "attribute_name": "规格",
+            "attribute_name": "spec",
             "display_name": "规格",
             "attribute_type": "enum",
             "enum_values": ["S", "M", "L", "XL", "定制"],
@@ -50,7 +50,7 @@ class MaterialVariantAttributeService:
             "description": "规格/尺码",
         },
         {
-            "attribute_name": "材质",
+            "attribute_name": "material",
             "display_name": "材质",
             "attribute_type": "enum",
             "enum_values": ["不锈钢", "碳钢", "塑料", "铝合金", "铜", "铸铁", "其他"],
@@ -60,7 +60,7 @@ class MaterialVariantAttributeService:
             "description": "原材料材质",
         },
         {
-            "attribute_name": "等级",
+            "attribute_name": "grade",
             "display_name": "等级",
             "attribute_type": "enum",
             "enum_values": ["一级品", "二级品", "合格品", "等外品"],
@@ -70,7 +70,7 @@ class MaterialVariantAttributeService:
             "description": "质量等级",
         },
         {
-            "attribute_name": "表面处理",
+            "attribute_name": "surface_finish",
             "display_name": "表面处理",
             "attribute_type": "enum",
             "enum_values": ["镀锌", "喷塑", "阳极氧化", "电泳", "无"],

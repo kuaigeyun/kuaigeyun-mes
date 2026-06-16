@@ -1,4 +1,5 @@
-import React, { forwardRef, useCallback, useImperativeHandle, useState } from 'react';
+import React, { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { App, Button, Input, Modal, Space, Table, Tag } from 'antd';
 import { ThemedSegmented } from '../../../../../components/themed-segmented';
@@ -115,14 +116,9 @@ type InboundQuickPullModalsProps = {
   onSuccess: () => void;
 };
 
-const OUTSOURCE_PULL_TYPE_OPTIONS: { label: string; value: InboundOutsourcePullType }[] = [
-  { label: '委外收货', value: 'outsource_receipt' },
-  { label: '委外退料', value: 'outsource_material_return' },
-  { label: '委外退货', value: 'outsource_product_return' },
-];
-
 const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuickPullModalsProps>(
   ({ onSuccess }, ref) => {
+    const { t } = useTranslation();
     const { message: messageApi } = App.useApp();
     const navigate = useNavigate();
 
@@ -157,6 +153,15 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
     const [outsourcePullType, setOutsourcePullType] = useState<InboundOutsourcePullType>('outsource_receipt');
     const [selectedOutsourceWoId, setSelectedOutsourceWoId] = useState<number | undefined>();
 
+    const outsourcePullTypeOptions = useMemo(
+      (): { label: string; value: InboundOutsourcePullType }[] => [
+        { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.receipt'), value: 'outsource_receipt' },
+        { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.materialReturn'), value: 'outsource_material_return' },
+        { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.productReturn'), value: 'outsource_product_return' },
+      ],
+      [t],
+    );
+
     const closeModal = useCallback(() => {
       setActiveKey(null);
       setSelectedPullReceiptNoticeId(null);
@@ -182,11 +187,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         setPullPoCandidates(res.data ?? []);
       } catch {
         setPullPoCandidates([]);
-        messageApi.error('加载采购订单失败');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.po.loadFailed'));
       } finally {
         setPullPoLoading(false);
       }
-    }, [messageApi]);
+    }, [messageApi, t]);
 
     const loadPullWorkOrderCandidates = useCallback(async (keyword: string = '') => {
       setPullWoLoading(true);
@@ -235,11 +240,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         setPullWoCandidates(candidates);
       } catch {
         setPullWoCandidates([]);
-        messageApi.error('加载生产工单失败');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.workOrder.loadFailed'));
       } finally {
         setPullWoLoading(false);
       }
-    }, [messageApi]);
+    }, [messageApi, t]);
 
     const loadPullOutsourceWoCandidates = useCallback(async (keyword: string = '') => {
       setPullOutsourceWoLoading(true);
@@ -289,11 +294,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         setPullOutsourceWoCandidates(candidates);
       } catch {
         setPullOutsourceWoCandidates([]);
-        messageApi.error('加载委外工单失败');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.outsource.loadFailed'));
       } finally {
         setPullOutsourceWoLoading(false);
       }
-    }, [messageApi]);
+    }, [messageApi, t]);
 
     useImperativeHandle(ref, () => ({
       open: (key: InboundQuickPullKey) => {
@@ -415,11 +420,11 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         setPullSalesOrderCandidates(candidates);
       } catch {
         setPullSalesOrderCandidates([]);
-        messageApi.error('加载销售订单失败');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.loadFailed'));
       } finally {
         setPullSalesOrderLoading(false);
       }
-    }, [messageApi]);
+    }, [messageApi, t]);
 
     const getSelectedPullablePoIds = useCallback(() => {
       if (!selectedPullPoIds.length) return [];
@@ -433,14 +438,14 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
       const pullableIds = getSelectedPullablePoIds();
       if (!pullableIds.length) {
         if (!selectedPullPoIds.length) {
-          messageApi.warning('请选择至少一个采购订单');
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectAtLeastOne'));
         } else {
-          messageApi.warning('所选采购订单均已入库完成，无可取单数量');
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.allCompleted'));
         }
         return;
       }
       if (pullableIds.length !== 1) {
-        messageApi.warning('入库请仅选择一个采购订单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.po.selectOnlyOne'));
         return;
       }
       const poId = pullableIds[0];
@@ -450,12 +455,12 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const handleReceiptNoticeConfirm = async () => {
       if (!selectedPullReceiptNoticeId) {
-        messageApi.warning('请选择收货通知单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.selectRequired'));
         return;
       }
       const selected = pullReceiptNoticeCandidates.find((x) => x.id === selectedPullReceiptNoticeId);
       if (selected?.converted) {
-        messageApi.warning('该收货通知单已创建采购入库单，请勿重复创建');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.alreadyConverted'));
         return;
       }
       setPullReceiptNoticeSubmitting(true);
@@ -465,7 +470,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         };
         const poId = Number(notice?.purchase_order_id);
         if (!Number.isFinite(poId) || poId <= 0) {
-          messageApi.error('收货通知单未关联采购订单');
+          messageApi.error(t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.noLinkedPo'));
           return;
         }
         closeModal();
@@ -476,7 +481,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
         const message =
           (typeof detail === 'string' ? detail : (detail as { message?: string })?.message)
           || err?.message
-          || '加载收货通知单失败';
+          || t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.loadFailed');
         messageApi.error(message);
       } finally {
         setPullReceiptNoticeSubmitting(false);
@@ -485,7 +490,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const handleWorkOrderOpenEntry = () => {
       if (!selectedPullWoId) {
-        messageApi.warning('请选择生产工单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.workOrder.selectRequired'));
         return;
       }
       closeModal();
@@ -494,7 +499,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const handleProductionReturnOpenEntry = () => {
       if (!pullProductionReturnWoId) {
-        messageApi.warning('请选择生产工单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.workOrder.selectRequired'));
         return;
       }
       closeModal();
@@ -503,7 +508,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const handleSalesReturnOpenEntry = () => {
       if (!selectedPullSalesOrderId) {
-        messageApi.warning('请选择销售订单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.salesReturn.selectRequired'));
         return;
       }
       closeModal();
@@ -512,25 +517,243 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
 
     const handleOutsourceOpenEntry = () => {
       if (!selectedOutsourceWoId) {
-        messageApi.warning('请选择委外工单');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.pull.outsource.selectRequired'));
         return;
       }
       closeModal();
       navigate(inboundOutsourceEntryPath(selectedOutsourceWoId, outsourcePullType));
     };
 
+    const poPullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'order_code', width: 160, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 160, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.orderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.purchaseQty'),
+          dataIndex: 'ordered_total',
+          width: 100,
+          align: 'right' as const,
+          render: (_: unknown, r: PullPurchaseOrderCandidate) => formatPullQty(r.ordered_total ?? r.total_quantity),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'),
+          dataIndex: 'received_total',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.outstandingQty'),
+          dataIndex: 'outstanding_total',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.receiptProgress'),
+          key: 'receipt_stage',
+          width: 130,
+          align: 'center' as const,
+          render: (_: unknown, r: PullPurchaseOrderCandidate) =>
+            renderLifecycleSubStageTag(t, r.lifecycle?.sub_stages, 'purchase_receipt'),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.pullable'),
+          key: 'pullable',
+          width: 100,
+          align: 'center' as const,
+          render: (_: unknown, r: PullPurchaseOrderCandidate) => renderPullableTag(t, r.pullable),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.deliveryDate'),
+          dataIndex: 'delivery_date',
+          width: 110,
+          render: (v: unknown) => v || '—',
+        },
+      ],
+      [t],
+    );
+
+    const receiptNoticePullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.noticeCode'), dataIndex: 'notice_code', width: 180, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.poCode'), dataIndex: 'purchase_order_code', width: 180, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.supplier'), dataIndex: 'supplier_name', width: 180, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.targetWarehouse'),
+          dataIndex: 'warehouse_name',
+          width: 150,
+          ellipsis: true,
+          render: (v: unknown) => v || '-',
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.noticeStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
+          dataIndex: 'updated_at',
+          width: 180,
+          render: (v: unknown) => formatDateTimeBySiteSetting(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.convertStatus'),
+          key: 'convert_status',
+          width: 170,
+          align: 'center' as const,
+          render: (_: unknown, r: PullReceiptNoticeCandidate) =>
+            r.converted ? (
+              <Tag color="gold">
+                {t('app.kuaizhizao.warehouseInbound.pull.convertCreated', {
+                  code: r.purchase_receipt_code || r.purchase_receipt_id,
+                })}
+              </Tag>
+            ) : (
+              <Tag color="success">{t('app.kuaizhizao.warehouseInbound.pull.convertAvailable')}</Tag>
+            ),
+        },
+      ],
+      [t],
+    );
+
+    const workOrderPullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'code', width: 140, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 160, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.sourceSalesOrder'),
+          dataIndex: 'sales_order_code',
+          width: 140,
+          ellipsis: true,
+          render: (v: unknown) => v || '—',
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.completionProgress'),
+          key: 'completion',
+          width: 180,
+          align: 'right' as const,
+          render: (_: unknown, r: PullWorkOrderCandidate) => formatPullPercent(r.completed_quantity, r.quantity),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
+          dataIndex: 'updated_at',
+          width: 168,
+          render: (v: unknown) => formatDateTimeBySiteSetting(v),
+        },
+      ],
+      [t],
+    );
+
+    const productionReturnPullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderCode'), dataIndex: 'code', width: 140, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 160, ellipsis: true },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.sourceSalesOrder'),
+          dataIndex: 'sales_order_code',
+          width: 140,
+          ellipsis: true,
+          render: (v: unknown) => v || '—',
+        },
+        { title: t('app.kuaizhizao.warehouseInbound.col.workOrderStatus'), dataIndex: 'status', width: 100, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.completionProgress'),
+          key: 'completion',
+          width: 120,
+          align: 'center' as const,
+          render: (_: unknown, r: PullWorkOrderCandidate) => formatPullPercent(r.completed_quantity, r.quantity),
+        },
+      ],
+      [t],
+    );
+
+    const salesReturnPullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.salesOrderCode'), dataIndex: 'order_code', width: 160, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.customer'), dataIndex: 'customer_name', width: 180, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.orderStatus'), dataIndex: 'status', width: 110, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.orderQty'),
+          dataIndex: 'total_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.deliveryProgress'),
+          dataIndex: 'delivery_progress',
+          width: 100,
+          align: 'center' as const,
+          render: (v: unknown) => (v != null && Number.isFinite(Number(v)) ? `${Number(v)}%` : '—'),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.deliveryDate'),
+          dataIndex: 'delivery_date',
+          width: 110,
+          render: (v: unknown) => (v ? String(v).slice(0, 10) : '-'),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
+          dataIndex: 'updated_at',
+          width: 168,
+          render: (v: unknown) => formatDateTimeBySiteSetting(v),
+        },
+      ],
+      [t],
+    );
+
+    const outsourcePullColumns = useMemo(
+      () => [
+        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceWoCode'), dataIndex: 'code', width: 140, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.product'), dataIndex: 'product_name', width: 150, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.outsourceSupplier'), dataIndex: 'supplier_name', width: 150, ellipsis: true },
+        { title: t('app.kuaizhizao.warehouseInbound.col.status'), dataIndex: 'status', width: 90, align: 'center' as const },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.plannedOutsourceQty'),
+          dataIndex: 'quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsourceQty'),
+          dataIndex: 'received_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.issuedQty'),
+          dataIndex: 'issued_quantity',
+          width: 100,
+          align: 'right' as const,
+          render: (v: unknown) => formatPullQty(v),
+        },
+        {
+          title: t('app.kuaizhizao.warehouseInbound.col.pendingOutsourceReceipt'),
+          key: 'pending_receipt',
+          width: 100,
+          align: 'right' as const,
+          render: (_: unknown, r: PullOutsourceWoCandidate) => {
+            const pending = Math.max(0, Number(r.quantity || 0) - Number(r.received_quantity || 0));
+            return formatPullQty(pending);
+          },
+        },
+      ],
+      [t],
+    );
+
     return (
       <>
         <Modal
-          title="从采购订单入库"
+          title={t('app.kuaizhizao.warehouseInbound.pull.po.title')}
           open={activeKey === 'purchase_order'}
           onCancel={closeModal}
           footer={[
             <Button key="cancel" onClick={closeModal}>
-              取消
+              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>,
             <Button key="receipt" type="primary" onClick={handlePurchaseOrderOpenReceiptEntry}>
-              入库
+              {t('app.kuaizhizao.warehouseInbound.action.inbound')}
             </Button>,
           ]}
           width={1280}
@@ -539,14 +762,14 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Input.Search
               allowClear
-              placeholder="按采购订单号/供应商搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.po.searchPlaceholder')}
               value={pullPoKeyword}
               onChange={(e) => setPullPoKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullPoKeyword(value);
                 void loadPullPurchaseOrderCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullPurchaseOrderCandidate>
               rowKey="id"
@@ -570,53 +793,13 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
                   );
                 },
               })}
-              columns={[
-                { title: '采购订单号', dataIndex: 'order_code', width: 160, ellipsis: true },
-                { title: '供应商', dataIndex: 'supplier_name', width: 160, ellipsis: true },
-                { title: '订单状态', dataIndex: 'status', width: 100, align: 'center' },
-                {
-                  title: '采购数量',
-                  dataIndex: 'ordered_total',
-                  width: 100,
-                  align: 'right',
-                  render: (_, r) => formatPullQty(r.ordered_total ?? r.total_quantity),
-                },
-                {
-                  title: '已入库',
-                  dataIndex: 'received_total',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '未入库',
-                  dataIndex: 'outstanding_total',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '入库进度',
-                  key: 'receipt_stage',
-                  width: 130,
-                  align: 'center',
-                  render: (_, r) => renderLifecycleSubStageTag(r.lifecycle?.sub_stages, 'purchase_receipt'),
-                },
-                {
-                  title: '可取单',
-                  key: 'pullable',
-                  width: 100,
-                  align: 'center',
-                  render: (_, r) => renderPullableTag(r.pullable),
-                },
-                { title: '交期', dataIndex: 'delivery_date', width: 110, render: (v) => v || '—' },
-              ]}
+              columns={poPullColumns}
             />
           </Space>
         </Modal>
 
         <Modal
-          title="从收货通知开入库单"
+          title={t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.title')}
           open={activeKey === 'receipt_notice'}
           onCancel={() => {
             if (pullReceiptNoticeSubmitting) return;
@@ -627,20 +810,20 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
           }}
           confirmLoading={pullReceiptNoticeSubmitting}
           width={1240}
-          okText="下一步"
+          okText={t('app.kuaizhizao.warehouseInbound.action.nextStep')}
           destroyOnHidden
         >
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Input.Search
               allowClear
-              placeholder="按通知单号/采购订单号/供应商搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.receiptNotice.searchPlaceholder')}
               value={pullReceiptNoticeKeyword}
               onChange={(e) => setPullReceiptNoticeKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullReceiptNoticeKeyword(value);
                 void loadPullReceiptNoticeCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullReceiptNoticeCandidate>
               rowKey="id"
@@ -664,50 +847,31 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
                   setSelectedPullReceiptNoticeId(record.id);
                 },
               })}
-              columns={[
-                { title: '收货通知单号', dataIndex: 'notice_code', width: 180, ellipsis: true },
-                { title: '采购订单号', dataIndex: 'purchase_order_code', width: 180, ellipsis: true },
-                { title: '供应商', dataIndex: 'supplier_name', width: 180, ellipsis: true },
-                { title: '目标仓库', dataIndex: 'warehouse_name', width: 150, ellipsis: true, render: (v) => v || '-' },
-                { title: '通知状态', dataIndex: 'status', width: 120, align: 'center' },
-                { title: '更新时间', dataIndex: 'updated_at', width: 180, render: (v) => formatDateTimeBySiteSetting(v) },
-                {
-                  title: '转单状态',
-                  key: 'convert_status',
-                  width: 170,
-                  align: 'center',
-                  render: (_, r) =>
-                    r.converted ? (
-                      <Tag color="gold">{`已创建：${r.purchase_receipt_code || r.purchase_receipt_id}`}</Tag>
-                    ) : (
-                      <Tag color="success">可创建</Tag>
-                    ),
-                },
-              ]}
+              columns={receiptNoticePullColumns}
             />
           </Space>
         </Modal>
 
         <Modal
-          title="从生产工单开入库单"
+          title={t('app.kuaizhizao.warehouseInbound.pull.workOrder.title')}
           open={activeKey === 'work_order'}
           onCancel={closeModal}
           onOk={handleWorkOrderOpenEntry}
           width={1200}
-          okText="开入库单"
+          okText={t('app.kuaizhizao.warehouseInbound.action.openReceipt')}
           destroyOnHidden
         >
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Input.Search
               allowClear
-              placeholder="按工单号/产品/销售订单号搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.searchPlaceholder')}
               value={pullWoKeyword}
               onChange={(e) => setPullWoKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullWoKeyword(value);
                 void loadPullWorkOrderCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullWorkOrderCandidate>
               rowKey="id"
@@ -727,49 +891,31 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
               onRow={(record) => ({
                 onClick: () => setSelectedPullWoId(record.id),
               })}
-              columns={[
-                { title: '工单号', dataIndex: 'code', width: 140, ellipsis: true },
-                { title: '产品', dataIndex: 'product_name', width: 160, ellipsis: true },
-                { title: '源销售订单', dataIndex: 'sales_order_code', width: 140, ellipsis: true, render: (v) => v || '—' },
-                { title: '工单状态', dataIndex: 'status', width: 100, align: 'center' },
-                {
-                  title: '完工进度',
-                  key: 'completion',
-                  width: 180,
-                  align: 'right',
-                  render: (_, r) => formatPullPercent(r.completed_quantity, r.quantity),
-                },
-                {
-                  title: '更新时间',
-                  dataIndex: 'updated_at',
-                  width: 168,
-                  render: (v) => formatDateTimeBySiteSetting(v),
-                },
-              ]}
+              columns={workOrderPullColumns}
             />
           </Space>
         </Modal>
 
         <Modal
-          title="从工单开生产退料单"
+          title={t('app.kuaizhizao.warehouseInbound.pull.productionReturn.title')}
           open={activeKey === 'production_return'}
           onCancel={closeModal}
           onOk={handleProductionReturnOpenEntry}
           width={1200}
-          okText="开入库单"
+          okText={t('app.kuaizhizao.warehouseInbound.action.openReceipt')}
           destroyOnHidden
         >
           <Space orientation="vertical" size={12} style={{ width: '100%' }}>
             <Input.Search
               allowClear
-              placeholder="按工单号/产品/销售订单号搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.workOrder.searchPlaceholder')}
               value={pullWoKeyword}
               onChange={(e) => setPullWoKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullWoKeyword(value);
                 void loadPullWorkOrderCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullWorkOrderCandidate>
               rowKey="id"
@@ -789,43 +935,31 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
               onRow={(record) => ({
                 onClick: () => setPullProductionReturnWoId(record.id),
               })}
-              columns={[
-                { title: '工单号', dataIndex: 'code', width: 140, ellipsis: true },
-                { title: '产品', dataIndex: 'product_name', width: 160, ellipsis: true },
-                { title: '源销售订单', dataIndex: 'sales_order_code', width: 140, ellipsis: true, render: (v) => v || '—' },
-                { title: '工单状态', dataIndex: 'status', width: 100, align: 'center' },
-                {
-                  title: '完工进度',
-                  key: 'completion',
-                  width: 120,
-                  align: 'center',
-                  render: (_, r) => formatPullPercent(r.completed_quantity, r.quantity),
-                },
-              ]}
+              columns={productionReturnPullColumns}
             />
           </Space>
         </Modal>
 
         <Modal
-          title="从销售订单开退货入库单"
+          title={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.title')}
           open={activeKey === 'sales_return'}
           onCancel={closeModal}
           onOk={handleSalesReturnOpenEntry}
-          okText="开入库单"
+          okText={t('app.kuaizhizao.warehouseInbound.action.openReceipt')}
           destroyOnHidden
           width={1100}
         >
           <Space direction="vertical" size={12} style={{ width: '100%' }}>
             <Input.Search
               allowClear
-              placeholder="按销售订单号/客户搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.salesReturn.searchPlaceholder')}
               value={pullSalesOrderKeyword}
               onChange={(e) => setPullSalesOrderKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullSalesOrderKeyword(value);
                 void loadPullSalesOrderCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullSalesOrderCandidate>
               rowKey="id"
@@ -847,67 +981,37 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
                   setSelectedPullSalesOrderId(record.id);
                 },
               })}
-              columns={[
-                { title: '销售订单号', dataIndex: 'order_code', width: 160, ellipsis: true },
-                { title: '客户', dataIndex: 'customer_name', width: 180, ellipsis: true },
-                { title: '订单状态', dataIndex: 'status', width: 110, align: 'center' },
-                {
-                  title: '订单数量',
-                  dataIndex: 'total_quantity',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '交货进度',
-                  dataIndex: 'delivery_progress',
-                  width: 100,
-                  align: 'center',
-                  render: (v) => (v != null && Number.isFinite(Number(v)) ? `${Number(v)}%` : '—'),
-                },
-                {
-                  title: '交期',
-                  dataIndex: 'delivery_date',
-                  width: 110,
-                  render: (v) => (v ? String(v).slice(0, 10) : '-'),
-                },
-                {
-                  title: '更新时间',
-                  dataIndex: 'updated_at',
-                  width: 168,
-                  render: (v) => formatDateTimeBySiteSetting(v),
-                },
-              ]}
+              columns={salesReturnPullColumns}
             />
           </Space>
         </Modal>
 
         <Modal
-          title="从委外工单开入库单"
+          title={t('app.kuaizhizao.warehouseInbound.pull.outsource.title')}
           open={activeKey === 'outsource'}
           onCancel={closeModal}
           onOk={handleOutsourceOpenEntry}
           width={1200}
-          okText="开入库单"
+          okText={t('app.kuaizhizao.warehouseInbound.action.openReceipt')}
           destroyOnHidden
         >
           <Space direction="vertical" size={16} style={{ width: '100%' }}>
             <ThemedSegmented
               block
               value={outsourcePullType}
-              options={OUTSOURCE_PULL_TYPE_OPTIONS}
+              options={outsourcePullTypeOptions}
               onChange={(v) => setOutsourcePullType(v as InboundOutsourcePullType)}
             />
             <Input.Search
               allowClear
-              placeholder="按委外工单号/产品/供应商搜索"
+              placeholder={t('app.kuaizhizao.warehouseInbound.pull.outsource.searchPlaceholder')}
               value={pullOutsourceWoKeyword}
               onChange={(e) => setPullOutsourceWoKeyword(e.target.value)}
               onSearch={(value) => {
                 setPullOutsourceWoKeyword(value);
                 void loadPullOutsourceWoCandidates(value);
               }}
-              enterButton="搜索"
+              enterButton={t('app.kuaizhizao.warehouseInbound.action.search')}
             />
             <Table<PullOutsourceWoCandidate>
               rowKey="id"
@@ -926,43 +1030,7 @@ const InboundQuickPullModals = forwardRef<InboundQuickPullModalsRef, InboundQuic
               onRow={(record) => ({
                 onClick: () => setSelectedOutsourceWoId(record.id),
               })}
-              columns={[
-                { title: '委外工单号', dataIndex: 'code', width: 140, ellipsis: true },
-                { title: '产品', dataIndex: 'product_name', width: 150, ellipsis: true },
-                { title: '委外供应商', dataIndex: 'supplier_name', width: 150, ellipsis: true },
-                { title: '状态', dataIndex: 'status', width: 90, align: 'center' },
-                {
-                  title: '计划数量',
-                  dataIndex: 'quantity',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '已收货',
-                  dataIndex: 'received_quantity',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '已发料',
-                  dataIndex: 'issued_quantity',
-                  width: 100,
-                  align: 'right',
-                  render: (v) => formatPullQty(v),
-                },
-                {
-                  title: '待收货',
-                  key: 'pending_receipt',
-                  width: 100,
-                  align: 'right',
-                  render: (_, r) => {
-                    const pending = Math.max(0, Number(r.quantity || 0) - Number(r.received_quantity || 0));
-                    return formatPullQty(pending);
-                  },
-                },
-              ]}
+              columns={outsourcePullColumns}
             />
           </Space>
         </Modal>

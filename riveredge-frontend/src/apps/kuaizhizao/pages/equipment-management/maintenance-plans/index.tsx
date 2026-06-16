@@ -23,7 +23,7 @@ import {
   ProFormDigit,
   ProFormTextArea,
 } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, message, Modal, Row, Col, Descriptions, Typography, Dropdown, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Tag, Modal, Row, Col, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
@@ -36,12 +36,29 @@ import {
   MODAL_CONFIG,
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getMaintenancePlanLifecycle } from '../../../utils/equipmentLifecycle';
 import { maintenancePlanApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+
+const P = 'app.kuaizhizao.maintenancePlan';
+
+const PLAN_STATUS_KEYS: Record<string, string> = {
+  '待执行': `${P}.status.pending`,
+  '执行中': `${P}.status.running`,
+  '已完成': `${P}.status.completed`,
+  '已取消': `${P}.status.cancelled`,
+};
+
+const PLAN_STATUS_COLORS: Record<string, string> = {
+  '待执行': 'default',
+  '执行中': 'processing',
+  '已完成': 'success',
+  '已取消': 'error',
+};
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -146,7 +163,7 @@ const MaintenancePlansPage: React.FC = () => {
   const handleEdit = async (record: MaintenancePlan) => {
     try {
       if (!record.uuid) {
-        messageApi.error('维护计划UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
       const detail = await maintenancePlanApi.get(record.uuid);
@@ -168,7 +185,7 @@ const MaintenancePlansPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取维护计划详情失败');
+      messageApi.error(t(`${P}.detailFailed`));
     }
   };
 
@@ -178,7 +195,7 @@ const MaintenancePlansPage: React.FC = () => {
   const handleDetail = async (record: MaintenancePlan) => {
     try {
       if (!record.uuid) {
-        messageApi.error('维护计划UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
       const detail = await maintenancePlanApi.get(record.uuid);
@@ -186,7 +203,7 @@ const MaintenancePlansPage: React.FC = () => {
       setDrawerVisible(true);
       setPlanTrackingRefreshKey((k) => k + 1);
     } catch (error) {
-      messageApi.error('获取维护计划详情失败');
+      messageApi.error(t(`${P}.detailFailed`));
     }
   };
 
@@ -195,14 +212,14 @@ const MaintenancePlansPage: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${keys.length} 条保养计划吗？`,
+      title: t(`${P}.batchDeleteTitle`),
+      content: t(`${P}.batchDeleteContent`, { count: keys.length }),
       onOk: async () => {
         try {
           for (const uuid of keys) {
             await maintenancePlanApi.delete(String(uuid));
           }
-          messageApi.success(`成功删除 ${keys.length} 条记录`);
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (planDetail?.uuid && keys.map(String).includes(String(planDetail.uuid))) {
             setDrawerVisible(false);
@@ -210,7 +227,7 @@ const MaintenancePlansPage: React.FC = () => {
           }
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -231,10 +248,10 @@ const MaintenancePlansPage: React.FC = () => {
       const editedUuid = isEdit ? currentPlan?.uuid : undefined;
       if (isEdit && editedUuid) {
         await maintenancePlanApi.update(editedUuid, submitData);
-        messageApi.success('维护计划更新成功');
+        messageApi.success(t(`${P}.updateSuccess`));
       } else {
         await maintenancePlanApi.create(submitData);
-        messageApi.success('维护计划创建成功');
+        messageApi.success(t(`${P}.createSuccess`));
       }
       setModalVisible(false);
       setCurrentPlan(null);
@@ -250,7 +267,7 @@ const MaintenancePlansPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -260,7 +277,7 @@ const MaintenancePlansPage: React.FC = () => {
    */
   const handleExecute = (record: MaintenancePlan) => {
     if (!record.uuid || !record.equipment_uuid) {
-      messageApi.error('维护计划或设备信息不完整');
+      messageApi.error(t(`${P}.incompleteInfo`));
       return;
     }
     setExecutePlan(record);
@@ -269,7 +286,7 @@ const MaintenancePlansPage: React.FC = () => {
       executeFormRef.current?.setFieldsValue({
         execution_date: dayjs(),
         execution_result: '正常',
-        execution_content: `执行维护计划：${record.plan_name}`,
+        execution_content: t(`${P}.executionContentTemplate`, { name: record.plan_name }),
       });
     }, 100);
   };
@@ -289,13 +306,13 @@ const MaintenancePlansPage: React.FC = () => {
         status: '已确认',
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('执行记录已提交');
+      messageApi.success(t(`${P}.executeSubmitted`));
       setExecuteModalVisible(false);
       setExecutePlan(null);
       executeFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '提交失败');
+      messageApi.error(error?.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -303,77 +320,73 @@ const MaintenancePlansPage: React.FC = () => {
   const detailBaseColumns: ProDescriptionsItemProps<MaintenancePlan>[] = useMemo(
     () => [
     {
-      title: '计划编号',
+      title: t(`${P}.col.planNo`),
       dataIndex: 'plan_no',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.plan_no ?? '') }}>{r.plan_no ?? '-'}</Typography.Text>
       ),
     },
     {
-      title: '计划名称',
+      title: t(`${P}.col.planName`),
       dataIndex: 'plan_name',
     },
     {
-      title: '计划类型',
+      title: t(`${P}.col.planType`),
       dataIndex: 'plan_type',
     },
     {
-      title: '设备编号',
+      title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
       ),
     },
     {
-      title: '设备名称',
+      title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
     },
     {
-      title: '维护类型',
+      title: t(`${P}.col.maintenanceType`),
       dataIndex: 'maintenance_type',
     },
     {
-      title: '维护周期',
+      title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'maintenance_cycle',
       render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
-      title: '计划开始日期',
+      title: t(`${P}.col.plannedStartDate`),
       dataIndex: 'planned_start_date',
       valueType: 'date',
     },
     {
-      title: '计划结束日期',
+      title: t(`${P}.col.plannedEndDate`),
       dataIndex: 'planned_end_date',
       valueType: 'date',
     },
     {
-      title: '状态',
+      title: t(`${P}.col.status`),
       dataIndex: 'status',
       render: (_, record) => {
-        const statusKey = String(record.status ?? '');
-        const statusMap: Record<string, { text: string; color: string }> = {
-          '待执行': { text: '待执行', color: 'default' },
-          '执行中': { text: '执行中', color: 'processing' },
-          '已完成': { text: '已完成', color: 'success' },
-          '已取消': { text: '已取消', color: 'error' },
-        };
-        const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const status = record.status;
+        const key = status ? PLAN_STATUS_KEYS[status] : undefined;
+        const text = key ? t(key) : (status || '-');
+        const color = status ? (PLAN_STATUS_COLORS[status] || 'default') : 'default';
+        return <Tag color={color}>{text}</Tag>;
       },
     },
     {
-      title: '创建时间',
+      title: t(`${P}.col.createdAt`),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
     ],
-    []
+    [t]
   );
 
   const renderPlanRowNodes = (record: MaintenancePlan): React.ReactNode[] => {
@@ -388,7 +401,7 @@ const MaintenancePlansPage: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        详情
+        {t('common.detail')}
       </Button>,
       <Button {...rowActionKind('update')}
         key="edit"
@@ -400,7 +413,7 @@ const MaintenancePlansPage: React.FC = () => {
           void handleEdit(record);
         }}
       >
-        编辑
+        {t('common.edit')}
       </Button>,
       <Button {...rowActionKind('delete')}
         key="del"
@@ -411,13 +424,13 @@ const MaintenancePlansPage: React.FC = () => {
         onClick={(e) => {
           e.stopPropagation();
           Modal.confirm({
-            title: '确认删除',
-            content: `确定要删除维护计划"${record.plan_name}"吗？`,
+            title: t(`${P}.deleteTitle`),
+            content: t(`${P}.deleteContent`, { name: record.plan_name }),
             onOk: () => record.uuid && handleDelete([record.uuid]),
           });
         }}
       >
-        删除
+        {t('common.delete')}
       </Button>,
     ];
     if (record.status === '待执行') {
@@ -431,7 +444,7 @@ const MaintenancePlansPage: React.FC = () => {
             handleExecute(record);
           }}
         >
-          执行
+          {t(`${P}.action.execute`)}
         </Button>
       );
     }
@@ -441,9 +454,9 @@ const MaintenancePlansPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<MaintenancePlan>[] = [
+  const columns: ProColumns<MaintenancePlan>[] = useMemo(() => [
     {
-      title: '计划编号',
+      title: t(`${P}.col.planNo`),
       dataIndex: 'plan_no',
       width: 140,
       ellipsis: true,
@@ -455,18 +468,18 @@ const MaintenancePlansPage: React.FC = () => {
       ),
     },
     {
-      title: '计划名称',
+      title: t(`${P}.col.planName`),
       dataIndex: 'plan_name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '计划类型',
+      title: t(`${P}.col.planType`),
       dataIndex: 'plan_type',
       width: 120,
     },
     {
-      title: '设备编号',
+      title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       width: 140,
       render: (_, r) => (
@@ -476,30 +489,30 @@ const MaintenancePlansPage: React.FC = () => {
       ),
     },
     {
-      title: '设备名称',
+      title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '维护类型',
+      title: t(`${P}.col.maintenanceType`),
       dataIndex: 'maintenance_type',
       width: 120,
     },
     {
-      title: '维护周期',
+      title: t(`${P}.col.maintenanceCycle`),
       dataIndex: 'maintenance_cycle',
       width: 120,
       render: (_, record) => record ? `${record.maintenance_cycle ?? ''} ${record.maintenance_cycle_unit ?? ''}`.trim() || '-' : '-',
     },
     {
-      title: '计划开始日期',
+      title: t(`${P}.col.plannedStartDate`),
       dataIndex: 'planned_start_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -507,28 +520,17 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getMaintenancePlanLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getMaintenancePlanLifecycle(record as Record<string, unknown>, t)} />
+      ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       width: 200,
       fixed: 'right',
@@ -536,13 +538,13 @@ const MaintenancePlansPage: React.FC = () => {
       render: (_, record) =>
         renderPlanRowActions(renderPlanRowNodes(record), `mpl-${record.uuid ?? 'row'}`),
     },
-  ];
+  ], [t]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<MaintenancePlan>
-          headerTitle="维护保养计划管理"
+          headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-plans"
           actionRef={actionRef}
           rowKey="uuid"
@@ -562,7 +564,7 @@ const MaintenancePlansPage: React.FC = () => {
                 total: response.total || 0,
               };
             } catch (error) {
-              messageApi.error('获取维护计划列表失败');
+              messageApi.error(t(`${P}.listFailed`));
               return {
                 data: [],
                 success: false,
@@ -579,7 +581,7 @@ const MaintenancePlansPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText="新建保养计划"
+          createButtonText={t(`${P}.create`)}
           onCreate={handleCreate}
           scroll={{ x: 1900 }}
         />
@@ -587,7 +589,7 @@ const MaintenancePlansPage: React.FC = () => {
 
       {/* 创建/编辑维护计划 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑维护计划' : '新建维护计划'}
+        title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -604,22 +606,22 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormText
               name="plan_name"
-              label="计划名称"
-              placeholder="请输入计划名称"
-              rules={[{ required: true, message: '请输入计划名称' }]}
+              label={t(`${P}.form.planName`)}
+              placeholder={t(`${P}.form.planNamePlaceholder`)}
+              rules={[{ required: true, message: t(`${P}.form.planNamePlaceholder`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="plan_type"
-              label="计划类型"
-              placeholder="请选择计划类型"
+              label={t(`${P}.form.planType`)}
+              placeholder={t(`${P}.form.selectPlanType`)}
               options={[
-                { label: '定期维护', value: '定期维护' },
-                { label: '预防性维护', value: '预防性维护' },
-                { label: '故障后维护', value: '故障后维护' },
+                { label: t(`${P}.planType.regular`), value: '定期维护' },
+                { label: t(`${P}.planType.preventive`), value: '预防性维护' },
+                { label: t(`${P}.planType.postFault`), value: '故障后维护' },
               ]}
-              rules={[{ required: true, message: '请选择计划类型' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectPlanType`) }]}
             />
           </Col>
         </Row>
@@ -627,8 +629,8 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="equipment_uuid"
-              label="关联设备"
-              placeholder="请选择设备"
+              label={t(`${P}.form.equipment`)}
+              placeholder={t(`${P}.form.selectEquipment`)}
               request={async () => {
                 try {
                   const response = await equipmentApi.list({ limit: 1000 });
@@ -640,21 +642,21 @@ const MaintenancePlansPage: React.FC = () => {
                   return [];
                 }
               }}
-              rules={[{ required: true, message: '请选择设备' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectEquipment`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="maintenance_type"
-              label="维护类型"
-              placeholder="请选择维护类型"
+              label={t(`${P}.form.maintenanceType`)}
+              placeholder={t(`${P}.form.selectMaintenanceType`)}
               options={[
-                { label: '日常保养', value: '日常保养' },
-                { label: '定期保养', value: '定期保养' },
-                { label: '大修', value: '大修' },
-                { label: '小修', value: '小修' },
+                { label: t(`${P}.maintenanceType.daily`), value: '日常保养' },
+                { label: t(`${P}.maintenanceType.periodic`), value: '定期保养' },
+                { label: t(`${P}.maintenanceType.overhaul`), value: '大修' },
+                { label: t(`${P}.maintenanceType.minor`), value: '小修' },
               ]}
-              rules={[{ required: true, message: '请选择维护类型' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectMaintenanceType`) }]}
             />
           </Col>
         </Row>
@@ -662,24 +664,24 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="maintenance_cycle"
-              label="维护周期"
-              placeholder="请输入维护周期"
+              label={t(`${P}.form.maintenanceCycle`)}
+              placeholder={t(`${P}.form.maintenanceCyclePlaceholder`)}
               min={1}
-              rules={[{ required: true, message: '请输入维护周期' }]}
+              rules={[{ required: true, message: t(`${P}.form.maintenanceCyclePlaceholder`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="maintenance_cycle_unit"
-              label="周期单位"
-              placeholder="请选择周期单位"
+              label={t(`${P}.form.cycleUnit`)}
+              placeholder={t(`${P}.form.selectCycleUnit`)}
               options={[
-                { label: '天', value: '天' },
-                { label: '周', value: '周' },
-                { label: '月', value: '月' },
-                { label: '年', value: '年' },
+                { label: t(`${P}.cycleUnit.day`), value: '天' },
+                { label: t(`${P}.cycleUnit.week`), value: '周' },
+                { label: t(`${P}.cycleUnit.month`), value: '月' },
+                { label: t(`${P}.cycleUnit.year`), value: '年' },
               ]}
-              rules={[{ required: true, message: '请选择周期单位' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectCycleUnit`) }]}
             />
           </Col>
         </Row>
@@ -687,16 +689,16 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="planned_start_date"
-              label="计划开始日期"
-              placeholder="请选择计划开始日期"
+              label={t(`${P}.form.plannedStartDate`)}
+              placeholder={t(`${P}.form.selectPlannedStartDate`)}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="planned_end_date"
-              label="计划结束日期"
-              placeholder="请选择计划结束日期"
+              label={t(`${P}.form.plannedEndDate`)}
+              placeholder={t(`${P}.form.selectPlannedEndDate`)}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -710,15 +712,15 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="status"
-              label="状态"
-              placeholder="请选择状态"
+              label={t(`${P}.col.status`)}
+              placeholder={t(`${P}.form.selectStatus`)}
               options={[
-                { label: '待执行', value: '待执行' },
-                { label: '执行中', value: '执行中' },
-                { label: '已完成', value: '已完成' },
-                { label: '已取消', value: '已取消' },
+                { label: t(`${P}.status.pending`), value: '待执行' },
+                { label: t(`${P}.status.running`), value: '执行中' },
+                { label: t(`${P}.status.completed`), value: '已完成' },
+                { label: t(`${P}.status.cancelled`), value: '已取消' },
               ]}
-              rules={[{ required: true, message: '请选择状态' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
             />
           </Col>
         </Row>
@@ -726,7 +728,7 @@ const MaintenancePlansPage: React.FC = () => {
 
       {/* 执行维护保养 Modal */}
       <FormModalTemplate
-        title="执行维护保养"
+        title={t(`${P}.executeModal`)}
         open={executeModalVisible}
         onClose={() => {
           setExecuteModalVisible(false);
@@ -743,23 +745,23 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="execution_date"
-              label="执行日期"
-              placeholder="请选择执行日期"
-              rules={[{ required: true, message: '请选择执行日期' }]}
+              label={t(`${P}.form.executionDate`)}
+              placeholder={t(`${P}.form.selectExecutionDate`)}
+              rules={[{ required: true, message: t(`${P}.form.selectExecutionDate`) }]}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="execution_result"
-              label="执行结果"
-              placeholder="请选择执行结果"
+              label={t(`${P}.form.executionResult`)}
+              placeholder={t(`${P}.form.selectExecutionResult`)}
               options={[
-                { label: '正常', value: '正常' },
-                { label: '异常', value: '异常' },
-                { label: '待处理', value: '待处理' },
+                { label: t(`${P}.executionResult.normal`), value: '正常' },
+                { label: t(`${P}.executionResult.abnormal`), value: '异常' },
+                { label: t(`${P}.executionResult.pending`), value: '待处理' },
               ]}
-              rules={[{ required: true, message: '请选择执行结果' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectExecutionResult`) }]}
             />
           </Col>
         </Row>
@@ -772,8 +774,8 @@ const MaintenancePlansPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="execution_content"
-              label="执行内容"
-              placeholder="请输入执行内容"
+              label={t(`${P}.form.executionContent`)}
+              placeholder={t(`${P}.form.executionContentPlaceholder`)}
               fieldProps={{ rows: 4 }}
             />
           </Col>
@@ -782,7 +784,7 @@ const MaintenancePlansPage: React.FC = () => {
 
       {/* 维护计划详情 Drawer */}
       <DetailDrawerTemplate
-        title="维护计划详情"
+        title={t(`${P}.detailTitle`)}
         open={drawerVisible}
         zIndex={planDetailDrawerZIndex}
         onClose={() => {
@@ -796,17 +798,17 @@ const MaintenancePlansPage: React.FC = () => {
         customContent={
           planDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
                 <Descriptions
                   column={3}
                   size="small"
                   items={buildDescriptionItemsFromColumns(planDetail, detailBaseColumns)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getMaintenancePlanLifecycle(planDetail as Record<string, unknown>);
+                    const lc = getMaintenancePlanLifecycle(planDetail as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
@@ -840,10 +842,10 @@ const MaintenancePlansPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="保养计划无明细行表" />
+              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
                 {planTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -856,7 +858,7 @@ const MaintenancePlansPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={planTracking.data} />
                 )}
                 {!planTracking.loading && !planTracking.data && !planTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
                 )}
               </DetailDrawerSection>
             </>

@@ -195,6 +195,46 @@ export function getAppDisplayName(
   return fallback ?? '';
 }
 
+/**
+ * 应用描述：优先 app.${code}.desc，其次 sys.app.${code}.desc，最后 fallback
+ */
+export function getAppDescription(
+  appCode: string,
+  t: (key: string, options?: { defaultValue?: string }) => string,
+  fallback?: string
+): string {
+  const key = `app.${appCode}.desc`;
+  let translated = t(key, { defaultValue: '' });
+  if (translated && translated !== key && translated.trim() !== '') return translated;
+  const legacyKey = `sys.app.${appCode}.desc`;
+  translated = t(legacyKey, { defaultValue: fallback ?? '' });
+  if (translated && translated !== legacyKey && translated.trim() !== '') return translated;
+  return fallback ?? '';
+}
+
+/** 应用中心 / 详情：名称（与侧栏 getAppDisplayName 同源，不区分 is_system） */
+export function resolveApplicationDisplayName(
+  record: { code?: string; name?: string | null },
+  t: (key: string, options?: { defaultValue?: string }) => string,
+): string {
+  const val = record.name ?? '';
+  if (typeof val === 'string' && val.startsWith('sys.')) return t(val);
+  if (record.code) return getAppDisplayName(record.code, t, val);
+  return val;
+}
+
+/** 应用中心 / 详情：描述 */
+export function resolveApplicationDescription(
+  record: { code?: string; description?: string | null },
+  t: (key: string, options?: { defaultValue?: string }) => string,
+  emptyFallback = '',
+): string {
+  const val = record.description ?? '';
+  if (typeof val === 'string' && val.startsWith('sys.')) return t(val);
+  if (record.code) return getAppDescription(record.code, t, val || emptyFallback);
+  return val || emptyFallback;
+}
+
 /** 系统菜单分组：库内英文 slug → 现行 menu.group.* key（与 system_menu_config 分组同义） */
 const SYSTEM_MENU_GROUP_SLUG_TO_I18N: Record<string, string> = {
   settings: 'menu.group.core-config',

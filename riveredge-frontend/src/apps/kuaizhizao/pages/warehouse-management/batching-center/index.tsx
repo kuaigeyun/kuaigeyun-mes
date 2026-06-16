@@ -42,7 +42,7 @@ import { workOrderApi } from '../../../services/work-order';
 import BatchingTaskQueue from './BatchingTaskQueue';
 import OutsourceMaterialPanel from './OutsourceMaterialPanel';
 import {
-  MATERIAL_CENTER_TABS,
+  getMaterialCenterTabs,
   DEFAULT_MATERIAL_CENTER_TAB,
   isBatchingTaskTab,
   type MaterialCenterTabKey,
@@ -95,13 +95,14 @@ const BatchingCenterPage: React.FC = () => {
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [searchParams] = useSearchParams();
+  const materialCenterTabs = useMemo(() => getMaterialCenterTabs(t), [t]);
   const initialTab = useMemo(() => {
     const tab = searchParams.get('tab');
-    if (tab && MATERIAL_CENTER_TABS.some((t) => t.key === tab)) {
+    if (tab && materialCenterTabs.some((item) => item.key === tab)) {
       return tab as MaterialCenterTabKey;
     }
     return DEFAULT_MATERIAL_CENTER_TAB;
-  }, [searchParams]);
+  }, [searchParams, materialCenterTabs]);
   const [activeTabKey, setActiveTabKey] = useState<MaterialCenterTabKey>(initialTab);
   const [createModalVisible, setCreateModalVisible] = useState(false);
   const [materialPickerOpen, setMaterialPickerOpen] = useState(false);
@@ -144,7 +145,7 @@ const BatchingCenterPage: React.FC = () => {
     try {
       if (values.create_mode === 'from_work_order') {
         if (!values.work_order_id) {
-          messageApi.error('请选择工单');
+          messageApi.error(t('app.kuaizhizao.batchingCenter.selectWorkOrder'));
           throw new Error('请选择工单');
         }
         await batchingOrderApi.pullFromWorkOrder({
@@ -158,11 +159,11 @@ const BatchingCenterPage: React.FC = () => {
           attachments: normalizeDocumentAttachments(values.attachments),
           allow_existing_draft: true,
         });
-        messageApi.success('从工单生成配料单成功');
+        messageApi.success(t('app.kuaizhizao.batchingCenter.pullFromWorkOrderSuccess'));
       } else {
         const items = values.items || [];
         if (items.length === 0) {
-          messageApi.error('手工创建时请至少添加一条配料明细');
+          messageApi.error(t('app.kuaizhizao.batchingCenter.manualNeedItems'));
           throw new Error('请添加配料明细');
         }
         const orderData: any = {
@@ -182,14 +183,14 @@ const BatchingCenterPage: React.FC = () => {
           warehouse_name: values._warehouse_name || '',
         }));
         await batchingOrderApi.create({ ...orderData, items: itemPayload });
-        messageApi.success('配料单创建成功');
+        messageApi.success(t('app.kuaizhizao.batchingCenter.createSuccess'));
       }
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
     } catch (error: any) {
       if (error.message && !error.message.includes('请选择') && !error.message.includes('请添加')) {
-        messageApi.error(error.message || '创建配料单失败');
+        messageApi.error(error.message || t('app.kuaizhizao.batchingCenter.createFailed'));
       }
       throw error;
     }
@@ -213,27 +214,31 @@ const BatchingCenterPage: React.FC = () => {
     backflush_alert: <WarningOutlined />,
   };
 
-  const taskTabs = MATERIAL_CENTER_TABS.map((tab) => ({
-    key: tab.key,
-    label: (
-      <Tooltip title={tab.hint}>
-        <Space size={4}>
-          {tabIcons[tab.key]}
-          <span>{tab.label}</span>
-        </Space>
-      </Tooltip>
-    ),
-    children: isBatchingTaskTab(tab.key) ? (
-      <BatchingTaskQueue
-        taskType={tab.key as BatchingTaskTabKey}
-        onCreate={tab.key === 'batching_draft' ? () => handleCreate() : undefined}
-        onOpenBatchingDetail={openBatchingDetail}
-        onRefreshBatchingList={invalidateMenuBadgeCounts}
-      />
-    ) : (
-      <OutsourceMaterialPanel mode={tab.key} />
-    ),
-  }));
+  const taskTabs = useMemo(
+    () =>
+      materialCenterTabs.map((tab) => ({
+        key: tab.key,
+        label: (
+          <Tooltip title={tab.hint}>
+            <Space size={4}>
+              {tabIcons[tab.key]}
+              <span>{tab.label}</span>
+            </Space>
+          </Tooltip>
+        ),
+        children: isBatchingTaskTab(tab.key) ? (
+          <BatchingTaskQueue
+            taskType={tab.key as BatchingTaskTabKey}
+            onCreate={tab.key === 'batching_draft' ? () => handleCreate() : undefined}
+            onOpenBatchingDetail={openBatchingDetail}
+            onRefreshBatchingList={invalidateMenuBadgeCounts}
+          />
+        ) : (
+          <OutsourceMaterialPanel mode={tab.key} />
+        ),
+      })),
+    [materialCenterTabs, invalidateMenuBadgeCounts, t],
+  );
 
   return (
     <>
@@ -245,7 +250,7 @@ const BatchingCenterPage: React.FC = () => {
 
       {/* 新建配料单 Modal */}
       <FormModalTemplate
-        title="新建配料单"
+        title={t('app.kuaizhizao.batchingCenter.createModalTitle')}
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
@@ -258,10 +263,10 @@ const BatchingCenterPage: React.FC = () => {
       >
         <ProFormRadio.Group
           name="create_mode"
-          label="创建方式"
+          label={t('app.kuaizhizao.batchingCenter.createMode')}
           options={[
-            { label: '从工单生成', value: 'from_work_order' },
-            { label: '手工创建', value: 'manual' },
+            { label: t('app.kuaizhizao.batchingCenter.createFromWorkOrder'), value: 'from_work_order' },
+            { label: t('app.kuaizhizao.batchingCenter.createManual'), value: 'manual' },
           ]}
           rules={[{ required: true }]}
         />
@@ -270,9 +275,9 @@ const BatchingCenterPage: React.FC = () => {
             create_mode === 'from_work_order' ? (
               <ProFormSelect
                 name="work_order_id"
-                label="工单"
-                placeholder="请选择工单"
-                rules={[{ required: true, message: '请选择工单' }]}
+                label={t('app.kuaizhizao.warehouseCommon.colWorkOrder')}
+                placeholder={t('app.kuaizhizao.batchingCenter.selectWorkOrder')}
+                rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectWorkOrder') }]}
                 fieldProps={{
                   showSearch: true,
                   filterOption: (input: string, option: any) =>
@@ -294,13 +299,13 @@ const BatchingCenterPage: React.FC = () => {
           {({ create_mode }) =>
             create_mode === 'manual' ? (
               <div className="uni-table-detail" style={{ width: '100%' }}>
-                <UniTableDetailHeader title="配料明细" required />
-                <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条配料明细' }]}>
+                <UniTableDetailHeader title={t('app.kuaizhizao.batchingCenter.batchingItems')} required />
+                <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.batchingCenter.minOneItem') }]}>
                   <AntForm.List name="items">
                     {(fields, { add, remove }) => {
                       const cols = [
                         {
-                          title: '物料',
+                          title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
                           dataIndex: 'material_id',
                           width: 260,
                           render: (_: any, __: any, index: number) => (
@@ -316,7 +321,7 @@ const BatchingCenterPage: React.FC = () => {
                                     <UniMaterialSelect
                                       name={[index, 'material_id']}
                                       label=""
-                                      placeholder="请选择物料"
+                                      placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
                                       required
                                       size="small"
                                       listFieldKey={index}
@@ -338,18 +343,18 @@ const BatchingCenterPage: React.FC = () => {
                           ),
                         },
                         {
-                          title: '需求数量',
+                          title: t('app.kuaizhizao.batchingCenter.requiredQty'),
                           dataIndex: 'required_quantity',
                           width: 120,
                           align: 'right' as const,
                           render: (_: any, __: any, index: number) => (
-                            <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.0001, message: '>0' }]} style={{ margin: 0 }}>
-                              <InputNumber placeholder="数量" min={0} precision={4} style={{ width: '100%' }} size="small" />
+                            <AntForm.Item name={[index, 'required_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.0001, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]} style={{ margin: 0 }}>
+                              <InputNumber placeholder={t('app.kuaizhizao.warehouseCommon.colQuantity')} min={0} precision={4} style={{ width: '100%' }} size="small" />
                             </AntForm.Item>
                           ),
                         },
                         {
-                          title: '操作',
+                          title: t('app.kuaizhizao.warehouseCommon.colActions'),
                           width: 60,
                           render: (_: any, __: any, index: number) => (
                             <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -373,7 +378,7 @@ const BatchingCenterPage: React.FC = () => {
                               footer={() => (
                                 <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                                   <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultBatchingItem)}>
-                                    添加明细
+                                    {t('app.kuaizhizao.warehouseCommon.addItem')}
                                   </Button>
                                   <Button
                                     type="default"
@@ -400,8 +405,8 @@ const BatchingCenterPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="拣选仓库"
-              placeholder="请选择拣选源仓库"
+              label={t('app.kuaizhizao.batchingCenter.pickingWarehouse')}
+              placeholder={t('app.kuaizhizao.batchingCenter.selectPickingWarehouse')}
               required
               onChange={(val, wh) => formRef.current?.setFieldsValue({ _warehouse_name: wh?.name })}
             />
@@ -409,8 +414,8 @@ const BatchingCenterPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="target_warehouse_id"
-              label="目标线边仓（可选）"
-              placeholder="请选择目标线边仓"
+              label={t('app.kuaizhizao.batchingCenter.targetLineSideWarehouse')}
+              placeholder={t('app.kuaizhizao.batchingCenter.selectTargetLineSideWarehouse')}
               onChange={(val, wh) => formRef.current?.setFieldsValue({ _target_warehouse_name: wh?.name })}
             />
           </Col>
@@ -419,8 +424,8 @@ const BatchingCenterPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="batching_date"
-              label="配料日期"
-              rules={[{ required: true, message: '请选择配料日期' }]}
+              label={t('app.kuaizhizao.batchingCenter.batchingDate')}
+              rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectBatchingDate') }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -429,8 +434,8 @@ const BatchingCenterPage: React.FC = () => {
         <DocumentAttachmentsField category="batching_order_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
@@ -444,7 +449,7 @@ const BatchingCenterPage: React.FC = () => {
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="配料单详情"
+        title={t('app.kuaizhizao.batchingCenter.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -453,26 +458,26 @@ const BatchingCenterPage: React.FC = () => {
         dataSource={currentOrder || {}}
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[
-          { title: '配料单号', dataIndex: 'code' },
-          { title: '仓库', dataIndex: 'warehouse_name' },
-          { title: '工单号', dataIndex: 'work_order_code' },
-          { title: '配料日期', dataIndex: 'batching_date', valueType: 'date' },
+          { title: t('app.kuaizhizao.batchingCenter.batchingCode'), dataIndex: 'code' },
+          { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
+          { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
+          { title: t('app.kuaizhizao.batchingCenter.batchingDate'), dataIndex: 'batching_date', valueType: 'date' },
           {
-            title: '状态',
+            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
             dataIndex: 'status',
             render: (_, entity) => {
               const stageName = getBatchingOrderStageName(entity?.status);
               return <Tag>{stageName}</Tag>;
             },
           },
-          { title: '物料种类', dataIndex: 'total_items' },
-          { title: '目标线边仓', dataIndex: 'target_warehouse_name' },
-          { title: '备注', dataIndex: 'remarks' },
-          { title: '执行人', dataIndex: 'executed_by_name' },
-          { title: '执行时间', dataIndex: 'executed_at', valueType: 'dateTime' },
+          { title: t('app.kuaizhizao.warehouseCommon.colMaterialKindCount'), dataIndex: 'total_items' },
+          { title: t('app.kuaizhizao.warehouseCommon.colTargetLineSideWarehouse'), dataIndex: 'target_warehouse_name' },
+          { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+          { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
+          { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', valueType: 'dateTime' },
         ]}
       >
-        <DetailDrawerSection title="生命周期">
+        <DetailDrawerSection title={t('app.kuaizhizao.warehouseCommon.lifecycleSection')}>
           {(() => {
             const lifecycle = getBatchingOrderLifecycle(currentOrder as unknown as Record<string, unknown>);
             const mainStages = lifecycle.mainStages ?? [];
@@ -488,21 +493,24 @@ const BatchingCenterPage: React.FC = () => {
           })()}
         </DetailDrawerSection>
         {currentOrder?.items && currentOrder.items.length > 0 && (
-          <Card title="配料明细" style={{ marginTop: 16 }}>
+          <Card title={t('app.kuaizhizao.batchingCenter.batchingItems')} style={{ marginTop: 16 }}>
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             <Table
               className="warehouse-detail-table"
               columns={[
-                { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' },
-                { title: '已拣数量', dataIndex: 'picked_quantity', width: 100, align: 'right' },
+                { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120 },
+                { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150 },
+                { title: t('app.kuaizhizao.batchingCenter.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' },
+                { title: t('app.kuaizhizao.warehouseCommon.colPickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' },
                 {
-                  title: '状态',
+                  title: t('app.kuaizhizao.warehouseCommon.colStatus'),
                   dataIndex: 'status',
                   width: 100,
                   render: (status: string) => {
-                    const map: Record<string, string> = { pending: '待拣', picked: '已拣' };
+                    const map: Record<string, string> = {
+                      pending: t('app.kuaizhizao.warehouseCommon.statusPendingPick'),
+                      picked: t('app.kuaizhizao.warehouseCommon.statusPicked'),
+                    };
                     return <Tag>{map[status] ?? status}</Tag>;
                   },
                 },

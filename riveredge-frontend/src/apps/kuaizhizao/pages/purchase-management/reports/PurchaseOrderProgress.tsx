@@ -1,18 +1,21 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const PurchaseOrderProgress: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    { title: '订单编号', dataIndex: 'order_code', width: 150 },
-    { title: '物料名称', dataIndex: 'material_name', width: 200 },
-    { title: '订单数量', dataIndex: 'order_qty', valueType: 'digit', width: 100 },
-    { title: '收货数量', dataIndex: 'receipt_qty', valueType: 'digit', width: 100 },
-    { title: '待收数量', dataIndex: 'pending_qty', valueType: 'digit', width: 100 },
-    { title: '执行进度', dataIndex: 'progress', valueType: 'percent', width: 100 },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseReports.colOrderCode'), dataIndex: 'order_code', width: 150 },
+      { title: t('app.kuaizhizao.purchaseReports.colMaterialName'), dataIndex: 'material_name', width: 200 },
+      { title: t('app.kuaizhizao.purchaseReports.colOrderQty'), dataIndex: 'order_qty', valueType: 'digit', width: 100 },
+      { title: t('app.kuaizhizao.purchaseReports.colReceiptQty'), dataIndex: 'receipt_qty', valueType: 'digit', width: 100 },
+      { title: t('app.kuaizhizao.purchaseReports.colPendingQty'), dataIndex: 'pending_qty', valueType: 'digit', width: 100 },
+      { title: t('app.kuaizhizao.purchaseReports.colProgress'), dataIndex: 'progress', valueType: 'percent', width: 100 },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

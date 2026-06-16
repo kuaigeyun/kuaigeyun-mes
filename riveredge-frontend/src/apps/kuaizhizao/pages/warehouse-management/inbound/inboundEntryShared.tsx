@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Form, Input, Select, Upload } from 'antd';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { useDebounceFn } from 'ahooks';
@@ -60,6 +61,7 @@ function userOptionFromUser(user: User) {
 }
 
 export function useInboundReceiverSelect() {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const currentUser = useGlobalStore((s) => s.currentUser);
   const useFullUserList = canReadUserDirectory(currentUser);
@@ -94,12 +96,12 @@ export function useInboundReceiverSelect() {
         }
         setReceiverOptions(users.map(userOptionFromUser));
       } catch {
-        messageApi.error('加载人员列表失败，请稍后重试');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadUsersFailed'));
       } finally {
         setReceiverLoading(false);
       }
     },
-    [currentUser, messageApi, useFullUserList],
+    [currentUser, messageApi, t, useFullUserList],
   );
 
   const { run: debounceLoadReceiverOptions } = useDebounceFn(
@@ -159,7 +161,9 @@ type InboundEntryReceiverFieldProps = {
   hook: ReturnType<typeof useInboundReceiverSelect>;
 };
 
-export function InboundEntryReceiverField({ label = '入库人', hook }: InboundEntryReceiverFieldProps) {
+export function InboundEntryReceiverField({ label, hook }: InboundEntryReceiverFieldProps) {
+  const { t } = useTranslation();
+  const resolvedLabel = label ?? t('app.kuaizhizao.warehouseInbound.field.receiver');
   const {
     currentUser,
     receiverUuid,
@@ -171,11 +175,11 @@ export function InboundEntryReceiverField({ label = '入库人', hook }: Inbound
   } = hook;
 
   return (
-    <Form.Item label={label}>
+    <Form.Item label={resolvedLabel}>
       {currentUser?.uuid ? (
         <Select
           style={{ width: '100%' }}
-          placeholder={`请选择${label}`}
+          placeholder={t('app.kuaizhizao.warehouseInbound.field.selectReceiver', { label: resolvedLabel })}
           showSearch
           filterOption={false}
           loading={receiverLoading}
@@ -202,8 +206,9 @@ export function InboundEntryAttachmentsSection({
   fileList,
   onChange,
 }: InboundEntryAttachmentsSectionProps) {
+  const { t } = useTranslation();
   return (
-    <Form.Item label="附件">
+    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.attachments')}>
       <Upload
         fileList={fileList}
         onChange={({ fileList: next }) => onChange(next)}
@@ -217,7 +222,7 @@ export function InboundEntryAttachmentsSection({
         }}
         multiple
       >
-        <Button>上传附件</Button>
+        <Button>{t('app.kuaizhizao.warehouseInbound.action.uploadAttachments')}</Button>
       </Upload>
     </Form.Item>
   );
@@ -233,13 +238,16 @@ type InboundEntryRemarksSectionProps = {
 export function InboundEntryRemarksSection({
   value,
   onChange,
-  label = '入库备注',
-  placeholder = '入库单备注',
+  label,
+  placeholder,
 }: InboundEntryRemarksSectionProps) {
+  const { t } = useTranslation();
+  const resolvedLabel = label ?? t('app.kuaizhizao.warehouseInbound.field.inboundRemarks');
+  const resolvedPlaceholder = placeholder ?? t('app.kuaizhizao.warehouseInbound.field.inboundRemarksPlaceholder');
   return (
-    <Form.Item label={label}>
+    <Form.Item label={resolvedLabel}>
       <Input.TextArea
-        placeholder={placeholder}
+        placeholder={resolvedPlaceholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         rows={3}

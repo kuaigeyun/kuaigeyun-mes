@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRequest } from 'ahooks';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   WalletOutlined,
   DollarOutlined,
@@ -27,6 +28,7 @@ import {
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../../kuaizhizao/components/module-center';
 
 const FinanceCenterDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: financeSummary, loading: summaryLoading } = useRequest(
     () => apiRequest<Record<string, number>>('/apps/kuaicaiwu/management-report/finance-summary', { method: 'GET' }),
@@ -53,47 +55,91 @@ const FinanceCenterDashboard: React.FC = () => {
     () => [
       {
         key: 'pending',
-        title: '待确认收付款',
+        title: t('app.kuaicaiwu.financeDashboard.kpi.pendingReceiptPayment'),
         value: (s?.pending_receipts ?? 0) + (s?.pending_payments ?? 0),
-        subtitle: `收款 ${s?.pending_receipts ?? 0} · 付款 ${s?.pending_payments ?? 0}`,
+        subtitle: t('app.kuaicaiwu.financeDashboard.kpi.pendingSubtitle', {
+          receipts: s?.pending_receipts ?? 0,
+          payments: s?.pending_payments ?? 0,
+        }),
         icon: <WalletOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/receipts'),
         sideMetrics: [
-          { label: '待审收款', value: s?.pending_receipts ?? 0 },
-          { label: '待审付款', value: s?.pending_payments ?? 0 },
+          {
+            label: t('app.kuaicaiwu.financeDashboard.kpi.pendingReceipts'),
+            value: s?.pending_receipts ?? 0,
+          },
+          {
+            label: t('app.kuaicaiwu.financeDashboard.kpi.pendingPayments'),
+            value: s?.pending_payments ?? 0,
+          },
         ],
       },
       {
         key: 'ar',
-        title: '逾期应收',
+        title: t('app.kuaicaiwu.financeDashboard.kpi.overdueReceivables'),
         value: s?.overdue_receivables ?? 0,
-        subtitle: '需跟进催收',
+        subtitle: t('app.kuaicaiwu.financeDashboard.kpi.overdueReceivablesSubtitle'),
         icon: <AlertOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/receivables'),
       },
       {
         key: 'ap',
-        title: '逾期应付',
+        title: t('app.kuaicaiwu.financeDashboard.kpi.overduePayables'),
         value: s?.overdue_payables ?? 0,
-        subtitle: `平均回款约 ${kpis?.dso ?? 0} 天`,
+        subtitle: t('app.kuaicaiwu.financeDashboard.kpi.overduePayablesSubtitle', {
+          dso: kpis?.dso ?? 0,
+        }),
         icon: <CreditCardOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/payables'),
       },
     ],
-    [navigate, s, kpis],
+    [navigate, s, kpis, t],
   );
 
-  const shortcuts: ModuleShortcutDef[] = [
-    { key: 'receipt', title: '收款单', icon: <DollarOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/kuaicaiwu/finance-management/receipts' },
-    { key: 'payment', title: '付款单', icon: <CreditCardOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />, path: '/apps/kuaicaiwu/finance-management/payments' },
-    { key: 'ar', title: '应收管理', icon: <WalletOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaicaiwu/finance-management/receivables' },
-    { key: 'ap', title: '应付管理', icon: <FileTextOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaicaiwu/finance-management/payables' },
-    { key: 'settle', title: '往来核销', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaicaiwu/finance-management/settlement' },
-    { key: 'partner-stmt', title: '往来对账', icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/kuaicaiwu/finance-management/partner-statements' },
-  ];
+  const shortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'receipt',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.receipts'),
+        icon: <DollarOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
+        path: '/apps/kuaicaiwu/finance-management/receipts',
+      },
+      {
+        key: 'payment',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.payments'),
+        icon: <CreditCardOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />,
+        path: '/apps/kuaicaiwu/finance-management/payments',
+      },
+      {
+        key: 'ar',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.receivables'),
+        icon: <WalletOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
+        path: '/apps/kuaicaiwu/finance-management/receivables',
+      },
+      {
+        key: 'ap',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.payables'),
+        icon: <FileTextOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
+        path: '/apps/kuaicaiwu/finance-management/payables',
+      },
+      {
+        key: 'settle',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.settlement'),
+        icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaicaiwu/finance-management/settlement',
+      },
+      {
+        key: 'partner-stmt',
+        title: t('app.kuaicaiwu.financeDashboard.shortcut.partnerStatements'),
+        icon: <ReconciliationOutlined style={{ fontSize: 22, color: '#13c2c2' }} />,
+        path: '/apps/kuaicaiwu/finance-management/partner-statements',
+      },
+    ],
+    [t],
+  );
 
   const todoItems = useMemo(() => {
     const list = [];
@@ -101,7 +147,9 @@ const FinanceCenterDashboard: React.FC = () => {
       list.push({
         id: 'fin-receipt',
         type: 'finance',
-        title: `${s?.pending_receipts} 笔收款单待确认`,
+        title: t('app.kuaicaiwu.financeDashboard.todo.pendingReceipts', {
+          count: s?.pending_receipts ?? 0,
+        }),
         priority: 'medium',
         status: 'pending',
         link: '/apps/kuaicaiwu/finance-management/receipts',
@@ -112,7 +160,9 @@ const FinanceCenterDashboard: React.FC = () => {
       list.push({
         id: 'fin-ar',
         type: 'finance',
-        title: `${s?.overdue_receivables} 笔应收已逾期`,
+        title: t('app.kuaicaiwu.financeDashboard.todo.overdueReceivables', {
+          count: s?.overdue_receivables ?? 0,
+        }),
         priority: 'high',
         status: 'pending',
         link: '/apps/kuaicaiwu/finance-management/receivables',
@@ -120,7 +170,7 @@ const FinanceCenterDashboard: React.FC = () => {
       });
     }
     return list;
-  }, [s]);
+  }, [s, t]);
 
   return (
     <ModuleCenterLayout
@@ -128,20 +178,33 @@ const FinanceCenterDashboard: React.FC = () => {
       kpiRow={<ModuleKpiRow items={kpisRow} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} colProps={{ xs: 12, sm: 8, md: 4, lg: 4 }} />}
       actionRow={
-        <ModuleActionPanel title="财务待办" lg={24}>
-          <ModuleTodoList items={todoItems} emptyText="暂无财务待办" />
+        <ModuleActionPanel title={t('app.kuaicaiwu.financeDashboard.todosTitle')} lg={24}>
+          <ModuleTodoList
+            items={todoItems}
+            emptyText={t('app.kuaicaiwu.financeDashboard.noTodos')}
+          />
         </ModuleActionPanel>
       }
       chartRow={
         <ModuleChartRow>
-          <ModuleChartPanel title="应收账龄" lg={12} loading={loadingArAging} height={360}>
+          <ModuleChartPanel
+            title={t('app.kuaicaiwu.financeDashboard.receivableAgingTitle')}
+            lg={12}
+            loading={loadingArAging}
+            height={360}
+          >
             <FinanceAgingPanel
               data={receivableAging}
               detailPath="/apps/kuaicaiwu/finance-management/receivables"
               onOpenDetail={navigate}
             />
           </ModuleChartPanel>
-          <ModuleChartPanel title="应付账龄" lg={12} loading={loadingApAging} height={360}>
+          <ModuleChartPanel
+            title={t('app.kuaicaiwu.financeDashboard.payableAgingTitle')}
+            lg={12}
+            loading={loadingApAging}
+            height={360}
+          >
             <FinanceAgingPanel
               data={payableAging}
               detailPath="/apps/kuaicaiwu/finance-management/payables"

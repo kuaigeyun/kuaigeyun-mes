@@ -2,6 +2,7 @@
  * 创建/编辑工单 — 工艺路线工序拖拽排序（独立 chunk，首屏不加载 @dnd-kit）
  */
 import React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Button, Space } from 'antd'
 import { HolderOutlined, DeleteOutlined } from '@ant-design/icons'
 import {
@@ -82,6 +83,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
   formRef,
   disabled,
 }) => {
+  const { t } = useTranslation()
   const sensors = useSensors(
     useSensor(PointerSensor),
     useSensor(KeyboardSensor, {
@@ -131,7 +133,7 @@ const CreateWorkOrderOperationsList: React.FC<CreateWorkOrderOperationsListProps
           borderRadius: 4,
         }}
       >
-        可手工添加工序，或选择工艺路线自动加载
+        {t('app.kuaizhizao.workOrder.msgAddOpsManually')}
       </div>
     )
   }

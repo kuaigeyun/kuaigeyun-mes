@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, Typography, Descriptions, Empty, Spin, theme as AntdTheme } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
@@ -25,16 +25,7 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
-
-const SKILL_DETAIL_COLUMNS: ProDescriptionsItemProps<Skill>[] = [
-  { title: '技能编号', dataIndex: 'code' },
-  { title: '技能名称', dataIndex: 'name' },
-  { title: '技能分类', dataIndex: 'category' },
-  { title: '描述', dataIndex: 'description', span: 3 },
-  { title: '启用状态', dataIndex: 'isActive', render: (_, record) => (record?.isActive ? '启用' : '禁用') },
-  { title: '创建时间', dataIndex: 'createdAt', valueType: 'dateTime' },
-  { title: '更新时间', dataIndex: 'updatedAt', valueType: 'dateTime' },
-];
+import { getPerformanceActiveValueEnum, renderActiveTag } from '../components/performanceMeta';
 
 const SkillsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -70,6 +61,23 @@ const SkillsPage: React.FC = () => {
     drawerVisible && skillDetail?.id != null ? 'performance_skill' : undefined,
     skillDetail?.id,
     skillTrackingRefreshKey,
+  );
+
+  const skillDetailColumns: ProDescriptionsItemProps<Skill>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.performance.skills.columns.skillCode'), dataIndex: 'code' },
+      { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name' },
+      { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category' },
+      { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', span: 3 },
+      {
+        title: t('app.kuaizhizao.performance.holidays.columns.activeStatus'),
+        dataIndex: 'isActive',
+        render: (_, record) => renderActiveTag(t, record?.isActive),
+      },
+      { title: t('app.kuaizhizao.performance.common.columns.createdAt'), dataIndex: 'createdAt', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.performance.common.columns.updatedAt'), dataIndex: 'updatedAt', valueType: 'dateTime' },
+    ],
+    [t],
   );
 
   const handleCreate = () => { setEditUuid(null); setModalVisible(true); };
@@ -126,7 +134,7 @@ const SkillsPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
     {
-      title: '技能编号',
+      title: t('app.kuaizhizao.performance.skills.columns.skillCode'),
       dataIndex: 'code',
       width: 150,
       fixed: 'left',
@@ -136,26 +144,26 @@ const SkillsPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '技能名称', dataIndex: 'name', width: 200, ellipsis: true },
-    { title: '技能分类', dataIndex: 'category', width: 150, hideInSearch: true },
-    { title: '描述', dataIndex: 'description', ellipsis: true, hideInSearch: true },
+    { title: t('app.kuaizhizao.performance.skills.columns.skillName'), dataIndex: 'name', width: 200, ellipsis: true },
+    { title: t('app.kuaizhizao.performance.skills.columns.category'), dataIndex: 'category', width: 150, hideInSearch: true },
+    { title: t('app.kuaizhizao.performance.common.columns.description'), dataIndex: 'description', ellipsis: true, hideInSearch: true },
     ...customFieldColumns,
     {
-      title: '启用',
+      title: t('app.kuaizhizao.performance.common.active.enabled'),
       dataIndex: 'isActive',
       hideInTable: true,
       valueType: 'select',
-      valueEnum: { true: { text: '启用' }, false: { text: '禁用' } },
+      valueEnum: getPerformanceActiveValueEnum(t),
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
       dataIndex: 'updatedAt',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.updatedAt ? dayjs(r.updatedAt).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -176,34 +184,34 @@ const SkillsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.performance.common.columns.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-            详情
+            {t('app.kuaizhizao.performance.common.actions.detail')}
           </Button>
           <Button key="edit" {...rowActionKind('update')} onClick={() => handleEdit(record)}>
-            编辑
+            {t('app.kuaizhizao.performance.common.actions.edit')}
           </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个技能吗？" onConfirm={() => handleDelete(record)}>
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.kuaizhizao.performance.skills.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
             <Button type="link" danger size="small" icon={<DeleteOutlined />}>
-              删除
+              {t('app.kuaizhizao.performance.common.actions.delete')}
             </Button>
           </Popconfirm>
         </Space>
       ),
     },
     ];
-  }, [customFields]);
+  }, [t, customFields]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Skill>
-          headerTitle="技能管理"
+          headerTitle={t('app.kuaizhizao.performance.skills.pageTitle')}
           actionRef={actionRef}
           columns={columns}
           columnPersistenceId="apps.kuaizhizao.pages.performance.skills"
@@ -220,7 +228,7 @@ const SkillsPage: React.FC = () => {
               const total = enrichedRows.length < pageSize ? skip + enrichedRows.length : skip + enrichedRows.length + 1;
               return { data: enrichedRows, success: true, total };
             } catch (error: any) {
-              messageApi.error(error?.message || '获取技能列表失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.performance.skills.messages.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -229,7 +237,7 @@ const SkillsPage: React.FC = () => {
           scroll={{ x: 1280 }}
           pagination={{ defaultPageSize: 20, showSizeChanger: true }}
           showCreateButton
-          createButtonText="新建技能"
+          createButtonText={t('app.kuaizhizao.performance.skills.createButton')}
           onCreate={handleCreate}
           enableRowSelection
           selectedRowKeys={selectedRowKeys}
@@ -237,11 +245,11 @@ const SkillsPage: React.FC = () => {
           showDeleteButton
           onDelete={handleBatchDelete}
           deleteConfirmTitle={(count) => t('common.confirmBatchDeleteContent', { count })}
-          deleteButtonText="批量删除"
+          deleteButtonText={t('common.batchDelete')}
         />
       </ListPageTemplate>
       <DetailDrawerTemplate
-        title="技能详情"
+        title={t('app.kuaizhizao.performance.skills.detailTitle')}
         open={drawerVisible}
         zIndex={skillDetailDrawerZIndex}
         onClose={handleCloseDetail}
@@ -255,11 +263,11 @@ const SkillsPage: React.FC = () => {
             </div>
           ) : skillDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
-                  items={buildMasterDetailDescriptionItems(skillDetail, SKILL_DETAIL_COLUMNS)}
+                  items={buildMasterDetailDescriptionItems(skillDetail, skillDetailColumns)}
                 />
               </DetailDrawerSection>
               {hasCustomFieldsDetailContent(customFields, customFieldValues) ? (
@@ -267,7 +275,7 @@ const SkillsPage: React.FC = () => {
                   <CustomFieldsDetailSection customFields={customFields} customFieldValues={customFieldValues} />
                 </DetailDrawerSection>
               ) : null}
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lc = getPerformanceConfigActiveLifecycle(skillDetail as unknown as Record<string, unknown>);
@@ -301,10 +309,10 @@ const SkillsPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细行" />
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.detailInfo')}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noDetailLines')} />
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.operationLog')}>
                 {skillTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -317,7 +325,7 @@ const SkillsPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={skillTracking.data} />
                 )}
                 {!skillTracking.loading && !skillTracking.data && !skillTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noActivityLog')} />
                 )}
               </DetailDrawerSection>
             </>

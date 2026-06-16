@@ -1,5 +1,6 @@
 import React from 'react';
 import { Tag } from 'antd';
+import type { TFunction } from 'i18next';
 
 export function formatPullQty(val: unknown): string {
   if (val == null || val === '') return '—';
@@ -19,19 +20,29 @@ export function formatPullPercent(done: unknown, total: unknown): string {
 type LifecycleSubStage = { key?: string; label?: string; status?: string };
 
 export function renderLifecycleSubStageTag(
+  t: TFunction,
   subStages: LifecycleSubStage[] | undefined,
   stageKey: string,
 ): React.ReactNode {
   const stage = subStages?.find((s) => s.key === stageKey);
   if (!stage?.label) return <Tag>—</Tag>;
   const color = stage.status === 'done' ? 'success' : stage.status === 'active' ? 'processing' : 'default';
-  const suffix = stage.status === 'done' ? '已完成' : stage.status === 'active' ? '进行中' : '待处理';
+  const suffix =
+    stage.status === 'done'
+      ? t('app.kuaizhizao.warehouseInbound.pull.lifecycle.done')
+      : stage.status === 'active'
+        ? t('app.kuaizhizao.warehouseInbound.pull.lifecycle.active')
+        : t('app.kuaizhizao.warehouseInbound.pull.lifecycle.pending');
   return <Tag color={color}>{`${stage.label}·${suffix}`}</Tag>;
 }
 
-export function renderPullableTag(pullable: boolean | undefined, doneLabel = '可取单'): React.ReactNode {
+export function renderPullableTag(
+  t: TFunction,
+  pullable: boolean | undefined,
+  doneLabel?: string,
+): React.ReactNode {
   if (pullable === false) {
-    return <Tag color="default">无可取数量</Tag>;
+    return <Tag color="default">{t('app.kuaizhizao.warehouseInbound.pull.noPullableQty')}</Tag>;
   }
-  return <Tag color="success">{doneLabel}</Tag>;
+  return <Tag color="success">{doneLabel ?? t('app.kuaizhizao.warehouseInbound.pull.pullable')}</Tag>;
 }

@@ -38,6 +38,7 @@ import {
   UpdateLanguageData,
   TranslationUpdateRequest,
 } from '../../../../services/language';
+import { cacheTenantDefaultLanguage } from '../../../../utils/localeBootstrap';
 import zhCN from '../../../../locales/zh-CN';
 import enUS from '../../../../locales/en-US';
 import { CODE_FONT_FAMILY } from '../../../../constants/fonts';
@@ -392,7 +393,12 @@ const LanguageListPage: React.FC = () => {
         await createLanguage(values as CreateLanguageData);
         messageApi.success(t('pages.system.createSuccess'));
       }
-      
+
+      if (values.is_default) {
+        const code = values.code ?? formInitialValues?.code;
+        if (code) cacheTenantDefaultLanguage(code);
+      }
+
       setModalVisible(false);
       setFormInitialValues(undefined);
       actionRef.current?.reload();

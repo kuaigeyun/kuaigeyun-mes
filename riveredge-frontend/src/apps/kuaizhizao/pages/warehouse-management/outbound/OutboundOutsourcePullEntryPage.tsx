@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
   App,
@@ -34,6 +35,7 @@ import {
   ReadOnlyFormValue,
   mapWarehouseSelectOptions,
 } from './outboundEntryShared';
+import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundOutsourceEntryPath } from './outboundPaths';
 
 type IssueLine = {
@@ -47,6 +49,7 @@ type IssueLine = {
 };
 
 const OutboundOutsourcePullEntryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
   const navigate = useNavigate();
@@ -65,10 +68,49 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
 
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundOutsourceEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? '');
+  const pageTitle = woCode
+    ? `${t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssue')} — ${woCode}`
+    : t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssue');
 
   const totalIssueQty = useMemo(
     () => issueLines.reduce((sum, line) => sum + Number(line.issueQuantity || 0), 0),
     [issueLines],
+  );
+
+  const lineColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'materialCode', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'materialName', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.pendingIssueQty'),
+        dataIndex: 'pendingQuantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.thisIssue'),
+        key: 'issueQuantity',
+        width: 140,
+        render: (_: unknown, line: IssueLine) => (
+          <InputNumber
+            min={0}
+            max={line.pendingQuantity}
+            value={line.issueQuantity}
+            onChange={(v) => {
+              const qty = Number(v ?? 0);
+              setIssueLines((prev) =>
+                prev.map((row) =>
+                  row.key === line.key ? { ...row, issueQuantity: qty } : row,
+                ),
+              );
+            }}
+            style={{ width: '100%' }}
+          />
+        ),
+      },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'unit', width: 60 },
+    ],
+    [t],
   );
 
   const leavePage = useCallback(() => {
@@ -77,23 +119,22 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
-      messageApi.error('无效的委外工单');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.invalidOutsource'));
       leavePage();
     }
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = woCode ? `委外发料 — ${woCode}` : '委外发料';
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [woCode, pagePath]);
+  }, [pagePath, pageTitle]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0 || initRef.current) return;
@@ -126,17 +167,17 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
           }),
         );
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载委外工单失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadOutsourceFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   const submit = async () => {
     if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error('请选择出库仓库');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
@@ -144,7 +185,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
 
     const activeLines = issueLines.filter((line) => line.issueQuantity > 0);
     if (!activeLines.length) {
-      messageApi.warning('请至少填写一行本次发料数量');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillIssueQty'));
       return;
     }
 
@@ -165,11 +206,11 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
         })),
       });
       invalidateMenuBadgeCounts();
-      messageApi.success('委外发料单已创建');
+      messageApi.success(t('app.kuaizhizao.warehouseOutbound.entry.outsourceIssueCreated'));
       leavePage();
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.entry.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -180,17 +221,17 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseOutbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {woCode ? `委外发料 — ${woCode}` : '委外发料'}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit()}>
-              确认发料
+              {t('app.kuaizhizao.warehouseOutbound.action.confirmIssue')}
             </Button>
           </Space>
         </>
@@ -202,30 +243,30 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
             <Form layout="vertical" requiredMark={false}>
               <Row gutter={16}>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库类型">
-                    <ReadOnlyFormValue value="委外发料" />
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.outboundType')}>
+                    <ReadOnlyFormValue value={getOutboundIssueTypeLabel(t, 'outsource_issue')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="委外工单号">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.outsourceCode')}>
                     <ReadOnlyFormValue value={woCode} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="产品">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.product')}>
                     <ReadOnlyFormValue value={String(workOrder.product_name ?? workOrder.productName ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="委外供应商">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.outsourceSupplier')}>
                     <ReadOnlyFormValue value={String(workOrder.supplier_name ?? workOrder.supplierName ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库仓库" required>
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
                     <Select
                       style={{ width: '100%' }}
-                      placeholder="请选择出库仓库"
+                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
                       options={warehouseOptions}
                       value={warehouseId}
                       onChange={setWarehouseId}
@@ -246,9 +287,9 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                 </Typography.Text>
               ) : null}
               <Typography.Text strong style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>
-                发料明细
+                {t('app.kuaizhizao.warehouseOutbound.entry.issueDetails')}
                 <Typography.Text type="secondary" style={{ marginLeft: 12, fontWeight: 'normal' }}>
-                  合计发料数量：{totalIssueQty}
+                  {t('app.kuaizhizao.warehouseOutbound.entry.totalIssueQty', { qty: totalIssueQty })}
                 </Typography.Text>
               </Typography.Text>
               <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -258,38 +299,7 @@ const OutboundOutsourcePullEntryPage: React.FC = () => {
                 rowKey="key"
                 pagination={false}
                 dataSource={issueLines}
-                columns={[
-                  { title: '物料编码', dataIndex: 'materialCode', width: 120 },
-                  { title: '物料名称', dataIndex: 'materialName', ellipsis: true },
-                  {
-                    title: '待发数量',
-                    dataIndex: 'pendingQuantity',
-                    width: 100,
-                    align: 'right',
-                  },
-                  {
-                    title: '本次发料',
-                    key: 'issueQuantity',
-                    width: 140,
-                    render: (_, line) => (
-                      <InputNumber
-                        min={0}
-                        max={line.pendingQuantity}
-                        value={line.issueQuantity}
-                        onChange={(v) => {
-                          const qty = Number(v ?? 0);
-                          setIssueLines((prev) =>
-                            prev.map((row) =>
-                              row.key === line.key ? { ...row, issueQuantity: qty } : row,
-                            ),
-                          );
-                        }}
-                        style={{ width: '100%' }}
-                      />
-                    ),
-                  },
-                  { title: '单位', dataIndex: 'unit', width: 60 },
-                ]}
+                columns={lineColumns}
               />
             </Form>
           )}

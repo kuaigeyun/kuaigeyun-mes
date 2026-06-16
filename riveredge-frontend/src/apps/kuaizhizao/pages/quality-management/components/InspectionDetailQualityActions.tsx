@@ -1,6 +1,7 @@
 import React from 'react';
 import { Alert, Button, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { buildInspectionDetailPath } from './inspectionTemplateUtils';
 
 export type InspectionQualityActionType = 'incoming' | 'process' | 'finished' | 'oqc';
@@ -34,6 +35,7 @@ const InspectionDetailQualityActions: React.FC<InspectionDetailQualityActionsPro
   onRegisterDefect,
   canRegisterDefect = true,
 }) => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   if (!inspection?.id) return null;
@@ -54,16 +56,16 @@ const InspectionDetailQualityActions: React.FC<InspectionDetailQualityActionsPro
       type="warning"
       showIcon
       style={{ marginBottom: 16 }}
-      message="检验不合格"
+      message={t('app.kuaizhizao.quality.detailActions.unqualifiedAlert')}
       description={
         <Space wrap>
           {inspectionType !== 'oqc' && canRegisterDefect && onRegisterDefect ? (
             <Button type="primary" danger size="small" onClick={onRegisterDefect}>
-              登记不合格品 (NC)
+              {t('app.kuaizhizao.quality.detailActions.registerDefect')}
             </Button>
           ) : null}
           <Button size="small" onClick={() => navigate(exceptionPath)}>
-            查看质量异常
+            {t('app.kuaizhizao.quality.detailActions.viewException')}
           </Button>
           {inspectionType === 'oqc' ? (
             <Button
@@ -72,7 +74,7 @@ const InspectionDetailQualityActions: React.FC<InspectionDetailQualityActionsPro
                 navigate(buildInspectionDetailPath('oqc_inspection', inspection.id) || '/apps/kuaizhizao/quality-management/oqc-inspection')
               }
             >
-              继续 OQC 处置
+              {t('app.kuaizhizao.quality.detailActions.continueOqc')}
             </Button>
           ) : null}
         </Space>

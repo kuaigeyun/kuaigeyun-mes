@@ -1,8 +1,10 @@
 import React from 'react';
 import { Button, Space, Tag, Typography } from 'antd';
 import { useRequest } from 'ahooks';
+import { useTranslation } from 'react-i18next';
 import { qualityApi } from '../../../services/quality-execution';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
+import { renderQualityQualityStatusTag } from './qualityMeta';
 
 const { Text } = Typography;
 
@@ -13,6 +15,7 @@ interface LinkedIqcPanelProps {
 }
 
 export const LinkedIqcPanel: React.FC<LinkedIqcPanelProps> = ({ purchaseReceiptId, active, onNavigate }) => {
+  const { t } = useTranslation();
   const { data, loading } = useRequest(
     () => qualityApi.incomingInspection.list({ limit: 50, purchase_receipt_id: purchaseReceiptId }),
     { ready: !!purchaseReceiptId && active !== false, refreshDeps: [purchaseReceiptId, active] },
@@ -21,13 +24,13 @@ export const LinkedIqcPanel: React.FC<LinkedIqcPanelProps> = ({ purchaseReceiptI
   const rows = (data as any)?.items || [];
 
   if (!purchaseReceiptId) return null;
-  if (loading) return <Text type="secondary">加载来料检验…</Text>;
+  if (loading) return <Text type="secondary">{t('app.kuaizhizao.quality.linked.loadingIqc')}</Text>;
   if (rows.length === 0) {
     return (
       <Space>
-        <Text type="secondary">暂无关联来料检验</Text>
+        <Text type="secondary">{t('app.kuaizhizao.quality.linked.noLinkedIqc')}</Text>
         <Button type="link" size="small" onClick={() => onNavigate('/apps/kuaizhizao/quality-management/incoming-inspection')}>
-          去来料检验
+          {t('app.kuaizhizao.quality.linked.gotoIqc')}
         </Button>
       </Space>
     );
@@ -47,7 +50,7 @@ export const LinkedIqcPanel: React.FC<LinkedIqcPanelProps> = ({ purchaseReceiptI
             {row.inspection_code}
           </Button>
           <Tag>{row.status}</Tag>
-          {row.quality_status ? <Tag color={row.quality_status === '合格' ? 'success' : 'error'}>{row.quality_status}</Tag> : null}
+          {row.quality_status ? renderQualityQualityStatusTag(t, row.quality_status) : null}
         </Space>
       ))}
     </Space>
@@ -67,6 +70,7 @@ export const LinkedOqcPanel: React.FC<LinkedOqcPanelProps> = ({
   active,
   onNavigate,
 }) => {
+  const { t } = useTranslation();
   const sourceId = shipmentNoticeId ?? salesDeliveryId;
   const { data, loading } = useRequest(
     () =>
@@ -81,13 +85,13 @@ export const LinkedOqcPanel: React.FC<LinkedOqcPanelProps> = ({
   const rows = (data as any)?.items || [];
 
   if (!sourceId) return null;
-  if (loading) return <Text type="secondary">加载出货检验…</Text>;
+  if (loading) return <Text type="secondary">{t('app.kuaizhizao.quality.linked.loadingOqc')}</Text>;
   if (rows.length === 0) {
     return (
       <Space>
-        <Text type="secondary">暂无关联出货检验 (OQC)</Text>
+        <Text type="secondary">{t('app.kuaizhizao.quality.linked.noLinkedOqc')}</Text>
         <Button type="link" size="small" onClick={() => onNavigate('/apps/kuaizhizao/quality-management/oqc-inspection')}>
-          去出货检验
+          {t('app.kuaizhizao.quality.linked.gotoOqc')}
         </Button>
       </Space>
     );
@@ -114,8 +118,8 @@ export const LinkedOqcPanel: React.FC<LinkedOqcPanelProps> = ({
               {row.inspection_code}
             </Button>
             <Tag>{row.status}</Tag>
-            {row.release_decision === 'released' ? <Tag color="success">已放行</Tag> : null}
-            {row.quality_status ? <Tag color={row.quality_status === '合格' ? 'success' : 'error'}>{row.quality_status}</Tag> : null}
+            {row.release_decision === 'released' ? <Tag color="success">{t('app.kuaizhizao.quality.linked.released')}</Tag> : null}
+            {row.quality_status ? renderQualityQualityStatusTag(t, row.quality_status) : null}
           </Space>
         ),
       )}

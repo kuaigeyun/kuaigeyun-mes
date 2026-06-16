@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -27,7 +28,7 @@ import {
   mapWarehouseSelectOptions,
   useInboundReceiverSelect,
 } from './inboundEntryShared';
-import { INBOUND_RECEIPT_TYPE_LABELS } from './inboundHubTypes';
+import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundWorkOrderEntryPath } from './inboundPaths';
 import type { InboundReceiptType } from './inboundHubTypes';
 
@@ -56,6 +57,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
   const woId = Number(woIdParam);
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -72,7 +74,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
 
   const line = preview?.lines?.[0];
   const receiptType: InboundReceiptType = preview?.inbound_doc_kind ?? 'finished_goods';
-  const inboundTypeLabel = INBOUND_RECEIPT_TYPE_LABELS[receiptType];
+  const inboundTypeLabel = inboundReceiptTypeLabel(t, receiptType);
   const pagePath = Number.isFinite(woId) && woId > 0 ? inboundWorkOrderEntryPath(woId) : INBOUND_LIST_PATH;
   const maxQty = Number(line?.source_pending_quantity ?? 0);
 
@@ -82,10 +84,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
-      messageApi.error('无效的生产工单');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.invalid'));
       leavePage();
     }
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   useEffect(() => {
     const title = preview?.work_order_code ? `${inboundTypeLabel} — ${preview.work_order_code}` : inboundTypeLabel;
@@ -112,7 +114,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           masterWarehouseApi.list({ is_active: true, limit: 500 }),
         ]);
         if (!previewRaw?.lines?.length) {
-          messageApi.warning(previewRaw?.message || '该工单无可入库明细');
+          messageApi.warning(previewRaw?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.noLines'));
           leavePage();
           return;
         }
@@ -122,27 +124,27 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         const firstLine = previewRaw.lines[0];
         setReceiptQty(Number(firstLine.receipt_quantity ?? firstLine.source_pending_quantity ?? 0));
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载工单入库预览失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!preview || !line) return;
     const qty = Number(receiptQty);
     if (!(qty > 0)) {
-      messageApi.warning('请填写本次入库数量');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.workOrder.fillReceiptQty'));
       return;
     }
     if (maxQty > 0 && qty > maxQty) {
-      messageApi.error(`本次入库数量不能超过待入库数量 ${maxQty}`);
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.qtyExceedsPending', { max: maxQty }));
       return;
     }
     if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error('请选择入库仓库');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
@@ -185,7 +187,13 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
         })) as { id?: number; receipt_code?: string };
         createdId = created?.id;
         if (mode === 'draft') {
-          messageApi.success(`已生成半成品入库草稿${created.receipt_code ? `：${created.receipt_code}` : ''}`);
+          messageApi.success(
+            t('app.kuaizhizao.warehouseInbound.entry.workOrder.semiDraftCreated', {
+              code: created.receipt_code
+                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.receipt_code })
+                : '',
+            }),
+          );
         }
       } else {
         const result = await warehouseApi.finishedGoodsReceipt.batchReceipt({
@@ -213,12 +221,18 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
           });
         }
         if (mode === 'draft') {
-          messageApi.success(`已生成成品入库草稿${created.receipt_code ? `：${created.receipt_code}` : ''}`);
+          messageApi.success(
+            t('app.kuaizhizao.warehouseInbound.entry.workOrder.finishedDraftCreated', {
+              code: created.receipt_code
+                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.receipt_code })
+                : '',
+            }),
+          );
         }
       }
 
       if (createdId == null) {
-        messageApi.error('下推成功但未返回入库单 ID');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.purchase.noReceiptId'));
         return;
       }
       invalidateMenuBadgeCounts();
@@ -236,31 +250,74 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
     } finally {
       setSubmitting(false);
     }
   };
+
+  const entryColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
+      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.plannedQty'), dataIndex: 'source_doc_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.receivedQty'), dataIndex: 'source_received_quantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.pendingQty'), dataIndex: 'source_pending_quantity', width: 90, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
+        width: 150,
+        render: () => (
+          <Select
+            style={{ width: '100%', minWidth: 118 }}
+            placeholder={t('app.kuaizhizao.warehouseInbound.field.select')}
+            showSearch
+            optionFilterProp="label"
+            value={warehouseId}
+            options={warehouseOptions}
+            onChange={(v) => setWarehouseId(v ?? undefined)}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.thisReceipt'),
+        width: 130,
+        align: 'right' as const,
+        render: () => (
+          <InputNumber
+            min={0}
+            max={maxQty > 0 ? maxQty : undefined}
+            precision={4}
+            value={receiptQty}
+            onChange={(v) => setReceiptQty(Number(v) || 0)}
+            style={{ width: 110 }}
+          />
+        ),
+      },
+    ],
+    [t, warehouseId, warehouseOptions, receiptQty, maxQty],
+  );
 
   return (
     <DocumentFormPageLayout
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
               {preview?.work_order_code ? `${inboundTypeLabel} — ${preview.work_order_code}` : inboundTypeLabel}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
-              生成草稿
+              {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
-              确认入库
+              {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           </Space>
         </>
@@ -273,52 +330,52 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
               <Form layout="vertical" requiredMark={false}>
                 <Row gutter={16}>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="入库类型">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.inboundType')}>
                       <ReadOnlyFormValue value={inboundTypeLabel} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单号">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderCode')}>
                       <ReadOnlyFormValue value={preview.work_order_code} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="产品">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.product')}>
                       <ReadOnlyFormValue value={line.material_name} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="产品编码">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.productCode')}>
                       <ReadOnlyFormValue value={line.material_code} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="计划数量">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.plannedQty')}>
                       <ReadOnlyFormValue value={line.source_doc_quantity} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="已入库">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.receivedQty')}>
                       <ReadOnlyFormValue value={line.source_received_quantity} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="待入库">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.pendingQty')}>
                       <ReadOnlyFormValue value={line.source_pending_quantity} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="源销售订单">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.sourceSalesOrder')}>
                       <ReadOnlyFormValue value={workOrder?.sales_order_code ? String(workOrder.sales_order_code) : undefined} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单状态">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderStatus')}>
                       <ReadOnlyFormValue value={workOrder?.status ? String(workOrder.status) : undefined} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="入库日期">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.receiptDate')}>
                       <DatePicker
                         style={{ width: '100%' }}
                         value={receiptTime}
@@ -330,10 +387,10 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
                     <InboundEntryReceiverField hook={receiverHook} />
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="默认入库仓库" required>
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.defaultWarehouse')} required>
                       <Select
                         style={{ width: '100%' }}
-                        placeholder="请选择入库仓库"
+                        placeholder={t('app.kuaizhizao.warehouseInbound.field.selectInboundWarehouse')}
                         showSearch
                         optionFilterProp="label"
                         value={warehouseId}
@@ -343,7 +400,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单交期">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderDeliveryDate')}>
                       <ReadOnlyFormValue
                         value={
                           workOrder?.delivery_date
@@ -359,7 +416,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
 
             {line && (
               <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
-                <UniTableDetailHeader title="入库明细" required />
+                <UniTableDetailHeader title={t('app.kuaizhizao.warehouseInbound.section.inboundDetails')} required />
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <div className="uni-table-detail-body">
                   <div className="uni-table-detail-scroll">
@@ -370,45 +427,7 @@ const InboundWorkOrderPullEntryPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 900 }}
                       dataSource={[line]}
-                      columns={[
-                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
-                        { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v) => v || '—' },
-                        { title: '单位', dataIndex: 'material_unit', width: 70, align: 'center' },
-                        { title: '计划数量', dataIndex: 'source_doc_quantity', width: 100, align: 'right' },
-                        { title: '已入库', dataIndex: 'source_received_quantity', width: 90, align: 'right' },
-                        { title: '待入库', dataIndex: 'source_pending_quantity', width: 90, align: 'right' },
-                        {
-                          title: '入库仓库',
-                          width: 150,
-                          render: () => (
-                            <Select
-                              style={{ width: '100%', minWidth: 118 }}
-                              placeholder="请选择"
-                              showSearch
-                              optionFilterProp="label"
-                              value={warehouseId}
-                              options={warehouseOptions}
-                              onChange={(v) => setWarehouseId(v ?? undefined)}
-                            />
-                          ),
-                        },
-                        {
-                          title: '本次入库',
-                          width: 130,
-                          align: 'right',
-                          render: () => (
-                            <InputNumber
-                              min={0}
-                              max={maxQty > 0 ? maxQty : undefined}
-                              precision={4}
-                              value={receiptQty}
-                              onChange={(v) => setReceiptQty(Number(v) || 0)}
-                              style={{ width: 110 }}
-                            />
-                          ),
-                        },
-                      ]}
+                      columns={entryColumns}
                     />
                   </div>
                 </div>

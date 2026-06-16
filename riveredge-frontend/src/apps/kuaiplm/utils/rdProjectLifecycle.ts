@@ -2,6 +2,7 @@
  * 研发项目生命周期（列表 Tab / 阶段展示）
  */
 
+import type { TFunction } from 'i18next';
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from '../../kuaicaiwu/utils/backendLifecycle';
 import { parseBackendLifecycle } from '../../kuaicaiwu/utils/backendLifecycle';
@@ -10,9 +11,12 @@ import {
   resolveListLifecycleStageFromSearch,
   toListLifecycleStageApiParams,
 } from '../../../utils/listLifecycleStage';
+import { getKuaiplmProjectLifecycleStageLabels } from '../components/kuaiplmMeta';
 
 export const RD_PROJECT_STAGE_LABELS = ['全部', '草稿', '进行中', '已暂停', '已结案', '已取消'] as const;
 export type RdProjectStageLabel = (typeof RD_PROJECT_STAGE_LABELS)[number];
+
+const INTERNAL_STAGE_LABELS = ['草稿', '进行中', '已暂停', '已结案', '已取消'] as const;
 
 const STATUS_TO_STAGE: Record<string, string> = {
   DRAFT: '草稿',
@@ -27,11 +31,14 @@ const STATUS_TO_STAGE: Record<string, string> = {
   已取消: '已取消',
 };
 
-export function buildRdProjectLifecycleValueEnum(): Record<string, { text: string; status?: string }> {
+export function buildRdProjectLifecycleValueEnum(
+  t?: TFunction,
+): Record<string, { text: string; status?: string }> {
+  const displayLabels = t ? getKuaiplmProjectLifecycleStageLabels(t) : [...INTERNAL_STAGE_LABELS];
   const map: Record<string, { text: string; status?: string }> = {};
-  RD_PROJECT_STAGE_LABELS.filter((s) => s !== '全部').forEach((label) => {
+  INTERNAL_STAGE_LABELS.forEach((label, i) => {
     map[label] = {
-      text: label,
+      text: displayLabels[i] ?? label,
       status: label === '已结案' ? 'Success' : label === '已取消' ? 'Default' : 'Processing',
     };
   });
@@ -58,27 +65,39 @@ export function resolveRdProjectListLifecycleParams(
   return { status: STAGE_TO_STATUS[api.lifecycle_stage] ?? api.lifecycle_stage };
 }
 
-export function getRdProjectLifecycle(record: Record<string, unknown> | null | undefined): LifecycleResult {
+export function getRdProjectLifecycle(
+  record: Record<string, unknown> | null | undefined,
+  t?: TFunction,
+): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = record.lifecycle as BackendLifecycle | undefined;
   if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
 
   const status = String(record.status ?? '').trim();
-  const stageName = STATUS_TO_STAGE[status] ?? (status || '草稿');
+  const internalStageName = STATUS_TO_STAGE[status] ?? (status || '草稿');
+  const displayLabels = t ? getKuaiplmProjectLifecycleStageLabels(t) : [...INTERNAL_STAGE_LABELS];
   const keys = ['draft', 'in_progress', 'on_hold', 'completed', 'cancelled'];
-  const labels = ['草稿', '进行中', '已暂停', '已结案', '已取消'];
-  const idx = labels.indexOf(stageName);
+  const idx = INTERNAL_STAGE_LABELS.indexOf(internalStageName as (typeof INTERNAL_STAGE_LABELS)[number]);
   const activeIdx = idx >= 0 ? idx : 0;
-  const mainStages = labels.map((label, i) => ({
+  const stageName = idx >= 0 ? displayLabels[idx] : internalStageName;
+  const mainStages = INTERNAL_STAGE_LABELS.map((internalLabel, i) => ({
     key: keys[i],
-    label,
-    status: (i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'pending') as 'done' | 'active' | 'pending',
+    label: displayLabels[i] ?? internalLabel,
+    status: (i < activeIdx ? 'done' : i === activeIdx ? 'active' : 'pending') as
+      | 'done'
+      | 'active'
+      | 'pending',
   }));
-  const percent = Math.round(((activeIdx + 1) / labels.length) * 100);
+  const percent = Math.round(((activeIdx + 1) / INTERNAL_STAGE_LABELS.length) * 100);
   return {
     percent,
     stageName,
-    status: stageName === '已结案' ? 'success' : stageName === '已取消' ? 'exception' : 'normal',
+    status:
+      internalStageName === '已结案'
+        ? 'success'
+        : internalStageName === '已取消'
+          ? 'exception'
+          : 'normal',
     mainStages,
   };
 }

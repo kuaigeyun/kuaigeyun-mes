@@ -1,5 +1,7 @@
 /** Hub 聚合列表统一行类型 */
 
+import type { TFunction } from 'i18next';
+
 export type InboundReceiptType =
   | 'purchase'
   | 'finished_goods'
@@ -72,6 +74,32 @@ export const INBOUND_RECEIPT_TYPE_LABELS: Record<InboundReceiptType, string> = {
   other_inbound: '其他入库',
   material_return: '还料单',
 };
+
+const INBOUND_RECEIPT_TYPES: InboundReceiptType[] = [
+  'purchase',
+  'finished_goods',
+  'semi_finished_goods',
+  'production_return',
+  'customer_material',
+  'sales_return',
+  'outsource_receipt',
+  'outsource_material_return',
+  'outsource_product_return',
+  'other_inbound',
+  'material_return',
+];
+
+export function inboundReceiptTypeLabel(t: TFunction, type: InboundReceiptType): string {
+  return t(`app.kuaizhizao.warehouseInbound.receiptType.${type}`);
+}
+
+export function inboundReceiptTypeValueEnum(
+  t: TFunction,
+): Record<string, { text: string; status: 'default' }> {
+  return Object.fromEntries(
+    INBOUND_RECEIPT_TYPES.map((key) => [key, { text: inboundReceiptTypeLabel(t, key), status: 'default' as const }]),
+  );
+}
 
 export function isInboundConfirmable(record: InboundHubOrder): boolean {
   const status = String(record.status || '');

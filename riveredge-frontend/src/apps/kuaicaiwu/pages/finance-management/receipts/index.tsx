@@ -3,14 +3,15 @@
  *
  * 记录从客户收取的款项，可用于核销应收单。
  */
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
+import { App, Button, Modal, Typography, Space, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { EyeOutlined, CheckOutlined, StopOutlined, PlusOutlined, DownOutlined, DeleteOutlined } from '@ant-design/icons';
+import { EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -22,6 +23,13 @@ import { receivableService } from '../../../services/finance/receivable';
 import { receiptService } from '../../../services/finance/receipt';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  buildVoucherStatusEnum,
+  formatPaymentMethod,
+  formatReceiptSettlementType,
+  getPaymentMethodOptions,
+  getReceiptSettlementTypeOptions,
+} from '../../../utils/financeSharedOptions';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
@@ -54,14 +62,7 @@ type PullReceivableCandidate = {
   remaining_amount: number;
 };
 
-const PAYMENT_METHOD_OPTIONS = [
-  { label: '银行转账', value: '银行转账' },
-  { label: '现金', value: '现金' },
-  { label: '承兑汇票', value: '承兑汇票' },
-  { label: '支票', value: '支票' },
-  { label: '在线支付', value: '在线支付' },
-  { label: '其他', value: '其他' },
-];
+const R = 'app.kuaicaiwu.receipt';
 
 const ReceiptsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -79,8 +80,20 @@ const ReceiptsPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRecord, setDetailRecord] = useState<ReceiptVoucher | null>(null);
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const pullFromReceivableAction = getKuaicaiwuDocumentAction('receipt.pull_from_receivable');
+
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const receiptSettlementTypeOptions = useMemo(() => getReceiptSettlementTypeOptions(t), [t]);
+
+  const formatVoucherStatus = useCallback(
+    (status: string) => {
+      const enumMap = buildVoucherStatusEnum(t);
+      return (enumMap as Record<string, { text: string }>)[status]?.text ?? status;
+    },
+    [t],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -118,7 +131,7 @@ const ReceiptsPage: React.FC = () => {
       const detail = await receiptService.getReceipt(record.id);
       setDetailRecord(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '加载详情失败');
+      messageApi.error(error.message || t(`${R}.loadDetailFailed`));
       setDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -140,7 +153,7 @@ const ReceiptsPage: React.FC = () => {
       attachments: normalizeDocumentAttachments(values.attachments),
     };
     await apiRequest('/apps/kuaicaiwu/receipts', { method: 'POST', data });
-    messageApi.success('收款单创建成功');
+    messageApi.success(t(`${R}.createSuccess`));
     setCreateModalVisible(false);
     actionRef.current?.reload();
   };
@@ -183,13 +196,16 @@ const ReceiptsPage: React.FC = () => {
 
   const handlePullConfirm = async () => {
     if (!selectedPullReceivableId) {
-      messageApi.warning(`请选择${pullFromReceivableAction.sourceLabel}`);
+      messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromReceivableAction.sourceLabel }));
       return;
     }
     const selected = pullCandidates.find((x) => x.id === selectedPullReceivableId);
     if (!selected) return;
     if (selected.remaining_amount <= 0) {
-      messageApi.warning(`${pullFromReceivableAction.sourceLabel}剩余应收为 0，无法创建${pullFromReceivableAction.targetLabel}`);
+      messageApi.warning(t('app.kuaicaiwu.common.sourceNoRemaining', {
+        source: pullFromReceivableAction.sourceLabel,
+        target: pullFromReceivableAction.targetLabel,
+      }));
       return;
     }
     setPullSubmitting(true);
@@ -202,15 +218,21 @@ const ReceiptsPage: React.FC = () => {
           total_amount: selected.remaining_amount,
           receipt_date: dayjs().format('YYYY-MM-DD'),
           payment_method: '银行转账',
-          notes: `从${pullFromReceivableAction.sourceLabel} ${selected.receivable_code} 创建`,
+          notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+            source: pullFromReceivableAction.sourceLabel,
+            code: selected.receivable_code,
+          }),
         },
       });
-      messageApi.success(`已创建${pullFromReceivableAction.targetLabel}`);
+      messageApi.success(t('app.kuaicaiwu.common.createdFromSource', {
+        source: pullFromReceivableAction.sourceLabel,
+        target: pullFromReceivableAction.targetLabel,
+      }));
       setPullVisible(false);
       setSelectedPullReceivableId(null);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || e?.message || '创建失败');
+      messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
     } finally {
       setPullSubmitting(false);
     }
@@ -218,15 +240,15 @@ const ReceiptsPage: React.FC = () => {
 
   const handleConfirm = async (record: ReceiptVoucher) => {
     Modal.confirm({
-      title: '确认收款单',
-      content: `确定要确认收款单 ${record.receipt_code} 吗？确认后不可修改。`,
+      title: t(`${R}.confirmTitle`),
+      content: t(`${R}.confirmContent`, { code: record.receipt_code }),
       onOk: async () => {
         try {
           await apiRequest(`/apps/kuaicaiwu/receipts/${record.id}/confirm`, { method: 'POST' });
-          messageApi.success('确认成功');
+          messageApi.success(t(`${R}.confirmSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
-          messageApi.error(e?.message || '操作失败');
+          messageApi.error(e?.message || t('common.operationFailed'));
         }
       },
     });
@@ -234,15 +256,15 @@ const ReceiptsPage: React.FC = () => {
 
   const handleCancel = async (record: ReceiptVoucher) => {
     Modal.confirm({
-      title: '作废收款单',
-      content: `确定要作废收款单 ${record.receipt_code} 吗？已核销的收款单不能作废。`,
+      title: t(`${R}.voidTitle`),
+      content: t(`${R}.voidContent`, { code: record.receipt_code }),
       onOk: async () => {
         try {
           await receiptService.cancelReceipt(record.id);
-          messageApi.success('作废成功');
+          messageApi.success(t(`${R}.voidSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
-          messageApi.error(e?.message || '操作失败');
+          messageApi.error(e?.message || t('common.operationFailed'));
         }
       },
     });
@@ -250,16 +272,16 @@ const ReceiptsPage: React.FC = () => {
 
   const handleDelete = async (record: ReceiptVoucher) => {
     Modal.confirm({
-      title: '删除收款单',
-      content: `确定删除收款单 ${record.receipt_code}？已确认的收款单不能删除，请使用作废。`,
+      title: t(`${R}.deleteTitle`),
+      content: t(`${R}.deleteContent`, { code: record.receipt_code }),
       okType: 'danger',
       onOk: async () => {
         try {
           await receiptService.deleteReceipt(record.id);
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           actionRef.current?.reload();
         } catch (e: any) {
-          messageApi.error(e?.message || '操作失败');
+          messageApi.error(e?.message || t('common.operationFailed'));
         }
       },
     });
@@ -270,11 +292,11 @@ const ReceiptsPage: React.FC = () => {
       for (const key of keys) {
         await receiptService.deleteReceipt(Number(key));
       }
-      messageApi.success(`已删除 ${keys.length} 条收款单`);
+      messageApi.success(t(`${R}.batchDeleted`, { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('common.deleteFailed'));
     }
   };
 
@@ -283,11 +305,11 @@ const ReceiptsPage: React.FC = () => {
       for (const key of keys) {
         await apiRequest(`/apps/kuaicaiwu/receipts/${key}/confirm`, { method: 'POST' });
       }
-      messageApi.success(`已确认 ${keys.length} 条收款单`);
+      messageApi.success(t(`${R}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量确认失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchConfirmFailed'));
     }
   };
 
@@ -296,17 +318,67 @@ const ReceiptsPage: React.FC = () => {
       for (const key of keys) {
         await receiptService.cancelReceipt(Number(key));
       }
-      messageApi.success(`已作废 ${keys.length} 条收款单`);
+      messageApi.success(t(`${R}.batchVoided`, { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量作废失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchVoidFailed'));
     }
   };
 
-  const columns: ProColumns<ReceiptVoucher>[] = [
+  const pullTableColumns = useMemo(() => [
+    { title: t(`${R}.pullCol.receivableCode`), dataIndex: 'receivable_code', width: 220, ellipsis: true },
+    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', width: 220, ellipsis: true },
+    { title: t('app.kuaicaiwu.common.businessStatus'), dataIndex: 'status', width: 120, align: 'center' as const },
+    { title: t('app.kuaicaiwu.common.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' as const },
     {
-      title: '收款单号',
+      title: t('app.kuaicaiwu.common.dueDate'),
+      dataIndex: 'due_date',
+      width: 120,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: t('app.kuaicaiwu.receivable.col.remainingAmount'),
+      dataIndex: 'remaining_amount',
+      width: 140,
+      align: 'right' as const,
+      render: (v: number) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+    },
+    {
+      title: t(`${R}.pullCol.canCreate`),
+      key: 'can_create',
+      width: 100,
+      align: 'center' as const,
+      render: (_: unknown, r: PullReceivableCandidate) => (
+        Number(r.remaining_amount || 0) > 0
+          ? <Tag color="success">{t(`${R}.pullTag.canCreate`)}</Tag>
+          : <Tag>{t(`${R}.pullTag.cannotCreate`)}</Tag>
+      ),
+    },
+  ], [t]);
+
+  const batchMenuItems = useMemo(() => [
+    {
+      key: 'batch-confirm',
+      label: t('app.kuaicaiwu.common.batchConfirm'),
+      requireConfirm: true,
+      confirmTitle: (count: number) => t(`${R}.batchConfirmTitle`, { count }),
+      confirmDescription: t(`${R}.batchConfirmDesc`),
+      onClick: handleBatchConfirm,
+    },
+    {
+      key: 'batch-cancel',
+      label: t('app.kuaicaiwu.common.batchVoid'),
+      requireConfirm: true,
+      confirmTitle: (count: number) => t(`${R}.batchVoidTitle`, { count }),
+      confirmDescription: t(`${R}.batchVoidDesc`),
+      onClick: handleBatchCancel,
+    },
+  ], [t]);
+
+  const columns: ProColumns<ReceiptVoucher>[] = useMemo(() => [
+    {
+      title: t(`${R}.col.code`),
       dataIndex: 'receipt_code',
       width: 168,
       fixed: 'left',
@@ -317,26 +389,26 @@ const ReceiptsPage: React.FC = () => {
       ),
     },
     {
-      title: '客户名称',
+      title: t('app.kuaicaiwu.common.customer'),
       dataIndex: 'customer_name',
       width: 200,
     },
     {
-      title: '收款总额',
+      title: t(`${R}.col.totalAmount`),
       dataIndex: 'total_amount',
       valueType: 'money',
       align: 'right',
       width: 130,
     },
     {
-      title: '已核销金额',
+      title: t(`${R}.col.settledAmount`),
       dataIndex: 'settled_amount',
       valueType: 'money',
       align: 'right',
       width: 120,
     },
     {
-      title: '待核销金额',
+      title: t(`${R}.col.unsettledAmount`),
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
@@ -347,42 +419,39 @@ const ReceiptsPage: React.FC = () => {
       ),
     },
     {
-      title: '收款日期',
+      title: t(`${R}.col.receiptDate`),
       dataIndex: 'receipt_date',
       valueType: 'date',
       width: 110,
     },
     {
-      title: '收款方式',
+      title: t(`${R}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      render: (_, record) => formatPaymentMethod(record.payment_method, t),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
-      valueEnum: {
-        Draft: { text: '草稿' },
-        Confirmed: { text: '已确认' },
-        Cancelled: { text: '已作废' },
-      },
+      valueEnum: buildVoucherStatusEnum(t),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaicaiwu.common.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       width: 120,
       hideInSearch: true,
       render: (_, record) => {
-        const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>);
+        const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lc.percent}
@@ -396,42 +465,42 @@ const ReceiptsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       width: 220,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
-              详情
+              {t('common.detail')}
             </Button>,
             record.status === 'Draft' ? (
               <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-                确认
+                {t('app.kuaicaiwu.common.confirm')}
               </Button>
             ) : null,
             record.status === 'Confirmed' ? (
               <Button {...rowActionKind('submit')} key="st" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
-                核销
+                {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancel(record)}>
-                作废
+                {t('app.kuaicaiwu.common.void')}
               </Button>
             ) : null,
             record.status !== 'Confirmed' ? (
               <Button {...rowActionKind('delete')} key="del" onClick={() => handleDelete(record)}>
-                删除
+                {t('common.delete')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ];
+  ], [t, navigate]);
 
   return (
     <ListPageTemplate>
       <UniTable<ReceiptVoucher>
-        headerTitle="收款单管理"
+        headerTitle={t(`${R}.pageTitle`)}
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -442,42 +511,26 @@ const ReceiptsPage: React.FC = () => {
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
-        createButtonText="新建收款单"
+        createButtonText={t(`${R}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}
         showDeleteButton
+        deleteButtonText={t('common.batchDelete')}
         onDelete={handleBatchDelete}
-        deleteConfirmTitle="确认批量删除"
-        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条收款单吗？已确认单据不能删除，请使用作废。`}
+        deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t(`${R}.deleteConfirm`, { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="receipt-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
-            menuItems={[
-              {
-                key: 'batch-confirm',
-                label: '批量确认',
-                requireConfirm: true,
-                confirmTitle: (count) => `确认批量确认 ${count} 条收款单`,
-                confirmDescription: '仅草稿收款单可确认，不满足条件的记录会由后端拒绝。',
-                onClick: handleBatchConfirm,
-              },
-              {
-                key: 'batch-cancel',
-                label: '批量作废',
-                requireConfirm: true,
-                confirmTitle: (count) => `确认批量作废 ${count} 条收款单`,
-                confirmDescription: '已核销的收款单不能作废，不满足条件的记录会由后端拒绝。',
-                onClick: handleBatchCancel,
-              },
-            ]}
+            buttonText={t('components.uniBatch.batchActions')}
+            menuItems={batchMenuItems}
           />,
         ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-receipt-with-pull"
             createIcon={<PlusOutlined />}
-            createLabel="新建收款单"
+            createLabel={t(`${R}.createTitle`)}
             onCreate={() => setCreateModalVisible(true)}
             menuItems={buildKuaicaiwuPullCreateMenuItems([
               {
@@ -523,21 +576,21 @@ const ReceiptsPage: React.FC = () => {
         onOk={() => {
           void handlePullConfirm();
         }}
-        okText={`创建${pullFromReceivableAction.targetLabel}`}
+        okText={t('app.kuaicaiwu.common.createTarget', { target: pullFromReceivableAction.targetLabel })}
         confirmLoading={pullSubmitting}
         destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
-            placeholder="按应收单号/客户搜索"
+            placeholder={t(`${R}.pullSearchPlaceholder`)}
             value={pullKeyword}
             onChange={(e) => setPullKeyword(e.target.value)}
             onSearch={(value) => {
               setPullKeyword(value);
               void loadPullReceivableCandidates(value);
             }}
-            enterButton="搜索"
+            enterButton={t('common.search')}
           />
           <Table<PullReceivableCandidate>
             rowKey="id"
@@ -553,33 +606,13 @@ const ReceiptsPage: React.FC = () => {
             onRow={(record) => ({
               onClick: () => setSelectedPullReceivableId(record.id),
             })}
-            columns={[
-              { title: '应收单号', dataIndex: 'receivable_code', width: 220, ellipsis: true },
-              { title: '客户', dataIndex: 'customer_name', width: 220, ellipsis: true },
-              { title: '业务状态', dataIndex: 'status', width: 120, align: 'center' },
-              { title: '审核状态', dataIndex: 'review_status', width: 120, align: 'center' },
-              { title: '到期日期', dataIndex: 'due_date', width: 120, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              {
-                title: '剩余应收',
-                dataIndex: 'remaining_amount',
-                width: 140,
-                align: 'right',
-                render: (v) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
-              },
-              {
-                title: '可转单',
-                key: 'can_create',
-                width: 100,
-                align: 'center',
-                render: (_, r) => (Number(r.remaining_amount || 0) > 0 ? <Tag color="success">可创建</Tag> : <Tag>不可创建</Tag>),
-              },
-            ]}
+            columns={pullTableColumns}
           />
         </Space>
       </Modal>
 
       <ModalForm
-        title="新建收款单"
+        title={t(`${R}.createTitle`)}
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
@@ -587,45 +620,44 @@ const ReceiptsPage: React.FC = () => {
       >
         <ProFormSelect
           name="customer_id"
-          label="客户"
+          label={t('app.kuaicaiwu.common.customer')}
           options={customerOptions}
-          rules={[{ required: true, message: '请选择客户' }]}
-          placeholder="请选择客户"
+          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
+          placeholder={t('app.kuaicaiwu.common.selectCustomer')}
           showSearch
         />
-        <ProFormMoney name="total_amount" label="收款金额" min={0.01} rules={[{ required: true }]} />
-        <ProFormDatePicker name="receipt_date" label="收款日期" rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormMoney name="total_amount" label={t(`${R}.col.amount`)} min={0.01} rules={[{ required: true }]} />
+        <ProFormDatePicker name="receipt_date" label={t(`${R}.col.receiptDate`)} rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
         <ProFormSelect
           name="payment_method"
-          label="收款方式"
-          options={PAYMENT_METHOD_OPTIONS}
-          rules={[{ required: true, message: '请选择收款方式' }]}
-          placeholder="请选择收款方式"
+          label={t(`${R}.col.paymentMethod`)}
+          options={paymentMethodOptions}
+          rules={[{ required: true, message: t(`${R}.selectPaymentMethod`) }]}
+          placeholder={t(`${R}.selectPaymentMethod`)}
         />
         <ProFormSelect
           name="settlement_type"
-          label="结算类型"
+          label={t(`${R}.settlementType.label`)}
           initialValue="normal"
-          options={[
-            { label: '普通收款', value: 'normal' },
-            { label: '预收款', value: 'prepayment' },
-          ]}
+          options={receiptSettlementTypeOptions}
         />
         <ProFormSelect
           name="bank_account_id"
-          label="入账银行账户"
+          label={t(`${R}.bankAccount`)}
           options={bankAccountOptions}
-          placeholder="选择后确认收款将自动记银行流水"
+          placeholder={t(`${R}.bankAccountPlaceholder`)}
           showSearch
           allowClear
         />
-        <ProFormText name="bank_account" label="收款账号（备注）" placeholder="未选银行账户时可手工填写" />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormText name="bank_account" label={t(`${R}.bankAccountNote`)} placeholder={t(`${R}.bankAccountNotePlaceholder`)} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="receipt_attachments" />
       </ModalForm>
 
       <Drawer
-        title={detailRecord ? `收款单 · ${detailRecord.receipt_code}` : '收款单详情'}
+        title={detailRecord
+          ? t(`${R}.detailDrawerTitle`, { code: detailRecord.receipt_code })
+          : t(`${R}.detailTitle`)}
         open={detailOpen}
         size={520}
         onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
@@ -634,21 +666,21 @@ const ReceiptsPage: React.FC = () => {
         <Spin spinning={detailLoading}>
           {detailRecord ? (
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="单号">{detailRecord.receipt_code}</Descriptions.Item>
-              <Descriptions.Item label="客户">{detailRecord.customer_name}</Descriptions.Item>
-              <Descriptions.Item label="状态">{detailRecord.status}</Descriptions.Item>
-              <Descriptions.Item label="收款日期">{detailRecord.receipt_date}</Descriptions.Item>
-              <Descriptions.Item label="收款方式">{detailRecord.payment_method}</Descriptions.Item>
-              <Descriptions.Item label="结算类型">
-                {detailRecord.settlement_type === 'prepayment' ? '预收款' : '普通收款'}
+              <Descriptions.Item label={t(`${R}.detail.code`)}>{detailRecord.receipt_code}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.common.customer')}>{detailRecord.customer_name}</Descriptions.Item>
+              <Descriptions.Item label={t('common.status')}>{formatVoucherStatus(detailRecord.status)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.col.receiptDate`)}>{detailRecord.receipt_date}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.col.paymentMethod`)}>{formatPaymentMethod(detailRecord.payment_method, t)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.settlementType.label`)}>
+                {formatReceiptSettlementType(detailRecord.settlement_type, t)}
               </Descriptions.Item>
-              <Descriptions.Item label="收款金额">¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="已核销">¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="未核销">¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="银行账户">{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
-              <Descriptions.Item label="账号备注">{detailRecord.bank_account || '—'}</Descriptions.Item>
-              <Descriptions.Item label="备注">{detailRecord.notes || '—'}</Descriptions.Item>
-              <Descriptions.Item label="创建时间">
+              <Descriptions.Item label={t(`${R}.col.amount`)}>¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.detail.settled`)}>¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.detail.unsettled`)}>¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.detail.bankAccount`)}>{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${R}.detail.accountNote`)}>{detailRecord.bank_account || '—'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
+              <Descriptions.Item label={t('common.createdAt')}>
                 {detailRecord.created_at ? dayjs(detailRecord.created_at).format('YYYY-MM-DD HH:mm') : '—'}
               </Descriptions.Item>
             </Descriptions>

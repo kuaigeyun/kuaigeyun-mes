@@ -33,6 +33,10 @@ import {
 } from '../../../../services/printTemplate';
 import { DOCUMENT_TYPE_OPTIONS, DOCUMENT_TYPE_TO_CODE } from '../../../../config/printTemplateSchemas';
 import { EMPTY_HTML_TEMPLATE } from '../../../../utils/printTemplateDefaults';
+import {
+  resolvePresetPrintTemplateDescription,
+  resolvePresetPrintTemplateName,
+} from '../../../../utils/presetEntityI18n';
 import { countWithPagedRequests } from '../../../../utils/pagedCount';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
@@ -410,7 +414,7 @@ const PrintTemplateListPage: React.FC = () => {
           <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text strong style={{ fontSize: 16 }}>
-                {template.name}
+                {resolvePresetPrintTemplateName(template, t)}
               </Text>
               <Tag color={typeInfo.color} icon={typeInfo.icon}>
                 {typeInfo.text}
@@ -428,7 +432,7 @@ const PrintTemplateListPage: React.FC = () => {
                 ellipsis={{ rows: 2, expandable: false }}
                 style={{ marginBottom: 0, fontSize: 12 }}
               >
-                {template.description}
+                {resolvePresetPrintTemplateDescription(template, t)}
               </Paragraph>
             )}
           </Space>
@@ -487,7 +491,13 @@ const PrintTemplateListPage: React.FC = () => {
    * 表格列定义
    */
   const columns: ProColumns<PrintTemplate>[] = [
-    { title: t('pages.system.printTemplates.columnName'), dataIndex: 'name', width: 200, ellipsis: true },
+    {
+      title: t('pages.system.printTemplates.columnName'),
+      dataIndex: 'name',
+      width: 200,
+      ellipsis: true,
+      render: (_, record) => resolvePresetPrintTemplateName(record, t),
+    },
     { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code', width: 150, ellipsis: true },
     {
       title: t('pages.system.printTemplates.columnType'),
@@ -596,10 +606,18 @@ const PrintTemplateListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns = [
-    { title: t('pages.system.printTemplates.columnName'), dataIndex: 'name' },
+    {
+      title: t('pages.system.printTemplates.columnName'),
+      dataIndex: 'name',
+      render: (_: unknown, record: PrintTemplate) => resolvePresetPrintTemplateName(record, t),
+    },
     { title: t('pages.system.printTemplates.columnCode'), dataIndex: 'code' },
     { title: t('pages.system.printTemplates.columnType'), dataIndex: 'type' },
-    { title: t('pages.system.printTemplates.labelDescription'), dataIndex: 'description' },
+    {
+      title: t('pages.system.printTemplates.labelDescription'),
+      dataIndex: 'description',
+      render: (_: unknown, record: PrintTemplate) => resolvePresetPrintTemplateDescription(record, t),
+    },
     {
       title: t('pages.system.printTemplates.columnActive'),
       dataIndex: 'is_active',

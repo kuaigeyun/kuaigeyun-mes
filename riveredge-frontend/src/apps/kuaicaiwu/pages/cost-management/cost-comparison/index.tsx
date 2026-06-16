@@ -1,16 +1,12 @@
 /**
  * 成本对比页面
- *
- * 提供标准成本和实际成本对比功能，基于物料来源类型进行成本对比分析。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
 import React, { useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer } from '@ant-design/pro-components';
-import { App, Button, Tag, Divider, Row, Col, Statistic, Alert, Descriptions, Typography, Empty, Timeline } from 'antd';
+import { App, Button, Divider, Row, Col, Statistic, Alert, Descriptions, Typography, Empty, Timeline } from 'antd';
 import { BarChartOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerSection, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { costComparisonApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
@@ -23,6 +19,13 @@ import {
   normalizeCostListRows,
   type CostSelectOption,
 } from '../costSelectData';
+import {
+  formatCalculationType,
+  formatSourceType,
+  formatVarianceType,
+  getSourceTypeTag,
+  getVarianceTypeTag,
+} from '../../../utils/costUiLabels';
 
 interface CostComparisonResult {
   material_id: number;
@@ -53,6 +56,7 @@ interface CostComparisonResult {
 }
 
 const CostComparisonPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -67,16 +71,13 @@ const CostComparisonPage: React.FC = () => {
     purchaseOrderItems: CostSelectOption[];
   }>({ workOrders: [], outsourceWorkOrders: [], purchaseOrders: [], purchaseOrderItems: [] });
 
-  /**
-   * 加载物料列表
-   */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(normalizeCostListRows(result));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -101,7 +102,7 @@ const CostComparisonPage: React.FC = () => {
           });
         }
       } catch (e) {
-        console.error('加载工单/采购/委外下拉失败:', e);
+        console.error('load reference options failed:', e);
       }
     })();
     return () => {
@@ -109,9 +110,6 @@ const CostComparisonPage: React.FC = () => {
     };
   }, []);
 
-  /**
-   * 处理对比
-   */
   const handleCompare = async (values: any) => {
     try {
       setLoading(true);
@@ -124,154 +122,99 @@ const CostComparisonPage: React.FC = () => {
         outsource_work_order_id: values.outsource_work_order_id,
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
       };
-      const result = await costComparisonApi.compare(data);
-      setResult(result);
-      messageApi.success('成本对比成功');
+      const res = await costComparisonApi.compare(data);
+      setResult(res);
+      messageApi.success(t('app.kuaicaiwu.costComparison.compareSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '成本对比失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costComparison.compareFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 打开对比弹窗
-   */
   const handleOpenModal = () => {
     setModalVisible(true);
     setResult(null);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      quantity: 1,
-    });
-  };
-
-  /**
-   * 获取物料来源类型标签
-   */
-  const getSourceTypeTag = (sourceType: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      Make: { color: 'blue', text: '自制件' },
-      Buy: { color: 'green', text: '采购件' },
-      Outsource: { color: 'orange', text: '委外件' },
-      Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
-    };
-    const type = typeMap[sourceType] || { color: 'default', text: sourceType };
-    return <Tag color={type.color}>{type.text}</Tag>;
-  };
-
-  /**
-   * 获取差异类型标签
-   */
-  const getVarianceTypeTag = (varianceType: string) => {
-    if (varianceType === '超支') {
-      return <Tag color="red">超支</Tag>;
-    } else if (varianceType === '节约') {
-      return <Tag color="green">节约</Tag>;
-    } else {
-      return <Tag color="default">无差异</Tag>;
-    }
+    formRef.current?.setFieldsValue({ calculation_date: dayjs(), quantity: 1 });
   };
 
   return (
     <PageContainer
-      title="成本对比"
+      title={t('app.kuaicaiwu.costComparison.title')}
       extra={[
-        <Button
-          key="compare"
-          type="primary"
-          icon={<BarChartOutlined />}
-          onClick={handleOpenModal}
-        >
-          对比标准成本和实际成本
+        <Button key="compare" type="primary" icon={<BarChartOutlined />} onClick={handleOpenModal}>
+          {t('app.kuaicaiwu.costComparison.compareButton')}
         </Button>,
       ]}
     >
       <ListPageTemplate>
         {!result ? (
-          <Empty description="暂无对比结果，请点击「对比标准成本和实际成本」发起对比" />
+          <Empty description={t('app.kuaicaiwu.costComparison.emptyHint')} />
         ) : (
           <>
-            <DetailDrawerSection title="基本信息">
+            <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
               <Descriptions column={3} size="small" bordered>
-                <Descriptions.Item label="物料编号">
+                <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.materialCode')}>
                   <Typography.Text copyable={{ text: String(result.material_code ?? '') }}>
                     {result.material_code ?? '-'}
                   </Typography.Text>
                 </Descriptions.Item>
-                <Descriptions.Item label="物料名称">{result.material_name ?? '-'}</Descriptions.Item>
-                <Descriptions.Item label="物料来源类型">{getSourceTypeTag(result.source_type)}</Descriptions.Item>
-                <Descriptions.Item label="数量">{result.quantity}</Descriptions.Item>
-                <Descriptions.Item label="核算日期">
+                <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.materialName')}>{result.material_name ?? '-'}</Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.sourceType')}>
+                  {getSourceTypeTag(result.source_type, t)}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.quantity')}>{result.quantity}</Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.calculationDate')}>
                   {result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-'}
                 </Descriptions.Item>
-                <Descriptions.Item label="差异类型">
-                  {getVarianceTypeTag(result.cost_variance.variance_type)}
+                <Descriptions.Item label={t('app.kuaicaiwu.costComparison.col.varianceType')}>
+                  {getVarianceTypeTag(result.cost_variance.variance_type, t)}
                 </Descriptions.Item>
               </Descriptions>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="生命周期">
+            <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                本页为分析型对比结果，无单据生命周期；差异类型已在基本信息中展示。
+                {t('app.kuaicaiwu.costComparison.lifecycleHint')}
               </Typography.Paragraph>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="明细信息">
-              <Typography.Text strong>标准成本与实际成本</Typography.Text>
+            <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
+              <Typography.Text strong>{t('app.kuaicaiwu.costComparison.standardVsActual')}</Typography.Text>
               <Row gutter={16} style={{ marginTop: 8 }}>
                 <Col xs={24} md={12}>
-                  <Typography.Text type="secondary">标准成本</Typography.Text>
+                  <Typography.Text type="secondary">{t('app.kuaicaiwu.costCommon.standardCost')}</Typography.Text>
                   <Divider style={{ margin: '8px 0' }} />
-                  <Statistic
-                    title="总成本"
-                    value={result.standard_cost.total_cost}
-                    prefix="¥"
-                    precision={2}
-                  />
-                  <Statistic
-                    style={{ marginTop: 12 }}
-                    title="单位成本"
-                    value={result.standard_cost.unit_cost}
-                    prefix="¥"
-                    precision={2}
-                  />
+                  <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={result.standard_cost.total_cost} prefix="¥" precision={2} />
+                  <Statistic style={{ marginTop: 12 }} title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={result.standard_cost.unit_cost} prefix="¥" precision={2} />
                   <div style={{ marginTop: 12, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                    核算类型：{result.standard_cost.calculation_type}
+                    {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
+                      type: formatCalculationType(result.standard_cost.calculation_type, t),
+                    })}
                   </div>
                 </Col>
                 <Col xs={24} md={12}>
-                  <Typography.Text type="secondary">实际成本</Typography.Text>
+                  <Typography.Text type="secondary">{t('app.kuaicaiwu.costCommon.actualCost')}</Typography.Text>
                   <Divider style={{ margin: '8px 0' }} />
-                  <Statistic
-                    title="总成本"
-                    value={result.actual_cost.total_cost}
-                    prefix="¥"
-                    precision={2}
-                  />
-                  <Statistic
-                    style={{ marginTop: 12 }}
-                    title="单位成本"
-                    value={result.actual_cost.unit_cost}
-                    prefix="¥"
-                    precision={2}
-                  />
+                  <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={result.actual_cost.total_cost} prefix="¥" precision={2} />
+                  <Statistic style={{ marginTop: 12 }} title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={result.actual_cost.unit_cost} prefix="¥" precision={2} />
                   <div style={{ marginTop: 12, fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                    核算类型：{result.actual_cost.calculation_type}
+                    {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
+                      type: formatCalculationType(result.actual_cost.calculation_type, t),
+                    })}
                   </div>
                 </Col>
               </Row>
               <Divider style={{ margin: '16px 0' }} />
               <Alert
-                message={result.cost_variance.variance_type}
+                message={formatVarianceType(result.cost_variance.variance_type, t)}
                 description={
                   <div>
-                    <p>总成本差异：¥{result.cost_variance.total_cost_variance.toFixed(2)}</p>
-                    <p>总成本差异率：{result.cost_variance.total_cost_variance_rate.toFixed(2)}%</p>
-                    <p>单位成本差异：¥{result.cost_variance.unit_cost_variance.toFixed(2)}</p>
-                    <p>单位成本差异率：{result.cost_variance.unit_cost_variance_rate.toFixed(2)}%</p>
+                    <p>{t('app.kuaicaiwu.costComparison.totalVariance', { amount: result.cost_variance.total_cost_variance.toFixed(2) })}</p>
+                    <p>{t('app.kuaicaiwu.costComparison.totalVarianceRate', { rate: result.cost_variance.total_cost_variance_rate.toFixed(2) })}</p>
+                    <p>{t('app.kuaicaiwu.costComparison.unitVariance', { amount: result.cost_variance.unit_cost_variance.toFixed(2) })}</p>
+                    <p>{t('app.kuaicaiwu.costComparison.unitVarianceRate', { rate: result.cost_variance.unit_cost_variance_rate.toFixed(2) })}</p>
                   </div>
                 }
                 type={
@@ -284,36 +227,18 @@ const CostComparisonPage: React.FC = () => {
                 showIcon
               />
               <Divider style={{ margin: '16px 0' }} />
-              <Typography.Text strong>结构化明细（JSON）</Typography.Text>
+              <Typography.Text strong>{t('app.kuaicaiwu.costComparison.structuredDetails')}</Typography.Text>
               <div style={{ overflowX: 'auto', overflowY: 'hidden', marginTop: 8 }}>
                 <Row gutter={16}>
                   <Col xs={24} lg={12}>
-                    <Typography.Text type="secondary">标准成本明细</Typography.Text>
-                    <pre
-                      style={{
-                        marginTop: 8,
-                        marginBottom: 0,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        maxHeight: 320,
-                        overflow: 'auto',
-                      }}
-                    >
+                    <Typography.Text type="secondary">{t('app.kuaicaiwu.costComparison.standardDetails')}</Typography.Text>
+                    <pre style={{ marginTop: 8, marginBottom: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 320, overflow: 'auto' }}>
                       {JSON.stringify(result.standard_cost.cost_details, null, 2)}
                     </pre>
                   </Col>
                   <Col xs={24} lg={12}>
-                    <Typography.Text type="secondary">实际成本明细</Typography.Text>
-                    <pre
-                      style={{
-                        marginTop: 8,
-                        marginBottom: 0,
-                        whiteSpace: 'pre-wrap',
-                        wordBreak: 'break-word',
-                        maxHeight: 320,
-                        overflow: 'auto',
-                      }}
-                    >
+                    <Typography.Text type="secondary">{t('app.kuaicaiwu.costComparison.actualDetails')}</Typography.Text>
+                    <pre style={{ marginTop: 8, marginBottom: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 320, overflow: 'auto' }}>
                       {JSON.stringify(result.actual_cost.cost_details, null, 2)}
                     </pre>
                   </Col>
@@ -321,14 +246,14 @@ const CostComparisonPage: React.FC = () => {
               </div>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="操作记录">
+            <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')}>
               <Timeline
                 items={[
                   {
                     color: 'blue',
                     children: (
                       <>
-                        对比完成 ·{' '}
+                        {t('app.kuaicaiwu.costComparison.compareCompleted')} ·{' '}
                         {result.calculation_date
                           ? dayjs(result.calculation_date).format('YYYY-MM-DD')
                           : dayjs().format('YYYY-MM-DD HH:mm:ss')}
@@ -342,9 +267,8 @@ const CostComparisonPage: React.FC = () => {
         )}
       </ListPageTemplate>
 
-      {/* 对比弹窗 */}
       <FormModalTemplate
-        title="对比标准成本和实际成本"
+        title={t('app.kuaicaiwu.costComparison.modalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -357,11 +281,11 @@ const CostComparisonPage: React.FC = () => {
       >
         <ProFormSelect
           name="material_id"
-          label="物料"
-          placeholder="请选择物料"
-          rules={[{ required: true, message: '请选择物料' }]}
-          options={materials.map(m => ({
-            label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+          label={t('app.kuaicaiwu.costCommon.field.material')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.materialPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
+          options={materials.map((m) => ({
+            label: `${m.mainCode || m.code} - ${m.name} (${formatSourceType(m.sourceType || m.source_type || 'Make', t)})`,
             value: m.id,
           }))}
           fieldProps={{
@@ -372,18 +296,18 @@ const CostComparisonPage: React.FC = () => {
         />
         <ProFormDigit
           name="quantity"
-          label="数量"
-          placeholder="请输入数量（用于计算标准成本）"
-          rules={[{ required: true, message: '请输入数量' }, { type: 'number', min: 0.0001, message: '数量必须大于0' }]}
-          fieldProps={{
-            precision: 4,
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.quantity')}
+          placeholder={t('app.kuaicaiwu.costComparison.field.quantityPlaceholder')}
+          rules={[
+            { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+            { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
+          ]}
+          fieldProps={{ precision: 4, style: { width: '100%' } }}
         />
         <ProFormSelect
           name="work_order_id"
-          label="工单（自制件/配置件实际成本）"
-          placeholder="可选"
+          label={t('app.kuaicaiwu.costComparison.field.workOrder')}
+          placeholder={t('app.kuaicaiwu.costCommon.optional')}
           allowClear
           options={costReferenceOptions.workOrders}
           showSearch
@@ -395,8 +319,8 @@ const CostComparisonPage: React.FC = () => {
         />
         <ProFormSelect
           name="purchase_order_id"
-          label="采购订单（采购件实际成本-整单）"
-          placeholder="可选"
+          label={t('app.kuaicaiwu.costComparison.field.purchaseOrder')}
+          placeholder={t('app.kuaicaiwu.costCommon.optional')}
           allowClear
           options={costReferenceOptions.purchaseOrders}
           showSearch
@@ -408,8 +332,8 @@ const CostComparisonPage: React.FC = () => {
         />
         <ProFormSelect
           name="purchase_order_item_id"
-          label="采购订单明细（采购件实际成本-明细）"
-          placeholder="可选"
+          label={t('app.kuaicaiwu.costComparison.field.purchaseOrderItem')}
+          placeholder={t('app.kuaicaiwu.costCommon.optional')}
           allowClear
           options={costReferenceOptions.purchaseOrderItems}
           showSearch
@@ -421,8 +345,8 @@ const CostComparisonPage: React.FC = () => {
         />
         <ProFormSelect
           name="outsource_work_order_id"
-          label="委外工单（委外件实际成本）"
-          placeholder="可选"
+          label={t('app.kuaicaiwu.costComparison.field.outsourceWorkOrder')}
+          placeholder={t('app.kuaicaiwu.costCommon.optional')}
           allowClear
           options={costReferenceOptions.outsourceWorkOrders}
           showSearch
@@ -434,11 +358,9 @@ const CostComparisonPage: React.FC = () => {
         />
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
       </FormModalTemplate>
     </PageContainer>

@@ -9,7 +9,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import type { DescriptionsProps } from 'antd';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -141,11 +141,6 @@ function renderPbRowActions(nodes: React.ReactNode[], keyPrefix: string): React.
   return nodes;
 }
 
-function getBindingSourceLabel(record: PackingBinding): string {
-  if (record.sales_delivery_id) return '销售出库';
-  if (record.finished_goods_receipt_id) return '成品入库';
-  return '其他来源';
-}
 
 const PB_STAT_SPARK_1 = [3, 4, 5, 4, 6, 5, 7];
 const PB_STAT_SPARK_2 = [2, 3, 2, 4, 3, 5, 4];
@@ -161,6 +156,30 @@ const PackingBindingPage: React.FC = () => {
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+
+  const getBindingSourceLabel = useCallback(
+    (record: PackingBinding) => {
+      if (record.sales_delivery_id) return t('app.kuaizhizao.packingBinding.sourceSalesDelivery');
+      if (record.finished_goods_receipt_id) return t('app.kuaizhizao.packingBinding.sourceFinishedGoodsReceipt');
+      return t('app.kuaizhizao.packingBinding.sourceOther');
+    },
+    [t],
+  );
+
+  const bindingMethodTag = useCallback(
+    (m?: string) => {
+      const v = (m || '').trim();
+      if (v === 'scan') return <Tag color="success">{t('app.kuaizhizao.packingBinding.bindingMethodScan')}</Tag>;
+      if (v === 'manual') return <Tag>{t('app.kuaizhizao.packingBinding.bindingMethodManual')}</Tag>;
+      return <Tag>{v || '-'}</Tag>;
+    },
+    [t],
+  );
+
+  const getErrorMessage = useCallback(
+    (error: any, fallbackKey: string) => error?.message || t(fallbackKey),
+    [t],
+  );
 
   const [statsVersion, setStatsVersion] = useState(0);
   const [editModalVisible, setEditModalVisible] = useState(false);
@@ -178,7 +197,7 @@ const PackingBindingPage: React.FC = () => {
       setDetailDrawerVisible(true);
       setPbTrackingRefreshKey((k) => k + 1);
     } catch (error: any) {
-      messageApi.error(error.message || '获取装箱绑定记录详情失败');
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.fetchDetailFailed'));
     }
   }, [messageApi]);
 
@@ -191,8 +210,6 @@ const PackingBindingPage: React.FC = () => {
     total: 0,
     items: [],
   });
-
-  const getErrorMessage = (error: any, fallback: string) => error?.message || fallback;
 
   const refreshLocalStats = useCallback(async () => {
     try {
@@ -219,11 +236,11 @@ const PackingBindingPage: React.FC = () => {
         items: Array.isArray(result?.items) ? result.items : [],
       });
     } catch (error: any) {
-      messageApi.error(getErrorMessage(error, '获取待装箱任务池失败'));
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.taskPoolFetchFailed'));
     } finally {
       setTaskPoolLoading(false);
     }
-  }, [messageApi]);
+  }, [getErrorMessage, messageApi]);
 
   useEffect(() => {
     void refreshLocalStats();
@@ -262,9 +279,9 @@ const PackingBindingPage: React.FC = () => {
             setSearchParams({}, { replace: true });
             return;
           }
-          messageApi.warning('未找到对应的装箱记录');
+          messageApi.warning(t('app.kuaizhizao.packingBinding.recordNotFound'));
         } catch {
-          messageApi.error('获取装箱记录失败');
+          messageApi.error(t('app.kuaizhizao.packingBinding.fetchRecordFailed'));
         }
       };
       void load();
@@ -274,7 +291,7 @@ const PackingBindingPage: React.FC = () => {
 
   const handleBatchGenerateQRCode = async () => {
     if (selectedRowKeys.length === 0) {
-      messageApi.warning('请先选择要生成二维码的装箱记录');
+      messageApi.warning(t('app.kuaizhizao.packingBinding.selectForQrcode'));
       return;
     }
 
@@ -290,16 +307,16 @@ const PackingBindingPage: React.FC = () => {
         });
         successCount += 1;
       } catch (error: any) {
-        failed.push(`${String(key)}: ${getErrorMessage(error, '生成失败')}`);
+        failed.push(`${String(key)}: ${getErrorMessage(error, 'app.kuaizhizao.packingBinding.generateFailed')}`);
       }
     }
     if (failed.length === 0) {
-      messageApi.success(`成功生成 ${successCount} 个装箱二维码`);
+      messageApi.success(t('app.kuaizhizao.packingBinding.qrcodeSuccess', { count: successCount }));
       return;
     }
-    messageApi.warning(`成功 ${successCount} 条，失败 ${failed.length} 条`);
+    messageApi.warning(t('app.kuaizhizao.packingBinding.qrcodePartial', { success: successCount, failed: failed.length }));
     Modal.error({
-      title: '批量生成二维码存在失败项',
+      title: t('app.kuaizhizao.packingBinding.qrcodeBatchFailedTitle'),
       content: (
         <div style={{ maxHeight: 280, overflowY: 'auto' }}>
           {failed.map((msg) => (
@@ -325,14 +342,14 @@ const PackingBindingPage: React.FC = () => {
         attachments: mapAttachmentsToUploadList(detail.attachments),
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取装箱绑定记录详情失败');
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.fetchDetailFailed'));
     }
   }, [messageApi]);
 
   const handleEditSubmit = async (values: any) => {
     try {
       if (!currentBindingId) {
-        messageApi.error('装箱绑定记录ID不存在');
+        messageApi.error(t('app.kuaizhizao.packingBinding.idNotFound'));
         return;
       }
 
@@ -342,7 +359,7 @@ const PackingBindingPage: React.FC = () => {
         remarks: values.remarks,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('装箱绑定记录更新成功');
+      messageApi.success(t('app.kuaizhizao.packingBinding.updateSuccess'));
       const oid = currentBindingId;
       setEditModalVisible(false);
       setCurrentBindingId(null);
@@ -361,7 +378,7 @@ const PackingBindingPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '更新装箱绑定记录失败');
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.updateFailed'));
       throw error;
     }
   };
@@ -369,7 +386,7 @@ const PackingBindingPage: React.FC = () => {
   const handleDeleteOne = async (record: PackingBinding) => {
     try {
       await packingBindingApi.delete(record.id!.toString());
-      messageApi.success('装箱绑定记录删除成功');
+      messageApi.success(t('app.kuaizhizao.packingBinding.deleteSuccess'));
       if (currentBinding?.id === record.id) {
         setDetailDrawerVisible(false);
         setCurrentBinding(null);
@@ -380,13 +397,13 @@ const PackingBindingPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除装箱绑定记录失败');
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.deleteFailed'));
     }
   };
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要删除的装箱绑定记录');
+      messageApi.warning(t('app.kuaizhizao.packingBinding.selectToDelete'));
       return;
     }
     const failed: string[] = [];
@@ -396,7 +413,7 @@ const PackingBindingPage: React.FC = () => {
         await packingBindingApi.delete(String(key));
         successCount += 1;
       } catch (error: any) {
-        failed.push(`${String(key)}: ${getErrorMessage(error, '删除失败')}`);
+        failed.push(`${String(key)}: ${getErrorMessage(error, 'common.deleteFailed')}`);
       }
     }
     try {
@@ -409,12 +426,12 @@ const PackingBindingPage: React.FC = () => {
       setStatsVersion((v) => v + 1);
       invalidateMenuBadgeCounts();
       if (failed.length === 0) {
-        messageApi.success(`已删除 ${successCount} 条记录`);
+        messageApi.success(t('app.kuaizhizao.packingBinding.batchDeleteSuccess', { count: successCount }));
         return;
       }
-      messageApi.warning(`删除成功 ${successCount} 条，失败 ${failed.length} 条`);
+      messageApi.warning(t('app.kuaizhizao.packingBinding.batchDeletePartial', { success: successCount, failed: failed.length }));
       Modal.error({
-        title: '批量删除存在失败项',
+        title: t('app.kuaizhizao.packingBinding.batchDeleteFailedTitle'),
         content: (
           <div style={{ maxHeight: 280, overflowY: 'auto' }}>
             {failed.map((msg) => (
@@ -425,243 +442,257 @@ const PackingBindingPage: React.FC = () => {
         width: 640,
       });
     } catch (error: any) {
-      messageApi.error(getErrorMessage(error, '批量删除失败'));
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.batchDeleteFailed'));
     }
   };
 
-  const bindingMethodTag = (m?: string) => {
-    const v = (m || '').trim();
-    if (v === 'scan') return <Tag color="success">扫码</Tag>;
-    if (v === 'manual') return <Tag>手动</Tag>;
-    return <Tag>{v || '-'}</Tag>;
-  };
+  const detailBaseColumns: ProDescriptionsItemProps<PackingBinding>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.packingBinding.colBoxNo'),
+        dataIndex: 'box_no',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.box_no ?? '') }}>{r.box_no ?? '-'}</Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colProductCode'),
+        dataIndex: 'product_code',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.product_code ?? '') }}>{r.product_code ?? '-'}</Typography.Text>
+        ),
+      },
+      { title: t('app.kuaizhizao.packingBinding.colProductName'), dataIndex: 'product_name' },
+      {
+        title: t('app.kuaizhizao.packingBinding.colProductSerialNo'),
+        dataIndex: 'product_serial_no',
+        render: (val) => val || '-',
+      },
+      { title: t('app.kuaizhizao.packingBinding.colPackingQty'), dataIndex: 'packing_quantity', valueType: 'digit' },
+      {
+        title: t('app.kuaizhizao.packingBinding.colPackingMaterialCode'),
+        dataIndex: 'packing_material_code',
+        render: (val) => val || '-',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colPackingMaterialName'),
+        dataIndex: 'packing_material_name',
+        render: (val) => val || '-',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colBindingMethod'),
+        dataIndex: 'binding_method',
+        render: (_, r) => bindingMethodTag(r.binding_method),
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colBarcode'),
+        dataIndex: 'barcode',
+        render: (val) =>
+          val ? <Typography.Text copyable={{ text: String(val) }}>{String(val)}</Typography.Text> : '-',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colFinishedGoodsReceiptId'),
+        dataIndex: 'finished_goods_receipt_id',
+        render: (val) => (val != null ? String(val) : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colSalesDeliveryId'),
+        dataIndex: 'sales_delivery_id',
+        render: (val) => (val != null ? String(val) : '-'),
+      },
+      { title: t('app.kuaizhizao.packingBinding.colBoundBy'), dataIndex: 'bound_by_name' },
+      { title: t('app.kuaizhizao.packingBinding.colBoundAt'), dataIndex: 'bound_at', valueType: 'dateTime' },
+      {
+        title: t('app.kuaizhizao.common.fieldNotes'),
+        dataIndex: 'remarks',
+        span: 3,
+        render: (text) => text || '-',
+      },
+    ],
+    [bindingMethodTag, t],
+  );
 
-  const detailBaseColumns: ProDescriptionsItemProps<PackingBinding>[] = [
-    {
-      title: '箱号',
-      dataIndex: 'box_no',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.box_no ?? '') }}>{r.box_no ?? '-'}</Typography.Text>
-      ),
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.product_code ?? '') }}>{r.product_code ?? '-'}</Typography.Text>
-      ),
-    },
-    { title: '产品名称', dataIndex: 'product_name' },
-    { title: '产品序列号', dataIndex: 'product_serial_no', render: (t) => t || '-' },
-    { title: '装箱数量', dataIndex: 'packing_quantity', valueType: 'digit' },
-    { title: '包装物料编号', dataIndex: 'packing_material_code', render: (t) => t || '-' },
-    { title: '包装物料名称', dataIndex: 'packing_material_name', render: (t) => t || '-' },
-    {
-      title: '绑定方式',
-      dataIndex: 'binding_method',
-      render: (_, r) => bindingMethodTag(r.binding_method),
-    },
-    {
-      title: '条码',
-      dataIndex: 'barcode',
-      render: (t) =>
-        t ? <Typography.Text copyable={{ text: String(t) }}>{String(t)}</Typography.Text> : '-',
-    },
-    {
-      title: '成品入库单ID',
-      dataIndex: 'finished_goods_receipt_id',
-      render: (t) => (t != null ? String(t) : '-'),
-    },
-    {
-      title: '销售出库单ID',
-      dataIndex: 'sales_delivery_id',
-      render: (t) => (t != null ? String(t) : '-'),
-    },
-    { title: '绑定人', dataIndex: 'bound_by_name' },
-    { title: '绑定时间', dataIndex: 'bound_at', valueType: 'dateTime' },
-    {
-      title: '备注',
-      dataIndex: 'remarks',
-      span: 3,
-      render: (text) => text || '-',
-    },
-  ];
-
-  const renderPbRowActionNodes = (record: PackingBinding): React.ReactNode[] => {
-    const nodes: React.ReactNode[] = [];
-    nodes.push(
-      <Button {...rowActionKind('read')}
-        key="detail"
-        type="link"
-        size="small"
-        icon={<EyeOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleDetail(record);
-        }}
-      >
-        详情
-      </Button>
-    );
-    nodes.push(
-      <Button {...rowActionKind('update')}
-        key="edit"
-        type="link"
-        size="small"
-        icon={<EditOutlined />}
-        onClick={(e) => {
-          e.stopPropagation();
-          void handleEdit(record);
-        }}
-      >
-        编辑
-      </Button>
-    );
-    nodes.push(
-      <Popconfirm {...rowActionKind('delete')}
-        key="del"
-        title="确定要删除这个装箱绑定记录吗？"
-        onConfirm={() => void handleDeleteOne(record)}
-        okText="确定"
-        cancelText="取消"
-      >
-        <Button
+  const renderPbRowActionNodes = useCallback(
+    (record: PackingBinding): React.ReactNode[] => {
+      const nodes: React.ReactNode[] = [];
+      nodes.push(
+        <Button {...rowActionKind('read')}
+          key="detail"
           type="link"
           size="small"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => e.stopPropagation()}
+          icon={<EyeOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleDetail(record);
+          }}
         >
-          删除
+          {t('common.detail')}
         </Button>
-      </Popconfirm>
-    );
-    return nodes;
-  };
-
-  const columns: ProColumns<PackingBinding>[] = [
-    {
-      title: '箱号',
-      dataIndex: 'box_no',
-      width: 168,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.box_no ?? '') }} ellipsis>
-          {r.box_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-      width: 128,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.product_code ?? '') }} ellipsis>
-          {r.product_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'product_name',
-      width: 160,
-      ellipsis: true,
-    },
-    {
-      title: '产品序列号',
-      dataIndex: 'product_serial_no',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => r.product_serial_no || '-',
-    },
-    {
-      title: '装箱数量',
-      dataIndex: 'packing_quantity',
-      width: 100,
-      align: 'right',
-    },
-    {
-      title: '包装物料',
-      dataIndex: 'packing_material_name',
-      width: 140,
-      ellipsis: true,
-      render: (_, r) => r.packing_material_name || '-',
-    },
-    {
-      title: '绑定方式',
-      dataIndex: 'binding_method',
-      width: 100,
-      render: (_, r) => bindingMethodTag(r.binding_method),
-    },
-    {
-      title: '来源',
-      dataIndex: 'source_type',
-      width: 110,
-      hideInSearch: true,
-      render: (_, r) => <Tag>{getBindingSourceLabel(r)}</Tag>,
-    },
-    {
-      title: '状态',
-      dataIndex: 'binding_status',
-      width: 90,
-      hideInSearch: true,
-      render: () => <Tag color="processing">已绑定</Tag>,
-    },
-    {
-      title: '绑定人',
-      dataIndex: 'bound_by_name',
-      width: 100,
-      ellipsis: true,
-    },
-    {
-      title: '绑定时间',
-      dataIndex: 'bound_at',
-      valueType: 'dateTime',
-      width: 168,
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => {
-        const d = r.updated_at;
-        return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
-      },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPackingBindingLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
+      );
+      nodes.push(
+        <Button {...rowActionKind('update')}
+          key="edit"
+          type="link"
+          size="small"
+          icon={<EditOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleEdit(record);
+          }}
+        >
+          {t('common.edit')}
+        </Button>
+      );
+      nodes.push(
+        <Popconfirm {...rowActionKind('delete')}
+          key="del"
+          title={t('app.kuaizhizao.packingBinding.confirmDeleteOne')}
+          onConfirm={() => void handleDeleteOne(record)}
+          okText={t('common.confirm')}
+          cancelText={t('common.cancel')}
+        >
+          <Button
+            type="link"
             size="small"
-            showCircleTooltip={false}
-          />
-        );
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {t('common.delete')}
+          </Button>
+        </Popconfirm>
+      );
+      return nodes;
+    },
+    [handleDetail, handleEdit, t],
+  );
+
+  const columns: ProColumns<PackingBinding>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.packingBinding.colBoxNo'),
+        dataIndex: 'box_no',
+        width: 168,
+        ellipsis: true,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.box_no ?? '') }} ellipsis>
+            {r.box_no ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '操作',
-      width: 200,
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) =>
-        renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.packingBinding.colProductCode'),
+        dataIndex: 'product_code',
+        width: 128,
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.product_code ?? '') }} ellipsis>
+            {r.product_code ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colProductName'),
+        dataIndex: 'product_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colProductSerialNo'),
+        dataIndex: 'product_serial_no',
+        width: 140,
+        ellipsis: true,
+        render: (_, r) => r.product_serial_no || '-',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colPackingQty'),
+        dataIndex: 'packing_quantity',
+        width: 100,
+        align: 'right',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colPackingMaterial'),
+        dataIndex: 'packing_material_name',
+        width: 140,
+        ellipsis: true,
+        render: (_, r) => r.packing_material_name || '-',
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colBindingMethod'),
+        dataIndex: 'binding_method',
+        width: 100,
+        render: (_, r) => bindingMethodTag(r.binding_method),
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colSource'),
+        dataIndex: 'source_type',
+        width: 110,
+        hideInSearch: true,
+        render: (_, r) => <Tag>{getBindingSourceLabel(r)}</Tag>,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colStatus'),
+        dataIndex: 'binding_status',
+        width: 90,
+        hideInSearch: true,
+        render: () => <Tag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</Tag>,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colBoundBy'),
+        dataIndex: 'bound_by_name',
+        width: 100,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colBoundAt'),
+        dataIndex: 'bound_at',
+        valueType: 'dateTime',
+        width: 168,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colUpdatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        render: (_, r) => {
+          const d = r.updated_at;
+          return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getPackingBindingLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('common.actions'),
+        width: 200,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) =>
+          renderPbRowActions(renderPbRowActionNodes(record), `pb-${record.id ?? 'row'}`),
+      },
+    ],
+    [bindingMethodTag, getBindingSourceLabel, renderPbRowActionNodes, t],
+  );
 
   const handleRequest = async (params: any) => {
     try {
@@ -681,7 +712,7 @@ const PackingBindingPage: React.FC = () => {
         total: Number(result?.total || 0),
       };
     } catch (error: any) {
-      messageApi.error(getErrorMessage(error, '获取装箱绑定列表失败'));
+      messageApi.error(getErrorMessage(error, 'app.kuaizhizao.packingBinding.fetchListFailed'));
       return {
         data: [],
         success: false,
@@ -690,26 +721,44 @@ const PackingBindingPage: React.FC = () => {
     }
   };
 
-  const statCards: StatCard[] = [
-    {
-      title: '装箱绑定总数',
-      value: localStats.total,
-      valueStyle: { color: token.colorPrimary },
-      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_1} color={token.colorPrimary} />,
-    },
-    {
-      title: '扫码绑定',
-      value: localStats.scan,
-      valueStyle: { color: token.colorSuccess },
-      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_2} color={token.colorSuccess} />,
-    },
-    {
-      title: '手动绑定',
-      value: localStats.manual,
-      valueStyle: { color: token.colorWarning },
-      backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_3} color={token.colorWarning} />,
-    },
-  ];
+  const statCards: StatCard[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.packingBinding.statTotal'),
+        value: localStats.total,
+        valueStyle: { color: token.colorPrimary },
+        backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_1} color={token.colorPrimary} />,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.statScan'),
+        value: localStats.scan,
+        valueStyle: { color: token.colorSuccess },
+        backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_2} color={token.colorSuccess} />,
+      },
+      {
+        title: t('app.kuaizhizao.packingBinding.statManual'),
+        value: localStats.manual,
+        valueStyle: { color: token.colorWarning },
+        backgroundChart: <SimpleSparkline data={PB_STAT_SPARK_3} color={token.colorWarning} />,
+      },
+    ],
+    [localStats.manual, localStats.scan, localStats.total, t, token.colorPrimary, token.colorSuccess, token.colorWarning],
+  );
+
+  const taskPoolColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.packingBinding.taskPoolColDeliveryCode'), dataIndex: 'delivery_code', width: 180 },
+      { title: t('app.kuaizhizao.packingBinding.taskPoolColCustomer'), dataIndex: 'customer_name', width: 200 },
+      { title: t('app.kuaizhizao.packingBinding.taskPoolColReviewStatus'), dataIndex: 'review_status', width: 120 },
+      { title: t('app.kuaizhizao.packingBinding.taskPoolColDocStatus'), dataIndex: 'status', width: 120 },
+      {
+        title: t('app.kuaizhizao.packingBinding.taskPoolColUpdatedAt'),
+        dataIndex: 'updated_at',
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
@@ -718,10 +767,10 @@ const PackingBindingPage: React.FC = () => {
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="口径说明：本页“装箱绑定总数”仅统计已创建的装箱绑定记录；“待装箱任务池”统计来自销售出库单待审核/待出库任务。"
+          message={t('app.kuaizhizao.packingBinding.scopeAlert')}
         />
         <UniTable<PackingBinding>
-          headerTitle="装箱绑定"
+          headerTitle={t('app.kuaizhizao.packingBinding.title')}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.packing-binding"
           actionRef={actionRef}
           rowKey="id"
@@ -733,11 +782,11 @@ const PackingBindingPage: React.FC = () => {
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton={true}
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条装箱绑定记录吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.packingBinding.confirmBatchDelete', { count })}
           scroll={{ x: 1900 }}
           toolBarActionsAfterCreate={[
             <Button {...rowActionKind('read')} key="task-pool" onClick={() => void openTaskPool()}>
-              待装箱任务池
+              {t('app.kuaizhizao.packingBinding.taskPoolButton')}
             </Button>,
           ]}
           toolBarActionsAfterDelete={[
@@ -747,7 +796,7 @@ const PackingBindingPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'batch-qrcode',
-                  label: '批量生成二维码',
+                  label: t('app.kuaizhizao.packingBinding.batchGenerateQrcode'),
                   icon: <QrcodeOutlined />,
                   onClick: () => void handleBatchGenerateQRCode(),
                 },
@@ -762,7 +811,7 @@ const PackingBindingPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title="编辑装箱绑定记录"
+        title={t('app.kuaizhizao.packingBinding.editTitle')}
         open={editModalVisible}
         onClose={() => {
           setEditModalVisible(false);
@@ -775,28 +824,28 @@ const PackingBindingPage: React.FC = () => {
       >
         <ProFormDigit
           name="packing_quantity"
-          label="装箱数量"
-          placeholder="请输入装箱数量"
-          rules={[{ required: true, message: '请输入装箱数量' }]}
+          label={t('app.kuaizhizao.packingBinding.fieldPackingQty')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderPackingQty')}
+          rules={[{ required: true, message: t('app.kuaizhizao.packingBinding.ruleEnterPackingQty') }]}
           min={0}
           fieldProps={{ precision: 2 }}
         />
         <ProFormText
           name="box_no"
-          label="箱号"
-          placeholder="请输入箱号（留空则自动生成）"
+          label={t('app.kuaizhizao.packingBinding.fieldBoxNo')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderBoxNo')}
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.common.fieldNotes')}
+          placeholder={t('app.kuaizhizao.packingBinding.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
         <DocumentAttachmentsField category="packing_binding_attachments" />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={`装箱绑定详情${currentBinding?.box_no ? ` - ${currentBinding.box_no}` : ''}`}
+        title={`${t('app.kuaizhizao.packingBinding.detailTitle')}${currentBinding?.box_no ? ` - ${currentBinding.box_no}` : ''}`}
         open={detailDrawerVisible}
         zIndex={packingBindingDetailDrawerZIndex}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -810,7 +859,7 @@ const PackingBindingPage: React.FC = () => {
         customContent={
           currentBinding && (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
                 <Row gutter={16}>
                   <Col xs={24} lg={24}>
                     <Descriptions
@@ -822,7 +871,7 @@ const PackingBindingPage: React.FC = () => {
                 </Row>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getPackingBindingLifecycle(currentBinding as Record<string, unknown>);
@@ -860,60 +909,60 @@ const PackingBindingPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
                 <Descriptions
                   size="small"
                   column={2}
                   items={[
                     {
                       key: 'sourceDoc',
-                      label: '来源单据',
+                      label: t('app.kuaizhizao.packingBinding.detailSourceDoc'),
                       children: currentBinding.sales_delivery_id
-                        ? `销售出库单 #${currentBinding.sales_delivery_id}`
+                        ? t('app.kuaizhizao.packingBinding.salesDeliveryDoc', { id: currentBinding.sales_delivery_id })
                         : currentBinding.finished_goods_receipt_id
-                          ? `成品入库单 #${currentBinding.finished_goods_receipt_id}`
+                          ? t('app.kuaizhizao.packingBinding.finishedGoodsReceiptDoc', { id: currentBinding.finished_goods_receipt_id })
                           : '-',
                     },
                     {
                       key: 'sourceType',
-                      label: '创建来源',
+                      label: t('app.kuaizhizao.packingBinding.detailCreateSource'),
                       children: getBindingSourceLabel(currentBinding),
                     },
                     {
                       key: 'status',
-                      label: '状态',
-                      children: <Tag color="processing">已绑定</Tag>,
+                      label: t('app.kuaizhizao.packingBinding.colStatus'),
+                      children: <Tag color="processing">{t('app.kuaizhizao.packingBinding.statusBound')}</Tag>,
                     },
                     {
                       key: 'bindingMethod',
-                      label: '绑定方式',
+                      label: t('app.kuaizhizao.packingBinding.colBindingMethod'),
                       children: bindingMethodTag(currentBinding.binding_method),
                     },
                     {
                       key: 'boxNo',
-                      label: '箱号',
+                      label: t('app.kuaizhizao.packingBinding.colBoxNo'),
                       children: currentBinding.box_no || '-',
                     },
                     {
                       key: 'qty',
-                      label: '数量',
+                      label: t('app.kuaizhizao.packingBinding.detailQty'),
                       children: currentBinding.packing_quantity != null ? String(currentBinding.packing_quantity) : '-',
                     },
                     {
                       key: 'operator',
-                      label: '操作人',
+                      label: t('app.kuaizhizao.packingBinding.detailOperator'),
                       children: currentBinding.bound_by_name || '-',
                     },
                     {
                       key: 'opTime',
-                      label: '操作时间',
+                      label: t('app.kuaizhizao.packingBinding.detailOpTime'),
                       children: currentBinding.bound_at ? dayjs(currentBinding.bound_at).format('YYYY-MM-DD HH:mm:ss') : '-',
                     },
                   ]}
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
                 {packingTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -926,7 +975,7 @@ const PackingBindingPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={packingTracking.data} />
                 )}
                 {!packingTracking.loading && !packingTracking.data && !packingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
                 )}
               </DetailDrawerSection>
             </>
@@ -935,7 +984,7 @@ const PackingBindingPage: React.FC = () => {
       />
 
       <Modal
-        title="待装箱任务池（只读）"
+        title={t('app.kuaizhizao.packingBinding.taskPoolTitle')}
         open={taskPoolVisible}
         onCancel={() => setTaskPoolVisible(false)}
         footer={null}
@@ -944,7 +993,11 @@ const PackingBindingPage: React.FC = () => {
         <Alert
           showIcon
           type="info"
-          message={`待审核 ${taskPool.pending_review} / 待出库 ${taskPool.pending_outbound} / 总计 ${taskPool.total}`}
+          message={t('app.kuaizhizao.packingBinding.taskPoolSummary', {
+            pendingReview: taskPool.pending_review,
+            pendingOutbound: taskPool.pending_outbound,
+            total: taskPool.total,
+          })}
           style={{ marginBottom: 12 }}
         />
         <Table<PackingTaskPoolItem>
@@ -953,17 +1006,7 @@ const PackingBindingPage: React.FC = () => {
           dataSource={taskPool.items}
           pagination={false}
           size="small"
-          columns={[
-            { title: '出库单号', dataIndex: 'delivery_code', width: 180 },
-            { title: '客户', dataIndex: 'customer_name', width: 200 },
-            { title: '审核状态', dataIndex: 'review_status', width: 120 },
-            { title: '单据状态', dataIndex: 'status', width: 120 },
-            {
-              title: '更新时间',
-              dataIndex: 'updated_at',
-              render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
-            },
-          ]}
+          columns={taskPoolColumns}
         />
       </Modal>
     </>

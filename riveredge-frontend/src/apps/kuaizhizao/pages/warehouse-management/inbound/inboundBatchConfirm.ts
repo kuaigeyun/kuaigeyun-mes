@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { warehouseApi } from '../../../services/warehouse-execution';
 import { customerMaterialRegistrationApi } from '../../../services/customer-material-registration';
 import {
@@ -45,7 +46,7 @@ async function fetchDetail(record: InboundHubOrder): Promise<Record<string, unkn
   }
 }
 
-async function confirmSingle(record: InboundHubOrder): Promise<void> {
+async function confirmSingle(record: InboundHubOrder, t?: TFunction): Promise<void> {
   const id = String(record.id);
   if (record.receipt_type === 'customer_material') {
     await customerMaterialRegistrationApi.process(id);
@@ -57,7 +58,7 @@ async function confirmSingle(record: InboundHubOrder): Promise<void> {
   }
   const detail = await fetchDetail(record);
   if (!detail) {
-    throw new Error('加载单据详情失败');
+    throw new Error(t?.('app.kuaizhizao.warehouseInbound.batchConfirm.loadDetailFailed') ?? '加载单据详情失败');
   }
   const whId = Number(detail.warehouse_id || record.warehouse_id || 0);
   const whName = String(detail.warehouse_name || record.warehouse_name || '');
@@ -113,31 +114,37 @@ async function confirmSingle(record: InboundHubOrder): Promise<void> {
     return;
   }
   if (record.receipt_type === 'outsource_material_return' || record.receipt_type === 'outsource_product_return') {
-    throw new Error('委外退料/退货请使用单行确认预览');
+    throw new Error(
+      t?.('app.kuaizhizao.warehouseInbound.batchConfirm.useSinglePreview') ?? '委外退料/退货请使用单行确认预览',
+    );
   }
-  throw new Error('不支持的单据类型');
+  throw new Error(t?.('app.kuaizhizao.warehouseInbound.batchConfirm.unsupportedType') ?? '不支持的单据类型');
 }
 
 export async function batchConfirmInboundDocuments(
   records: InboundHubOrder[],
+  t?: TFunction,
 ): Promise<BatchConfirmResult> {
   const result: BatchConfirmResult = { success: 0, failed: [] };
+  const notConfirmableMsg =
+    t?.('app.kuaizhizao.warehouseInbound.batchConfirm.notConfirmable') ?? '当前状态不可确认入库';
+  const failedMsg = t?.('app.kuaizhizao.warehouseInbound.batchConfirm.failed') ?? '确认失败';
   for (const record of records) {
     const key = `${record.receipt_type}::${record.id}`;
     if (!isInboundConfirmable(record)) {
-      result.failed.push({ key, message: '当前状态不可确认入库' });
+      result.failed.push({ key, message: notConfirmableMsg });
       continue;
     }
     try {
-      await confirmSingle(record);
+      await confirmSingle(record, t);
       result.success += 1;
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
       const msg =
         err?.response?.data?.detail ||
         err?.message ||
-        '确认失败';
-      result.failed.push({ key, message: typeof msg === 'string' ? msg : '确认失败' });
+        failedMsg;
+      result.failed.push({ key, message: typeof msg === 'string' ? msg : failedMsg });
     }
   }
   return result;

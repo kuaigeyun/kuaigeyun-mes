@@ -1,5 +1,5 @@
 import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
   ProFormDatePicker,
@@ -10,6 +10,7 @@ import {
   ProFormTextArea,
 } from '@ant-design/pro-components';
 import { App, Popconfirm, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -17,6 +18,7 @@ import { standardCostService, type StandardCost } from '../../../services/cost/s
 import { formatCostItemType, formatTargetType } from '../../../utils/financeUiLabels';
 
 const StandardCostsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -27,7 +29,7 @@ const StandardCostsPage: React.FC = () => {
     for (const key of keys) {
       await standardCostService.delete(Number(key));
     }
-    messageApi.success(`已删除 ${keys.length} 条标准成本`);
+    messageApi.success(t('app.kuaicaiwu.standardCost.batchDeleteSuccess', { count: keys.length }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -36,45 +38,86 @@ const StandardCostsPage: React.FC = () => {
     for (const key of keys) {
       await standardCostService.update(Number(key), { is_active: isActive });
     }
-    messageApi.success(`已将 ${keys.length} 条标准成本设为${isActive ? '启用' : '停用'}`);
+    messageApi.success(
+      isActive
+        ? t('app.kuaicaiwu.standardCost.batchEnableSuccess', { count: keys.length })
+        : t('app.kuaicaiwu.standardCost.batchDisableSuccess', { count: keys.length }),
+    );
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<StandardCost>[] = [
-    { title: '核算对象', dataIndex: 'target_type', width: 100, render: (_, r) => formatTargetType(r.target_type) },
-    { title: '对象编码', dataIndex: 'target_code', width: 120, ellipsis: true },
-    { title: '对象名称', dataIndex: 'target_name', ellipsis: true },
-    { title: '成本项目', dataIndex: 'cost_item_type', width: 100, render: (_, r) => formatCostItemType(r.cost_item_type) },
-    { title: '标准值', dataIndex: 'standard_value', valueType: 'money', align: 'right' },
-    { title: '单位', dataIndex: 'unit', width: 80 },
-    { title: '版本', dataIndex: 'version', width: 80 },
-    {
-      title: '状态',
-      dataIndex: 'is_active',
-      width: 80,
-      render: (_, r) => (r.is_active ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 120,
-      render: (_, record) => [
-        <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>编辑</a>,
-        <Popconfirm {...rowActionKind('delete')}
-          key="del"
-          title="确认删除该标准成本？"
-          onConfirm={async () => {
-            await standardCostService.delete(record.id);
-            messageApi.success('已删除');
-            actionRef.current?.reload();
-          }}
-        >
-          <a>删除</a>
-        </Popconfirm>,
-      ],
-    },
-  ];
+  const columns: ProColumns<StandardCost>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaicaiwu.standardCost.col.targetType'),
+        dataIndex: 'target_type',
+        width: 100,
+        render: (_, r) => formatTargetType(r.target_type, t),
+      },
+      { title: t('app.kuaicaiwu.standardCost.col.targetCode'), dataIndex: 'target_code', width: 120, ellipsis: true },
+      { title: t('app.kuaicaiwu.standardCost.col.targetName'), dataIndex: 'target_name', ellipsis: true },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.costItemType'),
+        dataIndex: 'cost_item_type',
+        width: 100,
+        render: (_, r) => formatCostItemType(r.cost_item_type, t),
+      },
+      { title: t('app.kuaicaiwu.standardCost.col.standardValue'), dataIndex: 'standard_value', valueType: 'money', align: 'right' },
+      { title: t('app.kuaicaiwu.standardCost.col.unit'), dataIndex: 'unit', width: 80 },
+      { title: t('app.kuaicaiwu.standardCost.col.version'), dataIndex: 'version', width: 80 },
+      {
+        title: t('app.kuaicaiwu.standardCost.col.status'),
+        dataIndex: 'is_active',
+        width: 80,
+        render: (_, r) =>
+          r.is_active ? (
+            <Tag color="success">{t('app.kuaicaiwu.standardCost.status.active')}</Tag>
+          ) : (
+            <Tag>{t('app.kuaicaiwu.standardCost.status.inactive')}</Tag>
+          ),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.action'),
+        valueType: 'option',
+        width: 120,
+        render: (_, record) => [
+          <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('app.kuaicaiwu.costCommon.edit')}</a>,
+          <Popconfirm
+            {...rowActionKind('delete')}
+            key="del"
+            title={t('app.kuaicaiwu.standardCost.confirmDelete')}
+            onConfirm={async () => {
+              await standardCostService.delete(record.id);
+              messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
+              actionRef.current?.reload();
+            }}
+          >
+            <a>{t('app.kuaicaiwu.costCommon.delete')}</a>
+          </Popconfirm>,
+        ],
+      },
+    ],
+    [t, messageApi],
+  );
+
+  const targetTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.financeUi.targetType.material'), value: 'material' },
+      { label: t('app.kuaicaiwu.financeUi.targetType.workCenter'), value: 'work_center' },
+      { label: t('app.kuaicaiwu.financeUi.targetType.workStation'), value: 'work_station' },
+    ],
+    [t],
+  );
+
+  const costItemOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.financeUi.costItem.material'), value: 'material' },
+      { label: t('app.kuaicaiwu.financeUi.costItem.labor'), value: 'labor' },
+      { label: t('app.kuaicaiwu.financeUi.costItem.overhead'), value: 'overhead' },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
@@ -92,29 +135,29 @@ const StandardCostsPage: React.FC = () => {
           return { data: res.items, success: true, total: res.total };
         }}
         showCreateButton
-        createButtonText="新建标准成本"
+        createButtonText={t('app.kuaicaiwu.standardCost.create')}
         onCreate={() => { setEditing(null); setModalVisible(true); }}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle="确认批量删除"
-        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条标准成本吗？`}
+        deleteConfirmTitle={t('app.kuaicaiwu.standardCost.batchDeleteTitle')}
+        deleteConfirmDescription={(count) => t('app.kuaicaiwu.standardCost.batchDeleteDesc', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="standard-cost-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaicaiwu.costCommon.batchActions')}
             menuItems={[
               {
                 key: 'batch-enable',
-                label: '批量启用',
+                label: t('app.kuaicaiwu.standardCost.batchEnable'),
                 onClick: (keys) => handleBatchSetActive(keys, true),
               },
               {
                 key: 'batch-disable',
-                label: '批量停用',
+                label: t('app.kuaicaiwu.standardCost.batchDisable'),
                 onClick: (keys) => handleBatchSetActive(keys, false),
               },
             ]}
@@ -123,17 +166,17 @@ const StandardCostsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={editing ? '编辑标准成本' : '新建标准成本'}
+        title={editing ? t('app.kuaicaiwu.standardCost.edit') : t('app.kuaicaiwu.standardCost.create')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         onFinish={async (values) => {
           if (editing) {
             await standardCostService.update(editing.id, values);
-            messageApi.success('更新成功');
+            messageApi.success(t('app.kuaicaiwu.costCommon.updateSuccess'));
           } else {
             await standardCostService.create(values);
-            messageApi.success('创建成功');
+            messageApi.success(t('app.kuaicaiwu.costCommon.createSuccess'));
           }
           setModalVisible(false);
           actionRef.current?.reload();
@@ -142,36 +185,35 @@ const StandardCostsPage: React.FC = () => {
       >
         <ProFormSelect
           name="target_type"
-          label="核算对象"
+          label={t('app.kuaicaiwu.standardCost.col.targetType')}
           rules={[{ required: true }]}
-          options={[
-            { label: '物料', value: 'material' },
-            { label: '工作中心', value: 'work_center' },
-            { label: '工位', value: 'work_station' },
-          ]}
+          options={targetTypeOptions}
           disabled={!!editing}
         />
-        <ProFormDigit name="target_id" label="对象内码" rules={[{ required: true }]} min={1} disabled={!!editing} tooltip="系统中物料、工作中心或工位的数字编号" />
-        <ProFormText name="target_code" label="对象编码" />
-        <ProFormText name="target_name" label="对象名称" />
+        <ProFormDigit
+          name="target_id"
+          label={t('app.kuaicaiwu.standardCost.field.targetId')}
+          rules={[{ required: true }]}
+          min={1}
+          disabled={!!editing}
+          tooltip={t('app.kuaicaiwu.standardCost.field.targetIdTooltip')}
+        />
+        <ProFormText name="target_code" label={t('app.kuaicaiwu.standardCost.col.targetCode')} />
+        <ProFormText name="target_name" label={t('app.kuaicaiwu.standardCost.col.targetName')} />
         <ProFormSelect
           name="cost_item_type"
-          label="成本项目"
+          label={t('app.kuaicaiwu.standardCost.col.costItemType')}
           rules={[{ required: true }]}
-          options={[
-            { label: '材料', value: 'material' },
-            { label: '人工', value: 'labor' },
-            { label: '制造费用', value: 'overhead' },
-          ]}
+          options={costItemOptions}
           disabled={!!editing}
         />
-        <ProFormDigit name="standard_value" label="标准值" rules={[{ required: true }]} min={0} />
-        <ProFormText name="unit" label="单位" />
-        <ProFormText name="version" label="版本" />
-        <ProFormDatePicker name="effective_date" label="生效日期" />
-        <ProFormDatePicker name="expiry_date" label="失效日期" />
-        <ProFormSwitch name="is_active" label="启用" />
-        <ProFormTextArea name="description" label="描述" />
+        <ProFormDigit name="standard_value" label={t('app.kuaicaiwu.standardCost.col.standardValue')} rules={[{ required: true }]} min={0} />
+        <ProFormText name="unit" label={t('app.kuaicaiwu.standardCost.col.unit')} />
+        <ProFormText name="version" label={t('app.kuaicaiwu.standardCost.col.version')} />
+        <ProFormDatePicker name="effective_date" label={t('app.kuaicaiwu.standardCost.field.effectiveDate')} />
+        <ProFormDatePicker name="expiry_date" label={t('app.kuaicaiwu.standardCost.field.expiryDate')} />
+        <ProFormSwitch name="is_active" label={t('app.kuaicaiwu.standardCost.status.active')} />
+        <ProFormTextArea name="description" label={t('app.kuaicaiwu.costCommon.description')} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

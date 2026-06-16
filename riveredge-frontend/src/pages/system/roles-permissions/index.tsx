@@ -86,6 +86,10 @@ import { ThemedSegmented } from '../../../components/themed-segmented';
 import { getMenuTree, type MenuTree } from '../../../services/menu';
 import { useTrialRunMode } from '../../../hooks/useTrialRunMode';
 import {
+  resolvePresetRoleDescription,
+  resolvePresetRoleName,
+} from '../../../utils/presetEntityI18n';
+import {
   extractAppCodeFromPath,
   getAppDisplayName,
   translateAppMenuItemName,
@@ -661,7 +665,7 @@ const RolesPermissionsPage: React.FC = () => {
                 flexShrink: 0,
               }}
             />
-            <span>{role.name}</span>
+            <span>{resolvePresetRoleName(role, t)}</span>
             {(role.user_count ?? 0) > 0 && (
               <Tooltip title={t('field.department.userCountTag', { count: role.user_count ?? 0 })}>
                 <Badge
@@ -1627,7 +1631,9 @@ const RolesPermissionsPage: React.FC = () => {
           <div className="roles-permissions-center-toolbar">
             <div className="roles-permissions-center-toolbar__meta">
               <Space size="small" style={{ minWidth: 0 }}>
-                <span style={{ fontSize: '16px', fontWeight: 600 }}>{selectedRole.name}</span>
+                <span style={{ fontSize: '16px', fontWeight: 600 }}>
+                  {resolvePresetRoleName(selectedRole, t)}
+                </span>
                 <Tag color="blue" variant="filled" style={{ margin: 0 }}>{selectedRole.code}</Tag>
                 {selectedRole.is_system && <Tag color="default" variant="filled">{t('pages.system.roles.systemRole')}</Tag>}
               </Space>
@@ -2374,7 +2380,13 @@ const RolesPermissionsPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetRoleCodes(keys as string[]),
           }}
           columns={[
-            { title: t('field.role.name'), dataIndex: 'name', width: 140, ellipsis: true },
+            {
+              title: t('field.role.name'),
+              dataIndex: 'name',
+              width: 140,
+              ellipsis: true,
+              render: (_: unknown, row: PresetRoleItem) => resolvePresetRoleName(row, t),
+            },
             {
               title: t('field.role.code'),
               dataIndex: 'code',
@@ -2385,6 +2397,7 @@ const RolesPermissionsPage: React.FC = () => {
               title: t('field.role.description'),
               dataIndex: 'description',
               ellipsis: true,
+              render: (_: unknown, row: PresetRoleItem) => resolvePresetRoleDescription(row, t),
             },
           ]}
         />

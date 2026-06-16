@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
 import { App, Card, Col, Row, Segmented, Select, Space, Statistic, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -36,6 +37,7 @@ interface GroupItem {
 }
 
 const InventoryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<any>(null);
   const lastQueryRef = useRef<Record<string, any>>({});
@@ -60,7 +62,13 @@ const InventoryPage: React.FC = () => {
   };
 
   const exportRows = (rows: InventoryItem[]) => {
-    const headers = ['物料编号', '物料名称', '库存数量', '状态', '仓库'];
+    const headers = [
+      t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+      t('app.kuaizhizao.warehouseReports.colMaterialName'),
+      t('app.kuaizhizao.warehouseReports.colStockQty'),
+      t('app.kuaizhizao.warehouseCommon.colStatus'),
+      t('app.kuaizhizao.warehouseReports.colWarehouse'),
+    ];
     const lines = rows.map((r) =>
       [
         r.material_code,
@@ -84,59 +92,66 @@ const InventoryPage: React.FC = () => {
 
   const groupTags = useMemo(() => groups.slice(0, 8), [groups]);
 
-  const columns: ProColumns<InventoryItem>[] = [
-    {
-      title: '物料',
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      render: (_, r) => (
-        <MaterialStackedCell
-          material_name={r.material_name}
-          material_code={r.material_code}
-        />
-      ),
-    },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
-    {
-      title: '库存数量',
-      dataIndex: 'quantity',
-      width: 120,
-      valueType: 'digit',
-      render: (_, record) => {
-        const qty = Number(record.quantity || 0);
-        const unit = String(record.material_unit || '').trim();
-        return (
-          <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
-            {qty}
-            {unit ? ` ${unit}` : ''}
-          </span>
-        );
+  const columns: ProColumns<InventoryItem>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+        key: 'material_name',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        render: (_, r) => (
+          <MaterialStackedCell
+            material_name={r.material_name}
+            material_code={r.material_code}
+          />
+        ),
       },
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 120,
-      render: (_, record) => {
-        let color = 'default';
-        if (record.status === '已过期') color = 'red';
-        else if (record.status === '无库存') color = 'orange';
-        else if (record.status === '在库') color = 'green';
-        return <Tag color={color}>{record.status}</Tag>;
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colStockQty'),
+        dataIndex: 'quantity',
+        width: 120,
+        valueType: 'digit',
+        render: (_, record) => {
+          const qty = Number(record.quantity || 0);
+          const unit = String(record.material_unit || '').trim();
+          return (
+            <span style={{ color: qty <= 0 ? '#ff4d4f' : undefined }}>
+              {qty}
+              {unit ? ` ${unit}` : ''}
+            </span>
+          );
+        },
       },
-    },
-    { title: '仓库', dataIndex: 'warehouse_name', width: 140, render: (_, r) => r.warehouse_name || '-' },
-  ];
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        width: 120,
+        render: (_, record) => {
+          let color = 'default';
+          if (record.status === '已过期') color = 'red';
+          else if (record.status === '无库存') color = 'orange';
+          else if (record.status === '在库') color = 'green';
+          return <Tag color={color}>{record.status}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        render: (_, r) => r.warehouse_name || '-',
+      },
+    ],
+    [t]
+  );
 
   const fetchInventory = async (params: any, _sort: any, _filter: any, searchFormValues?: Record<string, any>) => {
     const search = searchFormValues || {};
     const baseQuery = {
       material_id: search.material_id,
       warehouse_id: search.warehouse_id,
-      // 后端该筛选口径与前端开关语义历史上相反，这里统一反转后与“显示/隐藏0库存”文案保持一致
       include_zero_stock: !includeZeroStock,
       status_filter: statusFilter === 'all' ? undefined : statusFilter,
       keyword: (search as any).keyword ?? params.keyword,
@@ -168,7 +183,7 @@ const InventoryPage: React.FC = () => {
         success: true,
       };
     } catch (error: any) {
-      messageApi.error(error?.message || '查询失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
     }
   };
@@ -193,43 +208,47 @@ const InventoryPage: React.FC = () => {
         rows = allRes.items || [];
       }
       if (!rows.length) {
-        messageApi.warning('暂无数据可导出');
+        messageApi.warning(t('app.kuaizhizao.warehouseCommon.exportNoData'));
         return;
       }
       exportRows(rows);
-      messageApi.success(`已导出 ${rows.length} 条记录`);
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.exportSuccess', { count: rows.length }));
     } catch (error: any) {
-      messageApi.error(error?.message || '导出失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.exportFailed'));
     }
   };
 
   return (
     <ListPageTemplate>
-      <Card size="small" style={{ marginBottom: 12 }} title="分析区">
+      <Card size="small" style={{ marginBottom: 12 }} title={t('app.kuaizhizao.warehouseCommon.analysisSection')}>
         <Row gutter={12}>
-          <Col span={4}><Statistic title="记录数" value={summary.total_records} /></Col>
-          <Col span={4}><Statistic title="库存总量" value={summary.total_quantity} precision={2} /></Col>
-          <Col span={4}><Statistic title="在库" value={summary.in_stock_count} /></Col>
-          <Col span={4}><Statistic title="无库存" value={summary.zero_stock_count} /></Col>
-          <Col span={4}><Statistic title="近效期(30天)" value={summary.near_expiry_count} /></Col>
-          <Col span={4}><Statistic title="过期" value={summary.expired_count} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statRecords')} value={summary.total_records} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statTotalQty')} value={summary.total_quantity} precision={2} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statInStock')} value={summary.in_stock_count} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statZeroStock')} value={summary.zero_stock_count} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statNearExpiry')} value={summary.near_expiry_count} /></Col>
+          <Col span={4}><Statistic title={t('app.kuaizhizao.warehouseCommon.statExpired')} value={summary.expired_count} /></Col>
         </Row>
         <Space style={{ marginTop: 8, flexWrap: 'wrap' }}>
           {groupTags.map((g) => (
             <Tag key={g.group_key}>
-              {g.group_key}: {g.record_count}项 / {Number(g.total_quantity || 0).toFixed(2)}
+              {t('app.kuaizhizao.warehouseCommon.groupTag', {
+                key: g.group_key,
+                count: g.record_count,
+                qty: Number(g.total_quantity || 0).toFixed(2),
+              })}
             </Tag>
           ))}
         </Space>
       </Card>
 
-      <Card size="small" style={{ marginBottom: 12 }} title="筛选区">
+      <Card size="small" style={{ marginBottom: 12 }} title={t('app.kuaizhizao.warehouseCommon.filterSection')}>
         <Space wrap>
           <Segmented
             value={includeZeroStock ? 'show' : 'hide'}
             options={[
-              { label: '显示0库存', value: 'show' },
-              { label: '隐藏0库存', value: 'hide' },
+              { label: t('app.kuaizhizao.warehouseCommon.showZeroStock'), value: 'show' },
+              { label: t('app.kuaizhizao.warehouseCommon.hideZeroStock'), value: 'hide' },
             ]}
             onChange={(v) => {
               setIncludeZeroStock(v === 'show');
@@ -240,9 +259,9 @@ const InventoryPage: React.FC = () => {
             value={statusFilter}
             style={{ width: 140 }}
             options={[
-              { label: '全部状态', value: 'all' },
-              { label: '仅在库', value: 'in_stock' },
-              { label: '仅无库存', value: 'zero' },
+              { label: t('app.kuaizhizao.warehouseCommon.allStatus'), value: 'all' },
+              { label: t('app.kuaizhizao.warehouseCommon.inStockOnly'), value: 'in_stock' },
+              { label: t('app.kuaizhizao.warehouseCommon.zeroStockOnly'), value: 'zero' },
             ]}
             onChange={(v) => {
               setStatusFilter(v);
@@ -253,10 +272,10 @@ const InventoryPage: React.FC = () => {
             value={groupBy}
             style={{ width: 150 }}
             options={[
-              { label: '按仓库分组', value: 'warehouse' },
-              { label: '按物料分组', value: 'material' },
-              { label: '按状态分组', value: 'status' },
-              { label: '按库龄分组', value: 'aging_bucket' },
+              { label: t('app.kuaizhizao.warehouseCommon.groupByWarehouse'), value: 'warehouse' },
+              { label: t('app.kuaizhizao.warehouseCommon.groupByMaterial'), value: 'material' },
+              { label: t('app.kuaizhizao.warehouseCommon.groupByStatus'), value: 'status' },
+              { label: t('app.kuaizhizao.warehouseCommon.groupByAging'), value: 'aging_bucket' },
             ]}
             onChange={(v) => {
               setGroupBy(v);
@@ -266,9 +285,9 @@ const InventoryPage: React.FC = () => {
         </Space>
       </Card>
 
-      <Card size="small" title="结果区">
+      <Card size="small" title={t('app.kuaizhizao.warehouseCommon.resultSection')}>
         <UniTable<InventoryItem>
-          headerTitle="即时库存查询"
+          headerTitle={t('app.kuaizhizao.warehouseInventory.headerTitle')}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory"
           actionRef={actionRef}
           columns={columns}

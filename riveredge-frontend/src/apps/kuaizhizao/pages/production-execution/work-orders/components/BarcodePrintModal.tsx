@@ -10,6 +10,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'
 import { 
   Modal, Radio, Button, Typography, 
   Space, message, Spin 
@@ -40,6 +41,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
   operationId,
   level = 'operation',
 }) => {
+  const { t } = useTranslation()
   const [loading, setLoading] = useState(false);
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
@@ -62,7 +64,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       }
     } catch (error) {
       console.error('Failed to load print templates', error);
-      message.error('加载打印模板失败');
+      message.error(t('app.kuaizhizao.workOrder.msgLoadPrintTemplateFailed'));
     } finally {
       setLoading(false);
     }
@@ -70,7 +72,7 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
 
   const handlePrint = async () => {
     if (!selectedTemplate) {
-      message.warning('请选择打印模板');
+      message.warning(t('app.kuaizhizao.workOrder.msgSelectPrintTemplatePlaceholder'));
       return;
     }
 
@@ -86,11 +88,11 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
         : `/api/v1/apps/kuaizhizao/work-orders/${workOrderId}/operations/${operationId}/print?template_uuid=${selectedTemplate}`;
       
       window.open(printUrl, '_blank');
-      message.success('已发送打印请求');
+      message.success(t('app.kuaizhizao.workOrder.msgPrintRequestSent'));
       onCancel();
     } catch (error) {
       console.error('Print failed', error);
-      message.error('打印失败');
+      message.error(t('app.kuaizhizao.workOrder.msgPrintFailed'));
     } finally {
       setLoading(false);
     }
@@ -141,15 +143,15 @@ const BarcodePrintModal: React.FC<BarcodePrintModalProps> = ({
       {loading && templates.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '40px 0' }}>
           <Spin size="large" />
-          <div style={{ marginTop: 16, color: 'rgba(255,255,255,0.45)' }}>加载模板中...</div>
+          <div style={{ marginTop: 16, color: 'rgba(255,255,255,0.45)' }}>{t('app.kuaizhizao.workOrder.msgLoadingTemplates')}</div>
         </div>
       ) : (
         <div style={{ minHeight: 300 }}>
-          <Title level={4} style={{ color: 'rgba(255,255,255,0.65)', marginBottom: 16 }}>选择打印模板</Title>
+          <Title level={4} style={{ color: 'rgba(255,255,255,0.65)', marginBottom: 16 }}>{t('app.kuaizhizao.workOrder.kioskSelectTemplate')}</Title>
           {templates.length === 0 ? (
             <div style={{ padding: '40px 0', textAlign: 'center', background: 'rgba(255,255,255,0.02)', borderRadius: 8 }}>
               <FileTextOutlined style={{ fontSize: 48, color: 'rgba(255,255,255,0.1)', marginBottom: 16 }} />
-              <div style={{ color: 'rgba(255,255,255,0.45)' }}>未发现相关打印模板</div>
+              <div style={{ color: 'rgba(255,255,255,0.45)' }}>{t('app.kuaizhizao.workOrder.msgNoPrintTemplates')}</div>
             </div>
           ) : (
             <Radio.Group 

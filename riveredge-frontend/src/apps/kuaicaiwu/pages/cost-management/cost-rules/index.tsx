@@ -8,7 +8,8 @@
  * Date: 2026-01-05
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormTextArea, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Descriptions, Typography, Timeline } from 'antd';
 import { EditOutlined, DeleteOutlined, EyeOutlined } from '@ant-design/icons';
@@ -26,6 +27,7 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getPerformanceConfigActiveLifecycle } from '../../../../kuaizhizao/utils/performanceLifecycle';
 import { buildMasterDetailDescriptionItems } from '../../../utils/buildMasterDetailDescriptionItems';
 import { costRuleApi } from '../../../services/cost';
+import { getRuleTypeSelectOptions, getRuleTypeTag } from '../../../utils/costUiLabels';
 import dayjs from 'dayjs';
 
 interface CostRule {
@@ -53,6 +55,7 @@ interface CostRule {
 }
 
 const CostRulePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -86,10 +89,10 @@ const CostRulePage: React.FC = () => {
   const handleInitPresets = async () => {
     try {
       await costRuleApi.initPresets();
-      messageApi.success('预置规则初始化成功');
+      messageApi.success(t('app.kuaicaiwu.costRule.initPresetsSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '初始化失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costRule.initPresetsFailed'));
     }
   };
 
@@ -99,7 +102,7 @@ const CostRulePage: React.FC = () => {
   const handleEdit = async (record: CostRule) => {
     try {
       if (!record.uuid) {
-        messageApi.error('规则UUID不存在');
+        messageApi.error(t('app.kuaicaiwu.costRule.uuidMissing'));
         return;
       }
       const detail = await costRuleApi.get(record.uuid);
@@ -119,7 +122,7 @@ const CostRulePage: React.FC = () => {
         });
       }, 100);
     } catch (error: any) {
-      messageApi.error(error.message || '获取规则详情失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costRule.loadDetailFailed'));
     }
   };
 
@@ -129,14 +132,14 @@ const CostRulePage: React.FC = () => {
   const handleDetail = async (record: CostRule) => {
     try {
       if (!record.uuid) {
-        messageApi.error('规则UUID不存在');
+        messageApi.error(t('app.kuaicaiwu.costRule.uuidMissing'));
         return;
       }
       const detail = await costRuleApi.get(record.uuid);
       setCostRuleDetail(detail);
       setDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取规则详情失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costRule.loadDetailFailed'));
     }
   };
 
@@ -146,14 +149,14 @@ const CostRulePage: React.FC = () => {
   const handleDelete = async (record: CostRule) => {
     try {
       if (!record.uuid) {
-        messageApi.error('规则UUID不存在');
+        messageApi.error(t('app.kuaicaiwu.costRule.uuidMissing'));
         return;
       }
       await costRuleApi.delete(record.uuid);
-      messageApi.success('删除成功');
+      messageApi.success(t('app.kuaicaiwu.costCommon.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCommon.deleteFailed'));
     }
   };
 
@@ -162,11 +165,11 @@ const CostRulePage: React.FC = () => {
       for (const key of keys) {
         await costRuleApi.delete(String(key));
       }
-      messageApi.success(`已删除 ${keys.length} 条规则`);
+      messageApi.success(t('app.kuaicaiwu.costRule.batchDeleteSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.costRule.batchDeleteFailed'));
     }
   };
 
@@ -175,11 +178,15 @@ const CostRulePage: React.FC = () => {
       for (const key of keys) {
         await costRuleApi.update(String(key), { is_active: isActive });
       }
-      messageApi.success(`已将 ${keys.length} 条规则设为${isActive ? '启用' : '禁用'}`);
+      messageApi.success(
+        isActive
+          ? t('app.kuaicaiwu.costRule.batchEnableSuccess', { count: keys.length })
+          : t('app.kuaicaiwu.costRule.batchDisableSuccess', { count: keys.length }),
+      );
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量更新失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.costRule.batchUpdateFailed'));
     }
   };
 
@@ -193,7 +200,7 @@ const CostRulePage: React.FC = () => {
         try {
           values.calculation_formula = JSON.parse(values.calculation_formula);
         } catch (e) {
-          messageApi.error('计算公式格式错误，必须是有效的JSON格式');
+          messageApi.error(t('app.kuaicaiwu.costRule.formulaJsonError'));
           return;
         }
       }
@@ -201,233 +208,207 @@ const CostRulePage: React.FC = () => {
         try {
           values.rule_parameters = JSON.parse(values.rule_parameters);
         } catch (e) {
-          messageApi.error('规则参数格式错误，必须是有效的JSON格式');
+          messageApi.error(t('app.kuaicaiwu.costRule.parametersJsonError'));
           return;
         }
       }
 
       if (isEdit && currentCostRule?.uuid) {
         await costRuleApi.update(currentCostRule.uuid, values);
-        messageApi.success('更新成功');
+        messageApi.success(t('app.kuaicaiwu.costCommon.updateSuccess'));
       } else {
         await costRuleApi.create(values);
-        messageApi.success('创建成功');
+        messageApi.success(t('app.kuaicaiwu.costCommon.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '保存失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costRule.saveFailed'));
     }
   };
 
   /**
    * 表格列定义
    */
-  const columns: ProColumns<CostRule>[] = [
-    {
-      title: '是否启用',
-      dataIndex: 'is_active',
-      key: 'is_active',
-      hideInTable: true,
-      valueType: 'select',
-      fieldProps: {
-        allowClear: true,
-        options: [
-          { label: '启用', value: true },
-          { label: '禁用', value: false },
-        ],
+  const columns: ProColumns<CostRule>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaicaiwu.costRule.col.isActive'),
+        dataIndex: 'is_active',
+        key: 'is_active',
+        hideInTable: true,
+        valueType: 'select',
+        fieldProps: {
+          allowClear: true,
+          options: [
+            { label: t('app.kuaicaiwu.costRule.status.enabled'), value: true },
+            { label: t('app.kuaicaiwu.costRule.status.disabled'), value: false },
+          ],
+        },
       },
-    },
-    {
-      title: '规则编号',
-      dataIndex: 'code',
-      key: 'code',
-      width: 150,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '规则名称',
-      dataIndex: 'name',
-      key: 'name',
-      width: 200,
-    },
-    {
-      title: '规则类型',
-      dataIndex: 'rule_type',
-      key: 'rule_type',
-      width: 120,
-      render: (dom) => {
-        const text = dom as string;
-        const typeMap: Record<string, { color: string; text: string }> = {
-          '材料成本': { color: 'blue', text: '材料成本' },
-          '人工成本': { color: 'green', text: '人工成本' },
-          '制造费用': { color: 'orange', text: '制造费用' },
-        };
-        const type = typeMap[text] || { color: 'default', text: text };
-        return <Tag color={type.color}>{type.text}</Tag>;
+      {
+        title: t('app.kuaicaiwu.costRule.col.code'),
+        dataIndex: 'code',
+        key: 'code',
+        width: 150,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+            {r.code ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '成本类型',
-      dataIndex: 'cost_type',
-      key: 'cost_type',
-      width: 120,
-    },
-    {
-      title: '计算方法',
-      dataIndex: 'calculation_method',
-      key: 'calculation_method',
-      width: 120,
-    },
-    {
-      title: '分摊基准',
-      dataIndex: 'allocation_basis',
-      key: 'allocation_basis',
-      width: 120,
-    },
-    {
-      title: '来源模块',
-      dataIndex: 'source_module',
-      key: 'source_module',
-      width: 120,
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      key: 'created_at',
-      width: 180,
-      search: false,
-      render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: 180,
-      search: false,
-      render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      key: 'lifecycle',
-      width: 200,
-      fixed: 'right',
-      align: 'left',
-      search: false,
-      render: (_, record) => (
-        <UniLifecycle {...getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>)} showCircleTooltip={false} />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      fixed: 'right',
-      render: (_: any, record: CostRule) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={() => handleDetail(record)}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={() => handleEdit(record)}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => handleDelete(record)}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name', key: 'name', width: 200 },
+      {
+        title: t('app.kuaicaiwu.costRule.col.ruleType'),
+        dataIndex: 'rule_type',
+        key: 'rule_type',
+        width: 120,
+        render: (dom) => getRuleTypeTag(String(dom ?? ''), t),
+      },
+      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type', key: 'cost_type', width: 120 },
+      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method', key: 'calculation_method', width: 120 },
+      { title: t('app.kuaicaiwu.costRule.col.allocationBasis'), dataIndex: 'allocation_basis', key: 'allocation_basis', width: 120 },
+      { title: t('app.kuaicaiwu.costRule.col.sourceModule'), dataIndex: 'source_module', key: 'source_module', width: 120 },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
+        dataIndex: 'created_at',
+        key: 'created_at',
+        width: 180,
+        search: false,
+        render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
+        dataIndex: 'updated_at',
+        key: 'updated_at',
+        width: 180,
+        search: false,
+        render: (dom) => (dom ? dayjs(dom as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        key: 'lifecycle',
+        width: 200,
+        fixed: 'right',
+        align: 'left',
+        search: false,
+        render: (_, record) => (
+          <UniLifecycle {...getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>)} showCircleTooltip={false} />
+        ),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
+        width: 200,
+        fixed: 'right',
+        render: (_: any, record: CostRule) => (
+          <Space>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+              {t('app.kuaicaiwu.costCommon.detail')}
+            </Button>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('app.kuaicaiwu.costCommon.edit')}
+            </Button>
+            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => handleDelete(record)}>
+              {t('app.kuaicaiwu.costCommon.delete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
-  /**
-   * 详情描述项
-   */
-  const detailItems: any[] = [
-    {
-      title: '规则编号',
-      dataIndex: 'code',
-    },
-    {
-      title: '规则名称',
-      dataIndex: 'name',
-    },
-    {
-      title: '规则类型',
-      dataIndex: 'rule_type',
-    },
-    {
-      title: '成本类型',
-      dataIndex: 'cost_type',
-    },
-    {
-      title: '计算方法',
-      dataIndex: 'calculation_method',
-    },
-    {
-      title: '计算公式',
-      dataIndex: 'calculation_formula',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
-    },
-    {
-      title: '规则参数',
-      dataIndex: 'rule_parameters',
-      render: (text: any) => text ? JSON.stringify(text, null, 2) : '-',
-    },
-    {
-      title: '是否启用',
-      dataIndex: 'is_active',
-      render: (text: boolean) => (
-        <Tag color={text ? 'green' : 'red'}>{text ? '启用' : '禁用'}</Tag>
-      ),
-    },
-    {
-      title: '描述',
-      dataIndex: 'description',
-    },
-    {
-      title: '创建人',
-      dataIndex: 'created_by_name',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '更新人',
-      dataIndex: 'updated_by_name',
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      render: (text: string) => text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-  ];
+  const detailItems: any[] = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costRule.col.code'), dataIndex: 'code' },
+      { title: t('app.kuaicaiwu.costRule.col.name'), dataIndex: 'name' },
+      { title: t('app.kuaicaiwu.costRule.col.ruleType'), dataIndex: 'rule_type' },
+      { title: t('app.kuaicaiwu.costRule.col.costType'), dataIndex: 'cost_type' },
+      { title: t('app.kuaicaiwu.costRule.col.calculationMethod'), dataIndex: 'calculation_method' },
+      {
+        title: t('app.kuaicaiwu.costRule.col.calculationFormula'),
+        dataIndex: 'calculation_formula',
+        render: (text: any) => (text ? JSON.stringify(text, null, 2) : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.ruleParameters'),
+        dataIndex: 'rule_parameters',
+        render: (text: any) => (text ? JSON.stringify(text, null, 2) : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costRule.col.isActive'),
+        dataIndex: 'is_active',
+        render: (text: boolean) => (
+          <Tag color={text ? 'green' : 'red'}>
+            {text ? t('app.kuaicaiwu.costRule.status.enabled') : t('app.kuaicaiwu.costRule.status.disabled')}
+          </Tag>
+        ),
+      },
+      { title: t('app.kuaicaiwu.costCommon.description'), dataIndex: 'description' },
+      { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
+        dataIndex: 'created_at',
+        render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
+        dataIndex: 'updated_at',
+        render: (text: string) => (text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+    ],
+    [t],
+  );
 
   const ruleDetailBaseItems = detailItems.filter(
     (d) => !['calculation_formula', 'rule_parameters'].includes(String((d as { dataIndex?: string }).dataIndex)),
+  );
+
+  const calculationMethodOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.costRule.calculationMethod.byQuantity'), value: '按数量' },
+      { label: t('app.kuaicaiwu.costRule.calculationMethod.byHours'), value: '按工时' },
+      { label: t('app.kuaicaiwu.costRule.calculationMethod.byRatio'), value: '按比例' },
+      { label: t('app.kuaicaiwu.costRule.calculationMethod.byFixed'), value: '按固定值' },
+      { label: t('app.kuaicaiwu.costRule.calculationMethod.customFormula'), value: '自定义公式' },
+    ],
+    [t],
+  );
+
+  const allocationBasisOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.output'), value: '产量' },
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.hours'), value: '工时' },
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.machineHours'), value: '机器工时' },
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.outputValue'), value: '产值' },
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.average'), value: '平均分摊' },
+      { label: t('app.kuaicaiwu.costRule.allocationBasis.manual'), value: '手动分摊' },
+    ],
+    [t],
+  );
+
+  const wipValuationOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.costRule.wipValuation.none'), value: '不计算' },
+      { label: t('app.kuaicaiwu.costRule.wipValuation.equivalent'), value: '约当产量法' },
+      { label: t('app.kuaicaiwu.costRule.wipValuation.standard'), value: '定额成本法' },
+      { label: t('app.kuaicaiwu.costRule.wipValuation.materialOnly'), value: '只计材料' },
+    ],
+    [t],
+  );
+
+  const sourceModuleOptions = useMemo(
+    () => [
+      { label: t('app.kuaicaiwu.costRule.sourceModule.warehouse'), value: '仓库' },
+      { label: t('app.kuaicaiwu.costRule.sourceModule.reporting'), value: '报工' },
+      { label: t('app.kuaicaiwu.costRule.sourceModule.payroll'), value: '薪资' },
+      { label: t('app.kuaicaiwu.costRule.sourceModule.purchase'), value: '采购' },
+    ],
+    [t],
   );
 
   return (
@@ -464,31 +445,31 @@ const CostRulePage: React.FC = () => {
         columns={columns}
         rowKey="uuid"
         showCreateButton
-        createButtonText="新建成本核算规则"
+        createButtonText={t('app.kuaicaiwu.costRule.create')}
         onCreate={handleCreate}
         toolBarActionsAfterCreate={[
           <Button key="init-presets" type="default" onClick={handleInitPresets}>
-            初始化推荐规则
+            {t('app.kuaicaiwu.costRule.initPresets')}
           </Button>,
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle="确认批量删除"
-        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条成本核算规则吗？`}
+        deleteConfirmTitle={t('app.kuaicaiwu.costRule.batchDeleteTitle')}
+        deleteConfirmDescription={(count) => t('app.kuaicaiwu.costRule.batchDeleteDesc', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="cost-rule-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaicaiwu.costCommon.batchActions')}
             menuItems={[
               {
                 key: 'batch-enable',
-                label: '批量启用',
+                label: t('app.kuaicaiwu.costRule.batchEnable'),
                 onClick: (keys) => handleBatchSetActive(keys, true),
               },
               {
                 key: 'batch-disable',
-                label: '批量禁用',
+                label: t('app.kuaicaiwu.costRule.batchDisable'),
                 onClick: (keys) => handleBatchSetActive(keys, false),
               },
             ]}
@@ -505,7 +486,7 @@ const CostRulePage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑成本核算规则' : '新建成本核算规则'}
+        title={isEdit ? t('app.kuaicaiwu.costRule.edit') : t('app.kuaicaiwu.costRule.create')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSave}
@@ -514,115 +495,77 @@ const CostRulePage: React.FC = () => {
       >
         <ProFormText
           name="code"
-          label="规则编号"
-          placeholder="留空则自动生成"
+          label={t('app.kuaicaiwu.costRule.col.code')}
+          placeholder={t('app.kuaicaiwu.costRule.field.codePlaceholder')}
           disabled={isEdit}
         />
         <ProFormText
           name="name"
-          label="规则名称"
-          placeholder="请输入规则名称"
-          rules={[{ required: true, message: '请输入规则名称' }]}
+          label={t('app.kuaicaiwu.costRule.col.name')}
+          placeholder={t('app.kuaicaiwu.costRule.field.namePlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costRule.field.nameRequired') }]}
         />
         <ProFormSelect
           name="rule_type"
-          label="规则类型"
-          placeholder="请选择规则类型"
-          options={[
-            { label: '材料成本', value: '材料成本' },
-            { label: '人工成本', value: '人工成本' },
-            { label: '制造费用', value: '制造费用' },
-          ]}
-          rules={[{ required: true, message: '请选择规则类型' }]}
+          label={t('app.kuaicaiwu.costRule.col.ruleType')}
+          placeholder={t('app.kuaicaiwu.costRule.field.ruleTypePlaceholder')}
+          options={getRuleTypeSelectOptions(t)}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costRule.field.ruleTypeRequired') }]}
         />
         <ProFormText
           name="cost_type"
-          label="成本类型"
-          placeholder="请输入成本类型（如：直接材料、间接材料等）"
-          rules={[{ required: true, message: '请输入成本类型' }]}
+          label={t('app.kuaicaiwu.costRule.col.costType')}
+          placeholder={t('app.kuaicaiwu.costRule.field.costTypePlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costRule.field.costTypeRequired') }]}
         />
         <ProFormSelect
           name="calculation_method"
-          label="计算方法"
-          placeholder="请选择计算方法"
-          options={[
-            { label: '按数量', value: '按数量' },
-            { label: '按工时', value: '按工时' },
-            { label: '按比例', value: '按比例' },
-            { label: '按固定值', value: '按固定值' },
-            { label: '自定义公式', value: '自定义公式' },
-          ]}
-          rules={[{ required: true, message: '请选择计算方法' }]}
+          label={t('app.kuaicaiwu.costRule.col.calculationMethod')}
+          placeholder={t('app.kuaicaiwu.costRule.field.calculationMethodPlaceholder')}
+          options={calculationMethodOptions}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costRule.field.calculationMethodRequired') }]}
         />
         <ProFormSelect
           name="allocation_basis"
-          label="分摊基准"
-          placeholder="请选择分摊基准"
-          options={[
-            { label: '产量', value: '产量' },
-            { label: '工时', value: '工时' },
-            { label: '机器工时', value: '机器工时' },
-            { label: '产值', value: '产值' },
-            { label: '平均分摊', value: '平均分摊' },
-            { label: '手动分摊', value: '手动分摊' },
-          ]}
+          label={t('app.kuaicaiwu.costRule.col.allocationBasis')}
+          placeholder={t('app.kuaicaiwu.costRule.field.allocationBasisPlaceholder')}
+          options={allocationBasisOptions}
         />
         <ProFormSelect
           name="wip_valuation_method"
-          label="在产品核算方法"
-          placeholder="请选择在产品核算方法"
-          options={[
-            { label: '不计算在产品成本', value: '不计算' },
-            { label: '约当产量法', value: '约当产量法' },
-            { label: '定额成本法', value: '定额成本法' },
-            { label: '在产品只计材料成本', value: '只计材料' },
-          ]}
+          label={t('app.kuaicaiwu.costRule.field.wipValuation')}
+          placeholder={t('app.kuaicaiwu.costRule.field.wipValuationPlaceholder')}
+          options={wipValuationOptions}
         />
         <ProFormSelect
           name="source_module"
-          label="费用来源模块"
-          placeholder="请选择费用来源模块"
-          options={[
-            { label: '仓储/领料', value: '仓库' },
-            { label: '报工/生产', value: '报工' },
-            { label: '薪资/人力', value: '薪资' },
-            { label: '采购/发票', value: '采购' },
-          ]}
+          label={t('app.kuaicaiwu.costRule.col.sourceModule')}
+          placeholder={t('app.kuaicaiwu.costRule.field.sourceModulePlaceholder')}
+          options={sourceModuleOptions}
         />
         <ProFormTextArea
           name="calculation_formula"
-          label="计算公式（JSON格式）"
-          placeholder='请输入计算公式，JSON格式，例如：{"formula": "quantity * price"}'
-          fieldProps={{
-            rows: 4,
-          }}
+          label={t('app.kuaicaiwu.costRule.field.calculationFormulaJson')}
+          placeholder={t('app.kuaicaiwu.costRule.field.calculationFormulaPlaceholder')}
+          fieldProps={{ rows: 4 }}
         />
         <ProFormTextArea
           name="rule_parameters"
-          label="规则参数（JSON格式）"
-          placeholder='请输入规则参数，JSON格式，例如：{"rate": 0.1, "fixed_value": 100}'
-          fieldProps={{
-            rows: 4,
-          }}
+          label={t('app.kuaicaiwu.costRule.field.ruleParametersJson')}
+          placeholder={t('app.kuaicaiwu.costRule.field.ruleParametersPlaceholder')}
+          fieldProps={{ rows: 4 }}
         />
-        <ProFormSwitch
-          name="is_active"
-          label="是否启用"
-          initialValue={true}
-        />
+        <ProFormSwitch name="is_active" label={t('app.kuaicaiwu.costRule.col.isActive')} initialValue={true} />
         <ProFormTextArea
           name="description"
-          label="描述"
-          placeholder="请输入描述"
-          fieldProps={{
-            rows: 3,
-          }}
+          label={t('app.kuaicaiwu.costCommon.description')}
+          placeholder={t('app.kuaicaiwu.costCommon.descriptionPlaceholder')}
+          fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title="成本核算规则详情"
+        title={t('app.kuaicaiwu.costRule.detailTitle')}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -633,7 +576,7 @@ const CostRulePage: React.FC = () => {
         customContent={
           costRuleDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -643,60 +586,38 @@ const CostRulePage: React.FC = () => {
                   )}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
                 <UniLifecycle
                   {...getPerformanceConfigActiveLifecycle(costRuleDetail as unknown as Record<string, unknown>)}
                   showCircleTooltip={false}
                 />
                 <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  规则配置类数据；上下游单据跟踪未接入时仅展示启用状态生命周期。
+                  {t('app.kuaicaiwu.costRule.lifecycleHint')}
                 </Typography.Paragraph>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
                 <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                  <Typography.Text type="secondary">计算公式</Typography.Text>
-                  <pre
-                    style={{
-                      marginTop: 8,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      maxHeight: 240,
-                      overflow: 'auto',
-                    }}
-                  >
-                    {costRuleDetail.calculation_formula
-                      ? JSON.stringify(costRuleDetail.calculation_formula, null, 2)
-                      : '-'}
+                  <Typography.Text type="secondary">{t('app.kuaicaiwu.costRule.col.calculationFormula')}</Typography.Text>
+                  <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflow: 'auto' }}>
+                    {costRuleDetail.calculation_formula ? JSON.stringify(costRuleDetail.calculation_formula, null, 2) : '-'}
                   </pre>
                   <Typography.Text type="secondary" style={{ display: 'block', marginTop: 16 }}>
-                    规则参数
+                    {t('app.kuaicaiwu.costRule.col.ruleParameters')}
                   </Typography.Text>
-                  <pre
-                    style={{
-                      marginTop: 8,
-                      whiteSpace: 'pre-wrap',
-                      wordBreak: 'break-word',
-                      maxHeight: 240,
-                      overflow: 'auto',
-                    }}
-                  >
-                    {costRuleDetail.rule_parameters
-                      ? JSON.stringify(costRuleDetail.rule_parameters, null, 2)
-                      : '-'}
+                  <pre style={{ marginTop: 8, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 240, overflow: 'auto' }}>
+                    {costRuleDetail.rule_parameters ? JSON.stringify(costRuleDetail.rule_parameters, null, 2) : '-'}
                   </pre>
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')}>
                 <Timeline
                   items={[
                     {
                       color: 'green',
                       children: (
                         <>
-                          创建 ·{' '}
-                          {costRuleDetail.created_at
-                            ? dayjs(costRuleDetail.created_at).format('YYYY-MM-DD HH:mm:ss')
-                            : '-'}
+                          {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
+                          {costRuleDetail.created_at ? dayjs(costRuleDetail.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
                           {costRuleDetail.created_by_name ? ` · ${costRuleDetail.created_by_name}` : ''}
                         </>
                       ),
@@ -705,10 +626,8 @@ const CostRulePage: React.FC = () => {
                       color: 'blue',
                       children: (
                         <>
-                          更新 ·{' '}
-                          {costRuleDetail.updated_at
-                            ? dayjs(costRuleDetail.updated_at).format('YYYY-MM-DD HH:mm:ss')
-                            : '-'}
+                          {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
+                          {costRuleDetail.updated_at ? dayjs(costRuleDetail.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
                           {costRuleDetail.updated_by_name ? ` · ${costRuleDetail.updated_by_name}` : ''}
                         </>
                       ),

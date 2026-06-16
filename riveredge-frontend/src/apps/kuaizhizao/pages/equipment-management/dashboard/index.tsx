@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useMemo } from 'react';
-import { Progress, Table, Tag, Typography } from 'antd';
+import { Table, Tag, Typography } from 'antd';
 import { useRequest } from 'ahooks';
 import {
   ToolOutlined,
@@ -11,6 +11,7 @@ import {
   BuildOutlined,
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { mesDashboardService } from '../../../services/dashboard';
 import { equipmentFaultApi, maintenancePlanApi } from '../../../services/equipment';
 import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
@@ -38,6 +39,7 @@ const EquipmentStatusPie = lazy(async () => {
 });
 
 const EquipmentDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const { data: summary, loading: summaryLoading } = useRequest(
@@ -70,53 +72,144 @@ const EquipmentDashboard: React.FC = () => {
     () => [
       {
         key: 'fault',
-        title: '报修/故障中',
+        title: t('app.kuaizhizao.equipmentDashboard.kpi.faultInProgress'),
         value: s?.faulty_count ?? 0,
-        subtitle: (s?.faulty_count ?? 0) > 0 ? `当前有 ${s?.faulty_count} 台设备停机待修` : '全厂设备运行状态良好',
+        subtitle:
+          (s?.faulty_count ?? 0) > 0
+            ? t('app.kuaizhizao.equipmentDashboard.kpi.faultSubtitleWithCount', {
+                count: s?.faulty_count ?? 0,
+              })
+            : t('app.kuaizhizao.equipmentDashboard.kpi.faultSubtitleHealthy'),
         icon: <ToolOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         onClick: () => navigate('/apps/kuaizhizao/equipment-management/faults?status=维修中'),
-        sideMetrics: [{ label: '设备总计', value: s?.total_count ?? 0 }],
+        sideMetrics: [
+          {
+            label: t('app.kuaizhizao.equipmentDashboard.kpi.totalEquipment'),
+            value: s?.total_count ?? 0,
+          },
+        ],
       },
       {
         key: 'calibration',
-        title: '需校验/计量',
+        title: t('app.kuaizhizao.equipmentDashboard.kpi.calibrationNeeded'),
         value: s?.calibration_needed ?? 0,
-        subtitle: '含已逾期或本月需校验设备',
+        subtitle: t('app.kuaizhizao.equipmentDashboard.kpi.calibrationSubtitle'),
         icon: <SafetyCertificateOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/kuaizhizao/equipment-management/list'),
-        sideMetrics: [{ label: '逾期校验', value: s?.calibration_needed ?? 0 }],
+        sideMetrics: [
+          {
+            label: t('app.kuaizhizao.equipmentDashboard.kpi.overdueCalibration'),
+            value: s?.calibration_needed ?? 0,
+          },
+        ],
       },
       {
         key: 'oee',
-        title: '综合效率 OEE',
+        title: t('app.kuaizhizao.equipmentDashboard.kpi.oee'),
         value: `${s?.average_oee ?? 0}%`,
         icon: <DashboardOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         progress: s?.average_oee ?? 0,
         sideMetrics: [
-          { label: '稼动率', value: '88.2%' },
-          { label: '故障率', value: '1.5%' },
+          { label: t('app.kuaizhizao.equipmentDashboard.kpi.availability'), value: '88.2%' },
+          { label: t('app.kuaizhizao.equipmentDashboard.kpi.failureRate'), value: '1.5%' },
         ],
       },
     ],
-    [navigate, s],
+    [navigate, s, t],
   );
 
-  const shortcuts: ModuleShortcutDef[] = [
-    { key: 'ledger', title: '设备台账', icon: <BuildOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaizhizao/equipment-management/list' },
-    { key: 'maint', title: '保养计划', icon: <CalendarOutlined style={{ fontSize: 22, color: '#52c41a' }} />, path: '/apps/kuaizhizao/equipment-management/maintenance' },
-    { key: 'fault', title: '故障报修', icon: <AlertOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />, path: '/apps/kuaizhizao/equipment-management/faults' },
-    { key: 'spare', title: '备品备件', icon: <SettingOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/equipment-management/spare-parts' },
-  ];
+  const shortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'ledger',
+        title: t('app.kuaizhizao.equipmentDashboard.shortcut.ledger'),
+        icon: <BuildOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
+        path: '/apps/kuaizhizao/equipment-management/list',
+      },
+      {
+        key: 'maint',
+        title: t('app.kuaizhizao.equipmentDashboard.shortcut.maintenance'),
+        icon: <CalendarOutlined style={{ fontSize: 22, color: '#52c41a' }} />,
+        path: '/apps/kuaizhizao/equipment-management/maintenance',
+      },
+      {
+        key: 'fault',
+        title: t('app.kuaizhizao.equipmentDashboard.shortcut.fault'),
+        icon: <AlertOutlined style={{ fontSize: 22, color: '#ff4d4f' }} />,
+        path: '/apps/kuaizhizao/equipment-management/faults',
+      },
+      {
+        key: 'spare',
+        title: t('app.kuaizhizao.equipmentDashboard.shortcut.spareParts'),
+        icon: <SettingOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
+        path: '/apps/kuaizhizao/equipment-management/spare-parts',
+      },
+    ],
+    [t],
+  );
 
   const statusPieData = useMemo(
     () => [
-      { type: '正常', value: Math.max(0, (s?.total_count ?? 0) - (s?.faulty_count ?? 0)) },
-      { type: '故障/维修', value: s?.faulty_count ?? 0 },
+      {
+        type: t('app.kuaizhizao.equipmentDashboard.chart.statusNormal'),
+        value: Math.max(0, (s?.total_count ?? 0) - (s?.faulty_count ?? 0)),
+      },
+      {
+        type: t('app.kuaizhizao.equipmentDashboard.chart.statusFault'),
+        value: s?.faulty_count ?? 0,
+      },
     ],
-    [s],
+    [s, t],
+  );
+
+  const faultColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colFaultNo'),
+        dataIndex: 'fault_no',
+        render: (text: string, record: { uuid?: string }) => (
+          <a onClick={() => navigate(`/apps/kuaizhizao/equipment-management/faults/${record.uuid}`)}>
+            {text}
+          </a>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colEquipment'),
+        dataIndex: 'equipment_name',
+        ellipsis: true,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 80,
+        render: (status: string) => <Tag color="error">{status}</Tag>,
+      },
+    ],
+    [navigate, t],
+  );
+
+  const maintenanceColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colMaintenanceName'),
+        dataIndex: 'name',
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.equipmentDashboard.colNextPlanDate'),
+        dataIndex: 'next_execution_date',
+        width: 100,
+        render: (value: string) => (
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {value || '—'}
+          </Text>
+        ),
+      },
+    ],
+    [t],
   );
 
   return (
@@ -126,67 +219,62 @@ const EquipmentDashboard: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <>
-          <ModuleActionPanel title="设备待办" lg={8} loading={todosLoading}>
-            <ModuleTodoList items={todos} emptyText="暂无设备待办" />
-          </ModuleActionPanel>
           <ModuleActionPanel
-            title="待处理故障"
+            title={t('app.kuaizhizao.equipmentDashboard.todosTitle')}
             lg={8}
-            loading={faultsLoading}
-            extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/faults')}>全部</a>}
+            loading={todosLoading}
           >
-            <Table
-              size="small"
-              dataSource={recentFaults.filter((f: { status?: string }) =>
-                !String(f.status).includes('完成') && !String(f.status).includes('fixed'),
-              ).slice(0, 6)}
-              pagination={false}
-              rowKey="id"
-              columns={[
-                {
-                  title: '报修单号',
-                  dataIndex: 'fault_no',
-                  render: (text, record: { uuid?: string }) => (
-                    <a onClick={() => navigate(`/apps/kuaizhizao/equipment-management/faults/${record.uuid}`)}>{text}</a>
-                  ),
-                },
-                { title: '设备', dataIndex: 'equipment_name', ellipsis: true },
-                {
-                  title: '状态',
-                  dataIndex: 'status',
-                  width: 80,
-                  render: (status) => <Tag color="error">{status}</Tag>,
-                },
-              ]}
+            <ModuleTodoList
+              items={todos}
+              emptyText={t('app.kuaizhizao.equipmentDashboard.noTodos')}
             />
           </ModuleActionPanel>
           <ModuleActionPanel
-            title="保养到期提醒"
+            title={t('app.kuaizhizao.equipmentDashboard.pendingFaultsTitle')}
+            lg={8}
+            loading={faultsLoading}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/faults')}>
+                {t('app.kuaizhizao.equipmentDashboard.all')}
+              </a>
+            }
+          >
+            <Table
+              size="small"
+              dataSource={recentFaults
+                .filter(
+                  (f: { status?: string }) =>
+                    !String(f.status).includes('完成') && !String(f.status).includes('fixed'),
+                )
+                .slice(0, 6)}
+              pagination={false}
+              rowKey="id"
+              columns={faultColumns}
+            />
+          </ModuleActionPanel>
+          <ModuleActionPanel
+            title={t('app.kuaizhizao.equipmentDashboard.maintenanceDueTitle')}
             lg={8}
             loading={maintenanceLoading}
-            extra={<a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance')}>全部</a>}
+            extra={
+              <a onClick={() => navigate('/apps/kuaizhizao/equipment-management/maintenance')}>
+                {t('app.kuaizhizao.equipmentDashboard.all')}
+              </a>
+            }
           >
             <Table
               size="small"
               dataSource={recentMaintenance.slice(0, 6)}
               pagination={false}
               rowKey="id"
-              columns={[
-                { title: '维护名称', dataIndex: 'name', ellipsis: true },
-                {
-                  title: '下次计划',
-                  dataIndex: 'next_execution_date',
-                  width: 100,
-                  render: (t) => <Text type="secondary" style={{ fontSize: 12 }}>{t || '—'}</Text>,
-                },
-              ]}
+              columns={maintenanceColumns}
             />
           </ModuleActionPanel>
         </>
       }
       chartRow={
         <ModuleChartRow>
-          <ModuleChartPanel title="设备状态分布" lg={10}>
+          <ModuleChartPanel title={t('app.kuaizhizao.equipmentDashboard.statusDistributionTitle')} lg={10}>
             <Suspense fallback={null}>
               <EquipmentStatusPie
                 data={statusPieData}
@@ -197,7 +285,11 @@ const EquipmentDashboard: React.FC = () => {
               />
             </Suspense>
           </ModuleChartPanel>
-          <ModuleChartPanel title="故障报修趋势" loading={trendLoading} lg={14}>
+          <ModuleChartPanel
+            title={t('app.kuaizhizao.equipmentDashboard.faultTrendTitle')}
+            loading={trendLoading}
+            lg={14}
+          >
             <Suspense fallback={null}>
               <EquipmentTrendColumn
                 data={trendData?.items || []}

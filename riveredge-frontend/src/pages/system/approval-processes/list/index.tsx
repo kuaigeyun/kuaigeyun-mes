@@ -27,6 +27,10 @@ import {
   CreateApprovalProcessData,
   UpdateApprovalProcessData,
 } from '../../../../services/approvalProcess';
+import {
+  resolvePresetApprovalProcessDescription,
+  resolvePresetApprovalProcessName,
+} from '../../../../utils/presetEntityI18n';
 import { rowActionKind } from '../../../../components/uni-action';
 
 /**
@@ -44,6 +48,7 @@ const ApprovalProcessListPage: React.FC = () => {
       {
         title: t('pages.system.approvalProcesses.name'),
         dataIndex: 'name',
+        render: (_: unknown, record: ApprovalProcess) => resolvePresetApprovalProcessName(record, t),
       },
       {
         title: t('pages.system.approvalProcesses.code'),
@@ -52,6 +57,8 @@ const ApprovalProcessListPage: React.FC = () => {
       {
         title: t('pages.system.approvalProcesses.description'),
         dataIndex: 'description',
+        render: (_: unknown, record: ApprovalProcess) =>
+          resolvePresetApprovalProcessDescription(record, t),
       },
       {
         title: t('pages.system.approvalProcesses.enableStatus'),
@@ -272,6 +279,7 @@ const ApprovalProcessListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
+      render: (_, record) => resolvePresetApprovalProcessName(record, t),
     },
     {
       title: t('pages.system.approvalProcesses.code'),
@@ -285,6 +293,7 @@ const ApprovalProcessListPage: React.FC = () => {
       width: 200,
       ellipsis: true,
       hideInSearch: true,
+      render: (_, record) => resolvePresetApprovalProcessDescription(record, t),
     },
     {
       title: t('pages.system.approvalProcesses.enableStatus'),

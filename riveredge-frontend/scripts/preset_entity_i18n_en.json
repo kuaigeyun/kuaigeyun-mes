@@ -1,0 +1,527 @@
+{
+  "department": {
+    "EXEC": { "name": "Executive Office" },
+    "PROD": { "name": "Production Department" },
+    "PURCH": { "name": "Procurement Department" },
+    "SALES": { "name": "Sales Department" },
+    "WH": { "name": "Warehouse Department" },
+    "QC": { "name": "Quality Department" },
+    "FIN": { "name": "Finance Department" },
+    "HR": { "name": "Administration & HR Department" }
+  },
+  "position": {
+    "GM": { "name": "General Manager" },
+    "PROD_MGR": { "name": "Production Manager" },
+    "PROD_OP": { "name": "Production Operator" },
+    "PURCH_MGR": { "name": "Procurement Manager" },
+    "SALES_MGR": { "name": "Sales Manager" },
+    "WH_SUPV": { "name": "Warehouse Supervisor" },
+    "QC_INSP": { "name": "Quality Inspector" },
+    "ACCT": { "name": "Accountant" },
+    "CASHIER": { "name": "Cashier" },
+    "ADMIN": { "name": "Administration Specialist" },
+    "HR_SPEC": { "name": "HR Specialist" }
+  },
+  "role": {
+    "SALES_MANAGER": {
+      "name": "Sales Manager",
+      "desc": "Sales department head responsible for final order approval, sales planning, and pricing strategy"
+    },
+    "SALES_PERSON": {
+      "name": "Sales Representative",
+      "desc": "Standard sales staff responsible for customer relations, quoting, and order follow-up"
+    },
+    "SALES_OPERATOR": {
+      "name": "Sales Clerk",
+      "desc": "Clerical support role responsible for order entry, document filing, and workflow follow-up"
+    },
+    "PURCHASE_MANAGER": {
+      "name": "Procurement Manager",
+      "desc": "Procurement department head responsible for sourcing, cost control, and settlement approval"
+    },
+    "PURCHASE_PERSON": {
+      "name": "Procurement Specialist",
+      "desc": "Standard procurement staff responsible for vendor comparison, purchase planning, and supplier follow-up"
+    },
+    "PURCHASE_OPERATOR": {
+      "name": "Procurement Clerk",
+      "desc": "Clerical support role responsible for purchase order entry, delivery follow-up, and document management"
+    },
+    "PRODUCTION_MANAGER": {
+      "name": "Shop Floor Manager",
+      "desc": "Shop floor head responsible for production scheduling, quality coordination, and delivery alignment"
+    },
+    "PRODUCTION_TEAM_LEADER": {
+      "name": "Team Leader",
+      "desc": "Work team lead responsible for task assignment, progress tracking, and exception reporting"
+    },
+    "PRODUCTION_CLERK": {
+      "name": "Production Clerk",
+      "desc": "Production clerk responsible for work order maintenance, data entry, and report consolidation"
+    },
+    "PRODUCTION_STAFF": {
+      "name": "Production Operator",
+      "desc": "Frontline production staff responsible for executing operations per routing and process feedback"
+    },
+    "WAREHOUSE_MANAGER": {
+      "name": "Warehouse Supervisor",
+      "desc": "Warehouse department head responsible for inventory strategy and physical asset security"
+    },
+    "WAREHOUSE_OPERATOR": {
+      "name": "Warehouse Operator",
+      "desc": "Warehouse execution staff responsible for inbound/outbound transactions, cycle counts, and shipping/receiving"
+    },
+    "FINANCE_MANAGER": {
+      "name": "Finance Manager",
+      "desc": "Finance department head responsible for treasury coordination and cost accounting"
+    },
+    "FINANCE_OPERATOR": {
+      "name": "Accounting Specialist",
+      "desc": "Finance execution staff responsible for reconciliation, invoicing, and voucher entry"
+    },
+    "QUALITY_MANAGER": {
+      "name": "Quality Manager",
+      "desc": "Quality department head responsible for quality standards and arbitration decisions"
+    },
+    "QUALITY_OPERATOR": {
+      "name": "Quality Inspector",
+      "desc": "Quality execution staff responsible for incoming, in-process, and finished goods inspection"
+    },
+    "ADMIN_OFFICE": {
+      "name": "Administration",
+      "desc": "Administrative and general office functions"
+    },
+    "EMPLOYEE": {
+      "name": "General Employee",
+      "desc": "General functional access with basic read-only permissions"
+    }
+  },
+  "approvalProcess": {
+    "receivable": {
+      "name": "Accounts Receivable Approval",
+      "desc": "Accounts receivable approval"
+    },
+    "payable": {
+      "name": "Accounts Payable Approval",
+      "desc": "Accounts payable approval"
+    },
+    "purchase_invoice": {
+      "name": "Purchase Invoice Approval",
+      "desc": "Purchase invoice approval"
+    },
+    "sales_order": {
+      "name": "Sales Order Approval",
+      "desc": "Sales order approval"
+    },
+    "sales_order_change": {
+      "name": "Sales Order Change Approval",
+      "desc": "Sales order change approval"
+    },
+    "sales_forecast": {
+      "name": "Sales Forecast Approval",
+      "desc": "Sales forecast approval"
+    },
+    "sales_contract": {
+      "name": "Sales Contract Approval",
+      "desc": "Sales contract approval"
+    },
+    "quotation": {
+      "name": "Quotation Approval",
+      "desc": "Quotation approval"
+    },
+    "demand": {
+      "name": "Demand Approval",
+      "desc": "Demand approval"
+    },
+    "production_plan": {
+      "name": "Production Plan Approval",
+      "desc": "Production plan approval"
+    },
+    "purchase_order": {
+      "name": "Purchase Order Approval",
+      "desc": "Purchase order approval"
+    },
+    "purchase_order_change": {
+      "name": "Purchase Order Change Approval",
+      "desc": "Purchase order change approval"
+    },
+    "purchase_request": {
+      "name": "Purchase Requisition Approval",
+      "desc": "Purchase requisition approval"
+    },
+    "purchase_inquiry": {
+      "name": "Purchase Inquiry Approval",
+      "desc": "Purchase inquiry approval"
+    },
+    "reporting_record": {
+      "name": "Production Reporting Approval",
+      "desc": "Production reporting approval"
+    },
+    "incoming_inspection": {
+      "name": "Incoming Inspection Approval",
+      "desc": "Incoming inspection approval"
+    },
+    "process_inspection": {
+      "name": "In-Process Inspection Approval",
+      "desc": "In-process inspection approval"
+    },
+    "finished_goods_inspection": {
+      "name": "Finished Goods Inspection Approval",
+      "desc": "Finished goods inspection approval"
+    },
+    "oqc_inspection": {
+      "name": "Outgoing Quality Control Approval",
+      "desc": "Outgoing quality control approval"
+    }
+  },
+  "messageTemplate": {
+    "approval_approved": {
+      "name": "Approval Approved Notification",
+      "desc": "In-app message sent when an approval request is approved"
+    },
+    "approval_rejected": {
+      "name": "Approval Rejected Notification",
+      "desc": "In-app message sent when an approval request is rejected"
+    },
+    "HAOLIGO_EQUIPMENT_SPOT_CHECK_REPORT": {
+      "name": "Equipment Spot Check Exception Report",
+      "desc": "In-app message sent to selected recipients when a spot check is saved with reporting enabled"
+    },
+    "HAOLIGO_EQUIPMENT_ROUTE_PATROL_REPORT": {
+      "name": "Route Patrol Exception Report",
+      "desc": "In-app message sent to selected recipients when a route patrol record is saved with reporting enabled"
+    },
+    "HAOLIGO_PATROL_ISSUE_REGISTER_REPORT": {
+      "name": "Field Patrol Issue Registration Report",
+      "desc": "In-app message sent to selected recipients when an issue is registered with reporting enabled"
+    },
+    "HAOLIGO_PATROL_ISSUE_REMEDIATED": {
+      "name": "Field Patrol Issue Remediated",
+      "desc": "Notifies the registrant and related personnel when a hazard status changes to remediated"
+    },
+    "HAOLIGO_MOLD_TRIAL_SUBMITTED": {
+      "name": "Mold Trial Pending Approval Reminder",
+      "desc": "Notifies designated reviewers when a mold trial is created or resubmitted for approval"
+    },
+    "HAOLIGO_MOLD_TRIAL_APPROVED": {
+      "name": "Mold Trial Approved Notification",
+      "desc": "Notifies the requester and trial personnel when a mold trial is approved (non-failure workflow)"
+    },
+    "HAOLIGO_MOLD_TRIAL_REJECTED": {
+      "name": "Mold Trial Rejected Notification",
+      "desc": "Notifies the requester when a mold trial is rejected"
+    },
+    "HAOLIGO_MOLD_TRIAL_FAILURE_PENDING": {
+      "name": "Mold Trial Failure Pending Action Reminder",
+      "desc": "Notifies designated personnel when a failed trial is marked pending action (external partners notified after transfer)"
+    },
+    "HAOLIGO_MOLD_TRIAL_ADJUSTMENT_COMPLETE": {
+      "name": "Mold Trial Adjustment Complete Notification",
+      "desc": "Notifies the requester and designated personnel when adjustment is confirmed by external partner or internal team"
+    },
+    "HAOLIGO_MOLD_TRIAL_FAILURE_REPAIR": {
+      "name": "Mold Trial Failure Immediate Repair Notification",
+      "desc": "Notifies trial personnel and supplier-linked users when a failed trial is sent for immediate repair"
+    },
+    "HAOLIGO_MOLD_TRIAL_PRODUCTION_PENDING": {
+      "name": "Mold Trial Production Run Pending Reminder",
+      "desc": "Notifies trial production inspectors to enter results after trial approval enters production run stage"
+    },
+    "HAOLIGO_MOLD_TRIAL_RECALLED": {
+      "name": "Mold Trial Recalled and Closed Notification",
+      "desc": "Notifies related personnel after a failed mold trial is recalled and closed"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_PENDING": {
+      "name": "Outsource Maintenance Pending Approval Reminder",
+      "desc": "Notifies external partner users when an outsource maintenance order is submitted or resubmitted for approval"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_APPROVED": {
+      "name": "Outsource Maintenance Approved Notification",
+      "desc": "Notifies the requester and external partner users when an outsource maintenance order is approved"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REJECTED": {
+      "name": "Outsource Maintenance Rejected Notification",
+      "desc": "Notifies the requester when an outsource maintenance order is rejected"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_REVOKED": {
+      "name": "Outsource Maintenance Approval Revoked Notification",
+      "desc": "Notifies related personnel when an outsource maintenance approval is revoked"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_PENDING": {
+      "name": "In-House Maintenance Pending Approval Reminder",
+      "desc": "Notifies related personnel when an in-house maintenance/repair order enters pending approval"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_APPROVED": {
+      "name": "In-House Maintenance Approved Notification",
+      "desc": "Notifies the requester when an in-house maintenance/repair order is approved"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_REJECTED": {
+      "name": "In-House Maintenance Rejected Notification",
+      "desc": "Notifies the requester when an in-house maintenance/repair order is rejected"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_REVOKED": {
+      "name": "In-House Maintenance Approval Revoked Notification",
+      "desc": "Notifies related personnel when an in-house maintenance approval is revoked"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_COMPLETE_CREATED": {
+      "name": "In-House Maintenance Completion Created Notification",
+      "desc": "Notifies the requester when an in-house maintenance/repair completion record is created"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_COMPLETE_PENDING": {
+      "name": "Outsource Maintenance Completion Pending Approval Reminder",
+      "desc": "Notifies the requester and source maintenance personnel when an external partner submits a completion record"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_COMPLETE_APPROVED": {
+      "name": "Outsource Maintenance Completion Approved Notification",
+      "desc": "Notifies the requester and external partner users when an outsource completion record is approved"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REJECTED": {
+      "name": "Outsource Maintenance Completion Rejected Notification",
+      "desc": "Notifies the requester when an outsource completion record is rejected"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_COMPLETE_REVOKED": {
+      "name": "Outsource Maintenance Completion Approval Revoked Notification",
+      "desc": "Notifies the requester and source maintenance personnel when an outsource completion approval is revoked"
+    },
+    "HAOLIGO_EQUIPMENT_UPKEEP_SHEET_CREATED": {
+      "name": "Equipment Maintenance Order Created Notification",
+      "desc": "Notifies the requester when an equipment maintenance/repair order is created"
+    },
+    "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_CREATED": {
+      "name": "Equipment Maintenance Completion Created Notification",
+      "desc": "Notifies the requester when an equipment maintenance completion record is created"
+    }
+  },
+  "printTemplate": {
+    "default_label": {
+      "name": "Generic Label Template",
+      "desc": "Generic label print template supporting variables such as {{code}}, {{name}}, and {{quantity}}"
+    },
+    "default_receipt": {
+      "name": "Generic Receipt Template",
+      "desc": "Generic receipt print template supporting variables such as {{title}}, {{items}}, and {{total}}"
+    },
+    "QUOTATION_PRINT": {
+      "name": "Quotation",
+      "desc": "KuaiZhiZao preset print template: Quotation"
+    },
+    "SALES_CONTRACT_PRINT": {
+      "name": "Sales Contract",
+      "desc": "KuaiZhiZao preset print template: Sales Contract"
+    },
+    "SALES_ORDER_PRINT": {
+      "name": "Sales Order",
+      "desc": "KuaiZhiZao preset print template: Sales Order"
+    },
+    "DELIVERY_NOTICE_PRINT": {
+      "name": "Delivery Note",
+      "desc": "KuaiZhiZao preset print template: Delivery Note"
+    },
+    "SALES_DELIVERY_PRINT": {
+      "name": "Sales Shipment",
+      "desc": "KuaiZhiZao preset print template: Sales Shipment"
+    },
+    "PURCHASE_ORDER_PRINT": {
+      "name": "Purchase Order",
+      "desc": "KuaiZhiZao preset print template: Purchase Order"
+    },
+    "PURCHASE_RECEIPT_PRINT": {
+      "name": "Purchase Receipt",
+      "desc": "KuaiZhiZao preset print template: Purchase Receipt"
+    },
+    "WORK_ORDER_PRINT": {
+      "name": "Work Order",
+      "desc": "KuaiZhiZao preset print template: Work Order"
+    },
+    "PRODUCTION_PICKING_PRINT": {
+      "name": "Production Material Issue",
+      "desc": "KuaiZhiZao preset print template: Production Material Issue"
+    },
+    "PRODUCTION_RETURN_PRINT": {
+      "name": "Production Material Return",
+      "desc": "KuaiZhiZao preset print template: Production Material Return"
+    },
+    "FINISHED_GOODS_RECEIPT_PRINT": {
+      "name": "Finished Goods Receipt",
+      "desc": "KuaiZhiZao preset print template: Finished Goods Receipt"
+    },
+    "SEMI_FINISHED_GOODS_RECEIPT_PRINT": {
+      "name": "Semi-Finished Goods Receipt",
+      "desc": "KuaiZhiZao preset print template: Semi-Finished Goods Receipt"
+    },
+    "MATERIAL_BORROW_PRINT": {
+      "name": "Material Borrow Slip",
+      "desc": "KuaiZhiZao preset print template: Material Borrow Slip"
+    },
+    "MATERIAL_RETURN_PRINT": {
+      "name": "Material Return Slip",
+      "desc": "KuaiZhiZao preset print template: Material Return Slip"
+    },
+    "OTHER_INBOUND_PRINT": {
+      "name": "Miscellaneous Inbound",
+      "desc": "KuaiZhiZao preset print template: Miscellaneous Inbound"
+    },
+    "OTHER_OUTBOUND_PRINT": {
+      "name": "Miscellaneous Outbound",
+      "desc": "KuaiZhiZao preset print template: Miscellaneous Outbound"
+    },
+    "SALES_FORECAST_PRINT": {
+      "name": "Sales Forecast",
+      "desc": "KuaiZhiZao preset print template: Sales Forecast"
+    },
+    "PRODUCT_QUALITY_CERTIFICATE_PRINT": {
+      "name": "Product Quality Certificate",
+      "desc": "Product quality certificate (A5), linked to finished goods inspection; for shipment delivery printing"
+    },
+    "HAOLIGO_EQUIPMENT_SPOT_CHECK_PRINT": {
+      "name": "Equipment Spot Check Report",
+      "desc": "Professional equipment spot check report (A4) with inspection plan details and measured results"
+    },
+    "HAOLIGO_EQUIPMENT_UPKEEP_COMPLETE_PRINT": {
+      "name": "Equipment Maintenance Completion Report",
+      "desc": "Professional equipment repair/maintenance completion report (A4); see print-variables API for variables"
+    },
+    "HAOLIGO_MOLD_MAINTENANCE_COMPLETE_PRINT": {
+      "name": "Mold Maintenance Completion Report",
+      "desc": "Professional in-house mold repair/maintenance completion report (A4) with mold details and maintenance records"
+    },
+    "HAOLIGO_MOLD_OUTSOURCE_MAINTENANCE_COMPLETE_PRINT": {
+      "name": "Mold Outsource Maintenance Completion Report",
+      "desc": "Professional outsource mold repair completion report (A4) with external partner and cost details"
+    }
+  },
+  "operationIndustry": {
+    "machining": {
+      "name": "Machining",
+      "desc": "Common operations for subtractive and precision machining such as cutting, grinding, and drilling/tapping"
+    },
+    "injection_molding": {
+      "name": "Injection Molding",
+      "desc": "Common operations for injection molding, machine setup, tooling, and post-processing"
+    },
+    "sheet_metal": {
+      "name": "Sheet Metal",
+      "desc": "Common operations for blanking, forming, welding, and surface finishing"
+    },
+    "electronics_assembly": {
+      "name": "Electronics Assembly",
+      "desc": "Common operations for SMT, through-hole assembly, testing, and packaging"
+    },
+    "die_casting": {
+      "name": "Die Casting",
+      "desc": "Common operations for die casting, deburring, and post-machining"
+    },
+    "general_assembly": {
+      "name": "Mechanical Assembly & Final Assembly",
+      "desc": "Sub-assembly, final assembly, commissioning, and final inspection/packaging"
+    },
+    "wire_harness": {
+      "name": "Wire Harness & Connectors",
+      "desc": "Automotive/industrial wire harness operations: cutting/stripping, crimping, welding, assembly, and electrical testing"
+    },
+    "powder_metallurgy": {
+      "name": "Powder Metallurgy",
+      "desc": "Common operations for compaction, sintering, and post-processing"
+    },
+    "forging": {
+      "name": "Forging",
+      "desc": "Common operations for hot die forging, trimming, heat treatment, and NDT inspection"
+    },
+    "rubber_molding": {
+      "name": "Rubber Molding & Vulcanization",
+      "desc": "Common operations for seals, dampers, and other rubber product manufacturing"
+    },
+    "pcb_fabrication": {
+      "name": "PCB Fabrication",
+      "desc": "Common multilayer PCB operations including drilling, plating, etching, and electrical testing"
+    },
+    "wood_panel": {
+      "name": "Panel Furniture & Wood Products",
+      "desc": "Common operations for cutting, edge banding, drilling, and painting"
+    }
+  },
+  "operation": {
+    "machining__blanking": { "name": "Blanking" },
+    "machining__cnc_milling": { "name": "CNC Milling" },
+    "machining__cnc_turning": { "name": "CNC Turning" },
+    "machining__drill_tap": { "name": "Drilling & Tapping" },
+    "machining__grinding": { "name": "Grinding" },
+    "machining__heat_treat": { "name": "Heat Treatment" },
+    "machining__surface_finish": { "name": "Surface Finishing" },
+    "machining__inspect": { "name": "Inspection" },
+    "injection_molding__material_prep": { "name": "Material Drying / Blending" },
+    "injection_molding__mold_setup": { "name": "Mold Setup" },
+    "injection_molding__trial_run": { "name": "Trial Run / Machine Setup" },
+    "injection_molding__injection": { "name": "Injection Molding" },
+    "injection_molding__de_gate": { "name": "Gate Removal / Trimming" },
+    "injection_molding__deburr": { "name": "Deburring" },
+    "injection_molding__inspect_pack": { "name": "Inspection & Packaging" },
+    "sheet_metal__laser_cut": { "name": "Laser Cutting" },
+    "sheet_metal__punch_nc": { "name": "NC Punch / Stamping" },
+    "sheet_metal__bend": { "name": "Bending" },
+    "sheet_metal__weld": { "name": "Welding" },
+    "sheet_metal__grind_polish": { "name": "Grinding & Polishing" },
+    "sheet_metal__powder_coat": { "name": "Spray / Powder Coating" },
+    "sheet_metal__assembly": { "name": "Assembly" },
+    "electronics_assembly__smt_print": { "name": "Solder Paste Printing" },
+    "electronics_assembly__smt_place": { "name": "SMT Placement" },
+    "electronics_assembly__reflow": { "name": "Reflow Soldering" },
+    "electronics_assembly__dip_wave": { "name": "Through-Hole / Wave Soldering" },
+    "electronics_assembly__coating": { "name": "Conformal Coating" },
+    "electronics_assembly__ict_fct": { "name": "ICT / FCT Testing" },
+    "electronics_assembly__burn_in": { "name": "Burn-In" },
+    "electronics_assembly__pack": { "name": "Packaging & Shipment" },
+    "die_casting__alloy_prep": { "name": "Alloy Melting / Holding" },
+    "die_casting__die_cast": { "name": "Die Casting" },
+    "die_casting__trim": { "name": "Trimming / Forming" },
+    "die_casting__shot_blast": { "name": "Shot Blasting / Sandblasting" },
+    "die_casting__cnc_finish": { "name": "Post-Machining" },
+    "die_casting__inspect": { "name": "Inspection" },
+    "general_assembly__sub_assembly": { "name": "Sub-Assembly" },
+    "general_assembly__final_assembly": { "name": "Final Assembly" },
+    "general_assembly__commissioning": { "name": "Commissioning / Test Run" },
+    "general_assembly__paint": { "name": "Painting / Coating" },
+    "general_assembly__final_inspect": { "name": "Final Inspection" },
+    "general_assembly__pack_ship": { "name": "Packaging & Shipping" },
+    "wire_harness__cut_strip": { "name": "Cutting & Stripping" },
+    "wire_harness__crimp": { "name": "Terminal Crimping" },
+    "wire_harness__ultrasonic_weld": { "name": "Ultrasonic Welding" },
+    "wire_harness__assembly": { "name": "Harness Assembly" },
+    "wire_harness__taping_wrap": { "name": "Taping / Sleeving" },
+    "wire_harness__continuity_hipot": { "name": "Continuity / Hi-Pot Testing" },
+    "wire_harness__pack_ship": { "name": "Inspection & Packaging" },
+    "powder_metallurgy__powder_mix": { "name": "Powder Mixing / Blending" },
+    "powder_metallurgy__compaction": { "name": "Compaction / Pressing" },
+    "powder_metallurgy__sintering": { "name": "Sintering" },
+    "powder_metallurgy__sizing": { "name": "Sizing / Re-Pressing" },
+    "powder_metallurgy__impregnation": { "name": "Impregnation / Oil Infusion" },
+    "powder_metallurgy__finish_machining": { "name": "Post-Machining" },
+    "powder_metallurgy__inspect": { "name": "Inspection" },
+    "forging__heating": { "name": "Heating" },
+    "forging__preform": { "name": "Preform / Roll Forging" },
+    "forging__hot_forging": { "name": "Hot Die Forging" },
+    "forging__trim_punch": { "name": "Trimming & Punching" },
+    "forging__heat_treat": { "name": "Heat Treatment" },
+    "forging__shot_peen": { "name": "Shot Peening / Surface Cleaning" },
+    "forging__ndt_inspect": { "name": "NDT / Inspection" },
+    "rubber_molding__mixing": { "name": "Rubber Mixing" },
+    "rubber_molding__preform": { "name": "Preform / Cutting" },
+    "rubber_molding__vulcanization": { "name": "Vulcanization Molding" },
+    "rubber_molding__post_cure": { "name": "Post-Cure" },
+    "rubber_molding__deflashing": { "name": "Deflashing / Cryogenic Trimming" },
+    "rubber_molding__inspect_pack": { "name": "Inspection & Packaging" },
+    "pcb_fabrication__panel_prep": { "name": "Panel Cutting / Baking" },
+    "pcb_fabrication__drilling": { "name": "Drilling" },
+    "pcb_fabrication__plating": { "name": "Plating / Hole Copper" },
+    "pcb_fabrication__etch_outer": { "name": "Outer Layer Etching" },
+    "pcb_fabrication__solder_mask": { "name": "Solder Mask / Silkscreen" },
+    "pcb_fabrication__routing": { "name": "Routing / V-Scoring" },
+    "pcb_fabrication__e_test": { "name": "Flying Probe / Electrical Test" },
+    "wood_panel__cutting": { "name": "CNC Cutting" },
+    "wood_panel__edge_banding": { "name": "Edge Banding" },
+    "wood_panel__drilling": { "name": "Drilling / 5-Axis Boring" },
+    "wood_panel__sanding": { "name": "Sanding" },
+    "wood_panel__painting": { "name": "Primer / Topcoat" },
+    "wood_panel__assembly_pack": { "name": "Assembly & Packaging" }
+  }
+}

@@ -50,6 +50,7 @@ import {
 import { executeDatasetQuery, getDatasetList } from '../../../../services/dataset';
 import { downloadFile } from '../../../../utils';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
+import { resolvePresetDepartmentName } from '../../../../utils/presetEntityI18n';
 
 const DepartmentListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -60,7 +61,11 @@ const DepartmentListPage: React.FC = () => {
 
   const departmentDetailDescColumns = useMemo<ProDescriptionsItemProps<Department>[]>(
     () => [
-      { title: t('field.department.name'), dataIndex: 'name' },
+      {
+        title: t('field.department.name'),
+        dataIndex: 'name',
+        render: (_: unknown, entity: Department) => resolvePresetDepartmentName(entity, t),
+      },
       { title: t('field.department.code'), dataIndex: 'code' },
       {
         title: t('field.department.parentName'),
@@ -518,7 +523,7 @@ const DepartmentListPage: React.FC = () => {
       fixed: 'left',
       render: (_, record) => (
         <Space>
-          <span style={{ fontWeight: 500 }}>{record.name}</span>
+          <span style={{ fontWeight: 500 }}>{resolvePresetDepartmentName(record, t)}</span>
           {(record.children_count || 0) > 0 && (
             <Tag color="blue" style={{ marginLeft: 4 }}>
               {t('field.department.childrenCount', { count: record.children_count })}
@@ -766,7 +771,12 @@ const DepartmentListPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetCodes(keys as string[]),
           }}
           columns={[
-            { title: t('field.department.name'), dataIndex: 'name', width: 140 },
+            {
+              title: t('field.department.name'),
+              dataIndex: 'name',
+              width: 140,
+              render: (_: unknown, row: PresetDepartmentItem) => resolvePresetDepartmentName(row, t),
+            },
             { title: t('field.department.code'), dataIndex: 'code', width: 100 },
             { title: t('field.department.sortOrder'), dataIndex: 'sort_order', width: 88 },
           ]}

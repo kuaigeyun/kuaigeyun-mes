@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, Form, Row, Select, Space, Spin, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -24,9 +25,11 @@ import {
   mapWarehouseSelectOptions,
   useOutboundOperatorSelect,
 } from './outboundEntryShared';
+import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundWorkOrderEntryPath } from './outboundPaths';
 
 const OutboundWorkOrderPullEntryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { woId: woIdParam } = useParams<{ woId: string }>();
   const woId = Number(woIdParam);
   const navigate = useNavigate();
@@ -44,6 +47,9 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
 
   const pagePath = Number.isFinite(woId) && woId > 0 ? outboundWorkOrderEntryPath(woId) : OUTBOUND_LIST_PATH;
   const woCode = String(workOrder?.code ?? workOrder?.work_order_code ?? '');
+  const pageTitle = woCode
+    ? `${t('app.kuaizhizao.warehouseOutbound.entry.productionPicking')} — ${woCode}`
+    : t('app.kuaizhizao.warehouseOutbound.entry.productionPicking');
 
   const leavePage = useCallback(() => {
     navigate(OUTBOUND_LIST_PATH);
@@ -51,23 +57,22 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
-      messageApi.error('无效的生产工单');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.invalidWorkOrder'));
       leavePage();
     }
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = woCode ? `生产领料 — ${woCode}` : '生产领料';
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [woCode, pagePath]);
+  }, [pagePath, pageTitle]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0 || initRef.current) return;
@@ -82,17 +87,17 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         setWorkOrder(woRaw as Record<string, unknown>);
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载工单失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadWorkOrderFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error('请选择出库仓库');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
@@ -110,7 +115,7 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
         ?? [];
       const created = (list[0] ?? {}) as { id?: number; picking_code?: string };
       if (created?.id == null) {
-        messageApi.error('下推成功但未返回领料单 ID');
+        messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noPickingId'));
         return;
       }
       if (notes.trim() || operatorHook.receiverName.trim()) {
@@ -134,12 +139,16 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
           },
         });
       } else {
-        messageApi.success(`已生成生产领料草稿${created.picking_code ? `：${created.picking_code}` : ''}`);
+        messageApi.success(
+          t('app.kuaizhizao.warehouseOutbound.entry.draftPickingCreated', {
+            code: created.picking_code ? `：${created.picking_code}` : '',
+          }),
+        );
         leavePage();
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.entry.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -150,20 +159,20 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseOutbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {woCode ? `生产领料 — ${woCode}` : '生产领料'}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
-              生成草稿
+              {t('app.kuaizhizao.warehouseOutbound.action.generateDraft')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
-              确认出库
+              {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
             </Button>
           </Space>
         </>
@@ -175,32 +184,32 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
             <Form layout="vertical" requiredMark={false}>
               <Row gutter={16}>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库类型">
-                    <ReadOnlyFormValue value="生产领料" />
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.outboundType')}>
+                    <ReadOnlyFormValue value={getOutboundIssueTypeLabel(t, 'production_picking')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="工单号">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.col.workOrderCode')}>
                     <ReadOnlyFormValue value={woCode} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="产品">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.product')}>
                     <ReadOnlyFormValue value={String(workOrder.product_name ?? workOrder.name ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="工单状态">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.workOrderStatus')}>
                     <ReadOnlyFormValue value={String(workOrder.status ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="计划数量">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.plannedQty')}>
                     <ReadOnlyFormValue value={String(workOrder.quantity ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="计划开工">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.plannedStart')}>
                     <ReadOnlyFormValue
                       value={
                         workOrder.planned_start_date
@@ -211,10 +220,10 @@ const OutboundWorkOrderPullEntryPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库仓库" required>
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
                     <Select
                       style={{ width: '100%' }}
-                      placeholder="请选择出库仓库"
+                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
                       options={warehouseOptions}
                       value={warehouseId}
                       onChange={setWarehouseId}

@@ -27,6 +27,7 @@ import {
 } from '../../../../services/position';
 import { getDepartmentTree, DepartmentTreeItem } from '../../../../services/department';
 import { useTrialRunMode } from '../../../../hooks/useTrialRunMode';
+import { resolvePresetPositionName } from '../../../../utils/presetEntityI18n';
 
 function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: string; key: string; children?: any[] }> {
   return items.map((item) => ({
@@ -46,7 +47,11 @@ const PositionListPage: React.FC = () => {
 
   const positionDetailDescColumns = useMemo<ProDescriptionsItemProps<Position>[]>(
     () => [
-      { title: t('field.position.name'), dataIndex: 'name' },
+      {
+        title: t('field.position.name'),
+        dataIndex: 'name',
+        render: (_: unknown, record: Position) => resolvePresetPositionName(record, t),
+      },
       { title: t('field.position.code'), dataIndex: 'code' },
       { title: t('field.position.remark'), dataIndex: 'description' },
       {
@@ -193,6 +198,7 @@ const PositionListPage: React.FC = () => {
       width: 150,
       fixed: 'left',
       sorter: true,
+      render: (_, record) => resolvePresetPositionName(record, t),
     },
     {
       title: t('field.position.code'),
@@ -400,7 +406,12 @@ const PositionListPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetCodes(keys as string[]),
           }}
           columns={[
-            { title: t('field.position.name'), dataIndex: 'name', width: 140 },
+            {
+              title: t('field.position.name'),
+              dataIndex: 'name',
+              width: 140,
+              render: (_: unknown, row: PresetPositionItem) => resolvePresetPositionName(row, t),
+            },
             { title: t('field.position.code'), dataIndex: 'code', width: 100 },
             { title: t('field.position.sortOrder'), dataIndex: 'sort_order', width: 88 },
           ]}

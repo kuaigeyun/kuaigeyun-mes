@@ -1,5 +1,7 @@
 /** Hub 聚合列表统一行类型 */
 
+import type { TFunction } from 'i18next';
+
 export type OutboundIssueType =
   | 'production_picking'
   | 'sales_delivery'
@@ -61,6 +63,18 @@ export const OUTBOUND_POSTED_STATUSES = new Set([
   '已确认',
   'confirmed',
 ]);
+
+export const OUTBOUND_ISSUE_TYPE_I18N_KEYS: Record<OutboundIssueType, string> = {
+  production_picking: 'app.kuaizhizao.warehouseOutbound.type.productionPicking',
+  sales_delivery: 'app.kuaizhizao.warehouseOutbound.type.salesDelivery',
+  outsource_issue: 'app.kuaizhizao.warehouseOutbound.type.outsourceIssue',
+  other_outbound: 'app.kuaizhizao.warehouseOutbound.type.otherOutbound',
+  material_borrow: 'app.kuaizhizao.warehouseOutbound.type.materialBorrow',
+};
+
+export function getOutboundIssueTypeLabel(t: TFunction, type: OutboundIssueType): string {
+  return t(OUTBOUND_ISSUE_TYPE_I18N_KEYS[type]);
+}
 
 export const OUTBOUND_ISSUE_TYPE_LABELS: Record<OutboundIssueType, string> = {
   production_picking: '生产领料',

@@ -7,7 +7,8 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormSelect, ProFormSwitch, ProFormDigit, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Popconfirm, Modal, Typography } from 'antd';
@@ -44,6 +45,7 @@ interface BarcodeMappingRule {
  * 条码映射规则管理页面组件
  */
 const BarcodeMappingRulesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -93,7 +95,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
           attachments: mapAttachmentsToUploadList(detailData.attachments),
         });
       } catch (error) {
-        messageApi.error('获取规则详情失败');
+        messageApi.error(t('app.kuaizhizao.barcodeMapping.loadDetailFailed'));
       }
     }
   };
@@ -105,12 +107,12 @@ const BarcodeMappingRulesPage: React.FC = () => {
     if (record.id) {
       try {
         await warehouseApi.barcodeMappingRule.delete(record.id.toString());
-        messageApi.success('删除成功');
+        messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: 1 }));
         invalidateMenuBadgeCounts();
 
         actionRef.current?.reload();
       } catch (error) {
-        messageApi.error('删除失败');
+        messageApi.error(t('app.kuaizhizao.warehouseCommon.deleteFailed'));
       }
     }
   };
@@ -125,7 +127,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
         setCurrentRecord(detailData);
         setDetailDrawerVisible(true);
       } catch (error) {
-        messageApi.error('获取规则详情失败');
+        messageApi.error(t('app.kuaizhizao.barcodeMapping.loadDetailFailed'));
       }
     }
   };
@@ -133,9 +135,9 @@ const BarcodeMappingRulesPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<BarcodeMappingRule>[] = [
+  const columns: ProColumns<BarcodeMappingRule>[] = useMemo(() => [
     {
-      title: '规则编号',
+      title: t('app.kuaizhizao.barcodeMapping.colRuleCode'),
       dataIndex: 'code',
       width: 120,
       fixed: 'left',
@@ -146,70 +148,74 @@ const BarcodeMappingRulesPage: React.FC = () => {
       ),
     },
     {
-      title: '规则名称',
+      title: t('app.kuaizhizao.barcodeMapping.colRuleName'),
       dataIndex: 'name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '客户',
+      title: t('app.kuaizhizao.warehouseCommon.colCustomer'),
       dataIndex: 'customer_name',
       width: 120,
       ellipsis: true,
-      render: (_, record) => record.customer_name || '全部客户',
+      render: (_, record) => record.customer_name || t('app.kuaizhizao.barcodeMapping.allCustomers'),
     },
     {
-      title: '条码模式',
+      title: t('app.kuaizhizao.barcodeMapping.colBarcodePattern'),
       dataIndex: 'barcode_pattern',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '条码类型',
+      title: t('app.kuaizhizao.barcodeMapping.colBarcodeType'),
       dataIndex: 'barcode_type',
       width: 100,
       render: (_, record) => (
         <Tag color={record.barcode_type === '2d' ? 'blue' : 'default'}>
-          {record.barcode_type === '2d' ? '二维码' : '一维码'}
+          {record.barcode_type === '2d'
+            ? t('app.kuaizhizao.warehouseCommon.barcodeType2d')
+            : t('app.kuaizhizao.warehouseCommon.barcodeType1d')}
         </Tag>
       ),
     },
     {
-      title: '映射物料编号',
+      title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialCode'),
       dataIndex: 'material_code',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '映射物料名称',
+      title: t('app.kuaizhizao.barcodeMapping.colMappedMaterialName'),
       dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '启用状态',
+      title: t('app.kuaizhizao.barcodeMapping.colEnabledStatus'),
       dataIndex: 'is_enabled',
       width: 100,
       render: (_, record) => (
         <Tag color={record.is_enabled ? 'success' : 'default'}>
-          {record.is_enabled ? '启用' : '禁用'}
+          {record.is_enabled
+            ? t('app.kuaizhizao.warehouseCommon.enabled')
+            : t('app.kuaizhizao.warehouseCommon.disabled')}
         </Tag>
       ),
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.barcodeMapping.colPriority'),
       dataIndex: 'priority',
       width: 80,
       align: 'right',
     },
     {
-      title: '创建时间',
+      title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 180,
       fixed: 'right',
       render: (_, record) => (
@@ -217,17 +223,17 @@ const BarcodeMappingRulesPage: React.FC = () => {
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           <Button {...rowActionKind('update')} onClick={() => handleEdit(record)} />
           <Popconfirm
-            title="确定要删除这条映射规则吗？"
+            title={t('app.kuaizhizao.barcodeMapping.deleteConfirm')}
             onConfirm={() => handleDelete(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('app.kuaizhizao.warehouseCommon.confirm')}
+            cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
           >
             <Button {...rowActionKind('delete')} />
           </Popconfirm>
         </Space>
       ),
     },
-  ];
+  ], [t]);
 
   /**
    * 处理表单提交
@@ -241,10 +247,10 @@ const BarcodeMappingRulesPage: React.FC = () => {
       };
       if (isEdit && currentId) {
         await warehouseApi.barcodeMappingRule.update(currentId.toString(), payload);
-        messageApi.success('更新成功');
+        messageApi.success(t('app.kuaizhizao.warehouseCommon.updateSuccessGeneric'));
       } else {
         await warehouseApi.barcodeMappingRule.create(payload);
-        messageApi.success('创建成功');
+        messageApi.success(t('app.kuaizhizao.warehouseCommon.createSuccessGeneric'));
       }
       setModalVisible(false);
       setPendingFormValues(null);
@@ -253,7 +259,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
       throw error;
     } finally {
       setFormLoading(false);
@@ -263,13 +269,13 @@ const BarcodeMappingRulesPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="条码映射规则"
+        headerTitle={t('app.kuaizhizao.barcodeMapping.headerTitle')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.barcode-mapping-rules"
         showCreateButton={true}
-        createButtonText="新建条码映射规则"
+        createButtonText={t('app.kuaizhizao.barcodeMapping.createButton')}
         onCreate={handleCreate}
         enableRowSelection={true}
         showDeleteButton={true}
@@ -278,14 +284,14 @@ const BarcodeMappingRulesPage: React.FC = () => {
             for (const id of keys) {
               await warehouseApi.barcodeMappingRule.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条条码映射规则吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.barcodeMapping.deleteBatchConfirm', { count })}
         request={async (params) => {
           try {
             const pageSize = params.pageSize || 20;
@@ -302,7 +308,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
               total,
             };
           } catch (error) {
-            messageApi.error('获取规则列表失败');
+            messageApi.error(t('app.kuaizhizao.barcodeMapping.loadListFailed'));
             return {
               data: [],
               success: false,
@@ -315,7 +321,7 @@ const BarcodeMappingRulesPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑映射规则' : '新建映射规则'}
+        title={isEdit ? t('app.kuaizhizao.barcodeMapping.editModalTitle') : t('app.kuaizhizao.barcodeMapping.createModalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -347,15 +353,15 @@ const BarcodeMappingRulesPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="规则名称"
-          placeholder="请输入规则名称"
-          rules={[{ required: true, message: '请输入规则名称' }]}
+          label={t('app.kuaizhizao.barcodeMapping.colRuleName')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.enterRuleName')}
+          rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.enterRuleName') }]}
           colProps={{ span: 24 }}
         />
         <ProFormSelect
           name="customer_id"
-          label="客户"
-          placeholder="请选择客户（留空则适用于所有客户）"
+          label={t('app.kuaizhizao.warehouseCommon.colCustomer')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.selectCustomerOptional')}
           request={async () => {
             try {
               const customers = unwrapSupplyPagedList(await customerApi.list());
@@ -368,28 +374,28 @@ const BarcodeMappingRulesPage: React.FC = () => {
         />
         <ProFormSelect
           name="barcode_type"
-          label="条码类型"
-          placeholder="请选择条码类型"
-          rules={[{ required: true, message: '请选择条码类型' }]}
+          label={t('app.kuaizhizao.barcodeMapping.colBarcodeType')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.selectBarcodeType')}
+          rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.selectBarcodeType') }]}
           options={[
-            { label: '一维码', value: '1d' },
-            { label: '二维码', value: '2d' },
+            { label: t('app.kuaizhizao.warehouseCommon.barcodeType1d'), value: '1d' },
+            { label: t('app.kuaizhizao.warehouseCommon.barcodeType2d'), value: '2d' },
           ]}
           colProps={{ span: 12 }}
         />
         <ProFormText
           name="barcode_pattern"
-          label="条码模式（正则表达式）"
-          placeholder="请输入条码模式，例如：^CUST\\d+$"
-          rules={[{ required: true, message: '请输入条码模式' }]}
+          label={t('app.kuaizhizao.barcodeMapping.barcodePatternLabel')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.barcodePatternPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.enterBarcodePattern') }]}
           colProps={{ span: 24 }}
-          extra="使用正则表达式匹配条码，例如：^CUST\\d+$ 匹配以CUST开头的数字条码"
+          extra={t('app.kuaizhizao.barcodeMapping.barcodePatternExtra')}
         />
         <ProFormSelect
           name="material_id"
-          label="映射物料"
-          placeholder="请选择要映射的物料"
-          rules={[{ required: true, message: '请选择映射物料' }]}
+          label={t('app.kuaizhizao.barcodeMapping.mappedMaterial')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.selectMappedMaterial')}
+          rules={[{ required: true, message: t('app.kuaizhizao.barcodeMapping.selectMappedMaterial') }]}
           request={async (params) => {
             try {
               const materials = await materialApi.list({
@@ -414,28 +420,28 @@ const BarcodeMappingRulesPage: React.FC = () => {
         />
         <ProFormSwitch
           name="is_enabled"
-          label="启用状态"
+          label={t('app.kuaizhizao.barcodeMapping.colEnabledStatus')}
           colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="priority"
-          label="优先级"
-          placeholder="请输入优先级（数字越大优先级越高）"
+          label={t('app.kuaizhizao.barcodeMapping.colPriority')}
+          placeholder={t('app.kuaizhizao.barcodeMapping.priorityPlaceholder')}
           fieldProps={{ min: 0 }}
           colProps={{ span: 12 }}
         />
         <DocumentAttachmentsField category="barcode_mapping_rule_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
       {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title={`规则详情 - ${currentRecord?.code || ''}`}
+        title={`${t('app.kuaizhizao.barcodeMapping.detailTitle')}${currentRecord?.code ? ` - ${currentRecord.code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => setDetailDrawerVisible(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -443,23 +449,27 @@ const BarcodeMappingRulesPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>规则编号：</strong>{currentRecord.code}</p>
-              <p><strong>规则名称：</strong>{currentRecord.name}</p>
-              <p><strong>客户：</strong>{currentRecord.customer_name || '全部客户'}</p>
-              <p><strong>条码模式：</strong>{currentRecord.barcode_pattern}</p>
-              <p><strong>条码类型：</strong>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colRuleCode')}：</strong>{currentRecord.code}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colRuleName')}：</strong>{currentRecord.name}</p>
+              <p><strong>{t('app.kuaizhizao.warehouseCommon.colCustomer')}：</strong>{currentRecord.customer_name || t('app.kuaizhizao.barcodeMapping.allCustomers')}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colBarcodePattern')}：</strong>{currentRecord.barcode_pattern}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colBarcodeType')}：</strong>
                 <Tag color={currentRecord.barcode_type === '2d' ? 'blue' : 'default'}>
-                  {currentRecord.barcode_type === '2d' ? '二维码' : '一维码'}
+                  {currentRecord.barcode_type === '2d'
+                    ? t('app.kuaizhizao.warehouseCommon.barcodeType2d')
+                    : t('app.kuaizhizao.warehouseCommon.barcodeType1d')}
                 </Tag>
               </p>
-              <p><strong>映射物料编号：</strong>{currentRecord.material_code}</p>
-              <p><strong>映射物料名称：</strong>{currentRecord.material_name}</p>
-              <p><strong>启用状态：</strong>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colMappedMaterialCode')}：</strong>{currentRecord.material_code}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colMappedMaterialName')}：</strong>{currentRecord.material_name}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colEnabledStatus')}：</strong>
                 <Tag color={currentRecord.is_enabled ? 'success' : 'default'}>
-                  {currentRecord.is_enabled ? '启用' : '禁用'}
+                  {currentRecord.is_enabled
+                    ? t('app.kuaizhizao.warehouseCommon.enabled')
+                    : t('app.kuaizhizao.warehouseCommon.disabled')}
                 </Tag>
               </p>
-              <p><strong>优先级：</strong>{currentRecord.priority}</p>
+              <p><strong>{t('app.kuaizhizao.barcodeMapping.colPriority')}：</strong>{currentRecord.priority}</p>
             </div>
           ) : null
         }
@@ -469,4 +479,3 @@ const BarcodeMappingRulesPage: React.FC = () => {
 };
 
 export default BarcodeMappingRulesPage;
-

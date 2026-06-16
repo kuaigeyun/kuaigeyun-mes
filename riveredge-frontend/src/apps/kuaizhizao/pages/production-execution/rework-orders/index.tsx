@@ -37,6 +37,7 @@ import {
 } from '../../../../../components/custom-fields';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useTranslation } from 'react-i18next';
 
 const REWORK_ORDER_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_rework_orders';
 
@@ -77,20 +78,21 @@ interface ReworkOrder {
   }>;
 }
 
-const REWORK_TYPE_FALLBACK = [
-  { label: '返工', value: '返工' },
-  { label: '返修', value: '返修' },
-  { label: '报废', value: '报废' },
+const REWORK_TYPE_FALLBACK = (translate: (key: string) => string) => [
+  { label: translate('app.kuaizhizao.reworkOrder.typeRework'), value: '返工' },
+  { label: translate('app.kuaizhizao.reworkOrder.typeRepair'), value: '返修' },
+  { label: translate('app.kuaizhizao.reworkOrder.typeScrap'), value: '报废' },
 ];
 
 const ReworkOrdersPage: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const currentUser = useGlobalStore((s) => s.currentUser);
 
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
-  const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(REWORK_TYPE_FALLBACK);
+  const [reworkTypeOptions, setReworkTypeOptions] = useState<Array<{ label: string; value: string }>>(() => REWORK_TYPE_FALLBACK(t));
   const [reworkTypeLoading, setReworkTypeLoading] = useState(false);
 
   useEffect(() => {
@@ -102,13 +104,13 @@ const ReworkOrdersPage: React.FC = () => {
         const dictList = await getDataDictionaryList({ code: 'REWORK_TYPE', page: 1, page_size: 1 });
         const dict = dictList.items?.[0];
         if (!dict) {
-          setReworkTypeOptions(REWORK_TYPE_FALLBACK);
+          setReworkTypeOptions(REWORK_TYPE_FALLBACK(t));
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
         setReworkTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
-        setReworkTypeOptions(REWORK_TYPE_FALLBACK);
+        setReworkTypeOptions(REWORK_TYPE_FALLBACK(t));
       } finally {
         setReworkTypeLoading(false);
       }
@@ -163,105 +165,105 @@ const ReworkOrdersPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemProps<ReworkOrder>[] = [
+  const detailColumns: ProDescriptionsItemProps<ReworkOrder>[] = useMemo(() => [
     {
-      title: '返工单编号',
+      title: t('app.kuaizhizao.reworkOrder.colCode'),
       dataIndex: 'code',
     },
     {
-      title: '原工单ID',
+      title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_id',
     },
     {
-      title: '产品编号',
+      title: t('app.kuaizhizao.reworkOrder.colProductCode'),
       dataIndex: 'product_code',
     },
     {
-      title: '产品名称',
+      title: t('app.kuaizhizao.reworkOrder.colProductName'),
       dataIndex: 'product_name',
       span: 2,
     },
     {
-      title: '返工数量',
+      title: t('app.kuaizhizao.reworkOrder.colQuantity'),
       dataIndex: 'quantity',
     },
     {
-      title: '返工类型',
+      title: t('app.kuaizhizao.reworkOrder.colReworkType'),
       dataIndex: 'rework_type',
       render: (_, record) => {
         const text = String(record.rework_type ?? '');
         const typeMap: Record<string, { text: string; color: string }> = {
-          '返工': { text: '返工', color: 'blue' },
-          '返修': { text: '返修', color: 'orange' },
-          '报废': { text: '报废', color: 'red' },
+          '返工': { text: t('app.kuaizhizao.reworkOrder.typeRework'), color: 'blue' },
+          '返修': { text: t('app.kuaizhizao.reworkOrder.typeRepair'), color: 'orange' },
+          '报废': { text: t('app.kuaizhizao.reworkOrder.typeScrap'), color: 'red' },
         };
         const config = typeMap[text] || { text: text || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '返工起始工序',
+      title: t('app.kuaizhizao.reworkOrder.colStartOperation'),
       dataIndex: 'rework_operations',
       span: 2,
       render: (_: any, record: any) => {
         const startOp = (record.rework_operations || []).find((o: any) => o.is_start)
           || (record.rework_operations || [])[0];
         if (!startOp) return '-';
-        return `${startOp.operation_code || ''} ${startOp.operation_name || ''}`.trim() || `工序#${startOp.work_order_operation_id}`;
+        return `${startOp.operation_code || ''} ${startOp.operation_name || ''}`.trim() || t('app.kuaizhizao.reworkOrder.operationFallback', { id: startOp.work_order_operation_id });
       },
     },
     {
-      title: '车间',
+      title: t('app.kuaizhizao.reworkOrder.colWorkshop'),
       dataIndex: 'workshop_name',
     },
     {
-      title: '工作中心',
+      title: t('app.kuaizhizao.reworkOrder.colWorkCenter'),
       dataIndex: 'work_center_name',
     },
     {
-      title: '计划开始时间',
+      title: t('app.kuaizhizao.reworkOrder.colPlannedStart'),
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
     },
     {
-      title: '计划结束时间',
+      title: t('app.kuaizhizao.reworkOrder.colPlannedEnd'),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
     },
     {
-      title: '实际开始时间',
+      title: t('app.kuaizhizao.reworkOrder.colActualStart'),
       dataIndex: 'actual_start_date',
       valueType: 'dateTime',
       render: (text) => formatDateTimeBySiteSetting(text),
     },
     {
-      title: '实际结束时间',
+      title: t('app.kuaizhizao.reworkOrder.colActualEnd'),
       dataIndex: 'actual_end_date',
       valueType: 'dateTime',
       render: (text) => formatDateTimeBySiteSetting(text),
     },
     {
-      title: '已完成数量',
+      title: t('app.kuaizhizao.reworkOrder.colCompletedQty'),
       dataIndex: 'completed_quantity',
       render: (text) => text || 0,
     },
     {
-      title: '合格数量',
+      title: t('app.kuaizhizao.reworkOrder.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       render: (text) => text || 0,
     },
     {
-      title: '不合格数量',
+      title: t('app.kuaizhizao.reworkOrder.colUnqualifiedQty'),
       dataIndex: 'unqualified_quantity',
       render: (text) => text || 0,
     },
     {
-      title: '备注',
+      title: t('app.kuaizhizao.workReporting.colRemarks'),
       dataIndex: 'remarks',
       span: 2,
       render: (text) => text || '-',
     },
-  ];
+  ], [t]);
 
   /**
    * 表格列定义
@@ -270,39 +272,39 @@ const ReworkOrdersPage: React.FC = () => {
     const customFieldColumns = generateReworkCustomFieldColumns();
     return [
     {
-      title: '返工单编号',
+      title: t('app.kuaizhizao.reworkOrder.colCode'),
       dataIndex: 'code',
       width: 180,
       fixed: 'left',
       ellipsis: true,
     },
     {
-      title: '原工单ID',
+      title: t('app.kuaizhizao.reworkOrder.colOriginalWorkOrderId'),
       dataIndex: 'original_work_order_id',
       width: 120,
     },
     {
-      title: '产品名称',
+      title: t('app.kuaizhizao.reworkOrder.colProductName'),
       dataIndex: 'product_name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '返工数量',
+      title: t('app.kuaizhizao.reworkOrder.colQuantity'),
       dataIndex: 'quantity',
       width: 100,
       valueType: 'digit',
     },
     {
-      title: '返工类型',
+      title: t('app.kuaizhizao.reworkOrder.colReworkType'),
       dataIndex: 'rework_type',
       width: 100,
       render: (_, record) => {
         const text = String(record.rework_type ?? '');
         const typeMap: Record<string, { text: string; color: string }> = {
-          '返工': { text: '返工', color: 'blue' },
-          '返修': { text: '返修', color: 'orange' },
-          '报废': { text: '报废', color: 'red' },
+          '返工': { text: t('app.kuaizhizao.reworkOrder.typeRework'), color: 'blue' },
+          '返修': { text: t('app.kuaizhizao.reworkOrder.typeRepair'), color: 'orange' },
+          '报废': { text: t('app.kuaizhizao.reworkOrder.typeScrap'), color: 'red' },
         };
         const config = typeMap[text] || { text: text || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
@@ -310,16 +312,16 @@ const ReworkOrdersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.reworkOrder.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       width: 140,
       fixed: 'right',
       valueEnum: {
-        draft: { text: '草稿', status: 'Default' },
-        released: { text: '已下达', status: 'Processing' },
-        in_progress: { text: '执行中', status: 'Processing' },
-        completed: { text: '已完成', status: 'Success' },
-        cancelled: { text: '已取消', status: 'Error' },
+        draft: { text: t('app.kuaizhizao.reworkOrder.lifecycleDraft'), status: 'Default' },
+        released: { text: t('app.kuaizhizao.reworkOrder.lifecycleReleased'), status: 'Processing' },
+        in_progress: { text: t('app.kuaizhizao.reworkOrder.lifecycleInProgress'), status: 'Processing' },
+        completed: { text: t('app.kuaizhizao.reworkOrder.lifecycleCompleted'), status: 'Success' },
+        cancelled: { text: t('app.kuaizhizao.reworkOrder.lifecycleCancelled'), status: 'Error' },
       },
       render: (_, record) => {
         const lifecycle = getReworkOrderLifecycle(record);
@@ -327,7 +329,7 @@ const ReworkOrdersPage: React.FC = () => {
         return (
           <UniLifecycle
             percent={lifecycle.percent}
-            stageName={activeStage?.label ?? lifecycle.stageName ?? record.status ?? '草稿'}
+            stageName={activeStage?.label ?? lifecycle.stageName ?? record.status ?? t('app.kuaizhizao.reworkOrder.lifecycleDraft')}
             status={lifecycle.status}
             subStages={lifecycle.subStages}
             showLabel
@@ -338,19 +340,19 @@ const ReworkOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '计划开始时间',
+      title: t('app.kuaizhizao.reworkOrder.colPlannedStart'),
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '计划结束时间',
+      title: t('app.kuaizhizao.reworkOrder.colPlannedEnd'),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
@@ -358,7 +360,7 @@ const ReworkOrdersPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -370,7 +372,7 @@ const ReworkOrdersPage: React.FC = () => {
           lifecycle.stageName === '已下达' || lifecycle.stageName === '执行中';
         return (
           <Space>
-            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>详情</Button>
+            <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>{t('common.detail')}</Button>
             {canReport ? (
               <Button{...rowActionKind('delete')} key="delete"
                 type="link"
@@ -378,7 +380,7 @@ const ReworkOrdersPage: React.FC = () => {
                 icon={<FormOutlined />}
                 onClick={() => void handleOpenReport(record)}
               >
-                报工
+                {t('app.kuaizhizao.reworkOrder.report')}
               </Button>
             ) : null}
             <Button key="edit" {...rowActionKind('update')}
@@ -387,17 +389,17 @@ const ReworkOrdersPage: React.FC = () => {
               onClick={() => handleEdit(record)}
               disabled={!canEdit}
             >
-              编辑
+              {t('common.edit')}
             </Button>
             {canDelete && (
-              <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>删除</Button>
+              <Button key="delete" {...rowActionKind('delete')} onClick={() => handleDelete(record)}>{t('common.delete')}</Button>
             )}
           </Space>
         );
       },
     },
   ];
-  }, [reworkListCustomFields, generateReworkCustomFieldColumns]);
+  }, [reworkListCustomFields, generateReworkCustomFieldColumns, t]);
 
   /**
    * 处理详情查看
@@ -411,7 +413,7 @@ const ReworkOrdersPage: React.FC = () => {
         await loadReworkFieldValuesForDetail(detail.id);
       }
     } catch (error) {
-      messageApi.error('获取返工单详情失败');
+      messageApi.error(t('app.kuaizhizao.reworkOrder.loadDetailFailed'));
     }
   };
 
@@ -462,7 +464,7 @@ const ReworkOrdersPage: React.FC = () => {
         }
       }, 100);
     } catch (error) {
-      messageApi.error('获取返工单详情失败');
+      messageApi.error(t('app.kuaizhizao.reworkOrder.loadDetailFailed'));
     }
   };
 
@@ -477,7 +479,7 @@ const ReworkOrdersPage: React.FC = () => {
       setReportingOptions(options);
       setReportModalVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '加载返工报工选项失败');
+      messageApi.error(error.message || t('app.kuaizhizao.reworkOrder.loadReportingOptionsFailed'));
     }
   };
 
@@ -497,15 +499,15 @@ const ReworkOrdersPage: React.FC = () => {
 
   const handleSubmitReport = async (values: any): Promise<void> => {
     if (!currentReworkOrderForReport?.id) {
-      throw new Error('返工单信息不存在');
+      throw new Error(t('app.kuaizhizao.reworkOrder.notFound'));
     }
     setReportSubmitLoading(true);
     try {
       const workerId = currentUser?.id;
       const workerName =
-        currentUser?.full_name || currentUser?.username || values.worker_name || '操作工';
+        currentUser?.full_name || currentUser?.username || values.worker_name || t('app.kuaizhizao.reworkOrder.fallbackWorker');
       if (!workerId) {
-        throw new Error('无法获取当前用户信息');
+        throw new Error(t('app.kuaizhizao.reworkOrder.cannotGetCurrentUser'));
       }
       await reworkOrderApi.report(currentReworkOrderForReport.id.toString(), {
         work_order_operation_id: values.work_order_operation_id,
@@ -520,7 +522,7 @@ const ReworkOrdersPage: React.FC = () => {
           : new Date().toISOString(),
         remarks: values.remarks || undefined,
       });
-      messageApi.success('返工报工成功');
+      messageApi.success(t('app.kuaizhizao.reworkOrder.reportSuccess'));
       setReportModalVisible(false);
       setCurrentReworkOrderForReport(null);
       setReportingOptions(null);
@@ -531,7 +533,7 @@ const ReworkOrdersPage: React.FC = () => {
         setReworkOrderDetail(refreshed);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '返工报工失败');
+      messageApi.error(error.message || t('app.kuaizhizao.reworkOrder.reportFailed'));
       throw error;
     } finally {
       setReportSubmitLoading(false);
@@ -543,19 +545,19 @@ const ReworkOrdersPage: React.FC = () => {
    */
   const handleDelete = async (record: ReworkOrder) => {
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除返工单 "${record.code}" 吗？`,
-      okText: '确认',
-      cancelText: '取消',
+      title: t('app.kuaizhizao.reworkOrder.confirmDeleteTitle'),
+      content: t('app.kuaizhizao.reworkOrder.confirmDeleteContent', { code: record.code }),
+      okText: t('common.confirm'),
+      cancelText: t('common.cancel'),
       onOk: async () => {
         try {
           await reworkOrderApi.delete(record.id!.toString());
-          messageApi.success('删除成功');
+          messageApi.success(t('common.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -580,14 +582,14 @@ const ReworkOrdersPage: React.FC = () => {
       standardValues.attachments = normalizeDocumentAttachments(standardValues.attachments);
       if (isEdit && currentReworkOrder?.id) {
         await reworkOrderApi.update(currentReworkOrder.id.toString(), standardValues);
-        messageApi.success('返工单更新成功');
+        messageApi.success(t('app.kuaizhizao.reworkOrder.updateSuccess'));
         await saveReworkCustomFieldValues(currentReworkOrder.id, customData);
       } else {
         const created = await reworkOrderApi.create(standardValues);
         if (created?.id != null) {
           await saveReworkCustomFieldValues(created.id, customData);
         }
-        messageApi.success('返工单创建成功');
+        messageApi.success(t('app.kuaizhizao.reworkOrder.createSuccess'));
       }
       setModalVisible(false);
       resetReworkFormFieldValues();
@@ -595,7 +597,7 @@ const ReworkOrdersPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -621,7 +623,7 @@ const ReworkOrdersPage: React.FC = () => {
         total: enriched.length,
       };
     } catch (error: any) {
-      messageApi.error('获取返工单列表失败');
+      messageApi.error(t('app.kuaizhizao.reworkOrder.listLoadFailed'));
       return {
         data: [],
         success: false,
@@ -635,19 +637,19 @@ const ReworkOrdersPage: React.FC = () => {
    */
   const handleDeleteFromSelection = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要删除的返工单');
+      messageApi.warning(t('app.kuaizhizao.reworkOrder.selectToDelete'));
       return;
     }
     try {
       for (const key of keys) {
         await reworkOrderApi.delete(key.toString());
       }
-      messageApi.success('删除成功');
+      messageApi.success(t('common.deleteSuccess'));
       invalidateMenuBadgeCounts();
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -655,7 +657,7 @@ const ReworkOrdersPage: React.FC = () => {
     <ListPageTemplate>
       <UniTable<ReworkOrder>
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.rework-orders"
-        headerTitle="返工单"
+        headerTitle={t('app.kuaizhizao.reworkOrder.title')}
         actionRef={actionRef}
         columns={columns}
         request={handleRequest}
@@ -664,16 +666,16 @@ const ReworkOrdersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
-        createButtonText="新建返工工单"
+        createButtonText={t('app.kuaizhizao.reworkOrder.createButton')}
         onCreate={handleCreate}
         showDeleteButton={true}
         onDelete={handleDeleteFromSelection}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 个返工单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.reworkOrder.deleteSelectedConfirm', { count })}
         showAdvancedSearch={true}
       />
       {/* 表单Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑返工单' : '新建返工单'}
+        title={isEdit ? t('app.kuaizhizao.reworkOrder.editModalTitle') : t('app.kuaizhizao.reworkOrder.createModalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -689,7 +691,7 @@ const ReworkOrdersPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-production-rework-order"
               name="code"
-              label="返工单编号"
+              label={t('app.kuaizhizao.reworkOrder.colCode')}
               required={true}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}
@@ -700,8 +702,8 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="original_work_order_id"
-              label="原工单"
-              placeholder="请选择原工单"
+              label={t('app.kuaizhizao.reworkOrder.formOriginalWorkOrder')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formOriginalWorkOrderPlaceholder')}
               rules={[{ required: false }]}
               disabled={isEdit}
               fieldProps={{
@@ -725,7 +727,7 @@ const ReworkOrdersPage: React.FC = () => {
                         quantity: wo.quantity ?? undefined,
                       });
                     } catch {
-                      messageApi.error('获取工单详情失败');
+                      messageApi.error(t('app.kuaizhizao.reworkOrder.loadWorkOrderFailed'));
                       setWorkOrderProduct(null);
                     } finally {
                       setWorkOrderProductLoading(false);
@@ -760,8 +762,8 @@ const ReworkOrdersPage: React.FC = () => {
                   workOrderProduct ? (
                     <ProFormSelect
                       name="product_id"
-                      label="产品"
-                      placeholder="请选择产品"
+                      label={t('app.kuaizhizao.reworkOrder.formProduct')}
+                      placeholder={t('app.kuaizhizao.reworkOrder.formProductPlaceholder')}
                       required
                       options={[
                         {
@@ -774,8 +776,8 @@ const ReworkOrdersPage: React.FC = () => {
                   ) : (
                     <ProFormSelect
                       name="product_id"
-                      label="产品"
-                      placeholder={workOrderProductLoading ? '加载中...' : '请选择产品'}
+                      label={t('app.kuaizhizao.reworkOrder.formProduct')}
+                      placeholder={workOrderProductLoading ? t('app.kuaizhizao.reworkOrder.formProductLoading') : t('app.kuaizhizao.reworkOrder.formProductPlaceholder')}
                       required
                       options={[]}
                       fieldProps={{ disabled: true, loading: workOrderProductLoading }}
@@ -784,8 +786,8 @@ const ReworkOrdersPage: React.FC = () => {
                 ) : (
                   <UniMaterialSelect
                     name="product_id"
-                    label="产品"
-                    placeholder="请选择产品"
+                    label={t('app.kuaizhizao.reworkOrder.formProduct')}
+                    placeholder={t('app.kuaizhizao.reworkOrder.formProductPlaceholder')}
                     required
                     fillMapping={{
                       product_code: 'mainCode',
@@ -801,9 +803,9 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="quantity"
-              label="返工数量"
-              placeholder="请输入返工数量"
-              rules={[{ required: true, message: '请输入返工数量' }]}
+              label={t('app.kuaizhizao.reworkOrder.colQuantity')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formQuantityRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formQuantityRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
             />
@@ -813,15 +815,15 @@ const ReworkOrdersPage: React.FC = () => {
         <ProFormText name="product_name" hidden />
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="rework_type" label="返工类型" rules={[{ required: true, message: '请选择返工类型' }]}>
+            <ProFormItem name="rework_type" label={t('app.kuaizhizao.reworkOrder.colReworkType')} rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReworkTypeRequired') }]}>
               <UniDropdown
-                placeholder="请选择返工类型"
+                placeholder={t('app.kuaizhizao.reworkOrder.formReworkTypePlaceholder')}
                 showSearch
                 allowClear
                 loading={reworkTypeLoading}
                 style={{ width: '100%' }}
                 options={reworkTypeOptions}
-                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+                quickCreate={{ label: t('app.kuaizhizao.reworkOrder.dictManage'), onClick: () => navigate('/system/data-dictionaries') }}
               />
             </ProFormItem>
           </Col>
@@ -832,8 +834,8 @@ const ReworkOrdersPage: React.FC = () => {
             original_work_order_id ? (
               <ProFormSelect
                 name="start_work_order_operation_id"
-                label="返工起始工序"
-                placeholder="不选则取原工单首道工序"
+                label={t('app.kuaizhizao.reworkOrder.formStartOperation')}
+                placeholder={t('app.kuaizhizao.reworkOrder.formStartOperationPlaceholder')}
                 allowClear
                 fieldProps={{
                   showSearch: true,
@@ -843,7 +845,7 @@ const ReworkOrdersPage: React.FC = () => {
                 request={async () => {
                   const ops = await workOrderApi.getOperations(String(original_work_order_id));
                   return (ops || []).map((op: any) => ({
-                    label: `工序${op.sequence || ''} - ${op.operation_name || op.operation_code || ''}`,
+                    label: t('app.kuaizhizao.reworkOrder.formReportOperationSequence', { sequence: op.sequence || '', name: op.operation_name || op.operation_code || '' }),
                     value: op.id,
                   }));
                 }}
@@ -855,16 +857,16 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="planned_start_date"
-              label="计划开始时间"
-              placeholder="请选择计划开始时间"
+              label={t('app.kuaizhizao.reworkOrder.formPlannedStart')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formPlannedStartPlaceholder')}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="planned_end_date"
-              label="计划结束时间"
-              placeholder="请选择计划结束时间"
+              label={t('app.kuaizhizao.reworkOrder.formPlannedEnd')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formPlannedEndPlaceholder')}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>
@@ -873,8 +875,8 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={8}>
             <ProFormDigit
               name="completed_quantity"
-              label="已完成数量"
-              placeholder="请输入已完成数量"
+              label={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formCompletedQty')}
               initialValue={0}
               min={0}
               fieldProps={{ precision: 2 }}
@@ -883,8 +885,8 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={8}>
             <ProFormDigit
               name="qualified_quantity"
-              label="合格数量"
-              placeholder="请输入合格数量"
+              label={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
               initialValue={0}
               min={0}
               fieldProps={{ precision: 2 }}
@@ -893,8 +895,8 @@ const ReworkOrdersPage: React.FC = () => {
           <Col span={8}>
             <ProFormDigit
               name="unqualified_quantity"
-              label="不合格数量"
-              placeholder="请输入不合格数量"
+              label={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
               initialValue={0}
               min={0}
               fieldProps={{ precision: 2 }}
@@ -903,9 +905,9 @@ const ReworkOrdersPage: React.FC = () => {
         </Row>
         <ProFormTextArea
           name="rework_reason"
-          label="返工原因"
-          placeholder="请输入返工原因"
-          rules={[{ required: true, message: '请输入返工原因' }]}
+          label={t('app.kuaizhizao.reworkOrder.formReworkReason')}
+          placeholder={t('app.kuaizhizao.reworkOrder.formReworkReasonRequired')}
+          rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReworkReasonRequired') }]}
           fieldProps={{ rows: 3 }}
         />
         <CustomFieldsFormSection
@@ -916,15 +918,15 @@ const ReworkOrdersPage: React.FC = () => {
         <DocumentAttachmentsField category="rework_order_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.workReporting.colRemarks')}
+          placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title="返工单详情"
+        title={t('app.kuaizhizao.reworkOrder.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -955,7 +957,7 @@ const ReworkOrdersPage: React.FC = () => {
                           void handleOpenReport(reworkOrderDetail);
                         }}
                       >
-                        报工
+                        {t('app.kuaizhizao.reworkOrder.report')}
                       </Button>
                     ),
                   },
@@ -972,7 +974,7 @@ const ReworkOrdersPage: React.FC = () => {
                           handleEdit(reworkOrderDetail);
                         }}
                       >
-                        编辑
+                        {t('common.edit')}
                       </Button>
                     ),
                   },
@@ -987,7 +989,7 @@ const ReworkOrdersPage: React.FC = () => {
                         icon={<DeleteOutlined />}
                         onClick={() => handleDelete(reworkOrderDetail)}
                       >
-                        删除
+                        {t('common.delete')}
                       </Button>
                     ),
                   },
@@ -998,7 +1000,7 @@ const ReworkOrdersPage: React.FC = () => {
         }
       >
         {hasCustomFieldsDetailContent(reworkListCustomFields, reworkDetailCustomFieldValues) ? (
-          <DetailDrawerSection title="自定义字段">
+          <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionCustomFields')}>
             <CustomFieldsDetailSection
               customFields={reworkListCustomFields}
               customFieldValues={reworkDetailCustomFieldValues}
@@ -1010,7 +1012,7 @@ const ReworkOrdersPage: React.FC = () => {
           const mainStages = lifecycle.mainStages ?? [];
           if (mainStages.length === 0) return null;
           return (
-            <DetailDrawerSection title="生命周期">
+            <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionLifecycle')}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {mainStages.length > 0 && (
                   <UniLifecycleStepper
@@ -1025,14 +1027,14 @@ const ReworkOrdersPage: React.FC = () => {
           );
         })()}
         {reworkOrderDetail?.id && (
-          <DetailDrawerSection title="操作历史">
+          <DetailDrawerSection title={t('app.kuaizhizao.reworkOrder.sectionOperationHistory')}>
             <DocumentTrackingPanel documentType="rework_order" documentId={reworkOrderDetail.id} />
           </DetailDrawerSection>
         )}
       </DetailDrawerTemplate>
 
       <FormModalTemplate
-        title="返工报工"
+        title={t('app.kuaizhizao.reworkOrder.reportModalTitle')}
         open={reportModalVisible}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         loading={reportSubmitLoading}
@@ -1052,25 +1054,25 @@ const ReworkOrdersPage: React.FC = () => {
               <Row gutter={16}>
                 <Col span={12}>
                   <div>
-                    <strong>返工单：</strong>
+                    {t('app.kuaizhizao.reworkOrder.reportCardOrder')}
                     {currentReworkOrderForReport.code}
                   </div>
                 </Col>
                 <Col span={12}>
                   <div>
-                    <strong>返工数量：</strong>
+                    {t('app.kuaizhizao.reworkOrder.reportCardQuantity')}
                     {reportingOptions.rework_quantity}
                   </div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
                   <div>
-                    <strong>起始工序：</strong>
+                    {t('app.kuaizhizao.reworkOrder.reportCardStartOperation')}
                     {reportingOptions.start_operation_name || '-'}
                   </div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
                   <div>
-                    <strong>剩余可报合格数：</strong>
+                    {t('app.kuaizhizao.reworkOrder.reportCardRemaining')}
                     {reportingOptions.remaining_rework_quantity}
                   </div>
                 </Col>
@@ -1078,50 +1080,50 @@ const ReworkOrdersPage: React.FC = () => {
             </Card>
             <ProFormSelect
               name="work_order_operation_id"
-              label="报工工序"
-              placeholder="请选择报工工序"
-              rules={[{ required: true, message: '请选择报工工序' }]}
+              label={t('app.kuaizhizao.reworkOrder.formReportOperation')}
+              placeholder={t('app.kuaizhizao.reworkOrder.formReportOperationRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReportOperationRequired') }]}
               options={(reportingOptions.operations || [])
                 .filter((op: any) => op.selectable)
                 .map((op: any) => ({
-                  label: `${op.is_start_operation ? '【起始】' : ''}工序${op.sequence || ''} - ${op.operation_name || op.operation_code || op.work_order_operation_id}（已报 ${op.reported_quantity}）`,
+                  label: `${op.is_start_operation ? t('app.kuaizhizao.reworkOrder.formReportOperationStart') : ''}${t('app.kuaizhizao.reworkOrder.formReportOperationSequence', { sequence: op.sequence || '', name: op.operation_name || op.operation_code || op.work_order_operation_id })}${t('app.kuaizhizao.reworkOrder.formReportOperationReported', { qty: op.reported_quantity })}`,
                   value: op.work_order_operation_id,
                 }))}
               fieldProps={{ showSearch: true }}
             />
             <ProFormDigit
               name="reported_quantity"
-              label="报工数量"
-              rules={[{ required: true, message: '请输入报工数量' }]}
+              label={t('app.kuaizhizao.workReporting.colReportedQty')}
+              rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReportedQtyRequired') }]}
               min={0.01}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDigit
               name="qualified_quantity"
-              label="合格数量"
-              rules={[{ required: true, message: '请输入合格数量' }]}
+              label={t('app.kuaizhizao.reworkOrder.formQualifiedQty')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formQualifiedQtyRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDigit
               name="unqualified_quantity"
-              label="不合格数量"
+              label={t('app.kuaizhizao.reworkOrder.formUnqualifiedQty')}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDigit
               name="work_hours"
-              label="工时（小时）"
+              label={t('app.kuaizhizao.workReporting.colWorkHours')}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDatePicker
               name="reported_at"
-              label="报工时间"
-              rules={[{ required: true, message: '请选择报工时间' }]}
+              label={t('app.kuaizhizao.reworkOrder.formReportedAt')}
+              rules={[{ required: true, message: t('app.kuaizhizao.reworkOrder.formReportedAtRequired') }]}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
-            <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="remarks" label={t('app.kuaizhizao.workReporting.colRemarks')} fieldProps={{ rows: 2 }} />
           </>
         ) : null}
       </FormModalTemplate>

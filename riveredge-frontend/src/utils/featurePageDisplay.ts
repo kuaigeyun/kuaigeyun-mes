@@ -11,12 +11,23 @@ import {
   translateAppMenuItemName,
   translateMenuName,
 } from './menuTranslation';
+import {
+  resolveCodeRulePageCodeFieldLabel,
+  resolveCodeRulePageModule,
+  resolveCodeRulePageName,
+} from './codeRulePageI18n';
+import {
+  resolveCustomFieldPageName,
+  resolveCustomFieldPageTableNameLabel,
+} from './customFieldPageI18n';
 
 export interface PageWithMenuDisplay {
-  pageCode: string;
+  pageCode?: string;
   pageName: string;
   pagePath: string;
   module?: string;
+  codeFieldLabel?: string;
+  tableNameLabel?: string;
 }
 
 export function normalizePagePath(path?: string): string {
@@ -81,6 +92,10 @@ export function resolveModuleDisplayName(
     if (translated && !isI18nKey(translated)) {
       return translated;
     }
+    const fromCodeRule = resolveCodeRulePageModule(module, t);
+    if (fromCodeRule && fromCodeRule !== module) {
+      return fromCodeRule;
+    }
   }
   return module || '';
 }
@@ -97,6 +112,17 @@ export function resolvePageDisplayName(
     const fromMenu = menuPathNameMap.get(path)!;
     if (fromMenu && !isI18nKey(fromMenu)) {
       return fromMenu;
+    }
+  }
+
+  if (page.pageCode) {
+    const fromCodeRule = resolveCodeRulePageName(page, t);
+    if (fromCodeRule && !isI18nKey(fromCodeRule) && fromCodeRule !== page.pageCode) {
+      return fromCodeRule;
+    }
+    const fromCustomField = resolveCustomFieldPageName(page, t);
+    if (fromCustomField && !isI18nKey(fromCustomField) && fromCustomField !== page.pageCode) {
+      return fromCustomField;
     }
   }
 
@@ -119,6 +145,12 @@ export function enrichPagesWithMenuNames<T extends PageWithMenuDisplay>(
     pageName: resolvePageDisplayName(page, menuPathNameMap, t),
     ...(page.module !== undefined
       ? { module: resolveModuleDisplayName(page.module, page.pagePath, t) }
+      : {}),
+    ...(page.codeFieldLabel !== undefined
+      ? { codeFieldLabel: resolveCodeRulePageCodeFieldLabel(page, t) }
+      : {}),
+    ...(page.tableNameLabel !== undefined
+      ? { tableNameLabel: resolveCustomFieldPageTableNameLabel(page, t) }
       : {}),
   }));
 }

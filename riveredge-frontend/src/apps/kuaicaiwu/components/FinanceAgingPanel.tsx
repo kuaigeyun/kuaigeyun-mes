@@ -1,5 +1,6 @@
 import React, { Suspense, lazy, useMemo } from 'react';
 import { Button, Col, Empty, Row, Statistic } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   agingChartData,
   orderedAgingRows,
@@ -18,8 +19,9 @@ type FinanceAgingPanelProps = {
 };
 
 const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath, onOpenDetail }) => {
-  const rows = useMemo(() => orderedAgingRows(data), [data]);
-  const chartData = useMemo(() => agingChartData(data), [data]);
+  const { t } = useTranslation();
+  const rows = useMemo(() => orderedAgingRows(data, t), [data, t]);
+  const chartData = useMemo(() => agingChartData(data, t), [data, t]);
   const totalAmount = useMemo(
     () => rows.reduce((sum, row) => sum + Number(row.amount || 0), 0),
     [rows],
@@ -44,7 +46,11 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
           />
         </Suspense>
       ) : (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无未结清账龄" style={{ margin: '24px 0' }} />
+        <Empty
+          image={Empty.PRESENTED_IMAGE_SIMPLE}
+          description={t('app.kuaicaiwu.financeUi.aging.noOpenAging')}
+          style={{ margin: '24px 0' }}
+        />
       )}
       <Row gutter={[8, 8]} style={{ marginTop: 12 }}>
         {rows.map((row) => (
@@ -61,10 +67,10 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
                 value={row.amount}
                 precision={2}
                 prefix="¥"
-                styles={{ content: {fontSize: 16 } }}
+                styles={{ content: { fontSize: 16 } }}
               />
               <div style={{ fontSize: 12, color: 'var(--ant-color-text-secondary)' }}>
-                {row.count} 笔
+                {t('app.kuaicaiwu.financeUi.aging.countUnit', { count: row.count })}
               </div>
             </div>
           </Col>
@@ -81,10 +87,13 @@ const FinanceAgingPanel: React.FC<FinanceAgingPanelProps> = ({ data, detailPath,
         }}
       >
         <span>
-          未结清合计 ¥{totalAmount.toFixed(2)} · {totalCount} 笔
+          {t('app.kuaicaiwu.financeUi.aging.openTotal', {
+            amount: totalAmount.toFixed(2),
+            count: totalCount,
+          })}
         </span>
         <Button type="link" size="small" onClick={() => onOpenDetail(detailPath)}>
-          查看明细
+          {t('app.kuaicaiwu.financeUi.aging.viewDetail')}
         </Button>
       </div>
     </>

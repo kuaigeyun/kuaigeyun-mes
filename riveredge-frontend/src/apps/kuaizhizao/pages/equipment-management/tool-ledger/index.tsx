@@ -231,7 +231,7 @@ const ToolLedgerPage: React.FC = () => {
   const handleEdit = async (record: Tool) => {
     try {
       if (!record.uuid) {
-        messageApi.error('工装UUID不存在');
+        messageApi.error(t('app.kuaizhizao.toolLedger.uuidNotFound'));
         return;
       }
       const detail = await toolApi.get(record.uuid);
@@ -256,14 +256,14 @@ const ToolLedgerPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error) {
-      messageApi.error('获取工装详情失败');
+      messageApi.error(t('app.kuaizhizao.toolLedger.getDetailFailed'));
     }
   };
 
   const handleDetail = async (record: Tool) => {
     try {
       if (!record.uuid) {
-        messageApi.error('工装UUID不存在');
+        messageApi.error(t('app.kuaizhizao.toolLedger.uuidNotFound'));
         return;
       }
       const detail = await toolApi.get(record.uuid);
@@ -274,7 +274,7 @@ const ToolLedgerPage: React.FC = () => {
       loadCalibrations(record.uuid);
       setToolTrackingRefreshKey((k) => k + 1);
     } catch (error) {
-      messageApi.error('获取工装详情失败');
+      messageApi.error(t('app.kuaizhizao.toolLedger.getDetailFailed'));
     }
   };
 
@@ -291,7 +291,7 @@ const ToolLedgerPage: React.FC = () => {
         ...values,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('领用成功');
+      messageApi.success(t('app.kuaizhizao.toolLedger.checkoutSuccess'));
       setUsageModalVisible(false);
       if (toolDetail?.uuid) {
         loadUsages(toolDetail.uuid);
@@ -301,14 +301,14 @@ const ToolLedgerPage: React.FC = () => {
       }
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '领用失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.toolLedger.checkoutFailed'));
     }
   };
 
   const handleCheckin = async (usageUuid: string) => {
     try {
       await toolApi.checkin(usageUuid);
-      messageApi.success('归还成功');
+      messageApi.success(t('app.kuaizhizao.toolLedger.checkinSuccess'));
       if (toolDetail?.uuid) {
         loadUsages(toolDetail.uuid);
         const detail = await toolApi.get(toolDetail.uuid);
@@ -316,7 +316,7 @@ const ToolLedgerPage: React.FC = () => {
         setToolTrackingRefreshKey((k) => k + 1);
       }
     } catch (e: any) {
-      messageApi.error(e?.message || '归还失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.toolLedger.checkinFailed'));
     }
   };
 
@@ -336,7 +336,7 @@ const ToolLedgerPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(values.attachments),
       };
       await toolApi.recordMaintenance(data);
-      messageApi.success('维保记录已保存');
+      messageApi.success(t('app.kuaizhizao.toolLedger.maintenanceSaved'));
       setMaintModalVisible(false);
       if (toolDetail?.uuid) {
         loadMaintenances(toolDetail.uuid);
@@ -344,7 +344,7 @@ const ToolLedgerPage: React.FC = () => {
       }
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('common.saveFailed'));
     }
   };
 
@@ -364,7 +364,7 @@ const ToolLedgerPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(values.attachments),
       };
       await toolApi.recordCalibration(data);
-      messageApi.success('校验记录已保存');
+      messageApi.success(t('app.kuaizhizao.toolLedger.calibrationSaved'));
       setCalibModalVisible(false);
       if (toolDetail?.uuid) {
         loadCalibrations(toolDetail.uuid);
@@ -374,7 +374,7 @@ const ToolLedgerPage: React.FC = () => {
       }
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('common.saveFailed'));
     }
   };
 
@@ -394,10 +394,10 @@ const ToolLedgerPage: React.FC = () => {
       const editedUuid = isEdit ? currentTool?.uuid : undefined;
       if (isEdit && editedUuid) {
         await toolApi.update(editedUuid, data);
-        messageApi.success('工装更新成功');
+        messageApi.success(t('app.kuaizhizao.toolLedger.updateSuccess'));
       } else {
         await toolApi.create(data);
-        messageApi.success('工装创建成功');
+        messageApi.success(t('app.kuaizhizao.toolLedger.createSuccess'));
       }
       setModalVisible(false);
       actionRef.current?.reload();
@@ -414,7 +414,7 @@ const ToolLedgerPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -422,47 +422,48 @@ const ToolLedgerPage: React.FC = () => {
   const detailBaseColumns: ProDescriptionsItemProps<Tool>[] = useMemo(
     () => [
       {
-        title: '工装编号',
+        title: t('app.kuaizhizao.toolLedger.colCode'),
         dataIndex: 'code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '工装名称', dataIndex: 'name' },
-      { title: '工装类型', dataIndex: 'type' },
-      { title: '规格型号', dataIndex: 'spec' },
-      { title: '制造商', dataIndex: 'manufacturer' },
-      { title: '供应商', dataIndex: 'supplier' },
-      { title: '采购日期', dataIndex: 'purchase_date', valueType: 'date' },
-      { title: '保修到期日', dataIndex: 'warranty_expiry', valueType: 'date' },
+      { title: t('app.kuaizhizao.toolLedger.colName'), dataIndex: 'name' },
+      { title: t('app.kuaizhizao.toolLedger.colType'), dataIndex: 'type' },
+      { title: t('app.kuaizhizao.toolLedger.colSpec'), dataIndex: 'spec' },
+      { title: t('app.kuaizhizao.toolLedger.colManufacturer'), dataIndex: 'manufacturer' },
+      { title: t('app.kuaizhizao.toolLedger.colSupplier'), dataIndex: 'supplier' },
+      { title: t('app.kuaizhizao.toolLedger.colPurchaseDate'), dataIndex: 'purchase_date', valueType: 'date' },
+      { title: t('app.kuaizhizao.toolLedger.colWarrantyExpiry'), dataIndex: 'warranty_expiry', valueType: 'date' },
       {
-        title: '状态',
+        title: t('common.status'),
         dataIndex: 'status',
         render: (_, record) => {
           const statusKey = String(record.status ?? '');
           const statusMap: Record<string, { text: string; color: string }> = {
-            正常: { text: '正常', color: 'success' },
-            领用中: { text: '领用中', color: 'processing' },
-            维修中: { text: '维修中', color: 'warning' },
-            校验中: { text: '校验中', color: 'warning' },
-            停用: { text: '停用', color: 'default' },
-            报废: { text: '报废', color: 'error' },
+            正常: { text: t('app.kuaizhizao.toolLedger.statusNormal'), color: 'success' },
+            领用中: { text: t('app.kuaizhizao.toolLedger.statusCheckedOut'), color: 'processing' },
+            维修中: { text: t('app.kuaizhizao.toolLedger.statusRepairing'), color: 'warning' },
+            校验中: { text: t('app.kuaizhizao.toolLedger.statusCalibrating'), color: 'warning' },
+            停用: { text: t('app.kuaizhizao.toolLedger.statusDisabled'), color: 'default' },
+            报废: { text: t('app.kuaizhizao.toolLedger.statusScrapped'), color: 'error' },
           };
           const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
           return <Tag color={config.color}>{config.text}</Tag>;
         },
       },
-      { title: '累计使用次数', dataIndex: 'total_usage_count' },
-      { title: '备注', dataIndex: 'description' },
-      { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime' },
-      { title: '更新时间', dataIndex: 'updated_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'), dataIndex: 'total_usage_count' },
+      { title: t('app.kuaizhizao.toolLedger.fieldDescription'), dataIndex: 'description' },
+      { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
+      { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
     ],
-    []
+    [t]
   );
 
-  const columns: ProColumns<Tool>[] = [
+  const columns: ProColumns<Tool>[] = useMemo(
+    () => [
     {
-      title: '工装编号',
+      title: t('app.kuaizhizao.toolLedger.colCode'),
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
@@ -473,12 +474,12 @@ const ToolLedgerPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '工装名称', dataIndex: 'name', width: 200, ellipsis: true },
-    { title: '工装类型', dataIndex: 'type', width: 100 },
-    { title: '规格型号', dataIndex: 'spec', width: 120, ellipsis: true },
-    { title: '累计使用次数', dataIndex: 'total_usage_count', width: 110 },
+    { title: t('app.kuaizhizao.toolLedger.colName'), dataIndex: 'name', width: 200, ellipsis: true },
+    { title: t('app.kuaizhizao.toolLedger.colType'), dataIndex: 'type', width: 100 },
+    { title: t('app.kuaizhizao.toolLedger.colSpec'), dataIndex: 'spec', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.toolLedger.colTotalUsageCount'), dataIndex: 'total_usage_count', width: 110 },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -486,7 +487,7 @@ const ToolLedgerPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.toolLedger.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -507,7 +508,7 @@ const ToolLedgerPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -523,7 +524,7 @@ const ToolLedgerPage: React.FC = () => {
             void handleDetail(record);
           }}
         >
-          详情
+          {t('common.detail')}
         </Button>,
         <Button {...rowActionKind('update')}
           key="edit"
@@ -535,17 +536,129 @@ const ToolLedgerPage: React.FC = () => {
             void handleEdit(record);
           }}
         >
-          编辑
+          {t('common.edit')}
         </Button>,
       ],
     },
-  ];
+  ],
+  [t],
+  );
+
+  const toolSourceTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.toolLedger.sourceWorkOrder'), value: 'work_order' },
+      { label: t('app.kuaizhizao.toolLedger.sourceProductionOrder'), value: 'production_order' },
+      { label: t('app.kuaizhizao.toolLedger.sourceOther'), value: 'other' },
+    ],
+    [t],
+  );
+
+  const toolMaintenanceTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.toolLedger.maintenanceTypeDaily'), value: '日常保养' },
+      { label: t('app.kuaizhizao.toolLedger.maintenanceTypePeriodic'), value: '定期保养' },
+      { label: t('app.kuaizhizao.toolLedger.maintenanceTypeRepair'), value: '故障维修' },
+    ],
+    [t],
+  );
+
+  const toolMaintenanceResultOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.toolLedger.maintenanceResultDone'), value: '完成' },
+      { label: t('app.kuaizhizao.toolLedger.maintenanceResultPending'), value: '未完成' },
+    ],
+    [t],
+  );
+
+  const toolCalibrationResultOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.toolLedger.resultPass'), value: '合格' },
+      { label: t('app.kuaizhizao.toolLedger.resultFail'), value: '不合格' },
+      { label: t('app.kuaizhizao.toolLedger.resultApproved'), value: '准用' },
+    ],
+    [t],
+  );
+
+  const usageTableColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.toolLedger.colUsageNo'), dataIndex: 'usage_no', width: 140 },
+      { title: t('app.kuaizhizao.toolLedger.colSourceType'), dataIndex: 'source_type', width: 100 },
+      { title: t('app.kuaizhizao.toolLedger.colSourceNo'), dataIndex: 'source_no', width: 120 },
+      { title: t('app.kuaizhizao.toolLedger.colOperator'), dataIndex: 'operator_name', width: 90 },
+      {
+        title: t('app.kuaizhizao.toolLedger.colCheckoutDate'),
+        dataIndex: 'checkout_date',
+        width: 160,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.toolLedger.colCheckinDate'),
+        dataIndex: 'checkin_date',
+        width: 160,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 80,
+        render: (s: string) => <Tag>{s || '-'}</Tag>,
+      },
+      {
+        title: t('common.actions'),
+        width: 80,
+        render: (_: unknown, record: ToolUsage) =>
+          record.status === '使用中' ? (
+            <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
+              {t('app.kuaizhizao.toolLedger.checkin')}
+            </Button>
+          ) : null,
+      },
+    ],
+    [t],
+  );
+
+  const maintenanceTableColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.toolLedger.colMaintenanceType'), dataIndex: 'maintenance_type', width: 100 },
+      {
+        title: t('app.kuaizhizao.toolLedger.colMaintenanceDate'),
+        dataIndex: 'maintenance_date',
+        width: 110,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      { title: t('app.kuaizhizao.toolLedger.colExecutor'), dataIndex: 'executor', width: 90 },
+      { title: t('app.kuaizhizao.toolLedger.colContent'), dataIndex: 'content', ellipsis: true },
+      { title: t('app.kuaizhizao.toolLedger.colResult'), dataIndex: 'result', width: 80 },
+    ],
+    [t],
+  );
+
+  const calibrationTableColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.toolLedger.colCalibrationDate'),
+        dataIndex: 'calibration_date',
+        width: 110,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+      { title: t('app.kuaizhizao.toolLedger.colCalibrationOrg'), dataIndex: 'calibration_org', width: 120 },
+      { title: t('app.kuaizhizao.toolLedger.colCertificateNo'), dataIndex: 'certificate_no', width: 120 },
+      { title: t('app.kuaizhizao.toolLedger.colResult'), dataIndex: 'result', width: 80 },
+      {
+        title: t('app.kuaizhizao.toolLedger.colExpiryDate'),
+        dataIndex: 'expiry_date',
+        width: 110,
+        render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Tool>
-          headerTitle="工装台账"
+          headerTitle={t('app.kuaizhizao.toolLedger.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-ledger"
           actionRef={actionRef}
           rowKey="uuid"
@@ -569,7 +682,7 @@ const ToolLedgerPage: React.FC = () => {
                 total: response.total || 0,
               };
             } catch (error) {
-              messageApi.error('获取工装列表失败');
+              messageApi.error(t('app.kuaizhizao.toolLedger.getListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -577,14 +690,14 @@ const ToolLedgerPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={async (keys) => {
             Modal.confirm({
-              title: '确认批量删除',
-              content: `确定要删除选中的 ${keys.length} 条工装吗？`,
+              title: t('app.kuaizhizao.toolLedger.confirmBatchDeleteTitle'),
+              content: t('app.kuaizhizao.toolLedger.confirmBatchDeleteContent', { count: keys.length }),
               onOk: async () => {
                 try {
                   for (const uuid of keys) {
                     await toolApi.delete(String(uuid));
                   }
-                  messageApi.success(`成功删除 ${keys.length} 条记录`);
+                  messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
                   if (toolDetail?.uuid && keys.map(String).includes(String(toolDetail.uuid))) {
                     setDrawerVisible(false);
                     setToolDetail(null);
@@ -594,18 +707,18 @@ const ToolLedgerPage: React.FC = () => {
                   }
                   actionRef.current?.reload();
                 } catch (error: any) {
-                  messageApi.error(error.message || '删除失败');
+                  messageApi.error(error.message || t('common.deleteFailed'));
                 }
               },
             });
           }}
           showCreateButton
-          createButtonText="新建工装"
+          createButtonText={t('app.kuaizhizao.toolLedger.create')}
           onCreate={handleCreate}
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('导入数据为空或格式不正确');
+              messageApi.warning(t('app.kuaizhizao.toolLedger.importEmpty'));
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -614,7 +727,7 @@ const ToolLedgerPage: React.FC = () => {
               toolLedgerImportTemplate.importHeaderMap,
             );
             if (headerIndexMap.name === undefined) {
-              messageApi.error('导入表头需包含工装名称');
+              messageApi.error(t('app.kuaizhizao.toolLedger.importHeaderMissingName'));
               return;
             }
             const items: any[] = [];
@@ -641,21 +754,21 @@ const ToolLedgerPage: React.FC = () => {
               });
             }
             if (items.length === 0) {
-              messageApi.warning('没有可导入的有效数据');
+              messageApi.warning(t('app.kuaizhizao.toolLedger.importNoRows'));
               return;
             }
             const result = await batchImport({
               items,
               importFn: async (item) => toolApi.create(item),
-              title: '导入工装',
+              title: t('app.kuaizhizao.toolLedger.importTitle'),
               concurrency: 5,
             });
             if (result.successCount > 0) {
-              messageApi.success(`成功导入 ${result.successCount} 条工装`);
+              messageApi.success(t('app.kuaizhizao.toolLedger.importSuccess', { count: result.successCount }));
               actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
-              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+              messageApi.warning(t('app.kuaizhizao.toolLedger.importPartialFail', { count: result.failureCount }));
             }
           }}
           importHeaders={toolLedgerImportTemplate.importHeaders}
@@ -672,7 +785,7 @@ const ToolLedgerPage: React.FC = () => {
                 items = items.filter((d: any) => d.uuid && keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.noDataToExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -682,9 +795,9 @@ const ToolLedgerPage: React.FC = () => {
               a.download = `tools-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           scroll={{ x: 1800 }}
@@ -692,7 +805,7 @@ const ToolLedgerPage: React.FC = () => {
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑工装' : '新建工装'}
+        title={isEdit ? t('app.kuaizhizao.toolLedger.edit') : t('app.kuaizhizao.toolLedger.create')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -710,7 +823,7 @@ const ToolLedgerPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-equipment-management-tool"
               name="code"
-              label="工装编号"
+              label={t('app.kuaizhizao.toolLedger.fieldCode')}
               required={false}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}
@@ -719,40 +832,40 @@ const ToolLedgerPage: React.FC = () => {
           <Col span={12}>
             <ProFormText
               name="name"
-              label="工装名称"
-              placeholder="请输入工装名称"
-              rules={[{ required: true, message: '请输入工装名称' }]}
+              label={t('app.kuaizhizao.toolLedger.fieldName')}
+              placeholder={t('app.kuaizhizao.toolLedger.phName')}
+              rules={[{ required: true, message: t('app.kuaizhizao.toolLedger.ruleNameRequired') }]}
             />
           </Col>
           <Col span={12}>
             <DictionarySelect
               dictionaryCode="TOOL_TYPE"
               name="type"
-              label="工装类型"
-              placeholder="请选择工装类型"
+              label={t('app.kuaizhizao.toolLedger.fieldType')}
+              placeholder={t('common.selectField', { field: t('app.kuaizhizao.toolLedger.fieldType') })}
               formRef={formRef}
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="spec" label="规格型号" placeholder="请输入规格型号" />
+            <ProFormText name="spec" label={t('app.kuaizhizao.toolLedger.fieldSpec')} placeholder={t('app.kuaizhizao.toolLedger.phSpec')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="manufacturer" label="制造商" placeholder="请输入制造商" />
+            <ProFormText name="manufacturer" label={t('app.kuaizhizao.toolLedger.fieldManufacturer')} placeholder={t('app.kuaizhizao.toolLedger.phManufacturer')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="supplier" label="供应商" placeholder="请输入供应商" />
+            <ProFormText name="supplier" label={t('app.kuaizhizao.toolLedger.fieldSupplier')} placeholder={t('app.kuaizhizao.toolLedger.phSupplier')} />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="purchase_date"
-              label="采购日期"
+              label={t('app.kuaizhizao.toolLedger.fieldPurchaseDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="warranty_expiry"
-              label="保修到期日"
+              label={t('app.kuaizhizao.toolLedger.fieldWarrantyExpiry')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -760,25 +873,25 @@ const ToolLedgerPage: React.FC = () => {
             <DictionarySelect
               dictionaryCode="TOOL_STATUS"
               name="status"
-              label="工装状态"
-              placeholder="请选择状态"
+              label={t('app.kuaizhizao.toolLedger.fieldStatus')}
+              placeholder={t('app.kuaizhizao.toolLedger.phStatus')}
               formRef={formRef}
             />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="maintenance_period" label="保养周期（天）" placeholder="请输入保养周期" />
+            <ProFormDigit name="maintenance_period" label={t('app.kuaizhizao.toolLedger.fieldMaintenancePeriod')} placeholder={t('app.kuaizhizao.toolLedger.phMaintenancePeriod')} />
           </Col>
           <Col span={12}>
-            <ProFormDigit name="calibration_period" label="校验周期（天）" placeholder="请输入校验周期" />
+            <ProFormDigit name="calibration_period" label={t('app.kuaizhizao.toolLedger.fieldCalibrationPeriod')} placeholder={t('app.kuaizhizao.toolLedger.phCalibrationPeriod')} />
           </Col>
           <Col span={24}>
             <DocumentAttachmentsField category="tool_ledger_attachments" />
           </Col>
           <Col span={24}>
-            <ProFormTextArea name="description" label="备注" placeholder="请输入备注" fieldProps={{ rows: 2 }} />
+            <ProFormTextArea name="description" label={t('app.kuaizhizao.toolLedger.fieldDescription')} placeholder={t('app.kuaizhizao.toolLedger.phDescription')} fieldProps={{ rows: 2 }} />
           </Col>
           <Col span={24}>
-            <ProFormSwitch name="is_active" label="是否启用" />
+            <ProFormSwitch name="is_active" label={t('app.kuaizhizao.toolLedger.fieldIsActive')} />
           </Col>
         </Row>
       </FormModalTemplate>
@@ -793,21 +906,21 @@ const ToolLedgerPage: React.FC = () => {
           setMaintenances([]);
           setCalibrations([]);
         }}
-        title={`工装详情 - ${toolDetail?.code || ''}`}
+        title={t('app.kuaizhizao.toolLedger.detailTitle', { code: toolDetail?.code || '' })}
         columns={[]}
         column={2}
         width={DRAWER_CONFIG.HALF_WIDTH}
         customContent={
           toolDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
                 <Descriptions
                   column={2}
                   size="small"
                   items={buildDescriptionItemsFromColumns(toolDetail, detailBaseColumns)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lc = getToolAssetLifecycle(toolDetail as Record<string, unknown>);
@@ -847,13 +960,13 @@ const ToolLedgerPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
                 <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
                   <div style={{ marginBottom: 16 }}>
-                    <Typography.Text strong>领用记录</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionUsages')}</Typography.Text>
                     <div style={{ marginTop: 8, marginBottom: 8 }}>
                       <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCheckout}>
-                        新建领用
+                        {t('app.kuaizhizao.toolLedger.createCheckout')}
                       </Button>
                     </div>
                     <Table<ToolUsage>
@@ -864,47 +977,14 @@ const ToolLedgerPage: React.FC = () => {
                       pagination={false}
                       tableLayout="fixed"
                       style={{ minWidth: 1100 }}
-                      columns={[
-                        { title: '领用单号', dataIndex: 'usage_no', width: 140 },
-                        { title: '来源类型', dataIndex: 'source_type', width: 100 },
-                        { title: '来源单号', dataIndex: 'source_no', width: 120 },
-                        { title: '操作人', dataIndex: 'operator_name', width: 90 },
-                        {
-                          title: '领用时间',
-                          dataIndex: 'checkout_date',
-                          width: 160,
-                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
-                        },
-                        {
-                          title: '归还时间',
-                          dataIndex: 'checkin_date',
-                          width: 160,
-                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
-                        },
-                        {
-                          title: '状态',
-                          dataIndex: 'status',
-                          width: 80,
-                          render: (s) => <Tag>{s || '-'}</Tag>,
-                        },
-                        {
-                          title: '操作',
-                          width: 80,
-                          render: (_, record) =>
-                            record.status === '使用中' ? (
-                              <Button type="link" size="small" onClick={() => handleCheckin(record.uuid!)}>
-                                归还
-                              </Button>
-                            ) : null,
-                        },
-                      ]}
+                      columns={usageTableColumns}
                     />
                   </div>
                   <div style={{ marginBottom: 16 }}>
-                    <Typography.Text strong>维保记录</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionMaintenances')}</Typography.Text>
                     <div style={{ marginTop: 8, marginBottom: 8 }}>
                       <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordMaintenance}>
-                        新建维保记录
+                        {t('app.kuaizhizao.toolLedger.createMaintenance')}
                       </Button>
                     </div>
                     <Table<ToolMaintenance>
@@ -915,25 +995,14 @@ const ToolLedgerPage: React.FC = () => {
                       pagination={false}
                       tableLayout="fixed"
                       style={{ minWidth: 900 }}
-                      columns={[
-                        { title: '维保类型', dataIndex: 'maintenance_type', width: 100 },
-                        {
-                          title: '维保日期',
-                          dataIndex: 'maintenance_date',
-                          width: 110,
-                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
-                        },
-                        { title: '执行人', dataIndex: 'executor', width: 90 },
-                        { title: '内容', dataIndex: 'content', ellipsis: true },
-                        { title: '结果', dataIndex: 'result', width: 80 },
-                      ]}
+                      columns={maintenanceTableColumns}
                     />
                   </div>
                   <div>
-                    <Typography.Text strong>校验记录</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.toolLedger.sectionCalibrations')}</Typography.Text>
                     <div style={{ marginTop: 8, marginBottom: 8 }}>
                       <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
-                        新建校验记录
+                        {t('app.kuaizhizao.toolLedger.createCalibration')}
                       </Button>
                     </div>
                     <Table<ToolCalibration>
@@ -944,28 +1013,12 @@ const ToolLedgerPage: React.FC = () => {
                       pagination={false}
                       tableLayout="fixed"
                       style={{ minWidth: 900 }}
-                      columns={[
-                        {
-                          title: '校验日期',
-                          dataIndex: 'calibration_date',
-                          width: 110,
-                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
-                        },
-                        { title: '校验机构', dataIndex: 'calibration_org', width: 120 },
-                        { title: '证书编号', dataIndex: 'certificate_no', width: 120 },
-                        { title: '结果', dataIndex: 'result', width: 80 },
-                        {
-                          title: '有效期至',
-                          dataIndex: 'expiry_date',
-                          width: 110,
-                          render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
-                        },
-                      ]}
+                      columns={calibrationTableColumns}
                     />
                   </div>
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
                 {toolTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -978,7 +1031,7 @@ const ToolLedgerPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={toolTracking.data} />
                 )}
                 {!toolTracking.loading && !toolTracking.data && !toolTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.toolLedger.noTimeline')} />
                 )}
               </DetailDrawerSection>
             </>
@@ -986,22 +1039,18 @@ const ToolLedgerPage: React.FC = () => {
         }
       />
 
-      <Modal title="新建领用" open={usageModalVisible} onOk={handleSubmitCheckout} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title={t('app.kuaizhizao.toolLedger.createCheckout')} open={usageModalVisible} onOk={handleSubmitCheckout} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setUsageModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={usageForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="operator_name" label="领用人"><Input placeholder="请输入领用人" /></Form.Item>
-          <Form.Item name="department_name" label="领用部门"><Input placeholder="请输入领用部门" /></Form.Item>
-          <Form.Item name="source_type" label="来源类型">
-            <Select placeholder="请选择" allowClear options={[
-              { label: '工单', value: 'work_order' },
-              { label: '生产订单', value: 'production_order' },
-              { label: '其他', value: 'other' },
-            ]} />
+          <Form.Item name="operator_name" label={t('app.kuaizhizao.toolLedger.checkoutOperator')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCheckoutOperator')} /></Form.Item>
+          <Form.Item name="department_name" label={t('app.kuaizhizao.toolLedger.checkoutDepartment')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCheckoutDepartment')} /></Form.Item>
+          <Form.Item name="source_type" label={t('app.kuaizhizao.toolLedger.colSourceType')}>
+            <Select placeholder={t('app.kuaizhizao.toolLedger.phSelect')} allowClear options={toolSourceTypeOptions} />
           </Form.Item>
-          <Form.Item name="source_no" label="来源单号"><Input placeholder="请输入来源单号" /></Form.Item>
+          <Form.Item name="source_no" label={t('app.kuaizhizao.toolLedger.colSourceNo')}><Input placeholder={t('app.kuaizhizao.toolLedger.phSourceNo')} /></Form.Item>
           <Form.Item
             name="attachments"
-            label="附件"
+            label={t('app.kuaizhizao.toolLedger.attachments')}
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
           >
@@ -1014,35 +1063,31 @@ const ToolLedgerPage: React.FC = () => {
                 options.onSuccess?.(res[0], options.file as any);
               }}
             >
-              <Button icon={<UploadOutlined />}>上传</Button>
+              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="新建维保记录" open={maintModalVisible} onOk={handleSubmitMaintenance} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title={t('app.kuaizhizao.toolLedger.createMaintenance')} open={maintModalVisible} onOk={handleSubmitMaintenance} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setMaintModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={maintForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="maintenance_type" label="维保类型" rules={[{ required: true }]}>
-            <Select options={[
-              { label: '日常保养', value: '日常保养' },
-              { label: '定期保养', value: '定期保养' },
-              { label: '故障维修', value: '故障维修' },
-            ]} />
+          <Form.Item name="maintenance_type" label={t('app.kuaizhizao.toolLedger.colMaintenanceType')} rules={[{ required: true }]}>
+            <Select options={toolMaintenanceTypeOptions} />
           </Form.Item>
-          <Form.Item name="maintenance_date" label="维保日期" rules={[{ required: true }]}>
+          <Form.Item name="maintenance_date" label={t('app.kuaizhizao.toolLedger.colMaintenanceDate')} rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="executor" label="执行人"><Input placeholder="请输入执行人" /></Form.Item>
-          <Form.Item name="content" label="维保内容"><Input.TextArea rows={2} placeholder="请输入维保内容" /></Form.Item>
-          <Form.Item name="result" label="维保结果">
-            <Select options={[{ label: '完成', value: '完成' }, { label: '未完成', value: '未完成' }]} />
+          <Form.Item name="executor" label={t('app.kuaizhizao.toolLedger.colExecutor')}><Input placeholder={t('app.kuaizhizao.toolLedger.phExecutor')} /></Form.Item>
+          <Form.Item name="content" label={t('app.kuaizhizao.toolLedger.colContent')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phMaintenanceContent')} /></Form.Item>
+          <Form.Item name="result" label={t('app.kuaizhizao.toolLedger.colResult')}>
+            <Select options={toolMaintenanceResultOptions} />
           </Form.Item>
-          <Form.Item name="cost" label="费用" initialValue={0}><InputNumber min={0} step={0.01} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="cost" label={t('app.kuaizhizao.toolLedger.cost')} initialValue={0}><InputNumber min={0} step={0.01} style={{ width: '100%' }} /></Form.Item>
           <Form.Item
             name="attachments"
-            label="附件"
+            label={t('app.kuaizhizao.toolLedger.attachments')}
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
           >
@@ -1055,34 +1100,30 @@ const ToolLedgerPage: React.FC = () => {
                 options.onSuccess?.(res[0], options.file as any);
               }}
             >
-              <Button icon={<UploadOutlined />}>上传</Button>
+              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
         </Form>
       </Modal>
 
-      <Modal title="新建校验记录" open={calibModalVisible} onOk={handleSubmitCalibration} okText={'确定' + SUBMIT_SHORTCUT_HINT} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
+      <Modal title={t('app.kuaizhizao.toolLedger.createCalibration')} open={calibModalVisible} onOk={handleSubmitCalibration} okText={t('common.confirm') + SUBMIT_SHORTCUT_HINT} onCancel={() => setCalibModalVisible(false)} destroyOnHidden width={MODAL_CONFIG.SMALL_WIDTH}>
         <Form form={calibForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item name="tool_uuid" hidden><Input /></Form.Item>
-          <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>
+          <Form.Item name="calibration_date" label={t('app.kuaizhizao.toolLedger.colCalibrationDate')} rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="calibration_org" label="校验机构"><Input placeholder="请输入校验机构" /></Form.Item>
-          <Form.Item name="certificate_no" label="证书编号"><Input placeholder="请输入证书编号" /></Form.Item>
-          <Form.Item name="result" label="校验结果" rules={[{ required: true }]}>
-            <Select options={[
-              { label: '合格', value: '合格' },
-              { label: '不合格', value: '不合格' },
-              { label: '准用', value: '准用' },
-            ]} />
+          <Form.Item name="calibration_org" label={t('app.kuaizhizao.toolLedger.colCalibrationOrg')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCalibrationOrg')} /></Form.Item>
+          <Form.Item name="certificate_no" label={t('app.kuaizhizao.toolLedger.colCertificateNo')}><Input placeholder={t('app.kuaizhizao.toolLedger.phCertificateNo')} /></Form.Item>
+          <Form.Item name="result" label={t('app.kuaizhizao.toolLedger.colResult')} rules={[{ required: true }]}>
+            <Select options={toolCalibrationResultOptions} />
           </Form.Item>
-          <Form.Item name="expiry_date" label="有效期至">
+          <Form.Item name="expiry_date" label={t('app.kuaizhizao.toolLedger.colExpiryDate')}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
             name="attachments"
-            label="附件"
+            label={t('app.kuaizhizao.toolLedger.attachments')}
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
           >
@@ -1095,10 +1136,10 @@ const ToolLedgerPage: React.FC = () => {
                 options.onSuccess?.(res[0], options.file as any);
               }}
             >
-              <Button icon={<UploadOutlined />}>上传</Button>
+              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.toolLedger.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} placeholder="请输入备注" /></Form.Item>
+          <Form.Item name="remark" label={t('app.kuaizhizao.toolLedger.remark')}><Input.TextArea rows={2} placeholder={t('app.kuaizhizao.toolLedger.phRemark')} /></Form.Item>
         </Form>
       </Modal>
     </>

@@ -5,6 +5,7 @@
  * - 发起叫料为独立 Modal（zIndex 更高），挂在主 Modal 同级，避免嵌套 Dialog 事件问题
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import type { SelectProps } from 'antd'
 import { Spin, Empty, Typography, Table, Space, Modal, Form, Button, InputNumber, Input, App, Select, Tabs } from 'antd'
@@ -18,21 +19,37 @@ import UniMaterialSelect from '../../../../../../components/uni-material-select'
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../../services/dataDictionary'
 import { useInvalidateMenuBadgeCounts } from '../../../../../../hooks/useInvalidateMenuBadgeCounts'
 
-const FALLBACK_CALL_TYPE_OPTIONS = [
-  { label: '单独叫料', value: 'CUSTOM_SELECTION' },
-  { label: '整单叫料', value: 'FULL_ORDER' },
-]
-
-/** 叫料类型码 → 中文（与字典兜底一致；表格内同步展示，不依赖字典异步加载） */
-const MATERIAL_CALL_TYPE_ZH: Record<string, string> = {
-  ...Object.fromEntries(FALLBACK_CALL_TYPE_OPTIONS.map((o) => [o.value, o.label])),
-  SINGLE_MATERIAL: '单独叫料',
+function useFallbackCallTypeOptions() {
+  const { t } = useTranslation()
+  return useMemo(
+    () => [
+      { label: t('app.kuaizhizao.workOrder.callTypeCustom'), value: 'CUSTOM_SELECTION' },
+      { label: t('app.kuaizhizao.workOrder.callTypeFullOrder'), value: 'FULL_ORDER' },
+    ],
+    [t]
+  )
 }
 
-function formatMaterialCallTypeZh(code: unknown): string {
+function useFallbackCallReasonOptions() {
+  const { t } = useTranslation()
+  return useMemo(
+    () => [
+      { label: t('app.kuaizhizao.workOrder.callReasonLineSideShortage'), value: 'LINE_SIDE_SHORTAGE' },
+      { label: t('app.kuaizhizao.workOrder.callReasonPickingShortage'), value: 'PICKING_SHORTAGE' },
+      { label: t('app.kuaizhizao.workOrder.callReasonScrapReplenish'), value: 'SCRAP_REPLENISH' },
+      { label: t('app.kuaizhizao.workOrder.callReasonEngineeringChange'), value: 'ENGINEERING_CHANGE' },
+      { label: t('app.kuaizhizao.workOrder.callReasonPlanChange'), value: 'PLAN_CHANGE' },
+      { label: t('app.kuaizhizao.workOrder.callReasonTrialSample'), value: 'TRIAL_SAMPLE' },
+      { label: t('app.kuaizhizao.workOrder.callReasonOther'), value: 'OTHER' },
+    ],
+    [t]
+  )
+}
+
+function formatMaterialCallType(code: unknown, typeLabels: Record<string, string>): string {
   const s = String(code ?? '').trim()
   if (!s) return '—'
-  return MATERIAL_CALL_TYPE_ZH[s] ?? s
+  return typeLabels[s] ?? s
 }
 
 /** 主 Modal body：不设 maxHeight/overflow，避免内容未溢出时仍出现内层滚动条；超长内容由 .ant-modal-wrap 整体滚动 */
@@ -41,16 +58,6 @@ const READINESS_MAIN_MODAL_BODY_STYLE = {
   overflow: 'visible',
   maxHeight: 'none',
 } satisfies React.CSSProperties
-
-const FALLBACK_CALL_REASON_OPTIONS = [
-  { label: '线边仓缺料', value: 'LINE_SIDE_SHORTAGE' },
-  { label: '批量领料未领足', value: 'PICKING_SHORTAGE' },
-  { label: '报废/质量异常补料', value: 'SCRAP_REPLENISH' },
-  { label: '工艺或设计变更换料', value: 'ENGINEERING_CHANGE' },
-  { label: '计划变更/紧急插单', value: 'PLAN_CHANGE' },
-  { label: '试制/打样加料', value: 'TRIAL_SAMPLE' },
-  { label: '其他', value: 'OTHER' },
-]
 
 /** 阻止事件冒泡到 rc-table 行（expandRowByClick 时否则会触发展开/收起） */
 function stopRowToggle(e: React.MouseEvent) {
@@ -138,10 +145,13 @@ const WorkOrderMaterialCallModal: React.FC<{
   workOrderId: number
   workOrderCode?: string
 }> = ({ open, onClose, workOrderId, workOrderCode: workOrderCodeProp }) => {
+  const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const queryClient = useQueryClient()
   const [form] = Form.useForm()
   const [submitting, setSubmitting] = useState(false)
+  const fallbackCallTypeOptions = useFallbackCallTypeOptions()
+  const fallbackCallReasonOptions = useFallbackCallReasonOptions()
 
   const { data: kittingData } = useQuery({
     queryKey: ['workOrderKittingAnalysis', workOrderId],
@@ -165,8 +175,8 @@ const WorkOrderMaterialCallModal: React.FC<{
   })
 
   const callTypeOptions = useMemo(
-    () => (callTypeDictOptions?.length ? callTypeDictOptions : FALLBACK_CALL_TYPE_OPTIONS),
-    [callTypeDictOptions]
+    () => (callTypeDictOptions?.length ? callTypeDictOptions : fallbackCallTypeOptions),
+    [callTypeDictOptions, fallbackCallTypeOptions]
   )
 
   const { data: callReasonDictOptions } = useQuery({
@@ -179,7 +189,7 @@ const WorkOrderMaterialCallModal: React.FC<{
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((i) => ({ label: i.label, value: i.value }))
       } catch {
-        return FALLBACK_CALL_REASON_OPTIONS
+        return fallbackCallReasonOptions
       }
     },
     staleTime: 0,
@@ -188,8 +198,8 @@ const WorkOrderMaterialCallModal: React.FC<{
   })
 
   const callReasonOptions = useMemo(
-    () => (callReasonDictOptions?.length ? callReasonDictOptions : FALLBACK_CALL_REASON_OPTIONS),
-    [callReasonDictOptions]
+    () => (callReasonDictOptions?.length ? callReasonDictOptions : fallbackCallReasonOptions),
+    [callReasonDictOptions, fallbackCallReasonOptions]
   )
 
   const callTypeWatch = Form.useWatch('call_type', form)
@@ -246,7 +256,7 @@ const WorkOrderMaterialCallModal: React.FC<{
     const values = await form.validateFields()
     const woCode = await resolveWorkOrderCode()
     if (!woCode) {
-      messageApi.error('无法获取工单编号，请稍后重试')
+      messageApi.error(t('app.kuaizhizao.workOrder.msgCannotGetWorkOrderCode'))
       return
     }
     const rawItems = (values.items ?? []) as Array<Record<string, unknown>>
@@ -260,7 +270,7 @@ const WorkOrderMaterialCallModal: React.FC<{
         requested_quantity: Number(it.requested_quantity),
       }))
     if (!items.length) {
-      messageApi.error('请至少添加一行物料并填写数量')
+      messageApi.error(t('app.kuaizhizao.workOrder.msgAddAtLeastOneMaterial'))
       return
     }
     setSubmitting(true)
@@ -274,7 +284,7 @@ const WorkOrderMaterialCallModal: React.FC<{
         remarks: '生产现场通过工单列表齐套率发起叫料',
         items,
       })
-      messageApi.success('叫料申请已提交')
+      messageApi.success(t('app.kuaizhizao.workOrder.msgCallSubmitted'))
       queryClient.invalidateQueries({ queryKey: ['materialCallsByWorkOrder', workOrderId] })
       closeModal()
     } catch (e: any) {
@@ -420,6 +430,15 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   setCallModalOpen: (v: boolean) => void
   onCloseMain?: () => void
 }> = ({ workOrderId, setCallModalOpen, onCloseMain }) => {
+  const { t } = useTranslation()
+  const fallbackCallTypeOptions = useFallbackCallTypeOptions()
+  const materialCallTypeLabels = useMemo(
+    () => ({
+      ...Object.fromEntries(fallbackCallTypeOptions.map((o) => [o.value, o.label])),
+      SINGLE_MATERIAL: t('app.kuaizhizao.workOrder.callTypeCustom'),
+    }),
+    [fallbackCallTypeOptions, t]
+  )
   const { message: messageApi } = App.useApp()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -528,7 +547,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
         allow_existing_draft: true,
         remarks: '工单齐套率面板一键配料',
       })
-      messageApi.success('已生成配料任务，请在物料中心确认')
+      messageApi.success(t('app.kuaizhizao.workOrder.msgBatchingTaskCreated'))
       invalidateMenuBadgeCounts()
       onCloseMain?.()
       navigate('/apps/kuaizhizao/warehouse-management/batching-center')
@@ -542,7 +561,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
   const tabItems = [
     {
       key: 'warehouse',
-      label: '物料所在仓库',
+      label: t('app.kuaizhizao.workOrder.readinessTabWarehouse'),
       children: (
         <>
           <Space orientation="vertical" size={8} style={{ width: '100%', marginBottom: 8 }}>
@@ -579,11 +598,11 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               rowKey="key"
               dataSource={warehouseRows}
               columns={[
-                { title: '物料', dataIndex: 'material', key: 'material', ellipsis: true, width: 220 },
-                { title: '需求数量', dataIndex: 'requiredQty', key: 'requiredQty', ellipsis: true, width: 112 },
-                { title: '仓库', dataIndex: 'warehouse', key: 'warehouse', ellipsis: true, width: 100 },
+                { title: t('app.kuaizhizao.workOrder.colMaterial'), dataIndex: 'material', key: 'material', ellipsis: true, width: 220 },
+                { title: t('app.kuaizhizao.workOrder.colRequiredQty'), dataIndex: 'requiredQty', key: 'requiredQty', ellipsis: true, width: 112 },
+                { title: t('app.kuaizhizao.workOrder.colWarehouse'), dataIndex: 'warehouse', key: 'warehouse', ellipsis: true, width: 100 },
                 {
-                  title: '数量/库位',
+                  title: t('app.kuaizhizao.workOrder.colQtyLocation'),
                   dataIndex: 'qty',
                   key: 'qty',
                   ellipsis: true,
@@ -605,7 +624,7 @@ const WorkOrderReadinessPopoverContent: React.FC<{
     },
     {
       key: 'calls',
-      label: '叫料申请',
+      label: t('app.kuaizhizao.workOrder.readinessTabCalls'),
       children: (
         <Space orientation="vertical" size={8} style={{ width: '100%' }}>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
@@ -641,20 +660,20 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                       dataSource={items}
                       columns={[
                         {
-                          title: '行',
+                          title: t('app.kuaizhizao.workOrder.colLine'),
                           key: 'line_no',
                           width: 48,
                           render: (_: unknown, it) => String(it.line_no ?? '—'),
                         },
                         {
-                          title: '物料',
+                          title: t('app.kuaizhizao.workOrder.colMaterial'),
                           key: 'mn',
                           ellipsis: true,
                           render: (_: unknown, it) =>
                             `${String(it.material_code ?? '')} ${String(it.material_name ?? '')}`.trim() || '—',
                         },
                         {
-                          title: '已/需',
+                          title: t('app.kuaizhizao.workOrder.colDeliveredRequested'),
                           key: 'dq',
                           width: 120,
                           align: 'right',
@@ -668,29 +687,30 @@ const WorkOrderReadinessPopoverContent: React.FC<{
               }}
               columns={[
                 {
-                  title: '单号',
+                  title: t('app.kuaizhizao.workOrder.colDocNo'),
                   dataIndex: 'code',
                   key: 'code',
                   width: '20%',
                   ellipsis: true,
                 },
                 {
-                  title: '类型',
+                  title: t('app.kuaizhizao.workOrder.colType'),
                   key: 'call_type',
                   width: '12%',
                   ellipsis: false,
                   onCell: () => CALL_TABLE_CELL_NOWRAP,
-                  render: (_: unknown, r: Record<string, unknown>) => formatMaterialCallTypeZh(r.call_type),
+                  render: (_: unknown, r: Record<string, unknown>) =>
+                    formatMaterialCallType(r.call_type, materialCallTypeLabels),
                 },
                 {
-                  title: '物料',
+                  title: t('app.kuaizhizao.workOrder.colMaterial'),
                   key: 'material',
                   width: '34%',
                   ellipsis: true,
                   render: (_: unknown, r: Record<string, unknown>) => String(r.material_name ?? ''),
                 },
                 {
-                  title: '已/需',
+                  title: t('app.kuaizhizao.workOrder.colDeliveredRequested'),
                   key: 'qty',
                   width: '14%',
                   align: 'right',
@@ -731,15 +751,15 @@ const WorkOrderReadinessPopoverContent: React.FC<{
                         onClick={(e) => {
                           stopRowToggle(e)
                           Modal.confirm({
-                            title: '确认撤回叫料',
-                            content: '确定撤回该叫料申请吗？仅仓库未开始处理时可撤回。',
-                            okText: '撤回',
+                            title: t('app.kuaizhizao.workOrder.modalConfirmWithdrawCall'),
+                            content: t('app.kuaizhizao.workOrder.modalWithdrawCallContent'),
+                            okText: t('app.kuaizhizao.workOrder.actionRevoke'),
                             okButtonProps: { danger: true },
                             cancelText: '取消',
                             onOk: async () => {
                               try {
                                 await warehouseApi.materialCall.cancel(id)
-                                messageApi.success('已撤回叫料申请')
+                                messageApi.success(t('app.kuaizhizao.workOrder.msgConfirmWithdrawCallSuccess'))
                                 await queryClient.invalidateQueries({
                                   queryKey: ['materialCallsByWorkOrder', workOrderId],
                                 })
@@ -778,6 +798,7 @@ export const WorkOrderReadinessPopover: React.FC<WorkOrderReadinessPopoverProps>
   workOrderCode,
   children,
 }) => {
+  const { t } = useTranslation()
   const [mainModalOpen, setMainModalOpen] = useState(false)
   const [callModalOpen, setCallModalOpen] = useState(false)
 

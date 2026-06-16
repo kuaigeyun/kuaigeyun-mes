@@ -1,6 +1,7 @@
 import React from 'react';
 import { ProFormDigit, ProFormSelect } from '@ant-design/pro-components';
 import { Alert, Divider, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   getInspectionTemplateSource,
   getTemplateStepItems,
@@ -17,26 +18,31 @@ interface InspectionTemplateConductFieldsProps {
  * 按检验单上的方案/标准模板渲染检验项录入（plan 模式逐步判定，simple 模式展示标准摘要）。
  */
 const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsProps> = ({ inspection }) => {
+  const { t } = useTranslation();
   const template = getInspectionTemplateSource(inspection);
   if (!template) return null;
 
-  const planName = (template.plan_code as string) || (template.standard_id ? '质量标准' : null);
+  const planName = (template.plan_code as string) || (template.standard_id ? t('app.kuaizhizao.quality.template.qualityStandard') : null);
   const steps = getTemplateStepItems(template);
+  const passLabel = t('app.kuaizhizao.quality.common.result.qualified');
+  const failLabel = t('app.kuaizhizao.quality.common.result.unqualified');
 
   if (hasInspectionPlanSteps(template)) {
     return (
       <>
         <Divider orientation="left" plain>
-          检验方案项{planName ? `（${planName}）` : ''}
+          {planName
+            ? t('app.kuaizhizao.quality.template.planItemsTitleWithName', { planName })
+            : t('app.kuaizhizao.quality.template.planItemsTitle')}
         </Divider>
         <Alert
           type="info"
           showIcon
           style={{ marginBottom: 12 }}
-          message="方案模式下须逐项填写检验结果后方可提交。"
+          message={t('app.kuaizhizao.quality.template.planModeHint')}
         />
         {steps.map((step, idx) => {
-          const label = step.inspection_item || `检验项 ${idx + 1}`;
+          const label = step.inspection_item || t('app.kuaizhizao.quality.template.inspectionItemFallback', { index: idx + 1 });
           const hint = [step.inspection_method, step.acceptance_criteria].filter(Boolean).join(' · ');
           return (
             <div key={`${label}-${idx}`} style={{ marginBottom: 12 }}>
@@ -50,13 +56,13 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
               ) : null}
               <ProFormSelect
                 name={['item_results', String(idx)]}
-                label="判定"
-                rules={[{ required: true, message: `请填写「${label}」的判定结果` }]}
-                valueEnum={{ pass: '合格', fail: '不合格' }}
+                label={t('app.kuaizhizao.quality.template.judgment')}
+                rules={[{ required: true, message: t('app.kuaizhizao.quality.template.judgmentRequired', { label }) }]}
+                valueEnum={{ pass: passLabel, fail: failLabel }}
               />
               <ProFormDigit
                 name={['measurement_data', label]}
-                label="测量值（选填）"
+                label={t('app.kuaizhizao.quality.template.measurementOptional')}
                 fieldProps={{ precision: 4, style: { width: '100%' } }}
               />
             </div>
@@ -73,23 +79,32 @@ const InspectionTemplateConductFields: React.FC<InspectionTemplateConductFieldsP
   return (
     <>
       <Divider orientation="left" plain>
-        质量标准{planName ? `（${planName}）` : ''}
+        {planName
+          ? t('app.kuaizhizao.quality.template.standardTitleWithName', { planName })
+          : t('app.kuaizhizao.quality.template.standardTitle')}
       </Divider>
       {criteria ? (
-        <Alert type="info" showIcon style={{ marginBottom: 12 }} title={`合格标准：${criteria}`} />
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 12 }}
+          title={t('app.kuaizhizao.quality.template.acceptanceCriteria', { criteria })}
+        />
       ) : null}
       {standardItems ? (
         <div style={{ marginBottom: 12 }}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            检验项目：{typeof standardItems === 'string' ? standardItems : JSON.stringify(standardItems)}
+            {t('app.kuaizhizao.quality.template.inspectionItems', {
+              items: typeof standardItems === 'string' ? standardItems : JSON.stringify(standardItems),
+            })}
           </Text>
         </div>
       ) : null}
       <ProFormSelect
         name={['item_results', '0']}
-        label="整体判定"
-        rules={[{ required: true, message: '请填写检验判定' }]}
-        valueEnum={{ pass: '合格', fail: '不合格' }}
+        label={t('app.kuaizhizao.quality.template.overallJudgment')}
+        rules={[{ required: true, message: t('app.kuaizhizao.quality.template.overallJudgmentRequired') }]}
+        valueEnum={{ pass: passLabel, fail: failLabel }}
       />
     </>
   );

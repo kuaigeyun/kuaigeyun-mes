@@ -1,0 +1,1126 @@
+{
+  "MATERIAL_TYPE": {
+    "name": "Material Type",
+    "desc": "Material type dictionary used in material master data",
+    "items": {
+      "FIN": {
+        "label": "Finished Goods",
+        "desc": "Final product ready for sale"
+      },
+      "SEMI": {
+        "label": "Semi-Finished Goods",
+        "desc": "Semi-finished product requiring further processing"
+      },
+      "RAW": {
+        "label": "Raw Material",
+        "desc": "Raw materials used in production"
+      },
+      "PACK": {
+        "label": "Packaging Material",
+        "desc": "Materials used for packaging"
+      },
+      "AUX": {
+        "label": "Auxiliary Material",
+        "desc": "Auxiliary materials used in production"
+      }
+    }
+  },
+  "MATERIAL_UNIT": {
+    "name": "Material Unit of Measure",
+    "desc": "Units of measure for materials; built-in items cover the most common units for SMB manufacturing and can be extended per organization",
+    "items": {
+      "个": {
+        "label": "Piece (ea)",
+        "desc": "Count by piece"
+      },
+      "件": {
+        "label": "Item (pc)",
+        "desc": "Count by item"
+      },
+      "台": {
+        "label": "Unit (set)",
+        "desc": "Equipment or complete machine"
+      },
+      "套": {
+        "label": "Set",
+        "desc": "Complete set or kit"
+      },
+      "箱": {
+        "label": "Case",
+        "desc": "Packaging unit — case/carton"
+      },
+      "包": {
+        "label": "Pack",
+        "desc": "Packaging unit — pack/bundle"
+      },
+      "千克": {
+        "label": "Kilogram (kg)",
+        "desc": "Weight — kilogram"
+      },
+      "克": {
+        "label": "Gram (g)",
+        "desc": "Weight — gram"
+      },
+      "吨": {
+        "label": "Metric Ton (t)",
+        "desc": "Weight — metric ton"
+      },
+      "米": {
+        "label": "Meter (m)",
+        "desc": "Length — meter"
+      },
+      "毫米": {
+        "label": "Millimeter (mm)",
+        "desc": "Length — millimeter"
+      },
+      "平方米": {
+        "label": "Square Meter (m²)",
+        "desc": "Area — square meter"
+      },
+      "升": {
+        "label": "Liter (L)",
+        "desc": "Volume — liter"
+      },
+      "立方米": {
+        "label": "Cubic Meter (m³)",
+        "desc": "Volume — cubic meter"
+      }
+    }
+  },
+  "CURRENCY": {
+    "name": "Currency",
+    "desc": "Currencies supported by the system",
+    "items": {
+      "CNY": {
+        "label": "Chinese Yuan (CNY)",
+        "desc": "Chinese Yuan Renminbi"
+      },
+      "USD": {
+        "label": "US Dollar (USD)",
+        "desc": "United States Dollar"
+      },
+      "EUR": {
+        "label": "Euro (EUR)",
+        "desc": "Euro (European Union)"
+      },
+      "JPY": {
+        "label": "Japanese Yen (JPY)",
+        "desc": "Japanese Yen"
+      },
+      "GBP": {
+        "label": "British Pound (GBP)",
+        "desc": "British Pound Sterling"
+      }
+    }
+  },
+  "TIMEZONE": {
+    "name": "Time Zone",
+    "desc": "Time zones supported by the system",
+    "items": {
+      "Etc/GMT+12": {
+        "label": "(UTC-12:00) International Date Line West",
+        "desc": "International Date Line West"
+      },
+      "Etc/GMT+11": {
+        "label": "(UTC-11:00) Coordinated Universal Time-11",
+        "desc": "Coordinated Universal Time minus 11 hours"
+      },
+      "Pacific/Honolulu": {
+        "label": "(UTC-10:00) Hawaii",
+        "desc": "Hawaii"
+      },
+      "America/Anchorage": {
+        "label": "(UTC-09:00) Alaska",
+        "desc": "Alaska"
+      },
+      "America/Los_Angeles": {
+        "label": "(UTC-08:00) Pacific Time (US & Canada)",
+        "desc": "Pacific Time (US and Canada)"
+      },
+      "America/Denver": {
+        "label": "(UTC-07:00) Mountain Time (US & Canada)",
+        "desc": "Mountain Time (US and Canada)"
+      },
+      "America/Chicago": {
+        "label": "(UTC-06:00) Central Time (US & Canada)",
+        "desc": "Central Time (US and Canada)"
+      },
+      "America/New_York": {
+        "label": "(UTC-05:00) Eastern Time (US & Canada)",
+        "desc": "Eastern Time (US and Canada)"
+      },
+      "America/Halifax": {
+        "label": "(UTC-04:00) Atlantic Time (Canada)",
+        "desc": "Atlantic Time (Canada)"
+      },
+      "America/Sao_Paulo": {
+        "label": "(UTC-03:00) Brasilia",
+        "desc": "Brasilia"
+      },
+      "America/Argentina/Buenos_Aires": {
+        "label": "(UTC-03:00) Buenos Aires",
+        "desc": "Buenos Aires"
+      },
+      "Etc/GMT+2": {
+        "label": "(UTC-02:00) Coordinated Universal Time-02",
+        "desc": "Coordinated Universal Time minus 2 hours"
+      },
+      "Atlantic/Azores": {
+        "label": "(UTC-01:00) Azores",
+        "desc": "Azores"
+      },
+      "Etc/UTC": {
+        "label": "(UTC+00:00) Coordinated Universal Time",
+        "desc": "Coordinated Universal Time"
+      },
+      "Europe/London": {
+        "label": "(UTC+00:00) London, Dublin, Lisbon",
+        "desc": "Greenwich Mean Time"
+      },
+      "Europe/Paris": {
+        "label": "(UTC+01:00) Paris, Berlin, Rome, Madrid",
+        "desc": "Central European Standard Time"
+      },
+      "Europe/Athens": {
+        "label": "(UTC+02:00) Athens, Bucharest",
+        "desc": "Athens, Bucharest"
+      },
+      "Africa/Cairo": {
+        "label": "(UTC+02:00) Cairo",
+        "desc": "Cairo"
+      },
+      "Asia/Jerusalem": {
+        "label": "(UTC+02:00) Jerusalem",
+        "desc": "Jerusalem"
+      },
+      "Europe/Moscow": {
+        "label": "(UTC+03:00) Moscow, St. Petersburg",
+        "desc": "Moscow, St. Petersburg"
+      },
+      "Asia/Baghdad": {
+        "label": "(UTC+03:00) Baghdad",
+        "desc": "Baghdad"
+      },
+      "Asia/Dubai": {
+        "label": "(UTC+04:00) Dubai",
+        "desc": "Dubai"
+      },
+      "Asia/Karachi": {
+        "label": "(UTC+05:00) Karachi",
+        "desc": "Karachi"
+      },
+      "Asia/Kolkata": {
+        "label": "(UTC+05:30) New Delhi, Mumbai",
+        "desc": "India Standard Time"
+      },
+      "Asia/Dhaka": {
+        "label": "(UTC+06:00) Dhaka",
+        "desc": "Dhaka"
+      },
+      "Asia/Bangkok": {
+        "label": "(UTC+07:00) Bangkok, Hanoi, Jakarta",
+        "desc": "Bangkok, Hanoi, Jakarta"
+      },
+      "Asia/Shanghai": {
+        "label": "(UTC+08:00) Beijing, Shanghai, Hong Kong, Taipei",
+        "desc": "China Standard Time"
+      },
+      "Asia/Singapore": {
+        "label": "(UTC+08:00) Singapore",
+        "desc": "Singapore"
+      },
+      "Australia/Perth": {
+        "label": "(UTC+08:00) Perth",
+        "desc": "Perth"
+      },
+      "Asia/Tokyo": {
+        "label": "(UTC+09:00) Tokyo, Osaka, Sapporo",
+        "desc": "Japan Standard Time"
+      },
+      "Asia/Seoul": {
+        "label": "(UTC+09:00) Seoul",
+        "desc": "Korea Standard Time"
+      },
+      "Australia/Darwin": {
+        "label": "(UTC+09:30) Darwin",
+        "desc": "Darwin"
+      },
+      "Australia/Sydney": {
+        "label": "(UTC+10:00) Sydney, Melbourne, Canberra",
+        "desc": "Sydney, Melbourne, Canberra"
+      },
+      "Australia/Brisbane": {
+        "label": "(UTC+10:00) Brisbane",
+        "desc": "Brisbane"
+      },
+      "Pacific/Guadalcanal": {
+        "label": "(UTC+11:00) Magadan, Solomon Islands",
+        "desc": "Magadan, Solomon Islands"
+      },
+      "Pacific/Auckland": {
+        "label": "(UTC+12:00) Auckland, Wellington",
+        "desc": "Auckland, Wellington"
+      },
+      "Pacific/Tongatapu": {
+        "label": "(UTC+13:00) Nuku'alofa",
+        "desc": "Nuku'alofa"
+      }
+    }
+  },
+  "SHIPPING_METHOD": {
+    "name": "Shipping Method",
+    "desc": "Shipping methods for sales orders, outbound deliveries, and related documents",
+    "items": {
+      "EXPRESS": {
+        "label": "Express Courier",
+        "desc": "Express courier delivery"
+      },
+      "LOGISTICS": {
+        "label": "Freight / Logistics",
+        "desc": "Third-party freight or logistics delivery"
+      },
+      "SELF_PICKUP": {
+        "label": "Customer Pickup",
+        "desc": "Customer self-pickup"
+      },
+      "DEDICATED": {
+        "label": "Dedicated Vehicle",
+        "desc": "Dedicated vehicle delivery"
+      },
+      "AIR": {
+        "label": "Air Freight",
+        "desc": "Air transport"
+      },
+      "SEA": {
+        "label": "Sea Freight",
+        "desc": "Ocean transport"
+      }
+    }
+  },
+  "PAYMENT_TERMS": {
+    "name": "Payment Terms",
+    "desc": "Payment terms for sales orders, purchase orders, and related documents",
+    "items": {
+      "NET30": {
+        "label": "Net 30 Days",
+        "desc": "Payment due within 30 days (month-end settlement)"
+      },
+      "NET60": {
+        "label": "Net 60 Days",
+        "desc": "Payment due within 60 days (month-end settlement)"
+      },
+      "COD": {
+        "label": "Cash on Delivery",
+        "desc": "Payment upon delivery"
+      },
+      "PREPAID": {
+        "label": "Prepaid in Full",
+        "desc": "Full payment in advance"
+      },
+      "PREPAID_30": {
+        "label": "30% Prepayment",
+        "desc": "30% deposit required in advance"
+      },
+      "CREDIT_30": {
+        "label": "30-Day Credit Terms",
+        "desc": "30-day payment on account"
+      },
+      "CREDIT_60": {
+        "label": "60-Day Credit Terms",
+        "desc": "60-day payment on account"
+      }
+    }
+  },
+  "ORDER_TYPE": {
+    "name": "Order Type",
+    "desc": "Order types for purchase orders and related business documents",
+    "items": {
+      "标准采购": {
+        "label": "Standard Purchase",
+        "desc": "Standard purchase order"
+      },
+      "框架协议": {
+        "label": "Framework Agreement",
+        "desc": "Purchase order executed under a framework agreement"
+      }
+    }
+  },
+  "RETURN_REASON": {
+    "name": "Return Reason",
+    "desc": "Return reasons for sales returns, purchase returns, and related transactions",
+    "items": {
+      "QUALITY_ISSUE": {
+        "label": "Quality Issue",
+        "desc": "Product quality defect or non-conformance"
+      },
+      "SPEC_MISMATCH": {
+        "label": "Specification Mismatch",
+        "desc": "Specification or model does not match order"
+      },
+      "QTY_ERROR": {
+        "label": "Quantity Error",
+        "desc": "Shipped or received quantity does not match order"
+      },
+      "PACKAGE_DAMAGE": {
+        "label": "Packaging Damage",
+        "desc": "Packaging or transit damage"
+      },
+      "WRONG_OR_MISSING": {
+        "label": "Wrong or Missing Items",
+        "desc": "Wrong item shipped or item missing from shipment"
+      },
+      "CUSTOMER_CANCEL": {
+        "label": "Customer Cancellation",
+        "desc": "Return due to customer order cancellation"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other reason"
+      }
+    }
+  },
+  "RETURN_TYPE": {
+    "name": "Return Type",
+    "desc": "Return types for sales returns, purchase returns, and related transactions",
+    "items": {
+      "EXCHANGE": {
+        "label": "Exchange",
+        "desc": "Return and re-ship replacement goods"
+      },
+      "REFUND": {
+        "label": "Refund",
+        "desc": "Return with refund"
+      },
+      "REWORK": {
+        "label": "Rework",
+        "desc": "Return for rework and send back"
+      },
+      "SCRAP_RETURN": {
+        "label": "Scrap Return",
+        "desc": "Cannot be repaired or reused; scrapped"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other return type"
+      }
+    }
+  },
+  "EQUIPMENT_TYPE": {
+    "name": "Equipment Type",
+    "desc": "Equipment types in equipment management",
+    "items": {
+      "加工设备": {
+        "label": "Processing Equipment",
+        "desc": "Production and processing equipment"
+      },
+      "检测设备": {
+        "label": "Inspection Equipment",
+        "desc": "Inspection and testing equipment"
+      },
+      "包装设备": {
+        "label": "Packaging Equipment",
+        "desc": "Packaging equipment"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other equipment type"
+      }
+    }
+  },
+  "MOLD_TYPE": {
+    "name": "Mold Type",
+    "desc": "Mold types in mold management",
+    "items": {
+      "注塑模具": {
+        "label": "Injection Mold",
+        "desc": "Injection molding tool"
+      },
+      "压铸模具": {
+        "label": "Die Casting Mold",
+        "desc": "Die casting tool"
+      },
+      "冲压模具": {
+        "label": "Stamping / Press Mold",
+        "desc": "Stamping or press tool"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other mold type"
+      }
+    }
+  },
+  "TOOL_TYPE": {
+    "name": "Tooling Type",
+    "desc": "Tooling types in the tooling register",
+    "items": {
+      "夹具": {
+        "label": "Fixture (Clamp)",
+        "desc": "Clamping or holding fixture"
+      },
+      "治具": {
+        "label": "Jig",
+        "desc": "Production jig or fixture"
+      },
+      "检具": {
+        "label": "Gauge / Inspection Tool",
+        "desc": "Inspection gauge or checking fixture"
+      },
+      "刀具": {
+        "label": "Cutting Tool",
+        "desc": "Cutting tool or cutter"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other tooling type"
+      }
+    }
+  },
+  "EQUIPMENT_STATUS": {
+    "name": "Equipment Status",
+    "desc": "Equipment status in equipment management",
+    "items": {
+      "正常": {
+        "label": "Normal",
+        "desc": "In normal operating condition"
+      },
+      "维修中": {
+        "label": "Under Repair",
+        "desc": "Currently under repair"
+      },
+      "停用": {
+        "label": "Inactive",
+        "desc": "Deactivated or out of service"
+      },
+      "报废": {
+        "label": "Scrapped",
+        "desc": "Scrapped and written off"
+      }
+    }
+  },
+  "HAOLIGO_EQUIPMENT_OPERATIONAL_STATUS": {
+    "name": "Equipment Operational Status",
+    "desc": "Operational status for HaoliGO equipment register and status adjustment documents (editable in data dictionary; use English codes for values)",
+    "items": {
+      "running": {
+        "label": "Running",
+        "desc": "Equipment is running normally"
+      },
+      "repair": {
+        "label": "Under Repair",
+        "desc": "Equipment is under repair"
+      },
+      "upkeep": {
+        "label": "Under Maintenance",
+        "desc": "Equipment is under scheduled or manual maintenance"
+      },
+      "shutdown": {
+        "label": "Shutdown",
+        "desc": "Equipment is shut down"
+      },
+      "standby": {
+        "label": "Standby",
+        "desc": "Equipment is on standby"
+      }
+    }
+  },
+  "HAOLIGO_EQUIPMENT_REPAIR_REASON": {
+    "name": "Equipment Repair Reason",
+    "desc": "Repair reasons for HaoliGO equipment maintenance orders of type Repair (maintainable in data dictionary with quick-add support)",
+    "items": {
+      "机械故障": {
+        "label": "Mechanical Failure",
+        "desc": "Mechanical structure or drive system failure"
+      },
+      "电气故障": {
+        "label": "Electrical Failure",
+        "desc": "Electrical or control system failure"
+      },
+      "液压/气动异常": {
+        "label": "Hydraulic / Pneumatic Anomaly",
+        "desc": "Hydraulic or pneumatic system abnormality"
+      },
+      "精度超差": {
+        "label": "Out-of-Tolerance Accuracy",
+        "desc": "Machining or positioning accuracy out of tolerance"
+      },
+      "异响/振动": {
+        "label": "Abnormal Noise / Vibration",
+        "desc": "Abnormal noise or vibration during operation"
+      },
+      "泄漏": {
+        "label": "Leakage",
+        "desc": "Oil, water, air, or other fluid leakage"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other repair reason"
+      }
+    }
+  },
+  "HAOLIGO_EQUIPMENT_MAINTENANCE_REASON": {
+    "name": "Equipment Maintenance Reason",
+    "desc": "Maintenance reasons for HaoliGO equipment maintenance orders of type Maintenance (maintainable in data dictionary with quick-add support)",
+    "items": {
+      "定期保养计划": {
+        "label": "Scheduled Maintenance Plan",
+        "desc": "Routine maintenance per policy or schedule"
+      },
+      "预防性维护": {
+        "label": "Preventive Maintenance",
+        "desc": "Inspection and maintenance before failure occurs"
+      },
+      "清洁与润滑": {
+        "label": "Cleaning and Lubrication",
+        "desc": "Clean and replenish lubrication"
+      },
+      "易损件更换": {
+        "label": "Wear Part Replacement",
+        "desc": "Filters, belts, seals, and other wear parts"
+      },
+      "精度校验": {
+        "label": "Accuracy Calibration",
+        "desc": "Accuracy or parameter calibration and adjustment"
+      },
+      "换季/长期停机保养": {
+        "label": "Seasonal / Long-Term Shutdown Maintenance",
+        "desc": "Maintenance before seasonal change or after extended shutdown"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other maintenance reason"
+      }
+    }
+  },
+  "MOLD_STATUS": {
+    "name": "Mold Status",
+    "desc": "Mold register status for HaoliGO (aligned with apps.haoligo.constants.mold_status)",
+    "items": {
+      "待启用": {
+        "label": "Pending Activation",
+        "desc": "Awaiting activation"
+      },
+      "待用": {
+        "label": "Available",
+        "desc": "Available and not in use"
+      },
+      "在用": {
+        "label": "In Use",
+        "desc": "Currently in production use"
+      },
+      "维修": {
+        "label": "Under Repair",
+        "desc": "Under repair"
+      },
+      "保养": {
+        "label": "Under Maintenance",
+        "desc": "Under maintenance"
+      },
+      "外协维修": {
+        "label": "Outsourced Repair",
+        "desc": "Sent to external vendor for repair"
+      },
+      "报废": {
+        "label": "Scrapped",
+        "desc": "Scrapped and written off"
+      },
+      "停用": {
+        "label": "Inactive",
+        "desc": "Deactivated or out of service"
+      }
+    }
+  },
+  "HAOLIGO_MOLD_REPAIR_REASON": {
+    "name": "Mold Repair Reason",
+    "desc": "Repair reasons on HaoliGO in-house and outsourced maintenance order lines (maintainable in data dictionary with quick-add support)",
+    "items": {
+      "磨损": {
+        "label": "Wear",
+        "desc": "Excessive wear"
+      },
+      "裂纹": {
+        "label": "Crack",
+        "desc": "Crack or fracture"
+      },
+      "变形": {
+        "label": "Deformation",
+        "desc": "Deformation or distortion"
+      },
+      "尺寸超差": {
+        "label": "Dimensional Out of Tolerance",
+        "desc": "Dimension out of specification"
+      },
+      "配合不良": {
+        "label": "Poor Fit",
+        "desc": "Poor fit or mating condition"
+      },
+      "锈蚀": {
+        "label": "Corrosion / Rust",
+        "desc": "Corrosion or rust damage"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other repair reason"
+      }
+    }
+  },
+  "HAOLIGO_MOLD_MAINTENANCE_REASON": {
+    "name": "Mold Maintenance Reason",
+    "desc": "Maintenance reasons on HaoliGO in-house maintenance order lines of type Maintenance (maintainable in data dictionary with quick-add support)",
+    "items": {
+      "定期保养计划": {
+        "label": "Scheduled Maintenance Plan",
+        "desc": "Routine maintenance per policy or schedule"
+      },
+      "预防性维护": {
+        "label": "Preventive Maintenance",
+        "desc": "Inspection and maintenance before failure occurs"
+      },
+      "清洁与润滑": {
+        "label": "Cleaning and Lubrication",
+        "desc": "Clean cavity/surfaces and replenish lubrication"
+      },
+      "易损件检查更换": {
+        "label": "Wear Part Inspection and Replacement",
+        "desc": "Seals, springs, ejector pins, and other wear parts"
+      },
+      "冷却水路保养": {
+        "label": "Cooling Channel Maintenance",
+        "desc": "Channel flushing, descaling, or pressure testing"
+      },
+      "导柱导套保养": {
+        "label": "Guide Pin and Bushing Maintenance",
+        "desc": "Clean, lubricate, and inspect guide components for wear"
+      },
+      "防锈处理": {
+        "label": "Anti-Rust Treatment",
+        "desc": "Anti-rust treatment during shutdown or seasonal change"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other maintenance reason"
+      }
+    }
+  },
+  "HAOLIGO_PATROL_ISSUE_TYPE": {
+    "name": "Shop Floor Patrol Issue Type",
+    "desc": "Issue types for HaoliGO daily patrol and issue registration forms (editable in data dictionary)",
+    "items": {
+      "劳保穿戴": {
+        "label": "PPE Compliance",
+        "desc": "Personal protective equipment not worn or worn incorrectly"
+      },
+      "设备电源未关": {
+        "label": "Equipment Left Powered On",
+        "desc": "Equipment power not switched off when required"
+      },
+      "私人物品进入车间、岗位": {
+        "label": "Personal Items in Production Area",
+        "desc": "Personal belongings brought into shop floor or work station"
+      },
+      "灭火器、消防栓不符合要求": {
+        "label": "Fire Extinguisher / Hydrant Non-Compliance",
+        "desc": "Fire extinguisher or hydrant does not meet requirements"
+      },
+      "消防通道阻塞": {
+        "label": "Blocked Fire Exit / Aisle",
+        "desc": "Fire exit or emergency aisle obstructed"
+      },
+      "标识标牌缺失": {
+        "label": "Missing Signage",
+        "desc": "Required labels or signs are missing"
+      },
+      "未划分区域堆放": {
+        "label": "Unmarked Storage Area",
+        "desc": "Materials stored without designated zone allocation"
+      },
+      "成品存放混乱": {
+        "label": "Disorganized Finished Goods Storage",
+        "desc": "Finished goods stored in disarray"
+      },
+      "废弃物未分类放置": {
+        "label": "Improper Waste Segregation",
+        "desc": "Waste not sorted or placed in designated containers"
+      },
+      "违规操作": {
+        "label": "Procedural Violation",
+        "desc": "Operation not performed per standard procedure"
+      },
+      "安全警示牌缺失": {
+        "label": "Missing Safety Warning Signs",
+        "desc": "Required safety warning signs are missing"
+      },
+      "现场环境脏乱": {
+        "label": "Poor Housekeeping",
+        "desc": "Work area is dirty or cluttered"
+      },
+      "现场发现违规行为": {
+        "label": "Observed Rule Violation",
+        "desc": "Rule or policy violation observed on site"
+      },
+      "现场发现安全隐患": {
+        "label": "Observed Safety Hazard",
+        "desc": "Safety hazard identified on site"
+      },
+      "现场发现质量问题": {
+        "label": "Observed Quality Issue",
+        "desc": "Quality issue identified on site"
+      },
+      "现场发现设备故障": {
+        "label": "Observed Equipment Fault",
+        "desc": "Equipment fault identified on site"
+      },
+      "其他": {
+        "label": "Other",
+        "desc": "Other issue type"
+      }
+    }
+  },
+  "TOOL_STATUS": {
+    "name": "Tooling Status",
+    "desc": "Tooling status in the tooling register",
+    "items": {
+      "正常": {
+        "label": "Normal",
+        "desc": "In normal condition"
+      },
+      "领用中": {
+        "label": "Issued / In Use",
+        "desc": "Checked out and in use"
+      },
+      "维修中": {
+        "label": "Under Repair",
+        "desc": "Currently under repair"
+      },
+      "校验中": {
+        "label": "Under Calibration",
+        "desc": "Under calibration or verification"
+      },
+      "停用": {
+        "label": "Inactive",
+        "desc": "Deactivated or out of service"
+      },
+      "报废": {
+        "label": "Scrapped",
+        "desc": "Scrapped and written off"
+      }
+    }
+  },
+  "INDUSTRY_SECTOR": {
+    "name": "Industry Sector",
+    "desc": "Industry classification for customers and suppliers (extensible)",
+    "items": {
+      "MFG": {
+        "label": "Manufacturing",
+        "desc": "General manufacturing"
+      },
+      "ELEC": {
+        "label": "Electronics & IT",
+        "desc": "Electronics and information technology"
+      },
+      "AUTO": {
+        "label": "Automotive & Parts",
+        "desc": "Automotive and components"
+      },
+      "MACH": {
+        "label": "Machinery & Equipment",
+        "desc": "Machinery and industrial equipment"
+      },
+      "CHEM": {
+        "label": "Energy & Chemicals",
+        "desc": "Energy, chemical, and related industries"
+      },
+      "TRADE": {
+        "label": "Wholesale & Retail",
+        "desc": "Wholesale and retail trade"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other industry sector"
+      }
+    }
+  },
+  "PARTNER_SOURCE_CHANNEL": {
+    "name": "Partner Source Channel",
+    "desc": "Lead and supplier sourcing channels for customers and partners",
+    "items": {
+      "EXPO": {
+        "label": "Trade Show / Exhibition",
+        "desc": "Trade show or exhibition"
+      },
+      "BID": {
+        "label": "Tender / RFP",
+        "desc": "Public tender or bid process"
+      },
+      "REF": {
+        "label": "Customer Referral",
+        "desc": "Referred by existing customer"
+      },
+      "ONLINE": {
+        "label": "Online Marketing",
+        "desc": "Online promotion or digital marketing"
+      },
+      "SDR": {
+        "label": "Sales Development",
+        "desc": "Proactive sales outreach"
+      },
+      "SOURCING": {
+        "label": "Procurement Sourcing",
+        "desc": "Procurement-led supplier sourcing"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other source channel"
+      }
+    }
+  },
+  "CUSTOMER_LEVEL": {
+    "name": "Customer Tier",
+    "desc": "Customer tier classification",
+    "items": {
+      "STRATEGIC": {
+        "label": "Strategic Account",
+        "desc": "Strategic key account"
+      },
+      "A": {
+        "label": "Tier A",
+        "desc": "Tier A customer"
+      },
+      "B": {
+        "label": "Tier B",
+        "desc": "Tier B customer"
+      },
+      "C": {
+        "label": "Tier C",
+        "desc": "Tier C customer"
+      }
+    }
+  },
+  "CUSTOMER_CATEGORY": {
+    "name": "Customer Category",
+    "desc": "Customer and partner category in customer/supplier master (extensible per organization in data dictionary)",
+    "items": {
+      "ENTERPRISE": {
+        "label": "Enterprise Customer",
+        "desc": "Corporate or organizational customer"
+      },
+      "OEM": {
+        "label": "End Customer / OEM",
+        "desc": "End brand or OEM customer"
+      },
+      "CHANNEL": {
+        "label": "Distributor / Channel Partner",
+        "desc": "Distributor, agent, or trading company"
+      },
+      "GOV": {
+        "label": "Government / Public Sector",
+        "desc": "Government or public institution"
+      },
+      "INDIVIDUAL": {
+        "label": "Individual Customer",
+        "desc": "Individual or personal customer"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other category"
+      }
+    }
+  },
+  "CONTACT_TITLE": {
+    "name": "Contact Job Title",
+    "desc": "Contact job titles for customer and supplier contacts (extensible per organization in data dictionary)",
+    "items": {
+      "GM": {
+        "label": "General Manager / Executive",
+        "desc": "General manager or primary executive"
+      },
+      "PROCUREMENT": {
+        "label": "Procurement",
+        "desc": "Procurement-related role"
+      },
+      "SALES": {
+        "label": "Sales / Business Development",
+        "desc": "Sales or business development"
+      },
+      "TECH": {
+        "label": "Technical / Engineering",
+        "desc": "Technical, engineering, or R&D role"
+      },
+      "FINANCE": {
+        "label": "Finance / Accounting",
+        "desc": "Finance or accounting role"
+      },
+      "LOGISTICS": {
+        "label": "Warehouse / Logistics",
+        "desc": "Warehouse, logistics, or planning role"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other job title"
+      }
+    }
+  },
+  "SALES_FOLLOW_UP_TYPE": {
+    "name": "Sales Follow-Up Method",
+    "desc": "Communication methods recorded in customer follow-up activities",
+    "items": {
+      "PHONE": {
+        "label": "Phone Call",
+        "desc": "Telephone call"
+      },
+      "VISIT": {
+        "label": "On-Site Visit",
+        "desc": "In-person visit"
+      },
+      "IM": {
+        "label": "Instant Messaging",
+        "desc": "WeChat or other instant messaging"
+      },
+      "EMAIL": {
+        "label": "Email",
+        "desc": "Email correspondence"
+      },
+      "EXPO": {
+        "label": "Trade Show / Meeting",
+        "desc": "Trade show or business meeting"
+      },
+      "SAMPLE_TECH": {
+        "label": "Sample / Technical Discussion",
+        "desc": "Sample submission or technical exchange"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other follow-up method"
+      }
+    }
+  },
+  "SALES_OPPORTUNITY_STAGE": {
+    "name": "Sales Opportunity Stage",
+    "desc": "Sales pipeline stages for opportunities (sort_order reflects funnel sequence)",
+    "items": {
+      "INITIAL": {
+        "label": "Initial Contact",
+        "desc": "Lead entered pipeline"
+      },
+      "QUALIFIED": {
+        "label": "Needs Confirmed",
+        "desc": "Intent and requirements confirmed"
+      },
+      "PROPOSAL": {
+        "label": "Proposal & Quotation",
+        "desc": "Solution and quotation submitted"
+      },
+      "NEGOTIATION": {
+        "label": "Negotiation",
+        "desc": "Pricing and contract negotiation"
+      },
+      "WON": {
+        "label": "Won",
+        "desc": "Closed won"
+      },
+      "LOST": {
+        "label": "Lost",
+        "desc": "Closed lost"
+      }
+    }
+  },
+  "FEE_TYPE": {
+    "name": "Additional Fee Type",
+    "desc": "Additional fee types on sales and purchase orders",
+    "items": {
+      "LOGISTICS": {
+        "label": "Freight / Logistics Fee",
+        "desc": "Shipping or delivery charges"
+      },
+      "PACKAGING": {
+        "label": "Packaging Fee",
+        "desc": "Packaging or reinforcement charges"
+      },
+      "INSURANCE": {
+        "label": "Insurance Fee",
+        "desc": "Transport insurance charges"
+      },
+      "CUSTOMS": {
+        "label": "Customs / Clearance Fee",
+        "desc": "Customs declaration and clearance charges"
+      },
+      "HANDLING": {
+        "label": "Handling Fee",
+        "desc": "Loading, unloading, or handling charges"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other miscellaneous charges"
+      }
+    }
+  },
+  "MATERIAL_CALL_TYPE": {
+    "name": "Material Request Type",
+    "desc": "Custom selection requests one or more materials; full-order request generates one request with multiple lines from work order kitting shortages",
+    "items": {
+      "CUSTOM_SELECTION": {
+        "label": "Custom Selection",
+        "desc": "Select one or more materials and quantities to request"
+      },
+      "FULL_ORDER": {
+        "label": "Full Work Order Request",
+        "desc": "Generate one material request with multiple lines from work order kitting shortage analysis"
+      }
+    }
+  },
+  "MATERIAL_CALL_REASON": {
+    "name": "Material Request Reason",
+    "desc": "Reason for custom material requests to support warehouse and planning traceability",
+    "items": {
+      "LINE_SIDE_SHORTAGE": {
+        "label": "Line-Side Shortage",
+        "desc": "Insufficient line-side stock; replenishment from main warehouse required"
+      },
+      "PICKING_SHORTAGE": {
+        "label": "Batch Picking Shortfall",
+        "desc": "Quantity issued under batch picking list is insufficient; supplemental request needed"
+      },
+      "SCRAP_REPLENISH": {
+        "label": "Scrap / Quality Exception Replenishment",
+        "desc": "Replenishment due to scrap, rework, or quality exception"
+      },
+      "ENGINEERING_CHANGE": {
+        "label": "Engineering / Design Change",
+        "desc": "Material specification or quantity change due to process or design change"
+      },
+      "PLAN_CHANGE": {
+        "label": "Plan Change / Rush Order",
+        "desc": "Material plan misaligned due to schedule change or inserted rush order"
+      },
+      "TRIAL_SAMPLE": {
+        "label": "Trial / Sample Run",
+        "desc": "Additional material for trial production, sampling, or small-batch validation"
+      },
+      "OTHER": {
+        "label": "Other",
+        "desc": "Other reason (describe in remarks)"
+      }
+    }
+  },
+  "WORK_ORDER_PRIORITY": {
+    "name": "Work Order Priority",
+    "desc": "Priority levels for production work orders, subcontract orders, and related documents",
+    "items": {
+      "low": {
+        "label": "Low",
+        "desc": "Low priority"
+      },
+      "normal": {
+        "label": "Normal",
+        "desc": "Normal priority"
+      },
+      "high": {
+        "label": "High",
+        "desc": "High priority"
+      },
+      "urgent": {
+        "label": "Urgent",
+        "desc": "Urgent priority"
+      }
+    }
+  }
+}

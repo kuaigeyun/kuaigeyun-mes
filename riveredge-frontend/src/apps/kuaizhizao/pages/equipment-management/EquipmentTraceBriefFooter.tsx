@@ -29,72 +29,72 @@ export function EquipmentTraceBriefPrimaryActions(props: {
     <>
       {brief.document_type === 'purchase_order' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenPurchaseOrder', { defaultValue: '前往采购订单' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenPurchaseOrder')}
         </Button>
       ) : null}
       {brief.document_type === 'sales_order' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.SALES_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenSalesOrder')}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenSalesOrder')}
         </Button>
       ) : null}
       {brief.document_type === 'demand' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.DEMAND_MANAGEMENT)}>
-          {t('components.documentTrackingPanel.traceBriefOpenDemand', { defaultValue: '前往需求管理' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenDemand')}
         </Button>
       ) : null}
       {brief.document_type === 'purchase_requisition' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PURCHASE_REQUISITIONS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenPurchaseRequisition', { defaultValue: '前往采购申请' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenPurchaseRequisition')}
         </Button>
       ) : null}
       {brief.document_type === 'work_order' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.WORK_ORDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenWorkOrder', { defaultValue: '前往工单' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenWorkOrder')}
         </Button>
       ) : null}
       {brief.document_type === 'maintenance_reminder' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.MAINTENANCE_REMINDERS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenMaintenanceReminder', { defaultValue: '前往维护提醒' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenMaintenanceReminder')}
         </Button>
       ) : null}
       {brief.document_type === 'equipment' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.EQUIPMENT)}>
-          {t('components.documentTrackingPanel.traceBriefOpenEquipment', { defaultValue: '前往设备台账' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenEquipment')}
         </Button>
       ) : null}
       {brief.document_type === 'equipment_fault' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.EQUIPMENT_FAULTS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenEquipmentFault', { defaultValue: '前往设备故障' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenEquipmentFault')}
         </Button>
       ) : null}
       {brief.document_type === 'maintenance_plan' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.MAINTENANCE_PLANS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenMaintenancePlan', { defaultValue: '前往保养计划' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenMaintenancePlan')}
         </Button>
       ) : null}
       {brief.document_type === 'mold' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.MOLDS)}>
-          {t('components.documentTrackingPanel.traceBriefOpenMold', { defaultValue: '前往模具台账' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenMold')}
         </Button>
       ) : null}
       {brief.document_type === 'tool' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.TOOL_LEDGER)}>
-          {t('components.documentTrackingPanel.traceBriefOpenTool', { defaultValue: '前往工装台账' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenTool')}
         </Button>
       ) : null}
       {brief.document_type === 'incoming_inspection' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.INCOMING_INSPECTION)}>
-          {t('components.documentTrackingPanel.traceBriefOpenIncomingInspection', { defaultValue: '前往来料检验' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenIncomingInspection')}
         </Button>
       ) : null}
       {brief.document_type === 'process_inspection' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.PROCESS_INSPECTION)}>
-          {t('components.documentTrackingPanel.traceBriefOpenProcessInspection', { defaultValue: '前往过程检验' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenProcessInspection')}
         </Button>
       ) : null}
       {brief.document_type === 'finished_goods_inspection' ? (
         <Button type="primary" size="small" onClick={() => go(ROUTES.FINISHED_GOODS_INSPECTION)}>
-          {t('components.documentTrackingPanel.traceBriefOpenFinishedGoodsInspection', { defaultValue: '前往成品检验' })}
+          {t('app.kuaizhizao.equipmentTrace.traceBriefOpenFinishedGoodsInspection')}
         </Button>
       ) : null}
     </>
@@ -122,7 +122,7 @@ export function EquipmentTraceBriefFooter(props: {
       }}
     >
       <Space wrap>
-        <Button onClick={onDismissBrief}>{t('components.documentTrackingPanel.traceBriefDismiss')}</Button>
+        <Button onClick={onDismissBrief}>{t('app.kuaizhizao.equipmentTrace.traceBriefDismiss')}</Button>
         <EquipmentTraceBriefPrimaryActions doc={brief} t={t} navigate={navigate} closeDrawer={closeDrawer} />
       </Space>
     </div>

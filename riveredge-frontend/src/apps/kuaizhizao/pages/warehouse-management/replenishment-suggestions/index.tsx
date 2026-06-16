@@ -7,13 +7,14 @@
  * @date 2026-01-17
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
-import { App, Button, Tag, Space, Modal, Card, Table, Input, Typography, Descriptions } from 'antd';
+import { App, Button, Tag, Space, Modal, Descriptions } from 'antd';
 import dayjs from 'dayjs';
 import { ProForm, ProFormRadio, ProFormTextArea } from '@ant-design/pro-components';
-import { EyeOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { ReloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   MaterialStackedCell,
@@ -26,7 +27,6 @@ import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { warehouseApi } from '../../../services/production';
 import { getReplenishmentSuggestionLifecycle } from '../../../utils/replenishmentSuggestionLifecycle';
 
-// 补货建议接口定义
 interface ReplenishmentSuggestion {
   id?: number;
   tenant_id?: number;
@@ -61,25 +61,51 @@ interface ReplenishmentSuggestion {
 }
 
 const ReplenishmentSuggestionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  // Drawer 相关状态
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
   const [suggestionDetail, setSuggestionDetail] = useState<ReplenishmentSuggestion | null>(null);
 
-  // 处理Modal状态
   const [processModalVisible, setProcessModalVisible] = useState(false);
   const [processSuggestion, setProcessSuggestion] = useState<ReplenishmentSuggestion | null>(null);
   const [processStatus, setProcessStatus] = useState<string>('processed');
   const [processNotes, setProcessNotes] = useState<string>('');
 
-  // 表格列定义
-  const columns: ProColumns<ReplenishmentSuggestion>[] = [
+  const suggestionTypeLabel = (type?: string) => {
+    const typeMap: Record<string, string> = {
+      low_stock: t('app.kuaizhizao.replenishmentSuggestions.typeLowStock'),
+      demand_based: t('app.kuaizhizao.replenishmentSuggestions.typeDemandBased'),
+      seasonal: t('app.kuaizhizao.replenishmentSuggestions.typeSeasonal'),
+    };
+    return type ? typeMap[type] || type : '-';
+  };
+
+  const priorityConfig = (priority?: string) => {
+    const priorityMap: Record<string, { text: string; color: string }> = {
+      high: { text: t('app.kuaizhizao.warehouseCommon.priorityHigh'), color: 'error' },
+      medium: { text: t('app.kuaizhizao.warehouseCommon.priorityMedium'), color: 'warning' },
+      low: { text: t('app.kuaizhizao.warehouseCommon.priorityLow'), color: 'default' },
+    };
+    return priorityMap[priority || ''] || priorityMap.medium;
+  };
+
+  const statusConfig = (status?: string) => {
+    const statusMap: Record<string, { text: string; color: string }> = {
+      pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending'), color: 'default' },
+      processed: { text: t('app.kuaizhizao.replenishmentSuggestions.statusProcessed'), color: 'success' },
+      ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored'), color: 'error' },
+    };
+    const key = status || '';
+    return statusMap[key] || { text: key || '-', color: 'default' };
+  };
+
+  const columns: ProColumns<ReplenishmentSuggestion>[] = useMemo(() => [
     {
-      title: '物料',
+      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       key: 'material_name',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -88,28 +114,28 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '当前库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colCurrentStock'),
       dataIndex: 'current_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '安全库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSafetyStock'),
       dataIndex: 'safety_stock',
       width: 100,
       align: 'right',
     },
     {
-      title: '建议补货数量',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedQty'),
       dataIndex: 'suggested_quantity',
       width: 120,
       align: 'right',
@@ -118,64 +144,52 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       ),
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colPriority'),
       dataIndex: 'priority',
       width: 100,
       render: (priority) => {
-        const priorityMap = {
-          'high': { text: '高', color: 'error' },
-          'medium': { text: '中', color: 'warning' },
-          'low': { text: '低', color: 'default' },
-        };
-        const config = priorityMap[priority as keyof typeof priorityMap] || priorityMap['medium'];
+        const config = priorityConfig(String(priority ?? ''));
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '建议类型',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestionType'),
       dataIndex: 'suggestion_type',
       width: 120,
-      render: (type) => {
-        const typeMap = {
-          'low_stock': '低库存',
-          'demand_based': '需求驱动',
-          'seasonal': '季节性',
-        };
-        return typeMap[type as keyof typeof typeMap] || type;
-      },
+      render: (type) => suggestionTypeLabel(String(type ?? '')),
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
       valueEnum: {
-        pending: { text: '待处理' },
-        processed: { text: '已处理' },
-        ignored: { text: '已忽略' },
+        pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
+        processed: { text: t('app.kuaizhizao.replenishmentSuggestions.statusProcessed') },
+        ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored') },
       },
     },
     {
-      title: '建议下单日期',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedOrderDate'),
       dataIndex: 'suggested_order_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '创建时间',
+      title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -196,7 +210,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 150,
       fixed: 'right',
       render: (_, record) => (
@@ -204,26 +218,24 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
             <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleProcess(record)}>
-              处理
+              {t('app.kuaizhizao.warehouseCommon.handle')}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
 
-  // 处理详情查看
   const handleDetail = async (record: ReplenishmentSuggestion) => {
     try {
       const detail = await warehouseApi.replenishmentSuggestion.get(record.id!.toString());
       setSuggestionDetail(detail);
       setDetailDrawerVisible(true);
     } catch (error) {
-      messageApi.error('获取补货建议详情失败');
+      messageApi.error(t('app.kuaizhizao.replenishmentSuggestions.msgGetDetailFailed'));
     }
   };
 
-  // 处理补货建议
   const handleProcess = (record: ReplenishmentSuggestion) => {
     setProcessSuggestion(record);
     setProcessStatus('processed');
@@ -231,7 +243,6 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
     setProcessModalVisible(true);
   };
 
-  // 提交处理
   const handleProcessSubmit = async () => {
     if (!processSuggestion) return;
 
@@ -240,31 +251,28 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         status: processStatus,
         processing_notes: processNotes,
       });
-      messageApi.success('补货建议处理成功');
+      messageApi.success(t('app.kuaizhizao.replenishmentSuggestions.msgProcessSuccess'));
       setProcessModalVisible(false);
       setProcessSuggestion(null);
       invalidateMenuBadgeCounts();
-
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '处理失败');
+      messageApi.error(error.message || t('app.kuaizhizao.replenishmentSuggestions.msgProcessFailed'));
     }
   };
 
-  // 生成补货建议
   const handleGenerateFromAlerts = async () => {
     Modal.confirm({
-      title: '生成补货建议',
-      content: '确定要从库存预警生成补货建议吗？',
+      title: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateTitle'),
+      content: t('app.kuaizhizao.replenishmentSuggestions.msgGenerateContent'),
       onOk: async () => {
         try {
           await warehouseApi.replenishmentSuggestion.generateFromAlerts();
-          messageApi.success('补货建议生成成功');
+          messageApi.success(t('app.kuaizhizao.replenishmentSuggestions.msgGenerateSuccess'));
           invalidateMenuBadgeCounts();
-
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '生成失败');
+          messageApi.error(error.message || t('app.kuaizhizao.replenishmentSuggestions.msgGenerateFailed'));
         }
       },
     });
@@ -272,7 +280,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
 
   const handleBatchProcess = async (status: 'processed' | 'ignored') => {
     if (!selectedRowKeys.length) {
-      messageApi.warning('请先选择补货建议');
+      messageApi.warning(t('app.kuaizhizao.replenishmentSuggestions.msgSelectSuggestions'));
       return;
     }
     let successCount = 0;
@@ -285,131 +293,119 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`批量处理成功 ${successCount} 条`);
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.batchHandleSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量处理失败');
+    messageApi.error(t('app.kuaizhizao.warehouseCommon.batchHandleFailed'));
   };
 
-  // 详情列定义
-  const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = [
+  const detailColumns: ProDescriptionsItemProps<ReplenishmentSuggestion>[] = useMemo(() => [
     {
-      title: '物料编号',
+      title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
       dataIndex: 'material_code',
     },
     {
-      title: '物料名称',
+      title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
       dataIndex: 'material_name',
     },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
     },
     {
-      title: '当前库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colCurrentStock'),
       dataIndex: 'current_quantity',
     },
     {
-      title: '安全库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSafetyStock'),
       dataIndex: 'safety_stock',
     },
     {
-      title: '最低库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colMinStock'),
       dataIndex: 'min_stock',
     },
     {
-      title: '最高库存',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colMaxStock'),
       dataIndex: 'max_stock',
     },
     {
-      title: '建议补货数量',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedQty'),
       dataIndex: 'suggested_quantity',
       render: (_, record) => (
         <span style={{ fontWeight: 'bold', color: '#1890ff' }}>{record.suggested_quantity}</span>
       ),
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colPriority'),
       dataIndex: 'priority',
       render: (_, record) => {
-        const priorityKey = String(record.priority ?? '');
-        const priorityMap: Record<string, { text: string; color: string }> = {
-          high: { text: '高', color: 'error' },
-          medium: { text: '中', color: 'warning' },
-          low: { text: '低', color: 'default' },
-        };
-        const config = priorityMap[priorityKey] || { text: priorityKey || '-', color: 'default' };
+        const config = priorityConfig(record.priority);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '建议类型',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestionType'),
       dataIndex: 'suggestion_type',
+      render: (_, record) => suggestionTypeLabel(record.suggestion_type),
     },
     {
-      title: '预计交货天数',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colEstimatedDeliveryDays'),
       dataIndex: 'estimated_delivery_days',
     },
     {
-      title: '建议下单日期',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSuggestedOrderDate'),
       dataIndex: 'suggested_order_date',
       valueType: 'dateTime',
     },
     {
-      title: '供应商',
+      title: t('app.kuaizhizao.replenishmentSuggestions.colSupplier'),
       dataIndex: 'supplier_name',
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       render: (_, record) => {
-        const statusKey = String(record.status ?? '');
-        const statusMap: Record<string, { text: string; color: string }> = {
-          pending: { text: '待处理', color: 'default' },
-          processed: { text: '已处理', color: 'success' },
-          ignored: { text: '已忽略', color: 'error' },
-        };
-        const config = statusMap[statusKey] || { text: statusKey || '-', color: 'default' };
+        const config = statusConfig(record.status);
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '备注',
+      title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
       dataIndex: 'remarks',
       span: 2,
       render: (text) => text || '-',
     },
-  ];
+  ], [t]);
 
   return (
     <>
       <ListPageTemplate
         statCards={[
           {
-            title: '待处理建议',
+            title: t('app.kuaizhizao.replenishmentSuggestions.statPending'),
             value: 0,
             prefix: <ExclamationCircleOutlined />,
             valueStyle: { color: '#faad14' },
           },
           {
-            title: '高优先级',
+            title: t('app.kuaizhizao.replenishmentSuggestions.statHighPriority'),
             value: 0,
-            suffix: '个',
+            suffix: t('app.kuaizhizao.replenishmentSuggestions.statUnit'),
             valueStyle: { color: '#f5222d' },
           },
           {
-            title: '已处理',
+            title: t('app.kuaizhizao.replenishmentSuggestions.statProcessed'),
             value: 0,
-            suffix: '个',
+            suffix: t('app.kuaizhizao.replenishmentSuggestions.statUnit'),
             valueStyle: { color: '#52c41a' },
           },
         ]}
       >
         <UniTable
-          headerTitle="补货建议"
+          headerTitle={t('app.kuaizhizao.replenishmentSuggestions.headerTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -432,7 +428,7 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
                 total: Array.isArray(response) ? response.length : response.total || 0,
               };
             } catch (error) {
-              messageApi.error('获取补货建议列表失败');
+              messageApi.error(t('app.kuaizhizao.replenishmentSuggestions.msgListFailed'));
               return {
                 data: [],
                 success: false,
@@ -447,19 +443,19 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
             <UniBatchMenuButton
               key="replenishment-batch-actions"
               selectedRowKeys={selectedRowKeys}
-              label="批量操作"
+              label={t('app.kuaizhizao.warehouseCommon.batchOps')}
               disabled={selectedRowKeys.length === 0}
               menuItems={[
                 {
                   key: 'batch-processed',
-                  label: '批量标记已处理',
+                  label: t('app.kuaizhizao.warehouseCommon.batchMarkProcessed'),
                   onClick: () => {
                     void handleBatchProcess('processed');
                   },
                 },
                 {
                   key: 'batch-ignored',
-                  label: '批量标记忽略',
+                  label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
                   onClick: () => {
                     void handleBatchProcess('ignored');
                   },
@@ -474,16 +470,19 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
               icon={<ReloadOutlined />}
               onClick={handleGenerateFromAlerts}
             >
-              从预警生成
+              {t('app.kuaizhizao.replenishmentSuggestions.actionGenerateFromAlerts')}
             </Button>,
           ]}
           scroll={{ x: 1200 }}
         />
       </ListPageTemplate>
 
-      {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title={`补货建议详情${suggestionDetail?.material_code ? ` - ${suggestionDetail.material_code}` : ''}`}
+        title={
+          suggestionDetail?.material_code
+            ? t('app.kuaizhizao.replenishmentSuggestions.detailTitleWithCode', { code: suggestionDetail.material_code })
+            : t('app.kuaizhizao.replenishmentSuggestions.detailTitle')
+        }
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -497,9 +496,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         }
       />
 
-      {/* 处理Modal */}
       <Modal
-        title="处理补货建议"
+        title={t('app.kuaizhizao.replenishmentSuggestions.modalProcess')}
         open={processModalVisible}
         onOk={handleProcessSubmit}
         onCancel={() => {
@@ -507,8 +505,8 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
           setProcessSuggestion(null);
           setProcessNotes('');
         }}
-        okText="确认"
-        cancelText="取消"
+        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
+        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
       >
         <ProForm
           submitter={false}
@@ -527,16 +525,16 @@ const ReplenishmentSuggestionsPage: React.FC = () => {
         >
           <ProFormRadio.Group
             name="status"
-            label="处理状态"
+            label={t('app.kuaizhizao.replenishmentSuggestions.formProcessStatus')}
             options={[
-              { label: '已处理', value: 'processed' },
-              { label: '忽略', value: 'ignored' },
+              { label: t('app.kuaizhizao.replenishmentSuggestions.statusProcessed'), value: 'processed' },
+              { label: t('app.kuaizhizao.replenishmentSuggestions.formIgnore'), value: 'ignored' },
             ]}
           />
           <ProFormTextArea
             name="notes"
-            label="处理备注"
-            placeholder="请输入处理备注（可选）"
+            label={t('app.kuaizhizao.replenishmentSuggestions.formProcessNotes')}
+            placeholder={t('app.kuaizhizao.replenishmentSuggestions.formProcessNotesPlaceholder')}
             fieldProps={{
               rows: 4,
             }}

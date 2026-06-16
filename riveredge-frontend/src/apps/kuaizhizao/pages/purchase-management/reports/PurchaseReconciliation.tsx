@@ -1,21 +1,24 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const PurchaseReconciliation: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    { title: '订单编号', dataIndex: 'order_code', width: 150 },
-    { title: '订单日期', dataIndex: 'order_date', valueType: 'date', width: 120 },
-    { title: '供应商', dataIndex: 'supplier_name', width: 200 },
-    { title: '订单金额', dataIndex: 'order_amount', valueType: 'money', width: 120 },
-    { title: '已入库', dataIndex: 'received_amount', valueType: 'money', width: 120 },
-    { title: '已收票', dataIndex: 'invoiced_amount', valueType: 'money', width: 120 },
-    { title: '已付款', dataIndex: 'paid_amount', valueType: 'money', width: 120 },
-    { title: '未付', dataIndex: 'pending_amount', valueType: 'money', width: 120 },
-    { title: '状态', dataIndex: 'status', width: 100 },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseReports.colOrderCode'), dataIndex: 'order_code', width: 150 },
+      { title: t('app.kuaizhizao.purchaseReports.colOrderDate'), dataIndex: 'order_date', valueType: 'date', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colSupplier'), dataIndex: 'supplier_name', width: 200 },
+      { title: t('app.kuaizhizao.purchaseReports.colOrderAmount'), dataIndex: 'order_amount', valueType: 'money', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colReceivedAmount'), dataIndex: 'received_amount', valueType: 'money', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colInvoicedAmount'), dataIndex: 'invoiced_amount', valueType: 'money', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colPaidAmount'), dataIndex: 'paid_amount', valueType: 'money', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colPendingAmount'), dataIndex: 'pending_amount', valueType: 'money', width: 120 },
+      { title: t('common.status'), dataIndex: 'status', width: 100 },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next'
 import { 
   Modal, Tabs, Form, Input, Button, Table, 
   Typography, message, InputNumber, Divider, Card 
@@ -49,6 +50,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
   reportingRecordId,
   onSuccess,
 }) => {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<'feeding' | 'discharging'>('feeding');
   const [loading, setLoading] = useState(false);
   const [boundMaterials, setBoundMaterials] = useState<MaterialBinding[]>([]);
@@ -72,7 +74,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
       setBoundMaterials(res?.data || []);
     } catch (error) {
       console.error('Failed to load material bindings', error);
-      message.error('加载绑定记录失败');
+      message.error(t('app.kuaizhizao.workOrder.kioskLoadBindFailed'));
     } finally {
       setLoading(false);
     }
@@ -94,7 +96,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
         await materialBindingApi.createDischarging(reportingRecordId.toString(), data);
       }
 
-      message.success('绑定成功');
+      message.success(t('app.kuaizhizao.workOrder.kioskBindSuccess'));
       form.resetFields(['barcode', 'quantity', 'batch_number']);
       loadBoundMaterials();
       onSuccess?.();
@@ -103,7 +105,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
       scanInputRef.current?.focus();
     } catch (error) {
       console.error('Failed to bind material', error);
-      message.error('绑定失败');
+      message.error(t('app.kuaizhizao.workOrder.kioskBindFailed'));
     } finally {
       setLoading(false);
     }
@@ -124,10 +126,10 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
   };
 
   const columns = [
-    { title: '物料编号/条码', dataIndex: 'material_code', key: 'material_code', render: (text: string, record: any) => text || record.barcode },
+    { title: t('app.kuaizhizao.workOrder.kioskMaterialCodeBarcode'), dataIndex: 'material_code', key: 'material_code', render: (text: string, record: any) => text || record.barcode },
     { title: '批次', dataIndex: 'batch_number', key: 'batch_number' },
-    { title: '数量', dataIndex: 'quantity', key: 'quantity' },
-    { title: '类型', dataIndex: 'binding_type', key: 'binding_type', render: (type: string) => <Text style={{ color: '#fff' }}>{type === 'feeding' ? '上料' : '下料'}</Text> },
+    { title: t('app.kuaizhizao.workOrder.colQuantity'), dataIndex: 'quantity', key: 'quantity' },
+    { title: t('app.kuaizhizao.workOrder.colType'), dataIndex: 'binding_type', key: 'binding_type', render: (type: string) => <Text style={{ color: '#fff' }}>{type === 'feeding' ? '上料' : '下料'}</Text> },
     { 
       title: '操作', 
       key: 'action', 
@@ -252,7 +254,7 @@ const MaterialBindingModal: React.FC<MaterialBindingModalProps> = ({
         <div style={{ flex: 1, minHeight: 0 }}>
           <div style={{ marginBottom: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 18 }}>当前已绑定物料 ({boundMaterials.length})</Text>
-            <Button icon={<SaveOutlined />} onClick={loadBoundMaterials}>刷新</Button>
+            <Button icon={<SaveOutlined />} onClick={loadBoundMaterials}>{t('app.kuaizhizao.workOrder.actionRefresh')}</Button>
           </div>
           <Table 
             dataSource={boundMaterials} 

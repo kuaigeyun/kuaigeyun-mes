@@ -53,7 +53,7 @@ import { batchConfirmOutboundDocuments, withdrawOutboundDocument } from './outbo
 import {
   type OutboundHubOrder,
   type OutboundIssueType,
-  OUTBOUND_ISSUE_TYPE_LABELS,
+  getOutboundIssueTypeLabel,
   isOutboundConfirmable,
   isOutboundWithdrawable,
   mapOutsourceIssueToOutbound,
@@ -317,11 +317,11 @@ const OutboundPage: React.FC = () => {
         const warehouseId = values.warehouse_id as number;
         const wh = warehouseOptions.find((w) => w.value === warehouseId);
         if (!orderIds?.length) {
-          messageApi.warning('请选择至少一个销售订单');
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectSalesOrders'));
           return;
         }
         if (!warehouseId) {
-          messageApi.warning('请选择出库仓库');
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
           return;
         }
         let success = 0;
@@ -337,21 +337,26 @@ const OutboundPage: React.FC = () => {
             if (recordId > 0) createdIds.push(recordId);
             success++;
           } catch (e: any) {
-            messageApi.warning(`销售订单 ${id} 上拉失败：${e?.message || e?.response?.data?.detail || '未知错误'}`);
+            messageApi.warning(
+              t('app.kuaizhizao.warehouseOutbound.msg.salesOrderPullFailed', {
+                id,
+                message: e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.unknownError'),
+              }),
+            );
           }
         }
         await saveCustomFieldsToCreated(createdIds);
-        messageApi.success(`批量销售出库成功，共创建 ${success} 张销售出库单`);
+        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchSalesSuccess', { count: success }));
       } else {
         const workOrderIds = values.work_order_ids as number[];
         const warehouseId = values.warehouse_id as number;
         const wh = warehouseOptions.find((w) => w.value === warehouseId);
         if (!workOrderIds?.length) {
-          messageApi.warning('请选择至少一个工单');
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWorkOrders'));
           return;
         }
         if (!warehouseId) {
-          messageApi.warning('请选择出库仓库');
+          messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
           return;
         }
         const result = await warehouseApi.productionPicking.batchPick({
@@ -364,14 +369,14 @@ const OutboundPage: React.FC = () => {
           .map((row: { id?: number }) => Number(row?.id ?? 0))
           .filter((id: number) => id > 0);
         await saveCustomFieldsToCreated(createdIds);
-        messageApi.success(`批量生产领料成功，共创建 ${list.length} 张领料单`);
+        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchPickingSuccess', { count: list.length }));
       }
       resetBatchOutboundModal();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || e?.response?.data?.detail || '批量出库失败');
+      messageApi.error(e?.message || e?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.batchOutboundFailed'));
     } finally {
       setBatchSubmitting(false);
     }
@@ -419,7 +424,7 @@ const OutboundPage: React.FC = () => {
         await loadProductionPickingFieldValuesForDetail(record.id);
       }
     } catch {
-      messageApi.error('获取出库单详情失败');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'));
     }
   };
 
@@ -442,9 +447,9 @@ const OutboundPage: React.FC = () => {
       const detail = await warehouseApi.salesDelivery.get(String(currentOrder.id));
       setCurrentOrder({ ...detail, outbound_type: 'sales_delivery' });
       setSalesDeliveryAttachments(mapAttachmentsToUploadList(detail.attachments));
-      messageApi.success('附件已保存');
+      messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.attachmentsSaved'));
     } catch (error: any) {
-      messageApi.error(error?.message || '保存附件失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseOutbound.msg.saveAttachmentsFailed'));
     } finally {
       setSavingSalesDeliveryAttachments(false);
     }
@@ -491,7 +496,7 @@ const OutboundPage: React.FC = () => {
 
   const handleBatchConfirm = async (keys: React.Key[]) => {
     if (!keys.length) {
-      messageApi.warning('请先选择待出库单据');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPendingDocs'));
       return;
     }
     const records = keys
@@ -501,20 +506,23 @@ const OutboundPage: React.FC = () => {
       })
       .filter((r) => r.id && isOutboundConfirmable(r));
     if (!records.length) {
-      messageApi.warning('所选单据均不可确认出库');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noneConfirmable'));
       return;
     }
     setBatchConfirmSubmitting(true);
     try {
       const result = await batchConfirmOutboundDocuments(records);
       if (result.success > 0) {
-        messageApi.success(`成功确认 ${result.success} 张出库单`);
+        messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.batchConfirmSuccess', { count: result.success }));
         invalidateMenuBadgeCounts();
         actionRef.current?.reload();
       }
       if (result.failed.length) {
         messageApi.warning(
-          `${result.failed.length} 张失败：${result.failed.slice(0, 3).map((f) => f.message).join('；')}`,
+          t('app.kuaizhizao.warehouseOutbound.msg.batchConfirmFailed', {
+            count: result.failed.length,
+            details: result.failed.slice(0, 3).map((f) => f.message).join('；'),
+          }),
         );
       }
     } finally {
@@ -524,17 +532,17 @@ const OutboundPage: React.FC = () => {
 
   const handleWithdraw = (record: OutboundOrder) => {
     Modal.confirm({
-      title: '撤回出库',
-      content: `确定撤回单据 "${outboundDocumentCode(record)}" 吗？系统将回冲库存并恢复待出库状态。`,
+      title: t('app.kuaizhizao.warehouseOutbound.msg.withdrawTitle'),
+      content: t('app.kuaizhizao.warehouseOutbound.msg.withdrawConfirm', { code: outboundDocumentCode(record) }),
       onOk: async () => {
         try {
           await withdrawOutboundDocument(record);
-          messageApi.success('撤回成功');
+          messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.withdrawSuccess'));
           invalidateMenuBadgeCounts();
           await refreshOrderAfterConfirm(record);
         } catch (e: unknown) {
           const err = e as { message?: string; response?: { data?: { detail?: string } } };
-          messageApi.error(err?.message || err?.response?.data?.detail || '撤回失败');
+          messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.msg.withdrawFailed'));
         }
       },
     });
@@ -544,7 +552,7 @@ const OutboundPage: React.FC = () => {
     if (!record.id) return;
     const docType = outboundTypeToPrintDocumentType(record.outbound_type);
     if (!docType) {
-      messageApi.warning('该类型暂不支持打印');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.printNotSupported'));
       return;
     }
     openPrint({ documentType: docType, documentId: record.id });
@@ -566,7 +574,7 @@ const OutboundPage: React.FC = () => {
 
   const handleGenerateWave = async () => {
     if (!selectedProductionPickingIds.length) {
-      messageApi.warning('请先勾选生产领料单');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.selectPickingDocs'));
       return;
     }
     try {
@@ -576,9 +584,9 @@ const OutboundPage: React.FC = () => {
       });
       setWaveResult(result as WavePickingResult);
       setWaveModalVisible(true);
-      messageApi.success('波次拣货单生成成功');
+      messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.waveGenerated'));
     } catch (e: any) {
-      messageApi.error(e?.message || '生成波次拣货单失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.warehouseOutbound.msg.waveGenerateFailed'));
     } finally {
       setWaveGenerating(false);
     }
@@ -593,14 +601,63 @@ const OutboundPage: React.FC = () => {
     }
     if (record.work_order_code) return String(record.work_order_code);
     if (record.customer_name) return String(record.customer_name);
-    return '出库单';
+    return t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
   };
 
   const salesDeliveryCustomFieldColumns = generateSalesDeliveryCustomFieldColumns();
   const productionPickingCustomFieldColumns = generateProductionPickingCustomFieldColumns();
-  const columns: ProColumns<OutboundOrder>[] = [
+
+  const waveColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 130 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.locationCode'), dataIndex: 'location_code', width: 120, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 130 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name' },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.demandQty'),
+        dataIndex: 'total_quantity',
+        width: 130,
+        align: 'right' as const,
+        render: (v: number, row: WaveMergedItem) => `${Number(v || 0)} ${row.unit || ''}`.trim(),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.sourcePickings'),
+        dataIndex: 'source_pickings',
+        width: 260,
+        render: (v: string[]) => (Array.isArray(v) ? v.join('、') : '-'),
+      },
+    ],
+    [t],
+  );
+
+  const pickingDetailColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.requiredQty'), dataIndex: 'required_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'), dataIndex: 'batch_number', width: 100 },
+    ],
+    [t],
+  );
+
+  const deliveryDetailColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'), dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+      { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes' },
+    ],
+    [t],
+  );
+
+  const columns: ProColumns<OutboundOrder>[] = useMemo(
+    () => [
     {
-      title: '主体 / 单号',
+      title: t('app.kuaizhizao.warehouseOutbound.col.subjectDocNo'),
       key: 'delivery_code',
       dataIndex: ['delivery_code', 'picking_code'],
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -613,66 +670,66 @@ const OutboundPage: React.FC = () => {
       ),
     },
     {
-      title: '出库单号',
+      title: t('app.kuaizhizao.warehouseOutbound.col.outboundCode'),
       dataIndex: ['delivery_code', 'picking_code'],
       hideInTable: true,
     },
     {
-      title: '出库类型',
+      title: t('app.kuaizhizao.warehouseOutbound.col.outboundType'),
       dataIndex: 'outbound_type',
       width: 100,
       valueEnum: {
-        production_picking: { text: OUTBOUND_ISSUE_TYPE_LABELS.production_picking, status: 'processing' },
-        sales_delivery: { text: OUTBOUND_ISSUE_TYPE_LABELS.sales_delivery, status: 'success' },
-        outsource_issue: { text: OUTBOUND_ISSUE_TYPE_LABELS.outsource_issue, status: 'warning' },
-        other_outbound: { text: OUTBOUND_ISSUE_TYPE_LABELS.other_outbound, status: 'default' },
-        material_borrow: { text: OUTBOUND_ISSUE_TYPE_LABELS.material_borrow, status: 'default' },
+        production_picking: { text: getOutboundIssueTypeLabel(t, 'production_picking'), status: 'processing' },
+        sales_delivery: { text: getOutboundIssueTypeLabel(t, 'sales_delivery'), status: 'success' },
+        outsource_issue: { text: getOutboundIssueTypeLabel(t, 'outsource_issue'), status: 'warning' },
+        other_outbound: { text: getOutboundIssueTypeLabel(t, 'other_outbound'), status: 'default' },
+        material_borrow: { text: getOutboundIssueTypeLabel(t, 'material_borrow'), status: 'default' },
       },
     },
     {
-      title: '客户',
+      title: t('app.kuaizhizao.warehouseOutbound.col.customer'),
       dataIndex: 'customer_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '工单号',
+      title: t('app.kuaizhizao.warehouseOutbound.col.workOrderCode'),
       dataIndex: 'work_order_code',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '出库数量',
+      title: t('app.kuaizhizao.warehouseOutbound.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '出库品种',
+      title: t('app.kuaizhizao.warehouseOutbound.col.totalItems'),
       dataIndex: 'total_items',
       width: 100,
       align: 'right',
     },
     {
-      title: '出库仓库',
+      title: t('app.kuaizhizao.warehouseOutbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '操作员',
+      title: t('app.kuaizhizao.warehouseOutbound.col.operator'),
       dataIndex: 'delivered_by',
       width: 100,
       ellipsis: true,
     },
     {
-      title: '出库日期',
+      title: t('app.kuaizhizao.warehouseOutbound.col.outboundDate'),
       dataIndex: 'delivery_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -680,7 +737,7 @@ const OutboundPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -703,7 +760,7 @@ const OutboundPage: React.FC = () => {
     ...salesDeliveryCustomFieldColumns,
     ...productionPickingCustomFieldColumns,
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
       width: 220,
       fixed: 'right',
       render: (_, record) => (
@@ -715,7 +772,7 @@ const OutboundPage: React.FC = () => {
                 record.outbound_type === 'production_picking' &&
                 executionConfig &&
                 executionConfig.current_user_can_confirm_picking === false
-                  ? '当前业务配置下，您无权限确认生产领料'
+                  ? t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission')
                   : undefined
               }
             >
@@ -729,13 +786,13 @@ const OutboundPage: React.FC = () => {
                   executionConfig.current_user_can_confirm_picking === false
                 }
               >
-                确认出库
+                {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
               </Button>
             </Tooltip>
           )}
           {isOutboundWithdrawable(record) && record.outbound_type !== 'outsource_issue' && (
             <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
-              撤回
+              {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
             </Button>
           )}
           {(() => {
@@ -747,12 +804,23 @@ const OutboundPage: React.FC = () => {
         </Space>
       ),
     },
-  ];
+  ],
+    [
+      t,
+      executionConfig,
+      handleDetail,
+      handleConfirm,
+      handleWithdraw,
+      handlePrint,
+      salesDeliveryCustomFieldColumns,
+      productionPickingCustomFieldColumns,
+    ],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="出库管理"
+        headerTitle={t('app.kuaizhizao.warehouseOutbound.title')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.outbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.outbound_type}::${record.id}`}
@@ -765,7 +833,7 @@ const OutboundPage: React.FC = () => {
               enrichSalesDeliveryRecordsWithCustomFields,
             });
           } catch {
-            messageApi.error('获取出库单列表失败');
+            messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
@@ -788,15 +856,15 @@ const OutboundPage: React.FC = () => {
                 await warehouseApi.materialBorrow.delete(id);
               }
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.warehouseOutbound.msg.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: unknown) {
             const err = error as { message?: string };
-            messageApi.error(err?.message || '删除失败');
+            messageApi.error(err?.message || t('app.kuaizhizao.warehouseOutbound.msg.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条出库单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.warehouseOutbound.msg.deleteConfirm', { count })}
         toolBarRender={() => [
           <UniPullLoadButton
             key="pull"
@@ -829,15 +897,17 @@ const OutboundPage: React.FC = () => {
           <UniBatchMenuButton
             key="batch-confirm"
             selectedRowKeys={selectedOutboundKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaizhizao.warehouseOutbound.action.batchActions')}
             disabled={batchConfirmSubmitting}
             menuItems={[
               {
                 key: 'batch-confirm',
-                label: batchConfirmSubmitting ? '确认中…' : '批量确认出库',
+                label: batchConfirmSubmitting
+                  ? t('app.kuaizhizao.warehouseOutbound.action.confirming')
+                  : t('app.kuaizhizao.warehouseOutbound.action.batchConfirm'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确认批量出库 ${count} 张单据`,
-                confirmDescription: '将按单据类型调用对应确认接口；不可确认的单据会跳过并汇总失败原因。',
+                confirmTitle: (count) => t('app.kuaizhizao.warehouseOutbound.batchConfirm.title', { count }),
+                confirmDescription: t('app.kuaizhizao.warehouseOutbound.batchConfirm.description'),
                 onClick: handleBatchConfirm,
               },
             ]}
@@ -855,7 +925,7 @@ const OutboundPage: React.FC = () => {
               setBatchModalVisible(true);
             }}
           >
-            批量出库
+            {t('app.kuaizhizao.warehouseOutbound.action.batchOutbound')}
           </Button>,
           <Button
             key="wave-picking"
@@ -863,23 +933,23 @@ const OutboundPage: React.FC = () => {
             disabled={!selectedProductionPickingIds.length}
             onClick={handleGenerateWave}
           >
-            生成波次拣货单
+            {t('app.kuaizhizao.warehouseOutbound.action.generateWave')}
           </Button>,
         ]}
         scroll={{ x: 2000 }}
       />
 
       <Modal
-        title="批量出库"
+        title={t('app.kuaizhizao.warehouseOutbound.batch.title')}
         open={batchModalVisible}
         onCancel={resetBatchOutboundModal}
         onOk={handleBatchOutboundSubmit}
         confirmLoading={batchSubmitting}
         width={520}
-        okText="确认出库"
+        okText={t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
       >
         <p style={{ marginBottom: 16, color: '#666' }}>
-          根据上游单据批量创建出库单。生产领料：从工单下推；销售出库：从销售订单上拉。
+          {t('app.kuaizhizao.warehouseOutbound.batch.description')}
         </p>
         <ProForm
           formRef={batchFormRef}
@@ -889,11 +959,11 @@ const OutboundPage: React.FC = () => {
         >
           <ProFormSelect
             name="batch_outbound_type"
-            label="出库类型"
+            label={t('app.kuaizhizao.warehouseOutbound.col.outboundType')}
             rules={[{ required: true }]}
             options={[
-              { label: '生产领料（从工单）', value: 'production_picking' },
-              { label: '销售出库（从销售订单）', value: 'sales_delivery' },
+              { label: t('app.kuaizhizao.warehouseOutbound.batch.typeProductionPicking'), value: 'production_picking' },
+              { label: t('app.kuaizhizao.warehouseOutbound.batch.typeSalesDelivery'), value: 'sales_delivery' },
             ]}
             fieldProps={{
               onChange: (v: string) => setBatchOutboundType(v as 'production_picking' | 'sales_delivery'),
@@ -903,18 +973,18 @@ const OutboundPage: React.FC = () => {
             <>
               <ProFormSelect
                 name="work_order_ids"
-                label="选择工单"
-                rules={[{ required: true, message: '请选择至少一个工单' }]}
+                label={t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrders')}
+                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrdersRule') }]}
                 mode="multiple"
-                placeholder="请选择工单（已下达/进行中）"
+                placeholder={t('app.kuaizhizao.warehouseOutbound.batch.selectWorkOrdersPlaceholder')}
                 options={workOrderOptions}
                 fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
               />
               <ProFormSelect
                 name="warehouse_id"
-                label="出库仓库"
-                rules={[{ required: true, message: '请选择出库仓库' }]}
-                placeholder="请选择仓库"
+                label={t('app.kuaizhizao.warehouseOutbound.col.warehouse')}
+                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWarehouseRule') }]}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
                 options={warehouseOptions}
                 fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
               />
@@ -929,18 +999,18 @@ const OutboundPage: React.FC = () => {
             <>
               <ProFormSelect
                 name="sales_order_ids"
-                label="选择销售订单"
-                rules={[{ required: true, message: '请选择至少一个销售订单' }]}
+                label={t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrders')}
+                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrdersRule') }]}
                 mode="multiple"
-                placeholder="请选择销售订单（已审核/已确认）"
+                placeholder={t('app.kuaizhizao.warehouseOutbound.batch.selectSalesOrdersPlaceholder')}
                 options={salesOrderOptions}
                 fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
               />
               <ProFormSelect
                 name="warehouse_id"
-                label="出库仓库"
-                rules={[{ required: true, message: '请选择出库仓库' }]}
-                placeholder="请选择仓库"
+                label={t('app.kuaizhizao.warehouseOutbound.col.warehouse')}
+                rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.batch.selectWarehouseRule') }]}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
                 options={warehouseOptions}
                 fieldProps={{ showSearch: true, filterOption: (input, opt) => (opt?.label ?? '').toString().toLowerCase().includes(input.toLowerCase()) }}
               />
@@ -968,44 +1038,29 @@ const OutboundPage: React.FC = () => {
       />
 
       <Modal
-        title={`波次拣货单${waveResult?.wave_code ? ` - ${waveResult.wave_code}` : ''}`}
+        title={`${t('app.kuaizhizao.warehouseOutbound.wave.title')}${waveResult?.wave_code ? ` - ${waveResult.wave_code}` : ''}`}
         open={waveModalVisible}
         footer={null}
         width={980}
         onCancel={() => setWaveModalVisible(false)}
       >
         <Typography.Paragraph type="secondary">
-          已合并 {waveResult?.source_picking_ids?.length || 0} 张生产领料单，生成 {waveResult?.total_items || 0} 条拣货路线。
+          {t('app.kuaizhizao.warehouseOutbound.wave.summary', {
+            sourceCount: waveResult?.source_picking_ids?.length || 0,
+            itemCount: waveResult?.total_items || 0,
+          })}
         </Typography.Paragraph>
         <Table<WaveMergedItem>
           size="small"
           rowKey={(row, idx) => `${row.material_code || 'm'}-${row.location_code || 'l'}-${idx}`}
           dataSource={waveResult?.merged_items || []}
           pagination={false}
-          columns={[
-            { title: '仓库', dataIndex: 'warehouse_name', width: 130 },
-            { title: '库位', dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
-            { title: '物料编码', dataIndex: 'material_code', width: 130 },
-            { title: '物料名称', dataIndex: 'material_name' },
-            {
-              title: '需求数量',
-              dataIndex: 'total_quantity',
-              width: 130,
-              align: 'right',
-              render: (v, row) => `${Number(v || 0)} ${row.unit || ''}`.trim(),
-            },
-            {
-              title: '来源领料单',
-              dataIndex: 'source_pickings',
-              width: 260,
-              render: (v: string[]) => (Array.isArray(v) ? v.join('、') : '-'),
-            },
-          ]}
+          columns={waveColumns}
         />
       </Modal>
 
       <DetailDrawerTemplate
-        title={`出库单详情 - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
+        title={`${t('app.kuaizhizao.warehouseOutbound.detail.title')} - ${currentOrder?.delivery_code || currentOrder?.picking_code || ''}`}
         open={detailDrawerVisible}
         zIndex={outboundDetailDrawerZIndex}
         onClose={() => {
@@ -1031,12 +1086,12 @@ const OutboundPage: React.FC = () => {
                     executionConfig.current_user_can_confirm_picking === false
                   }
                 >
-                  确认出库
+                  {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
                 </Button>
               )}
               {isOutboundWithdrawable(currentOrder) && currentOrder.outbound_type !== 'outsource_issue' && (
                 <Button danger icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentOrder)}>
-                  撤回
+                  {t('app.kuaizhizao.warehouseOutbound.action.withdraw')}
                 </Button>
               )}
             </Space>
@@ -1045,26 +1100,20 @@ const OutboundPage: React.FC = () => {
         customContent={
           currentOrder ? (
             <div style={{ padding: '16px 0' }}>
-              <Card title="基本信息" style={{ marginBottom: 16 }}>
-                <p><strong>出库单号：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
-                <p><strong>出库类型：</strong>
+              <Card title={t('app.kuaizhizao.warehouseOutbound.section.basicInfo')} style={{ marginBottom: 16 }}>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.field.outboundCode')}：</strong>{currentOrder.delivery_code || currentOrder.picking_code}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.field.outboundType')}：</strong>
                   <Tag color={
                     currentOrder.outbound_type === 'production_picking' ? 'processing'
                       : currentOrder.outbound_type === 'outsource_issue' ? 'warning'
                         : 'success'
                   }>
-                    {currentOrder.outbound_type === 'production_picking'
-                      ? OUTBOUND_ISSUE_TYPE_LABELS.production_picking
-                      : currentOrder.outbound_type === 'outsource_issue'
-                        ? OUTBOUND_ISSUE_TYPE_LABELS.outsource_issue
-                        : currentOrder.outbound_type === 'other_outbound'
-                          ? OUTBOUND_ISSUE_TYPE_LABELS.other_outbound
-                          : currentOrder.outbound_type === 'material_borrow'
-                            ? OUTBOUND_ISSUE_TYPE_LABELS.material_borrow
-                            : OUTBOUND_ISSUE_TYPE_LABELS.sales_delivery}
+                    {currentOrder.outbound_type
+                      ? getOutboundIssueTypeLabel(t, currentOrder.outbound_type)
+                      : ''}
                   </Tag>
                 </p>
-                <p><strong>状态：</strong>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.status')}：</strong>
                   <Tag color={
                     currentOrder.status === '已完成' ? 'success' :
                       currentOrder.status === '已确认' ? 'processing' :
@@ -1074,16 +1123,16 @@ const OutboundPage: React.FC = () => {
                   </Tag>
                 </p>
                 {currentOrder.customer_name && (
-                  <p><strong>客户：</strong>{currentOrder.customer_name}</p>
+                  <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.customer')}：</strong>{currentOrder.customer_name}</p>
                 )}
                 {currentOrder.work_order_code && (
-                  <p><strong>工单号：</strong>{currentOrder.work_order_code}</p>
+                  <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.workOrderCode')}：</strong>{currentOrder.work_order_code}</p>
                 )}
-                <p><strong>出库仓库：</strong>{currentOrder.warehouse_name}</p>
-                <p><strong>出库日期：</strong>{currentOrder.delivery_date}</p>
-                <p><strong>操作员：</strong>{currentOrder.delivered_by}</p>
-                <p><strong>总数量：</strong>{currentOrder.total_quantity}</p>
-                <p><strong>总品种：</strong>{currentOrder.total_items}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.field.warehouse')}：</strong>{currentOrder.warehouse_name}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.outboundDate')}：</strong>{currentOrder.delivery_date}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.operator')}：</strong>{currentOrder.delivered_by}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.totalQty')}：</strong>{currentOrder.total_quantity}</p>
+                <p><strong>{t('app.kuaizhizao.warehouseOutbound.col.totalSku')}：</strong>{currentOrder.total_items}</p>
                 {currentOrder.outbound_type === 'sales_delivery' &&
                 hasCustomFieldsDetailContent(salesDeliveryListCustomFields, salesDeliveryDetailCustomFieldValues) ? (
                   <div style={{ marginTop: 12 }}>
@@ -1106,11 +1155,11 @@ const OutboundPage: React.FC = () => {
                   </div>
                 ) : null}
                 {currentOrder.notes && (
-                  <p style={{ marginTop: 12 }}><strong>备注：</strong>{currentOrder.notes}</p>
+                  <p style={{ marginTop: 12 }}><strong>{t('app.kuaizhizao.common.fieldNotes')}：</strong>{currentOrder.notes}</p>
                 )}
                 {currentOrder.outbound_type === 'sales_delivery' ? (
                   <div style={{ marginTop: 12 }}>
-                    <Typography.Text strong>附件</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.warehouseOutbound.section.attachments')}</Typography.Text>
                     {isEditableSalesDelivery(currentOrder) ? (
                       <>
                         <Upload
@@ -1129,7 +1178,7 @@ const OutboundPage: React.FC = () => {
                           multiple
                           style={{ marginTop: 8, display: 'block' }}
                         >
-                          <Button>上传附件</Button>
+                          <Button>{t('app.kuaizhizao.warehouseOutbound.action.uploadAttachments')}</Button>
                         </Upload>
                         <Button
                           size="small"
@@ -1137,7 +1186,7 @@ const OutboundPage: React.FC = () => {
                           loading={savingSalesDeliveryAttachments}
                           onClick={handleSaveSalesDeliveryAttachments}
                         >
-                          保存附件
+                          {t('app.kuaizhizao.warehouseOutbound.action.saveAttachments')}
                         </Button>
                       </>
                     ) : (currentOrder.attachments?.length ?? 0) > 0 ? (
@@ -1145,22 +1194,21 @@ const OutboundPage: React.FC = () => {
                         {(currentOrder.attachments ?? []).map((file) => (
                           <li key={file.uid ?? file.name}>
                             <a href={file.url} target="_blank" rel="noreferrer">
-                              {file.name ?? '附件'}
+                              {file.name ?? t('app.kuaizhizao.warehouseOutbound.detail.attachmentFallback')}
                             </a>
                           </li>
                         ))}
                       </ul>
                     ) : (
                       <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                        暂无附件
+                        {t('app.kuaizhizao.warehouseOutbound.detail.noAttachments')}
                       </Typography.Text>
                     )}
                   </div>
                 ) : null}
               </Card>
 
-              {/* 生命周期 */}
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getOutboundLifecycle(currentOrder as Record<string, unknown>);
@@ -1199,7 +1247,7 @@ const OutboundPage: React.FC = () => {
               </DetailDrawerSection>
 
               {currentOrder.outbound_type === 'sales_delivery' && currentOrder.id ? (
-                <DetailDrawerSection title="出货检验 (OQC)">
+                <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.oqc')}>
                   <LinkedOqcPanel
                     salesDeliveryId={currentOrder.id}
                     active={detailDrawerVisible}
@@ -1212,9 +1260,8 @@ const OutboundPage: React.FC = () => {
                 </DetailDrawerSection>
               ) : null}
 
-              {/* 出库单明细 */}
               {currentOrder.items && currentOrder.items.length > 0 && (
-                <Card title="出库明细">
+                <Card title={t('app.kuaizhizao.warehouseOutbound.section.outboundDetails')}>
                   <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                   <Table
                     className="warehouse-detail-table"
@@ -1226,31 +1273,16 @@ const OutboundPage: React.FC = () => {
                     pagination={false}
                     columns={
                       currentOrder.outbound_type === 'production_picking'
-                        ? [
-                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                            { title: '需求数量', dataIndex: 'required_quantity', width: 100, align: 'right' as const },
-                            { title: '已领数量', dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
-                            { title: '单位', dataIndex: 'material_unit', width: 60 },
-                            { title: '仓库', dataIndex: 'warehouse_name', width: 120 },
-                            { title: '批次号', dataIndex: 'batch_number', width: 100 },
-                          ]
-                        : [
-                            { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                            { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                            { title: '出库数量', dataIndex: 'delivery_quantity', width: 100, align: 'right' as const },
-                            { title: '单位', dataIndex: 'material_unit', width: 60 },
-                            { title: '备注', dataIndex: 'notes' },
-                          ]
+                        ? pickingDetailColumns
+                        : deliveryDetailColumns
                     }
                     dataSource={currentOrder.items}
                   />
                 </Card>
               )}
 
-              {/* 操作记录 */}
               {currentOrder?.id && (
-                <DetailDrawerSection title="操作记录">
+                <DetailDrawerSection title={t('app.kuaizhizao.warehouseOutbound.section.operationLog')}>
                   {outboundTracking.loading && (
                     <div style={{ textAlign: 'center', padding: 24 }}>
                       <Spin />
@@ -1263,7 +1295,7 @@ const OutboundPage: React.FC = () => {
                     <DocumentTrackingTimelineBody data={outboundTracking.data} />
                   )}
                   {!outboundTracking.loading && !outboundTracking.data && !outboundTracking.error && (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseOutbound.detail.noOperationLog')} />
                   )}
                 </DetailDrawerSection>
               )}

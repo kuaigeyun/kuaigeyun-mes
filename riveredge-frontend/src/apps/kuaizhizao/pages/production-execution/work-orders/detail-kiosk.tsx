@@ -8,6 +8,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'
 import { Card, Button, Row, Col, Tabs, Tag, Descriptions, message, Modal, Input, Space, Statistic, Progress } from 'antd';
 import { 
     ArrowLeftOutlined, 
@@ -27,6 +28,7 @@ import { workOrderApi } from '../../../services/production';
 const { Meta } = Card;
 
 const WorkOrderDetailKioskPage: React.FC = () => {
+  const { t } = useTranslation()
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [loading, setLoading] = useState(false);
@@ -58,7 +60,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             }
         } catch (error) {
             console.error(error);
-            message.error('加载工单详情失败');
+            message.error(t('app.kuaizhizao.workOrder.kioskDetailLoadFailed'));
         } finally {
             setLoading(false);
         }
@@ -68,10 +70,10 @@ const WorkOrderDetailKioskPage: React.FC = () => {
         if (!workOrder || !activeOperation) return;
         try {
             await workOrderApi.startOperation(workOrder.id, activeOperation.id);
-            message.success('工序已开始');
+            message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
             loadWorkOrderDetail(workOrder.id);
         } catch (error) {
-            message.error('操作失败');
+            message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
         }
     };
     
@@ -83,7 +85,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
 
     const submitReporting = async () => {
         if (!reportQuantity || parseFloat(reportQuantity) <= 0) {
-            message.warning('请输入有效的报工数量');
+            message.warning(t('app.kuaizhizao.workOrder.kioskEnterValidReportQty'));
             return;
         }
 
@@ -94,7 +96,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             setReportModalVisible(false);
             loadWorkOrderDetail(workOrder.id);
         } catch (error) {
-            message.error('报工失败');
+            message.error(t('app.kuaizhizao.workOrder.kioskReportFailed'));
         }
     };
 
@@ -124,15 +126,15 @@ const WorkOrderDetailKioskPage: React.FC = () => {
             fullscreen={true}
             footerButtons={[
                 {
-                    title: '暂停',
+                    title: t('app.kuaizhizao.workOrder.actionPause'),
                     type: 'default',
                     icon: <PauseCircleOutlined />,
-                    onClick: () => message.info('暂停功能待实现'),
+                    onClick: () => message.info(t('app.kuaizhizao.workOrder.kioskPauseNotImplemented')),
                     disabled: activeOperation?.status !== 'processing',
                     block: false
                 },
                  {
-                    title: '返回列表',
+                    title: t('app.kuaizhizao.workOrder.actionBackToList'),
                     type: 'default',
                     icon: <ArrowLeftOutlined />,
                     onClick: () => navigate(-1),
@@ -183,7 +185,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                     <div style={{ height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center', backgroundColor: '#f5f5f5', border: '1px dashed #d9d9d9' }}>
                                         <div style={{ textAlign: 'center' }}>
                                             <FileTextOutlined style={{ fontSize: '64px', color: '#bfbfbf' }} />
-                                            <div style={{ marginTop: '16px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#999' }}>暂无 SOP 文件预览</div>
+                                            <div style={{ marginTop: '16px', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, color: '#999' }}>{t('app.kuaizhizao.workOrder.kioskNoSopPreview')}</div>
                                             {/* 这里后续集成 PDF 预览或图片轮播 */}
                                         </div>
                                     </div>
@@ -197,7 +199,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
                                         <Button size="large" {...touchButtonProps({ size: 'action' })} icon={<BarcodeOutlined />} style={{ width: 200 }}>
                                             扫描投料
                                         </Button>
-                                        <div style={{ marginTop: '20px', color: '#999', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>扫描关键件条码进行防错校验和追溯绑定</div>
+                                        <div style={{ marginTop: '20px', color: '#999', fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDetailScanFeedHint')}</div>
                                     </div>
                                 )
                             }
@@ -208,7 +210,7 @@ const WorkOrderDetailKioskPage: React.FC = () => {
 
             {/* 报工弹窗 */}
             <Modal
-                title={<span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>工序报工</span>}
+                title={<span style={{ fontSize: HMI_DESIGN_TOKENS.FONT_TITLE_MIN }}>{t('app.kuaizhizao.workOrder.kioskOpReport')}</span>}
                 open={reportModalVisible}
                 onCancel={() => setReportModalVisible(false)}
                 footer={null}

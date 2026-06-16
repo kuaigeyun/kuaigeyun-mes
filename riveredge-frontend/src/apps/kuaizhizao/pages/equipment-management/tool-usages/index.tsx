@@ -5,9 +5,10 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * 展示全量工装领用记录，支持领用、归还操作。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Modal, Typography } from 'antd';
+import { App, Button, Modal, Typography } from 'antd';
 import { PlusOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
@@ -37,6 +38,7 @@ interface ToolUsage {
 }
 
 const ToolUsagesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -57,25 +59,31 @@ const ToolUsagesPage: React.FC = () => {
     formRef.current?.setFieldsValue({ checkout_date: dayjs() });
   };
 
-  const handleCheckin = async (record: ToolUsage) => {
-    if (record.status !== '使用中') {
-      messageApi.warning('该记录已归还');
-      return;
-    }
-    Modal.confirm({
-      title: '确认归还',
-      content: `确定要归还工装「${record.tool_code} - ${record.tool_name}」吗？`,
-      onOk: async () => {
-        try {
-          await toolApi.checkin(record.uuid!);
-          messageApi.success('归还成功');
-          actionRef.current?.reload();
-        } catch (e: any) {
-          messageApi.error(e?.message || '归还失败');
-        }
-      },
-    });
-  };
+  const handleCheckin = useCallback(
+    async (record: ToolUsage) => {
+      if (record.status !== '使用中') {
+        messageApi.warning(t('app.kuaizhizao.toolUsage.alreadyReturned'));
+        return;
+      }
+      Modal.confirm({
+        title: t('app.kuaizhizao.toolUsage.confirmCheckinTitle'),
+        content: t('app.kuaizhizao.toolUsage.confirmCheckinContent', {
+          code: record.tool_code,
+          name: record.tool_name,
+        }),
+        onOk: async () => {
+          try {
+            await toolApi.checkin(record.uuid!);
+            messageApi.success(t('app.kuaizhizao.toolUsage.checkinSuccess'));
+            actionRef.current?.reload();
+          } catch (e: any) {
+            messageApi.error(e?.message || t('app.kuaizhizao.toolUsage.checkinFailed'));
+          }
+        },
+      });
+    },
+    [messageApi, t],
+  );
 
   const handleSubmit = async (values: any) => {
     try {
@@ -89,101 +97,104 @@ const ToolUsagesPage: React.FC = () => {
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('领用成功');
+      messageApi.success(t('app.kuaizhizao.toolUsage.checkoutSuccess'));
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '领用失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.toolUsage.checkoutFailed'));
       throw e;
     }
   };
 
-  const columns: ProColumns<ToolUsage>[] = [
-    {
-      title: '领用单号',
-      dataIndex: 'usage_no',
-      width: 150,
-      fixed: 'left',
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
-          {r.usage_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '工装编号',
-      dataIndex: 'tool_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
-          {r.tool_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '工装名称', dataIndex: 'tool_name', width: 180, ellipsis: true },
-    { title: '领用时间', dataIndex: 'checkout_date', valueType: 'dateTime', width: 170 },
-    { title: '归还时间', dataIndex: 'checkin_date', valueType: 'dateTime', width: 170 },
-    { title: '操作人', dataIndex: 'operator_name', width: 100 },
-    { title: '来源类型', dataIndex: 'source_type', width: 100 },
-    {
-      title: '来源单号',
-      dataIndex: 'source_no',
-      width: 140,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
-          {r.source_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+  const columns: ProColumns<ToolUsage>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.toolUsage.colUsageNo'),
+        dataIndex: 'usage_no',
+        width: 150,
+        fixed: 'left',
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
+            {r.usage_no ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 100,
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) =>
-        record.status === '使用中' ? (
-          <Button
-            type="link"
-            size="small"
-            icon={<RollbackOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleCheckin(record);
-            }}
-          >
-            归还
-          </Button>
-        ) : null,
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.toolUsage.colToolCode'),
+        dataIndex: 'tool_code',
+        width: 120,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.tool_code ?? '') }} ellipsis>
+            {r.tool_code ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaizhizao.toolUsage.colToolName'), dataIndex: 'tool_name', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.toolUsage.colCheckoutDate'), dataIndex: 'checkout_date', valueType: 'dateTime', width: 170 },
+      { title: t('app.kuaizhizao.toolUsage.colCheckinDate'), dataIndex: 'checkin_date', valueType: 'dateTime', width: 170 },
+      { title: t('app.kuaizhizao.toolUsage.colOperator'), dataIndex: 'operator_name', width: 100 },
+      { title: t('app.kuaizhizao.toolUsage.colSourceType'), dataIndex: 'source_type', width: 100 },
+      {
+        title: t('app.kuaizhizao.toolUsage.colSourceNo'),
+        dataIndex: 'source_no',
+        width: 140,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
+            {r.source_no ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.toolUsage.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.toolUsage.colActions'),
+        valueType: 'option',
+        width: 100,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) =>
+          record.status === '使用中' ? (
+            <Button
+              type="link"
+              size="small"
+              icon={<RollbackOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleCheckin(record);
+              }}
+            >
+              {t('app.kuaizhizao.toolUsage.actionCheckin')}
+            </Button>
+          ) : null,
+      },
+    ],
+    [handleCheckin, t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<ToolUsage>
-        headerTitle="工装领用归还"
+        headerTitle={t('app.kuaizhizao.toolUsage.title')}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.tool-usages"
         actionRef={actionRef}
         enableRowSelection
@@ -209,7 +220,7 @@ const ToolUsagesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={handleCheckout}
           >
-            {withSingleNewShortcutHint('新建工装领用')}
+            {withSingleNewShortcutHint(t('app.kuaizhizao.toolUsage.createCheckout'))}
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}
@@ -220,7 +231,7 @@ const ToolUsagesPage: React.FC = () => {
       <FormModalTemplate
         open={modalVisible}
         onClose={() => setModalVisible(false)}
-        title="工装领用"
+        title={t('app.kuaizhizao.toolUsage.checkoutModalTitle')}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         onFinish={handleSubmit}
@@ -228,18 +239,18 @@ const ToolUsagesPage: React.FC = () => {
       >
         <ProFormSelect
           name="tool_uuid"
-          label="工装"
+          label={t('app.kuaizhizao.toolUsage.formTool')}
           options={toolOptions}
-          placeholder="请选择工装"
-          rules={[{ required: true, message: '请选择工装' }]}
+          placeholder={t('app.kuaizhizao.toolUsage.formSelectTool')}
+          rules={[{ required: true, message: t('app.kuaizhizao.toolUsage.formSelectToolRequired') }]}
           colProps={{ span: 12 }}
         />
-        <ProFormText name="operator_name" label="领用人" colProps={{ span: 12 }} />
-        <ProFormText name="department_name" label="领用部门" colProps={{ span: 12 }} />
-        <ProFormText name="source_type" label="来源类型" placeholder="如：工单" colProps={{ span: 12 }} />
-        <ProFormText name="source_no" label="来源单号" colProps={{ span: 12 }} />
+        <ProFormText name="operator_name" label={t('app.kuaizhizao.toolUsage.formBorrower')} colProps={{ span: 12 }} />
+        <ProFormText name="department_name" label={t('app.kuaizhizao.toolUsage.formDepartment')} colProps={{ span: 12 }} />
+        <ProFormText name="source_type" label={t('app.kuaizhizao.toolUsage.formSourceType')} placeholder={t('app.kuaizhizao.toolUsage.formSourceTypePlaceholder')} colProps={{ span: 12 }} />
+        <ProFormText name="source_no" label={t('app.kuaizhizao.toolUsage.formSourceNo')} colProps={{ span: 12 }} />
         <DocumentAttachmentsField category="tool_usage_attachments" />
-        <ProFormText name="remark" label="备注" colProps={{ span: 24 }} />
+        <ProFormText name="remark" label={t('app.kuaizhizao.toolUsage.formRemark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

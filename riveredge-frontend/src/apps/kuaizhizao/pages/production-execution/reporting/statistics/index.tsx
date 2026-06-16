@@ -7,7 +7,7 @@
  * @date 2025-01-04
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, Row, Col, Statistic, DatePicker, Button, Space, Table, Tag } from 'antd';
 import { Line, Bar, Column } from '@ant-design/charts';
 import { DownloadOutlined, ReloadOutlined } from '@ant-design/icons';
@@ -16,10 +16,12 @@ import { reportingApi } from '../../../../services/production';
 import type { ReportingDetailedStatistics } from '../../../../services/reporting';
 import dayjs, { Dayjs } from 'dayjs';
 import type { NoUndefinedRangeValueType } from 'rc-picker/lib/PickerInput/RangePicker';
+import { useTranslation } from 'react-i18next';
 
 const { RangePicker } = DatePicker;
 
 const ReportingStatisticsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>([
@@ -41,7 +43,7 @@ const ReportingStatisticsPage: React.FC = () => {
       });
       setStatistics(result);
     } catch (error: any) {
-      messageApi.error(error.message || '加载统计数据失败');
+      messageApi.error(error.message || t('app.kuaizhizao.workReporting.statistics.loadFailed'));
     } finally {
       setLoading(false);
     }
@@ -75,7 +77,7 @@ const ReportingStatisticsPage: React.FC = () => {
    */
   const handleExport = () => {
     if (!statistics) {
-      messageApi.warning('暂无数据可导出');
+      messageApi.warning(t('app.kuaizhizao.workReporting.statistics.noDataExport'));
       return;
     }
     try {
@@ -86,112 +88,115 @@ const ReportingStatisticsPage: React.FC = () => {
       a.download = `reporting-statistics-${dateRange[0].format('YYYY-MM-DD')}-${dateRange[1].format('YYYY-MM-DD')}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      messageApi.success('导出成功');
+      messageApi.success(t('app.kuaizhizao.workReporting.statistics.exportSuccess'));
     } catch (error: any) {
-      messageApi.error(error?.message || '导出失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.workReporting.statistics.exportFailed'));
     }
   };
 
-  // 工序统计表格列
-  const operationColumns = [
-    {
-      title: '工序名称',
-      dataIndex: 'operation_name',
-      key: 'operation_name',
-    },
-    {
-      title: '报工次数',
-      dataIndex: 'count',
-      key: 'count',
-      align: 'right' as const,
-    },
-    {
-      title: '报工数量',
-      dataIndex: 'reported_quantity',
-      key: 'reported_quantity',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '合格数量',
-      dataIndex: 'qualified_quantity',
-      key: 'qualified_quantity',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '工时（小时）',
-      dataIndex: 'work_hours',
-      key: 'work_hours',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '合格率',
-      dataIndex: 'qualification_rate',
-      key: 'qualification_rate',
-      align: 'right' as const,
-      render: (value: number) => (
-        <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
-          {value.toFixed(2)}%
-        </Tag>
-      ),
-    },
-  ];
+  const operationColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colOperationName'),
+        dataIndex: 'operation_name',
+        key: 'operation_name',
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colReportCount'),
+        dataIndex: 'count',
+        key: 'count',
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colReportedQty'),
+        dataIndex: 'reported_quantity',
+        key: 'reported_quantity',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colQualifiedQty'),
+        dataIndex: 'qualified_quantity',
+        key: 'qualified_quantity',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colWorkHours'),
+        dataIndex: 'work_hours',
+        key: 'work_hours',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colQualificationRate'),
+        dataIndex: 'qualification_rate',
+        key: 'qualification_rate',
+        align: 'right' as const,
+        render: (value: number) => (
+          <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
+            {value.toFixed(2)}%
+          </Tag>
+        ),
+      },
+    ],
+    [t],
+  );
 
-  // 操作工统计表格列
-  const workerColumns = [
-    {
-      title: '操作工姓名',
-      dataIndex: 'worker_name',
-      key: 'worker_name',
-    },
-    {
-      title: '报工次数',
-      dataIndex: 'count',
-      key: 'count',
-      align: 'right' as const,
-    },
-    {
-      title: '报工数量',
-      dataIndex: 'reported_quantity',
-      key: 'reported_quantity',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '合格数量',
-      dataIndex: 'qualified_quantity',
-      key: 'qualified_quantity',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '工时（小时）',
-      dataIndex: 'work_hours',
-      key: 'work_hours',
-      align: 'right' as const,
-      render: (value: number) => value.toFixed(2),
-    },
-    {
-      title: '合格率',
-      dataIndex: 'qualification_rate',
-      key: 'qualification_rate',
-      align: 'right' as const,
-      render: (value: number) => (
-        <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
-          {value.toFixed(2)}%
-        </Tag>
-      ),
-    },
-  ];
+  const workerColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colWorkerName'),
+        dataIndex: 'worker_name',
+        key: 'worker_name',
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colReportCount'),
+        dataIndex: 'count',
+        key: 'count',
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colReportedQty'),
+        dataIndex: 'reported_quantity',
+        key: 'reported_quantity',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colQualifiedQty'),
+        dataIndex: 'qualified_quantity',
+        key: 'qualified_quantity',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colWorkHours'),
+        dataIndex: 'work_hours',
+        key: 'work_hours',
+        align: 'right' as const,
+        render: (value: number) => value.toFixed(2),
+      },
+      {
+        title: t('app.kuaizhizao.workReporting.statistics.colQualificationRate'),
+        dataIndex: 'qualification_rate',
+        key: 'qualification_rate',
+        align: 'right' as const,
+        render: (value: number) => (
+          <Tag color={value >= 95 ? 'green' : value >= 90 ? 'orange' : 'red'}>
+            {value.toFixed(2)}%
+          </Tag>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <div>
-      {/* 筛选条件 */}
       <Card style={{ marginBottom: 12 }}>
         <Space>
-          <span>日期范围：</span>
+          <span>{t('app.kuaizhizao.workReporting.statistics.dateRange')}</span>
           <RangePicker
             value={dateRange}
             onChange={handleDateRangeChange}
@@ -203,22 +208,21 @@ const ReportingStatisticsPage: React.FC = () => {
             onClick={handleRefresh}
             loading={loading}
           >
-            查询
+            {t('app.kuaizhizao.workReporting.statistics.query')}
           </Button>
           <Button icon={<DownloadOutlined />} onClick={handleExport}>
-            导出
+            {t('app.kuaizhizao.workReporting.statistics.export')}
           </Button>
         </Space>
       </Card>
 
-      {/* 统计概览 */}
       {statistics && (
         <>
           <Row gutter={16} style={{ marginBottom: 12 }}>
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="总报工次数"
+                  title={t('app.kuaizhizao.workReporting.statistics.statTotalCount')}
                   value={statistics.total_count}
                   styles={{ content: {color: '#1890ff' } }}
                 />
@@ -227,7 +231,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="总报工数量"
+                  title={t('app.kuaizhizao.workReporting.statistics.statTotalReportedQty')}
                   value={statistics.total_reported_quantity}
                   precision={2}
                   styles={{ content: {color: '#52c41a' } }}
@@ -237,7 +241,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="合格率"
+                  title={t('app.kuaizhizao.workReporting.statistics.statQualificationRate')}
                   value={statistics.qualification_rate}
                   precision={2}
                   suffix="%"
@@ -248,7 +252,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="总工时（小时）"
+                  title={t('app.kuaizhizao.workReporting.statistics.statTotalWorkHours')}
                   value={statistics.total_work_hours}
                   precision={2}
                   styles={{ content: {color: '#722ed1' } }}
@@ -261,7 +265,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="待审核"
+                  title={t('app.kuaizhizao.workReporting.statistics.statPending')}
                   value={statistics.pending_count}
                   styles={{ content: {color: '#faad14' } }}
                 />
@@ -270,7 +274,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="已审核"
+                  title={t('app.kuaizhizao.workReporting.statistics.statApproved')}
                   value={statistics.approved_count}
                   styles={{ content: {color: '#52c41a' } }}
                 />
@@ -279,7 +283,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="平均效率（件/小时）"
+                  title={t('app.kuaizhizao.workReporting.statistics.statAvgEfficiency')}
                   value={statistics.avg_quantity_per_hour}
                   precision={2}
                   styles={{ content: {color: '#1890ff' } }}
@@ -289,7 +293,7 @@ const ReportingStatisticsPage: React.FC = () => {
             <Col span={6}>
               <Card>
                 <Statistic
-                  title="不合格率"
+                  title={t('app.kuaizhizao.workReporting.statistics.statUnqualifiedRate')}
                   value={statistics.unqualified_rate}
                   precision={2}
                   suffix="%"
@@ -299,10 +303,9 @@ const ReportingStatisticsPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* 图表展示 */}
           <Row gutter={16} style={{ marginBottom: 12 }}>
             <Col span={12}>
-              <Card title="按工序统计（Top 10）">
+              <Card title={t('app.kuaizhizao.workReporting.statistics.chartByOperation')}>
                 <Bar
                   data={statistics.operation_stats}
                   xField="operation_name"
@@ -315,7 +318,7 @@ const ReportingStatisticsPage: React.FC = () => {
               </Card>
             </Col>
             <Col span={12}>
-              <Card title="按操作工统计（Top 10）">
+              <Card title={t('app.kuaizhizao.workReporting.statistics.chartByWorker')}>
                 <Bar
                   data={statistics.worker_stats}
                   xField="worker_name"
@@ -329,8 +332,7 @@ const ReportingStatisticsPage: React.FC = () => {
             </Col>
           </Row>
 
-          {/* 按工序统计表格 */}
-          <Card title="按工序统计详情（Top 10）" style={{ marginBottom: 12 }}>
+          <Card title={t('app.kuaizhizao.workReporting.statistics.tableByOperation')} style={{ marginBottom: 12 }}>
             <Table
               columns={operationColumns}
               dataSource={statistics.operation_stats}
@@ -340,8 +342,7 @@ const ReportingStatisticsPage: React.FC = () => {
             />
           </Card>
 
-          {/* 按操作工统计表格 */}
-          <Card title="按操作工统计详情（Top 10）">
+          <Card title={t('app.kuaizhizao.workReporting.statistics.tableByWorker')}>
             <Table
               columns={workerColumns}
               dataSource={statistics.worker_stats}
@@ -357,4 +358,3 @@ const ReportingStatisticsPage: React.FC = () => {
 };
 
 export default ReportingStatisticsPage;
-

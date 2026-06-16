@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Select, Button, Spin, message, Empty } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import {
@@ -23,6 +24,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
   workOrderData,
   workOrderId,
 }) => {
+  const { t } = useTranslation();
   const [templates, setTemplates] = useState<PrintTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [printLoading, setPrintLoading] = useState(false);
@@ -65,7 +67,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
         setSelectedTemplateId(defaultTpl.uuid);
       }
     } catch (error: any) {
-      handleError(error, '加载打印模板失败');
+      handleError(error, t('app.kuaizhizao.workOrder.msgLoadPrintTemplateFailed'));
     } finally {
       setLoading(false);
     }
@@ -93,7 +95,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
     } catch (error: any) {
       const current = latestSelectionRef.current;
       if (reqId !== `${current.selectedTemplateId}-${current.effectiveWorkOrderId}`) return;
-      handleError(error, '加载预览失败');
+      handleError(error, t('app.kuaizhizao.workOrder.msgLoadPreviewFailed'));
       setPreviewHtml('');
     } finally {
       const current = latestSelectionRef.current;
@@ -105,11 +107,11 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
 
   const handlePrint = async () => {
     if (!effectiveWorkOrderId) {
-      message.warning('工单ID缺失，无法打印');
+      message.warning(t('app.kuaizhizao.workOrder.msgWorkOrderIdMissingPrint'));
       return;
     }
     if (!selectedTemplateId) {
-      message.warning('请先选择打印模板');
+      message.warning(t('app.kuaizhizao.workOrder.msgSelectPrintTemplate'));
       return;
     }
     setPrintLoading(true);
@@ -127,24 +129,24 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       );
       const html = result?.content ?? '';
       if (!html) {
-        message.error('打印内容为空');
+        message.error(t('app.kuaizhizao.workOrder.msgPrintContentEmpty'));
         return;
       }
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write(
-          `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>打印</title></head><body>${html}</body></html>`
+          `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${t('app.kuaizhizao.workOrder.actionPrint')}</title></head><body>${html}</body></html>`
         );
         printWindow.document.close();
         printWindow.focus();
         printWindow.print();
         printWindow.close();
-        message.success('打印已发送');
+        message.success(t('app.kuaizhizao.workOrder.msgPrintSent'));
       } else {
-        message.error('无法打开打印窗口，请检查浏览器弹窗设置');
+        message.error(t('app.kuaizhizao.workOrder.msgPrintPopupBlocked'));
       }
     } catch (error: any) {
-      handleError(error, '打印失败');
+      handleError(error, t('app.kuaizhizao.workOrder.msgPrintFailed'));
     } finally {
       setPrintLoading(false);
     }
@@ -154,16 +156,16 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
     <Modal
       title={
         <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', gap: 16 }}>
-          <span style={{ fontWeight: 600, fontSize: 16 }}>工单打印</span>
+          <span style={{ fontWeight: 600, fontSize: 16 }}>{t('app.kuaizhizao.workOrder.modalPrintTitle')}</span>
           <Select
             style={{ width: 260, flexShrink: 0 }}
-            placeholder="请选择打印模板"
+            placeholder={t('app.kuaizhizao.workOrder.msgSelectPrintTemplatePlaceholder')}
             value={selectedTemplateId}
             onChange={setSelectedTemplateId}
             loading={loading}
-            options={templates.map((t: PrintTemplate) => ({
-              label: t.name,
-              value: t.uuid,
+            options={templates.map((tpl: PrintTemplate) => ({
+              label: tpl.name,
+              value: tpl.uuid,
             }))}
           />
         </div>
@@ -182,7 +184,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       }}
       footer={[
         <Button key="cancel" onClick={onCancel}>
-          取消
+          {t('common.cancel')}
         </Button>,
         <Button
           key="print"
@@ -192,7 +194,7 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
           loading={printLoading}
           disabled={!selectedTemplateId || !effectiveWorkOrderId}
         >
-          打印
+          {t('app.kuaizhizao.workOrder.actionPrint')}
         </Button>,
       ]}
       className="work-order-print-modal"
@@ -200,17 +202,17 @@ const WorkOrderPrintModal: React.FC<WorkOrderPrintModalProps> = ({
       <Spin spinning={loading}>
         <div className="work-order-print-preview" style={{ height: '100%', overflow: 'auto' }}>
           {!effectiveWorkOrderId ? (
-            <Empty description="工单ID缺失，无法预览" style={{ paddingTop: 100 }} />
+            <Empty description={t('app.kuaizhizao.workOrder.msgWorkOrderIdMissingPreview')} style={{ paddingTop: 100 }} />
           ) : printLoading && !previewHtml ? (
             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', minHeight: 400 }}>
-              <Spin tip="加载预览中...">
+              <Spin tip={t('app.kuaizhizao.workOrder.msgLoadingPreview')}>
                 <div style={{ minHeight: 24 }} />
               </Spin>
             </div>
           ) : previewHtml ? (
             <div dangerouslySetInnerHTML={{ __html: previewHtml }} style={{ height: '100%', overflow: 'auto', padding: 16 }} />
           ) : (
-            <Empty description="请选择有效的打印模板" style={{ paddingTop: 100 }} />
+            <Empty description={t('app.kuaizhizao.workOrder.msgSelectValidPrintTemplate')} style={{ paddingTop: 100 }} />
           )}
         </div>
       </Spin>

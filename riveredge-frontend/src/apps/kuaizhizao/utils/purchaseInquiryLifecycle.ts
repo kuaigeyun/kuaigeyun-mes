@@ -28,6 +28,14 @@ const STATUS_TO_STAGE: Record<string, string> = {
 
 const STAGE_LABELS = ['草稿', '询价中', '待比价', '已定标', '已转单'] as const;
 
+const STAGE_I18N: Record<string, string> = {
+  草稿: 'app.kuaizhizao.purchaseInquiry.lifecycleDraft',
+  询价中: 'app.kuaizhizao.purchaseInquiry.lifecycleQuoting',
+  待比价: 'app.kuaizhizao.purchaseInquiry.lifecyclePendingCompare',
+  已定标: 'app.kuaizhizao.purchaseInquiry.lifecycleAwarded',
+  已转单: 'app.kuaizhizao.purchaseInquiry.lifecycleConverted',
+};
+
 export function isInquiryDraft(record: { status?: string }): boolean {
   const s = (record.status ?? '').trim();
   return s === 'DRAFT' || s === '草稿';
@@ -48,10 +56,15 @@ export function isInquiryAwarded(record: { status?: string }): boolean {
   return s === 'AWARDED' || s === '已定标';
 }
 
-export function buildPurchaseInquiryLifecycleValueEnum(): Record<string, { text: string; status?: string }> {
+export function buildPurchaseInquiryLifecycleValueEnum(
+  t?: (key: string) => string,
+): Record<string, { text: string; status?: string }> {
   const map: Record<string, { text: string; status?: string }> = {};
   STAGE_LABELS.forEach((label) => {
-    map[label] = { text: label, status: label === '已转单' ? 'Success' : 'Default' };
+    map[label] = {
+      text: t && STAGE_I18N[label] ? t(STAGE_I18N[label]) : label,
+      status: label === '已转单' ? 'Success' : 'Default',
+    };
   });
   return map;
 }

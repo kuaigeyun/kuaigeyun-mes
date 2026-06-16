@@ -25,7 +25,7 @@ function prependIndexColumn<T>(columns: ProColumns<T>[], t: (k: string) => strin
   return [
     {
       title: t('components.uniReport.indexColumn'),
-      valueType: 'indexBorder',
+      valueType: 'index',
       width: 48,
       fixed: 'left',
       hideInSearch: true,
@@ -219,27 +219,38 @@ export function UniReport<T extends Record<string, unknown> = Record<string, unk
   }, [columns, globalSummary, pageData, reportConfig, showIndexColumn, showSummaryRow, summaryFields]);
 
   return (
-    <ListPageTemplate statCards={statCards}>
-      <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} />
-      {children}
-      <UniTable<T>
-        headerTitle={title}
-        columnPersistenceId={columnPersistenceId}
-        actionRef={actionRef}
-        rowKey={rowKey as string}
-        columns={columns}
-        showAdvancedSearch
-        request={wrappedRequest}
-        permissionResource={permissionResource}
-        showExportButton={showExportButton}
-        onExport={handleExport}
-        showPrintButton={showPrintButton}
-        onPrint={handlePrint}
-        scroll={{ x: 1200 }}
-        bordered={template.bordered ?? true}
-        size={template.tableSize ?? 'small'}
-        summary={tableSummary}
-      />
+    <ListPageTemplate statCards={statCards} fillMain tableScrollLayout="report">
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <UniReportMetaHeader title={title} subtitle={resolvedSubtitle} />
+        {children}
+        <UniTable<T>
+          headerTitle={title}
+          columnPersistenceId={columnPersistenceId}
+          actionRef={actionRef}
+          rowKey={rowKey as string}
+          columns={columns}
+          viewTypes={['table']}
+          fillViewportBody
+          showAdvancedSearch
+          request={wrappedRequest}
+          permissionResource={permissionResource}
+          showExportButton={showExportButton}
+          onExport={handleExport}
+          showPrintButton={showPrintButton}
+          onPrint={handlePrint}
+          scroll={{ x: 1200 }}
+          bordered={template.bordered ?? true}
+          size={template.tableSize ?? 'small'}
+          summary={tableSummary}
+        />
+      </div>
     </ListPageTemplate>
   );
 }

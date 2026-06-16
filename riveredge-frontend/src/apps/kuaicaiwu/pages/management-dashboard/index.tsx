@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import {
   Alert,
   Col,
@@ -39,6 +40,7 @@ function formatMoney(value?: number) {
 }
 
 const ManagementDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const { data: kpis, isLoading: loadingKpis } = useQuery({
@@ -67,58 +69,64 @@ const ManagementDashboard: React.FC = () => {
     () => [
       {
         key: 'sales',
-        title: '近30天销售额',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.sales30Title'),
         value: formatMoney(kpis?.total_sales),
-        subtitle: '含税出库汇总',
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.sales30Subtitle'),
         icon: <DollarOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #13c2c2 0%, #36cfc9 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/management-analysis/margin-report'),
       },
       {
         key: 'dso',
-        title: '应收账款周转天数',
-        value: `${Number(kpis?.dso ?? 0).toFixed(1)} 天`,
-        subtitle: '资金回笼效率',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.dsoTitle'),
+        value: t('app.kuaicaiwu.managementDashboard.kpi.dsoValue', {
+          days: Number(kpis?.dso ?? 0).toFixed(1),
+        }),
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.dsoSubtitle'),
         icon: <LineChartOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/finance-management/receivables'),
       },
       {
         key: 'margin',
-        title: '毛利率',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.marginTitle'),
         value: `${((kpis?.gross_margin_rate ?? 0) * 100).toFixed(2)}%`,
-        subtitle: '本期销售盈利水平',
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.marginSubtitle'),
         icon: <RocketOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #ff4d4f 0%, #ff7875 100%)',
         onClick: () => navigate('/apps/kuaicaiwu/management-analysis/margin-report'),
       },
       {
         key: 'inventory',
-        title: '库存占用',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.inventoryTitle'),
         value: formatMoney(kpis?.inventory_total),
-        subtitle: `周转 ${Number(kpis?.inventory_turnover ?? 0).toFixed(1)} 次/年`,
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.inventorySubtitle', {
+          turnover: Number(kpis?.inventory_turnover ?? 0).toFixed(1),
+        }),
         icon: <FundOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
       },
       {
         key: 'labor',
-        title: '人效产出比',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.laborTitle'),
         value: `${Number(efficiency?.labor_efficiency_rate ?? 0).toFixed(1)}%`,
-        subtitle: '标准工时 / 实际工时',
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.laborSubtitle'),
         icon: <SafetyCertificateOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
       },
       {
         key: 'wip',
-        title: '在制品估值',
+        title: t('app.kuaicaiwu.managementDashboard.kpi.wipTitle'),
         value: formatMoney(wip?.estimated_wip_value),
-        subtitle: `在产工单 ${wip?.active_work_orders_count ?? 0} 单`,
+        subtitle: t('app.kuaicaiwu.managementDashboard.kpi.wipSubtitle', {
+          count: wip?.active_work_orders_count ?? 0,
+        }),
         icon: <HistoryOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #faad14 0%, #ffbb33 100%)',
         onClick: () => navigate('/apps/kuaizhizao/production-execution/work-orders'),
       },
     ],
-    [efficiency, kpis, navigate, wip],
+    [efficiency, kpis, navigate, t, wip],
   );
 
   const insightItems: ModuleTodoItem[] = useMemo(() => {
@@ -131,8 +139,11 @@ const ManagementDashboard: React.FC = () => {
       items.push({
         id: 'quality-loss',
         type: 'quality',
-        title: `质量损失 ${formatMoney(scrapCost)}，占销售额 ${(lossRatio * 100).toFixed(1)}%`,
-        description: '建议排查制程缺陷与报废原因',
+        title: t('app.kuaicaiwu.managementDashboard.insight.qualityLossTitle', {
+          amount: formatMoney(scrapCost),
+          ratio: (lossRatio * 100).toFixed(1),
+        }),
+        description: t('app.kuaicaiwu.managementDashboard.insight.qualityLossDesc'),
         priority: 'high',
         status: 'pending',
         link: '/apps/kuaizhizao/quality-management/inspection-center',
@@ -144,8 +155,10 @@ const ManagementDashboard: React.FC = () => {
       items.push({
         id: 'dso-high',
         type: 'finance',
-        title: `回款周期 ${Number(kpis?.dso ?? 0).toFixed(1)} 天，偏长`,
-        description: '可优先跟进逾期应收与催收计划',
+        title: t('app.kuaicaiwu.managementDashboard.insight.dsoHighTitle', {
+          days: Number(kpis?.dso ?? 0).toFixed(1),
+        }),
+        description: t('app.kuaicaiwu.managementDashboard.insight.dsoHighDesc'),
         priority: 'medium',
         status: 'pending',
         link: '/apps/kuaicaiwu/finance-management/receivables',
@@ -157,8 +170,10 @@ const ManagementDashboard: React.FC = () => {
       items.push({
         id: 'wip',
         type: 'production',
-        title: `在制品资金 ${formatMoney(wip?.estimated_wip_value)}`,
-        description: '关注在产工单进度，避免资金长期沉淀',
+        title: t('app.kuaicaiwu.managementDashboard.insight.wipTitle', {
+          amount: formatMoney(wip?.estimated_wip_value),
+        }),
+        description: t('app.kuaicaiwu.managementDashboard.insight.wipDesc'),
         priority: 'medium',
         status: 'pending',
         link: '/apps/kuaizhizao/production-execution/work-orders',
@@ -167,7 +182,7 @@ const ManagementDashboard: React.FC = () => {
     }
 
     return items;
-  }, [kpis, qualityLoss, wip]);
+  }, [kpis, qualityLoss, t, wip]);
 
   const qualityLossRatio =
     (kpis?.total_sales ?? 0) > 0 ? (qualityLoss?.scrap_cost ?? 0) / (kpis?.total_sales ?? 1) : 0;
@@ -184,14 +199,14 @@ const ManagementDashboard: React.FC = () => {
         />
       }
       actionRow={
-        <ModuleActionPanel title={`近 ${PERIOD_DAYS} 天经营关注点`} lg={24}>
-          <ModuleTodoList items={insightItems} emptyText="本期暂无需要特别关注的经营事项" />
+        <ModuleActionPanel title={t('app.kuaicaiwu.managementDashboard.actionPanelTitle', { days: PERIOD_DAYS })} lg={24}>
+          <ModuleTodoList items={insightItems} emptyText={t('app.kuaicaiwu.managementDashboard.emptyInsights')} />
         </ModuleActionPanel>
       }
       chartRow={
         <ModuleChartRow>
           <ModuleChartPanel
-            title="应收账款账龄分布"
+            title={t('app.kuaicaiwu.managementDashboard.chart.receivableAgingTitle')}
             lg={12}
             loading={loadingKpis}
             height={360}
@@ -203,14 +218,14 @@ const ManagementDashboard: React.FC = () => {
             />
           </ModuleChartPanel>
           <ModuleChartPanel
-            title="质量损失分析"
+            title={t('app.kuaicaiwu.managementDashboard.chart.qualityLossTitle')}
             lg={12}
             loading={loadingQuality}
             height={360}
             extra={
               showQualityAlert ? (
                 <Text type="danger">
-                  <AlertOutlined /> 异常预警
+                  <AlertOutlined /> {t('app.kuaicaiwu.managementDashboard.chart.abnormalAlert')}
                 </Text>
               ) : null
             }
@@ -220,7 +235,7 @@ const ManagementDashboard: React.FC = () => {
                 <Row gutter={[16, 16]}>
                   <Col xs={24} sm={12}>
                     <Statistic
-                      title="报废直接金额"
+                      title={t('app.kuaicaiwu.managementDashboard.chart.scrapAmount')}
                       value={qualityLoss?.scrap_cost ?? 0}
                       prefix="¥"
                       precision={2}
@@ -228,9 +243,9 @@ const ManagementDashboard: React.FC = () => {
                   </Col>
                   <Col xs={24} sm={12}>
                     <Statistic
-                      title="不合格品数"
+                      title={t('app.kuaicaiwu.managementDashboard.chart.unqualifiedQty')}
                       value={qualityLoss?.unqualified_quantity ?? 0}
-                      suffix="件"
+                      suffix={t('app.kuaicaiwu.managementDashboard.chart.piecesUnit')}
                       precision={0}
                     />
                   </Col>
@@ -240,18 +255,20 @@ const ManagementDashboard: React.FC = () => {
                     type="error"
                     showIcon
                     style={{ marginTop: 16 }}
-                    message={`质量损失占销售额 ${(qualityLossRatio * 100).toFixed(1)}%，建议排查制程缺陷`}
+                    message={t('app.kuaicaiwu.managementDashboard.chart.qualityLossAlert', {
+                      ratio: (qualityLossRatio * 100).toFixed(1),
+                    })}
                   />
                 ) : (
                   <Text type="secondary" style={{ display: 'block', marginTop: 16 }}>
-                    本期质量损失在可控范围内
+                    {t('app.kuaicaiwu.managementDashboard.chart.qualityUnderControl')}
                   </Text>
                 )}
               </>
             ) : (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
-                description="近 30 天暂无质量损失记录"
+                description={t('app.kuaicaiwu.managementDashboard.chart.noQualityLoss', { days: PERIOD_DAYS })}
                 style={{ margin: '48px 0' }}
               />
             )}

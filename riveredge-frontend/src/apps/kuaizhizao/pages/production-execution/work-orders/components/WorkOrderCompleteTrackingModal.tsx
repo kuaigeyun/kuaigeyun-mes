@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Form, Input, Modal } from 'antd'
 
 export type WorkOrderTrackingConfirmValues = {
@@ -31,6 +32,7 @@ export const WorkOrderCompleteTrackingModal: React.FC<Props> = ({
   onCancel,
   onConfirm,
 }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm<WorkOrderTrackingConfirmValues>()
 
   useEffect(() => {
@@ -46,7 +48,7 @@ export const WorkOrderCompleteTrackingModal: React.FC<Props> = ({
 
   return (
     <Modal
-      title={`指定结束 — ${workOrderCode || ''}`}
+      title={`${t('app.kuaizhizao.workOrder.modalCompleteTrackingTitle')} — ${workOrderCode || ''}`}
       open={open}
       onCancel={onCancel}
       confirmLoading={loading}
@@ -54,17 +56,29 @@ export const WorkOrderCompleteTrackingModal: React.FC<Props> = ({
       destroyOnHidden
     >
       <p style={{ marginBottom: 12, color: 'rgba(0,0,0,0.65)' }}>
-        可修改批号/序列号；留空将沿用计划值或在服务端按规则生成。
+        {t('app.kuaizhizao.workOrder.msgCompleteTrackingHint')}
       </p>
       <Form form={form} layout="vertical" onFinish={onConfirm}>
         {showBatch && (
-          <Form.Item name="confirmed_batch_no" label="确认批号">
-            <Input placeholder={plannedBatchNo ? `默认：${plannedBatchNo}` : '下达/完工时生成'} />
+          <Form.Item name="confirmed_batch_no" label={t('app.kuaizhizao.workOrder.msgConfirmBatchNo')}>
+            <Input
+              placeholder={
+                plannedBatchNo
+                  ? `${t('app.kuaizhizao.workOrder.msgDefaultPrefix')}${plannedBatchNo}`
+                  : t('app.kuaizhizao.workOrder.msgGenerateOnRelease')
+              }
+            />
           </Form.Item>
         )}
         {showSerial && (
-          <Form.Item name="confirmed_serial_no" label="确认序列号">
-            <Input placeholder={plannedSerialNo ? `默认：${plannedSerialNo}` : '下达/完工时生成'} />
+          <Form.Item name="confirmed_serial_no" label={t('app.kuaizhizao.workOrder.msgConfirmSerialNo')}>
+            <Input
+              placeholder={
+                plannedSerialNo
+                  ? `${t('app.kuaizhizao.workOrder.msgDefaultPrefix')}${plannedSerialNo}`
+                  : t('app.kuaizhizao.workOrder.msgGenerateOnRelease')
+              }
+            />
           </Form.Item>
         )}
       </Form>

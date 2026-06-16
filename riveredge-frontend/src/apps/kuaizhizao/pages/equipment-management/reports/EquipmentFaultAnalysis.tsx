@@ -1,14 +1,27 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const EquipmentFaultAnalysis: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    { title: '设备名称', dataIndex: 'equipment_name', width: 200 },
-    { title: '故障次数', dataIndex: 'count', valueType: 'digit', width: 120, sorter: true },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentReports.colEquipmentName'),
+        dataIndex: 'equipment_name',
+        width: 200,
+      },
+      {
+        title: t('app.kuaizhizao.equipmentReports.colFaultCount'),
+        dataIndex: 'count',
+        valueType: 'digit',
+        width: 120,
+        sorter: true,
+      },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

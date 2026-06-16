@@ -4,11 +4,12 @@
  */
 
 import React, { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ProColumns } from '@ant-design/pro-components';
 import { Badge, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
-import { UniLifecycle } from '../../../../../components/uni-lifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { sparePartApi } from '../../../services/equipment';
 import { getSparePartInventoryLifecycle } from '../../../utils/equipmentLifecycle';
 import { App } from 'antd';
@@ -25,14 +26,17 @@ interface SpareInventoryRow {
   updated_at?: string;
 }
 
+const P = 'app.kuaizhizao.sparePart';
+
 const SparePartsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [selectedRowKeys, setSelectedRowKeys] = React.useState<React.Key[]>([]);
 
   const columns: ProColumns<SpareInventoryRow>[] = useMemo(
     () => [
       {
-        title: '备件编号',
+        title: t(`${P}.col.partNo`),
         dataIndex: 'part_no',
         width: 140,
         fixed: 'left',
@@ -43,66 +47,55 @@ const SparePartsPage: React.FC = () => {
         ),
       },
       {
-        title: '备件名称',
+        title: t(`${P}.col.partName`),
         dataIndex: 'part_name',
         width: 200,
         ellipsis: true,
       },
       {
-        title: '当前库存',
+        title: t(`${P}.col.stockQuantity`),
         dataIndex: 'stock_quantity',
         width: 110,
         align: 'right',
         valueType: 'digit',
       },
-      { title: '库位', dataIndex: 'warehouse_location', width: 140, ellipsis: true },
+      { title: t(`${P}.col.warehouseLocation`), dataIndex: 'warehouse_location', width: 140, ellipsis: true },
       {
-        title: '库存快照',
+        title: t(`${P}.col.stockSnapshot`),
         width: 120,
         hideInSearch: true,
         render: (_, record) =>
           (record.stock_quantity ?? 0) < (record.safety_stock ?? record.min_stock ?? 5) ? (
-            <Badge status="error" text="低库存" />
+            <Badge status="error" text={t(`${P}.stockLow`)} />
           ) : (
-            <Badge status="success" text="充足" />
+            <Badge status="success" text={t(`${P}.stockSufficient`)} />
           ),
       },
       {
-        title: '更新时间',
+        title: t('common.updatedAt'),
         dataIndex: 'updated_at',
         width: 168,
         hideInSearch: true,
         render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
       },
       {
-        title: '生命周期',
+        title: t(`${P}.col.lifecycle`),
         dataIndex: 'lifecycle_stage',
         fixed: 'right',
         align: 'left',
         hideInSearch: true,
-        render: (_, record) => {
-          const lifecycle = getSparePartInventoryLifecycle(record as Record<string, unknown>);
-          return (
-            <UniLifecycle
-              percent={lifecycle.percent}
-              stageName={lifecycle.stageName}
-              status={lifecycle.status}
-              subStages={lifecycle.subStages}
-              showLabel
-              size="small"
-              showCircleTooltip={false}
-            />
-          );
-        },
+        render: (_, record) => (
+          <ListUniLifecycleCell lifecycle={getSparePartInventoryLifecycle(record as Record<string, unknown>, t)} />
+        ),
       },
     ],
-    []
+    [t],
   );
 
   return (
     <ListPageTemplate>
       <UniTable<SpareInventoryRow>
-        headerTitle="备件库存列表"
+        headerTitle={t(`${P}.title`)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.spare-parts"
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -117,7 +110,7 @@ const SparePartsPage: React.FC = () => {
             const list = Array.isArray(data) ? data : (data as any)?.data ?? [];
             return { data: list, success: true, total: list.length };
           } catch (e) {
-            messageApi.error('加载备件库存失败');
+            messageApi.error(t(`${P}.listFailed`));
             return { data: [], success: false, total: 0 };
           }
         }}

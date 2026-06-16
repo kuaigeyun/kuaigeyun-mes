@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next'
 import { 
   Card, Button, Tag, message, Input, Empty, 
   List, Typography, Form, Progress, Tooltip, Tabs, theme, Alert, Segmented, Modal, Radio, Select, Divider, Table
@@ -68,6 +69,7 @@ interface WorkOrder {
 }
 
 const WorkOrdersKioskPage: React.FC = () => {
+  const { t } = useTranslation()
     const { token } = theme.useToken();
     const [loading, setLoading] = useState(false);
     const [workOrders, setWorkOrders] = useState<WorkOrder[]>([]);
@@ -159,7 +161,7 @@ const WorkOrdersKioskPage: React.FC = () => {
         } catch (error) {
             console.error(error);
             setLoadError('加载工单列表失败，请重试');
-            message.error('加载工单列表失败');
+            message.error(t('app.kuaizhizao.workOrder.kioskLoadListFailed'));
         } finally {
             setLoading(false);
         }
@@ -186,7 +188,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 setActiveOperation(current || sortedOps[0]);
             } catch (error) {
                 console.error(error);
-                message.error('加载工序失败');
+                message.error(t('app.kuaizhizao.workOrder.kioskLoadOpsFailed'));
             } finally {
                 setOpsLoading(false);
             }
@@ -213,7 +215,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             // Call startOperation API
             await workOrderApi.startOperation(selectedWorkOrder.id.toString(), activeOperation.id);
             addRecentOp('开始执行', activeOperation.operation_name || activeOperation.name);
-            message.success('工序已开始');
+            message.success(t('app.kuaizhizao.workOrder.kioskOpStarted'));
             
             // Refresh operations and work order list status
             const ops = await workOrderApi.getOperations(selectedWorkOrder.id.toString());
@@ -224,7 +226,7 @@ const WorkOrdersKioskPage: React.FC = () => {
             loadWorkOrders(stationInfo?.workCenterId);
         } catch (error) {
             console.error(error);
-            message.error('操作失败');
+            message.error(t('app.kuaizhizao.workOrder.kioskOperationFailed'));
         } finally {
             setOpsLoading(false);
         }
@@ -238,7 +240,7 @@ const WorkOrdersKioskPage: React.FC = () => {
         try {
             setLoading(true);
             await warehouseApi.productionPicking.quickPick(selectedWorkOrder.id.toString());
-            message.success('一键领料成功');
+            message.success(t('app.kuaizhizao.workOrder.kioskOneClickPickingSuccess'));
         } catch (error) {
             console.error(error);
             message.error('领料失败');
@@ -264,11 +266,11 @@ const WorkOrdersKioskPage: React.FC = () => {
             const unqualified = Number(values.unqualified_quantity) || 0;
             const qty = qualified + unqualified;
             if (qty <= 0) {
-                message.warning('合格数和不合格数之和须大于 0');
+                message.warning(t('app.kuaizhizao.workOrder.kioskQtySumMustBePositive'));
                 return;
             }
             if (unqualified > 0 && defectTypeOptions.length > 0 && !selectedDefectType) {
-                message.warning('请选择不良品类型');
+                message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
                 return;
             }
             setOpsLoading(true);
@@ -384,9 +386,9 @@ const WorkOrdersKioskPage: React.FC = () => {
                         loadWorkOrders(stationInfo?.workCenterId, v);
                     }}
                     options={[
-                        { label: '全部', value: 'all' },
-                        { label: '只看本机台', value: 'station' },
-                        { label: '只看当前用户', value: 'currentUser' },
+                        { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
+                        { label: t('app.kuaizhizao.workOrder.kioskFilterStation'), value: 'station' },
+                        { label: t('app.kuaizhizao.workOrder.kioskFilterCurrentUser'), value: 'currentUser' },
                     ]}
                     style={{ width: '100%', marginBottom: 12 }}
                     className="kiosk-work-order-filter-select"
@@ -520,9 +522,9 @@ const WorkOrdersKioskPage: React.FC = () => {
                         { title: '序号', dataIndex: 'sequence', width: 60, align: 'center' },
                         { title: '工序名称', dataIndex: 'name', minWidth: 120 },
                         { title: '投入数', dataIndex: 'input', width: 80, align: 'right' },
-                        { title: '产出数', dataIndex: 'output', width: 80, align: 'right', render: (val: number) => <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontWeight: 600 }}>{val}</span> },
+                        { title: t('app.kuaizhizao.workOrder.kioskOutputQty'), dataIndex: 'output', width: 80, align: 'right', render: (val: number) => <span style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontWeight: 600 }}>{val}</span> },
                         { title: '不良数', dataIndex: 'scrap', width: 80, align: 'right', render: (val: number) => <span style={{ color: val > 0 ? HMI_DESIGN_TOKENS.STATUS_ALARM : HMI_DESIGN_TOKENS.TEXT_TERTIARY }}>{val}</span> },
-                        { title: '合格率', dataIndex: 'yield', width: 80, align: 'right', render: (val: number) => `${val}%` },
+                        { title: t('app.kuaizhizao.workOrder.kioskPassRate'), dataIndex: 'yield', width: 80, align: 'right', render: (val: number) => `${val}%` },
                     ]}
                     rowClassName={(record: any) => record.key === activeOperation?.id ? 'kiosk-wip-row-active' : ''}
                 />
@@ -547,7 +549,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                             <UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE, color: HMI_DESIGN_TOKENS.STATUS_INFO }} />
                             请选择工单开始
                         </div>
-                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>从左侧列表选择工单</div>
+                        <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskSelectWorkOrder')}</div>
                     </div>
                 </div>
             );
@@ -630,7 +632,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         styles={{ body: { padding: 24, overflowY: 'auto' } }}
                     >
                         {operations.length === 0 ? (
-                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无工序</span>} />
+                            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.msgNoOperations')}</span>} />
                         ) : (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: HMI_DESIGN_TOKENS.SECTION_GAP }}>
                                 {activeOperation ? (
@@ -659,14 +661,14 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                 {activeOperation.reporting_type !== 'status' && (
                                                     <>
                                                         <div>
-                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>合格/不合格</div>
+                                                            <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskQualifiedUnqualified')}</div>
                                                             <div style={{ color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>
                                                                 {activeOperation.qualified_quantity ?? 0} / {activeOperation.unqualified_quantity ?? 0}
                                                             </div>
                                                         </div>
                                                         {(Number(activeOperation.completed_quantity) || 0) > 0 && (
                                                             <div>
-                                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>合格率</div>
+                                                                <div style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: 12, marginBottom: 4 }}>{t('app.kuaizhizao.workOrder.kioskPassRate')}</div>
                                                                 <div style={{ color: HMI_DESIGN_TOKENS.STATUS_OK, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, fontWeight: 600 }}>
                                                                     {Math.round(((Number(activeOperation.qualified_quantity) || 0) / (Number(activeOperation.completed_quantity) || 1)) * 100)}%
                                                                 </div>
@@ -695,7 +697,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                         </div>
                                         <Form form={form} layout="vertical">
                                         <div style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.SECTION_GAP, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-                                            <Form.Item name="qualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>合格数</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                            <Form.Item name="qualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskQualifiedQty')}</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
                                                 <Input
                                                     type="text"
                                                     inputMode="none"
@@ -713,7 +715,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                                                     }}
                                                 />
                                             </Form.Item>
-                                            <Form.Item name="unqualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>不合格数</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
+                                            <Form.Item name="unqualified_quantity" label={<Text style={{ color: HMI_DESIGN_TOKENS.TEXT_SECONDARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskUnqualifiedQty')}</Text>} initialValue={0} rules={[{ required: true, message: '请用右侧小键盘输入' }]}>
                                                 <Input
                                                     type="text"
                                                     inputMode="none"
@@ -807,10 +809,10 @@ const WorkOrdersKioskPage: React.FC = () => {
                                     value={docSubTabKey}
                                     onChange={v => setDocSubTabKey(v as DocumentCenterTabKey)}
                                     options={[
-                                        { label: '作业指导书', value: 'sop' },
+                                        { label: t('app.kuaizhizao.workOrder.modalSopTitle'), value: 'sop' },
                                         { label: '图纸', value: 'drawings' },
-                                        { label: '代码', value: 'cnc' },
-                                        { label: '附件', value: 'attachments' },
+                                        { label: t('app.kuaizhizao.workOrder.kioskDocCode'), value: 'cnc' },
+                                        { label: t('app.kuaizhizao.workOrder.colAttachments'), value: 'attachments' },
                                     ]}
                                     style={{ marginBottom: 12, flexShrink: 0, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}
                                 />
@@ -822,7 +824,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     },
                     {
                         key: 'wip',
-                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />在制品跟踪</span>,
+                        label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: HMI_DESIGN_TOKENS.TEXT_PRIMARY, fontSize: HMI_DESIGN_TOKENS.FONT_CARD_HEADER, fontWeight: 600 }}><UnorderedListOutlined style={{ fontSize: HMI_DESIGN_TOKENS.CARD_HEADER_ICON_SIZE }} />{t('app.kuaizhizao.workOrder.kioskTabWip')}</span>,
                         children: (
                             <div style={{ flex: 1, minHeight: 0 }}>
                                 {renderWipTab()}
@@ -893,8 +895,8 @@ const WorkOrdersKioskPage: React.FC = () => {
                                 onInput={handleKeypadInput}
                                 onSelectField={(k) => setFocusedNumField(k as 'qualified_quantity' | 'unqualified_quantity')}
                                 fields={[
-                                    { key: 'qualified_quantity', label: '合格数' },
-                                    { key: 'unqualified_quantity', label: '不合格数' },
+                                    { key: 'qualified_quantity', label: t('app.kuaizhizao.workOrder.kioskQualifiedQty') },
+                                    { key: 'unqualified_quantity', label: t('app.kuaizhizao.workOrder.kioskUnqualifiedQty') },
                                 ]}
                             />
                         </div>
@@ -988,8 +990,8 @@ const WorkOrdersKioskPage: React.FC = () => {
             deviceName={(stationInfo as any).deviceName || '未连接'}
             headerExtra={
                 <div className="header-extra-buttons" style={{ display: 'flex', gap: HMI_DESIGN_TOKENS.BUTTON_GAP }}>
-                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>刷新</Button>
-                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<SwapOutlined />} onClick={handleSwitchStation}>切换工位</Button>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<ReloadOutlined />} onClick={() => loadWorkOrders(stationInfo?.workCenterId)}>{t('app.kuaizhizao.workOrder.actionRefresh')}</Button>
+                    <Button size="large" {...touchButtonProps({ size: 'header' })} icon={<SwapOutlined />} onClick={handleSwitchStation}>{t('app.kuaizhizao.workOrder.actionSwitchStation')}</Button>
                 </div>
             }
         >
@@ -1027,7 +1029,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     {[
                         { label: '工单数', value: String(filteredWorkOrders.length), valueColor: HMI_DESIGN_TOKENS.STATUS_INFO },
                         { label: '计划/已报', planValue: selectedWorkOrder?.quantity ?? '—', reportedValue: selectedWorkOrder?.completed_quantity ?? 0 },
-                        { label: '合格率', value: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? `${Math.round(((selectedWorkOrder.qualified_quantity ?? ((selectedWorkOrder.completed_quantity ?? 0) - (selectedWorkOrder.unqualified_quantity ?? 0))) / (selectedWorkOrder.completed_quantity ?? 1)) * 100)}%` : '—', valueColor: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_TERTIARY },
+                        { label: t('app.kuaizhizao.workOrder.kioskPassRate'), value: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? `${Math.round(((selectedWorkOrder.qualified_quantity ?? ((selectedWorkOrder.completed_quantity ?? 0) - (selectedWorkOrder.unqualified_quantity ?? 0))) / (selectedWorkOrder.completed_quantity ?? 1)) * 100)}%` : '—', valueColor: selectedWorkOrder && (selectedWorkOrder.completed_quantity ?? 0) > 0 ? HMI_DESIGN_TOKENS.STATUS_OK : HMI_DESIGN_TOKENS.TEXT_TERTIARY },
                         { label: '质检', value: '—', valueColor: HMI_DESIGN_TOKENS.TEXT_TERTIARY },
                         { label: '当前状态', value: currentStatusLabel, valueColor: currentStatusLabel === '执行中' ? token.colorWarning : currentStatusLabel === '已完成' ? token.colorSuccess : HMI_DESIGN_TOKENS.TEXT_PRIMARY },
                     ].map((item, i) => {
@@ -1158,7 +1160,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                             if (selectedDefectType) {
                                 setDefectModalVisible(false);
                             } else {
-                                message.warning('请选择不良品类型');
+                                message.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'));
                             }
                         }}
                     >
@@ -1215,7 +1217,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                     items={[
                         {
                             key: 'static',
-                            label: '图文作业指导（静态）',
+                            label: t('app.kuaizhizao.workOrder.kioskSopStatic'),
                             children: (
                                 <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
                                     {docCenterProps.sopContent ? (
@@ -1230,7 +1232,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                         },
                         {
                             key: 'guided',
-                            label: '分步作业指导（引导式）',
+                            label: t('app.kuaizhizao.workOrder.kioskSopGuided'),
                             children: (
                                 <div style={{ padding: '16px 0', minHeight: 320, maxHeight: '60vh', overflowY: 'auto' }}>
                                     <Empty description="分步引导式作业指导开发中" image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 48 }} />
@@ -1248,7 +1250,7 @@ const WorkOrdersKioskPage: React.FC = () => {
                 rootClassName="kiosk-modal-terminal-bg"
                 onCancel={() => setParamModalVisible(false)}
                 footer={[
-                    <Button key="close" onClick={() => setParamModalVisible(false)}>关闭</Button>,
+                    <Button key="close" onClick={() => setParamModalVisible(false)}>{t('app.kuaizhizao.workOrder.actionClose')}</Button>,
                 ]}
                 width={640}
                 destroyOnHidden

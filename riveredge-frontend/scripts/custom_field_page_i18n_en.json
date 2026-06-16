@@ -1,0 +1,254 @@
+{
+  "pageName": {
+    "厂区管理": "Plants",
+    "车间管理": "Workshops",
+    "产线管理": "Production Lines",
+    "工位管理": "Workstations",
+    "工作中心": "Work Centers",
+    "仓库管理": "Warehouses",
+    "库区管理": "Storage Areas",
+    "库位管理": "Storage Locations",
+    "物料分组": "Material Groups",
+    "物料管理": "Materials",
+    "工序管理": "Operations",
+    "工艺路线": "Process Routes",
+    "工程图纸": "Engineering Drawings",
+    "物料清单BOM": "Bill of Materials",
+    "缺陷类型": "Defect Types",
+    "客户管理": "Customers",
+    "供应商管理": "Suppliers",
+    "技能管理": "Skills",
+    "工单管理": "Work Orders",
+    "返工单": "Rework Orders",
+    "委外单": "Outsource Orders",
+    "委外工单": "Outsource Work Orders",
+    "采购订单": "Purchase Orders",
+    "采购收货": "Purchase Receipts",
+    "采购退货": "Purchase Returns",
+    "销售订单": "Sales Orders",
+    "销售发货": "Sales Deliveries",
+    "销售退货": "Sales Returns",
+    "生产领料": "Production Material Issues",
+    "生产退料": "Production Material Returns",
+    "其他入库": "Other Inbound",
+    "其他出库": "Other Outbound",
+    "成品入库": "Finished Goods Inbound",
+    "来料检验": "Incoming Inspection",
+    "过程检验": "Process Inspection",
+    "成品检验": "Finished Goods Inspection",
+    "生产计划": "Production Plans",
+    "设备管理": "Equipment",
+    "模具管理": "Molds",
+    "标准操作SOP": "Standard Operation SOP",
+    "节假日": "Holidays"
+  },
+  "tableNameLabel": {
+    "厂区表": "Plants",
+    "车间表": "Workshops",
+    "产线表": "Production lines",
+    "工位表": "Workstations",
+    "工作中心表": "Work centers",
+    "仓库表": "Warehouses",
+    "库区表": "Storage areas",
+    "库位表": "Storage locations",
+    "物料分组表": "Material groups",
+    "物料表": "Materials",
+    "工序表": "Operations",
+    "工艺路线表": "Process routes",
+    "工程图纸表": "Engineering drawings",
+    "物料清单BOM表": "Bill of materials",
+    "缺陷类型表": "Defect types",
+    "客户表": "Customers",
+    "供应商表": "Suppliers",
+    "技能表": "Skills",
+    "工单表": "Work orders",
+    "返工单表": "Rework orders",
+    "委外单表": "Outsource orders",
+    "委外工单表": "Outsource work orders",
+    "采购订单表": "Purchase orders",
+    "采购收货表": "Purchase receipts",
+    "采购退货表": "Purchase returns",
+    "销售订单表": "Sales orders",
+    "销售发货表": "Sales deliveries",
+    "销售退货表": "Sales returns",
+    "生产领料表": "Material issues",
+    "生产退料表": "Material returns",
+    "其他入库表": "Other inbound",
+    "其他出库表": "Other outbound",
+    "成品入库表": "Finished goods inbound",
+    "来料检验表": "Incoming inspection",
+    "过程检验表": "Process inspection",
+    "成品检验表": "Finished goods inspection",
+    "生产计划表": "Production plans",
+    "设备表": "Equipment",
+    "模具表": "Molds",
+    "标准操作SOP表": "Standard operation SOP",
+    "节假日表": "Holidays"
+  },
+  "pages": {
+    "master-data-factory-plant": {
+      "pageName": "Plants",
+      "tableNameLabel": "Plants"
+    },
+    "master-data-factory-workshop": {
+      "pageName": "Workshops",
+      "tableNameLabel": "Workshops"
+    },
+    "master-data-factory-production-line": {
+      "pageName": "Production Lines",
+      "tableNameLabel": "Production lines"
+    },
+    "master-data-factory-workstation": {
+      "pageName": "Workstations",
+      "tableNameLabel": "Workstations"
+    },
+    "master-data-factory-work-center": {
+      "pageName": "Work Centers",
+      "tableNameLabel": "Work centers"
+    },
+    "master-data-warehouse-warehouse": {
+      "pageName": "Warehouses",
+      "tableNameLabel": "Warehouses"
+    },
+    "master-data-warehouse-storage-area": {
+      "pageName": "Storage Areas",
+      "tableNameLabel": "Storage areas"
+    },
+    "master-data-warehouse-storage-location": {
+      "pageName": "Storage Locations",
+      "tableNameLabel": "Storage locations"
+    },
+    "master-data-material-group": {
+      "pageName": "Material Groups",
+      "tableNameLabel": "Material groups"
+    },
+    "master-data-material": {
+      "pageName": "Materials",
+      "tableNameLabel": "Materials"
+    },
+    "master-data-engineering-bom": {
+      "pageName": "Bill of Materials",
+      "tableNameLabel": "Bill of materials"
+    },
+    "master-data-defect-type": {
+      "pageName": "缺陷类型管理",
+      "tableNameLabel": "Defect types"
+    },
+    "master-data-operation": {
+      "pageName": "Operations",
+      "tableNameLabel": "Operations"
+    },
+    "master-data-process-route": {
+      "pageName": "工艺路线管理",
+      "tableNameLabel": "Process routes"
+    },
+    "master-data-process-drawing": {
+      "pageName": "图纸管理",
+      "tableNameLabel": "Engineering drawings"
+    },
+    "master-data-manufacturing-bom": {
+      "pageName": "Standard Operation SOP",
+      "tableNameLabel": "Standard operation SOP"
+    },
+    "master-data-customer": {
+      "pageName": "Customers",
+      "tableNameLabel": "Customers"
+    },
+    "master-data-supplier": {
+      "pageName": "Suppliers",
+      "tableNameLabel": "Suppliers"
+    },
+    "master-data-holiday": {
+      "pageName": "节假日管理",
+      "tableNameLabel": "Holidays"
+    },
+    "master-data-skill": {
+      "pageName": "Skills",
+      "tableNameLabel": "Skills"
+    },
+    "kuaizhizao-production-work-order": {
+      "pageName": "Work Orders",
+      "tableNameLabel": "Work orders"
+    },
+    "kuaizhizao-production-rework-order": {
+      "pageName": "Rework Orders",
+      "tableNameLabel": "Rework orders"
+    },
+    "kuaizhizao-production-outsource-order": {
+      "pageName": "Outsource Orders",
+      "tableNameLabel": "Outsource orders"
+    },
+    "kuaizhizao-production-outsource-work-order": {
+      "pageName": "Outsource Work Orders",
+      "tableNameLabel": "Outsource work orders"
+    },
+    "kuaizhizao-purchase-order": {
+      "pageName": "Purchase Orders",
+      "tableNameLabel": "Purchase orders"
+    },
+    "kuaizhizao-purchase-receipt": {
+      "pageName": "采购入库",
+      "tableNameLabel": "Purchase receipts"
+    },
+    "kuaizhizao-purchase-return": {
+      "pageName": "Purchase Returns",
+      "tableNameLabel": "Purchase returns"
+    },
+    "kuaizhizao-sales-order": {
+      "pageName": "Sales Orders",
+      "tableNameLabel": "Sales orders"
+    },
+    "kuaizhizao-sales-delivery": {
+      "pageName": "Sales Deliveries",
+      "tableNameLabel": "Sales deliveries"
+    },
+    "kuaizhizao-sales-return": {
+      "pageName": "Sales Returns",
+      "tableNameLabel": "Sales returns"
+    },
+    "kuaizhizao-warehouse-inbound": {
+      "pageName": "Production Material Issues",
+      "tableNameLabel": "Material issues"
+    },
+    "kuaizhizao-warehouse-production-return": {
+      "pageName": "Production Material Returns",
+      "tableNameLabel": "Material returns"
+    },
+    "kuaizhizao-warehouse-other-inbound": {
+      "pageName": "Other Inbound",
+      "tableNameLabel": "Other inbound"
+    },
+    "kuaizhizao-warehouse-other-outbound": {
+      "pageName": "Other Outbound",
+      "tableNameLabel": "Other outbound"
+    },
+    "kuaizhizao-warehouse-finished-goods-inbound": {
+      "pageName": "Finished Goods Inbound",
+      "tableNameLabel": "Finished goods inbound"
+    },
+    "kuaizhizao-quality-incoming-inspection": {
+      "pageName": "Incoming Inspection",
+      "tableNameLabel": "Incoming inspection"
+    },
+    "kuaizhizao-quality-process-inspection": {
+      "pageName": "Process Inspection",
+      "tableNameLabel": "Process inspection"
+    },
+    "kuaizhizao-quality-finished-goods-inspection": {
+      "pageName": "Finished Goods Inspection",
+      "tableNameLabel": "Finished goods inspection"
+    },
+    "kuaizhizao-plan-production-plan": {
+      "pageName": "Production Plans",
+      "tableNameLabel": "Production plans"
+    },
+    "kuaizhizao-equipment": {
+      "pageName": "设备台账",
+      "tableNameLabel": "Equipment"
+    },
+    "kuaizhizao-mold": {
+      "pageName": "模具台账",
+      "tableNameLabel": "Molds"
+    }
+  }
+}

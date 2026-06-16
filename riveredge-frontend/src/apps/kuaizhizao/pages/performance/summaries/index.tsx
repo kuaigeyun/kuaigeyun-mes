@@ -2,7 +2,7 @@
  * 绩效汇总页面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
@@ -21,6 +21,7 @@ import {
 } from '../../../../../components/layout-templates';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { PerformanceTraceBriefPrimaryActions } from '../PerformanceTraceBriefFooter';
+import { getPerformanceSummaryStatusValueEnum } from '../components/performanceMeta';
 import { employeePerformanceApi } from '../../../services/performance';
 import type { PerformanceSummary, PerformanceDetail, PerformanceDetailItem } from '../../../types/performance';
 import { getPerformanceSummaryLifecycle } from '../../../utils/performanceLifecycle';
@@ -64,11 +65,11 @@ const SummariesPage: React.FC = () => {
     try {
       setCalcLoading(true);
       await employeePerformanceApi.calculate(period);
-      messageApi.success('计算完成');
+      messageApi.success(t('app.kuaizhizao.performance.summaries.messages.calculateSuccess'));
       actionRef.current?.reload();
       setSummaryTrackingRefreshKey((k) => k + 1);
     } catch (e: any) {
-      messageApi.error(e?.message || '计算失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.calculateFailed'));
     } finally {
       setCalcLoading(false);
     }
@@ -77,20 +78,20 @@ const SummariesPage: React.FC = () => {
   const handleConfirm = async (record: PerformanceSummary) => {
     try {
       await employeePerformanceApi.confirmSummary(record.id);
-      messageApi.success('已确认');
+      messageApi.success(t('app.kuaizhizao.performance.summaries.messages.confirmSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '确认失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.confirmFailed'));
     }
   };
 
   const handleReopen = async (record: PerformanceSummary) => {
     try {
       await employeePerformanceApi.reopenSummary(record.id);
-      messageApi.success('已退回重算');
+      messageApi.success(t('app.kuaizhizao.performance.summaries.messages.reopenSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '退回失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.reopenFailed'));
     }
   };
 
@@ -98,10 +99,15 @@ const SummariesPage: React.FC = () => {
     try {
       setCalcLoading(true);
       const res = await employeePerformanceApi.batchConfirm(period);
-      messageApi.success(`已确认 ${res.confirmed_count} 条，跳过 ${res.skipped_count} 条`);
+      messageApi.success(
+        t('app.kuaizhizao.performance.summaries.messages.batchConfirmSuccess', {
+          confirmed: res.confirmed_count,
+          skipped: res.skipped_count,
+        }),
+      );
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '批量确认失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.batchConfirmFailed'));
     } finally {
       setCalcLoading(false);
     }
@@ -118,7 +124,7 @@ const SummariesPage: React.FC = () => {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e: any) {
-      messageApi.error(e?.message || '导出失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.summaries.messages.exportFailed'));
     }
   };
 
@@ -134,110 +140,131 @@ const SummariesPage: React.FC = () => {
       }
       setSummaryTrackingRefreshKey((k) => k + 1);
     } catch (e: any) {
-      messageApi.error(e?.message || '加载失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
     } finally {
       setDetailLoading(false);
     }
   };
 
-  const detailColumns: ProDescriptionsItemProps<PerformanceDetail>[] = [
-    { title: '员工', dataIndex: 'employee_name' },
-    { title: '周期', dataIndex: 'period' },
-    { title: '总工时', dataIndex: ['summary', 'total_hours'], render: (_, r) => r?.summary?.total_hours ?? '-' },
-    { title: '总件数', dataIndex: ['summary', 'total_pieces'], render: (_, r) => r?.summary?.total_pieces ?? '-' },
-    { title: '应发金额', dataIndex: ['summary', 'total_amount'], render: (_, r) => r?.summary?.total_amount ?? '-' },
-    { title: 'KPI综合分', dataIndex: ['summary', 'kpi_score'], render: (_, r) => r?.summary?.kpi_score ?? '-' },
-    { title: '绩效系数', dataIndex: ['summary', 'kpi_coefficient'], render: (_, r) => r?.summary?.kpi_coefficient ?? '-' },
-  ];
+  const detailColumns: ProDescriptionsItemProps<PerformanceDetail>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.performance.common.columns.employee'), dataIndex: 'employee_name' },
+      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period' },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalHours'),
+        dataIndex: ['summary', 'total_hours'],
+        render: (_, r) => r?.summary?.total_hours ?? '-',
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalPieces'),
+        dataIndex: ['summary', 'total_pieces'],
+        render: (_, r) => r?.summary?.total_pieces ?? '-',
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.totalAmount'),
+        dataIndex: ['summary', 'total_amount'],
+        render: (_, r) => r?.summary?.total_amount ?? '-',
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.kpiScore'),
+        dataIndex: ['summary', 'kpi_score'],
+        render: (_, r) => r?.summary?.kpi_score ?? '-',
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'),
+        dataIndex: ['summary', 'kpi_coefficient'],
+        render: (_, r) => r?.summary?.kpi_coefficient ?? '-',
+      },
+    ],
+    [t],
+  );
 
-  const columns: ProColumns<PerformanceSummary>[] = [
-    {
-      title: '员工',
-      dataIndex: 'employee_name',
-      width: 120,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
-          {r.employee_name ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '周期', dataIndex: 'period', width: 100 },
-    { title: '总工时', dataIndex: 'total_hours', width: 100, align: 'right' },
-    { title: '总件数', dataIndex: 'total_pieces', width: 100, align: 'right' },
-    { title: '计时金额', dataIndex: 'time_amount', width: 110, align: 'right' },
-    { title: '计件金额', dataIndex: 'piece_amount', width: 110, align: 'right' },
-    { title: '应发总额', dataIndex: 'total_amount', width: 110, align: 'right' },
-    { title: 'KPI综合分', dataIndex: 'kpi_score', width: 100, align: 'right' },
-    { title: '绩效系数', dataIndex: 'kpi_coefficient', width: 90, align: 'right' },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: {
-        pending: { text: '待计算' },
-        calculated: { text: '已计算' },
-        confirmed: { text: '已确认' },
-        draft: { text: '草稿' },
+  const columns: ProColumns<PerformanceSummary>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.performance.common.columns.employee'),
+        dataIndex: 'employee_name',
+        width: 120,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
+            {r.employee_name ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      { title: t('app.kuaizhizao.performance.common.columns.period'), dataIndex: 'period', width: 100 },
+      { title: t('app.kuaizhizao.performance.common.columns.totalHours'), dataIndex: 'total_hours', width: 100, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.totalPieces'), dataIndex: 'total_pieces', width: 100, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.timeAmount'), dataIndex: 'time_amount', width: 110, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.pieceAmount'), dataIndex: 'piece_amount', width: 110, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.totalAmount'), dataIndex: 'total_amount', width: 110, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.kpiScore'), dataIndex: 'kpi_score', width: 100, align: 'right' },
+      { title: t('app.kuaizhizao.performance.common.columns.kpiCoefficient'), dataIndex: 'kpi_coefficient', width: 90, align: 'right' },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueEnum: getPerformanceSummaryStatusValueEnum(t),
       },
-    },
-    {
-      title: '操作',
-      width: 220,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space size={0}>
-          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
-            明细
-          </Button>
-          {record.status === 'calculated' ? (
-            <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
-              确认
+      {
+        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getPerformanceSummaryLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        width: 220,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space size={0}>
+            <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleViewDetail(record)}>
+              {t('app.kuaizhizao.performance.summaries.actions.detail')}
             </Button>
-          ) : null}
-          {record.status === 'confirmed' ? (
-            <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleReopen(record)}>
-              退回
-            </Button>
-          ) : null}
-        </Space>
-      ),
-    },
-  ];
+            {record.status === 'calculated' ? (
+              <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleConfirm(record)}>
+                {t('app.kuaizhizao.performance.common.actions.confirm')}
+              </Button>
+            ) : null}
+            {record.status === 'confirmed' ? (
+              <Button type="link" size="small" icon={<RollbackOutlined />} onClick={() => handleReopen(record)}>
+                {t('app.kuaizhizao.performance.common.actions.reopen')}
+              </Button>
+            ) : null}
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<PerformanceSummary>
-          headerTitle="绩效汇总"
+          headerTitle={t('app.kuaizhizao.performance.summaries.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -257,7 +284,7 @@ const SummariesPage: React.FC = () => {
               const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
               return { data: rows, success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || '加载失败');
+              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -271,10 +298,10 @@ const SummariesPage: React.FC = () => {
                   setPeriod(d ? d.format('YYYY-MM') : '');
                   actionRef.current?.reload();
                 }}
-                placeholder="周期"
+                placeholder={t('app.kuaizhizao.performance.summaries.placeholder.period')}
               />
               <Select
-                placeholder="员工"
+                placeholder={t('app.kuaizhizao.performance.summaries.placeholder.employee')}
                 allowClear
                 style={{ width: 160 }}
                 options={employees.map((e) => ({ label: e.full_name, value: e.id }))}
@@ -285,13 +312,13 @@ const SummariesPage: React.FC = () => {
                 }}
               />
               <Button type="primary" icon={<CalculatorOutlined />} loading={calcLoading} onClick={handleCalculate}>
-                计算绩效
+                {t('app.kuaizhizao.performance.summaries.actions.calculate')}
               </Button>
               <Button icon={<CheckOutlined />} loading={calcLoading} onClick={handleBatchConfirm}>
-                批量确认
+                {t('app.kuaizhizao.performance.summaries.actions.batchConfirm')}
               </Button>
               <Button icon={<DownloadOutlined />} onClick={handleExport}>
-                导出已确认
+                {t('app.kuaizhizao.performance.summaries.actions.exportConfirmed')}
               </Button>
             </Space>,
           ]}
@@ -299,7 +326,10 @@ const SummariesPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={`绩效明细 - ${detail?.employee_name || ''} ${detail?.period || ''}`}
+        title={t('app.kuaizhizao.performance.summaries.modal.detailTitle', {
+          name: detail?.employee_name || '',
+          period: detail?.period || '',
+        })}
         open={drawerVisible}
         zIndex={summaryDrawerZIndex}
         onClose={closeDrawer}
@@ -313,10 +343,10 @@ const SummariesPage: React.FC = () => {
             </div>
           ) : detail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.basicInfo')}>
                 <Descriptions column={2} items={detailDrawerDescriptionItems(detailColumns, detail)} />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const row = (detail.summary ?? detail) as unknown as Record<string, unknown>;
@@ -352,20 +382,20 @@ const SummariesPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
               {detail.kpi_scores && detail.kpi_scores.length > 0 ? (
-                <DetailDrawerSection title="KPI 分项得分">
+                <DetailDrawerSection title={t('app.kuaizhizao.performance.summaries.sections.kpiScores')}>
                   <Table
                     size="small"
                     rowKey="kpi_code"
                     pagination={false}
                     dataSource={detail.kpi_scores}
                     columns={[
-                      { title: '指标', dataIndex: 'kpi_code', width: 120 },
-                      { title: '得分', dataIndex: 'score', width: 80, align: 'right' },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.kpiCode'), dataIndex: 'kpi_code', width: 120 },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.score'), dataIndex: 'score', width: 80, align: 'right' },
                     ]}
                   />
                 </DetailDrawerSection>
               ) : null}
-              <DetailDrawerSection title="报工明细">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.summaries.sections.reportingItems')}>
                 {detail.items && detail.items.length > 0 ? (
                   <Table<PerformanceDetailItem>
                     size="small"
@@ -373,19 +403,19 @@ const SummariesPage: React.FC = () => {
                     pagination={false}
                     dataSource={detail.items}
                     columns={[
-                      { title: '报工记录', dataIndex: 'reporting_record_id', width: 88 },
-                      { title: '工单', dataIndex: 'work_order_code', width: 120, ellipsis: true },
-                      { title: '工序', dataIndex: 'operation_name', width: 120, ellipsis: true },
-                      { title: '报工时间', dataIndex: 'reported_at', width: 160 },
-                      { title: '合格数', dataIndex: 'qualified_quantity', width: 80, align: 'right' },
-                      { title: '工时', dataIndex: 'work_hours', width: 80, align: 'right' },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.reportingRecord'), dataIndex: 'reporting_record_id', width: 88 },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.workOrder'), dataIndex: 'work_order_code', width: 120, ellipsis: true },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.operation'), dataIndex: 'operation_name', width: 120, ellipsis: true },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.reportedAt'), dataIndex: 'reported_at', width: 160 },
+                      { title: t('app.kuaizhizao.performance.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', width: 80, align: 'right' },
+                      { title: t('app.kuaizhizao.performance.summaries.columns.workHours'), dataIndex: 'work_hours', width: 80, align: 'right' },
                     ]}
                   />
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无报工明细" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noReportingItems')} />
                 )}
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaizhizao.performance.common.sections.operationLog')}>
                 {summaryTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -398,7 +428,7 @@ const SummariesPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={summaryTracking.data} />
                 )}
                 {!summaryTracking.loading && !summaryTracking.data && !summaryTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.performance.common.empty.noActivityLog')} />
                 )}
               </DetailDrawerSection>
             </>

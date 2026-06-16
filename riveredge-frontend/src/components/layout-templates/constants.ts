@@ -300,11 +300,13 @@ export const LIST_PAGE_TABLE_SCROLL = {
   STAT_CARDS_ROW_EXTRA_PX: 120,
   /** MultiTabListPageTemplate 相对标准列表：Ant Design Card 的 Tab 栏及结构增量 */
   MULTI_TAB_CARD_EXTRA_PX: 78,
+  /** UniReport 报表标题区（UniReportMetaHeader：标题 + 副标题 + margin，约 66px） */
+  REPORT_META_HEADER_EXTRA_PX: 70,
   /** UniTable 无模板变量时使用的默认回退（312 + 136） */
   DEFAULT_FALLBACK_OFFSET_PX: 448,
 } as const;
 
-export type ListPageTableScrollLayout = 'list' | 'multiTab';
+export type ListPageTableScrollLayout = 'list' | 'multiTab' | 'report';
 
 export interface ListPageTableBodyScrollYOptions {
   layout?: ListPageTableScrollLayout;
@@ -321,6 +323,9 @@ export function getListPageTableScrollOffsetPx(options: ListPageTableBodyScrollY
   }
   if (layout === 'multiTab') {
     sub += LIST_PAGE_TABLE_SCROLL.MULTI_TAB_CARD_EXTRA_PX;
+  }
+  if (layout === 'report') {
+    sub += LIST_PAGE_TABLE_SCROLL.REPORT_META_HEADER_EXTRA_PX;
   }
   return sub;
 }

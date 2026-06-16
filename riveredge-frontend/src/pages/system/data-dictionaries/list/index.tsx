@@ -45,6 +45,12 @@ import {
   CreateDictionaryItemData,
   UpdateDictionaryItemData,
 } from '../../../../services/dataDictionary';
+import {
+  resolveSystemDictionaryDescription,
+  resolveSystemDictionaryItemDescription,
+  resolveSystemDictionaryItemLabel,
+  resolveSystemDictionaryName,
+} from '../../../../utils/systemDictionaryI18n';
 
 const DataDictionaryListPage: React.FC = () => {
   const { t } = useTranslation();
@@ -56,9 +62,17 @@ const DataDictionaryListPage: React.FC = () => {
 
   const dataDictionaryDetailDescColumns = useMemo<ProDescriptionsItemProps<DataDictionary>[]>(
     () => [
-      { title: t('field.dataDictionary.name'), dataIndex: 'name' },
+      {
+        title: t('field.dataDictionary.name'),
+        dataIndex: 'name',
+        render: (_: unknown, entity: DataDictionary) => resolveSystemDictionaryName(entity, t),
+      },
       { title: t('field.dataDictionary.code'), dataIndex: 'code' },
-      { title: t('field.dataDictionary.description'), dataIndex: 'description' },
+      {
+        title: t('field.dataDictionary.description'),
+        dataIndex: 'description',
+        render: (_: unknown, entity: DataDictionary) => resolveSystemDictionaryDescription(entity, t),
+      },
       {
         title: t('field.dataDictionary.systemDictionary'),
         dataIndex: 'is_system',
@@ -336,6 +350,7 @@ const DataDictionaryListPage: React.FC = () => {
       dataIndex: 'name',
       width: 150,
       fixed: 'left',
+      render: (_, record) => resolveSystemDictionaryName(record, t),
     },
     {
       title: t('field.dataDictionary.code'),
@@ -347,6 +362,7 @@ const DataDictionaryListPage: React.FC = () => {
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
+      render: (_, record) => resolveSystemDictionaryDescription(record, t),
     },
     {
       title: t('field.dataDictionary.systemDictionary'),
@@ -429,13 +445,18 @@ const DataDictionaryListPage: React.FC = () => {
   /**
    * 字典项表格列定义
    */
-  const itemColumns = [
+  const itemColumns = useMemo(
+    () => [
     {
       title: t('field.dataDictionary.itemLabel'),
       dataIndex: 'label',
       key: 'label',
       width: 120,
       ellipsis: true,
+      render: (_: unknown, record: DictionaryItem) =>
+        currentDictionaryForItems?.code
+          ? resolveSystemDictionaryItemLabel(currentDictionaryForItems.code, record, t)
+          : record.label,
     },
     {
       title: t('field.dataDictionary.itemValue'),
@@ -444,7 +465,17 @@ const DataDictionaryListPage: React.FC = () => {
       width: 140,
       ellipsis: { showTitle: true },
     },
-    { title: t('field.dataDictionary.description'), dataIndex: 'description', key: 'description', ellipsis: true, width: 200 },
+    {
+      title: t('field.dataDictionary.description'),
+      dataIndex: 'description',
+      key: 'description',
+      ellipsis: true,
+      width: 200,
+      render: (_: unknown, record: DictionaryItem) =>
+        currentDictionaryForItems?.code
+          ? resolveSystemDictionaryItemDescription(currentDictionaryForItems.code, record, t)
+          : record.description,
+    },
     {
       title: t('field.dataDictionary.itemColor'),
       dataIndex: 'color',
@@ -497,7 +528,9 @@ const DataDictionaryListPage: React.FC = () => {
         );
       },
     },
-  ];
+  ],
+    [t, currentDictionaryForItems?.code],
+  );
 
   const dictionaryItemDrawerStyles = useMemo(() => {
     const floating = getDrawerFloatingWrapperStyle('right', token);
@@ -636,7 +669,11 @@ const DataDictionaryListPage: React.FC = () => {
 
       {/* 字典项管理 Drawer */}
       <Drawer
-        title={`${t('field.dataDictionary.manageItems')} - ${currentDictionaryForItems?.name || ''}`}
+        title={`${t('field.dataDictionary.manageItems')} - ${
+          currentDictionaryForItems
+            ? resolveSystemDictionaryName(currentDictionaryForItems, t)
+            : ''
+        }`}
         open={itemDrawerVisible}
         onClose={() => {
           setItemDrawerVisible(false);

@@ -2,7 +2,8 @@
  * 员工绩效配置页面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Tag, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -14,25 +15,24 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { employeePerformanceApi } from '../../../services/performance';
 import type { EmployeePerformanceConfig } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
-
-const CALC_MODE_OPTIONS = [
-  { label: '计时', value: 'time' },
-  { label: '计件', value: 'piece' },
-  { label: '混合', value: 'mixed' },
-];
-
-const PIECE_RATE_MODE_OPTIONS = [
-  { label: '按工序单价', value: 'operation' },
-  { label: '默认单价', value: 'default' },
-];
+import {
+  getCalcModeOptions,
+  getCalcModeText,
+  getPerformanceYesNoValueEnum,
+  getPieceRateModeOptions,
+} from '../components/performanceMeta';
 
 const EmployeeConfigsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
   const [employees, setEmployees] = useState<{ id: number; full_name: string }[]>([]);
+
+  const calcModeOptions = useMemo(() => getCalcModeOptions(t), [t]);
+  const pieceRateModeOptions = useMemo(() => getPieceRateModeOptions(t), [t]);
 
   useEffect(() => {
     employeePerformanceApi.listEmployees({ limit: 500 }).then((r) => {
@@ -59,8 +59,8 @@ const EmployeeConfigsPage: React.FC = () => {
         effective_to: c.effective_to ? dayjs(c.effective_to) : undefined,
         is_active: c.is_active !== false,
       });
-    }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
-  }, [modalVisible, editId]);
+    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+  }, [modalVisible, editId, messageApi, t]);
 
   const handleCreate = () => {
     setEditId(null);
@@ -73,10 +73,10 @@ const EmployeeConfigsPage: React.FC = () => {
   const handleDelete = async (record: EmployeePerformanceConfig) => {
     try {
       await employeePerformanceApi.deleteConfig(record.id);
-      messageApi.success('删除成功');
+      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '删除失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
 
@@ -86,89 +86,89 @@ const EmployeeConfigsPage: React.FC = () => {
     actionRef.current?.reload();
   };
 
-  const columns: ProColumns<EmployeePerformanceConfig>[] = [
-    {
-      title: '员工',
-      dataIndex: 'employee_name',
-      width: 120,
-      ellipsis: true,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
-          {r.employee_name ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '计算模式',
-      dataIndex: 'calc_mode',
-      width: 100,
-      render: (_, r) => <Tag>{CALC_MODE_OPTIONS.find((o) => o.value === r.calc_mode)?.label || r.calc_mode}</Tag>,
-    },
-    { title: '工时单价（元/时）', dataIndex: 'hourly_rate', width: 120, align: 'right' },
-    { title: '默认计件单价（元/件）', dataIndex: 'default_piece_rate', width: 140, align: 'right' },
-    { title: '月保障工资（元）', dataIndex: 'base_salary', width: 120, align: 'right' },
-    {
-      title: '启用',
-      dataIndex: 'is_active',
-      hideInTable: true,
-      valueEnum: {
-        true: { text: '是' },
-        false: { text: '否' },
+  const columns: ProColumns<EmployeePerformanceConfig>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.performance.common.columns.employee'),
+        dataIndex: 'employee_name',
+        width: 120,
+        ellipsis: true,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.employee_name ?? '') }} ellipsis>
+            {r.employee_name ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      {
+        title: t('app.kuaizhizao.performance.common.columns.calcMode'),
+        dataIndex: 'calc_mode',
+        width: 100,
+        render: (_, r) => <Tag>{getCalcModeText(t, r.calc_mode)}</Tag>,
       },
-    },
-    {
-      title: '操作',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.hourlyRate'), dataIndex: 'hourly_rate', width: 120, align: 'right' },
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.defaultPieceRate'), dataIndex: 'default_piece_rate', width: 140, align: 'right' },
+      { title: t('app.kuaizhizao.performance.employeeConfigs.columns.baseSalary'), dataIndex: 'base_salary', width: 120, align: 'right' },
+      {
+        title: t('app.kuaizhizao.performance.common.form.active'),
+        dataIndex: 'is_active',
+        hideInTable: true,
+        valueEnum: getPerformanceYesNoValueEnum(t),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        width: 150,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('app.kuaizhizao.performance.common.actions.edit')}
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm title={t('app.kuaizhizao.performance.employeeConfigs.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('app.kuaizhizao.performance.common.actions.delete')}
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<EmployeePerformanceConfig>
-          headerTitle="员工绩效配置"
+          headerTitle={t('app.kuaizhizao.performance.employeeConfigs.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -186,7 +186,7 @@ const EmployeeConfigsPage: React.FC = () => {
               const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
               return { data: rows, success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || '加载失败');
+              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -198,21 +198,21 @@ const EmployeeConfigsPage: React.FC = () => {
               for (const id of keys) {
                 await employeePerformanceApi.deleteConfig(Number(id));
               }
-              messageApi.success(`成功删除 ${keys.length} 条记录`);
+              messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || '删除失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
             }
           }}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条员工配置吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.employeeConfigs.messages.deleteBatchConfirm', { count })}
           showCreateButton
-          createButtonText="新建员工绩效配置"
+          createButtonText={t('app.kuaizhizao.performance.employeeConfigs.createButton')}
           onCreate={handleCreate}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={editId ? '编辑员工绩效配置' : '新建员工绩效配置'}
+        title={editId ? t('app.kuaizhizao.performance.employeeConfigs.modal.editTitle') : t('app.kuaizhizao.performance.employeeConfigs.modal.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -234,10 +234,10 @@ const EmployeeConfigsPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateConfig(editId, payload);
-            messageApi.success('更新成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
           } else {
             await employeePerformanceApi.createConfig(payload);
-            messageApi.success('创建成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
           }
           handleModalSuccess();
         }}
@@ -246,20 +246,20 @@ const EmployeeConfigsPage: React.FC = () => {
       >
         <ProFormSelect
           name="employee_id"
-          label="员工"
+          label={t('app.kuaizhizao.performance.common.columns.employee')}
           rules={[{ required: true }]}
           options={employees.map((e) => ({ label: e.full_name, value: e.id }))}
           colProps={{ span: 12 }}
           disabled={!!editId}
         />
-        <ProFormRadio.Group name="calc_mode" label="计算模式" options={CALC_MODE_OPTIONS} colProps={{ span: 12 }} />
-        <ProFormSelect name="piece_rate_mode" label="计件单价来源" options={PIECE_RATE_MODE_OPTIONS} colProps={{ span: 12 }} />
-        <ProFormDigit name="hourly_rate" label="工时单价（元/小时）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormDigit name="default_piece_rate" label="默认计件单价（元/件）" min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
-        <ProFormDigit name="base_salary" label="月保障工资（元）" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormDatePicker name="effective_from" label="生效日期" colProps={{ span: 12 }} />
-        <ProFormDatePicker name="effective_to" label="失效日期" colProps={{ span: 12 }} />
-        <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
+        <ProFormRadio.Group name="calc_mode" label={t('app.kuaizhizao.performance.common.columns.calcMode')} options={calcModeOptions} colProps={{ span: 12 }} />
+        <ProFormSelect name="piece_rate_mode" label={t('app.kuaizhizao.performance.employeeConfigs.form.pieceRateMode')} options={pieceRateModeOptions} colProps={{ span: 12 }} />
+        <ProFormDigit name="hourly_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.hourlyRate')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
+        <ProFormDigit name="default_piece_rate" label={t('app.kuaizhizao.performance.employeeConfigs.form.defaultPieceRate')} min={0} fieldProps={{ precision: 4 }} colProps={{ span: 12 }} />
+        <ProFormDigit name="base_salary" label={t('app.kuaizhizao.performance.employeeConfigs.form.baseSalary')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_from" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveFrom')} colProps={{ span: 12 }} />
+        <ProFormDatePicker name="effective_to" label={t('app.kuaizhizao.performance.employeeConfigs.form.effectiveTo')} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>
   );

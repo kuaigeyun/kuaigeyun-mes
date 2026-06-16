@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import type { ProColumns } from '@ant-design/pro-components';
 import { InputNumber, Space } from 'antd';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
@@ -9,54 +10,43 @@ import { managementReportService } from '../../../services/management-report';
 type MarginRow = Record<string, unknown>;
 type Dimension = 'product' | 'customer' | 'order';
 
-const productColumns: ProColumns<MarginRow>[] = [
-  { title: '产品编码', dataIndex: 'product_code', width: 120 },
-  { title: '产品名称', dataIndex: 'product_name', ellipsis: true },
-  { title: '销售额', dataIndex: 'revenue', valueType: 'money', align: 'right' },
-  { title: '成本', dataIndex: 'cost', valueType: 'money', align: 'right' },
-  { title: '毛利', dataIndex: 'gross_margin', valueType: 'money', align: 'right' },
-  {
-    title: '毛利率',
-    dataIndex: 'gross_margin_rate',
-    align: 'right',
-    render: (_, r) => `${((Number(r.gross_margin_rate) || 0) * 100).toFixed(2)}%`,
-  },
-];
-
-const customerColumns: ProColumns<MarginRow>[] = [
-  { title: '客户', dataIndex: 'customer_name', ellipsis: true },
-  { title: '销售额', dataIndex: 'revenue', valueType: 'money', align: 'right' },
-  { title: '成本', dataIndex: 'cost', valueType: 'money', align: 'right' },
-  { title: '毛利', dataIndex: 'gross_margin', valueType: 'money', align: 'right' },
-  {
-    title: '毛利率',
-    dataIndex: 'gross_margin_rate',
-    align: 'right',
-    render: (_, r) => `${((Number(r.gross_margin_rate) || 0) * 100).toFixed(2)}%`,
-  },
-];
-
-const orderColumns: ProColumns<MarginRow>[] = [
-  { title: '订单号', dataIndex: 'sales_order_code', width: 140 },
-  { title: '出库单', dataIndex: 'delivery_code', width: 140 },
-  { title: '销售额', dataIndex: 'revenue', valueType: 'money', align: 'right' },
-  { title: '成本', dataIndex: 'cost', valueType: 'money', align: 'right' },
-  { title: '毛利', dataIndex: 'gross_margin', valueType: 'money', align: 'right' },
-  {
-    title: '毛利率',
-    dataIndex: 'gross_margin_rate',
-    align: 'right',
-    render: (_, r) => `${((Number(r.gross_margin_rate) || 0) * 100).toFixed(2)}%`,
-  },
-];
-
-const COLUMNS: Record<Dimension, ProColumns<MarginRow>[]> = {
-  product: productColumns,
-  customer: customerColumns,
-  order: orderColumns,
-};
-
 const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimension, days }) => {
+  const { t } = useTranslation();
+
+  const columns: ProColumns<MarginRow>[] = useMemo(() => {
+    const marginRateCol: ProColumns<MarginRow> = {
+      title: t('app.kuaicaiwu.marginReport.col.grossMarginRate'),
+      dataIndex: 'gross_margin_rate',
+      align: 'right',
+      render: (_, r) => `${((Number(r.gross_margin_rate) || 0) * 100).toFixed(2)}%`,
+    };
+    const sharedCols: ProColumns<MarginRow>[] = [
+      { title: t('app.kuaicaiwu.marginReport.col.revenue'), dataIndex: 'revenue', valueType: 'money', align: 'right' },
+      { title: t('app.kuaicaiwu.marginReport.col.cost'), dataIndex: 'cost', valueType: 'money', align: 'right' },
+      { title: t('app.kuaicaiwu.marginReport.col.grossMargin'), dataIndex: 'gross_margin', valueType: 'money', align: 'right' },
+      marginRateCol,
+    ];
+
+    if (dimension === 'product') {
+      return [
+        { title: t('app.kuaicaiwu.marginReport.col.productCode'), dataIndex: 'product_code', width: 120 },
+        { title: t('app.kuaicaiwu.marginReport.col.productName'), dataIndex: 'product_name', ellipsis: true },
+        ...sharedCols,
+      ];
+    }
+    if (dimension === 'customer') {
+      return [
+        { title: t('app.kuaicaiwu.marginReport.col.customer'), dataIndex: 'customer_name', ellipsis: true },
+        ...sharedCols,
+      ];
+    }
+    return [
+      { title: t('app.kuaicaiwu.marginReport.col.orderNo'), dataIndex: 'sales_order_code', width: 140 },
+      { title: t('app.kuaicaiwu.marginReport.col.deliveryNote'), dataIndex: 'delivery_code', width: 140 },
+      ...sharedCols,
+    ];
+  }, [dimension, t]);
+
   const { data, isLoading } = useQuery({
     queryKey: ['marginReport', dimension, days],
     queryFn: async () => {
@@ -72,7 +62,7 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
     <UniTable<MarginRow>
       rowKey={(r, i) => String(r.product_id ?? r.customer_id ?? r.delivery_id ?? i)}
       columnPersistenceId={`apps.kuaicaiwu.pages.management-analysis.margin-report.${dimension}`}
-      columns={COLUMNS[dimension]}
+      columns={columns}
       dataSource={items}
       loading={isLoading}
       search={false}
@@ -83,17 +73,18 @@ const MarginTable: React.FC<{ dimension: Dimension; days: number }> = ({ dimensi
 };
 
 const MarginReportPage: React.FC = () => {
+  const { t } = useTranslation();
   const [days, setDays] = useState(30);
   const [dimension, setDimension] = useState<Dimension>('product');
 
   const tabBarExtraContent = useMemo(
     () => (
       <Space>
-        <span>统计天数</span>
+        <span>{t('app.kuaicaiwu.marginReport.statsDays')}</span>
         <InputNumber min={7} max={365} value={days} onChange={(v) => setDays(Number(v) || 30)} />
       </Space>
     ),
-    [days],
+    [days, t],
   );
 
   return (
@@ -102,9 +93,9 @@ const MarginReportPage: React.FC = () => {
       onTabChange={(key) => setDimension(key as Dimension)}
       tabBarExtraContent={tabBarExtraContent}
       tabs={[
-        { key: 'product', label: '按产品', children: <MarginTable dimension="product" days={days} /> },
-        { key: 'customer', label: '按客户', children: <MarginTable dimension="customer" days={days} /> },
-        { key: 'order', label: '按订单', children: <MarginTable dimension="order" days={days} /> },
+        { key: 'product', label: t('app.kuaicaiwu.marginReport.tab.product'), children: <MarginTable dimension="product" days={days} /> },
+        { key: 'customer', label: t('app.kuaicaiwu.marginReport.tab.customer'), children: <MarginTable dimension="customer" days={days} /> },
+        { key: 'order', label: t('app.kuaicaiwu.marginReport.tab.order'), children: <MarginTable dimension="order" days={days} /> },
       ]}
     />
   );

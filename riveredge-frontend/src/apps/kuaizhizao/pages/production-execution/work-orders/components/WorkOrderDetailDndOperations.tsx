@@ -1,7 +1,8 @@
 /**
  * 工单详情 — 工序列表拖拽排序（独立 chunk，首屏不加载 @dnd-kit）
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { App, Button, Modal, Popconfirm, Space, Tag } from 'antd'
 import { HolderOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -38,6 +39,7 @@ interface SortableOperationItemProps {
   isReported: boolean
   onEdit: () => void
   onDelete: () => void
+  statusMap: Record<string, { text: string; color: string }>
 }
 
 const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
@@ -46,7 +48,9 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
   isReported,
   onEdit,
   onDelete,
+  statusMap,
 }) => {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: operation.id,
   })
@@ -61,13 +65,6 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
     padding: '12px',
     marginBottom: '8px',
     cursor: canEdit && !isReported ? 'grab' : 'not-allowed',
-  }
-
-  const statusMap: Record<string, { text: string; color: string }> = {
-    pending: { text: '待开始', color: 'default' },
-    in_progress: { text: '进行中', color: 'processing' },
-    completed: { text: '已完成', color: 'success' },
-    cancelled: { text: '已取消', color: 'error' },
   }
 
   const statusConfig = statusMap[operation.status] || { text: operation.status, color: 'default' }
@@ -95,15 +92,28 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
               {operation.sequence}. {operation.operation_name || operation.name}
             </span>
             <Tag color={statusConfig.color}>{statusConfig.text}</Tag>
-            {isReported && <Tag color="warning">已报工</Tag>}
+            {isReported && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagReported')}</Tag>}
           </div>
           <div style={{ fontSize: '12px', color: '#999' }}>
             <Space separator={<span>|</span>}>
-              <span>编号: {operation.operation_code || operation.code}</span>
-              {operation.workshop_name && <span>车间: {operation.workshop_name}</span>}
-              {operation.standard_time > 0 && <span>标准工时: {operation.standard_time}h</span>}
+              <span>
+                {t('app.kuaizhizao.workOrder.colCodeShort')}: {operation.operation_code || operation.code}
+              </span>
+              {operation.workshop_name && (
+                <span>
+                  {t('app.kuaizhizao.workOrder.colWorkshop')}: {operation.workshop_name}
+                </span>
+              )}
+              {operation.standard_time > 0 && (
+                <span>
+                  {t('app.kuaizhizao.workOrder.colStandardTime')}: {operation.standard_time}h
+                </span>
+              )}
               {operation.planned_start_date && (
-                <span>计划: {dayjs(operation.planned_start_date).format('YYYY-MM-DD HH:mm')}</span>
+                <span>
+                  {t('app.kuaizhizao.workOrder.labelPlan')}:{' '}
+                  {dayjs(operation.planned_start_date).format('YYYY-MM-DD HH:mm')}
+                </span>
               )}
             </Space>
           </div>
@@ -111,15 +121,17 @@ const SortableOperationItem: React.FC<SortableOperationItemProps> = ({
         {canEdit && (
           <Space>
             <Button type="link" size="small" onClick={onEdit}>
-              编辑
+              {t('app.kuaizhizao.workOrder.actionEdit')}
             </Button>
             <Popconfirm
-              title="确认删除"
-              description={`确定要删除工序"${operation.operation_name || operation.name}"吗？`}
+              title={t('app.kuaizhizao.workOrder.modalConfirmDeleteOp')}
+              description={t('app.kuaizhizao.workOrder.msgOpDeleteConfirm', {
+                name: operation.operation_name || operation.name,
+              })}
               onConfirm={onDelete}
             >
               <Button type="link" size="small" danger>
-                删除
+                {t('app.kuaizhizao.workOrder.actionDelete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -136,9 +148,20 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
   onUpdate,
   onEdit,
 }) => {
+  const { t } = useTranslation()
   const { message: messageApi } = App.useApp()
   const [localOperations, setLocalOperations] = useState<any[]>(operations)
   const [, setSaving] = useState(false)
+
+  const statusMap = useMemo(
+    () => ({
+      pending: { text: t('app.kuaizhizao.workOrder.opStatusPending'), color: 'default' },
+      in_progress: { text: t('app.kuaizhizao.workOrder.opStatusInProgress'), color: 'processing' },
+      completed: { text: t('app.kuaizhizao.workOrder.opStatusCompleted'), color: 'success' },
+      cancelled: { text: t('app.kuaizhizao.workOrder.opStatusCancelled'), color: 'error' },
+    }),
+    [t]
+  )
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -162,7 +185,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
 
       const movedOperation = localOperations[oldIndex]
       if (movedOperation.status !== 'pending' && movedOperation.status !== 'in_progress') {
-        messageApi.warning('已报工的工序不允许调整顺序')
+        messageApi.warning(t('app.kuaizhizao.workOrder.msgOpCannotReorderReported'))
         return
       }
 
@@ -180,10 +203,10 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
           await workOrderApi.updateOperations(workOrderId.toString(), {
             operations: sortedOperations,
           })
-          messageApi.success('工序顺序已更新')
+          messageApi.success(t('app.kuaizhizao.workOrder.msgOpOrderUpdated'))
           await onUpdate()
         } catch (error: any) {
-          messageApi.error(error.message || '更新失败')
+          messageApi.error(error.message || t('common.updateFailed'))
           setLocalOperations(operations)
         } finally {
           setSaving(false)
@@ -194,13 +217,13 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
 
   const handleDelete = async (operation: any) => {
     if (operation.status !== 'pending' && operation.status !== 'in_progress') {
-      messageApi.warning('已报工的工序不允许删除')
+      messageApi.warning(t('app.kuaizhizao.workOrder.msgOpCannotDeleteReported'))
       return
     }
 
     Modal.confirm({
-      title: '确认删除',
-      content: `确定要删除工序"${operation.operation_name}"吗？`,
+      title: t('app.kuaizhizao.workOrder.modalConfirmDeleteOp'),
+      content: t('app.kuaizhizao.workOrder.msgOpDeleteConfirm', { name: operation.operation_name }),
       onOk: async () => {
         try {
           if (!workOrderId) return
@@ -216,10 +239,10 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
             operations: updatedOperations,
           })
 
-          messageApi.success('工序删除成功')
+          messageApi.success(t('app.kuaizhizao.workOrder.msgOpDeleteSuccess'))
           await onUpdate()
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败')
+          messageApi.error(error.message || t('common.deleteFailed'))
         }
       },
     })
@@ -228,7 +251,11 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
   const canEdit = workOrderStatus && ['draft', 'released'].includes(workOrderStatus)
 
   if (localOperations.length === 0) {
-    return <div style={{ padding: '48px 24px', textAlign: 'center', color: '#999' }}>暂无工序</div>
+    return (
+      <div style={{ padding: '48px 24px', textAlign: 'center', color: '#999' }}>
+        {t('app.kuaizhizao.workOrder.msgNoOperations')}
+      </div>
+    )
   }
 
   return (
@@ -248,6 +275,7 @@ const WorkOrderOperationsList: React.FC<WorkOrderOperationsListProps> = ({
                 isReported={isReported}
                 onEdit={() => onEdit(operation)}
                 onDelete={() => handleDelete(operation)}
+                statusMap={statusMap}
               />
             )
           })}

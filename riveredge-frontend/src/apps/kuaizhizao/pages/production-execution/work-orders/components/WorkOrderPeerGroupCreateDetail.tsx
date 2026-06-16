@@ -54,12 +54,18 @@ const LazyUniMaterialSelect = React.lazy(
     }))
 )
 
-const PRIORITY_OPTIONS = [
-  { label: '低', value: 'low' },
-  { label: '正常', value: 'normal' },
-  { label: '高', value: 'high' },
-  { label: '紧急', value: 'urgent' },
-]
+function usePriorityOptions() {
+  const { t } = useTranslation()
+  return useMemo(
+    () => [
+      { label: t('app.kuaizhizao.workOrder.priorityLow'), value: 'low' },
+      { label: t('app.kuaizhizao.workOrder.priorityNormal'), value: 'normal' },
+      { label: t('app.kuaizhizao.workOrder.priorityHigh'), value: 'high' },
+      { label: t('app.kuaizhizao.workOrder.priorityUrgent'), value: 'urgent' },
+    ],
+    [t]
+  )
+}
 
 export const EMPTY_PEER_GROUP_ITEM = {
   product_id: undefined as number | undefined,
@@ -79,6 +85,7 @@ const PeerGroupMaterialCell: React.FC<{ index: number; sourceType?: string }> = 
   index,
   sourceType,
 }) => {
+  const { t } = useTranslation()
   const form = Form.useFormInstance()
   const row = Form.useWatch(['group_items', index])
   const mid =
@@ -98,7 +105,7 @@ const PeerGroupMaterialCell: React.FC<{ index: number; sourceType?: string }> = 
         <LazyUniMaterialSelect
           name={[index, 'product_id']}
           label=""
-          placeholder="请选择产品"
+          placeholder={t('app.kuaizhizao.workOrder.formSelectProduct')}
           required
           size="small"
           sourceType={sourceType}
@@ -168,12 +175,13 @@ const PeerGroupProcessRouteCell: React.FC<{
   index: number
   processRouteList: WorkOrderPeerGroupCreateDetailProps['processRouteList']
 }> = ({ index, processRouteList }) => {
+  const { t } = useTranslation()
   const form = Form.useFormInstance()
 
   return (
     <Form.Item name={[index, 'process_route_id']} style={{ margin: 0 }}>
       <UniDropdown
-        placeholder="可选"
+        placeholder={t('app.kuaizhizao.workOrder.formOptional')}
         size="small"
         options={processRouteList.map((route) => ({
           label: `${route.code} - ${route.name}`,
@@ -182,10 +190,10 @@ const PeerGroupProcessRouteCell: React.FC<{
         showSearch
         allowClear
         advancedSearch={{
-          label: '高级搜索',
+          label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
           fields: [
-            { name: 'code', label: '工艺路线编号' },
-            { name: 'name', label: '工艺路线名称' },
+            { name: 'code', label: t('app.kuaizhizao.workOrder.formProcessRouteCode') },
+            { name: 'name', label: t('app.kuaizhizao.workOrder.formProcessRouteName') },
           ],
           onSearch: async (values) => {
             try {
@@ -229,6 +237,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
 }) => {
   const { t } = useTranslation()
   const form = Form.useFormInstance()
+  const priorityOptions = usePriorityOptions()
   const [onlyShowMake, setOnlyShowMake] = useState(true)
   const materialSourceType = onlyShowMake ? 'Make' : undefined
 
@@ -249,7 +258,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
   const columns = useMemo<ColumnsType<Record<string, unknown>>>(
     () => [
       {
-        title: '产品',
+        title: t('app.kuaizhizao.workOrder.colProduct'),
         key: 'product_id',
         width: 240,
         fixed: 'left',
@@ -258,13 +267,13 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         ),
       },
       {
-        title: '计划数量',
+        title: t('app.kuaizhizao.workOrder.colPlannedQty'),
         key: 'quantity',
         width: 100,
         render: (_: unknown, __: unknown, index: number) => (
           <Form.Item
             name={[index, 'quantity']}
-            rules={[{ required: true, message: '必填' }]}
+            rules={[{ required: true, message: t('common.required') }]}
             style={{ margin: 0 }}
           >
             <InputNumber min={0.0001} precision={2} style={{ width: '100%' }} size="small" />
@@ -272,17 +281,17 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         ),
       },
       {
-        title: '优先级',
+        title: t('app.kuaizhizao.workOrder.colPriority'),
         key: 'priority',
         width: 96,
         render: (_: unknown, __: unknown, index: number) => (
           <Form.Item name={[index, 'priority']} initialValue="normal" style={{ margin: 0 }}>
-            <Select options={PRIORITY_OPTIONS} size="small" />
+            <Select options={priorityOptions} size="small" />
           </Form.Item>
         ),
       },
       {
-        title: '工艺路线',
+        title: t('app.kuaizhizao.workOrder.colProcessRoute'),
         key: 'process_route_id',
         width: 200,
         render: (_: unknown, __: unknown, index: number) => (
@@ -290,7 +299,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         ),
       },
       {
-        title: '允许跳转工序',
+        title: t('app.kuaizhizao.workOrder.colAllowOpJump'),
         key: 'allow_operation_jump',
         width: 110,
         align: 'center',
@@ -306,7 +315,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         ),
       },
       {
-        title: '超报',
+        title: t('app.kuaizhizao.workOrder.colOverReport'),
         key: 'over_report',
         width: 200,
         render: (_: unknown, __: unknown, index: number) => (
@@ -314,7 +323,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         ),
       },
     ],
-    [materialSourceType, overReportModeOptions, processRouteList]
+    [t, materialSourceType, overReportModeOptions, priorityOptions, processRouteList]
   )
 
   return (
@@ -328,16 +337,16 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
       `}</style>
       <UniTableDetail
         name="group_items"
-        title="组内工单明细"
+        title={t('app.kuaizhizao.workOrder.formGroupItemsTitle')}
         required
-        requiredMessage="请至少添加 2 条明细"
+        requiredMessage={t('app.kuaizhizao.workOrder.formGroupItemsRequired')}
         leftExtra={
           <ThemedSegmented
             value={onlyShowMake ? 'make' : 'all'}
             onChange={(v) => setOnlyShowMake(v === 'make')}
             options={[
-              { label: '自制件', value: 'make' },
-              { label: '全部', value: 'all' },
+              { label: t('app.kuaizhizao.workOrder.formSegmentMake'), value: 'make' },
+              { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
             ]}
           />
         }
@@ -346,7 +355,7 @@ export const WorkOrderPeerGroupCreateDetail: React.FC<WorkOrderPeerGroupCreateDe
         headerExtra={
           <Space size={8}>
             <Button type="dashed" icon={<PlusOutlined />} onClick={appendRow}>
-              添加明细
+              {t('app.kuaizhizao.workOrder.actionAddDetail')}
             </Button>
           </Space>
         }

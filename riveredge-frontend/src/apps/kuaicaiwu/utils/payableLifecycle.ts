@@ -6,6 +6,21 @@
 import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
+import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+
+const PL = 'app.kuaicaiwu.payable.lifecycle';
+
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  pending_review: `${PL}.pendingReview`,
+  approved: `${PL}.approved`,
+  settled: `${PL}.settled`,
+  rejected: `${PL}.rejected`,
+};
+
+const NEXT_STEP_KEYS: Record<string, string[]> = {
+  pending_review: [`${PL}.suggestionReview`],
+  approved: [`${PL}.suggestionRecordPayment`],
+};
 
 function norm(s: string | undefined): string {
   return (s ?? '').trim();
@@ -68,10 +83,15 @@ function buildFallbackLifecycle(record: Record<string, unknown>): BackendLifecyc
 }
 
 export function getPayableLifecycle(
-  record: Record<string, unknown> | null | undefined
+  record: Record<string, unknown> | null | undefined,
+  t?: LifecycleTranslateFn,
 ): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const backend = (record as Record<string, unknown>).lifecycle as BackendLifecycle | undefined;
-  if (backend?.main_stages?.length) return parseBackendLifecycle(backend);
-  return parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  const parsed =
+    backend?.main_stages?.length
+      ? parseBackendLifecycle(backend)
+      : parseBackendLifecycle(buildFallbackLifecycle(record as Record<string, unknown>));
+  if (!t) return parsed;
+  return applyLifecycleI18n(parsed, t, STAGE_LABEL_KEYS, NEXT_STEP_KEYS);
 }

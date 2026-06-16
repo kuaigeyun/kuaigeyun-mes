@@ -31,7 +31,7 @@ import {
   syncLanguageFromPreferences,
 } from './config/i18n';
 import { getDefaultTenantHomePath, useConfigStore } from './stores/configStore';
-import { getLanguageFromPreferenceCache, useUserPreferenceStore } from './stores/userPreferenceStore';
+import { useUserPreferenceStore } from './stores/userPreferenceStore';
 import { getPlatformSettingsPublic } from './services/platformSettings';
 import { applyFavicon } from './utils/favicon';
 import { useThemeStore } from './stores/themeStore';
@@ -595,10 +595,6 @@ export default function App() {
   // 主题与语言初始化（挂载时执行一次）
   useEffect(() => {
     useUserPreferenceStore.getState().rehydrateFromStorage();
-    const cachedLang = getLanguageFromPreferenceCache();
-    if (cachedLang) {
-      i18n.changeLanguage(cachedLang).catch(() => {});
-    }
     initFromApi();
     initLanguageFromApi().catch((err) => {
       console.warn('Failed to init user language during app init:', err);

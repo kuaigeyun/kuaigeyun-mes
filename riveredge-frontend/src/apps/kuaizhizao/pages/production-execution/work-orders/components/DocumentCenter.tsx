@@ -10,6 +10,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next'
 import { Tabs, Card, Empty, Typography, Image, List, Tag, Button, Space } from 'antd';
 import { 
   FileImageOutlined, 
@@ -47,6 +48,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
   style,
   singleTab,
 }) => {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('sop');
   const effectiveTab = singleTab ?? activeTab;
 
@@ -57,7 +59,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           {sopContent}
         </Paragraph>
       ) : (
-        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无作业指导书</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
+        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDocNoSop')}</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
       )}
     </div>
   );
@@ -78,7 +80,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           ))}
         </div>
       ) : (
-        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无图纸</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
+        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDocNoDrawing')}</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
       )}
     </div>
   );
@@ -100,7 +102,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           {cncCode}
         </pre>
       ) : (
-        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无代码</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
+        <Empty description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDocNoCode')}</span>} image={Empty.PRESENTED_IMAGE_SIMPLE} style={{ marginTop: 24 }} />
       )}
     </div>
   );
@@ -110,7 +112,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
       {attachments.length === 0 ? (
         <Empty
           image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>暂无附件</span>}
+          description={<span style={{ color: HMI_DESIGN_TOKENS.TEXT_TERTIARY, fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN }}>{t('app.kuaizhizao.workOrder.kioskDocNoAttachments')}</span>}
           style={{ marginTop: 24 }}
         />
       ) : (
@@ -119,8 +121,8 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
         renderItem={item => (
           <List.Item
             actions={[
-              <Button type="link" icon={<EyeOutlined />} key="view" style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE }}>预览</Button>,
-              <Button type="link" icon={<DownloadOutlined />} key="download" style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE }}>下载</Button>
+              <Button type="link" icon={<EyeOutlined />} key="view" style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE }}>{t('app.kuaizhizao.workOrder.actionPreview')}</Button>,
+              <Button type="link" icon={<DownloadOutlined />} key="download" style={{ fontSize: HMI_DESIGN_TOKENS.FONT_BODY_MIN, minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE }}>{t('app.kuaizhizao.workOrder.actionDownload')}</Button>
             ]}
             style={{ borderBottom: `1px solid ${HMI_DESIGN_TOKENS.BORDER}`, minHeight: HMI_DESIGN_TOKENS.TOUCH_MIN_SIZE }}
           >
@@ -184,7 +186,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           {renderSOP()}
         </TabPane>
         <TabPane 
-          tab={<Space style={tabStyle}><FileImageOutlined />生产图纸</Space>} 
+          tab={<Space style={tabStyle}><FileImageOutlined />{t('app.kuaizhizao.workOrder.kioskDocDrawing')}</Space>} 
           key="drawings"
         >
           {renderDrawings()}
@@ -196,7 +198,7 @@ const DocumentCenter: React.FC<DocumentCenterProps> = ({
           {renderCNCCode()}
         </TabPane>
         <TabPane 
-          tab={<Space style={tabStyle}><PaperClipOutlined />相关附件</Space>} 
+          tab={<Space style={tabStyle}><PaperClipOutlined />{t('app.kuaizhizao.workOrder.kioskDocAttachments')}</Space>} 
           key="attachments"
         >
           {renderAttachments()}

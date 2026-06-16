@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs, { Dayjs } from 'dayjs';
@@ -24,7 +25,18 @@ type MatrixRow = {
 
 const REST_VALUE = 0;
 
+const WEEKDAY_KEYS = [
+  'app.kuaizhizao.performance.common.weekday.mon',
+  'app.kuaizhizao.performance.common.weekday.tue',
+  'app.kuaizhizao.performance.common.weekday.wed',
+  'app.kuaizhizao.performance.common.weekday.thu',
+  'app.kuaizhizao.performance.common.weekday.fri',
+  'app.kuaizhizao.performance.common.weekday.sat',
+  'app.kuaizhizao.performance.common.weekday.sun',
+] as const;
+
 const ShiftRostersPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
   const [shifts, setShifts] = useState<Shift[]>([]);
@@ -43,10 +55,10 @@ const ShiftRostersPage: React.FC = () => {
 
   const shiftOptions = useMemo(
     () => [
-      { label: '休息', value: REST_VALUE },
+      { label: t('app.kuaizhizao.performance.common.form.rest'), value: REST_VALUE },
       ...shifts.filter((s) => s.isActive).map((s) => ({ label: `${s.name} (${s.code})`, value: s.id })),
     ],
-    [shifts],
+    [shifts, t],
   );
 
   const loadBase = useCallback(async () => {
@@ -62,9 +74,9 @@ const ShiftRostersPage: React.FC = () => {
         setWorkGroupId(wgItems[0].id);
       }
     } catch (e: any) {
-      messageApi.error(e?.message || '加载基础数据失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.rosters.messages.loadBaseFailed'));
     }
-  }, [messageApi, workGroupId]);
+  }, [messageApi, workGroupId, t]);
 
   const buildMatrix = useCallback(
     (wg: WorkGroup, rosterData: ShiftRoster) => {
@@ -82,13 +94,13 @@ const ShiftRostersPage: React.FC = () => {
         return {
           key: m.employeeId,
           employeeId: m.employeeId,
-          employeeName: m.employeeName || `员工#${m.employeeId}`,
+          employeeName: m.employeeName || t('app.kuaizhizao.performance.rosters.employeeFallback', { id: m.employeeId }),
           cells,
         };
       });
       setMatrix(rows);
     },
-    [weekDates],
+    [weekDates, t],
   );
 
   const loadRoster = useCallback(async () => {
@@ -97,7 +109,7 @@ const ShiftRostersPage: React.FC = () => {
     try {
       const wgMeta = workGroups.find((w) => w.id === workGroupId);
       if (!wgMeta?.uuid) {
-        messageApi.warning('请先选择工作小组');
+        messageApi.warning(t('app.kuaizhizao.performance.rosters.messages.selectWorkGroup'));
         return;
       }
       const wg = await workGroupApi.get(wgMeta.uuid);
@@ -105,13 +117,13 @@ const ShiftRostersPage: React.FC = () => {
       setRoster(rosterData);
       buildMatrix(wg, rosterData);
     } catch (e: any) {
-      messageApi.error(e?.message || '加载排班表失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.rosters.messages.loadRosterFailed'));
       setRoster(null);
       setMatrix([]);
     } finally {
       setLoading(false);
     }
-  }, [workGroupId, periodStart, workGroups, buildMatrix, messageApi]);
+  }, [workGroupId, periodStart, workGroups, buildMatrix, messageApi, t]);
 
   useEffect(() => {
     loadBase();
@@ -155,9 +167,9 @@ const ShiftRostersPage: React.FC = () => {
       setSaving(true);
       const updated = await shiftRosterApi.saveAssignments(roster.uuid, collectAssignments());
       setRoster(updated);
-      messageApi.success('排班已保存');
+      messageApi.success(t('app.kuaizhizao.performance.rosters.messages.saveSuccess'));
     } catch (e: any) {
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.saveFailed'));
     } finally {
       setSaving(false);
     }
@@ -169,9 +181,9 @@ const ShiftRostersPage: React.FC = () => {
       setSaving(true);
       const updated = await shiftRosterApi.publish(roster.uuid);
       setRoster(updated);
-      messageApi.success('排班已发布');
+      messageApi.success(t('app.kuaizhizao.performance.rosters.messages.publishSuccess'));
     } catch (e: any) {
-      messageApi.error(e?.message || '发布失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.publishFailed'));
     } finally {
       setSaving(false);
     }
@@ -188,9 +200,9 @@ const ShiftRostersPage: React.FC = () => {
         const wg = await workGroupApi.get(wgUuid);
         buildMatrix(wg, updated);
       }
-      messageApi.success('已复制上周排班');
+      messageApi.success(t('app.kuaizhizao.performance.rosters.messages.copySuccess'));
     } catch (e: any) {
-      messageApi.error(e?.message || '复制失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.copyFailed'));
     } finally {
       setSaving(false);
     }
@@ -199,7 +211,7 @@ const ShiftRostersPage: React.FC = () => {
   const columns: ColumnsType<MatrixRow> = useMemo(() => {
     const base: ColumnsType<MatrixRow> = [
       {
-        title: '员工',
+        title: t('app.kuaizhizao.performance.common.columns.employee'),
         dataIndex: 'employeeName',
         fixed: 'left',
         width: 120,
@@ -212,7 +224,7 @@ const ShiftRostersPage: React.FC = () => {
             {dayjs(d).format('MM-DD')}
             <br />
             <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-              {['一', '二', '三', '四', '五', '六', '日'][dayjs(d).isoWeekday() - 1]}
+              {t(WEEKDAY_KEYS[dayjs(d).isoWeekday() - 1])}
             </Typography.Text>
           </span>
         ),
@@ -237,21 +249,21 @@ const ShiftRostersPage: React.FC = () => {
       });
     });
     return base;
-  }, [weekDates, shiftOptions, roster?.status]);
+  }, [weekDates, shiftOptions, roster?.status, t]);
 
   return (
     <ListPageTemplate>
       <Card>
         <Space wrap style={{ marginBottom: 16 }}>
-          <span>工作小组</span>
+          <span>{t('app.kuaizhizao.performance.rosters.label.workGroup')}</span>
           <Select
             style={{ minWidth: 200 }}
-            placeholder="选择工作小组"
+            placeholder={t('app.kuaizhizao.performance.rosters.placeholder.workGroup')}
             value={workGroupId}
             options={workGroups.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
             onChange={(v) => setWorkGroupId(v)}
           />
-          <span>排班周</span>
+          <span>{t('app.kuaizhizao.performance.rosters.label.rosterWeek')}</span>
           <DatePicker
             picker="week"
             value={weekAnchor}
@@ -259,22 +271,27 @@ const ShiftRostersPage: React.FC = () => {
           />
           {roster ? (
             <Tag color={roster.status === 'published' ? 'success' : 'processing'}>
-              {roster.status === 'published' ? '已发布' : '草稿'}
+              {roster.status === 'published'
+                ? t('app.kuaizhizao.performance.common.rosterStatus.published')
+                : t('app.kuaizhizao.performance.common.rosterStatus.draft')}
             </Tag>
           ) : null}
           <Button type="primary" loading={saving} disabled={roster?.status === 'published'} onClick={handleSave}>
-            保存草稿
+            {t('app.kuaizhizao.performance.common.actions.saveDraft')}
           </Button>
           <Button loading={saving} disabled={roster?.status === 'published'} onClick={handlePublish}>
-            发布
+            {t('app.kuaizhizao.performance.common.actions.publish')}
           </Button>
           <Button loading={saving} disabled={roster?.status === 'published'} onClick={handleCopyPrevious}>
-            复制上周
+            {t('app.kuaizhizao.performance.common.actions.copyPreviousWeek')}
           </Button>
-          <Button onClick={loadRoster}>刷新</Button>
+          <Button onClick={loadRoster}>{t('app.kuaizhizao.performance.common.actions.refresh')}</Button>
         </Space>
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-          周期：{periodStart} ~ {weekAnchor.endOf('isoWeek').format('YYYY-MM-DD')}。未排班单元格留空；选择「休息」表示当日不上班。
+          {t('app.kuaizhizao.performance.rosters.hint.period', {
+            start: periodStart,
+            end: weekAnchor.endOf('isoWeek').format('YYYY-MM-DD'),
+          })}
         </Typography.Paragraph>
         <Table<MatrixRow>
           size="small"

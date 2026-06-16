@@ -42,6 +42,7 @@ import {
 } from '@ant-design/pro-components';
 import dayjs from 'dayjs';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ListPageTemplate, FormModalTemplate } from '../../../../components/layout-templates';
 import {
   getRdProjectWorkbench,
@@ -57,11 +58,6 @@ import {
   updateRdProjectDeliverable,
   deleteRdProjectDeliverable,
   updateRdProjectGate,
-  PROJECT_STATUS_LABELS,
-  PROJECT_TYPE_LABELS,
-  TASK_STATUS_LABELS,
-  DELIVERABLE_STATUS_LABELS,
-  GATE_STATUS_LABELS,
   type RdProjectWorkbench,
   type RdProjectGate,
   type RdProjectTask,
@@ -69,14 +65,21 @@ import {
   type RdProjectDeliverable,
   type ProjectType,
 } from '../../services/rd-project';
-import {
-  ENGINEERING_LINK_TYPE_LABELS,
-  openMasterDataInNewTab,
-  type EngineeringLinkType,
-} from '../../services/master-data-links';
+import { openMasterDataInNewTab, type EngineeringLinkType } from '../../services/master-data-links';
 import { RdProjectGateStepper } from '../../components/RdProjectGateStepper';
 import { UniUserSelect } from '../../../../components/uni-user-select';
 import { resolveUserDisplay } from '../../../../services/user';
+import {
+  getKuaiplmDeliverableStatusOptions,
+  getKuaiplmDeliverableStatusText,
+  getKuaiplmEngineeringLinkOptions,
+  getKuaiplmEngineeringLinkText,
+  getKuaiplmGateStatusText,
+  getKuaiplmProjectStatusText,
+  getKuaiplmProjectTypeText,
+  getKuaiplmTaskStatusOptions,
+  getKuaiplmTaskStatusText,
+} from '../../components/kuaiplmMeta';
 import './detail.less';
 
 const GATE_STATUS_COLOR: Record<string, string> = {
@@ -103,15 +106,15 @@ const TASK_STATUS_COLOR: Record<string, string> = {
 
 function buildTaskRows(tasks: RdProjectTask[]) {
   const roots = tasks
-    .filter((t) => !t.parent_task_id)
+    .filter((task) => !task.parent_task_id)
     .sort((a, b) => (a.id ?? 0) - (b.id ?? 0));
   const childrenByParent = new Map<number, RdProjectTask[]>();
   tasks
-    .filter((t) => t.parent_task_id)
-    .forEach((t) => {
-      const pid = t.parent_task_id!;
+    .filter((task) => task.parent_task_id)
+    .forEach((task) => {
+      const pid = task.parent_task_id!;
       if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
-      childrenByParent.get(pid)!.push(t);
+      childrenByParent.get(pid)!.push(task);
     });
   const rows: Array<{ task: RdProjectTask; isChild: boolean }> = [];
   for (const root of roots) {
@@ -122,12 +125,13 @@ function buildTaskRows(tasks: RdProjectTask[]) {
   }
   const shown = new Set(rows.map((r) => r.task.id));
   tasks
-    .filter((t) => t.parent_task_id && !shown.has(t.id))
-    .forEach((t) => rows.push({ task: t, isChild: true }));
+    .filter((task) => task.parent_task_id && !shown.has(task.id))
+    .forEach((task) => rows.push({ task, isChild: true }));
   return rows;
 }
 
 const RdProjectDetailPage: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -152,6 +156,10 @@ const RdProjectDetailPage: React.FC = () => {
   const deliverableFormRef = React.useRef<any>(null);
   const gateFormRef = React.useRef<any>(null);
   const selectedReviewerRef = React.useRef<{ id: number; name: string } | null>(null);
+
+  const taskStatusOptions = useMemo(() => getKuaiplmTaskStatusOptions(t), [t]);
+  const deliverableStatusOptions = useMemo(() => getKuaiplmDeliverableStatusOptions(t), [t]);
+  const engineeringLinkOptions = useMemo(() => getKuaiplmEngineeringLinkOptions(t), [t]);
 
   const openGateEdit = async (gate: RdProjectGate) => {
     setEditingGate(gate);
@@ -198,12 +206,12 @@ const RdProjectDetailPage: React.FC = () => {
       const data = await getRdProjectWorkbench(id);
       setWorkbench(data);
     } catch (e: any) {
-      messageApi.error(e?.message || '加载项目工作台失败');
+      messageApi.error(e?.message || t('app.kuaiplm.rdProjects.detail.loadFailed'));
       setWorkbench(null);
     } finally {
       setLoading(false);
     }
-  }, [id, messageApi]);
+  }, [id, messageApi, t]);
 
   useEffect(() => {
     load();
@@ -285,18 +293,18 @@ const RdProjectDetailPage: React.FC = () => {
   const handlePassGate = (gate: RdProjectGate) => {
     if (!id || !gate.id) return;
     modalApi.confirm({
-      title: `确认通过阶段门「${gate.gate_name}」？`,
-      content: '若存在未批准的阻塞交付物，将无法通过。',
+      title: `${t('app.kuaiplm.common.actions.approve')} · ${gate.gate_name}`,
+      content: t('app.kuaiplm.rdProjects.detail.gatePassConfirm'),
       onOk: async () => {
         try {
           await updateRdProjectGate(id, gate.id!, {
             status: 'PASSED',
             actual_date: dayjs().format('YYYY-MM-DD'),
           });
-          messageApi.success('阶段门已通过');
+          messageApi.success(t('app.kuaiplm.rdProjects.detail.gatePassSuccess'));
           load();
         } catch (e: any) {
-          messageApi.error(e?.message || '阶段门更新失败');
+          messageApi.error(e?.message || t('app.kuaiplm.rdProjects.detail.gatePassFailed'));
           throw e;
         }
       },
@@ -306,298 +314,302 @@ const RdProjectDetailPage: React.FC = () => {
   const parentTaskOptions = useMemo(() => {
     if (!activeGate?.id) return [];
     return tasks
-      .filter((t) => t.gate_id === activeGate.id && !t.parent_task_id && t.id !== editingTask?.id)
-      .map((t) => ({ value: t.id, label: t.task_name }));
+      .filter((task) => task.gate_id === activeGate.id && !task.parent_task_id && task.id !== editingTask?.id)
+      .map((task) => ({ value: task.id, label: task.task_name }));
   }, [tasks, activeGate?.id, editingTask?.id]);
 
-  const linkColumns = [
-    {
-      title: '类型',
-      dataIndex: 'link_type',
-      width: 100,
-      render: (t: string) => ENGINEERING_LINK_TYPE_LABELS[t as EngineeringLinkType] ?? t,
-    },
-    { title: '名称', dataIndex: 'target_name', ellipsis: true },
-    { title: '版本', dataIndex: 'version', width: 80 },
-    {
-      title: '操作',
-      width: 160,
-      render: (_: unknown, row: RdProjectLink) => (
-        <Space>
-          <Button
-            type="link"
-            size="small"
-            icon={<LinkOutlined />}
-            onClick={() =>
-              openMasterDataInNewTab({
-                link_type: (row.link_type ?? 'material') as EngineeringLinkType,
-                target_uuid: row.target_uuid ?? undefined,
-                target_id: row.target_id ?? undefined,
-                version: row.version ?? undefined,
-                material_id: row.material_id ?? undefined,
-              })
-            }
-          >
-            打开
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => {
-              modalApi.confirm({
-                title: '删除此工程链接？',
-                onOk: async () => {
-                  await deleteRdProjectLink(id!, row.id!);
-                  messageApi.success('已删除');
-                  load();
-                },
-              });
-            }}
-          />
-        </Space>
-      ),
-    },
-  ];
-
-  const renderGatePanel = (gate: RdProjectGate) => {
-    const gateTasks = tasks.filter((t) => t.gate_id === gate.id);
-    const gateDeliverables = deliverables.filter((d) => d.gate_id === gate.id);
-    const taskRows = buildTaskRows(gateTasks);
-    const gateStatus = gate.status ?? 'PENDING';
-
-    return (
-      <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-        <Card
-          size="small"
-          className="rd-project-gate-section-card"
-          title="阶段门信息"
-          extra={
-            <Space>
-              <Button
-                size="small"
-                icon={<EditOutlined />}
-                onClick={() => openGateEdit(gate)}
-              >
-                编辑
-              </Button>
-              <Button
-                type="primary"
-                size="small"
-                disabled={gateStatus === 'PASSED' || gateStatus === 'SKIPPED'}
-                onClick={() => handlePassGate(gate)}
-              >
-                通过评审
-              </Button>
-            </Space>
-          }
-        >
-          <Descriptions column={2} size="small">
-            <Descriptions.Item label="状态">
-              <Tag color={GATE_STATUS_COLOR[gateStatus] ?? 'default'}>
-                {GATE_STATUS_LABELS[gateStatus] ?? gateStatus}
-              </Tag>
-            </Descriptions.Item>
-            <Descriptions.Item label="计划日期">
-              {gate.planned_date ? dayjs(gate.planned_date).format('YYYY-MM-DD') : '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="实际日期">
-              {gate.actual_date ? dayjs(gate.actual_date).format('YYYY-MM-DD') : '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label="评审人">{gate.reviewer_name || '—'}</Descriptions.Item>
-            <Descriptions.Item label="通过准则" span={2}>
-              {gate.criteria || '—'}
-            </Descriptions.Item>
-            {gate.review_notes ? (
-              <Descriptions.Item label="评审意见" span={2}>
-                {gate.review_notes}
-              </Descriptions.Item>
-            ) : null}
-          </Descriptions>
-        </Card>
-
-        <Card
-          size="small"
-          className="rd-project-gate-section-card"
-          title={`任务 (${gateTasks.length})`}
-          extra={
-            <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openCreateTask(gate)}>
-              新建任务
-            </Button>
-          }
-        >
-          <Table
-            rowKey="id"
-            size="small"
-            pagination={false}
-            locale={{ emptyText: '本阶段暂无任务' }}
-            dataSource={taskRows.map((r) => r.task)}
-            columns={[
-              {
-                title: '任务',
-                dataIndex: 'task_name',
-                render: (name: string, row: RdProjectTask) => {
-                  const isChild = taskRows.find((r) => r.task.id === row.id)?.isChild;
-                  return (
-                    <span style={{ paddingLeft: isChild ? 20 : 0 }}>
-                      {isChild ? '↳ ' : ''}
-                      {name}
-                    </span>
-                  );
-                },
-              },
-              {
-                title: '负责人',
-                dataIndex: 'assignee_name',
-                width: 100,
-                render: (v) => v || '—',
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                width: 88,
-                render: (s: string) => (
-                  <Tag color={TASK_STATUS_COLOR[s] ?? 'default'}>{TASK_STATUS_LABELS[s] ?? s}</Tag>
-                ),
-              },
-              {
-                title: '截止',
-                dataIndex: 'due_date',
-                width: 108,
-                render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—'),
-              },
-              {
-                title: '操作',
-                width: 120,
-                render: (_: unknown, row: RdProjectTask) => (
-                  <Space size="small">
-                    <Button type="link" size="small" onClick={() => openEditTask(row)}>
-                      编辑
-                    </Button>
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      onClick={() => {
-                        modalApi.confirm({
-                          title: '删除任务？',
-                          onOk: async () => {
-                            await deleteRdProjectTask(id!, row.id!);
-                            messageApi.success('已删除');
-                            load();
-                          },
-                        });
-                      }}
-                    >
-                      删除
-                    </Button>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </Card>
-
-        <Card
-          size="small"
-          className="rd-project-gate-section-card"
-          title={`交付物 (${gateDeliverables.length})`}
-          extra={
+  const linkColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaiplm.common.columns.type'),
+        dataIndex: 'link_type',
+        width: 100,
+        render: (linkType: string) => getKuaiplmEngineeringLinkText(t, linkType),
+      },
+      { title: t('app.kuaiplm.common.columns.name'), dataIndex: 'target_name', ellipsis: true },
+      { title: t('app.kuaiplm.common.columns.version'), dataIndex: 'version', width: 80 },
+      {
+        title: t('app.kuaiplm.common.columns.actions'),
+        width: 160,
+        render: (_: unknown, row: RdProjectLink) => (
+          <Space>
             <Button
               type="link"
               size="small"
-              icon={<PlusOutlined />}
-              onClick={() => openCreateDeliverable(gate)}
+              icon={<LinkOutlined />}
+              onClick={() =>
+                openMasterDataInNewTab({
+                  link_type: (row.link_type ?? 'material') as EngineeringLinkType,
+                  target_uuid: row.target_uuid ?? undefined,
+                  target_id: row.target_id ?? undefined,
+                  version: row.version ?? undefined,
+                  material_id: row.material_id ?? undefined,
+                })
+              }
             >
-              新建交付物
+              {t('app.kuaiplm.common.actions.detail')}
             </Button>
-          }
-        >
-          <Table
-            rowKey="id"
+            <Button
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => {
+                modalApi.confirm({
+                  title: t('app.kuaiplm.rdProjects.detail.link.deleteConfirm'),
+                  onOk: async () => {
+                    await deleteRdProjectLink(id!, row.id!);
+                    messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                    load();
+                  },
+                });
+              }}
+            />
+          </Space>
+        ),
+      },
+    ],
+    [t, id, modalApi, messageApi, load],
+  );
+
+  const renderGatePanel = useCallback(
+    (gate: RdProjectGate) => {
+      const gateTasks = tasks.filter((task) => task.gate_id === gate.id);
+      const gateDeliverables = deliverables.filter((item) => item.gate_id === gate.id);
+      const taskRows = buildTaskRows(gateTasks);
+      const gateStatus = gate.status ?? 'PENDING';
+
+      return (
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Card
             size="small"
-            pagination={false}
-            locale={{ emptyText: '本阶段暂无交付物' }}
-            dataSource={gateDeliverables}
-            columns={[
-              { title: '名称', dataIndex: 'name', ellipsis: true },
-              {
-                title: '类型',
-                dataIndex: 'deliverable_type',
-                width: 100,
-                render: (v) => v || '—',
-              },
-              {
-                title: '状态',
-                dataIndex: 'status',
-                width: 88,
-                render: (s: string) => (
-                  <Tag color={DELIVERABLE_STATUS_COLOR[s] ?? 'default'}>
-                    {DELIVERABLE_STATUS_LABELS[s] ?? s}
-                  </Tag>
-                ),
-              },
-              {
-                title: '操作',
-                width: 220,
-                render: (_: unknown, row: RdProjectDeliverable) => (
-                  <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
-                    <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
-                      编辑
-                    </Button>
-                    {row.status !== 'SUBMITTED' && row.status !== 'APPROVED' ? (
+            className="rd-project-gate-section-card"
+            title={t('app.kuaiplm.rdProjects.detail.section.gateInfo')}
+            extra={
+              <Space>
+                <Button size="small" icon={<EditOutlined />} onClick={() => openGateEdit(gate)}>
+                  {t('app.kuaiplm.common.actions.edit')}
+                </Button>
+                <Button
+                  type="primary"
+                  size="small"
+                  disabled={gateStatus === 'PASSED' || gateStatus === 'SKIPPED'}
+                  onClick={() => handlePassGate(gate)}
+                >
+                  {t('app.kuaiplm.common.actions.approve')}
+                </Button>
+              </Space>
+            }
+          >
+            <Descriptions column={2} size="small">
+              <Descriptions.Item label={t('app.kuaiplm.common.columns.status')}>
+                <Tag color={GATE_STATUS_COLOR[gateStatus] ?? 'default'}>
+                  {getKuaiplmGateStatusText(t, gateStatus)}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.plannedDate')}>
+                {gate.planned_date ? dayjs(gate.planned_date).format('YYYY-MM-DD') : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.actualDate')}>
+                {gate.actual_date ? dayjs(gate.actual_date).format('YYYY-MM-DD') : '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.reviewer')}>
+                {gate.reviewer_name || '—'}
+              </Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.passCriteria')} span={2}>
+                {gate.criteria || '—'}
+              </Descriptions.Item>
+              {gate.review_notes ? (
+                <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.reviewNotes')} span={2}>
+                  {gate.review_notes}
+                </Descriptions.Item>
+              ) : null}
+            </Descriptions>
+          </Card>
+
+          <Card
+            size="small"
+            className="rd-project-gate-section-card"
+            title={`${t('app.kuaiplm.common.columns.task')} (${gateTasks.length})`}
+            extra={
+              <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => openCreateTask(gate)}>
+                {t('app.kuaiplm.rdProjects.detail.task.createTitle')}
+              </Button>
+            }
+          >
+            <Table
+              rowKey="id"
+              size="small"
+              pagination={false}
+              locale={{ emptyText: t('app.kuaiplm.rdProjects.detail.empty.gateTasks') }}
+              dataSource={taskRows.map((r) => r.task)}
+              columns={[
+                {
+                  title: t('app.kuaiplm.common.columns.task'),
+                  dataIndex: 'task_name',
+                  render: (name: string, row: RdProjectTask) => {
+                    const isChild = taskRows.find((r) => r.task.id === row.id)?.isChild;
+                    return (
+                      <span style={{ paddingLeft: isChild ? 20 : 0 }}>
+                        {isChild ? '↳ ' : ''}
+                        {name}
+                      </span>
+                    );
+                  },
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.owner'),
+                  dataIndex: 'assignee_name',
+                  width: 100,
+                  render: (v) => v || '—',
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.status'),
+                  dataIndex: 'status',
+                  width: 88,
+                  render: (s: string) => (
+                    <Tag color={TASK_STATUS_COLOR[s] ?? 'default'}>{getKuaiplmTaskStatusText(t, s)}</Tag>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.dueDate'),
+                  dataIndex: 'due_date',
+                  width: 108,
+                  render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '—'),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.actions'),
+                  width: 120,
+                  render: (_: unknown, row: RdProjectTask) => (
+                    <Space size="small">
+                      <Button type="link" size="small" onClick={() => openEditTask(row)}>
+                        {t('app.kuaiplm.common.actions.edit')}
+                      </Button>
                       <Button
                         type="link"
                         size="small"
-                        onClick={async () => {
-                          await updateRdProjectDeliverable(id!, row.id!, { status: 'SUBMITTED' });
-                          messageApi.success('已标记为已提交');
-                          load();
+                        danger
+                        onClick={() => {
+                          modalApi.confirm({
+                            title: t('app.kuaiplm.rdProjects.detail.task.deleteConfirm'),
+                            onOk: async () => {
+                              await deleteRdProjectTask(id!, row.id!);
+                              messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                              load();
+                            },
+                          });
                         }}
                       >
-                        提交
+                        {t('app.kuaiplm.common.actions.delete')}
                       </Button>
-                    ) : null}
-                    {row.status !== 'APPROVED' ? (
-                      <Button
-                        type="link"
-                        size="small"
-                        onClick={async () => {
-                          await updateRdProjectDeliverable(id!, row.id!, { status: 'APPROVED' });
-                          messageApi.success('已批准');
-                          load();
-                        }}
-                      >
-                        批准
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+
+          <Card
+            size="small"
+            className="rd-project-gate-section-card"
+            title={`${t('app.kuaiplm.rdProjects.detail.deliverable.name')} (${gateDeliverables.length})`}
+            extra={
+              <Button
+                type="link"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => openCreateDeliverable(gate)}
+              >
+                {t('app.kuaiplm.rdProjects.detail.deliverable.createTitle')}
+              </Button>
+            }
+          >
+            <Table
+              rowKey="id"
+              size="small"
+              pagination={false}
+              locale={{ emptyText: t('app.kuaiplm.rdProjects.detail.empty.gateDeliverables') }}
+              dataSource={gateDeliverables}
+              columns={[
+                { title: t('app.kuaiplm.common.columns.name'), dataIndex: 'name', ellipsis: true },
+                {
+                  title: t('app.kuaiplm.common.columns.type'),
+                  dataIndex: 'deliverable_type',
+                  width: 100,
+                  render: (v) => v || '—',
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.status'),
+                  dataIndex: 'status',
+                  width: 88,
+                  render: (s: string) => (
+                    <Tag color={DELIVERABLE_STATUS_COLOR[s] ?? 'default'}>
+                      {getKuaiplmDeliverableStatusText(t, s)}
+                    </Tag>
+                  ),
+                },
+                {
+                  title: t('app.kuaiplm.common.columns.actions'),
+                  width: 220,
+                  render: (_: unknown, row: RdProjectDeliverable) => (
+                    <Space size={4} wrap={false} style={{ whiteSpace: 'nowrap' }}>
+                      <Button type="link" size="small" onClick={() => openEditDeliverable(row)}>
+                        {t('app.kuaiplm.common.actions.edit')}
                       </Button>
-                    ) : null}
-                    <Button
-                      type="link"
-                      size="small"
-                      danger
-                      onClick={() => {
-                        modalApi.confirm({
-                          title: '删除交付物？',
-                          onOk: async () => {
-                            await deleteRdProjectDeliverable(id!, row.id!);
-                            messageApi.success('已删除');
+                      {row.status !== 'SUBMITTED' && row.status !== 'APPROVED' ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={async () => {
+                            await updateRdProjectDeliverable(id!, row.id!, { status: 'SUBMITTED' });
+                            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.submitSuccess'));
                             load();
-                          },
-                        });
-                      }}
-                    >
-                      删除
-                    </Button>
-                  </Space>
-                ),
-              },
-            ]}
-          />
-        </Card>
-      </Space>
-    );
-  };
+                          }}
+                        >
+                          {t('app.kuaiplm.common.deliverableStatus.submitted')}
+                        </Button>
+                      ) : null}
+                      {row.status !== 'APPROVED' ? (
+                        <Button
+                          type="link"
+                          size="small"
+                          onClick={async () => {
+                            await updateRdProjectDeliverable(id!, row.id!, { status: 'APPROVED' });
+                            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.approveSuccess'));
+                            load();
+                          }}
+                        >
+                          {t('app.kuaiplm.common.actions.approve')}
+                        </Button>
+                      ) : null}
+                      <Button
+                        type="link"
+                        size="small"
+                        danger
+                        onClick={() => {
+                          modalApi.confirm({
+                            title: t('app.kuaiplm.rdProjects.detail.deliverable.deleteConfirm'),
+                            onOk: async () => {
+                              await deleteRdProjectDeliverable(id!, row.id!);
+                              messageApi.success(t('app.kuaiplm.common.messages.deleteSuccess'));
+                              load();
+                            },
+                          });
+                        }}
+                      >
+                        {t('app.kuaiplm.common.actions.delete')}
+                      </Button>
+                    </Space>
+                  ),
+                },
+              ]}
+            />
+          </Card>
+        </Space>
+      );
+    },
+    [t, tasks, deliverables, id, modalApi, messageApi, load],
+  );
 
   if (loading) {
     return (
@@ -612,8 +624,10 @@ const RdProjectDetailPage: React.FC = () => {
   if (!project) {
     return (
       <ListPageTemplate>
-        <Empty description="项目不存在或无权访问">
-          <Button onClick={() => navigate('/apps/kuaiplm/rd-projects')}>返回列表</Button>
+        <Empty description={t('app.kuaiplm.rdProjects.detail.notFound')}>
+          <Button onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+            {t('app.kuaiplm.common.actions.allProjects')}
+          </Button>
         </Empty>
       </ListPageTemplate>
     );
@@ -629,14 +643,14 @@ const RdProjectDetailPage: React.FC = () => {
     ? [
         {
           key: 'requirements',
-          title: '研发需求',
+          title: t('app.kuaiplm.rdProjects.detail.shortcut.requirements'),
           count: collaboration.requirement_count ?? 0,
           icon: FileSearchOutlined,
           path: `/apps/kuaiplm/phase2/requirements?project_id=${projectId}`,
         },
         {
           key: 'design-reviews',
-          title: '设计评审',
+          title: t('app.kuaiplm.rdProjects.detail.shortcut.designReviews'),
           count: collaboration.design_review_count ?? 0,
           icon: AuditOutlined,
           path: `/apps/kuaiplm/phase2/design-reviews?project_id=${projectId}`,
@@ -656,17 +670,17 @@ const RdProjectDetailPage: React.FC = () => {
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
         <Space wrap>
           <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
-            返回列表
+            {t('app.kuaiplm.common.actions.allProjects')}
           </Button>
           <Typography.Title level={4} style={{ margin: 0 }}>
             {project.project_code} · {project.project_name}
           </Typography.Title>
           <Tag color={projectType === 'DELIVERY' ? 'blue' : 'purple'}>
-            {PROJECT_TYPE_LABELS[projectType]}
+            {getKuaiplmProjectTypeText(t, projectType)}
           </Tag>
           {project.status ? (
             <Tag color={project.status === 'DRAFT' ? 'default' : 'processing'}>
-              {PROJECT_STATUS_LABELS[project.status] ?? project.status}
+              {getKuaiplmProjectStatusText(t, project.status)}
             </Tag>
           ) : null}
           {projectType === 'DELIVERY' && project.source_project_id ? (
@@ -677,7 +691,8 @@ const RdProjectDetailPage: React.FC = () => {
                 navigate(`/apps/kuaiplm/rd-projects/detail/${project.source_project_id}`)
               }
             >
-              来源研发：{project.source_project_code ?? `#${project.source_project_id}`}
+              {t('app.kuaiplm.rdProjects.form.sourceProject')}:{' '}
+              {project.source_project_code ?? `#${project.source_project_id}`}
             </Button>
           ) : null}
           {project.status === 'DRAFT' ? (
@@ -686,21 +701,20 @@ const RdProjectDetailPage: React.FC = () => {
               icon={<PlayCircleOutlined />}
               onClick={() => {
                 modalApi.confirm({
-                  title: '启动项目？',
-                  content:
-                    '启动后项目状态将变为「进行中」，可正式推进 NPI 阶段门、任务与交付物。此操作不可撤销为草稿。',
+                  title: t('app.kuaiplm.rdProjects.detail.startConfirmTitle'),
+                  content: t('app.kuaiplm.rdProjects.detail.startConfirmContent'),
                   onOk: async () => {
                     await updateRdProject(id!, {
                       status: 'IN_PROGRESS',
                       actual_start_date: dayjs().format('YYYY-MM-DD'),
                     });
-                    messageApi.success('项目已启动');
+                    messageApi.success(t('app.kuaiplm.rdProjects.detail.startSuccess'));
                     load();
                   },
                 });
               }}
             >
-              启动项目
+              {t('app.kuaiplm.rdProjects.detail.startConfirmTitle').replace('?', '')}
             </Button>
           ) : null}
           {isRdProject && releasePassed ? (
@@ -709,22 +723,22 @@ const RdProjectDetailPage: React.FC = () => {
               icon={<RocketOutlined />}
               onClick={() => {
                 modalApi.confirm({
-                  title: '创建交付项目？',
-                  content: '将从当前研发项目下推交付项目，继承物料与工程资料关联。',
+                  title: t('app.kuaiplm.rdProjects.detail.createDeliveryTitle'),
+                  content: t('app.kuaiplm.rdProjects.detail.createDeliveryContent'),
                   onOk: async () => {
                     const created = await spawnDeliveryProject(projectId);
-                    messageApi.success('交付项目已创建');
+                    messageApi.success(t('app.kuaiplm.rdProjects.detail.createDeliverySuccess'));
                     navigate(`/apps/kuaiplm/rd-projects/detail/${created.id}`);
                   },
                 });
               }}
             >
-              创建交付项目
+              {t('app.kuaiplm.rdProjects.detail.createDeliveryTitle').replace('?', '')}
             </Button>
           ) : null}
           {isRdProject ? (
             <Button icon={<RocketOutlined />} onClick={() => setPushModalOpen(true)}>
-              下推试制工单
+              {t('app.kuaiplm.rdProjects.detail.trialWo.title')}
             </Button>
           ) : null}
         </Space>
@@ -733,14 +747,16 @@ const RdProjectDetailPage: React.FC = () => {
           <Row gutter={[24, 16]} align="middle">
             <Col xs={24} md={16}>
               <Descriptions column={{ xs: 1, sm: 2 }} size="small">
-                <Descriptions.Item label="产品">
+                <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.product')}>
                   {project.material_name || project.material_code || '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="负责人">{project.owner_name || '—'}</Descriptions.Item>
-                <Descriptions.Item label="当前阶段门">
+                <Descriptions.Item label={t('app.kuaiplm.common.columns.owner')}>
+                  {project.owner_name || '—'}
+                </Descriptions.Item>
+                <Descriptions.Item label={t('app.kuaiplm.common.columns.currentGate')}>
                   {project.current_gate_name || activeGate?.gate_name || '—'}
                 </Descriptions.Item>
-                <Descriptions.Item label="计划周期">
+                <Descriptions.Item label={t('app.kuaiplm.rdProjects.detail.label.plannedPeriod')}>
                   {project.planned_start_date
                     ? dayjs(project.planned_start_date).format('YYYY-MM-DD')
                     : '—'}
@@ -752,10 +768,11 @@ const RdProjectDetailPage: React.FC = () => {
               </Descriptions>
             </Col>
             <Col xs={24} md={8}>
-              <Typography.Text type="secondary">综合进度</Typography.Text>
+              <Typography.Text type="secondary">{t('app.kuaiplm.common.columns.progress')}</Typography.Text>
               <Progress percent={Math.round(progress)} status="active" />
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                阶段门 40% · 任务 30% · 交付物 30%
+                {t('app.kuaiplm.common.columns.gate')} 40% · {t('app.kuaiplm.common.columns.task')} 30% ·{' '}
+                {t('app.kuaiplm.rdProjects.detail.deliverable.name')} 30%
               </Typography.Text>
             </Col>
           </Row>
@@ -777,18 +794,14 @@ const RdProjectDetailPage: React.FC = () => {
               </Card>
             ) : (
               <Card>
-                <Empty description="暂无阶段门" />
+                <Empty description={t('app.kuaiplm.rdProjects.detail.empty.gates')} />
               </Card>
             )}
           </Col>
 
           <Col xs={24} lg={8}>
             {collaborationItems.length > 0 ? (
-              <Card
-                size="small"
-                title="协同事项"
-                style={{ marginBottom: 16 }}
-              >
+              <Card size="small" title={t('app.kuaiplm.rdProjects.detail.section.collaboration')} style={{ marginBottom: 16 }}>
                 <Row gutter={[8, 8]}>
                   {collaborationItems.map((item) => {
                     const Icon = item.icon;
@@ -839,10 +852,10 @@ const RdProjectDetailPage: React.FC = () => {
 
             <Card
               size="small"
-              title="工程资料链接"
+              title={t('app.kuaiplm.rdProjects.detail.section.engineeringLinks')}
               extra={
                 <Button type="link" size="small" icon={<PlusOutlined />} onClick={() => setLinkModalOpen(true)}>
-                  添加
+                  {t('app.kuaiplm.rdProjects.detail.link.addTitle')}
                 </Button>
               }
               style={{ marginBottom: 16 }}
@@ -853,11 +866,11 @@ const RdProjectDetailPage: React.FC = () => {
                 pagination={false}
                 columns={linkColumns}
                 dataSource={links}
-                locale={{ emptyText: '暂无工程链接' }}
+                locale={{ emptyText: t('app.kuaiplm.rdProjects.detail.empty.engineeringLinks') }}
               />
             </Card>
 
-            <Card size="small" title="关联知识">
+            <Card size="small" title={t('app.kuaiplm.rdProjects.detail.section.relatedKnowledge')}>
               {articles.length > 0 ? (
                 <Space direction="vertical" style={{ width: '100%' }}>
                   {articles.map((a) => (
@@ -874,7 +887,10 @@ const RdProjectDetailPage: React.FC = () => {
                   ))}
                 </Space>
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联文章" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={t('app.kuaiplm.rdProjects.detail.empty.relatedArticles')}
+                />
               )}
             </Card>
           </Col>
@@ -882,36 +898,37 @@ const RdProjectDetailPage: React.FC = () => {
       </Space>
 
       <FormModalTemplate
-        title="添加工程链接"
+        title={t('app.kuaiplm.rdProjects.detail.link.addTitle')}
         open={linkModalOpen}
         onClose={() => setLinkModalOpen(false)}
         formRef={linkFormRef}
         onFinish={async (values) => {
           await createRdProjectLink(id!, values);
-          messageApi.success('链接已添加');
+          messageApi.success(t('app.kuaiplm.rdProjects.detail.link.addSuccess'));
           setLinkModalOpen(false);
           load();
         }}
       >
         <ProFormSelect
           name="link_type"
-          label="链接类型"
+          label={t('app.kuaiplm.rdProjects.detail.link.linkType')}
           rules={[{ required: true }]}
-          options={Object.entries(ENGINEERING_LINK_TYPE_LABELS).map(([value, label]) => ({
-            value,
-            label,
-          }))}
+          options={engineeringLinkOptions}
         />
-        <ProFormText name="link_label" label="显示名称" />
-        <ProFormText name="target_uuid" label="目标 UUID" />
-        <ProFormText name="target_id" label="目标 ID" />
-        <ProFormText name="material_id" label="物料 ID（BOM/物料）" />
-        <ProFormText name="version" label="版本" />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormText name="link_label" label={t('app.kuaiplm.rdProjects.detail.link.displayName')} />
+        <ProFormText name="target_uuid" label={t('app.kuaiplm.rdProjects.detail.link.targetUuid')} />
+        <ProFormText name="target_id" label={t('app.kuaiplm.rdProjects.detail.link.targetId')} />
+        <ProFormText name="material_id" label={t('app.kuaiplm.rdProjects.detail.link.materialId')} />
+        <ProFormText name="version" label={t('app.kuaiplm.common.columns.version')} />
+        <ProFormTextArea name="notes" label={t('app.kuaiplm.rdProjects.form.notes')} />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={editingTask ? '编辑任务' : '新建任务'}
+        title={
+          editingTask
+            ? t('app.kuaiplm.rdProjects.detail.task.editTitle')
+            : t('app.kuaiplm.rdProjects.detail.task.createTitle')
+        }
         open={taskModalOpen}
         onClose={() => {
           setTaskModalOpen(false);
@@ -922,21 +939,19 @@ const RdProjectDetailPage: React.FC = () => {
           const payload = {
             ...values,
             gate_id: values.gate_id ?? activeGate?.id,
-            due_date: values.due_date
-              ? dayjs(values.due_date).format('YYYY-MM-DD')
-              : undefined,
+            due_date: values.due_date ? dayjs(values.due_date).format('YYYY-MM-DD') : undefined,
             parent_task_id: values.parent_task_id ?? null,
           };
           if (!payload.gate_id) {
-            messageApi.error('请选择所属阶段门');
+            messageApi.error(t('app.kuaiplm.rdProjects.detail.task.gateRequired'));
             return;
           }
           if (editingTask?.id) {
             await updateRdProjectTask(id!, editingTask.id, payload);
-            messageApi.success('任务已更新');
+            messageApi.success(t('app.kuaiplm.rdProjects.detail.task.updateSuccess'));
           } else {
             await createRdProjectTask(id!, payload);
-            messageApi.success('任务已创建');
+            messageApi.success(t('app.kuaiplm.rdProjects.detail.task.createSuccess'));
           }
           setTaskModalOpen(false);
           setEditingTask(null);
@@ -945,31 +960,39 @@ const RdProjectDetailPage: React.FC = () => {
       >
         <ProFormSelect
           name="gate_id"
-          label="所属阶段门"
-          rules={[{ required: true, message: '请选择阶段门' }]}
+          label={t('app.kuaiplm.rdProjects.detail.task.gateField')}
+          rules={[{ required: true, message: t('app.kuaiplm.rdProjects.detail.task.gateRequired') }]}
           options={gates.map((g) => ({ value: g.id, label: g.gate_name }))}
           initialValue={activeGate?.id}
         />
-        <ProFormText name="task_name" label="任务名称" rules={[{ required: true }]} />
+        <ProFormText
+          name="task_name"
+          label={t('app.kuaiplm.rdProjects.detail.task.name')}
+          rules={[{ required: true }]}
+        />
         <ProFormSelect
           name="parent_task_id"
-          label="父任务（可选，仅一级子任务）"
+          label={t('app.kuaiplm.rdProjects.detail.task.parentTask')}
           allowClear
           options={parentTaskOptions}
         />
-        <ProFormText name="assignee_name" label="负责人" />
+        <ProFormText name="assignee_name" label={t('app.kuaiplm.rdProjects.detail.task.assignee')} />
         <ProFormSelect
           name="status"
-          label="状态"
+          label={t('app.kuaiplm.common.columns.status')}
           initialValue="TODO"
-          options={Object.entries(TASK_STATUS_LABELS).map(([value, label]) => ({ value, label }))}
+          options={taskStatusOptions}
         />
-        <ProFormDatePicker name="due_date" label="截止日期" />
-        <ProFormTextArea name="description" label="说明" />
+        <ProFormDatePicker name="due_date" label={t('app.kuaiplm.common.columns.dueDate')} />
+        <ProFormTextArea name="description" label={t('app.kuaiplm.rdProjects.detail.task.description')} />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={editingDeliverable ? '编辑交付物' : '新建交付物'}
+        title={
+          editingDeliverable
+            ? t('app.kuaiplm.rdProjects.detail.deliverable.editTitle')
+            : t('app.kuaiplm.rdProjects.detail.deliverable.createTitle')
+        }
         open={deliverableModalOpen}
         onClose={() => {
           setDeliverableModalOpen(false);
@@ -982,15 +1005,15 @@ const RdProjectDetailPage: React.FC = () => {
             gate_id: values.gate_id ?? activeGate?.id,
           };
           if (!payload.gate_id) {
-            messageApi.error('请选择所属阶段门');
+            messageApi.error(t('app.kuaiplm.rdProjects.detail.task.gateRequired'));
             return;
           }
           if (editingDeliverable?.id) {
             await updateRdProjectDeliverable(id!, editingDeliverable.id, payload);
-            messageApi.success('交付物已更新');
+            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.updateSuccess'));
           } else {
             await createRdProjectDeliverable(id!, payload);
-            messageApi.success('交付物已创建');
+            messageApi.success(t('app.kuaiplm.rdProjects.detail.deliverable.createSuccess'));
           }
           setDeliverableModalOpen(false);
           setEditingDeliverable(null);
@@ -999,29 +1022,34 @@ const RdProjectDetailPage: React.FC = () => {
       >
         <ProFormSelect
           name="gate_id"
-          label="所属阶段门"
+          label={t('app.kuaiplm.rdProjects.detail.task.gateField')}
           rules={[{ required: true }]}
           options={gates.map((g) => ({ value: g.id, label: g.gate_name }))}
           initialValue={activeGate?.id}
         />
-        <ProFormText name="name" label="交付物名称" rules={[{ required: true }]} />
-        <ProFormText name="deliverable_type" label="类型" placeholder="如：文档、图纸包" />
+        <ProFormText
+          name="name"
+          label={t('app.kuaiplm.rdProjects.detail.deliverable.name')}
+          rules={[{ required: true }]}
+        />
+        <ProFormText
+          name="deliverable_type"
+          label={t('app.kuaiplm.common.columns.type')}
+          placeholder={t('app.kuaiplm.rdProjects.detail.deliverable.typePlaceholder')}
+        />
         <ProFormSelect
           name="status"
-          label="状态"
+          label={t('app.kuaiplm.common.columns.status')}
           initialValue="PENDING"
-          options={Object.entries(DELIVERABLE_STATUS_LABELS).map(([value, label]) => ({
-            value,
-            label,
-          }))}
+          options={deliverableStatusOptions}
         />
-        <ProFormText name="file_url" label="文件链接" />
-        <ProFormText name="file_name" label="文件名" />
-        <ProFormTextArea name="description" label="说明" />
+        <ProFormText name="file_url" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileUrl')} />
+        <ProFormText name="file_name" label={t('app.kuaiplm.rdProjects.detail.deliverable.fileName')} />
+        <ProFormTextArea name="description" label={t('app.kuaiplm.rdProjects.detail.task.description')} />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={`编辑阶段门 · ${editingGate?.gate_name ?? ''}`}
+        title={`${t('app.kuaiplm.common.actions.edit')} · ${editingGate?.gate_name ?? ''}`}
         open={gateEditOpen}
         grid
         onClose={() => {
@@ -1044,7 +1072,7 @@ const RdProjectDetailPage: React.FC = () => {
             criteria: values.criteria,
             review_notes: values.review_notes,
           });
-          messageApi.success('阶段门已更新');
+          messageApi.success(t('app.kuaiplm.rdProjects.detail.gate.updateSuccess'));
           setGateEditOpen(false);
           setEditingGate(null);
           selectedReviewerRef.current = null;
@@ -1053,22 +1081,22 @@ const RdProjectDetailPage: React.FC = () => {
       >
         <ProFormDatePicker
           name="planned_date"
-          label="计划日期"
+          label={t('app.kuaiplm.rdProjects.detail.label.plannedDate')}
           colProps={{ span: 12 }}
           width="100%"
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="actual_date"
-          label="实际日期"
+          label={t('app.kuaiplm.rdProjects.detail.label.actualDate')}
           colProps={{ span: 12 }}
           width="100%"
           fieldProps={{ style: { width: '100%' } }}
         />
         <UniUserSelect
           name="reviewer_uuid"
-          label="评审人"
-          placeholder="请选择评审人"
+          label={t('app.kuaiplm.rdProjects.detail.label.reviewer')}
+          placeholder={t('app.kuaiplm.rdProjects.detail.gate.reviewerPlaceholder')}
           colProps={{ span: 24 }}
           onChange={(_uuid, user) => {
             if (user && !Array.isArray(user)) {
@@ -1081,12 +1109,20 @@ const RdProjectDetailPage: React.FC = () => {
             }
           }}
         />
-        <ProFormTextArea name="criteria" label="通过准则" colProps={{ span: 24 }} />
-        <ProFormTextArea name="review_notes" label="评审意见" colProps={{ span: 24 }} />
+        <ProFormTextArea
+          name="criteria"
+          label={t('app.kuaiplm.rdProjects.detail.label.passCriteria')}
+          colProps={{ span: 24 }}
+        />
+        <ProFormTextArea
+          name="review_notes"
+          label={t('app.kuaiplm.rdProjects.detail.label.reviewNotes')}
+          colProps={{ span: 24 }}
+        />
       </FormModalTemplate>
 
       <Modal
-        title="下推试制工单"
+        title={t('app.kuaiplm.rdProjects.detail.trialWo.title')}
         open={pushModalOpen}
         confirmLoading={pushing}
         onCancel={() => setPushModalOpen(false)}
@@ -1095,11 +1131,13 @@ const RdProjectDetailPage: React.FC = () => {
           try {
             const res = await pushTrialWorkOrder(id!, { quantity: pushQty, notes: pushNotes });
             messageApi.success(
-              res.work_order_code ? `已创建试制工单 ${res.work_order_code}` : '试制工单已下推',
+              res.work_order_code
+                ? t('app.kuaiplm.rdProjects.detail.trialWo.successWithCode', { code: res.work_order_code })
+                : t('app.kuaiplm.rdProjects.detail.trialWo.success'),
             );
             setPushModalOpen(false);
           } catch (e: any) {
-            messageApi.error(e?.message || '下推失败');
+            messageApi.error(e?.message || t('app.kuaiplm.rdProjects.detail.trialWo.failed'));
           } finally {
             setPushing(false);
           }
@@ -1107,7 +1145,7 @@ const RdProjectDetailPage: React.FC = () => {
       >
         <Space direction="vertical" style={{ width: '100%' }}>
           <div>
-            <Typography.Text>试制数量</Typography.Text>
+            <Typography.Text>{t('app.kuaiplm.common.columns.progress')}</Typography.Text>
             <InputNumber
               min={1}
               value={pushQty}
@@ -1116,7 +1154,7 @@ const RdProjectDetailPage: React.FC = () => {
             />
           </div>
           <div>
-            <Typography.Text>备注</Typography.Text>
+            <Typography.Text>{t('app.kuaiplm.rdProjects.form.notes')}</Typography.Text>
             <Input.TextArea
               rows={3}
               value={pushNotes}

@@ -23,7 +23,6 @@ import {
 import {
   App,
   Button,
-  Tag,
   Space,
   Card,
   Row,
@@ -83,6 +82,13 @@ import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
+import {
+  getQualityIncomingDisposalFallback,
+  renderQualityResultTag,
+  renderQualityDocStatusTag,
+  renderQualityQualityStatusTag,
+  getQualityDefectTypeOptions,
+} from '../components/qualityMeta';
 
 const INCOMING_RESOURCE = 'kuaizhizao:quality-management-incoming-inspection';
 const INCOMING_INSPECTION_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_incoming_inspections';
@@ -153,13 +159,6 @@ interface IncomingInspection {
   updated_at?: string;
 }
 
-const DISPOSAL_METHOD_FALLBACK = [
-  { label: '退货', value: 'return' },
-  { label: '让步接收', value: 'accept' },
-  { label: '隔离', value: 'quarantine' },
-  { label: '其他', value: 'other' },
-];
-
 const IncomingInspectionPage: React.FC = () => {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
@@ -206,8 +205,13 @@ const IncomingInspectionPage: React.FC = () => {
   const invalidateStats = () => queryClient.invalidateQueries({ queryKey: ['incoming-inspection-statistics'] });
   const { canUpdate: canRegisterDefect } = useResourcePermissions(INCOMING_RESOURCE);
   const { canRead: canReadNcLedger } = useResourcePermissions(NC_RESOURCE);
-  const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(DISPOSAL_METHOD_FALLBACK);
+  const disposalFallback = useMemo(() => getQualityIncomingDisposalFallback(t), [t]);
+  const [disposalOptions, setDisposalOptions] = useState<Array<{ label: string; value: string }>>(disposalFallback);
   const [disposalLoading, setDisposalLoading] = useState(false);
+
+  useEffect(() => {
+    setDisposalOptions(disposalFallback);
+  }, [disposalFallback]);
 
   useEffect(() => {
     const load = async () => {
@@ -216,19 +220,19 @@ const IncomingInspectionPage: React.FC = () => {
         const dictList = await getDataDictionaryList({ code: 'DISPOSAL_METHOD', page: 1, page_size: 1 });
         const dict = dictList.items?.[0];
         if (!dict) {
-          setDisposalOptions(DISPOSAL_METHOD_FALLBACK);
+          setDisposalOptions(disposalFallback);
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
         setDisposalOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
-        setDisposalOptions(DISPOSAL_METHOD_FALLBACK);
+        setDisposalOptions(disposalFallback);
       } finally {
         setDisposalLoading(false);
       }
     };
     load();
-  }, []);
+  }, [disposalFallback]);
   // 检验Modal状态
   const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
   const [currentInspection, setCurrentInspection] = useState<IncomingInspection | null>(null);
@@ -340,7 +344,7 @@ const IncomingInspectionPage: React.FC = () => {
         }
       }
 
-      messageApi.success('来料检验完成');
+      messageApi.success(t('app.kuaizhizao.quality.common.messages.inspectSuccess'));
       setInspectionModalVisible(false);
       formRef.current?.resetFields();
       resetInspectionFormFieldValues();
@@ -350,7 +354,7 @@ const IncomingInspectionPage: React.FC = () => {
         await loadInspectionFieldValuesForDetail(currentInspection.id);
       }
     } catch (error: any) {
-      messageApi.error('检验提交失败');
+      messageApi.error(t('app.kuaizhizao.quality.common.messages.inspectFailed'));
       throw error;
     }
   };
@@ -366,7 +370,7 @@ const IncomingInspectionPage: React.FC = () => {
         await loadInspectionFieldValuesForDetail(record.id);
       }
     } catch (error) {
-      messageApi.error('获取检验单详情失败');
+      messageApi.error(t('app.kuaizhizao.quality.common.messages.loadDetailFailed'));
     }
   };
 
@@ -377,14 +381,14 @@ const IncomingInspectionPage: React.FC = () => {
       const successCount = result?.success_count ?? result?.data?.success_count ?? 0;
       const failureCount = result?.failure_count ?? result?.data?.failure_count ?? 0;
       if (failureCount > 0) {
-        messageApi.warning(`导入完成：成功 ${successCount} 条，失败 ${failureCount} 条`);
+        messageApi.warning(t('common.importResult', { success_count: successCount, failure_count: failureCount }));
       } else {
-        messageApi.success(`导入成功：成功 ${successCount} 条`);
+        messageApi.success(t('common.importSuccess', { count: successCount }));
       }
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '导入失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.importFailed'));
     }
   };
 
@@ -393,28 +397,30 @@ const IncomingInspectionPage: React.FC = () => {
     try {
       if (type === 'all') {
         const blob = await qualityApi.incomingInspection.export();
-        const filename = `来料检验单_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        const exportDate = new Date().toISOString().slice(0, 10);
+        const filename = `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${exportDate}.xlsx`;
         downloadFile(blob, filename);
-        messageApi.success('导出成功');
+        messageApi.success(t('app.kuaizhizao.quality.common.messages.exportSuccess'));
       } else {
         const toExport = type === 'selected' && selectedRowKeys?.length
           ? (currentPageData || []).filter((r) => r.id != null && selectedRowKeys.includes(r.id))
           : currentPageData || [];
         if (toExport.length === 0) {
-          messageApi.warning('暂无数据可导出');
+          messageApi.warning(t('app.kuaizhizao.quality.common.messages.exportEmpty'));
           return;
         }
         const blob = new Blob([JSON.stringify(toExport, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `来料检验单_${new Date().toISOString().slice(0, 10)}.json`;
+        const exportDate = new Date().toISOString().slice(0, 10);
+        a.download = `${t('app.kuaizhizao.quality.common.entity.incomingInspection')}_${exportDate}.json`;
         a.click();
         URL.revokeObjectURL(url);
-        messageApi.success(`已导出 ${toExport.length} 条记录`);
+        messageApi.success(t('common.exportCountSuccess', { count: toExport.length }));
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '导出失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.quality.common.messages.exportFailed'));
     }
   };
 
@@ -427,7 +433,7 @@ const IncomingInspectionPage: React.FC = () => {
     try {
       setPurchaseReceiptOptions(await fetchPurchaseReceiptsForIqc());
     } catch {
-      messageApi.error('加载采购入库单失败');
+      messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadReceiptFailed'));
     } finally {
       setPurchaseReceiptOptionsLoading(false);
     }
@@ -436,13 +442,13 @@ const IncomingInspectionPage: React.FC = () => {
   const handleCreateFromReceiptSubmit = async (values: any) => {
     try {
       await qualityApi.incomingInspection.createFromPurchaseReceipt(values.purchase_receipt_id.toString());
-      messageApi.success('成功创建来料检验单');
+      messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createSuccess'));
       setCreateFromReceiptModalVisible(false);
       createFromReceiptFormRef.current?.resetFields();
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建来料检验单失败');
+      messageApi.error(error.message || t('app.kuaizhizao.quality.incoming.messages.createFailed'));
     }
   };
 
@@ -462,7 +468,7 @@ const IncomingInspectionPage: React.FC = () => {
     try {
       setCustomerMaterialOptions(await fetchCustomerMaterialsForIqc());
     } catch {
-      messageApi.error('加载代工来料单失败');
+      messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadCustomerMaterialFailed'));
     } finally {
       setCustomerMaterialOptionsLoading(false);
     }
@@ -473,13 +479,13 @@ const IncomingInspectionPage: React.FC = () => {
       await qualityApi.incomingInspection.createFromCustomerMaterial(
         values.registration_id.toString()
       );
-      messageApi.success('成功从代工来料单创建来料检验单');
+      messageApi.success(t('app.kuaizhizao.quality.incoming.messages.createFromCustomerMaterialSuccess'));
       setCreateFromCustomerMaterialModalVisible(false);
       createFromCustomerMaterialFormRef.current?.resetFields();
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建来料检验单失败');
+      messageApi.error(error.message || t('app.kuaizhizao.quality.incoming.messages.createFailed'));
     }
   };
 
@@ -513,7 +519,7 @@ const IncomingInspectionPage: React.FC = () => {
         canReadNcLedger ? {
           content: (
             <Space>
-              <span>不合格品记录创建成功</span>
+              <span>{t('app.kuaizhizao.quality.common.messages.createDefectSuccess')}</span>
               <Button
                 type="link"
                 size="small"
@@ -524,18 +530,18 @@ const IncomingInspectionPage: React.FC = () => {
                   )
                 }
               >
-                查看台账
+                {t('app.kuaizhizao.quality.common.actions.viewLedger')}
               </Button>
             </Space>
           ),
-        } : '不合格品记录创建成功'
+        } : t('app.kuaizhizao.quality.common.messages.createDefectSuccess')
       );
       setCreateDefectModalVisible(false);
       defectFormRef.current?.resetFields();
       invalidateStats();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建不合格品记录失败');
+      messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.createDefectFailed'));
       throw error;
     }
   };
@@ -543,78 +549,63 @@ const IncomingInspectionPage: React.FC = () => {
   const detailBaseColumns: ProDescriptionsItemProps<IncomingInspection>[] = useMemo(
     () => [
       {
-        title: '检验单号',
+        title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
         dataIndex: 'inspection_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.inspection_code ?? '') }}>{r.inspection_code ?? '-'}</Typography.Text>
         ),
       },
       {
-        title: '物料编号',
+        title: t('app.kuaizhizao.quality.common.columns.materialCode'),
         dataIndex: 'material_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '物料名称', dataIndex: 'material_name' },
+      { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name' },
       {
-        title: '采购入库单号',
+        title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
         dataIndex: 'purchase_receipt_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.purchase_receipt_code ?? '') }}>{r.purchase_receipt_code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '供应商', dataIndex: 'supplier_name' },
-      { title: '检验数量', dataIndex: 'inspection_quantity', valueType: 'digit' },
-      { title: '合格数量', dataIndex: 'qualified_quantity', valueType: 'digit' },
-      { title: '不合格数量', dataIndex: 'unqualified_quantity', valueType: 'digit' },
+      { title: t('app.kuaizhizao.quality.common.columns.supplier'), dataIndex: 'supplier_name' },
+      { title: t('app.kuaizhizao.quality.common.columns.inspectionQty'), dataIndex: 'inspection_quantity', valueType: 'digit' },
+      { title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'), dataIndex: 'qualified_quantity', valueType: 'digit' },
+      { title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'), dataIndex: 'unqualified_quantity', valueType: 'digit' },
       {
-        title: '检验状态',
+        title: t('app.kuaizhizao.quality.common.columns.inspectionStatus'),
         dataIndex: 'status',
-        render: (s) => {
-          const statusMap: Record<string, { text: string; color: string }> = {
-            草稿: { text: '草稿', color: 'default' },
-            已审核: { text: '已审核', color: 'processing' },
-            已完成: { text: '已完成', color: 'success' },
-            已取消: { text: '已取消', color: 'error' },
-          };
-          const config = statusMap[String(s)] || { text: String(s ?? '-'), color: 'default' };
-          return <Tag color={config.color}>{config.text}</Tag>;
-        },
+        render: (_, r) => renderQualityDocStatusTag(t, r.status),
       },
       {
-        title: '质量状态',
+        title: t('app.kuaizhizao.quality.common.columns.qualityStatus'),
         dataIndex: 'quality_status',
-        render: (t) => <Tag color={t === '合格' ? 'success' : 'error'}>{t || '待判定'}</Tag>,
+        render: (_, r) => renderQualityQualityStatusTag(t, r.quality_status),
       },
       {
-        title: '检验结果',
+        title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
         dataIndex: 'inspection_result',
-        render: (text) => {
-          const resultMap: Record<string, { text: string; color: string }> = {
-            待检验: { text: '待检验', color: 'default' },
-            合格: { text: '合格', color: 'success' },
-            不合格: { text: '不合格', color: 'error' },
-            部分合格: { text: '部分合格', color: 'warning' },
-          };
-          const config = resultMap[text as string] || { text: text || '待检验', color: 'default' };
-          return <Tag color={config.color}>{config.text}</Tag>;
-        },
+        render: (_, r) => renderQualityResultTag(t, r.inspection_result),
       },
-      { title: '检验员', dataIndex: 'inspector_name' },
-      { title: '检验时间', dataIndex: 'inspection_time', valueType: 'dateTime' },
-      { title: '审核人', dataIndex: 'reviewer_name', render: (t) => t || '-' },
-      { title: '审核时间', dataIndex: 'review_time', valueType: 'dateTime', render: (t) => formatDateTimeBySiteSetting(t) },
+      { title: t('app.kuaizhizao.quality.common.columns.inspector'), dataIndex: 'inspector_name' },
+      { title: t('app.kuaizhizao.quality.common.columns.inspectionTime'), dataIndex: 'inspection_time', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.quality.common.columns.reviewer'), dataIndex: 'reviewer_name', render: (val) => val || '-' },
+      { title: t('app.kuaizhizao.quality.common.columns.reviewTime'), dataIndex: 'review_time', valueType: 'dateTime', render: (val) => formatDateTimeBySiteSetting(val) },
     ],
-    []
+    [t]
   );
 
-  const detailNotesColumn: ProDescriptionsItemProps<IncomingInspection> = {
-    title: '检验备注',
-    dataIndex: 'notes',
-    span: 2,
-    render: (t) => t || '-',
-  };
+  const detailNotesColumn: ProDescriptionsItemProps<IncomingInspection> = useMemo(
+    () => ({
+      title: t('app.kuaizhizao.quality.common.columns.inspectionNotes'),
+      dataIndex: 'notes',
+      span: 2,
+      render: (val) => val || '-',
+    }),
+    [t]
+  );
 
   const inspectionCustomFieldColumns = generateInspectionCustomFieldColumns();
 
@@ -630,7 +621,7 @@ const IncomingInspectionPage: React.FC = () => {
             void handleInspect(record);
           }}
         >
-          检验
+          {t('app.kuaizhizao.quality.common.actions.inspect')}
         </Button>,
       ];
     }
@@ -645,12 +636,12 @@ const IncomingInspectionPage: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        详情
+        {t('app.kuaizhizao.quality.common.actions.detail')}
       </Button>,
       <UniWorkflowActions {...rowActionKind('skip')}
         key="wf"
         record={record}
-        entityName="来料检验单"
+        entityName={t('app.kuaizhizao.quality.common.entity.incomingInspection')}
         statusField="status"
         reviewStatusField="review_status"
         draftStatuses={[]}
@@ -688,7 +679,7 @@ const IncomingInspectionPage: React.FC = () => {
             handleCreateDefect(record);
           }}
         >
-          创建不合格品记录
+          {t('app.kuaizhizao.quality.common.actions.createDefect')}
         </Button>
       );
     }
@@ -696,9 +687,10 @@ const IncomingInspectionPage: React.FC = () => {
   };
 
   // 表格列定义
-  const columns: ProColumns<IncomingInspection>[] = [
+  const columns: ProColumns<IncomingInspection>[] = useMemo(
+    () => [
     {
-      title: '检验单号',
+      title: t('app.kuaizhizao.quality.common.columns.inspectionCode'),
       dataIndex: 'inspection_code',
       width: 140,
       ellipsis: true,
@@ -710,7 +702,7 @@ const IncomingInspectionPage: React.FC = () => {
       ),
     },
     {
-      title: '物料',
+      title: t('app.kuaizhizao.quality.common.columns.material'),
       key: 'material_name',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -718,71 +710,62 @@ const IncomingInspectionPage: React.FC = () => {
         <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    { title: t('app.kuaizhizao.quality.common.columns.materialCode'), dataIndex: 'material_code', hideInTable: true },
+    { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'material_name', hideInTable: true },
     stackedPrimarySecondaryColumn<IncomingInspection>(
-      '供应商 / 入库单号',
+      t('app.kuaizhizao.quality.common.columns.supplierReceipt'),
       'supplierReceipt',
       ['supplier_name', 'supplierName'],
       ['purchase_receipt_code', 'purchaseReceiptCode'],
       { dataIndex: 'supplier_name' },
     ),
     {
-      title: '采购入库单号',
+      title: t('app.kuaizhizao.quality.common.columns.purchaseReceiptCode'),
       dataIndex: 'purchase_receipt_code',
       hideInTable: true,
     },
     {
-      title: '供应商',
+      title: t('app.kuaizhizao.quality.common.columns.supplier'),
       dataIndex: 'supplier_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '检验数量',
+      title: t('app.kuaizhizao.quality.common.columns.inspectionQty'),
       dataIndex: 'inspection_quantity',
       width: 100,
       align: 'right',
       render: (text) => text || 0,
     },
     {
-      title: '合格数量',
+      title: t('app.kuaizhizao.quality.common.columns.qualifiedQty'),
       dataIndex: 'qualified_quantity',
       ...qualifiedQuantityColumnProps,
     },
     {
-      title: '不合格数量',
+      title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
       dataIndex: 'unqualified_quantity',
       ...unqualifiedQuantityColumnProps,
     },
     {
-      title: '检验员',
+      title: t('app.kuaizhizao.quality.common.columns.inspector'),
       dataIndex: 'inspector_name',
       width: 100,
     },
     {
-      title: '检验结果',
+      title: t('app.kuaizhizao.quality.common.columns.inspectionResult'),
       dataIndex: 'inspection_result',
       width: 100,
-      render: (text) => {
-        const resultMap: Record<string, { text: string; color: string }> = {
-          '待检验': { text: '待检验', color: 'default' },
-          '合格': { text: '合格', color: 'success' },
-          '不合格': { text: '不合格', color: 'error' },
-          '部分合格': { text: '部分合格', color: 'warning' },
-        };
-        const config = resultMap[text as string] || { text: text || '待检验', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
-      },
+      render: (_, r) => renderQualityResultTag(t, r.inspection_result),
     },
     {
-      title: '检验时间',
+      title: t('app.kuaizhizao.quality.common.columns.inspectionTime'),
       dataIndex: 'inspection_time',
       width: 160,
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -791,7 +774,7 @@ const IncomingInspectionPage: React.FC = () => {
     },
     ...inspectionCustomFieldColumns,
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -812,7 +795,7 @@ const IncomingInspectionPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.quality.common.columns.actions'),
       key: 'action',
       width: 240,
       fixed: 'right',
@@ -820,31 +803,33 @@ const IncomingInspectionPage: React.FC = () => {
       render: (_, record) =>
         renderIncomingRowActions(renderIncomingRowNodes(record), `inc-${record.id ?? 'row'}`),
     },
-  ];
+  ],
+    [t, inspectionCustomFieldColumns],
+  );
 
   return (
     <ListPageTemplate
       statCards={[
         {
-          title: '待检验数量',
+          title: t('app.kuaizhizao.quality.common.stats.pendingCount'),
           value: stats.pendingCount,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#faad14' },
         },
         {
-          title: '合格数量',
+          title: t('app.kuaizhizao.quality.common.stats.qualifiedCount'),
           value: stats.qualifiedCount,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#52c41a' },
         },
         {
-          title: '不合格数量',
+          title: t('app.kuaizhizao.quality.common.stats.unqualifiedCount'),
           value: stats.unqualifiedCount,
           prefix: <CloseCircleOutlined />,
           valueStyle: { color: '#f5222d' },
         },
         {
-          title: '总检验数量',
+          title: t('app.kuaizhizao.quality.common.stats.totalInspected'),
           value: stats.totalInspected,
           prefix: <CheckCircleOutlined />,
           valueStyle: { color: '#1890ff' },
@@ -852,7 +837,7 @@ const IncomingInspectionPage: React.FC = () => {
       ]}
     >
       <UniTable<IncomingInspection>
-        headerTitle="来料检验"
+        headerTitle={t('app.kuaizhizao.quality.incoming.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.incoming-inspection"
         actionRef={actionRef}
         rowKey="id"
@@ -888,7 +873,7 @@ const IncomingInspectionPage: React.FC = () => {
               total,
             };
           } catch (error) {
-            messageApi.error('获取来料检验列表失败');
+            messageApi.error(t('app.kuaizhizao.quality.incoming.messages.loadListFailed'));
             return {
               data: [],
               success: false,
@@ -897,11 +882,11 @@ const IncomingInspectionPage: React.FC = () => {
           }
         }}
         showCreateButton={true}
-        createButtonText="从采购入库单创建"
+        createButtonText={t('app.kuaizhizao.quality.incoming.createFromReceipt')}
         onCreate={handleCreateFromReceipt}
         toolBarRender={() => [
           <Button key="from-cm" onClick={handleCreateFromCustomerMaterial}>
-            从代工来料单创建
+            {t('app.kuaizhizao.quality.incoming.createFromCustomerMaterial')}
           </Button>,
         ]}
         enableRowSelection={true}
@@ -924,7 +909,7 @@ const IncomingInspectionPage: React.FC = () => {
             for (const id of keys) {
               await qualityApi.incomingInspection.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             if (inspectionDetail?.id != null && ids.includes(inspectionDetail.id)) {
               setDetailVisible(false);
@@ -933,15 +918,15 @@ const IncomingInspectionPage: React.FC = () => {
             invalidateStats();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条来料检验单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.incoming.messages.deleteConfirm', { count })}
         scroll={{ x: 1800 }}
       />
 
       <FormModalTemplate
-        title={`来料检验 - ${currentInspection?.inspection_code || ''}`}
+        title={t('app.kuaizhizao.quality.common.modal.inspectTitle', { code: currentInspection?.inspection_code || '' })}
         open={inspectionModalVisible}
         onClose={() => {
           setInspectionModalVisible(false);
@@ -959,18 +944,18 @@ const IncomingInspectionPage: React.FC = () => {
         formRef={formRef}
       >
         {currentInspection && (
-          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+          <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
-                <strong>物料编号：</strong>{currentInspection.material_code}
+                <strong>{t('app.kuaizhizao.quality.common.label.materialCode')}：</strong>{currentInspection.material_code}
               </Col>
               <Col span={12}>
-                <strong>物料名称：</strong>{currentInspection.material_name}
+                <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentInspection.material_name}
               </Col>
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={24}>
-                <strong>检验数量：</strong>{currentInspection.inspection_quantity}
+                <strong>{t('app.kuaizhizao.quality.common.label.inspectionQty')}：</strong>{currentInspection.inspection_quantity}
               </Col>
             </Row>
           </Card>
@@ -978,18 +963,18 @@ const IncomingInspectionPage: React.FC = () => {
         <InspectionTemplateConductFields inspection={currentInspection as Record<string, unknown>} />
         <ProFormDigit
           name="qualified_quantity"
-          label="合格数量"
-          placeholder="请输入合格数量"
+          label={t('app.kuaizhizao.quality.common.form.qualifiedQty')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.qualifiedQty')}
           colProps={{ span: 12 }}
           rules={[
-            { required: true, message: '请输入合格数量' },
-            { type: 'number', min: 0, message: '合格数量不能小于0' },
+            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredQualifiedQty') },
+            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
             ({ getFieldValue }: any) => ({
               validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const unqualifiedQuantity = getFieldValue('unqualified_quantity') || 0;
                 if (value + unqualifiedQuantity > (currentInspection.inspection_quantity || 0)) {
-                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
                 }
                 return Promise.resolve();
               },
@@ -999,18 +984,18 @@ const IncomingInspectionPage: React.FC = () => {
         />
         <ProFormDigit
           name="unqualified_quantity"
-          label="不合格数量"
-          placeholder="请输入不合格数量"
+          label={t('app.kuaizhizao.quality.common.form.unqualifiedQty')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.unqualifiedQty')}
           colProps={{ span: 12 }}
           rules={[
-            { required: true, message: '请输入不合格数量' },
-            { type: 'number', min: 0, message: '不合格数量不能小于0' },
+            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredUnqualifiedQty') },
+            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
             ({ getFieldValue }: any) => ({
               validator(_: any, value: any) {
                 if (!currentInspection) return Promise.resolve();
                 const qualifiedQuantity = getFieldValue('qualified_quantity') || 0;
                 if (qualifiedQuantity + value > (currentInspection.inspection_quantity || 0)) {
-                  return Promise.reject('合格数量 + 不合格数量不能超过检验数量');
+                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.qtySumExceeds'));
                 }
                 return Promise.resolve();
               },
@@ -1020,8 +1005,8 @@ const IncomingInspectionPage: React.FC = () => {
         />
         <ProFormTextArea
           name="nonconformance_reason"
-          label="不合格原因"
-          placeholder="存在不合格数量时请填写原因"
+          label={t('app.kuaizhizao.quality.common.form.nonconformanceReason')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.nonconformanceReason')}
           fieldProps={{ rows: 2 }}
           colProps={{ span: 24 }}
         />
@@ -1033,15 +1018,15 @@ const IncomingInspectionPage: React.FC = () => {
         <DocumentAttachmentsField category="incoming_inspection_attachments" />
         <ProFormTextArea
           name="notes"
-          label="检验备注"
-          placeholder="请输入检验详情、发现的问题或处理意见"
+          label={t('app.kuaizhizao.quality.common.form.notes')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.notes')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={`检验详情 - ${inspectionDetail?.inspection_code || ''}`}
+        title={t('app.kuaizhizao.quality.common.modal.detailTitle', { code: inspectionDetail?.inspection_code || '' })}
         open={detailVisible}
         zIndex={incomingInspectionDetailDrawerZIndex}
         onClose={() => {
@@ -1056,7 +1041,7 @@ const IncomingInspectionPage: React.FC = () => {
           inspectionDetail && (
             <UniWorkflowActions {...rowActionKind('skip')}
               record={inspectionDetail}
-              entityName="来料检验单"
+              entityName={t('app.kuaizhizao.quality.common.entity.incomingInspection')}
               statusField="status"
               reviewStatusField="review_status"
               draftStatuses={[]}
@@ -1090,7 +1075,7 @@ const IncomingInspectionPage: React.FC = () => {
                 onRegisterDefect={() => handleCreateDefect(inspectionDetail)}
                 canRegisterDefect={canRegisterDefect}
               />
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -1114,7 +1099,7 @@ const IncomingInspectionPage: React.FC = () => {
                 ) : null}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lc = getIncomingInspectionLifecycle(inspectionDetail as Record<string, unknown>);
@@ -1152,11 +1137,11 @@ const IncomingInspectionPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="来料检验无明细行表" />
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noDetailLines')} />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
                 {incomingTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -1169,7 +1154,7 @@ const IncomingInspectionPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={incomingTracking.data} />
                 )}
                 {!incomingTracking.loading && !incomingTracking.data && !incomingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noActivityLog')} />
                 )}
               </DetailDrawerSection>
             </>
@@ -1178,7 +1163,7 @@ const IncomingInspectionPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="从代工来料单创建来料检验单"
+        title={t('app.kuaizhizao.quality.incoming.modal.createFromCustomerMaterialTitle')}
         open={createFromCustomerMaterialModalVisible}
         onClose={() => {
           setCreateFromCustomerMaterialModalVisible(false);
@@ -1190,11 +1175,11 @@ const IncomingInspectionPage: React.FC = () => {
       >
         <ProFormItem
           name="registration_id"
-          label="选择代工来料单"
-          rules={[{ required: true, message: '请选择代工来料单' }]}
+          label={t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial')}
+          rules={[{ required: true, message: t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial') }]}
         >
           <UniDropdown
-            placeholder="请选择代工来料单"
+            placeholder={t('app.kuaizhizao.quality.incoming.form.selectCustomerMaterial')}
             showSearch
             loading={customerMaterialOptionsLoading}
             options={customerMaterialOptions}
@@ -1204,7 +1189,7 @@ const IncomingInspectionPage: React.FC = () => {
 
       {/* 从采购入库单创建Modal */}
       <FormModalTemplate
-        title="从采购入库单创建来料检验单"
+        title={t('app.kuaizhizao.quality.incoming.modal.createFromReceiptTitle')}
         open={createFromReceiptModalVisible}
         onClose={() => {
           setCreateFromReceiptModalVisible(false);
@@ -1216,19 +1201,19 @@ const IncomingInspectionPage: React.FC = () => {
       >
         <ProFormItem
           name="purchase_receipt_id"
-          label="选择采购入库单"
-          rules={[{ required: true, message: '请选择采购入库单' }]}
+          label={t('app.kuaizhizao.quality.incoming.form.selectReceipt')}
+          rules={[{ required: true, message: t('app.kuaizhizao.quality.incoming.form.selectReceipt') }]}
         >
           <UniDropdown
-            placeholder="请选择采购入库单"
+            placeholder={t('app.kuaizhizao.quality.incoming.form.selectReceipt')}
             showSearch
             loading={purchaseReceiptOptionsLoading}
             options={purchaseReceiptOptions}
             advancedSearch={{
-              label: '高级搜索采购入库单',
+              label: t('app.kuaizhizao.quality.incoming.form.advancedSearchReceipt'),
               fields: [
-                { name: 'receipt_code', label: '入库单号', type: 'text' },
-                { name: 'supplier_name', label: '供应商名称', type: 'text' },
+                { name: 'receipt_code', label: t('app.kuaizhizao.quality.incoming.form.receiptCode'), type: 'text' },
+                { name: 'supplier_name', label: t('app.kuaizhizao.quality.incoming.form.supplierName'), type: 'text' },
               ],
               onSearch: (params) => fetchPurchaseReceiptsForIqc(params),
             }}
@@ -1238,7 +1223,7 @@ const IncomingInspectionPage: React.FC = () => {
 
       {/* 创建不合格品记录Modal */}
       <FormModalTemplate
-        title="创建不合格品记录"
+        title={t('app.kuaizhizao.quality.common.modal.createDefectTitle')}
         open={createDefectModalVisible}
         onClose={() => {
           setCreateDefectModalVisible(false);
@@ -1249,34 +1234,34 @@ const IncomingInspectionPage: React.FC = () => {
         formRef={defectFormRef}
       >
         {currentDefectInspection && (
-          <Card title="检验信息" size="small" style={{ marginBottom: 16 }}>
+          <Card title={t('app.kuaizhizao.quality.common.sections.inspectionInfo')} size="small" style={{ marginBottom: 16 }}>
             <Row gutter={16}>
               <Col span={12}>
-                <strong>检验单号：</strong>{currentDefectInspection.inspection_code}
+                <strong>{t('app.kuaizhizao.quality.common.label.inspectionCode')}：</strong>{currentDefectInspection.inspection_code}
               </Col>
               <Col span={12}>
-                <strong>物料名称：</strong>{currentDefectInspection.material_name}
+                <strong>{t('app.kuaizhizao.quality.common.label.materialName')}：</strong>{currentDefectInspection.material_name}
               </Col>
             </Row>
             <Row gutter={16} style={{ marginTop: 8 }}>
               <Col span={12}>
-                <strong>不合格数量：</strong>{currentDefectInspection.unqualified_quantity}
+                <strong>{t('app.kuaizhizao.quality.common.label.unqualifiedQty')}：</strong>{currentDefectInspection.unqualified_quantity}
               </Col>
             </Row>
           </Card>
         )}
         <ProFormDigit
           name="defect_quantity"
-          label="不合格品数量"
-          placeholder="请输入不合格品数量"
+          label={t('app.kuaizhizao.quality.common.form.defectQty')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectQty')}
           rules={[
-            { required: true, message: '请输入不合格品数量' },
-            { type: 'number', min: 0, message: '不合格品数量不能小于0' },
+            { required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectQty') },
+            { type: 'number', min: 0, message: t('app.kuaizhizao.quality.common.validation.minZero') },
             () => ({
               validator(_: any, value: any) {
                 if (!currentDefectInspection) return Promise.resolve();
                 if (value > (currentDefectInspection.unqualified_quantity || 0)) {
-                  return Promise.reject('不合格品数量不能超过检验单的不合格数量');
+                  return Promise.reject(t('app.kuaizhizao.quality.common.validation.defectQtyExceeds'));
                 }
                 return Promise.resolve();
               },
@@ -1286,38 +1271,32 @@ const IncomingInspectionPage: React.FC = () => {
         />
         <ProFormSelect
           name="defect_type"
-          label="不合格品类型"
-          placeholder="请选择不合格品类型"
-          rules={[{ required: true, message: '请选择不合格品类型' }]}
-          options={[
-            { label: '尺寸偏差', value: 'dimension' },
-            { label: '外观缺陷', value: 'appearance' },
-            { label: '功能异常', value: 'function' },
-            { label: '材质问题', value: 'material' },
-            { label: '其他', value: 'other' },
-          ]}
+          label={t('app.kuaizhizao.quality.common.form.defectType')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectType')}
+          rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectType') }]}
+          options={getQualityDefectTypeOptions(t)}
         />
         <ProFormTextArea
           name="defect_reason"
-          label="不合格原因"
-          placeholder="请输入不合格原因"
-          rules={[{ required: true, message: '请输入不合格原因' }]}
+          label={t('app.kuaizhizao.quality.common.form.defectReason')}
+          placeholder={t('app.kuaizhizao.quality.common.placeholder.defectReason')}
+          rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDefectReason') }]}
           fieldProps={{ rows: 3 }}
         />
-        <ProFormItem name="disposition" label="处理方式" rules={[{ required: true, message: '请选择处理方式' }]}>
+        <ProFormItem name="disposition" label={t('app.kuaizhizao.quality.common.form.disposition')} rules={[{ required: true, message: t('app.kuaizhizao.quality.common.validation.requiredDisposition') }]}>
           <UniDropdown
-            placeholder="请选择处理方式"
+            placeholder={t('app.kuaizhizao.quality.common.form.selectDisposition')}
             showSearch
             allowClear
             loading={disposalLoading}
             options={disposalOptions}
-            quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+            quickCreate={{ label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'), onClick: () => navigate('/system/data-dictionaries') }}
           />
         </ProFormItem>
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.quality.common.form.remarks')}
+          placeholder={t('app.kuaizhizao.quality.common.form.remarks')}
           fieldProps={{ rows: 2 }}
         />
       </FormModalTemplate>

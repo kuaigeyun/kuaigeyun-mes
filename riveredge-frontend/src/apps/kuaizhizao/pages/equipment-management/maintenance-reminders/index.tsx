@@ -13,10 +13,11 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import type { DescriptionsProps } from 'antd';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormInstance } from '@ant-design/pro-components';
-import { App, Button, Space, message, Badge, Tag, Modal, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
+import { App, Button, Space, Badge, Tag, notification, Descriptions, Typography, Empty, Spin, theme as AntdTheme } from 'antd';
 import { CheckOutlined, EyeOutlined, CheckCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
-import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { maintenanceReminderApi } from '../../../services/equipment';
 import { ProFormTextArea } from '@ant-design/pro-components';
@@ -26,6 +27,8 @@ import { getMaintenanceReminderLifecycle } from '../../../utils/equipmentLifecyc
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+
+const P = 'app.kuaizhizao.maintenanceReminder';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -121,8 +124,8 @@ const MaintenanceRemindersPage: React.FC = () => {
       // 如果有未读提醒，显示通知
       if (data.unread_count > 0) {
         notificationApi.info({
-          message: '维护提醒',
-          description: `您有 ${data.unread_count} 条未读维护提醒`,
+          message: t(`${P}.notificationTitle`),
+          description: t(`${P}.notificationDescription`, { count: data.unread_count }),
           duration: 5,
           placement: 'topRight',
         });
@@ -146,24 +149,12 @@ const MaintenanceRemindersPage: React.FC = () => {
   }, []);
 
   /**
-   * 获取提醒类型标签
-   */
-  const getReminderTypeTag = (type: string) => {
-    if (type === 'overdue') {
-      return <Tag color="red">已过期</Tag>;
-    } else if (type === 'due_soon') {
-      return <Tag color="orange">即将到期</Tag>;
-    }
-    return <Tag>{type}</Tag>;
-  };
-
-  /**
    * 处理标记为已读
    */
   const handleMarkAsRead = async (record: MaintenanceReminder) => {
     try {
       if (!record.uuid) {
-        messageApi.error('提醒UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
 
@@ -171,7 +162,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         reminder_uuids: [record.uuid],
       });
 
-      messageApi.success('已标记为已读');
+      messageApi.success(t(`${P}.markReadSuccess`));
       actionRef.current?.reload();
       fetchUnreadCount();
       if (detailVisible && currentReminder?.uuid === record.uuid) {
@@ -179,7 +170,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         setReminderTrackingRefreshKey((k) => k + 1);
       }
     } catch (error: any) {
-      messageApi.error(`标记已读失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.markReadFailed`, { message: error.message || t('common.unknownError') }));
     }
   };
 
@@ -200,7 +191,7 @@ const MaintenanceRemindersPage: React.FC = () => {
   const handleMarkAsHandledSubmit = async (values: any) => {
     try {
       if (!currentReminder?.uuid) {
-        messageApi.error('提醒UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
 
@@ -211,7 +202,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(values.attachments),
       })) as MaintenanceReminder;
 
-      messageApi.success('已标记为已处理');
+      messageApi.success(t(`${P}.markHandledSuccess`));
       setHandleModalVisible(false);
       actionRef.current?.reload();
       fetchUnreadCount();
@@ -220,7 +211,7 @@ const MaintenanceRemindersPage: React.FC = () => {
         setReminderTrackingRefreshKey((k) => k + 1);
       }
     } catch (error: any) {
-      messageApi.error(`标记已处理失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.markHandledFailed`, { message: error.message || t('common.unknownError') }));
     }
   };
 
@@ -231,7 +222,7 @@ const MaintenanceRemindersPage: React.FC = () => {
     try {
       const uuids = selectedRows.map((row) => row.uuid).filter(Boolean) as string[];
       if (uuids.length === 0) {
-        messageApi.warning('请选择要标记的提醒');
+        messageApi.warning(t(`${P}.selectReminders`));
         return;
       }
 
@@ -239,13 +230,13 @@ const MaintenanceRemindersPage: React.FC = () => {
         reminder_uuids: uuids,
       });
 
-      messageApi.success(`已标记 ${uuids.length} 条提醒为已读`);
+      messageApi.success(t(`${P}.batchMarkReadSuccess`, { count: uuids.length }));
       setSelectedRowKeys([]);
       setSelectedRows([]);
       actionRef.current?.reload();
       fetchUnreadCount();
     } catch (error: any) {
-      messageApi.error(`批量标记已读失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.batchMarkReadFailed`, { message: error.message || t('common.unknownError') }));
     }
   };
 
@@ -267,172 +258,194 @@ const MaintenanceRemindersPage: React.FC = () => {
         advance_days: 7,
       });
 
-      messageApi.success(`检查完成，创建了 ${result.reminder_count || 0} 条提醒`);
+      messageApi.success(t(`${P}.checkSuccess`, { count: result.reminder_count || 0 }));
       actionRef.current?.reload();
       fetchUnreadCount();
     } catch (error: any) {
-      messageApi.error(`检查维护计划失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.checkFailed`, { message: error.message || t('common.unknownError') }));
     }
   };
 
   const detailBaseColumns: ProDescriptionsItemProps<MaintenanceReminder>[] = useMemo(
-    () => [
-      {
-        title: '设备编号',
-        dataIndex: 'equipment_code',
-        render: (_, r) => (
-          <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
-        ),
-      },
-      { title: '设备名称', dataIndex: 'equipment_name' },
-      {
-        title: '提醒类型',
-        dataIndex: 'reminder_type',
-        render: (_, r) => getReminderTypeTag(r.reminder_type || ''),
-      },
-      {
-        title: '计划维护日期',
-        dataIndex: 'planned_maintenance_date',
-        render: (_, r) =>
-          r.planned_maintenance_date ? dayjs(r.planned_maintenance_date).format('YYYY-MM-DD HH:mm') : '-',
-      },
-      {
-        title: '距离到期',
-        dataIndex: 'days_until_due',
-        render: (_, r) => {
-          const days = r.days_until_due ?? 0;
-          if (days < 0) return <Tag color="red">已过期 {Math.abs(days)} 天</Tag>;
-          if (days === 0) return <Tag color="orange">今天到期</Tag>;
-          return <Tag color="blue">{days} 天后</Tag>;
+    () => {
+      const getReminderTypeTag = (type: string) => {
+        if (type === 'overdue') {
+          return <Tag color="red">{t(`${P}.reminderType.overdue`)}</Tag>;
+        }
+        if (type === 'due_soon') {
+          return <Tag color="orange">{t(`${P}.reminderType.dueSoon`)}</Tag>;
+        }
+        return <Tag>{type}</Tag>;
+      };
+
+      const renderDaysUntilDue = (days: number) => {
+        if (days < 0) {
+          return <Tag color="red">{t(`${P}.daysOverdue`, { days: Math.abs(days) })}</Tag>;
+        }
+        if (days === 0) {
+          return <Tag color="orange">{t(`${P}.dueToday`)}</Tag>;
+        }
+        return <Tag color="blue">{t(`${P}.daysRemaining`, { days })}</Tag>;
+      };
+
+      return [
+        {
+          title: t(`${P}.col.equipmentCode`),
+          dataIndex: 'equipment_code',
+          render: (_, r) => (
+            <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
+          ),
         },
-      },
-      { title: '提醒消息', dataIndex: 'reminder_message' },
-      {
-        title: '提醒时间',
-        dataIndex: 'reminder_date',
-        valueType: 'dateTime',
-      },
-    ],
-    []
+        { title: t(`${P}.col.equipmentName`), dataIndex: 'equipment_name' },
+        {
+          title: t(`${P}.col.reminderType`),
+          dataIndex: 'reminder_type',
+          render: (_, r) => getReminderTypeTag(r.reminder_type || ''),
+        },
+        {
+          title: t(`${P}.col.plannedMaintenanceDate`),
+          dataIndex: 'planned_maintenance_date',
+          render: (_, r) =>
+            r.planned_maintenance_date ? dayjs(r.planned_maintenance_date).format('YYYY-MM-DD HH:mm') : '-',
+        },
+        {
+          title: t(`${P}.col.daysUntilDue`),
+          dataIndex: 'days_until_due',
+          render: (_, r) => renderDaysUntilDue(r.days_until_due ?? 0),
+        },
+        { title: t(`${P}.col.reminderMessage`), dataIndex: 'reminder_message' },
+        {
+          title: t(`${P}.col.reminderDate`),
+          dataIndex: 'reminder_date',
+          valueType: 'dateTime',
+        },
+      ];
+    },
+    [t],
   );
 
   /**
    * 表格列定义
    */
-  const columns: ProColumns<MaintenanceReminder>[] = [
-    {
-      title: '设备编号',
-      dataIndex: 'equipment_code',
-      width: 120,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
-          {r.equipment_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '设备名称',
-      dataIndex: 'equipment_name',
-      width: 150,
-    },
-    {
-      title: '提醒类型',
-      dataIndex: 'reminder_type',
-      width: 120,
-      render: (_, record) => getReminderTypeTag(record.reminder_type || ''),
-    },
-    {
-      title: '计划维护日期',
-      dataIndex: 'planned_maintenance_date',
-      width: 150,
-      render: (_, record) =>
-        record.planned_maintenance_date
-          ? dayjs(record.planned_maintenance_date).format('YYYY-MM-DD HH:mm')
-          : '-',
-    },
-    {
-      title: '距离到期',
-      dataIndex: 'days_until_due',
-      width: 100,
-      render: (_, record) => {
-        const days = record.days_until_due || 0;
-        if (days < 0) {
-          return <Tag color="red">已过期 {Math.abs(days)} 天</Tag>;
-        } else if (days === 0) {
-          return <Tag color="orange">今天到期</Tag>;
-        } else {
-          return <Tag color="blue">{days} 天后</Tag>;
+  const columns: ProColumns<MaintenanceReminder>[] = useMemo(
+    () => {
+      const getReminderTypeTag = (type: string) => {
+        if (type === 'overdue') {
+          return <Tag color="red">{t(`${P}.reminderType.overdue`)}</Tag>;
         }
-      },
+        if (type === 'due_soon') {
+          return <Tag color="orange">{t(`${P}.reminderType.dueSoon`)}</Tag>;
+        }
+        return <Tag>{type}</Tag>;
+      };
+
+      const renderDaysUntilDue = (days: number) => {
+        if (days < 0) {
+          return <Tag color="red">{t(`${P}.daysOverdue`, { days: Math.abs(days) })}</Tag>;
+        }
+        if (days === 0) {
+          return <Tag color="orange">{t(`${P}.dueToday`)}</Tag>;
+        }
+        return <Tag color="blue">{t(`${P}.daysRemaining`, { days })}</Tag>;
+      };
+
+      return [
+        {
+          title: t(`${P}.col.equipmentCode`),
+          dataIndex: 'equipment_code',
+          width: 120,
+          fixed: 'left',
+          render: (_, r) => (
+            <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }} ellipsis>
+              {r.equipment_code ?? '-'}
+            </Typography.Text>
+          ),
+        },
+        {
+          title: t(`${P}.col.equipmentName`),
+          dataIndex: 'equipment_name',
+          width: 150,
+        },
+        {
+          title: t(`${P}.col.reminderType`),
+          dataIndex: 'reminder_type',
+          width: 120,
+          render: (_, record) => getReminderTypeTag(record.reminder_type || ''),
+        },
+        {
+          title: t(`${P}.col.plannedMaintenanceDate`),
+          dataIndex: 'planned_maintenance_date',
+          width: 150,
+          render: (_, record) =>
+            record.planned_maintenance_date
+              ? dayjs(record.planned_maintenance_date).format('YYYY-MM-DD HH:mm')
+              : '-',
+        },
+        {
+          title: t(`${P}.col.daysUntilDue`),
+          dataIndex: 'days_until_due',
+          width: 100,
+          render: (_, record) => renderDaysUntilDue(record.days_until_due || 0),
+        },
+        {
+          title: t(`${P}.col.reminderMessage`),
+          dataIndex: 'reminder_message',
+          ellipsis: true,
+          width: 200,
+        },
+        {
+          title: t(`${P}.col.reminderDate`),
+          dataIndex: 'reminder_date',
+          width: 150,
+          render: (_, record) =>
+            record.reminder_date ? dayjs(record.reminder_date).format('YYYY-MM-DD HH:mm:ss') : '-',
+        },
+        {
+          title: t(`${P}.col.lifecycle`),
+          dataIndex: 'lifecycle_stage',
+          fixed: 'right',
+          align: 'left',
+          hideInSearch: true,
+          render: (_, record) => (
+            <ListUniLifecycleCell lifecycle={getMaintenanceReminderLifecycle(record as Record<string, unknown>, t)} />
+          ),
+        },
+        {
+          title: t('common.actions'),
+          valueType: 'option',
+          width: 200,
+          fixed: 'right',
+          render: (_, record) => (
+            <Space>
+              <Button key="view" {...rowActionKind('read')}
+                icon={<EyeOutlined />}
+                onClick={() => handleViewDetail(record)}
+              >
+                {t('common.view')}
+              </Button>
+              {!record.is_read && (
+                <Button key="approve" {...rowActionKind('audit')}
+                  icon={<CheckOutlined />}
+                  onClick={() => handleMarkAsRead(record)}
+                >
+                  {t(`${P}.action.markRead`)}
+                </Button>
+              )}
+              {!record.is_handled && (
+                <Button key="approve" {...rowActionKind('audit')}
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => handleMarkAsHandled(record)}
+                >
+                  {t(`${P}.action.markHandled`)}
+                </Button>
+              )}
+            </Space>
+          ),
+        },
+      ];
     },
-    {
-      title: '提醒消息',
-      dataIndex: 'reminder_message',
-      ellipsis: true,
-      width: 200,
-    },
-    {
-      title: '提醒时间',
-      dataIndex: 'reminder_date',
-      width: 150,
-      render: (_, record) =>
-        record.reminder_date ? dayjs(record.reminder_date).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getMaintenanceReminderLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 200,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button key="view" {...rowActionKind('read')}
-            icon={<EyeOutlined />}
-            onClick={() => handleViewDetail(record)}
-          >
-            查看
-          </Button>
-          {!record.is_read && (
-            <Button key="approve" {...rowActionKind('audit')}
-              icon={<CheckOutlined />}
-              onClick={() => handleMarkAsRead(record)}
-            >
-              标记已读
-            </Button>
-          )}
-          {!record.is_handled && (
-            <Button key="approve" {...rowActionKind('audit')}
-              icon={<CheckCircleOutlined />}
-              onClick={() => handleMarkAsHandled(record)}
-            >
-              标记已处理
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
+    [t],
+  );
 
   return (
     <ListPageTemplate
@@ -447,23 +460,23 @@ const MaintenanceRemindersPage: React.FC = () => {
           }}
         >
           <Space>
-            <span>设备维护提醒</span>
+            <span>{t(`${P}.title`)}</span>
             {unreadCount > 0 && (
               <Badge count={unreadCount} showZero>
-                <span style={{ fontSize: 16 }}>未读提醒</span>
+                <span style={{ fontSize: 16 }}>{t(`${P}.unreadBadge`)}</span>
               </Badge>
             )}
           </Space>
           <Space>
             <Button icon={<ReloadOutlined />} onClick={handleCheckMaintenancePlans}>
-              手动检查
+              {t(`${P}.manualCheck`)}
             </Button>
           </Space>
         </div>
       }
     >
       <UniTable<MaintenanceReminder>
-        headerTitle="设备维护提醒"
+        headerTitle={t(`${P}.title`)}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.maintenance-reminders"
         actionRef={actionRef}
         request={async (params) => {
@@ -491,8 +504,8 @@ const MaintenanceRemindersPage: React.FC = () => {
         rowKey="uuid"
         search={{
           labelWidth: 'auto',
-          searchText: '搜索',
-          resetText: '重置',
+          searchText: t(`${P}.search`),
+          resetText: t(`${P}.reset`),
         }}
         pagination={{
           defaultPageSize: 20,
@@ -512,7 +525,7 @@ const MaintenanceRemindersPage: React.FC = () => {
             disabled={selectedRows.length === 0}
             onClick={() => handleBatchMarkAsRead(selectedRows)}
           >
-            批量标记已读 ({selectedRows.length})
+            {t(`${P}.batchMarkRead`, { count: selectedRows.length })}
           </Button>,
         ]}
         scroll={{ x: 1600 }}
@@ -520,7 +533,7 @@ const MaintenanceRemindersPage: React.FC = () => {
 
       {/* 详情抽屉 */}
       <DetailDrawerTemplate
-        title="维护提醒详情"
+        title={t(`${P}.detailTitle`)}
         open={detailVisible}
         zIndex={reminderDetailDrawerZIndex}
         onClose={() => {
@@ -533,17 +546,17 @@ const MaintenanceRemindersPage: React.FC = () => {
         customContent={
           currentReminder ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
                 <Descriptions
                   column={2}
                   size="small"
                   items={buildDescriptionItemsFromColumns(currentReminder, detailBaseColumns)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getMaintenanceReminderLifecycle(currentReminder as Record<string, unknown>);
+                    const lc = getMaintenanceReminderLifecycle(currentReminder as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
@@ -557,12 +570,16 @@ const MaintenanceRemindersPage: React.FC = () => {
                     );
                   })()}
                   <Typography.Text type="secondary">
-                    已读/处理状态：已读 {currentReminder.is_read ? '是' : '否'}
-                    {currentReminder.read_at ? `（${dayjs(currentReminder.read_at).format('YYYY-MM-DD HH:mm:ss')}）` : ''}
-                    ；已处理 {currentReminder.is_handled ? '是' : '否'}
-                    {currentReminder.handled_at
-                      ? `（${dayjs(currentReminder.handled_at).format('YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
-                      : ''}
+                    {t(`${P}.readHandleStatus`, {
+                      read: currentReminder.is_read ? t(`${P}.yes`) : t(`${P}.no`),
+                      readAt: currentReminder.read_at
+                        ? `（${dayjs(currentReminder.read_at).format('YYYY-MM-DD HH:mm:ss')}）`
+                        : '',
+                      handled: currentReminder.is_handled ? t(`${P}.yes`) : t(`${P}.no`),
+                      handledAt: currentReminder.handled_at
+                        ? `（${dayjs(currentReminder.handled_at).format('YYYY-MM-DD HH:mm:ss')}，${currentReminder.handled_by_name || '-'}）`
+                        : '',
+                    })}
                   </Typography.Text>
                   {currentReminder.id != null ? (
                     <DetailDrawerInlineFullChain
@@ -585,10 +602,10 @@ const MaintenanceRemindersPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="维护提醒无明细行" />
+              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
                 {reminderTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -601,7 +618,7 @@ const MaintenanceRemindersPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={reminderTracking.data} />
                 )}
                 {!reminderTracking.loading && !reminderTracking.data && !reminderTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
                 )}
               </DetailDrawerSection>
             </>
@@ -611,7 +628,7 @@ const MaintenanceRemindersPage: React.FC = () => {
 
       {/* 标记已处理Modal */}
       <FormModalTemplate
-        title="标记为已处理"
+        title={t(`${P}.handleModal`)}
         open={handleModalVisible}
         onClose={() => setHandleModalVisible(false)}
         formRef={handleFormRef}
@@ -621,8 +638,8 @@ const MaintenanceRemindersPage: React.FC = () => {
         <DocumentAttachmentsField category="maintenance_reminder_attachments" />
         <ProFormTextArea
           name="remark"
-          label="处理备注"
-          placeholder="请输入处理备注（可选）"
+          label={t(`${P}.form.handleRemark`)}
+          placeholder={t(`${P}.form.handleRemarkPlaceholder`)}
         />
       </FormModalTemplate>
     </ListPageTemplate>

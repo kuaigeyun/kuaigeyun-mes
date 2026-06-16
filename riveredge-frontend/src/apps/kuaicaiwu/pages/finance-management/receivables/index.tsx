@@ -23,9 +23,12 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getReceivableLifecycle } from '../../../utils/financeLifecycle';
+import { buildReceivableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+
+const P = 'app.kuaicaiwu.receivable';
 
 const ReceivableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -34,6 +37,7 @@ const ReceivableList: React.FC = () => {
     const [customerOptions, setCustomerOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
+    const navigate = useNavigate();
 
     const receivableImportTemplate = useMemo(
         () =>
@@ -43,28 +47,27 @@ const ReceivableList: React.FC = () => {
                     {
                         field: 'customer',
                         required: true,
-                        labelKey: 'app.kuaicaiwu.receivable.import.customerName',
+                        labelKey: `${P}.import.customerName`,
                         aliases: ['客户名称', '客户'],
                     },
                     {
                         field: 'amount',
                         required: true,
-                        labelKey: 'app.kuaicaiwu.receivable.import.amount',
+                        labelKey: `${P}.import.amount`,
                         aliases: ['应收金额', '金额'],
                     },
-                    { field: 'dueDate', labelKey: 'app.kuaicaiwu.receivable.import.dueDate', aliases: ['到期日期'] },
-                    { field: 'businessDate', labelKey: 'app.kuaicaiwu.receivable.import.businessDate', aliases: ['业务日期'] },
+                    { field: 'dueDate', labelKey: `${P}.import.dueDate`, aliases: ['到期日期'] },
+                    { field: 'businessDate', labelKey: `${P}.import.businessDate`, aliases: ['业务日期'] },
                 ],
                 [
-                    t('app.kuaicaiwu.receivable.importExample.customerName'),
-                    t('app.kuaicaiwu.receivable.importExample.amount'),
-                    t('app.kuaicaiwu.receivable.importExample.dueDate'),
-                    t('app.kuaicaiwu.receivable.importExample.businessDate'),
+                    t(`${P}.importExample.customerName`),
+                    t(`${P}.importExample.amount`),
+                    t(`${P}.importExample.dueDate`),
+                    t(`${P}.importExample.businessDate`),
                 ],
             ),
         [t, i18n.language],
     );
-    const navigate = useNavigate();
 
     useEffect(() => {
         const load = async () => {
@@ -101,7 +104,7 @@ const ReceivableList: React.FC = () => {
             attachments: normalizeDocumentAttachments(values.attachments),
         };
         await receivableService.createReceivable(data);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
         actionRef.current?.reload();
     };
@@ -111,11 +114,11 @@ const ReceivableList: React.FC = () => {
             for (const id of keys) {
                 await receivableService.deleteReceivable(Number(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             actionRef.current?.reload();
         } catch (error: any) {
-            messageApi.error(error?.message || '删除失败');
+            messageApi.error(error?.message || t('common.deleteFailed'));
         }
     };
 
@@ -124,17 +127,17 @@ const ReceivableList: React.FC = () => {
             for (const id of keys) {
                 await receivableService.approveReceivable(Number(id));
             }
-            messageApi.success(`成功审核 ${keys.length} 条应收单`);
+            messageApi.success(t('app.kuaicaiwu.common.batchApproveSuccess', { count: keys.length, entity: t(`${P}.entityName`) }));
             setSelectedRowKeys([]);
             actionRef.current?.reload();
         } catch (error: any) {
-            messageApi.error(error?.message || '批量审核失败');
+            messageApi.error(error?.message || t('app.kuaicaiwu.common.batchApproveFailed'));
         }
     };
 
-    const columns: ProColumns<Receivable>[] = [
+    const columns: ProColumns<Receivable>[] = useMemo(() => [
         {
-            title: t('app.kuaicaiwu.common.code', { defaultValue: '编号' }),
+            title: t('app.kuaicaiwu.common.code'),
             dataIndex: 'receivable_code',
             width: 168,
             fixed: 'left',
@@ -145,26 +148,26 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
-            title: '客户名称',
+            title: t(`${P}.col.customerName`),
             dataIndex: 'customer_name',
             width: 200,
         },
         {
-            title: '应收总额',
+            title: t(`${P}.col.totalAmount`),
             dataIndex: 'total_amount',
             valueType: 'money',
             align: 'right',
             width: 120,
         },
         {
-            title: '已收金额',
+            title: t(`${P}.col.receivedAmount`),
             dataIndex: 'received_amount',
             valueType: 'money',
             align: 'right',
             width: 120,
         },
         {
-            title: '剩余应收',
+            title: t(`${P}.col.remainingAmount`),
             dataIndex: 'remaining_amount',
             valueType: 'money',
             align: 'right',
@@ -178,49 +181,39 @@ const ReceivableList: React.FC = () => {
             ),
         },
         {
-            title: '到期日期',
+            title: t('app.kuaicaiwu.common.dueDate'),
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
         },
         {
-            title: '状态',
+            title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
-            valueEnum: {
-                '未收款': { text: '未收款' },
-                '部分收款': { text: '部分收款' },
-                '已结清': { text: '已结清' },
-            },
+            valueEnum: buildReceivableStatusEnum(t),
         },
         {
-            title: '审核状态',
+            title: t('app.kuaicaiwu.common.reviewStatus'),
             dataIndex: 'review_status',
             hideInTable: true,
-            valueEnum: {
-                '待审核': { text: '待审核' },
-                '已审核': { text: '已审核' },
-                '已驳回': { text: '已驳回' },
-                '通过': { text: '已审核' },
-                '驳回': { text: '已驳回' },
-            },
+            valueEnum: buildReviewStatusEnum(t),
         },
         {
-            title: '更新时间',
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 168,
             hideInSearch: true,
             render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
         },
         {
-            title: '生命周期',
+            title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
             align: 'left',
             width: 130,
             hideInSearch: true,
             render: (_, record) => {
-                const lc = getReceivableLifecycle(record as unknown as Record<string, unknown>);
+                const lc = getReceivableLifecycle(record as unknown as Record<string, unknown>, t);
                 return (
                     <UniLifecycle
                         percent={lc.percent}
@@ -235,7 +228,7 @@ const ReceivableList: React.FC = () => {
             },
         },
         {
-            title: '操作',
+            title: t('common.actions'),
             valueType: 'option',
             fixed: 'right',
             width: 220,
@@ -247,12 +240,12 @@ const ReceivableList: React.FC = () => {
                             icon={<EyeOutlined />}
                             onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${record.id}`)}
                         >
-                            详情
+                            {t('common.detail')}
                         </Button>,
                         <UniWorkflowActions {...rowActionKind('skip')}
                             key="wf"
                             record={record}
-                            entityName="应收单"
+                            entityName={t(`${P}.entityName`)}
                             statusField="status"
                             reviewStatusField="review_status"
                             draftStatuses={[]}
@@ -271,17 +264,28 @@ const ReceivableList: React.FC = () => {
                                 icon={<DollarOutlined />}
                                 onClick={() => navigate(`/apps/kuaicaiwu/finance-management/receivables/${record.id}`)}
                             >
-                                收款
+                                {t('app.kuaicaiwu.common.collect')}
                             </Button>
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ];
+    ], [t, navigate]);
+
+    const batchMenuItems = useMemo(() => [
+        {
+            key: 'batch-approve',
+            label: t('app.kuaicaiwu.common.batchApprove'),
+            requireConfirm: true,
+            confirmTitle: (count: number) => t(`${P}.batchApproveTitle`, { count }),
+            confirmDescription: t('app.kuaicaiwu.common.batchOnlyPendingApprove'),
+            onClick: handleBatchApprove,
+        },
+    ], [t]);
 
     return (
         <ListPageTemplate>
             <UniTable<Receivable>
-                headerTitle="应收账款"
+                headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
                 columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.receivables"
@@ -303,44 +307,35 @@ const ReceivableList: React.FC = () => {
                             success: true,
                         };
                     } catch (error: any) {
-                        messageApi.error(error?.message || '获取列表失败');
+                        messageApi.error(error?.message || t('app.kuaicaiwu.common.loadListFailed'));
                         return { data: [], total: 0, success: false };
                     }
                 }}
                 rowKey="id"
                 showCreateButton
-                createButtonText="新建应收单"
+                createButtonText={t(`${P}.createTitle`)}
                 onCreate={() => setCreateModalVisible(true)}
                 enableRowSelection
                 selectedRowKeys={selectedRowKeys}
                 onRowSelectionChange={setSelectedRowKeys}
                 showDeleteButton
-                deleteButtonText="批量删除"
+                deleteButtonText={t('common.batchDelete')}
                 onDelete={handleBatchDelete}
-                deleteConfirmTitle="确认批量删除"
-                deleteConfirmDescription={(count) => `确定要删除选中的 ${count} 条应收单吗？仅待审核且无收款记录的应收单可删除。`}
+                deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+                deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
                 toolBarActionsAfterDelete={[
                     <UniBatchMenuButton
                         key="receivable-batch-actions"
                         selectedRowKeys={selectedRowKeys}
-                        buttonText="批量操作"
-                        menuItems={[
-                            {
-                                key: 'batch-approve',
-                                label: '批量审核',
-                                requireConfirm: true,
-                                confirmTitle: (count) => `确认审核 ${count} 条应收单`,
-                                confirmDescription: '仅待审核单据会审核通过，不满足条件的单据会在后端返回错误。',
-                                onClick: handleBatchApprove,
-                            },
-                        ]}
+                        buttonText={t('components.uniBatch.batchActions')}
+                        menuItems={batchMenuItems}
                     />,
                 ]}
                 showAdvancedSearch={true}
                 showImportButton
                 onImport={async (data) => {
                     if (!data || data.length < 2) {
-                        messageApi.warning('导入数据为空或格式不正确');
+                        messageApi.warning(t('app.kuaicaiwu.common.importEmpty'));
                         return;
                     }
                     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -349,7 +344,7 @@ const ReceivableList: React.FC = () => {
                         receivableImportTemplate.importHeaderMap,
                     );
                     if (headerIndexMap.customer === undefined || headerIndexMap.amount === undefined) {
-                        messageApi.error('导入表头需包含客户名称和应收金额');
+                        messageApi.error(t(`${P}.importHeaderError`));
                         return;
                     }
                     const items: ReceivableCreateData[] = [];
@@ -387,21 +382,21 @@ const ReceivableList: React.FC = () => {
                         });
                     }
                     if (items.length === 0) {
-                        messageApi.warning('没有可导入的有效数据');
+                        messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
                         return;
                     }
                     const result = await batchImport({
                         items,
                         importFn: async (item) => receivableService.createReceivable(item),
-                        title: '导入应收单',
+                        title: t(`${P}.importTitle`),
                         concurrency: 5,
                     });
                     if (result.successCount > 0) {
-                        messageApi.success(`成功导入 ${result.successCount} 条应收单`);
+                        messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
                         actionRef.current?.reload();
                     }
                     if (result.failureCount > 0) {
-                        messageApi.warning(`部分失败 ${result.failureCount} 条`);
+                        messageApi.warning(t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }));
                     }
                 }}
                 importHeaders={receivableImportTemplate.importHeaders}
@@ -418,7 +413,7 @@ const ReceivableList: React.FC = () => {
                             items = items.filter((d: Receivable) => d.id != null && keys.includes(d.id));
                         }
                         if (items.length === 0) {
-                            messageApi.warning('暂无数据可导出');
+                            messageApi.warning(t('common.exportNoData'));
                             return;
                         }
                         const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -428,15 +423,15 @@ const ReceivableList: React.FC = () => {
                         a.download = `receivables-${new Date().toISOString().slice(0, 10)}.json`;
                         a.click();
                         URL.revokeObjectURL(url);
-                        messageApi.success(`已导出 ${items.length} 条记录`);
+                        messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {
-                        messageApi.error(error?.message || '导出失败');
+                        messageApi.error(error?.message || t('common.exportFailed'));
                     }
                 }}
             />
 
             <ModalForm
-                title="新建应收单"
+                title={t(`${P}.createTitle`)}
                 open={createModalVisible}
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleCreate}
@@ -444,15 +439,15 @@ const ReceivableList: React.FC = () => {
             >
                 <ProFormSelect
                     name="customer_id"
-                    label="客户"
+                    label={t('app.kuaicaiwu.common.customer')}
                     options={customerOptions}
-                    rules={[{ required: true, message: '请选择客户' }]}
-                    placeholder="请选择客户"
+                    rules={[{ required: true, message: t('app.kuaicaiwu.common.selectCustomer') }]}
+                    placeholder={t('app.kuaicaiwu.common.selectCustomer')}
                 />
-                <ProFormMoney name="total_amount" label="应收金额" min={0.01} rules={[{ required: true }]} />
-                <ProFormDatePicker name="due_date" label="到期日期" rules={[{ required: true }]} />
-                <ProFormDatePicker name="business_date" label="业务日期" />
-                <ProFormTextArea name="notes" label="备注" />
+                <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
+                <ProFormDatePicker name="due_date" label={t('app.kuaicaiwu.common.dueDate')} rules={[{ required: true }]} />
+                <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="receivable_attachments" />
             </ModalForm>
         </ListPageTemplate>

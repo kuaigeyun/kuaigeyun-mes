@@ -7,11 +7,12 @@
  * Date: 2026-01-16
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Card, Badge, Button, Space, Timeline, Tag, Row, Col, Select, Input, App, Typography, Spin, Empty, theme as AntdTheme } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
+import type { ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { ReloadOutlined, HistoryOutlined, EditOutlined, PlayCircleOutlined, PauseCircleOutlined, WarningOutlined } from '@ant-design/icons';
 import { ListPageTemplate, FormModalTemplate, DetailDrawerTemplate, DetailDrawerSection, DetailDrawerInlineFullChain, DRAWER_CONFIG } from '../../../../../components/layout-templates';
 import { equipmentStatusApi } from '../../../services/equipment';
@@ -25,6 +26,17 @@ import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter'
 const { Meta } = Card;
 const { Option } = Select;
 const { Search } = Input;
+
+const P = 'app.kuaizhizao.equipmentStatus';
+
+const STATUS_I18N: Record<string, string> = {
+  '正常': `${P}.status.normal`,
+  '运行中': `${P}.status.running`,
+  '待机': `${P}.status.standby`,
+  '维修中': `${P}.status.maintenance`,
+  '故障': `${P}.status.fault`,
+  '停用': `${P}.status.disabled`,
+};
 
 interface EquipmentStatus {
   equipment: {
@@ -100,6 +112,42 @@ const EquipmentStatusPage: React.FC = () => {
   const [updateModalVisible, setUpdateModalVisible] = useState(false);
   const updateFormRef = useRef<any>(null);
 
+  const translateStatus = (status: string) => {
+    const key = STATUS_I18N[status];
+    return key ? t(key) : status;
+  };
+
+  const statusFormOptions = useMemo(
+    () => [
+      { label: t(`${P}.status.normal`), value: '正常' },
+      { label: t(`${P}.status.running`), value: '运行中' },
+      { label: t(`${P}.status.standby`), value: '待机' },
+      { label: t(`${P}.status.maintenance`), value: '维修中' },
+      { label: t(`${P}.status.fault`), value: '故障' },
+      { label: t(`${P}.status.disabled`), value: '停用' },
+    ],
+    [t],
+  );
+
+  const descriptionColumns: ProDescriptionsItemProps<Record<string, unknown>>[] = useMemo(
+    () => [
+      { title: t(`${P}.col.code`), dataIndex: 'code' },
+      { title: t(`${P}.col.name`), dataIndex: 'name' },
+      { title: t(`${P}.col.type`), dataIndex: 'type' },
+      { title: t(`${P}.col.category`), dataIndex: 'category' },
+      { title: t(`${P}.col.status`), dataIndex: 'status' },
+      { title: t(`${P}.col.onlineStatus`), dataIndex: 'is_online' },
+      { title: t(`${P}.col.runtimeHours`), dataIndex: 'runtime_hours' },
+      { title: t(`${P}.col.temperature`), dataIndex: 'temperature' },
+      { title: t(`${P}.col.pressure`), dataIndex: 'pressure' },
+      { title: t(`${P}.col.vibration`), dataIndex: 'vibration' },
+      { title: t(`${P}.col.lastMaintenanceDate`), dataIndex: 'last_maintenance_date' },
+      { title: t(`${P}.col.nextMaintenanceDate`), dataIndex: 'next_maintenance_date' },
+      { title: t(`${P}.col.monitoredAt`), dataIndex: 'monitored_at' },
+    ],
+    [t],
+  );
+
   /**
    * 获取设备实时状态列表
    */
@@ -109,7 +157,7 @@ const EquipmentStatusPage: React.FC = () => {
       const data = await equipmentStatusApi.getRealtimeStatus();
       setStatusList(data || []);
     } catch (error: any) {
-      messageApi.error(`获取设备状态失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.listFailed`, { message: error.message || t('common.unknownError') }));
     } finally {
       setLoading(false);
     }
@@ -154,7 +202,7 @@ const EquipmentStatusPage: React.FC = () => {
    * 获取状态标签
    */
   const getStatusTag = (status: string) => {
-    return <Badge status={getStatusColor(status) as any} text={status} />;
+    return <Badge status={getStatusColor(status) as any} text={translateStatus(status)} />;
   };
 
   /**
@@ -171,7 +219,7 @@ const EquipmentStatusPage: React.FC = () => {
       const historyData = await equipmentStatusApi.getStatusHistory(equipment.equipment.uuid);
       setHistoryList(historyData.items || []);
     } catch (error: any) {
-      messageApi.error(`获取状态历史失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.historyFailed`, { message: error.message || t('common.unknownError') }));
     } finally {
       setHistoryLoading(false);
     }
@@ -202,7 +250,7 @@ const EquipmentStatusPage: React.FC = () => {
         ...values,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('设备状态更新成功');
+      messageApi.success(t(`${P}.updateSuccess`));
       setUpdateModalVisible(false);
       await fetchStatusList();
       if (detailVisible && currentEquipment?.equipment?.uuid === targetUuid) {
@@ -213,13 +261,12 @@ const EquipmentStatusPage: React.FC = () => {
             setCurrentEquipment(found);
           }
           setEqStatusTrackingRefreshKey((k) => k + 1);
-          setFullChainRefreshKey((k) => k + 1);
         } catch {
           /* ignore */
         }
       }
     } catch (error: any) {
-      messageApi.error(`更新设备状态失败: ${error.message || '未知错误'}`);
+      messageApi.error(t(`${P}.updateFailed`, { message: error.message || t('common.unknownError') }));
     }
   };
 
@@ -265,21 +312,53 @@ const EquipmentStatusPage: React.FC = () => {
     fault: filteredStatusList.filter((item) => item.status === '故障').length,
   };
 
+  const hoursSuffix = t(`${P}.unit.hours`);
+
+  const drawerDescriptionColumns = useMemo(() => {
+    if (!currentEquipment) return descriptionColumns;
+
+    return descriptionColumns.map((col) => {
+      const dataIndex = col.dataIndex as string | undefined;
+      if (dataIndex === 'runtime_hours') {
+        return { ...col, hide: !hasMetric(currentEquipment.runtime_hours) };
+      }
+      if (dataIndex === 'temperature') {
+        return { ...col, hide: !hasMetric(currentEquipment.temperature) };
+      }
+      if (dataIndex === 'pressure') {
+        return { ...col, hide: !hasMetric(currentEquipment.pressure) };
+      }
+      if (dataIndex === 'vibration') {
+        return { ...col, hide: !hasMetric(currentEquipment.vibration) };
+      }
+      if (dataIndex === 'last_maintenance_date') {
+        return { ...col, hide: !currentEquipment.last_maintenance_date };
+      }
+      if (dataIndex === 'next_maintenance_date') {
+        return { ...col, hide: !currentEquipment.next_maintenance_date };
+      }
+      if (dataIndex === 'monitored_at') {
+        return { ...col, hide: !currentEquipment.monitored_at };
+      }
+      return col;
+    });
+  }, [descriptionColumns, currentEquipment]);
+
   return (
     <ListPageTemplate>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
         <Typography.Title level={4} style={{ margin: 0 }}>
-          设备状态监控
+          {t(`${P}.title`)}
         </Typography.Title>
         <Space>
           <Button
             icon={autoRefresh ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
             onClick={() => setAutoRefresh(!autoRefresh)}
           >
-            {autoRefresh ? '暂停自动刷新' : '开启自动刷新'}
+            {autoRefresh ? t(`${P}.pauseAutoRefresh`) : t(`${P}.startAutoRefresh`)}
           </Button>
           <Button icon={<ReloadOutlined />} onClick={fetchStatusList} loading={loading}>
-            刷新
+            {t(`${P}.refresh`)}
           </Button>
         </Space>
       </div>
@@ -289,7 +368,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold' }}>{stats.total}</div>
-              <div style={{ color: '#999' }}>总设备数</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.total`)}</div>
             </div>
           </Card>
         </Col>
@@ -297,7 +376,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold', color: '#52c41a' }}>{stats.online}</div>
-              <div style={{ color: '#999' }}>在线设备</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.online`)}</div>
             </div>
           </Card>
         </Col>
@@ -305,7 +384,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>{stats.offline}</div>
-              <div style={{ color: '#999' }}>离线设备</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.offline`)}</div>
             </div>
           </Card>
         </Col>
@@ -313,7 +392,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold', color: '#1890ff' }}>{stats.running}</div>
-              <div style={{ color: '#999' }}>运行中</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.running`)}</div>
             </div>
           </Card>
         </Col>
@@ -321,7 +400,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold', color: '#faad14' }}>{stats.maintenance}</div>
-              <div style={{ color: '#999' }}>维修中</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.maintenance`)}</div>
             </div>
           </Card>
         </Col>
@@ -329,7 +408,7 @@ const EquipmentStatusPage: React.FC = () => {
           <Card size="small">
             <div style={{ textAlign: 'center' }}>
               <div style={{ fontSize: 24, fontWeight: 'bold', color: '#ff4d4f' }}>{stats.fault}</div>
-              <div style={{ color: '#999' }}>故障设备</div>
+              <div style={{ color: '#999' }}>{t(`${P}.stat.fault`)}</div>
             </div>
           </Card>
         </Col>
@@ -340,39 +419,39 @@ const EquipmentStatusPage: React.FC = () => {
         <Row gutter={16} align="middle">
           <Col xs={24} sm={8} md={6}>
             <Space>
-              <span>状态：</span>
+              <span>{t(`${P}.filter.status`)}</span>
               <Select
                 value={statusFilter}
                 onChange={setStatusFilter}
                 style={{ width: 120 }}
               >
-                <Option value="all">全部</Option>
-                <Option value="正常">正常</Option>
-                <Option value="运行中">运行中</Option>
-                <Option value="待机">待机</Option>
-                <Option value="维修中">维修中</Option>
-                <Option value="故障">故障</Option>
-                <Option value="停用">停用</Option>
+                <Option value="all">{t(`${P}.filter.all`)}</Option>
+                <Option value="正常">{t(`${P}.status.normal`)}</Option>
+                <Option value="运行中">{t(`${P}.status.running`)}</Option>
+                <Option value="待机">{t(`${P}.status.standby`)}</Option>
+                <Option value="维修中">{t(`${P}.status.maintenance`)}</Option>
+                <Option value="故障">{t(`${P}.status.fault`)}</Option>
+                <Option value="停用">{t(`${P}.status.disabled`)}</Option>
               </Select>
             </Space>
           </Col>
           <Col xs={24} sm={8} md={6}>
             <Space>
-              <span>在线状态：</span>
+              <span>{t(`${P}.filter.onlineStatus`)}</span>
               <Select
                 value={onlineFilter}
                 onChange={setOnlineFilter}
                 style={{ width: 120 }}
               >
-                <Option value="all">全部</Option>
-                <Option value="online">在线</Option>
-                <Option value="offline">离线</Option>
+                <Option value="all">{t(`${P}.filter.all`)}</Option>
+                <Option value="online">{t(`${P}.filter.online`)}</Option>
+                <Option value="offline">{t(`${P}.filter.offline`)}</Option>
               </Select>
             </Space>
           </Col>
           <Col xs={24} sm={8} md={12}>
             <Search
-              placeholder="搜索设备编号或名称"
+              placeholder={t(`${P}.searchPlaceholder`)}
               value={searchKeyword}
               onChange={(e) => setSearchKeyword(e.target.value)}
               style={{ maxWidth: 300 }}
@@ -393,14 +472,14 @@ const EquipmentStatusPage: React.FC = () => {
                   icon={<HistoryOutlined />}
                   onClick={() => handleViewDetail(item)}
                 >
-                  历史
+                  {t(`${P}.action.history`)}
                 </Button>,
                 <Button
                   type="link"
                   icon={<EditOutlined />}
                   onClick={() => handleUpdateStatus(item)}
                 >
-                  更新
+                  {t(`${P}.action.update`)}
                 </Button>,
               ]}
               style={{
@@ -423,22 +502,22 @@ const EquipmentStatusPage: React.FC = () => {
                     <div style={{ marginBottom: 8 }}>
                       <Badge
                         status={item.is_online ? 'success' : 'error'}
-                        text={item.is_online ? '在线' : '离线'}
+                        text={item.is_online ? t(`${P}.online`) : t(`${P}.offline`)}
                       />
                     </div>
                     {hasMetric(item.runtime_hours) && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        运行时长: {formatMetric(item.runtime_hours, 1, ' 小时')}
+                        {t(`${P}.runtimeHours`, { value: formatMetric(item.runtime_hours, 1, hoursSuffix) })}
                       </div>
                     )}
                     {hasMetric(item.temperature) && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        温度: {formatMetric(item.temperature, 1, '°C')}
+                        {t(`${P}.temperature`, { value: formatMetric(item.temperature, 1, '°C') })}
                       </div>
                     )}
                     {item.monitored_at && (
                       <div style={{ color: '#999', fontSize: 12 }}>
-                        更新时间: {dayjs(item.monitored_at).format('HH:mm:ss')}
+                        {t(`${P}.updatedAt`, { time: dayjs(item.monitored_at).format('HH:mm:ss') })}
                       </div>
                     )}
                   </div>
@@ -451,13 +530,13 @@ const EquipmentStatusPage: React.FC = () => {
 
       {filteredStatusList.length === 0 && !loading && (
         <Card style={{ textAlign: 'center', padding: 40 }}>
-          暂无设备状态数据
+          {t(`${P}.empty`)}
         </Card>
       )}
 
       {/* 详情抽屉 */}
       <DetailDrawerTemplate
-        title="设备状态详情"
+        title={t(`${P}.detailTitle`)}
         open={detailVisible}
         zIndex={equipmentStatusDrawerZIndex}
         onClose={() => {
@@ -469,7 +548,7 @@ const EquipmentStatusPage: React.FC = () => {
         customContent={
           currentEquipment ? (
             <>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
                 {currentEquipment.equipment?.id != null ? (
                   <DetailDrawerInlineFullChain
                     documentType="equipment"
@@ -491,7 +570,7 @@ const EquipmentStatusPage: React.FC = () => {
                   />
                 ) : null}
               </DetailDrawerSection>
-              <DetailDrawerSection title="实时监控">
+              <DetailDrawerSection title={t(`${P}.section.realtimeMonitor`)}>
                 <ProDescriptions
                   title={false}
                   bordered
@@ -505,10 +584,10 @@ const EquipmentStatusPage: React.FC = () => {
                     is_online: (
                       <Badge
                         status={currentEquipment.is_online ? 'success' : 'error'}
-                        text={currentEquipment.is_online ? '在线' : '离线'}
+                        text={currentEquipment.is_online ? t(`${P}.online`) : t(`${P}.offline`)}
                       />
                     ),
-                    runtime_hours: formatMetric(currentEquipment.runtime_hours, 2, ' 小时'),
+                    runtime_hours: formatMetric(currentEquipment.runtime_hours, 2, hoursSuffix),
                     temperature: formatMetric(currentEquipment.temperature, 1, '°C'),
                     pressure: formatMetric(currentEquipment.pressure, 2),
                     vibration: formatMetric(currentEquipment.vibration, 2),
@@ -522,33 +601,11 @@ const EquipmentStatusPage: React.FC = () => {
                       ? dayjs(currentEquipment.monitored_at).format('YYYY-MM-DD HH:mm:ss')
                       : undefined,
                   }}
-                  columns={[
-                    { title: '设备编号', dataIndex: 'code' },
-                    { title: '设备名称', dataIndex: 'name' },
-                    { title: '设备类型', dataIndex: 'type' },
-                    { title: '设备分类', dataIndex: 'category' },
-                    { title: '当前状态', dataIndex: 'status' },
-                    { title: '在线状态', dataIndex: 'is_online' },
-                    { title: '运行时长', dataIndex: 'runtime_hours', hide: !hasMetric(currentEquipment.runtime_hours) },
-                    { title: '温度', dataIndex: 'temperature', hide: !hasMetric(currentEquipment.temperature) },
-                    { title: '压力', dataIndex: 'pressure', hide: !hasMetric(currentEquipment.pressure) },
-                    { title: '振动值', dataIndex: 'vibration', hide: !hasMetric(currentEquipment.vibration) },
-                    {
-                      title: '上次维护日期',
-                      dataIndex: 'last_maintenance_date',
-                      hide: !currentEquipment.last_maintenance_date,
-                    },
-                    {
-                      title: '下次维护日期',
-                      dataIndex: 'next_maintenance_date',
-                      hide: !currentEquipment.next_maintenance_date,
-                    },
-                    { title: '最后更新时间', dataIndex: 'monitored_at', hide: !currentEquipment.monitored_at },
-                  ]}
+                  columns={drawerDescriptionColumns}
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="状态变更历史">
+              <DetailDrawerSection title={t(`${P}.section.statusHistory`)}>
                 {historyLoading ? (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -561,11 +618,11 @@ const EquipmentStatusPage: React.FC = () => {
                       children: (
                         <div>
                           <div>
-                            <Tag color={getStatusColor(history.to_status)}>{history.to_status}</Tag>
+                            <Tag color={getStatusColor(history.to_status)}>{translateStatus(history.to_status)}</Tag>
                             {history.from_status && (
                               <>
                                 <span style={{ margin: '0 8px' }}>←</span>
-                                <Tag>{history.from_status}</Tag>
+                                <Tag>{translateStatus(history.from_status)}</Tag>
                               </>
                             )}
                           </div>
@@ -574,10 +631,14 @@ const EquipmentStatusPage: React.FC = () => {
                             {history.changed_by_name && ` · ${history.changed_by_name}`}
                           </div>
                           {history.reason && (
-                            <div style={{ marginTop: 4, color: '#666' }}>原因: {history.reason}</div>
+                            <div style={{ marginTop: 4, color: '#666' }}>
+                              {t(`${P}.history.reason`, { reason: history.reason })}
+                            </div>
                           )}
                           {history.remark && (
-                            <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>备注: {history.remark}</div>
+                            <div style={{ marginTop: 4, color: '#999', fontSize: 12 }}>
+                              {t(`${P}.history.remark`, { remark: history.remark })}
+                            </div>
                           )}
                         </div>
                       ),
@@ -586,7 +647,7 @@ const EquipmentStatusPage: React.FC = () => {
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
                 {equipmentDocTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -599,7 +660,7 @@ const EquipmentStatusPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={equipmentDocTracking.data} />
                 )}
                 {!equipmentDocTracking.loading && !equipmentDocTracking.data && !equipmentDocTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
                 )}
               </DetailDrawerSection>
             </>
@@ -609,7 +670,7 @@ const EquipmentStatusPage: React.FC = () => {
 
       {/* 状态更新Modal */}
       <FormModalTemplate
-        title="更新设备状态"
+        title={t(`${P}.updateModal`)}
         open={updateModalVisible}
         onClose={() => setUpdateModalVisible(false)}
         formRef={updateFormRef}
@@ -618,35 +679,28 @@ const EquipmentStatusPage: React.FC = () => {
       >
         <ProFormSelect
           name="status"
-          label="设备状态"
-          options={[
-            { label: '正常', value: '正常' },
-            { label: '运行中', value: '运行中' },
-            { label: '待机', value: '待机' },
-            { label: '维修中', value: '维修中' },
-            { label: '故障', value: '故障' },
-            { label: '停用', value: '停用' },
-          ]}
-          rules={[{ required: true, message: '请选择设备状态' }]}
+          label={t(`${P}.form.status`)}
+          options={statusFormOptions}
+          rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
         />
         <ProFormSelect
           name="is_online"
-          label="在线状态"
+          label={t(`${P}.form.onlineStatus`)}
           options={[
-            { label: '在线', value: true },
-            { label: '离线', value: false },
+            { label: t(`${P}.online`), value: true },
+            { label: t(`${P}.offline`), value: false },
           ]}
         />
         <ProFormTextArea
           name="reason"
-          label="变更原因"
-          placeholder="请输入状态变更原因"
+          label={t(`${P}.form.changeReason`)}
+          placeholder={t(`${P}.form.changeReasonPlaceholder`)}
         />
         <DocumentAttachmentsField category="equipment_status_attachments" />
         <ProFormTextArea
           name="remark"
-          label="备注"
-          placeholder="请输入备注信息"
+          label={t(`${P}.form.remark`)}
+          placeholder={t(`${P}.form.remarkPlaceholder`)}
         />
       </FormModalTemplate>
     </ListPageTemplate>

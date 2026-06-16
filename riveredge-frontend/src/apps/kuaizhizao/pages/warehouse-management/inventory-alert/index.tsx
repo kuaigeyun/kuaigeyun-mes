@@ -7,7 +7,8 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormText, ProFormDigit, ProFormTextArea, ProFormSelect, ProFormSwitch } from '@ant-design/pro-components';
 import { App, Button, Tag, Space, Modal, message, Popconfirm, Badge, Card, Row, Col, Statistic, Typography } from 'antd';
@@ -74,6 +75,7 @@ interface InventoryAlertRule {
 }
 
 const InventoryAlertPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -154,7 +156,7 @@ const InventoryAlertPage: React.FC = () => {
         attachments: mapAttachmentsToUploadList(detail.attachments),
       });
     } catch (error: any) {
-      messageApi.error(error.message || '获取预警规则详情失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetRuleFailed'));
     }
   };
 
@@ -174,7 +176,7 @@ const InventoryAlertPage: React.FC = () => {
           remarks: values.remarks,
           attachments: normalizeDocumentAttachments(values.attachments),
         });
-        messageApi.success('预警规则更新成功');
+        messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleUpdateSuccess'));
       } else {
         await inventoryAlertApi.createRule({
           name: values.name,
@@ -192,7 +194,7 @@ const InventoryAlertPage: React.FC = () => {
           remarks: values.remarks,
           attachments: normalizeDocumentAttachments(values.attachments),
         });
-        messageApi.success('预警规则创建成功');
+        messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleCreateSuccess'));
       }
       setRuleModalVisible(false);
       setCurrentRuleId(null);
@@ -202,7 +204,7 @@ const InventoryAlertPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.operationFailed'));
       throw error;
     }
   };
@@ -213,12 +215,12 @@ const InventoryAlertPage: React.FC = () => {
   const handleDeleteRule = async (record: InventoryAlertRule) => {
     try {
       await inventoryAlertApi.deleteRule(record.id!.toString());
-      messageApi.success('预警规则删除成功');
+      messageApi.success(t('app.kuaizhizao.inventoryAlert.msgRuleDeleteSuccess'));
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除预警规则失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgDeleteRuleFailed'));
     }
   };
 
@@ -231,7 +233,7 @@ const InventoryAlertPage: React.FC = () => {
       setCurrentAlert(detail);
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取预警详情失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgGetDetailFailed'));
     }
   };
 
@@ -252,7 +254,7 @@ const InventoryAlertPage: React.FC = () => {
   const handleAlertSubmit = async (values: any) => {
     try {
       if (!currentAlertId) {
-        messageApi.error('预警记录ID不存在');
+        messageApi.error(t('app.kuaizhizao.inventoryAlert.msgAlertIdNotFound'));
         return;
       }
 
@@ -260,7 +262,7 @@ const InventoryAlertPage: React.FC = () => {
         status: values.status,
         handling_notes: values.handling_notes,
       });
-      messageApi.success('预警处理成功');
+      messageApi.success(t('app.kuaizhizao.inventoryAlert.msgHandleSuccess'));
       setHandleModalVisible(false);
       setCurrentAlertId(null);
       setPendingHandleFormValues(null);
@@ -270,14 +272,14 @@ const InventoryAlertPage: React.FC = () => {
       actionRef.current?.reload();
       loadStatistics();
     } catch (error: any) {
-      messageApi.error(error.message || '处理预警失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryAlert.msgHandleFailed'));
       throw error;
     }
   };
 
   const handleBatchHandleAlerts = async (status: 'resolved' | 'ignored') => {
     if (!selectedRowKeys.length) {
-      messageApi.warning('请先选择预警记录');
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.selectAtLeastOne'));
       return;
     }
     let successCount = 0;
@@ -290,14 +292,14 @@ const InventoryAlertPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`批量处理成功 ${successCount} 条`);
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.batchHandleSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       loadStatistics();
       return;
     }
-    messageApi.error('批量处理失败');
+    messageApi.error(t('app.kuaizhizao.warehouseCommon.batchHandleFailed'));
   };
 
   const handleBatchDeleteRules = async (keys: React.Key[]) => {
@@ -311,31 +313,57 @@ const InventoryAlertPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`批量删除成功 ${successCount} 条规则`);
+      messageApi.success(t('app.kuaizhizao.warehouseCommon.batchDeleteSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量删除失败');
+    messageApi.error(t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
   };
+
+  const alertTypeEnum = useMemo(() => ({
+    low_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock'), status: 'error' as const },
+    high_stock: { text: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock'), status: 'warning' as const },
+    expired: { text: t('app.kuaizhizao.inventoryAlert.alertTypeExpired'), status: 'error' as const },
+  }), [t]);
+
+  const alertLevelEnum = useMemo(() => ({
+    critical: { text: t('app.kuaizhizao.inventoryAlert.alertLevelCritical'), status: 'error' as const },
+    warning: { text: t('app.kuaizhizao.inventoryAlert.alertLevelWarning'), status: 'warning' as const },
+    info: { text: t('app.kuaizhizao.inventoryAlert.alertLevelInfo'), status: 'default' as const },
+  }), [t]);
+
+  const alertStatusEnum = useMemo(() => ({
+    pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending'), status: 'warning' as const },
+    processing: { text: t('app.kuaizhizao.warehouseCommon.statusProcessing'), status: 'processing' as const },
+    resolved: { text: t('app.kuaizhizao.warehouseCommon.statusResolved'), status: 'success' as const },
+    ignored: { text: t('app.kuaizhizao.warehouseCommon.statusIgnored'), status: 'default' as const },
+  }), [t]);
+
+  const thresholdTypeEnum = useMemo(() => ({
+    quantity: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity') },
+    percentage: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage') },
+    days: { text: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays') },
+  }), [t]);
+
+  const enabledEnum = useMemo(() => ({
+    true: { text: t('app.kuaizhizao.warehouseCommon.enabled'), status: 'success' as const },
+    false: { text: t('app.kuaizhizao.warehouseCommon.disabled'), status: 'default' as const },
+  }), [t]);
 
   /**
    * 预警记录表格列定义
    */
-  const alertColumns: ProColumns<InventoryAlert>[] = [
+  const alertColumns: ProColumns<InventoryAlert>[] = useMemo(() => [
     {
-      title: '预警类型',
+      title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
       dataIndex: 'alert_type',
       width: 120,
-      valueEnum: {
-        low_stock: { text: '低库存', status: 'error' },
-        high_stock: { text: '高库存', status: 'warning' },
-        expired: { text: '过期', status: 'error' },
-      },
+      valueEnum: alertTypeEnum,
     },
     {
-      title: '物料',
+      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       key: 'material_name',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -343,62 +371,53 @@ const InventoryAlertPage: React.FC = () => {
         <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
       ),
     },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '当前数量',
+      title: t('app.kuaizhizao.inventoryAlert.colCurrentQty'),
       dataIndex: 'current_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '阈值',
+      title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
       dataIndex: 'threshold_value',
       width: 100,
       align: 'right',
     },
     {
-      title: '预警级别',
+      title: t('app.kuaizhizao.inventoryAlert.colAlertLevel'),
       dataIndex: 'alert_level',
       width: 100,
-      valueEnum: {
-        critical: { text: '严重', status: 'error' },
-        warning: { text: '警告', status: 'warning' },
-        info: { text: '信息', status: 'default' },
-      },
+      valueEnum: alertLevelEnum,
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       hideInTable: true,
-      valueEnum: {
-        pending: { text: '待处理', status: 'warning' },
-        processing: { text: '处理中', status: 'processing' },
-        resolved: { text: '已解决', status: 'success' },
-        ignored: { text: '已忽略', status: 'default' },
-      },
+      valueEnum: alertStatusEnum,
     },
     {
-      title: '触发时间',
+      title: t('app.kuaizhizao.inventoryAlert.colTriggeredAt'),
       dataIndex: 'triggered_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -419,7 +438,7 @@ const InventoryAlertPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -427,20 +446,20 @@ const InventoryAlertPage: React.FC = () => {
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
             <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleAlert(record)}>
-              处理
+              {t('app.kuaizhizao.warehouseCommon.handle')}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t, alertTypeEnum, alertLevelEnum, alertStatusEnum]);
 
   /**
    * 预警规则表格列定义
    */
-  const ruleColumns: ProColumns<InventoryAlertRule>[] = [
+  const ruleColumns: ProColumns<InventoryAlertRule>[] = useMemo(() => [
     {
-      title: '规则编号',
+      title: t('app.kuaizhizao.inventoryAlert.colRuleCode'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
@@ -452,84 +471,133 @@ const InventoryAlertPage: React.FC = () => {
       ),
     },
     {
-      title: '规则名称',
+      title: t('app.kuaizhizao.inventoryAlert.colRuleName'),
       dataIndex: 'name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '预警类型',
+      title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
       dataIndex: 'alert_type',
       width: 120,
-      valueEnum: {
-        low_stock: { text: '低库存', status: 'error' },
-        high_stock: { text: '高库存', status: 'warning' },
-        expired: { text: '过期', status: 'error' },
-      },
+      valueEnum: alertTypeEnum,
     },
     {
-      title: '物料',
+      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
       dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '阈值类型',
+      title: t('app.kuaizhizao.inventoryAlert.colThresholdType'),
       dataIndex: 'threshold_type',
       width: 100,
-      valueEnum: {
-        quantity: { text: '数量' },
-        percentage: { text: '百分比' },
-        days: { text: '天数' },
-      },
+      valueEnum: thresholdTypeEnum,
     },
     {
-      title: '阈值',
+      title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
       dataIndex: 'threshold_value',
       width: 100,
       align: 'right',
     },
     {
-      title: '启用状态',
+      title: t('app.kuaizhizao.inventoryAlert.colEnabled'),
       dataIndex: 'is_enabled',
       width: 100,
-      valueEnum: {
-        true: { text: '启用', status: 'success' },
-        false: { text: '禁用', status: 'default' },
-      },
+      valueEnum: enabledEnum,
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button {...rowActionKind('update')} onClick={() => handleEditRule(record)} />
           <Popconfirm
-            title="确定要删除这个预警规则吗？"
+            title={t('app.kuaizhizao.inventoryAlert.deleteRuleConfirm')}
             onConfirm={() => handleDeleteRule(record)}
-            okText="确定"
-            cancelText="取消"
+            okText={t('app.kuaizhizao.warehouseCommon.confirm')}
+            cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
           >
             <Button {...rowActionKind('delete')} />
           </Popconfirm>
         </Space>
       ),
     },
-  ];
+  ], [t, alertTypeEnum, thresholdTypeEnum, enabledEnum]);
+
+  const detailColumns = useMemo(() => [
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colAlertType'),
+      dataIndex: 'alert_type',
+      valueEnum: alertTypeEnum,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+      dataIndex: 'material_code',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+      dataIndex: 'material_name',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+      dataIndex: 'warehouse_name',
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colCurrentQty'),
+      dataIndex: 'current_quantity',
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colThreshold'),
+      dataIndex: 'threshold_value',
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colAlertLevel'),
+      dataIndex: 'alert_level',
+      valueEnum: alertLevelEnum,
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colAlertMessage'),
+      dataIndex: 'alert_message',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueEnum: alertStatusEnum,
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colTriggeredAt'),
+      dataIndex: 'triggered_at',
+      valueType: 'dateTime' as const,
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colHandledBy'),
+      dataIndex: 'handled_by_name',
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.colHandledAt'),
+      dataIndex: 'handled_at',
+      valueType: 'dateTime' as const,
+    },
+    {
+      title: t('app.kuaizhizao.inventoryAlert.formHandlingNotes'),
+      dataIndex: 'handling_notes',
+    },
+  ], [t, alertTypeEnum, alertLevelEnum, alertStatusEnum]);
 
   return (
     <ListPageTemplate>
@@ -539,7 +607,7 @@ const InventoryAlertPage: React.FC = () => {
           <Row gutter={16}>
             <Col span={6}>
               <Statistic
-                title="待处理预警"
+                title={t('app.kuaizhizao.inventoryAlert.statPendingAlerts')}
                 value={statistics.pending_count || 0}
                 prefix={<WarningOutlined />}
                 styles={{ content: {color: '#cf1322' } }}
@@ -547,21 +615,21 @@ const InventoryAlertPage: React.FC = () => {
             </Col>
             <Col span={6}>
               <Statistic
-                title="低库存预警"
+                title={t('app.kuaizhizao.inventoryAlert.statLowStock')}
                 value={statistics.by_type?.low_stock || 0}
                 styles={{ content: {color: '#cf1322' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
-                title="高库存预警"
+                title={t('app.kuaizhizao.inventoryAlert.statHighStock')}
                 value={statistics.by_type?.high_stock || 0}
                 styles={{ content: {color: '#faad14' } }}
               />
             </Col>
             <Col span={6}>
               <Statistic
-                title="严重级别"
+                title={t('app.kuaizhizao.inventoryAlert.statCriticalLevel')}
                 value={statistics.by_level?.critical || 0}
                 styles={{ content: {color: '#cf1322' } }}
               />
@@ -571,7 +639,7 @@ const InventoryAlertPage: React.FC = () => {
       )}
 
       <UniTable
-        headerTitle={activeTab === 'alerts' ? '库存预警记录' : '库存预警规则'}
+        headerTitle={activeTab === 'alerts' ? t('app.kuaizhizao.inventoryAlert.headerTitleAlerts') : t('app.kuaizhizao.inventoryAlert.headerTitleRules')}
         actionRef={actionRef}
         rowKey="id"
         columns={activeTab === 'alerts' ? alertColumns : ruleColumns}
@@ -582,7 +650,7 @@ const InventoryAlertPage: React.FC = () => {
         }
         showAdvancedSearch={true}
         showCreateButton={activeTab === 'rules'}
-        createButtonText="新建库存预警规则"
+        createButtonText={t('app.kuaizhizao.inventoryAlert.createRuleButton')}
         onCreate={activeTab === 'rules' ? handleCreateRule : undefined}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -591,8 +659,8 @@ const InventoryAlertPage: React.FC = () => {
         onDelete={activeTab === 'rules' ? handleBatchDeleteRules : undefined}
         deleteConfirmTitle={(count) =>
           activeTab === 'rules'
-            ? `确定要删除选中的 ${count} 条预警规则吗？`
-            : `确定要删除选中的 ${count} 条记录吗？`
+            ? t('app.kuaizhizao.inventoryAlert.deleteConfirmRules', { count })
+            : t('app.kuaizhizao.warehouseCommon.deleteConfirm', { count })
         }
         toolBarActionsAfterBatch={
           activeTab === 'alerts'
@@ -600,19 +668,19 @@ const InventoryAlertPage: React.FC = () => {
                 <UniBatchMenuButton
                   key="inventory-alert-batch-actions"
                   selectedRowKeys={selectedRowKeys}
-                  label="批量操作"
+                  label={t('app.kuaizhizao.warehouseCommon.batchOps')}
                   disabled={selectedRowKeys.length === 0}
                   menuItems={[
                     {
                       key: 'batch-resolved',
-                      label: '批量标记已解决',
+                      label: t('app.kuaizhizao.warehouseCommon.batchMarkResolved'),
                       onClick: () => {
                         void handleBatchHandleAlerts('resolved');
                       },
                     },
                     {
                       key: 'batch-ignored',
-                      label: '批量标记忽略',
+                      label: t('app.kuaizhizao.warehouseCommon.batchMarkIgnored'),
                       onClick: () => {
                         void handleBatchHandleAlerts('ignored');
                       },
@@ -669,7 +737,7 @@ const InventoryAlertPage: React.FC = () => {
               actionRef.current?.reload();
             }}
           >
-            预警记录
+            {t('app.kuaizhizao.inventoryAlert.tabAlerts')}
           </Button>,
           <Button
             key="rules"
@@ -682,14 +750,14 @@ const InventoryAlertPage: React.FC = () => {
               actionRef.current?.reload();
             }}
           >
-            预警规则
+            {t('app.kuaizhizao.inventoryAlert.tabRules')}
           </Button>,
         ]}
       />
 
       {/* 预警规则Modal */}
       <FormModalTemplate
-        title={currentRuleId ? '编辑预警规则' : '新建预警规则'}
+        title={currentRuleId ? t('app.kuaizhizao.inventoryAlert.modalEditRule') : t('app.kuaizhizao.inventoryAlert.modalCreateRule')}
         open={ruleModalVisible}
         onClose={() => {
           setRuleModalVisible(false);
@@ -713,80 +781,80 @@ const InventoryAlertPage: React.FC = () => {
       >
         <ProFormText
           name="name"
-          label="规则名称"
-          placeholder="请输入规则名称"
-          rules={[{ required: true, message: '请输入规则名称' }]}
+          label={t('app.kuaizhizao.inventoryAlert.formRuleName')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formRuleNamePlaceholder')}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formRuleNameRequired') }]}
         />
         <ProFormSelect
           name="alert_type"
-          label="预警类型"
+          label={t('app.kuaizhizao.inventoryAlert.formAlertType')}
           options={[
-            { label: '低库存', value: 'low_stock' },
-            { label: '高库存', value: 'high_stock' },
-            { label: '过期', value: 'expired' },
+            { label: t('app.kuaizhizao.inventoryAlert.alertTypeLowStock'), value: 'low_stock' },
+            { label: t('app.kuaizhizao.inventoryAlert.alertTypeHighStock'), value: 'high_stock' },
+            { label: t('app.kuaizhizao.inventoryAlert.alertTypeExpired'), value: 'expired' },
           ]}
-          rules={[{ required: true, message: '请选择预警类型' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formAlertTypeRequired') }]}
           disabled={!!currentRuleId}
         />
         <ProFormText
           name="material_id"
-          label="物料ID"
-          placeholder="请输入物料ID（可选）"
+          label={t('app.kuaizhizao.inventoryAlert.formMaterialId')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialIdPlaceholder')}
         />
         <ProFormText
           name="material_code"
-          label="物料编号"
-          placeholder="请输入物料编号（可选）"
+          label={t('app.kuaizhizao.warehouseReports.colMaterialCode')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialCodePlaceholder')}
         />
         <ProFormText
           name="material_name"
-          label="物料名称"
-          placeholder="请输入物料名称（可选）"
+          label={t('app.kuaizhizao.warehouseReports.colMaterialName')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formMaterialNamePlaceholder')}
         />
         <ProFormText
           name="warehouse_id"
-          label="仓库ID"
-          placeholder="请输入仓库ID（可选）"
+          label={t('app.kuaizhizao.inventoryAlert.formWarehouseId')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formWarehouseIdPlaceholder')}
         />
         <ProFormText
           name="warehouse_name"
-          label="仓库名称"
-          placeholder="请输入仓库名称（可选）"
+          label={t('app.kuaizhizao.inventoryAlert.formWarehouseName')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formWarehouseNamePlaceholder')}
         />
         <ProFormSelect
           name="threshold_type"
-          label="阈值类型"
+          label={t('app.kuaizhizao.inventoryAlert.formThresholdType')}
           options={[
-            { label: '数量', value: 'quantity' },
-            { label: '百分比', value: 'percentage' },
-            { label: '天数', value: 'days' },
+            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeQuantity'), value: 'quantity' },
+            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypePercentage'), value: 'percentage' },
+            { label: t('app.kuaizhizao.inventoryAlert.thresholdTypeDays'), value: 'days' },
           ]}
-          rules={[{ required: true, message: '请选择阈值类型' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdTypeRequired') }]}
         />
         <ProFormDigit
           name="threshold_value"
-          label="阈值数值"
-          placeholder="请输入阈值数值"
-          rules={[{ required: true, message: '请输入阈值数值' }]}
+          label={t('app.kuaizhizao.inventoryAlert.formThresholdValue')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formThresholdValuePlaceholder')}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formThresholdValueRequired') }]}
           min={0}
           fieldProps={{ precision: 2 }}
         />
         <ProFormSwitch
           name="is_enabled"
-          label="是否启用"
+          label={t('app.kuaizhizao.inventoryAlert.formIsEnabled')}
         />
         <DocumentAttachmentsField category="inventory_alert_rule_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 处理预警Modal */}
       <FormModalTemplate
-        title="处理预警"
+        title={t('app.kuaizhizao.inventoryAlert.modalHandleAlert')}
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
@@ -810,25 +878,25 @@ const InventoryAlertPage: React.FC = () => {
       >
         <ProFormSelect
           name="status"
-          label="处理状态"
+          label={t('app.kuaizhizao.inventoryAlert.formHandleStatus')}
           options={[
-            { label: '处理中', value: 'processing' },
-            { label: '已解决', value: 'resolved' },
-            { label: '已忽略', value: 'ignored' },
+            { label: t('app.kuaizhizao.warehouseCommon.statusProcessing'), value: 'processing' },
+            { label: t('app.kuaizhizao.warehouseCommon.statusResolved'), value: 'resolved' },
+            { label: t('app.kuaizhizao.warehouseCommon.statusIgnored'), value: 'ignored' },
           ]}
-          rules={[{ required: true, message: '请选择处理状态' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryAlert.formHandleStatusRequired') }]}
         />
         <ProFormTextArea
           name="handling_notes"
-          label="处理备注"
-          placeholder="请输入处理备注"
+          label={t('app.kuaizhizao.inventoryAlert.formHandlingNotes')}
+          placeholder={t('app.kuaizhizao.inventoryAlert.formHandlingNotesPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title="预警详情"
+        title={t('app.kuaizhizao.inventoryAlert.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -836,78 +904,7 @@ const InventoryAlertPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={currentAlert || {}}
-        columns={[
-          {
-            title: '预警类型',
-            dataIndex: 'alert_type',
-            valueEnum: {
-              low_stock: { text: '低库存', status: 'error' },
-              high_stock: { text: '高库存', status: 'warning' },
-              expired: { text: '过期', status: 'error' },
-            },
-          },
-          {
-            title: '物料编号',
-            dataIndex: 'material_code',
-          },
-          {
-            title: '物料名称',
-            dataIndex: 'material_name',
-          },
-          {
-            title: '仓库',
-            dataIndex: 'warehouse_name',
-          },
-          {
-            title: '当前数量',
-            dataIndex: 'current_quantity',
-          },
-          {
-            title: '阈值',
-            dataIndex: 'threshold_value',
-          },
-          {
-            title: '预警级别',
-            dataIndex: 'alert_level',
-            valueEnum: {
-              critical: { text: '严重', status: 'error' },
-              warning: { text: '警告', status: 'warning' },
-              info: { text: '信息', status: 'default' },
-            },
-          },
-          {
-            title: '预警消息',
-            dataIndex: 'alert_message',
-          },
-          {
-            title: '状态',
-            dataIndex: 'status',
-            valueEnum: {
-              pending: { text: '待处理', status: 'warning' },
-              processing: { text: '处理中', status: 'processing' },
-              resolved: { text: '已解决', status: 'success' },
-              ignored: { text: '已忽略', status: 'default' },
-            },
-          },
-          {
-            title: '触发时间',
-            dataIndex: 'triggered_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '处理人',
-            dataIndex: 'handled_by_name',
-          },
-          {
-            title: '处理时间',
-            dataIndex: 'handled_at',
-            valueType: 'dateTime',
-          },
-          {
-            title: '处理备注',
-            dataIndex: 'handling_notes',
-          },
-        ]}
+        columns={detailColumns}
       />
     </ListPageTemplate>
   );

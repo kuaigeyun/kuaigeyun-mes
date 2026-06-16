@@ -4,9 +4,10 @@
  * 查看线边仓列表及线边仓库存，支持从主仓库调拨物料至线边仓。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Select, Typography } from 'antd';
+import { App, Select } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -44,6 +45,7 @@ interface LineSideInventoryItem {
 }
 
 const LineSideWarehousePage: React.FC = () => {
+  const { t } = useTranslation();
   const { message } = App.useApp();
   const actionRef = useRef<any>(null);
   const [warehouses, setWarehouses] = useState<LineSideWarehouse[]>([]);
@@ -53,100 +55,103 @@ const LineSideWarehousePage: React.FC = () => {
     warehouseApi.lineSideWarehouse.listWarehouses().then((res: any) => {
       setWarehouses(Array.isArray(res) ? res : []);
     }).catch(() => {
-      message.error('获取线边仓列表失败');
+      message.error(t('app.kuaizhizao.lineSideWarehouse.loadWarehousesFailed'));
     });
-  }, []);
+  }, [message, t]);
 
-  const columns: ProColumns<LineSideInventoryItem>[] = [
-    {
-      title: '线边仓',
-      dataIndex: 'warehouse_name',
-      width: 140,
-      render: (_, record) => record.warehouse_name || '-',
-    },
-    {
-      title: '物料',
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, record) => (
-        <MaterialStackedCell
-          material_name={record.material_name}
-          material_code={record.material_code}
-          material_spec={record.material_spec}
-        />
-      ),
-    },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
-    {
-      title: '规格型号',
-      dataIndex: 'material_spec',
-      hideInTable: true,
-    },
-    {
-      title: '批号',
-      dataIndex: 'batch_no',
-      width: 100,
-      render: (_, record) => record.batch_no || '-',
-    },
-    {
-      title: '库存数量',
-      dataIndex: 'quantity',
-      width: 100,
-      valueType: 'digit',
-      render: (_, record) => (
-        <span style={{ color: record.quantity <= 0 ? '#ff4d4f' : 'inherit' }}>
-          {record.quantity} {record.material_unit || ''}
-        </span>
-      ),
-    },
-    {
-      title: '预留数量',
-      dataIndex: 'reserved_quantity',
-      width: 100,
-      render: (_, record) => `${record.reserved_quantity} ${record.material_unit || ''}`,
-    },
-    {
-      title: '可用数量',
-      width: 100,
-      render: (_, record) => {
-        const avail = Number(record.quantity) - Number(record.reserved_quantity);
-        return (
-          <span style={{ color: avail <= 0 ? '#ff4d4f' : '#52c41a' }}>
-            {avail} {record.material_unit || ''}
-          </span>
-        );
+  const columns: ProColumns<LineSideInventoryItem>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.lineSideWarehouse.colLineSideWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 140,
+        render: (_, record) => record.warehouse_name || '-',
       },
-    },
-    {
-      title: '预留工单',
-      dataIndex: 'work_order_code',
-      width: 120,
-      render: (_, record) => record.work_order_code || '-',
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getLineSideInventoryLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+        key: 'material_name',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, record) => (
+          <MaterialStackedCell
+            material_name={record.material_name}
+            material_code={record.material_code}
+            material_spec={record.material_spec}
           />
-        );
+        ),
       },
-    },
-  ];
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
+      {
+        title: t('app.kuaizhizao.lineSideWarehouse.colSpec'),
+        dataIndex: 'material_spec',
+        hideInTable: true,
+      },
+      {
+        title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
+        dataIndex: 'batch_no',
+        width: 100,
+        render: (_, record) => record.batch_no || '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colStockQty'),
+        dataIndex: 'quantity',
+        width: 100,
+        valueType: 'digit',
+        render: (_, record) => (
+          <span style={{ color: record.quantity <= 0 ? '#ff4d4f' : 'inherit' }}>
+            {record.quantity} {record.material_unit || ''}
+          </span>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.lineSideWarehouse.colReservedQty'),
+        dataIndex: 'reserved_quantity',
+        width: 100,
+        render: (_, record) => `${record.reserved_quantity} ${record.material_unit || ''}`,
+      },
+      {
+        title: t('app.kuaizhizao.lineSideWarehouse.colAvailableQty'),
+        width: 100,
+        render: (_, record) => {
+          const avail = Number(record.quantity) - Number(record.reserved_quantity);
+          return (
+            <span style={{ color: avail <= 0 ? '#ff4d4f' : '#52c41a' }}>
+              {avail} {record.material_unit || ''}
+            </span>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.lineSideWarehouse.colReservedWorkOrder'),
+        dataIndex: 'work_order_code',
+        width: 120,
+        render: (_, record) => record.work_order_code || '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getLineSideInventoryLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+    ],
+    [t]
+  );
 
   const fetchInventory = async (params: any) => {
     try {
@@ -163,7 +168,7 @@ const LineSideWarehousePage: React.FC = () => {
         success: true,
       };
     } catch {
-      message.error('查询失败');
+      message.error(t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
     }
   };
@@ -171,7 +176,7 @@ const LineSideWarehousePage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<LineSideInventoryItem>
-        headerTitle="线边仓库存"
+        headerTitle={t('app.kuaizhizao.lineSideWarehouse.headerTitle')}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.line-side-warehouse"
@@ -184,17 +189,15 @@ const LineSideWarehousePage: React.FC = () => {
         toolBarRender={() => [
           <Select
             key="warehouse-select"
-            placeholder="筛选线边仓"
+            placeholder={t('app.kuaizhizao.lineSideWarehouse.filterPlaceholder')}
             allowClear
             style={{ width: 200 }}
             options={warehouses.map((w) => ({ label: `${w.code} - ${w.name}`, value: w.id }))}
             value={selectedWarehouseId}
             onChange={(v) => {
               setSelectedWarehouseId(v);
-              // reset to first page is handled by UniTable/ProTable when params change usually, 
-              // but explicit reload is good. params prop change triggers reload.
             }}
-          />
+          />,
         ]}
       />
     </ListPageTemplate>

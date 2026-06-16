@@ -7,7 +7,8 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space } from 'antd';
@@ -15,6 +16,8 @@ import { EyeOutlined, CheckCircleOutlined, ClockCircleOutlined, ToolOutlined, Cl
 import { UniTable } from '../../../../../components/uni-table';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
+
+const P = 'app.kuaizhizao.productionException';
 
 /**
  * 延期异常接口定义
@@ -40,6 +43,7 @@ interface DeliveryDelayException {
  * 延期异常处理页面组件
  */
 const DeliveryDelayExceptionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -49,17 +53,60 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
   const [currentAction, setCurrentAction] = useState<string>('');
   const handleFormRef = useRef<any>(null);
 
-  /**
-   * 处理查看详情
-   */
+  const alertLevelLabel = useCallback(
+    (level?: string) => {
+      const map: Record<string, string> = {
+        critical: t(`${P}.alertLevel.critical`),
+        high: t(`${P}.alertLevel.high`),
+        medium: t(`${P}.alertLevel.medium`),
+        low: t(`${P}.alertLevel.low`),
+      };
+      return level ? (map[level] ?? level) : '-';
+    },
+    [t],
+  );
+
+  const statusLabel = useCallback(
+    (status?: string) => {
+      const map: Record<string, string> = {
+        pending: t(`${P}.status.pending`),
+        processing: t(`${P}.status.processing`),
+        resolved: t(`${P}.status.resolved`),
+        cancelled: t(`${P}.status.cancelled`),
+      };
+      return status ? (map[status] ?? status) : '-';
+    },
+    [t],
+  );
+
+  const suggestedActionLabel = useCallback(
+    (action?: string) => {
+      const map: Record<string, string> = {
+        adjust_plan: t(`${P}.suggestedAction.adjustPlan`),
+        increase_resources: t(`${P}.suggestedAction.increaseResources`),
+        expedite: t(`${P}.suggestedAction.expedite`),
+      };
+      return action ? (map[action] ?? '-') : '-';
+    },
+    [t],
+  );
+
+  const handleModalTitle = useMemo(() => {
+    const map: Record<string, string> = {
+      adjust_plan: t(`${P}.deliveryDelay.modal.handleAdjustPlan`),
+      increase_resources: t(`${P}.deliveryDelay.modal.handleIncreaseResources`),
+      expedite: t(`${P}.deliveryDelay.modal.handleExpedite`),
+      resolve: t(`${P}.deliveryDelay.modal.handleResolve`),
+      cancel: t(`${P}.deliveryDelay.modal.handleCancel`),
+    };
+    return map[currentAction] ?? t(`${P}.deliveryDelay.modal.handleDefault`);
+  }, [currentAction, t]);
+
   const handleDetail = async (record: DeliveryDelayException) => {
     setCurrentRecord(record);
     setDetailDrawerVisible(true);
   };
 
-  /**
-   * 打开处理异常Modal
-   */
   const openHandleModal = (record: DeliveryDelayException, action: string) => {
     setCurrentRecord(record);
     setCurrentAction(action);
@@ -69,13 +116,10 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
     }, 100);
   };
 
-  /**
-   * 处理延期异常
-   */
   const handleException = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('异常记录不存在');
+        throw new Error(t(`${P}.message.recordNotFound`));
       }
 
       const params: any = {
@@ -96,12 +140,12 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
       if (handled?.scheduling_deep_link) {
         messageApi.success(
           <span>
-            {handled.scheduling_notice || '处理成功'}，
-            <a href={handled.scheduling_deep_link}>前往可视排产</a>
+            {handled.scheduling_notice || t(`${P}.message.handleSuccess`)}，
+            <a href={handled.scheduling_deep_link}>{t(`${P}.message.goToVisualScheduling`)}</a>
           </span>
         );
       } else {
-        messageApi.success('处理成功');
+        messageApi.success(t(`${P}.message.handleSuccess`));
       }
       setHandleModalVisible(false);
       setCurrentRecord(null);
@@ -110,84 +154,81 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '处理失败');
+      messageApi.error(error.message || t(`${P}.message.handleFailed`));
       throw error;
     }
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<DeliveryDelayException>[] = [
+  const columns: ProColumns<DeliveryDelayException>[] = useMemo(() => [
     {
-      title: '工单编号',
+      title: t(`${P}.col.workOrderCode`),
       dataIndex: 'work_order_code',
       width: 140,
       fixed: 'left',
     },
     {
-      title: '计划结束日期',
+      title: t(`${P}.col.plannedEndDate`),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '延期天数',
+      title: t(`${P}.col.delayDays`),
       dataIndex: 'delay_days',
       width: 100,
       align: 'right',
       render: (_, record) => (
         <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-          {record.delay_days} 天
+          {t(`${P}.label.daysUnit`, { count: record.delay_days ?? 0 })}
         </span>
       ),
     },
     {
-      title: '延期原因',
+      title: t(`${P}.col.delayReason`),
       dataIndex: 'delay_reason',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '预警级别',
+      title: t(`${P}.col.alertLevel`),
       dataIndex: 'alert_level',
       width: 100,
       valueEnum: {
-        low: { text: '低', status: 'default' },
-        medium: { text: '中', status: 'warning' },
-        high: { text: '高', status: 'error' },
-        critical: { text: '紧急', status: 'error' },
+        low: { text: t(`${P}.alertLevel.low`), status: 'default' },
+        medium: { text: t(`${P}.alertLevel.medium`), status: 'warning' },
+        high: { text: t(`${P}.alertLevel.high`), status: 'error' },
+        critical: { text: t(`${P}.alertLevel.critical`), status: 'error' },
       },
     },
     {
-      title: '状态',
+      title: t(`${P}.col.status`),
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        pending: { text: '待处理', status: 'default' },
-        processing: { text: '处理中', status: 'processing' },
-        resolved: { text: '已解决', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        pending: { text: t(`${P}.status.pending`), status: 'default' },
+        processing: { text: t(`${P}.status.processing`), status: 'processing' },
+        resolved: { text: t(`${P}.status.resolved`), status: 'success' },
+        cancelled: { text: t(`${P}.status.cancelled`), status: 'error' },
       },
     },
     {
-      title: '建议操作',
+      title: t(`${P}.col.suggestedAction`),
       dataIndex: 'suggested_action',
       width: 120,
       valueEnum: {
-        adjust_plan: { text: '调整计划', status: 'default' },
-        increase_resources: { text: '增加资源', status: 'processing' },
-        expedite: { text: '加急处理', status: 'error' },
+        adjust_plan: { text: t(`${P}.suggestedAction.adjustPlan`), status: 'default' },
+        increase_resources: { text: t(`${P}.suggestedAction.increaseResources`), status: 'processing' },
+        expedite: { text: t(`${P}.suggestedAction.expedite`), status: 'error' },
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 250,
       fixed: 'right',
       render: (_, record) => (
@@ -198,7 +239,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            详情
+            {t('common.detail')}
           </Button>
           {record.status === 'pending' && (
             <>
@@ -208,7 +249,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 icon={<ToolOutlined />}
                 onClick={() => openHandleModal(record, 'adjust_plan')}
               >
-                调整计划
+                {t(`${P}.action.adjustPlan`)}
               </Button>
               <Button
                 type="link"
@@ -216,7 +257,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 icon={<UserAddOutlined />}
                 onClick={() => openHandleModal(record, 'increase_resources')}
               >
-                增加资源
+                {t(`${P}.action.increaseResources`)}
               </Button>
               <Button
                 type="link"
@@ -224,7 +265,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 icon={<ClockCircleOutlined />}
                 onClick={() => openHandleModal(record, 'expedite')}
               >
-                加急
+                {t(`${P}.action.expedite`)}
               </Button>
               <Button
                 type="link"
@@ -232,7 +273,7 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 icon={<CheckCircleOutlined />}
                 onClick={() => openHandleModal(record, 'resolve')}
               >
-                已解决
+                {t(`${P}.action.resolve`)}
               </Button>
               <Button
                 type="link"
@@ -241,20 +282,20 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
                 onClick={() => openHandleModal(record, 'cancel')}
                 danger
               >
-                取消
+                {t(`${P}.action.cancel`)}
               </Button>
             </>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
 
   return (
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.delivery-delay-exceptions"
-        headerTitle="延期异常"
+        headerTitle={t(`${P}.deliveryDelay.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -274,8 +315,8 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
               success: true,
               total: result?.length || 0,
             };
-          } catch (error) {
-            messageApi.error('获取异常列表失败');
+          } catch {
+            messageApi.error(t(`${P}.message.fetchListFailed`));
             return {
               data: [],
               success: false,
@@ -286,9 +327,8 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         showAdvancedSearch={true}
       />
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title={`延期异常详情 - ${currentRecord?.work_order_code || ''}`}
+        title={t(`${P}.deliveryDelay.detailTitle`, { code: currentRecord?.work_order_code || '' })}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -299,68 +339,52 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
-              <p><strong>计划结束日期：</strong>{currentRecord.planned_end_date}</p>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
+              <p><strong>{t(`${P}.col.plannedEndDate`)}:</strong> {currentRecord.planned_end_date}</p>
               {currentRecord.actual_end_date && (
-                <p><strong>实际结束日期：</strong>{currentRecord.actual_end_date}</p>
+                <p><strong>{t(`${P}.field.actualEndDate`)}:</strong> {currentRecord.actual_end_date}</p>
               )}
-              <p><strong>延期天数：</strong>
+              <p><strong>{t(`${P}.col.delayDays`)}:</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                  {currentRecord.delay_days} 天
+                  {t(`${P}.label.daysUnit`, { count: currentRecord.delay_days ?? 0 })}
                 </span>
               </p>
-              <p><strong>延期原因：</strong>{currentRecord.delay_reason || '-'}</p>
-              <p><strong>预警级别：</strong>
+              <p><strong>{t(`${P}.col.delayReason`)}:</strong> {currentRecord.delay_reason || '-'}</p>
+              <p><strong>{t(`${P}.col.alertLevel`)}:</strong>
                 <Tag color={
                   currentRecord.alert_level === 'critical' ? 'red' :
                     currentRecord.alert_level === 'high' ? 'orange' :
                       currentRecord.alert_level === 'medium' ? 'gold' : 'default'
                 }>
-                  {currentRecord.alert_level === 'critical' ? '紧急' :
-                    currentRecord.alert_level === 'high' ? '高' :
-                      currentRecord.alert_level === 'medium' ? '中' : '低'}
+                  {alertLevelLabel(currentRecord.alert_level)}
                 </Tag>
               </p>
-              <p><strong>状态：</strong>
+              <p><strong>{t(`${P}.col.status`)}:</strong>
                 <Tag color={
                   currentRecord.status === 'resolved' ? 'success' :
                     currentRecord.status === 'processing' ? 'processing' :
                       currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
-                  {currentRecord.status === 'resolved' ? '已解决' :
-                    currentRecord.status === 'processing' ? '处理中' :
-                      currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                  {statusLabel(currentRecord.status)}
                 </Tag>
               </p>
-              <p><strong>建议操作：</strong>
-                {currentRecord.suggested_action === 'adjust_plan' ? '调整计划' :
-                  currentRecord.suggested_action === 'increase_resources' ? '增加资源' :
-                    currentRecord.suggested_action === 'expedite' ? '加急处理' : '-'}
-              </p>
+              <p><strong>{t(`${P}.col.suggestedAction`)}:</strong> {suggestedActionLabel(currentRecord.suggested_action)}</p>
               {currentRecord.handled_by_name && (
                 <>
-                  <p><strong>处理人：</strong>{currentRecord.handled_by_name}</p>
-                  <p><strong>处理时间：</strong>{currentRecord.handled_at}</p>
+                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
+                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
                 </>
               )}
               {currentRecord.remarks && (
-                <p><strong>备注：</strong>{currentRecord.remarks}</p>
+                <p><strong>{t(`${P}.field.remarks`)}:</strong> {currentRecord.remarks}</p>
               )}
             </div>
           ) : null
         }
       />
 
-      {/* 处理异常 Modal */}
       <FormModalTemplate
-        title={
-          currentAction === 'adjust_plan' ? '处理延期异常 - 调整计划' :
-            currentAction === 'increase_resources' ? '处理延期异常 - 增加资源' :
-              currentAction === 'expedite' ? '处理延期异常 - 加急处理' :
-                currentAction === 'resolve' ? '处理延期异常 - 已解决' :
-                  currentAction === 'cancel' ? '处理延期异常 - 取消' :
-                    '处理延期异常'
-        }
+        title={handleModalTitle}
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
@@ -375,19 +399,19 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
         {currentRecord && (
           <>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
-              <p><strong>计划结束日期：</strong>{currentRecord.planned_end_date}</p>
-              <p><strong>延期天数：</strong>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
+              <p><strong>{t(`${P}.col.plannedEndDate`)}:</strong> {currentRecord.planned_end_date}</p>
+              <p><strong>{t(`${P}.col.delayDays`)}:</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                  {currentRecord.delay_days} 天
+                  {t(`${P}.label.daysUnit`, { count: currentRecord.delay_days ?? 0 })}
                 </span>
               </p>
-              <p><strong>延期原因：</strong>{currentRecord.delay_reason || '-'}</p>
+              <p><strong>{t(`${P}.col.delayReason`)}:</strong> {currentRecord.delay_reason || '-'}</p>
             </div>
             <ProFormTextArea
               name="remarks"
-              label="备注"
-              placeholder="请输入处理备注（可选）"
+              label={t(`${P}.field.remarks`)}
+              placeholder={t(`${P}.placeholder.handleRemarksOptional`)}
               fieldProps={{
                 rows: 4,
               }}
@@ -400,4 +424,3 @@ const DeliveryDelayExceptionsPage: React.FC = () => {
 };
 
 export default DeliveryDelayExceptionsPage;
-

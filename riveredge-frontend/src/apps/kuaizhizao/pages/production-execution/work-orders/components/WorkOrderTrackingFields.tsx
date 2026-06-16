@@ -4,6 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { App, Button, Card, Col, Form, Input, Select, Typography } from 'antd'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import { ProFormDependency, ProFormSwitch } from '@ant-design/pro-components'
@@ -78,30 +79,33 @@ function defaultTrackingAssignMode(mode: string): TrackingAssignMode {
   return 'batch'
 }
 
-function trackingAssignModeOptions(mode: string): { label: string; value: TrackingAssignMode }[] {
+function trackingAssignModeOptions(
+  mode: string,
+  t: (key: string) => string
+): { label: string; value: TrackingAssignMode }[] {
   if (mode === 'both') {
     return [
-      { label: '批号', value: 'batch' },
-      { label: '序列号', value: 'serial' },
-      { label: '批号+序列号', value: 'both' },
+      { label: t('app.kuaizhizao.workOrder.formTrackingBatch'), value: 'batch' },
+      { label: t('app.kuaizhizao.workOrder.formTrackingSerial'), value: 'serial' },
+      { label: t('app.kuaizhizao.workOrder.formTrackingBoth'), value: 'both' },
     ]
   }
   if (mode === 'serial') {
-    return [{ label: '序列号', value: 'serial' }]
+    return [{ label: t('app.kuaizhizao.workOrder.formTrackingSerial'), value: 'serial' }]
   }
-  return [{ label: '批号', value: 'batch' }]
+  return [{ label: t('app.kuaizhizao.workOrder.formTrackingBatch'), value: 'batch' }]
 }
 
-function assignModeHint(mode: TrackingAssignMode): string {
-  if (mode === 'batch') return '开普通工单，整单共用一个投产批号'
-  if (mode === 'serial') return '按件自动拆分子工单，每件一个投产序列号'
-  return '组级投产批号 + 按件拆分子工单并分配序列号'
+function assignModeHint(mode: TrackingAssignMode, t: (key: string) => string): string {
+  if (mode === 'batch') return t('app.kuaizhizao.workOrder.formTrackingBatchHint')
+  if (mode === 'serial') return t('app.kuaizhizao.workOrder.formTrackingSerialHint')
+  return t('app.kuaizhizao.workOrder.formTrackingBothHint')
 }
 
-function trackingPromptLabel(mode: string): string {
-  if (mode === 'batch') return '投产批号'
-  if (mode === 'serial') return '投产序列号'
-  return '投产批号/序列号'
+function trackingPromptLabel(mode: string, t: (key: string) => string): string {
+  if (mode === 'batch') return t('app.kuaizhizao.workOrder.formTrackingBatchLabel')
+  if (mode === 'serial') return t('app.kuaizhizao.workOrder.formTrackingSerialLabel')
+  return t('app.kuaizhizao.workOrder.formTrackingBothLabel')
 }
 
 export const WorkOrderTrackingFields: React.FC<Props> = ({
@@ -110,6 +114,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
   productList = [],
   disabled,
 }) => {
+  const { t } = useTranslation()
   const { message } = App.useApp()
   const [materialInfo, setMaterialInfo] = useState<WorkOrderTrackingMaterialInfo | null>(null)
   const [materialUuid, setMaterialUuid] = useState<string | null>(null)
@@ -120,7 +125,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
   const [serialRules, setSerialRules] = useState<RuleOption[]>([])
   const [previewLoading, setPreviewLoading] = useState(false)
   const [trackingAssignMode, setTrackingAssignMode] = useState<TrackingAssignMode>('batch')
-  const assignModeOptions = useMemo(() => trackingAssignModeOptions(trackingMode), [trackingMode])
+  const assignModeOptions = useMemo(() => trackingAssignModeOptions(trackingMode, t), [trackingMode, t])
   const showBatchFields = trackingAssignMode === 'batch' || trackingAssignMode === 'both'
   const showSerialFields = trackingAssignMode === 'serial' || trackingAssignMode === 'both'
 
@@ -278,11 +283,11 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
 
     if (showSerialFields) {
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        message.warning('预览序列号前请先填写计划数量')
+        message.warning(t('app.kuaizhizao.workOrder.msgPreviewQtyFirst'))
         return
       }
       if (!Number.isInteger(quantity)) {
-        message.warning('序列号物料的计划数量须为整数')
+        message.warning(t('app.kuaizhizao.workOrder.msgSerialQtyMustBeInteger'))
         return
       }
     }
@@ -318,7 +323,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
       } else if (serialNos?.length) {
         message.success(`已预览 ${serialNos.length} 个序列号`)
       } else {
-        message.warning('未生成预览号码，请检查批号/序列号规则配置')
+        message.warning(t('app.kuaizhizao.workOrder.msgPreviewNoNumbers'))
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } }
@@ -344,7 +349,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
     <>
       <ProFormSwitch
         name="enable_production_tracking"
-        label={trackingPromptLabel(trackingMode)}
+        label={trackingPromptLabel(trackingMode, t)}
         initialValue={false}
         colProps={{ span: 12 }}
         fieldProps={{
@@ -381,7 +386,7 @@ export const WorkOrderTrackingFields: React.FC<Props> = ({
               </div>
             </Form.Item>
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: 12 }}>
-              {assignModeHint(trackingAssignMode)}
+              {assignModeHint(trackingAssignMode, t)}
             </Typography.Text>
 
             <ProFormDependency name={['quantity']}>

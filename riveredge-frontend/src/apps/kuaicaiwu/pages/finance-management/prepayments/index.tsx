@@ -11,12 +11,16 @@ import { documentReconciliationService } from '../../../services/finance/documen
 import { prepaymentService } from '../../../services/finance/prepayment';
 import { receivableService } from '../../../services/finance/receivable';
 import { payableService } from '../../../services/finance/payable';
+import { useTranslation } from 'react-i18next';
 import { formatSettlementType } from '../../../utils/financeUiLabels';
+import type { TFunction } from 'i18next';
 
 type PrepaymentRow = Record<string, unknown>;
 
-const prepaymentTag = (type?: string) => {
-  const label = formatSettlementType(type);
+const P = 'app.kuaicaiwu.prepayment';
+
+const prepaymentTag = (type: string | undefined, t: TFunction) => {
+  const label = formatSettlementType(type, t);
   if (type === 'prepayment') {
     return <Tag color="blue">{label}</Tag>;
   }
@@ -24,6 +28,7 @@ const prepaymentTag = (type?: string) => {
 };
 
 const PrepaymentsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const receiptRef = useRef<ActionType>();
@@ -48,38 +53,38 @@ const PrepaymentsPage: React.FC = () => {
     () => [
       {
         key: 'customer',
-        title: '客户预收余额合计',
+        title: t(`${P}.statCustomerTotal`),
         value: (balances as any)?.total_customer_prepayment ?? 0,
         precision: 2,
         prefix: '¥',
       },
       {
         key: 'supplier',
-        title: '供应商预付余额合计',
+        title: t(`${P}.statSupplierTotal`),
         value: (balances as any)?.total_supplier_prepayment ?? 0,
         precision: 2,
         prefix: '¥',
       },
     ],
-    [balances],
+    [balances, t],
   );
 
-  const balanceColumns: ProColumns<PrepaymentRow>[] = [
-    { title: '往来单位', dataIndex: 'partner_name', ellipsis: true },
-    { title: '预收/预付余额', dataIndex: 'prepayment_balance', valueType: 'money', align: 'right' },
-    { title: '单据数', dataIndex: 'receipt_count', render: (_, r) => r.receipt_count ?? r.payment_count },
-  ];
+  const balanceColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
+    { title: t(`${P}.col.partner`), dataIndex: 'partner_name', ellipsis: true },
+    { title: t(`${P}.col.balance`), dataIndex: 'prepayment_balance', valueType: 'money', align: 'right' },
+    { title: t(`${P}.col.docCount`), dataIndex: 'receipt_count', render: (_, r) => r.receipt_count ?? r.payment_count },
+  ], [t]);
 
-  const receiptColumns: ProColumns<PrepaymentRow>[] = [
-    { title: '收款单号', dataIndex: 'receipt_code', width: 160, ellipsis: true },
-    { title: '客户', dataIndex: 'customer_name', ellipsis: true },
-    { title: '收款日期', dataIndex: 'receipt_date', valueType: 'date', width: 120 },
-    { title: '收款金额', dataIndex: 'total_amount', valueType: 'money', align: 'right' },
-    { title: '未核销余额', dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
-    { title: '结算方式', dataIndex: 'settlement_type', width: 100, render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal')) },
-    { title: '状态', dataIndex: 'status', width: 100 },
+  const receiptColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
+    { title: t(`${P}.col.receiptCode`), dataIndex: 'receipt_code', width: 160, ellipsis: true },
+    { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true },
+    { title: t(`${P}.col.receiptDate`), dataIndex: 'receipt_date', valueType: 'date', width: 120 },
+    { title: t(`${P}.col.receiptAmount`), dataIndex: 'total_amount', valueType: 'money', align: 'right' },
+    { title: t(`${P}.col.unsettledBalance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+    { title: t(`${P}.col.settlementMethod`), dataIndex: 'settlement_type', width: 100, render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t) },
+    { title: t(`${P}.col.status`), dataIndex: 'status', width: 100 },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 100,
       render: (_, r) => [
@@ -94,29 +99,32 @@ const PrepaymentsPage: React.FC = () => {
               pending_settlement: true,
             } as any);
             setReceivableOptions((res?.items || []).map((item: any) => ({
-              label: `${item.receivable_code} · 待收 ¥${item.remaining_amount}`,
+              label: t(`${P}.receivableOption`, {
+                code: item.receivable_code,
+                amount: item.remaining_amount,
+              }),
               value: item.id,
               remaining: Number(item.remaining_amount),
             })));
             setApplyReceiptVisible(true);
           }}
         >
-          转核销
+          {t(`${P}.applySettle`)}
         </a>,
       ],
     },
-  ];
+  ], [t]);
 
-  const paymentColumns: ProColumns<PrepaymentRow>[] = [
-    { title: '付款单号', dataIndex: 'payment_code', width: 160, ellipsis: true },
-    { title: '供应商', dataIndex: 'supplier_name', ellipsis: true },
-    { title: '付款日期', dataIndex: 'payment_date', valueType: 'date', width: 120 },
-    { title: '付款金额', dataIndex: 'total_amount', valueType: 'money', align: 'right' },
-    { title: '未核销余额', dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
-    { title: '结算方式', dataIndex: 'settlement_type', width: 100, render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal')) },
-    { title: '状态', dataIndex: 'status', width: 100 },
+  const paymentColumns: ProColumns<PrepaymentRow>[] = useMemo(() => [
+    { title: t(`${P}.col.paymentCode`), dataIndex: 'payment_code', width: 160, ellipsis: true },
+    { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true },
+    { title: t(`${P}.col.paymentDate`), dataIndex: 'payment_date', valueType: 'date', width: 120 },
+    { title: t(`${P}.col.paymentAmount`), dataIndex: 'total_amount', valueType: 'money', align: 'right' },
+    { title: t(`${P}.col.unsettledBalance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+    { title: t(`${P}.col.settlementMethod`), dataIndex: 'settlement_type', width: 100, render: (_, r) => prepaymentTag(String(r.settlement_type ?? 'normal'), t) },
+    { title: t(`${P}.col.status`), dataIndex: 'status', width: 100 },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 100,
       render: (_, r) => [
@@ -131,18 +139,103 @@ const PrepaymentsPage: React.FC = () => {
               pending_settlement: true,
             } as any);
             setPayableOptions((res?.items || []).map((item: any) => ({
-              label: `${item.payable_code} · 待付 ¥${item.remaining_amount}`,
+              label: t(`${P}.payableOption`, {
+                code: item.payable_code,
+                amount: item.remaining_amount,
+              }),
               value: item.id,
               remaining: Number(item.remaining_amount),
             })));
             setApplyPaymentVisible(true);
           }}
         >
-          转核销
+          {t(`${P}.applySettle`)}
         </a>,
       ],
     },
-  ];
+  ], [t]);
+
+  const tabs = useMemo(() => [
+    {
+      key: 'balance',
+      label: t(`${P}.tabSummary`),
+      children: (
+        <>
+          <UniTable<PrepaymentRow>
+            headerTitle={t(`${P}.customerBalance`)}
+            enableRowSelection
+            rowKey={(r) => `c-${r.partner_id}`}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
+            columns={balanceColumns}
+            dataSource={customerBalances}
+            search={false}
+            pagination={false}
+            toolBarRender={false}
+          />
+          <UniTable<PrepaymentRow>
+            headerTitle={t(`${P}.supplierBalance`)}
+            style={{ marginTop: 24 }}
+            enableRowSelection
+            rowKey={(r) => `s-${r.partner_id}`}
+            columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
+            columns={balanceColumns}
+            dataSource={supplierBalances}
+            search={false}
+            pagination={false}
+            toolBarRender={false}
+          />
+        </>
+      ),
+    },
+    {
+      key: 'receipt',
+      label: t(`${P}.tabReceiptDetail`),
+      children: (
+        <UniTable<PrepaymentRow>
+          actionRef={receiptRef}
+          enableRowSelection
+          rowKey="id"
+          columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
+          columns={receiptColumns}
+          request={async (params) => {
+            const res = await receiptService.listReceipts({
+              ...params,
+              settlement_type: 'prepayment',
+              unsettled_only: true,
+            } as any);
+            return { data: (res as any)?.items ?? [], success: true, total: (res as any)?.total ?? 0 };
+          }}
+          search={false}
+          pagination={{ pageSize: 20 }}
+          toolBarRender={false}
+        />
+      ),
+    },
+    {
+      key: 'payment',
+      label: t(`${P}.tabPaymentDetail`),
+      children: (
+        <UniTable<PrepaymentRow>
+          actionRef={paymentRef}
+          enableRowSelection
+          rowKey="id"
+          columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
+          columns={paymentColumns}
+          request={async (params) => {
+            const res = await paymentService.listPayments({
+              ...params,
+              settlement_type: 'prepayment',
+              unsettled_only: true,
+            } as any);
+            return { data: (res as any)?.items ?? [], success: true, total: (res as any)?.total ?? 0 };
+          }}
+          search={false}
+          pagination={{ pageSize: 20 }}
+          toolBarRender={false}
+        />
+      ),
+    },
+  ], [balanceColumns, customerBalances, paymentColumns, receiptColumns, supplierBalances, t]);
 
   return (
     <>
@@ -151,91 +244,11 @@ const PrepaymentsPage: React.FC = () => {
         activeTabKey={activeTab}
         onTabChange={setActiveTab}
         preserveMounted
-        tabs={[
-          {
-            key: 'balance',
-            label: '余额汇总',
-            children: (
-              <>
-                <UniTable<PrepaymentRow>
-                  headerTitle="客户预收"
-                  enableRowSelection
-                  rowKey={(r) => `c-${r.partner_id}`}
-                  columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.customer-balance"
-                  columns={balanceColumns}
-                  dataSource={customerBalances}
-                  search={false}
-                  pagination={false}
-                  toolBarRender={false}
-                />
-                <UniTable<PrepaymentRow>
-                  headerTitle="供应商预付"
-                  style={{ marginTop: 24 }}
-                  enableRowSelection
-                  rowKey={(r) => `s-${r.partner_id}`}
-                  columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.supplier-balance"
-                  columns={balanceColumns}
-                  dataSource={supplierBalances}
-                  search={false}
-                  pagination={false}
-                  toolBarRender={false}
-                />
-              </>
-            ),
-          },
-          {
-            key: 'receipt',
-            label: '预收明细',
-            children: (
-              <UniTable<PrepaymentRow>
-                actionRef={receiptRef}
-                enableRowSelection
-                rowKey="id"
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.receipts"
-                columns={receiptColumns}
-                request={async (params) => {
-                  const res = await receiptService.listReceipts({
-                    ...params,
-                    settlement_type: 'prepayment',
-                    unsettled_only: true,
-                  } as any);
-                  return { data: (res as any)?.items ?? [], success: true, total: (res as any)?.total ?? 0 };
-                }}
-                search={false}
-                pagination={{ pageSize: 20 }}
-                toolBarRender={false}
-              />
-            ),
-          },
-          {
-            key: 'payment',
-            label: '预付明细',
-            children: (
-              <UniTable<PrepaymentRow>
-                actionRef={paymentRef}
-                enableRowSelection
-                rowKey="id"
-                columnPersistenceId="apps.kuaicaiwu.pages.finance-management.prepayments.payments"
-                columns={paymentColumns}
-                request={async (params) => {
-                  const res = await paymentService.listPayments({
-                    ...params,
-                    settlement_type: 'prepayment',
-                    unsettled_only: true,
-                  } as any);
-                  return { data: (res as any)?.items ?? [], success: true, total: (res as any)?.total ?? 0 };
-                }}
-                search={false}
-                pagination={{ pageSize: 20 }}
-                toolBarRender={false}
-              />
-            ),
-          },
-        ]}
+        tabs={tabs}
       />
 
       <FormModalTemplate
-        title="预收转核销应收"
+        title={t(`${P}.convertReceipt`)}
         open={applyReceiptVisible}
         onClose={() => setApplyReceiptVisible(false)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -249,7 +262,7 @@ const PrepaymentsPage: React.FC = () => {
             receivable_id: values.receivable_id,
             amount: values.amount,
           });
-          messageApi.success('预收已核销至应收单');
+          messageApi.success(t(`${P}.settleSuccessReceipt`));
           queryClient.invalidateQueries({ queryKey: ['prepaymentBalances'] });
           receiptRef.current?.reload();
           setApplyReceiptVisible(false);
@@ -257,14 +270,14 @@ const PrepaymentsPage: React.FC = () => {
       >
         <ProFormSelect
           name="receivable_id"
-          label="目标应收单"
+          label={t(`${P}.targetReceivable`)}
           rules={[{ required: true }]}
           options={receivableOptions}
           showSearch
         />
         <ProFormMoney
           name="amount"
-          label="核销金额"
+          label={t(`${P}.settleAmount`)}
           min={0.01}
           max={selectedReceipt ? Number(selectedReceipt.unsettled_amount) : undefined}
           rules={[{ required: true }]}
@@ -272,7 +285,7 @@ const PrepaymentsPage: React.FC = () => {
       </FormModalTemplate>
 
       <FormModalTemplate
-        title="预付转核销应付"
+        title={t(`${P}.convertPayment`)}
         open={applyPaymentVisible}
         onClose={() => setApplyPaymentVisible(false)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -286,7 +299,7 @@ const PrepaymentsPage: React.FC = () => {
             payable_id: values.payable_id,
             amount: values.amount,
           });
-          messageApi.success('预付已核销至应付单');
+          messageApi.success(t(`${P}.settleSuccessPayment`));
           queryClient.invalidateQueries({ queryKey: ['prepaymentBalances'] });
           paymentRef.current?.reload();
           setApplyPaymentVisible(false);
@@ -294,14 +307,14 @@ const PrepaymentsPage: React.FC = () => {
       >
         <ProFormSelect
           name="payable_id"
-          label="目标应付单"
+          label={t(`${P}.targetPayable`)}
           rules={[{ required: true }]}
           options={payableOptions}
           showSearch
         />
         <ProFormMoney
           name="amount"
-          label="核销金额"
+          label={t(`${P}.settleAmount`)}
           min={0.01}
           max={selectedPayment ? Number(selectedPayment.unsettled_amount) : undefined}
           rules={[{ required: true }]}

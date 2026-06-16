@@ -7,7 +7,8 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, message, Card, Table, Row, Col, Typography, Tag, Form as AntForm, Input, InputNumber, Select } from 'antd';
@@ -91,6 +92,7 @@ const defaultTransferItem = {
 };
 
 const InventoryTransferPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
 
@@ -158,17 +160,17 @@ const InventoryTransferPage: React.FC = () => {
   const validateTransferItems = (items: Record<string, unknown>[], mode: 'transfer' | 'bin_relocation') => {
     const valid = items.filter((it) => it.material_id && (Number(it.quantity) || 0) > 0);
     if (!valid.length) {
-      messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
+      messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgNoValidItems'));
       throw new Error('no items');
     }
     if (mode === 'bin_relocation') {
       for (const it of valid) {
         if (!it.from_storage_area_id || !it.from_location_id || !it.to_storage_area_id || !it.to_location_id) {
-          messageApi.error('库内移位明细须填写调出/调入库区与库位');
+          messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBinAreasRequired'));
           throw new Error('bin_relocation areas required');
         }
         if (it.from_location_id === it.to_location_id) {
-          messageApi.error('库内移位时调出库位和调入库位不能相同');
+          messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgSameLocationError'));
           throw new Error('same location');
         }
       }
@@ -235,11 +237,11 @@ const InventoryTransferPage: React.FC = () => {
     try {
       const mode = values.transfer_mode || 'transfer';
       if (mode === 'transfer' && values.from_warehouse_id === values.to_warehouse_id) {
-        messageApi.error('跨仓调拨时，调出仓库和调入仓库不能相同');
+        messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgSameWarehouseError'));
         throw new Error('跨仓调拨时，调出仓库和调入仓库不能相同');
       }
       if (mode === 'bin_relocation' && values.from_warehouse_id !== values.to_warehouse_id) {
-        messageApi.error('库内移位时，调出仓库和调入仓库必须相同');
+        messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBinSameWarehouseRequired'));
         throw new Error('库内移位时，调出仓库和调入仓库必须相同');
       }
 
@@ -263,10 +265,10 @@ const InventoryTransferPage: React.FC = () => {
       };
       if (mode === 'bin_relocation') {
         await inventoryTransferApi.createBinTransfer(payload);
-        messageApi.success('库内移位单创建成功');
+        messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgBinCreateSuccess'));
       } else {
         await inventoryTransferApi.create(payload);
-        messageApi.success('调拨单创建成功');
+        messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgCreateSuccess'));
       }
       setCreateModalVisible(false);
       formRef.current?.resetFields();
@@ -281,7 +283,7 @@ const InventoryTransferPage: React.FC = () => {
         error.message !== 'bin_relocation areas required' &&
         error.message !== 'same location'
       ) {
-        messageApi.error(error.message || '创建调拨单失败');
+        messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgCreateFailed'));
       }
       throw error;
     }
@@ -296,7 +298,7 @@ const InventoryTransferPage: React.FC = () => {
       setCurrentTransfer(detail);
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取调拨单详情失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgGetDetailFailed'));
     }
   };
 
@@ -305,17 +307,17 @@ const InventoryTransferPage: React.FC = () => {
    */
   const handleExecute = async (record: InventoryTransfer) => {
     Modal.confirm({
-      title: '执行调拨',
-      content: `确定要执行调拨单 "${record.code}" 吗？执行后将更新库存。`,
+      title: t('app.kuaizhizao.inventoryTransfer.msgExecuteTitle'),
+      content: t('app.kuaizhizao.inventoryTransfer.msgExecuteContent', { code: record.code }),
       onOk: async () => {
         try {
           await inventoryTransferApi.execute(record.id!.toString());
-          messageApi.success('调拨执行成功');
+          messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgExecuteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '执行调拨失败');
+          messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgExecuteFailed'));
         }
       },
     });
@@ -344,23 +346,23 @@ const InventoryTransferPage: React.FC = () => {
   const handleAddItemSubmit = async (values: any) => {
     try {
       if (!currentTransferId) {
-        messageApi.error('调拨单ID不存在');
+        messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgTransferIdNotFound'));
         return;
       }
 
       const material = materialList.find((m: any) => m.id === values.material_id);
       if (!material) {
-        messageApi.error('物料不存在');
+        messageApi.error(t('app.kuaizhizao.warehouseCommon.materialNotFound'));
         return;
       }
 
       if (currentItemTransferMode === 'bin_relocation') {
         if (!values.from_storage_area_id || !values.from_location_id || !values.to_storage_area_id || !values.to_location_id) {
-          messageApi.error('库内移位必须选择调出/调入库区与库位');
+          messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgBinAreasSelectRequired'));
           return;
         }
         if (values.from_location_id === values.to_location_id) {
-          messageApi.error('库内移位时调出库位和调入库位不能相同');
+          messageApi.error(t('app.kuaizhizao.inventoryTransfer.msgSameLocationError'));
           return;
         }
       }
@@ -390,7 +392,7 @@ const InventoryTransferPage: React.FC = () => {
         unit_price: values.unit_price || 0,
         remarks: values.remarks,
       });
-      messageApi.success('调拨明细添加成功');
+      messageApi.success(t('app.kuaizhizao.inventoryTransfer.msgAddItemSuccess'));
       setItemModalVisible(false);
       setCurrentTransferId(null);
       itemFormRef.current?.resetFields();
@@ -398,7 +400,7 @@ const InventoryTransferPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '添加调拨明细失败');
+      messageApi.error(error.message || t('app.kuaizhizao.inventoryTransfer.msgAddItemFailed'));
       throw error;
     }
   };
@@ -406,9 +408,9 @@ const InventoryTransferPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<InventoryTransfer>[] = [
+  const columns: ProColumns<InventoryTransfer>[] = useMemo(() => [
     {
-      title: '调拨单号',
+      title: t('app.kuaizhizao.warehouseReports.colTransferCode'),
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
@@ -420,58 +422,60 @@ const InventoryTransferPage: React.FC = () => {
       ),
     },
     {
-      title: '单据模式',
+      title: t('app.kuaizhizao.inventoryTransfer.colTransferMode'),
       dataIndex: 'transfer_mode',
       width: 110,
       valueEnum: {
-        transfer: { text: '跨仓调拨', status: 'processing' },
-        bin_relocation: { text: '库内移位', status: 'warning' },
+        transfer: { text: t('app.kuaizhizao.inventoryTransfer.transferModeCross'), status: 'processing' },
+        bin_relocation: { text: t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocation'), status: 'warning' },
       },
       render: (_, record) => (
         <Tag color={record.transfer_mode === 'bin_relocation' ? 'gold' : 'blue'}>
-          {record.transfer_mode === 'bin_relocation' ? '库内移位' : '跨仓调拨'}
+          {record.transfer_mode === 'bin_relocation'
+            ? t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocation')
+            : t('app.kuaizhizao.inventoryTransfer.transferModeCross')}
         </Tag>
       ),
     },
     {
-      title: '调出仓库',
+      title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
       dataIndex: 'from_warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '调入仓库',
+      title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
       dataIndex: 'to_warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '调拨日期',
+      title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
       dataIndex: 'transfer_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '调拨物料总数',
+      title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'),
       dataIndex: 'total_items',
       width: 120,
       align: 'right',
     },
     {
-      title: '调拨总数量',
+      title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
       dataIndex: 'total_quantity',
       width: 120,
       align: 'right',
     },
     {
-      title: '调拨总金额',
+      title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
       dataIndex: 'total_amount',
       width: 120,
       align: 'right',
       render: (_, record) => `¥${record.total_amount?.toFixed(2) || '0.00'}`,
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -479,7 +483,7 @@ const InventoryTransferPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -500,7 +504,7 @@ const InventoryTransferPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -509,26 +513,26 @@ const InventoryTransferPage: React.FC = () => {
           {record.status === 'draft' && (
             <>
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
-                添加明细
+                {t('app.kuaizhizao.inventoryTransfer.actionAddItem')}
               </Button>
               <Button
                 {...rowActionKind('execute')}
                 {...rowActionLabelKeep()}
                 onClick={() => handleExecute(record)}
               >
-                执行调拨
+                {t('app.kuaizhizao.inventoryTransfer.actionExecute')}
               </Button>
             </>
           )}
           {record.status === 'in_progress' && (
             <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
-              添加明细
+              {t('app.kuaizhizao.inventoryTransfer.actionAddItem')}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
 
   const getAreaOptions = (warehouseId?: number) =>
     storageAreaList
@@ -543,14 +547,14 @@ const InventoryTransferPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="库存调拨管理"
+        headerTitle={t('app.kuaizhizao.inventoryTransfer.headerTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inventory-transfer"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={true}
-        createButtonText="新建调拨单"
+        createButtonText={t('app.kuaizhizao.inventoryTransfer.createButton')}
         onCreate={handleCreate}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
@@ -585,20 +589,20 @@ const InventoryTransferPage: React.FC = () => {
             for (const id of keys) {
               await inventoryTransferApi.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条调拨单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.inventoryTransfer.deleteConfirm', { count })}
         scroll={{ x: 2000 }}
       />
 
       {/* 创建调拨单Modal */}
       <FormModalTemplate
-        title="创建调拨单"
+        title={t('app.kuaizhizao.inventoryTransfer.modalCreate')}
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
@@ -612,12 +616,12 @@ const InventoryTransferPage: React.FC = () => {
       >
         <ProFormSelect
           name="transfer_mode"
-          label="单据模式"
+          label={t('app.kuaizhizao.inventoryTransfer.formTransferMode')}
           initialValue="transfer"
-          rules={[{ required: true, message: '请选择单据模式' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryTransfer.formTransferModeRequired') }]}
           options={[
-            { label: '跨仓调拨', value: 'transfer' },
-            { label: '库内移位（同仓）', value: 'bin_relocation' },
+            { label: t('app.kuaizhizao.inventoryTransfer.transferModeCross'), value: 'transfer' },
+            { label: t('app.kuaizhizao.inventoryTransfer.transferModeBinRelocationSame'), value: 'bin_relocation' },
           ]}
           fieldProps={{
             onChange: (v: 'transfer' | 'bin_relocation') => {
@@ -639,8 +643,8 @@ const InventoryTransferPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="from_warehouse_id"
-              label="调出仓库"
-              placeholder="请选择调出仓库"
+              label={t('app.kuaizhizao.warehouseReports.colFromWarehouse')}
+              placeholder={t('app.kuaizhizao.inventoryTransfer.formFromWarehousePlaceholder')}
               required
               onChange={(value, option) => {
                 formRef.current?.setFieldsValue({ _from_warehouse_name: option?.name });
@@ -657,8 +661,8 @@ const InventoryTransferPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="to_warehouse_id"
-              label={createTransferMode === 'bin_relocation' ? '所在仓库（同仓）' : '调入仓库'}
-              placeholder={createTransferMode === 'bin_relocation' ? '与调出仓库相同' : '请选择调入仓库'}
+              label={createTransferMode === 'bin_relocation' ? t('app.kuaizhizao.inventoryTransfer.formToWarehouseSame') : t('app.kuaizhizao.warehouseReports.colToWarehouse')}
+              placeholder={createTransferMode === 'bin_relocation' ? t('app.kuaizhizao.inventoryTransfer.formToWarehouseSamePlaceholder') : t('app.kuaizhizao.inventoryTransfer.formToWarehousePlaceholder')}
               required
               disabled={createTransferMode === 'bin_relocation'}
               onChange={(_, option) => formRef.current?.setFieldsValue({ _to_warehouse_name: option?.name })}
@@ -669,21 +673,21 @@ const InventoryTransferPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="transfer_date"
-              label="调拨日期"
-              rules={[{ required: true, message: '请选择调拨日期' }]}
+              label={t('app.kuaizhizao.inventoryTransfer.colTransferDate')}
+              rules={[{ required: true, message: t('app.kuaizhizao.inventoryTransfer.formTransferDateRequired') }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12} />
         </Row>
         <div className="uni-table-detail" style={{ width: '100%' }}>
-          <UniTableDetailHeader title="调拨明细" required />
-          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+          <UniTableDetailHeader title={t('app.kuaizhizao.inventoryTransfer.detailItemsTitle')} required />
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.inventoryTransfer.msgMinOneItem') }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => {
                 const baseCols = [
                   {
-                    title: '物料',
+                    title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
                     dataIndex: 'material_id',
                     width: 240,
                     render: (_: unknown, __: unknown, index: number) => (
@@ -699,7 +703,7 @@ const InventoryTransferPage: React.FC = () => {
                               <UniMaterialSelect
                                 name={[index, 'material_id']}
                                 label=""
-                                placeholder="请选择物料"
+                                placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
                                 required
                                 size="small"
                                 listFieldKey={index}
@@ -720,17 +724,17 @@ const InventoryTransferPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: '数量',
+                    title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
                     dataIndex: 'quantity',
                     width: 100,
                     align: 'right' as const,
                     render: (_: unknown, __: unknown, index: number) => (
                       <AntForm.Item
                         name={[index, 'quantity']}
-                        rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]}
+                        rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }, { type: 'number', min: 0.01, message: t('app.kuaizhizao.batchingCenter.qtyGtZero') }]}
                         style={{ margin: 0 }}
                       >
-                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                        <InputNumber placeholder={t('app.kuaizhizao.warehouseCommon.colQuantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
@@ -738,18 +742,18 @@ const InventoryTransferPage: React.FC = () => {
                 const binCols = createTransferMode === 'bin_relocation'
                   ? [
                       {
-                        title: '调出库区',
+                        title: t('app.kuaizhizao.inventoryTransfer.colFromStorageArea'),
                         dataIndex: 'from_storage_area_id',
                         width: 150,
                         render: (_: unknown, __: unknown, index: number) => (
                           <AntForm.Item
                             name={[index, 'from_storage_area_id']}
-                            rules={[{ required: true, message: '必选' }]}
+                            rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectRequired') }]}
                             style={{ margin: 0 }}
                           >
                             <Select
                               options={getAreaOptions(selectedCreateWarehouseId)}
-                              placeholder="调出库区"
+                              placeholder={t('app.kuaizhizao.inventoryTransfer.colFromStorageArea')}
                               size="small"
                               showSearch
                               optionFilterProp="label"
@@ -763,7 +767,7 @@ const InventoryTransferPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: '调出库位',
+                        title: t('app.kuaizhizao.inventoryTransfer.colFromLocation'),
                         dataIndex: 'from_location_id',
                         width: 150,
                         render: (_: unknown, __: unknown, index: number) => (
@@ -771,12 +775,12 @@ const InventoryTransferPage: React.FC = () => {
                             {({ getFieldValue }: { getFieldValue: (name: (string | number)[]) => unknown }) => (
                               <AntForm.Item
                                 name={[index, 'from_location_id']}
-                                rules={[{ required: true, message: '必选' }]}
+                                rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectRequired') }]}
                                 style={{ margin: 0 }}
                               >
                                 <Select
                                   options={getLocationOptions(getFieldValue(['items', index, 'from_storage_area_id']) as number | undefined)}
-                                  placeholder="调出库位"
+                                  placeholder={t('app.kuaizhizao.inventoryTransfer.colFromLocation')}
                                   size="small"
                                   showSearch
                                   optionFilterProp="label"
@@ -787,18 +791,18 @@ const InventoryTransferPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: '调入库区',
+                        title: t('app.kuaizhizao.inventoryTransfer.colToStorageArea'),
                         dataIndex: 'to_storage_area_id',
                         width: 150,
                         render: (_: unknown, __: unknown, index: number) => (
                           <AntForm.Item
                             name={[index, 'to_storage_area_id']}
-                            rules={[{ required: true, message: '必选' }]}
+                            rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectRequired') }]}
                             style={{ margin: 0 }}
                           >
                             <Select
                               options={getAreaOptions(selectedCreateWarehouseId)}
-                              placeholder="调入库区"
+                              placeholder={t('app.kuaizhizao.inventoryTransfer.colToStorageArea')}
                               size="small"
                               showSearch
                               optionFilterProp="label"
@@ -812,7 +816,7 @@ const InventoryTransferPage: React.FC = () => {
                         ),
                       },
                       {
-                        title: '调入库位',
+                        title: t('app.kuaizhizao.inventoryTransfer.colToLocation'),
                         dataIndex: 'to_location_id',
                         width: 150,
                         render: (_: unknown, __: unknown, index: number) => (
@@ -820,12 +824,12 @@ const InventoryTransferPage: React.FC = () => {
                             {({ getFieldValue }: { getFieldValue: (name: (string | number)[]) => unknown }) => (
                               <AntForm.Item
                                 name={[index, 'to_location_id']}
-                                rules={[{ required: true, message: '必选' }]}
+                                rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectRequired') }]}
                                 style={{ margin: 0 }}
                               >
                                 <Select
                                   options={getLocationOptions(getFieldValue(['items', index, 'to_storage_area_id']) as number | undefined)}
-                                  placeholder="调入库位"
+                                  placeholder={t('app.kuaizhizao.inventoryTransfer.colToLocation')}
                                   size="small"
                                   showSearch
                                   optionFilterProp="label"
@@ -839,17 +843,17 @@ const InventoryTransferPage: React.FC = () => {
                   : [];
                 const tailCols = [
                   {
-                    title: '批次号',
+                    title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
                     dataIndex: 'batch_no',
                     width: 120,
                     render: (_: unknown, __: unknown, index: number) => (
                       <AntForm.Item name={[index, 'batch_no']} style={{ margin: 0 }}>
-                        <Input placeholder="可选" size="small" />
+                        <Input placeholder={t('app.kuaizhizao.warehouseCommon.optional')} size="small" />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: '操作',
+                    title: t('app.kuaizhizao.warehouseCommon.colActions'),
                     width: 60,
                     render: (_: unknown, __: unknown, index: number) => (
                       <Button
@@ -885,7 +889,7 @@ const InventoryTransferPage: React.FC = () => {
                             block
                             onClick={() => add({ ...defaultTransferItem })}
                           >
-                            添加明细
+                            {t('app.kuaizhizao.inventoryTransfer.actionAddItem')}
                           </Button>
                         )}
                       />
@@ -898,22 +902,22 @@ const InventoryTransferPage: React.FC = () => {
         </div>
         <ProFormTextArea
           name="transfer_reason"
-          label="调拨原因"
-          placeholder="请输入调拨原因"
+          label={t('app.kuaizhizao.inventoryTransfer.formTransferReason')}
+          placeholder={t('app.kuaizhizao.inventoryTransfer.formTransferReasonPlaceholder')}
           fieldProps={{ rows: 3 }}
         />
         <DocumentAttachmentsField category="inventory_transfer_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 添加调拨明细Modal */}
       <FormModalTemplate
-        title="添加调拨明细"
+        title={t('app.kuaizhizao.inventoryTransfer.modalAddItem')}
         open={itemModalVisible}
         onClose={() => {
           setItemModalVisible(false);
@@ -926,9 +930,9 @@ const InventoryTransferPage: React.FC = () => {
       >
         <ProFormSelect
           name="material_id"
-          label="物料"
-          placeholder="请选择物料"
-          rules={[{ required: true, message: '请选择物料' }]}
+          label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
+          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectMaterial') }]}
           options={materialList.map((m: any) => ({
             label: `${m.mainCode ?? m.code ?? ''} - ${m.name}`,
             value: m.id,
@@ -941,16 +945,15 @@ const InventoryTransferPage: React.FC = () => {
         />
         <ProFormDigit
           name="quantity"
-          label="调拨数量"
-          placeholder="请输入调拨数量"
-          rules={[{ required: true, message: '请输入调拨数量' }]}
+          label={t('app.kuaizhizao.inventoryTransfer.formTransferQty')}
+          placeholder={t('app.kuaizhizao.inventoryTransfer.formTransferQtyPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaizhizao.inventoryTransfer.formTransferQtyRequired') }]}
           min={0}
           fieldProps={{ precision: 2 }}
         />
         <ProFormDigit
           name="unit_price"
-          label="单价"
-          placeholder="请输入单价"
+          label={t('app.kuaizhizao.warehouseCommon.colUnitPrice')}
           min={0}
           fieldProps={{ precision: 2 }}
         />
@@ -960,11 +963,11 @@ const InventoryTransferPage: React.FC = () => {
               {() => (
                 <ProFormSelect
                   name="from_storage_area_id"
-                  label="调出库区"
-                  placeholder="请选择调出库区"
+                  label={t('app.kuaizhizao.inventoryTransfer.colFromStorageArea')}
+                  placeholder={t('app.kuaizhizao.inventoryTransfer.formFromStorageAreaPlaceholder')}
                   rules={
                     currentItemTransferMode === 'bin_relocation'
-                      ? [{ required: true, message: '库内移位必须选择调出库区' }]
+                      ? [{ required: true, message: t('app.kuaizhizao.inventoryTransfer.msgBinFromAreaRequired') }]
                       : undefined
                   }
                   options={getAreaOptions(itemFormRef.current?.getFieldValue?.('from_warehouse_id'))}
@@ -983,11 +986,11 @@ const InventoryTransferPage: React.FC = () => {
               {() => (
                 <ProFormSelect
                   name="from_location_id"
-                  label="调出库位"
-                  placeholder="请选择调出库位"
+                  label={t('app.kuaizhizao.inventoryTransfer.colFromLocation')}
+                  placeholder={t('app.kuaizhizao.inventoryTransfer.formFromLocationPlaceholder')}
                   rules={
                     currentItemTransferMode === 'bin_relocation'
-                      ? [{ required: true, message: '库内移位必须选择调出库位' }]
+                      ? [{ required: true, message: t('app.kuaizhizao.inventoryTransfer.msgBinFromLocationRequired') }]
                       : undefined
                   }
                   options={getLocationOptions(itemFormRef.current?.getFieldValue?.('from_storage_area_id'))}
@@ -1003,11 +1006,11 @@ const InventoryTransferPage: React.FC = () => {
               {() => (
                 <ProFormSelect
                   name="to_storage_area_id"
-                  label="调入库区"
-                  placeholder="请选择调入库区"
+                  label={t('app.kuaizhizao.inventoryTransfer.colToStorageArea')}
+                  placeholder={t('app.kuaizhizao.inventoryTransfer.formToStorageAreaPlaceholder')}
                   rules={
                     currentItemTransferMode === 'bin_relocation'
-                      ? [{ required: true, message: '库内移位必须选择调入库区' }]
+                      ? [{ required: true, message: t('app.kuaizhizao.inventoryTransfer.msgBinToAreaRequired') }]
                       : undefined
                   }
                   options={getAreaOptions(itemFormRef.current?.getFieldValue?.('to_warehouse_id'))}
@@ -1026,11 +1029,11 @@ const InventoryTransferPage: React.FC = () => {
               {() => (
                 <ProFormSelect
                   name="to_location_id"
-                  label="调入库位"
-                  placeholder="请选择调入库位"
+                  label={t('app.kuaizhizao.inventoryTransfer.colToLocation')}
+                  placeholder={t('app.kuaizhizao.inventoryTransfer.formToLocationPlaceholder')}
                   rules={
                     currentItemTransferMode === 'bin_relocation'
-                      ? [{ required: true, message: '库内移位必须选择调入库位' }]
+                      ? [{ required: true, message: t('app.kuaizhizao.inventoryTransfer.msgBinToLocationRequired') }]
                       : undefined
                   }
                   options={getLocationOptions(itemFormRef.current?.getFieldValue?.('to_storage_area_id'))}
@@ -1044,20 +1047,20 @@ const InventoryTransferPage: React.FC = () => {
         <ProFormText name="to_location_code" hidden />
         <ProFormText
           name="batch_no"
-          label="批次号（可选）"
-          placeholder="请输入批次号"
+          label={t('app.kuaizhizao.inventoryTransfer.formBatchNoOptional')}
+          placeholder={t('app.kuaizhizao.inventoryTransfer.formBatchNoPlaceholder')}
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title="调拨单详情"
+        title={t('app.kuaizhizao.inventoryTransfer.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -1067,116 +1070,116 @@ const InventoryTransferPage: React.FC = () => {
         width={DRAWER_CONFIG.HALF_WIDTH}
         columns={[
           {
-            title: '调拨单号',
+            title: t('app.kuaizhizao.warehouseReports.colTransferCode'),
             dataIndex: 'code',
           },
           {
-            title: '调出仓库',
+            title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
             dataIndex: 'from_warehouse_name',
           },
           {
-            title: '调入仓库',
+            title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
             dataIndex: 'to_warehouse_name',
           },
           {
-            title: '调拨日期',
+            title: t('app.kuaizhizao.inventoryTransfer.colTransferDate'),
             dataIndex: 'transfer_date',
             valueType: 'date',
           },
           {
-            title: '状态',
+            title: t('app.kuaizhizao.warehouseCommon.colStatus'),
             dataIndex: 'status',
             valueEnum: {
-              draft: { text: '草稿', status: 'default' },
-              in_progress: { text: '调拨中', status: 'processing' },
-              completed: { text: '已完成', status: 'success' },
-              cancelled: { text: '已取消', status: 'error' },
+              draft: { text: t('app.kuaizhizao.warehouseCommon.statusDraft'), status: 'default' },
+              in_progress: { text: t('app.kuaizhizao.inventoryTransfer.statusInProgress'), status: 'processing' },
+              completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted'), status: 'success' },
+              cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled'), status: 'error' },
             },
           },
           {
-            title: '调拨物料总数',
+            title: t('app.kuaizhizao.inventoryTransfer.colTotalItems'),
             dataIndex: 'total_items',
           },
           {
-            title: '调拨总数量',
+            title: t('app.kuaizhizao.inventoryTransfer.colTotalQty'),
             dataIndex: 'total_quantity',
           },
           {
-            title: '调拨总金额',
+            title: t('app.kuaizhizao.inventoryTransfer.colTotalAmount'),
             dataIndex: 'total_amount',
             render: (dom: React.ReactNode, entity: InventoryTransfer) => `¥${entity.total_amount?.toFixed(2) || '0.00'}`,
           },
           {
-            title: '调拨原因',
+            title: t('app.kuaizhizao.inventoryTransfer.formTransferReason'),
             dataIndex: 'transfer_reason',
           },
           {
-            title: '备注',
+            title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
             dataIndex: 'remarks',
           },
         ]}
       >
         {currentTransfer && currentTransfer.items && currentTransfer.items.length > 0 && (
-          <Card title="调拨明细" style={{ marginTop: 16 }}>
+          <Card title={t('app.kuaizhizao.inventoryTransfer.detailItemsTitle')} style={{ marginTop: 16 }}>
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             <Table
               className="warehouse-detail-table"
               columns={[
                 {
-                  title: '物料编号',
+                  title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'),
                   dataIndex: 'material_code',
                   width: 120,
                 },
                 {
-                  title: '物料名称',
+                  title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
                   dataIndex: 'material_name',
                   width: 150,
                 },
                 {
-                  title: '调拨数量',
+                  title: t('app.kuaizhizao.inventoryTransfer.formTransferQty'),
                   dataIndex: 'quantity',
                   width: 100,
                   align: 'right',
                 },
                 {
-                  title: '调出库区/库位',
+                  title: t('app.kuaizhizao.inventoryTransfer.colFromAreaLocation'),
                   width: 160,
                   render: (_: unknown, row: InventoryTransferItem) =>
                     [row.from_storage_area_code, row.from_location_code].filter(Boolean).join(' / ') || '-',
                 },
                 {
-                  title: '调入库区/库位',
+                  title: t('app.kuaizhizao.inventoryTransfer.colToAreaLocation'),
                   width: 160,
                   render: (_: unknown, row: InventoryTransferItem) =>
                     [row.to_storage_area_code, row.to_location_code].filter(Boolean).join(' / ') || '-',
                 },
                 {
-                  title: '单价',
+                  title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
                   dataIndex: 'unit_price',
                   width: 100,
                   align: 'right',
                   render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
                 },
                 {
-                  title: '金额',
+                  title: t('app.kuaizhizao.warehouseCommon.colAmount'),
                   dataIndex: 'amount',
                   width: 100,
                   align: 'right',
                   render: (value: number) => `¥${value?.toFixed(2) || '0.00'}`,
                 },
                 {
-                  title: '批次号',
+                  title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
                   dataIndex: 'batch_no',
                   width: 100,
                 },
                 {
-                  title: '状态',
+                  title: t('app.kuaizhizao.warehouseCommon.colStatus'),
                   dataIndex: 'status',
                   width: 100,
                   render: (status: string) => {
                     const statusMap: Record<string, { text: string; color: string }> = {
-                      pending: { text: '待调拨', color: 'default' },
-                      transferred: { text: '已调拨', color: 'success' },
+                      pending: { text: t('app.kuaizhizao.inventoryTransfer.statusItemPending'), color: 'default' },
+                      transferred: { text: t('app.kuaizhizao.inventoryTransfer.statusItemTransferred'), color: 'success' },
                     };
                     const statusInfo = statusMap[status] || { text: status, color: 'default' };
                     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;

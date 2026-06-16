@@ -1,3 +1,5 @@
+import type { TFunction } from 'i18next';
+
 /** 从检验单记录解析方案/标准模板（other_checks 或 quality_characteristics） */
 export function getInspectionTemplateSource(record: Record<string, unknown> | null | undefined): Record<string, unknown> | null {
   if (!record) return null;
@@ -64,19 +66,20 @@ export type TraceabilityNodeLike = {
   data?: Record<string, unknown>;
 };
 
-const TRACEABILITY_NODE_LABEL: Record<string, string> = {
-  work_order: '产线工单',
-  batch: '物料批次',
-  process_inspection: '过程检验',
-  finished_goods_inspection: '成品检验',
-  defect_record: '不合格品',
-  incoming_inspection: '来料检验',
-  oqc_inspection: '出货检验',
+const TRACEABILITY_NODE_TYPE_I18N: Record<string, string> = {
+  work_order: 'app.kuaizhizao.quality.traceability.nodeType.workOrder',
+  batch: 'app.kuaizhizao.quality.traceability.nodeType.batch',
+  process_inspection: 'app.kuaizhizao.quality.traceability.nodeType.processInspection',
+  finished_goods_inspection: 'app.kuaizhizao.quality.traceability.nodeType.finishedGoodsInspection',
+  defect_record: 'app.kuaizhizao.quality.traceability.nodeType.defectRecord',
+  incoming_inspection: 'app.kuaizhizao.quality.traceability.nodeType.incomingInspection',
+  oqc_inspection: 'app.kuaizhizao.quality.traceability.nodeType.oqcInspection',
 };
 
-export function getTraceabilityNodeTypeLabel(type?: string): string {
-  if (!type) return '节点';
-  return TRACEABILITY_NODE_LABEL[type] || type;
+export function getTraceabilityNodeTypeLabel(type: string | undefined, t: TFunction): string {
+  if (!type) return t('app.kuaizhizao.quality.traceability.nodeType.default');
+  const key = TRACEABILITY_NODE_TYPE_I18N[type];
+  return key ? t(key) : type;
 }
 
 export function buildTraceabilityNodePath(node: TraceabilityNodeLike): string | null {

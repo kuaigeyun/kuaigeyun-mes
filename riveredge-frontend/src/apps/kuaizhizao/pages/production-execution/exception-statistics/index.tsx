@@ -7,15 +7,18 @@
  * @date 2025-01-15
  */
 
-import React, { useState, useEffect } from 'react';
-import { App, Card, Statistic, Row, Col, DatePicker, Space, message, Button } from 'antd';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { App, Card, Statistic, Row, Col, DatePicker, Space, Button } from 'antd';
 import { WarningOutlined, ClockCircleOutlined, BugOutlined, CheckCircleOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 import { Column, Pie } from '@ant-design/charts';
 import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
+
+const P = 'app.kuaizhizao.productionException';
 
 /**
  * 异常统计接口定义
@@ -51,15 +54,41 @@ interface ExceptionStatistics {
  * 异常统计分析页面组件
  */
 const ExceptionStatisticsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [statistics, setStatistics] = useState<ExceptionStatistics>({});
   const [loading, setLoading] = useState(false);
   const [dateRange, setDateRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null);
 
+  const alertLevelLabel = useCallback(
+    (level: string) => {
+      const map: Record<string, string> = {
+        critical: t(`${P}.alertLevel.critical`),
+        high: t(`${P}.alertLevel.high`),
+        medium: t(`${P}.alertLevel.medium`),
+        low: t(`${P}.alertLevel.low`),
+      };
+      return map[level] ?? level;
+    },
+    [t],
+  );
+
+  const severityLabel = useCallback(
+    (severity: string) => {
+      const map: Record<string, string> = {
+        critical: t(`${P}.quality.severity.critical`),
+        major: t(`${P}.quality.severity.major`),
+        minor: t(`${P}.quality.severity.minor`),
+      };
+      return map[severity] ?? severity;
+    },
+    [t],
+  );
+
   /**
    * 加载统计数据
    */
-  const loadStatistics = async () => {
+  const loadStatistics = useCallback(async () => {
     setLoading(true);
     try {
       const params: Record<string, string> = {};
@@ -72,16 +101,16 @@ const ExceptionStatisticsPage: React.FC = () => {
         params,
       });
       setStatistics(result || {});
-    } catch (error) {
-      messageApi.error('获取统计数据失败');
+    } catch {
+      messageApi.error(t(`${P}.statistics.message.fetchFailed`));
     } finally {
       setLoading(false);
     }
-  };
+  }, [dateRange, messageApi, t]);
 
   useEffect(() => {
     loadStatistics();
-  }, [dateRange]);
+  }, [loadStatistics]);
 
   /**
    * 处理刷新
@@ -99,26 +128,58 @@ const ExceptionStatisticsPage: React.FC = () => {
       await apiRequest('/apps/kuaizhizao/exceptions/detect', {
         method: 'POST',
       });
-      messageApi.success('异常检测已触发，请稍后查看结果');
-      // 延迟刷新统计数据
+      messageApi.success(t(`${P}.statistics.message.triggerSuccess`));
       setTimeout(() => {
         loadStatistics();
       }, 2000);
     } catch (error: any) {
-      messageApi.error(error.message || '触发异常检测失败');
+      messageApi.error(error.message || t(`${P}.statistics.message.triggerFailed`));
     } finally {
       setLoading(false);
     }
   };
 
+  const typeDistributionData = useMemo(
+    () =>
+      [
+        {
+          type: t(`${P}.statistics.chart.typeMaterialShortage`),
+          value: statistics.material_shortage?.total || 0,
+        },
+        {
+          type: t(`${P}.statistics.chart.typeDeliveryDelay`),
+          value: statistics.delivery_delay?.total || 0,
+        },
+        {
+          type: t(`${P}.statistics.chart.typeQuality`),
+          value: statistics.quality?.total || 0,
+        },
+      ].filter((item) => item.value > 0),
+    [statistics, t],
+  );
+
+  const statusDistributionData = useMemo(
+    () =>
+      [
+        {
+          type: t(`${P}.status.pending`),
+          value: statistics.summary?.total_pending || 0,
+        },
+        {
+          type: t(`${P}.status.resolved`),
+          value: statistics.summary?.total_resolved || 0,
+        },
+      ].filter((item) => item.value > 0),
+    [statistics, t],
+  );
+
   return (
     <ListPageTemplate>
       <div>
         <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
-          {/* 日期筛选和操作 */}
           <Card>
             <Space>
-              <span>日期范围：</span>
+              <span>{t(`${P}.statistics.dateRange`)}</span>
               <RangePicker
                 value={dateRange}
                 onChange={(dates) => setDateRange(dates as [dayjs.Dayjs, dayjs.Dayjs] | null)}
@@ -129,7 +190,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                 onClick={handleRefresh}
                 loading={loading}
               >
-                刷新
+                {t('common.refresh')}
               </Button>
               <Button
                 type="primary"
@@ -137,39 +198,38 @@ const ExceptionStatisticsPage: React.FC = () => {
                 onClick={handleTriggerDetection}
                 loading={loading}
               >
-                触发异常检测
+                {t(`${P}.statistics.triggerDetection`)}
               </Button>
             </Space>
           </Card>
 
-          {/* 总体统计 */}
-          <Card title="总体统计">
+          <Card title={t(`${P}.statistics.overallTitle`)}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
-                  title="异常总数"
+                  title={t(`${P}.statistics.totalExceptions`)}
                   value={statistics.summary?.total_exceptions || 0}
                   prefix={<WarningOutlined />}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="待处理"
+                  title={t(`${P}.status.pending`)}
                   value={statistics.summary?.total_pending || 0}
-                  styles={{ content: {color: '#ff4d4f' } }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="已解决"
+                  title={t(`${P}.status.resolved`)}
                   value={statistics.summary?.total_resolved || 0}
-                  styles={{ content: {color: '#52c41a' } }}
+                  styles={{ content: { color: '#52c41a' } }}
                   prefix={<CheckCircleOutlined />}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="解决率"
+                  title={t(`${P}.statistics.resolutionRate`)}
                   value={statistics.summary?.resolution_rate || 0}
                   suffix="%"
                   precision={2}
@@ -178,33 +238,32 @@ const ExceptionStatisticsPage: React.FC = () => {
             </Row>
           </Card>
 
-          {/* 缺料异常统计 */}
-          <Card title="缺料异常统计" loading={loading}>
+          <Card title={t(`${P}.statistics.materialShortageTitle`)} loading={loading}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
-                  title="缺料异常总数"
+                  title={t(`${P}.statistics.materialShortageTotal`)}
                   value={statistics.material_shortage?.total || 0}
                   prefix={<WarningOutlined />}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="待处理"
+                  title={t(`${P}.status.pending`)}
                   value={statistics.material_shortage?.pending || 0}
-                  styles={{ content: {color: '#ff4d4f' } }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="已解决"
+                  title={t(`${P}.status.resolved`)}
                   value={statistics.material_shortage?.resolved || 0}
-                  styles={{ content: {color: '#52c41a' } }}
+                  styles={{ content: { color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="按级别分布"
+                  title={t(`${P}.statistics.byLevelDistribution`)}
                   value={Object.keys(statistics.material_shortage?.by_level || {}).length}
                 />
               </Col>
@@ -215,7 +274,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                   {Object.entries(statistics.material_shortage.by_level).map(([level, count]) => (
                     <Col span={6} key={level}>
                       <Statistic
-                        title={`${level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低'}级别`}
+                        title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
                         value={count}
                       />
                     </Col>
@@ -224,7 +283,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.material_shortage.by_level).map(([level, count]) => ({
-                      level: level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低',
+                      level: alertLevelLabel(level),
                       count,
                     }))}
                     xField="level"
@@ -239,33 +298,32 @@ const ExceptionStatisticsPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 延期异常统计 */}
-          <Card title="延期异常统计" loading={loading}>
+          <Card title={t(`${P}.statistics.deliveryDelayTitle`)} loading={loading}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
-                  title="延期异常总数"
+                  title={t(`${P}.statistics.deliveryDelayTotal`)}
                   value={statistics.delivery_delay?.total || 0}
                   prefix={<ClockCircleOutlined />}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="待处理"
+                  title={t(`${P}.status.pending`)}
                   value={statistics.delivery_delay?.pending || 0}
-                  styles={{ content: {color: '#ff4d4f' } }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="已解决"
+                  title={t(`${P}.status.resolved`)}
                   value={statistics.delivery_delay?.resolved || 0}
-                  styles={{ content: {color: '#52c41a' } }}
+                  styles={{ content: { color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="按级别分布"
+                  title={t(`${P}.statistics.byLevelDistribution`)}
                   value={Object.keys(statistics.delivery_delay?.by_level || {}).length}
                 />
               </Col>
@@ -276,7 +334,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                   {Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => (
                     <Col span={6} key={level}>
                       <Statistic
-                        title={`${level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低'}级别`}
+                        title={t(`${P}.label.levelSuffix`, { level: alertLevelLabel(level) })}
                         value={count}
                       />
                     </Col>
@@ -285,7 +343,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.delivery_delay.by_level).map(([level, count]) => ({
-                      level: level === 'critical' ? '紧急' : level === 'high' ? '高' : level === 'medium' ? '中' : '低',
+                      level: alertLevelLabel(level),
                       count,
                     }))}
                     xField="level"
@@ -300,33 +358,32 @@ const ExceptionStatisticsPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 质量异常统计 */}
-          <Card title="质量异常统计" loading={loading}>
+          <Card title={t(`${P}.statistics.qualityTitle`)} loading={loading}>
             <Row gutter={16}>
               <Col span={6}>
                 <Statistic
-                  title="质量异常总数"
+                  title={t(`${P}.statistics.qualityTotal`)}
                   value={statistics.quality?.total || 0}
                   prefix={<BugOutlined />}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="待处理"
+                  title={t(`${P}.status.pending`)}
                   value={statistics.quality?.pending || 0}
-                  styles={{ content: {color: '#ff4d4f' } }}
+                  styles={{ content: { color: '#ff4d4f' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="已关闭"
+                  title={t(`${P}.status.closed`)}
                   value={statistics.quality?.closed || 0}
-                  styles={{ content: {color: '#52c41a' } }}
+                  styles={{ content: { color: '#52c41a' } }}
                 />
               </Col>
               <Col span={6}>
                 <Statistic
-                  title="按严重程度分布"
+                  title={t(`${P}.statistics.bySeverityDistribution`)}
                   value={Object.keys(statistics.quality?.by_severity || {}).length}
                 />
               </Col>
@@ -337,7 +394,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                   {Object.entries(statistics.quality.by_severity).map(([severity, count]) => (
                     <Col span={6} key={severity}>
                       <Statistic
-                        title={`${severity === 'critical' ? '紧急' : severity === 'major' ? '严重' : '轻微'}`}
+                        title={severityLabel(severity)}
                         value={count}
                       />
                     </Col>
@@ -346,7 +403,7 @@ const ExceptionStatisticsPage: React.FC = () => {
                 <div style={{ marginTop: 16 }}>
                   <Column
                     data={Object.entries(statistics.quality.by_severity).map(([severity, count]) => ({
-                      severity: severity === 'critical' ? '紧急' : severity === 'major' ? '严重' : '轻微',
+                      severity: severityLabel(severity),
                       count,
                     }))}
                     xField="severity"
@@ -361,25 +418,11 @@ const ExceptionStatisticsPage: React.FC = () => {
             )}
           </Card>
 
-          {/* 异常类型分布饼图 */}
-          <Card title="异常类型分布" loading={loading}>
+          <Card title={t(`${P}.statistics.typeDistributionTitle`)} loading={loading}>
             <Row gutter={16}>
               <Col span={12}>
                 <Pie
-                  data={[
-                    {
-                      type: '缺料异常',
-                      value: statistics.material_shortage?.total || 0,
-                    },
-                    {
-                      type: '延期异常',
-                      value: statistics.delivery_delay?.total || 0,
-                    },
-                    {
-                      type: '质量异常',
-                      value: statistics.quality?.total || 0,
-                    },
-                  ].filter(item => item.value > 0)}
+                  data={typeDistributionData}
                   angleField="value"
                   colorField="type"
                   radius={0.8}
@@ -392,16 +435,7 @@ const ExceptionStatisticsPage: React.FC = () => {
               </Col>
               <Col span={12}>
                 <Pie
-                  data={[
-                    {
-                      type: '待处理',
-                      value: statistics.summary?.total_pending || 0,
-                    },
-                    {
-                      type: '已解决',
-                      value: statistics.summary?.total_resolved || 0,
-                    },
-                  ].filter(item => item.value > 0)}
+                  data={statusDistributionData}
                   angleField="value"
                   colorField="type"
                   radius={0.8}
@@ -421,4 +455,3 @@ const ExceptionStatisticsPage: React.FC = () => {
 };
 
 export default ExceptionStatisticsPage;
-

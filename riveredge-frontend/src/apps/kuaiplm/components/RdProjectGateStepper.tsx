@@ -4,6 +4,7 @@
 
 import React, { useMemo } from 'react';
 import { Tag, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   Layers,
@@ -19,7 +20,8 @@ import {
 } from 'lucide-react';
 import { UniLifecycleStepper } from '../../../components/uni-lifecycle/UniLifecycleStepper';
 import type { SubStage, SubStageStatus } from '../../../components/uni-lifecycle/types';
-import { GATE_STATUS_LABELS, type ProjectType, type RdProjectGate } from '../services/rd-project';
+import type { ProjectType, RdProjectGate } from '../services/rd-project';
+import { getKuaiplmGateStatusText } from './kuaiplmMeta';
 import './RdProjectGateStepper.less';
 
 const GATE_ICON_SIZE = 17;
@@ -68,13 +70,17 @@ export const RdProjectGateStepper: React.FC<RdProjectGateStepperProps> = ({
   onChange,
   projectType = 'RD',
 }) => {
+  const { t } = useTranslation();
   const steps = useMemo(() => buildRdProjectGateSteps(gates, activeGateKey), [gates, activeGateKey]);
   const activeGate = gates.find((g) => g.gate_key === activeGateKey);
   const activeStatus = activeGate?.status ?? 'PENDING';
   const isException = activeStatus === 'FAILED';
 
   const passedCount = gates.filter((g) => g.status === 'PASSED').length;
-  const stageTitle = projectType === 'DELIVERY' ? '交付项目阶段' : 'NPI 项目阶段';
+  const stageTitle =
+    projectType === 'DELIVERY'
+      ? t('app.kuaiplm.rdProjects.gateStepper.deliveryTitle')
+      : t('app.kuaiplm.rdProjects.gateStepper.npiTitle');
 
   return (
     <div className="rd-project-gate-stepper">
@@ -82,7 +88,10 @@ export const RdProjectGateStepper: React.FC<RdProjectGateStepperProps> = ({
         <Typography.Text className="rd-project-gate-stepper__title">{stageTitle}</Typography.Text>
         <SpaceLike>
           <Typography.Text type="secondary" className="rd-project-gate-stepper__meta">
-            {passedCount}/{gates.length} 已通过
+            {t('app.kuaiplm.rdProjects.gateStepper.passedCount', {
+              passed: passedCount,
+              total: gates.length,
+            })}
           </Typography.Text>
           {activeGate ? (
             <Tag
@@ -96,7 +105,7 @@ export const RdProjectGateStepper: React.FC<RdProjectGateStepperProps> = ({
                       : 'default'
               }
             >
-              {activeGate.gate_name} · {GATE_STATUS_LABELS[activeStatus] ?? activeStatus}
+              {activeGate.gate_name} · {getKuaiplmGateStatusText(t, activeStatus)}
             </Tag>
           ) : null}
         </SpaceLike>
@@ -113,7 +122,7 @@ export const RdProjectGateStepper: React.FC<RdProjectGateStepperProps> = ({
       {isException ? (
         <Typography.Text type="danger" className="rd-project-gate-stepper__hint">
           <XCircle size={14} style={{ marginRight: 4, verticalAlign: '-2px' }} aria-hidden />
-          当前阶段评审未通过，请完善交付物后重新评审
+          {t('app.kuaiplm.rdProjects.gateStepper.failedHint')}
         </Typography.Text>
       ) : null}
     </div>

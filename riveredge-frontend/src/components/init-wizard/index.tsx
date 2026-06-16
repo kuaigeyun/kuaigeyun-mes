@@ -7,7 +7,7 @@
  * Date: 2025-01-15
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { App } from 'antd';
 import { ProForm, ProFormSelect, ProFormGroup } from '@ant-design/pro-components';
@@ -20,6 +20,12 @@ import { getDataDictionaryByCode, getDictionaryItemList } from '../../services/d
 import { getLanguageList } from '../../services/language';
 import { useConfigStore } from '../../stores/configStore';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../utils/siteSettingsDictCache';
+import {
+  buildFallbackCurrencyOptions,
+  buildFallbackTimezoneOptions,
+  mapCurrencyDictionaryOptions,
+  mapTimezoneDictionaryOptions,
+} from '../../utils/systemDictionaryLabels';
 import { SettingOutlined, CheckCircleOutlined } from '@ant-design/icons';
 
 /**
@@ -219,21 +225,16 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
   };
 
   /** 步骤2 默认选项（字典为空时使用，与站点设置一致） */
-  const defaultCurrencyOptions = [
-    { label: '人民币 (CNY)', value: 'CNY' },
-    { label: '美元 (USD)', value: 'USD' },
-    { label: '欧元 (EUR)', value: 'EUR' },
-    { label: '日元 (JPY)', value: 'JPY' },
-    { label: '英镑 (GBP)', value: 'GBP' },
-  ];
-  const defaultTimezoneOptions = [
-    { label: '东八区 (UTC+8)', value: 'Asia/Shanghai' },
-    { label: '东京 (UTC+9)', value: 'Asia/Tokyo' },
-    { label: '首尔 (UTC+9)', value: 'Asia/Seoul' },
-    { label: '纽约 (UTC-5)', value: 'America/New_York' },
-    { label: '伦敦 (UTC+0)', value: 'Europe/London' },
-    { label: '巴黎 (UTC+1)', value: 'Europe/Paris' },
-  ];
+  const defaultCurrencyOptions = useMemo(() => buildFallbackCurrencyOptions(t), [t]);
+  const defaultTimezoneOptions = useMemo(() => buildFallbackTimezoneOptions(t), [t]);
+  const localizedCurrencyOptions = useMemo(
+    () => (currencyOptions.length > 0 ? mapCurrencyDictionaryOptions(currencyOptions, t) : defaultCurrencyOptions),
+    [currencyOptions, defaultCurrencyOptions, t],
+  );
+  const localizedTimezoneOptions = useMemo(
+    () => (timezoneOptions.length > 0 ? mapTimezoneDictionaryOptions(timezoneOptions, t) : defaultTimezoneOptions),
+    [timezoneOptions, defaultTimezoneOptions, t],
+  );
   const defaultLanguageOptions = [
     { label: '简体中文 (zh-CN)', value: 'zh-CN' },
     { label: '繁体中文 (zh-TW)', value: 'zh-TW' },
@@ -273,13 +274,13 @@ const InitWizard: React.FC<InitWizardProps> = ({ tenantId, onComplete, onCancel 
               name="timezone"
               label={t('pages.init.wizard.timezone')}
               rules={[{ required: true, message: t('pages.init.wizard.selectTimezone') }]}
-              options={timezoneOptions.length > 0 ? timezoneOptions : defaultTimezoneOptions}
+              options={localizedTimezoneOptions}
             />
             <ProFormSelect
               name="default_currency"
               label={t('pages.init.wizard.defaultCurrency')}
               rules={[{ required: true, message: t('pages.init.wizard.selectCurrency') }]}
-              options={currencyOptions.length > 0 ? currencyOptions : defaultCurrencyOptions}
+              options={localizedCurrencyOptions}
             />
             <ProFormSelect
               name="default_language"

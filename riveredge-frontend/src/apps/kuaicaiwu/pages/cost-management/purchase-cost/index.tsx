@@ -1,16 +1,12 @@
 /**
  * 采购件成本核算页面
- *
- * 提供基于物料来源类型的采购成本核算功能。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, Divider } from 'antd';
+import { App, Button, Card, Divider } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { purchaseCostApi } from '../../../services/cost';
@@ -22,14 +18,13 @@ import {
   normalizeCostListRows,
   type CostSelectOption,
 } from '../costSelectData';
+import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
 
 interface PurchaseCostResult {
   material_id: number;
   material_code: string;
   material_name: string;
-  purchase_order_id?: number;
   purchase_order_code?: string;
-  purchase_order_item_id?: number;
   source_type: string;
   quantity: number;
   purchase_price: number;
@@ -39,7 +34,6 @@ interface PurchaseCostResult {
   cost_details: any;
   calculation_type: string;
   calculation_date: string;
-  supplier_id?: number;
   supplier_name?: string;
 }
 
@@ -48,6 +42,7 @@ export interface PurchaseCostPageProps {
 }
 
 const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -59,17 +54,14 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
   const [purchaseOrderItemOptions, setPurchaseOrderItemOptions] = useState<CostSelectOption[]>([]);
   const [calculationMode, setCalculationMode] = useState<'standard' | 'actual-item' | 'actual-order'>('standard');
 
-  /**
-   * 加载物料列表
-   */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        const rows = normalizeCostListRows(result);
-        setMaterials(rows.filter(m => (m.sourceType || m.source_type) === 'Buy'));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        const rows = normalizeCostListRows(list);
+        setMaterials(rows.filter((m) => (m.sourceType || m.source_type) === 'Buy'));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -88,7 +80,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
           setPurchaseOrderItemOptions(poi);
         }
       } catch (e) {
-        console.error('加载采购订单下拉失败:', e);
+        console.error('load purchase orders failed:', e);
       }
     })();
     return () => {
@@ -96,16 +88,12 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
     };
   }, []);
 
-  /**
-   * 处理核算
-   */
   const handleCalculate = async (values: any) => {
     try {
       setLoading(true);
       const data: any = {
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
       };
-
       if (calculationMode === 'standard') {
         data.material_id = values.material_id;
         data.quantity = values.quantity;
@@ -114,63 +102,71 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
       } else {
         data.purchase_order_id = values.purchase_order_id;
       }
-
-      const result = await purchaseCostApi.calculate(data);
-      setResult(result);
-      messageApi.success('采购成本核算成功');
+      const res = await purchaseCostApi.calculate(data);
+      setResult(res);
+      messageApi.success(t('app.kuaicaiwu.purchaseCost.calculateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '采购成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.purchaseCost.calculateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 打开核算弹窗
-   */
   const handleOpenModal = (mode: 'standard' | 'actual-item' | 'actual-order') => {
     setCalculationMode(mode);
     setModalVisible(true);
     setResult(null);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      quantity: 1,
-    });
+    formRef.current?.setFieldsValue({ calculation_date: dayjs(), quantity: 1 });
   };
+
+  const resultColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
+      {
+        title: t('app.kuaicaiwu.purchaseCost.col.purchaseOrderCode'),
+        dataIndex: 'purchase_order_code',
+        hide: !result?.purchase_order_code,
+      },
+      { title: t('app.kuaicaiwu.costCommon.col.supplier'), dataIndex: 'supplier_name', hide: !result?.supplier_name },
+      { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('app.kuaicaiwu.purchaseCost.col.purchasePrice'), dataIndex: 'purchase_price' },
+      { title: t('app.kuaicaiwu.purchaseCost.col.purchaseFee'), dataIndex: 'purchase_fee' },
+      { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.unitCost'), dataIndex: 'unit_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationType'), dataIndex: 'calculation_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationDate'), dataIndex: 'calculation_date' },
+    ],
+    [t, result],
+  );
+
+  const modalTitle =
+    calculationMode === 'standard'
+      ? t('app.kuaicaiwu.purchaseCost.modalStandard')
+      : calculationMode === 'actual-item'
+        ? t('app.kuaicaiwu.purchaseCost.modalActualItem')
+        : t('app.kuaicaiwu.purchaseCost.modalActualOrder');
 
   return (
     <PageContainer
       ghost={embedded}
-      title={embedded ? false : '采购件成本核算'}
+      title={embedded ? false : t('app.kuaicaiwu.purchaseCost.title')}
       extra={[
-        <Button
-          key="calculate-standard"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={() => handleOpenModal('standard')}
-        >
-          核算标准采购成本
+        <Button key="standard" type="primary" icon={<CalculatorOutlined />} onClick={() => handleOpenModal('standard')}>
+          {t('app.kuaicaiwu.purchaseCost.calculateStandard')}
         </Button>,
-        <Button
-          key="calculate-actual-item"
-          icon={<CalculatorOutlined />}
-          onClick={() => handleOpenModal('actual-item')}
-        >
-          核算实际成本（明细）
+        <Button key="item" icon={<CalculatorOutlined />} onClick={() => handleOpenModal('actual-item')}>
+          {t('app.kuaicaiwu.purchaseCost.calculateActualItem')}
         </Button>,
-        <Button
-          key="calculate-actual-order"
-          icon={<CalculatorOutlined />}
-          onClick={() => handleOpenModal('actual-order')}
-        >
-          核算实际成本（整单）
+        <Button key="order" icon={<CalculatorOutlined />} onClick={() => handleOpenModal('actual-order')}>
+          {t('app.kuaicaiwu.purchaseCost.calculateActualOrder')}
         </Button>,
       ]}
     >
-      {/* 核算结果展示 */}
       {result && (
-        <Card title="核算结果" style={{ marginBottom: 16 }}>
+        <Card title={t('app.kuaicaiwu.costCommon.resultTitle')} style={{ marginBottom: 16 }}>
           <ProDescriptions
             bordered
             column={2}
@@ -179,7 +175,7 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
               material_name: result.material_name,
               purchase_order_code: result.purchase_order_code,
               supplier_name: result.supplier_name,
-              source_type: <Tag color="green">采购件</Tag>,
+              source_type: getSourceTypeTag('Buy', t),
               quantity: result.quantity,
               purchase_price: `¥${result.purchase_price?.toFixed(2)}`,
               purchase_fee: `¥${result.purchase_fee?.toFixed(2)}`,
@@ -189,28 +185,14 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
                 </span>
               ),
               unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
-              calculation_type: result.calculation_type,
+              calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
             }}
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code' },
-              { title: '物料名称', dataIndex: 'material_name' },
-              { title: '采购订单编号', dataIndex: 'purchase_order_code', hide: !result.purchase_order_code },
-              { title: '供应商', dataIndex: 'supplier_name', hide: !result.supplier_name },
-              { title: '物料来源类型', dataIndex: 'source_type' },
-              { title: '数量', dataIndex: 'quantity' },
-              { title: '采购价格', dataIndex: 'purchase_price' },
-              { title: '采购费用', dataIndex: 'purchase_fee' },
-              { title: '总成本', dataIndex: 'total_cost' },
-              { title: '单位成本', dataIndex: 'unit_cost' },
-              { title: '核算类型', dataIndex: 'calculation_type' },
-              { title: '核算日期', dataIndex: 'calculation_date' },
-            ]}
+            columns={resultColumns}
           />
-
           {result.cost_details && (
             <>
-              <Divider>成本明细</Divider>
+              <Divider>{t('app.kuaicaiwu.costCommon.costDetails')}</Divider>
               <div style={{ maxHeight: 400, overflow: 'auto' }}>
                 <StructuredCostDataView data={result.cost_details} />
               </div>
@@ -219,15 +201,8 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
         </Card>
       )}
 
-      {/* 核算弹窗 */}
       <FormModalTemplate
-        title={
-          calculationMode === 'standard'
-            ? '核算标准采购成本'
-            : calculationMode === 'actual-item'
-            ? '核算实际采购成本（明细）'
-            : '核算实际采购成本（整单）'
-        }
+        title={modalTitle}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -242,10 +217,10 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
           <>
             <ProFormSelect
               name="material_id"
-              label="物料"
-              placeholder="请选择采购件物料"
-              rules={[{ required: true, message: '请选择物料' }]}
-              options={materials.map(m => ({
+              label={t('app.kuaicaiwu.costCommon.field.material')}
+              placeholder={t('app.kuaicaiwu.purchaseCost.field.materialPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
+              options={materials.map((m) => ({
                 label: `${m.mainCode || m.code} - ${m.name}`,
                 value: m.id,
               }))}
@@ -257,21 +232,21 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
             />
             <ProFormDigit
               name="quantity"
-              label="数量"
-              placeholder="请输入数量"
-              rules={[{ required: true, message: '请输入数量' }, { type: 'number', min: 0.0001, message: '数量必须大于0' }]}
-              fieldProps={{
-                precision: 4,
-                style: { width: '100%' },
-              }}
+              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
+              rules={[
+                { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+                { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
+              ]}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
             />
           </>
         ) : calculationMode === 'actual-item' ? (
           <ProFormSelect
             name="purchase_order_item_id"
-            label="采购订单明细"
-            placeholder="请选择采购订单明细"
-            rules={[{ required: true, message: '请选择采购订单明细' }]}
+            label={t('app.kuaicaiwu.purchaseCost.field.purchaseOrderItem')}
+            placeholder={t('app.kuaicaiwu.purchaseCost.field.purchaseOrderItemPlaceholder')}
+            rules={[{ required: true, message: t('app.kuaicaiwu.purchaseCost.field.purchaseOrderItemRequired') }]}
             options={purchaseOrderItemOptions}
             showSearch
             fieldProps={{
@@ -283,9 +258,9 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
         ) : (
           <ProFormSelect
             name="purchase_order_id"
-            label="采购订单"
-            placeholder="请选择采购订单"
-            rules={[{ required: true, message: '请选择采购订单' }]}
+            label={t('app.kuaicaiwu.purchaseCost.field.purchaseOrder')}
+            placeholder={t('app.kuaicaiwu.purchaseCost.field.purchaseOrderPlaceholder')}
+            rules={[{ required: true, message: t('app.kuaicaiwu.purchaseCost.field.purchaseOrderRequired') }]}
             options={purchaseOrderOptions}
             showSearch
             fieldProps={{
@@ -297,11 +272,9 @@ const PurchaseCostPage: React.FC<PurchaseCostPageProps> = ({ embedded = false })
         )}
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
       </FormModalTemplate>
     </PageContainer>

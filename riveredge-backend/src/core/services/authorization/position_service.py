@@ -336,17 +336,17 @@ class PositionService:
 
     # 中国中小制造业极简职位预设（不关联部门，用户可后续分配）
     PRESET_POSITIONS = [
-        {"name": "总经理", "code": "ZJL", "sort_order": 10},
-        {"name": "生产经理", "code": "SCJL", "sort_order": 20},
-        {"name": "生产人员", "code": "SCRY", "sort_order": 25},
-        {"name": "采购经理", "code": "CGJL", "sort_order": 30},
-        {"name": "销售经理", "code": "XSJL", "sort_order": 40},
-        {"name": "仓库主管", "code": "CKZG", "sort_order": 50},
-        {"name": "质检员", "code": "ZJY", "sort_order": 60},
-        {"name": "会计", "code": "KJ", "sort_order": 70},
-        {"name": "出纳", "code": "CN", "sort_order": 80},
-        {"name": "行政专员", "code": "XZZY", "sort_order": 90},
-        {"name": "人事专员", "code": "RSZY", "sort_order": 100},
+        {"name": "总经理", "code": "GM", "sort_order": 10},
+        {"name": "生产经理", "code": "PROD_MGR", "sort_order": 20},
+        {"name": "生产人员", "code": "PROD_OP", "sort_order": 25},
+        {"name": "采购经理", "code": "PURCH_MGR", "sort_order": 30},
+        {"name": "销售经理", "code": "SALES_MGR", "sort_order": 40},
+        {"name": "仓库主管", "code": "WH_SUPV", "sort_order": 50},
+        {"name": "质检员", "code": "QC_INSP", "sort_order": 60},
+        {"name": "会计", "code": "ACCT", "sort_order": 70},
+        {"name": "出纳", "code": "CASHIER", "sort_order": 80},
+        {"name": "行政专员", "code": "ADMIN", "sort_order": 90},
+        {"name": "人事专员", "code": "HR_SPEC", "sort_order": 100},
     ]
 
     @staticmethod

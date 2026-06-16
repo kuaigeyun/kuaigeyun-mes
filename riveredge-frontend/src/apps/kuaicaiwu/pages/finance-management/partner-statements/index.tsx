@@ -20,6 +20,7 @@ import {
 import { ProForm } from '@ant-design/pro-components';
 import { EyeOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import dayjs, { Dayjs } from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -28,14 +29,16 @@ import {
   partnerStatementService,
   PartnerStatement,
   PartnerStatementPreview,
-  PARTNER_STATEMENT_STATUS_MAP,
 } from '../../../services/finance/partnerStatement';
+import { buildPartnerStatementStatusEnum } from '../../../utils/financeSharedOptions';
 import { apiRequest } from '../../../../../services/api';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 const money = (v: number | string | undefined) =>
   `¥${Number(v ?? 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+const PS = 'app.kuaicaiwu.partnerStatement';
 
 const PartnerStatementsPage: React.FC = () => {
   const customerActionRef = useRef<ActionType>();
@@ -52,6 +55,7 @@ const PartnerStatementsPage: React.FC = () => {
   const [partnerOptions, setPartnerOptions] = useState<{ label: string; value: number }[]>([]);
   const [createForm] = ProForm.useForm();
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const partnerType = activeTab;
@@ -93,7 +97,7 @@ const PartnerStatementsPage: React.FC = () => {
 
   const handlePreview = async () => {
     if (!partnerId) {
-      messageApi.warning('请选择往来单位');
+      messageApi.warning(t(`${PS}.selectPartner`));
       return;
     }
     setPreviewLoading(true);
@@ -106,7 +110,7 @@ const PartnerStatementsPage: React.FC = () => {
       });
       setPreview(data);
     } catch (e: any) {
-      messageApi.error(e?.message || '预览失败');
+      messageApi.error(e?.message || t(`${PS}.previewFailed`));
     } finally {
       setPreviewLoading(false);
     }
@@ -114,7 +118,7 @@ const PartnerStatementsPage: React.FC = () => {
 
   const handleCreate = async () => {
     if (!partnerId || !preview) {
-      messageApi.warning('请先预览对账数据');
+      messageApi.warning(t(`${PS}.previewFirst`));
       return;
     }
     setSubmitting(true);
@@ -127,14 +131,14 @@ const PartnerStatementsPage: React.FC = () => {
         end_date: periodRange.end.format('YYYY-MM-DD'),
         attachments: normalizeDocumentAttachments(createForm.getFieldValue('attachments')),
       });
-      messageApi.success('对账单已生成');
+      messageApi.success(t(`${PS}.generateSuccess`));
       setCreateOpen(false);
       resetCreate();
       if (partnerType === 'Customer') customerActionRef.current?.reload();
       else supplierActionRef.current?.reload();
       navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${created.id}`);
     } catch (e: any) {
-      messageApi.error(e?.message || '生成失败');
+      messageApi.error(e?.message || t(`${PS}.generateFailed`));
     } finally {
       setSubmitting(false);
     }
@@ -142,12 +146,12 @@ const PartnerStatementsPage: React.FC = () => {
 
   const handleDelete = (record: PartnerStatement) => {
     Modal.confirm({
-      title: '删除对账单',
-      content: `确定删除对账单 ${record.statement_code}？仅草稿可删除。`,
+      title: t(`${PS}.deleteTitle`),
+      content: t(`${PS}.deleteConfirm`, { code: record.statement_code }),
       okType: 'danger',
       onOk: async () => {
         await partnerStatementService.delete(record.id);
-        messageApi.success('已删除');
+        messageApi.success(t(`${PS}.deleted`));
         if (record.partner_type === 'Customer') customerActionRef.current?.reload();
         else supplierActionRef.current?.reload();
       },
@@ -159,7 +163,7 @@ const PartnerStatementsPage: React.FC = () => {
       for (const id of keys) {
         await partnerStatementService.delete(Number(id));
       }
-      messageApi.success(`成功删除 ${keys.length} 条对账单`);
+      messageApi.success(t(`${PS}.batchDeleted`, { count: keys.length }));
       if (type === 'Customer') {
         setCustomerSelectedRowKeys([]);
         customerActionRef.current?.reload();
@@ -168,7 +172,7 @@ const PartnerStatementsPage: React.FC = () => {
         supplierActionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('common.batchDeleteFailed'));
     }
   };
 
@@ -177,7 +181,7 @@ const PartnerStatementsPage: React.FC = () => {
       for (const id of keys) {
         await partnerStatementService.confirm(Number(id));
       }
-      messageApi.success(`成功确认 ${keys.length} 条对账单`);
+      messageApi.success(t(`${PS}.batchConfirmed`, { count: keys.length }));
       if (type === 'Customer') {
         setCustomerSelectedRowKeys([]);
         customerActionRef.current?.reload();
@@ -186,13 +190,15 @@ const PartnerStatementsPage: React.FC = () => {
         supplierActionRef.current?.reload();
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '批量确认失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchConfirmFailed'));
     }
   };
 
-  const buildColumns = (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
+  const statusEnum = useMemo(() => buildPartnerStatementStatusEnum(t), [t]);
+
+  const buildColumns = useMemo(() => (type: 'Customer' | 'Supplier'): ProColumns<PartnerStatement>[] => [
     {
-      title: '对账单号',
+      title: t(`${PS}.col.code`),
       dataIndex: 'statement_code',
       width: 160,
       fixed: 'left',
@@ -205,17 +211,17 @@ const PartnerStatementsPage: React.FC = () => {
       ),
     },
     {
-      title: type === 'Customer' ? '客户名称' : '供应商名称',
+      title: type === 'Customer' ? t(`${PS}.col.customerName`) : t(`${PS}.col.supplierName`),
       dataIndex: 'partner_name',
       width: 200,
     },
     {
-      title: '对账期间',
+      title: t(`${PS}.col.period`),
       dataIndex: 'statement_period',
       width: 110,
     },
     {
-      title: '期初余额',
+      title: t(`${PS}.col.openingBalance`),
       dataIndex: 'opening_balance',
       width: 120,
       align: 'right',
@@ -223,7 +229,7 @@ const PartnerStatementsPage: React.FC = () => {
       render: (_, r) => money(r.opening_balance),
     },
     {
-      title: '期末余额',
+      title: t(`${PS}.col.closingBalance`),
       dataIndex: 'closing_balance',
       width: 120,
       align: 'right',
@@ -235,26 +241,30 @@ const PartnerStatementsPage: React.FC = () => {
       ),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       width: 100,
-      valueEnum: Object.fromEntries(
-        Object.entries(PARTNER_STATEMENT_STATUS_MAP).map(([k, v]) => [k, { text: v.text }]),
-      ),
+      valueEnum: statusEnum,
       render: (_, r) => {
-        const m = PARTNER_STATEMENT_STATUS_MAP[r.status] || { text: r.status, color: 'default' };
-        return <Tag color={m.color}>{m.text}</Tag>;
+        const m = statusEnum[r.status as keyof typeof statusEnum] || { text: r.status };
+        const colorMap: Record<string, string> = {
+          Draft: 'default',
+          Confirmed: 'processing',
+          Sent: 'success',
+          Disputed: 'warning',
+        };
+        return <Tag color={colorMap[r.status] || 'default'}>{m.text}</Tag>;
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm') : '—'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       width: 160,
@@ -266,7 +276,7 @@ const PartnerStatementsPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => navigate(`/apps/kuaicaiwu/finance-management/partner-statements/${record.id}`)}
             >
-              详情
+              {t('common.detail')}
             </Button>,
             record.status === 'Draft' ? (
               <Button {...rowActionKind('delete')}
@@ -277,12 +287,40 @@ const PartnerStatementsPage: React.FC = () => {
                 icon={<DeleteOutlined />}
                 onClick={() => handleDelete(record)}
               >
-                删除
+                {t('common.delete')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ];
+  ], [t, navigate, statusEnum]);
+
+  const previewLineColumns = useMemo(() => [
+    { title: t(`${PS}.col.date`), dataIndex: 'date', width: 110 },
+    { title: t(`${PS}.col.docType`), dataIndex: 'doc_type', width: 90 },
+    { title: t(`${PS}.col.docCode`), dataIndex: 'doc_code', width: 140, ellipsis: true },
+    { title: t(`${PS}.col.summary`), dataIndex: 'summary', ellipsis: true },
+    {
+      title: t(`${PS}.col.debit`),
+      dataIndex: 'debit',
+      width: 100,
+      align: 'right' as const,
+      render: (v: unknown) => (v ? money(v as number) : '—'),
+    },
+    {
+      title: t(`${PS}.col.credit`),
+      dataIndex: 'credit',
+      width: 100,
+      align: 'right' as const,
+      render: (v: unknown) => (v ? money(v as number) : '—'),
+    },
+    {
+      title: preview?.balance_label || t(`${PS}.col.closingBalance`),
+      dataIndex: 'balance',
+      width: 110,
+      align: 'right' as const,
+      render: (v: unknown) => money(v as number),
+    },
+  ], [t, preview?.balance_label]);
 
   const tableRequest = (type: 'Customer' | 'Supplier') => async (params: any) => {
     const { current, pageSize, status, statement_period } = params;
@@ -298,7 +336,7 @@ const PartnerStatementsPage: React.FC = () => {
 
   const customerTable = (
     <UniTable<PartnerStatement>
-      headerTitle="客户对账"
+      headerTitle={t(`${PS}.tabCustomer`)}
       actionRef={customerActionRef}
       enableRowSelection
       selectedRowKeys={customerSelectedRowKeys}
@@ -309,7 +347,7 @@ const PartnerStatementsPage: React.FC = () => {
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
-      createButtonText="新建对账单"
+      createButtonText={t(`${PS}.createButton`)}
       onCreate={() => {
         setActiveTab('Customer');
         resetCreate();
@@ -317,20 +355,20 @@ const PartnerStatementsPage: React.FC = () => {
       }}
       showDeleteButton
       onDelete={(keys) => handleBatchDelete(keys, 'Customer')}
-      deleteConfirmTitle="确认批量删除"
-      deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条客户对账单吗？仅草稿可删除。`}
+      deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+      deleteConfirmDescription={(count) => t(`${PS}.batchDeleteCustomerConfirm`, { count })}
       toolBarActionsAfterDelete={[
         <UniBatchMenuButton
           key="customer-partner-statement-batch-actions"
           selectedRowKeys={customerSelectedRowKeys}
-          buttonText="批量操作"
+          buttonText={t('components.uniBatch.batchActions')}
           menuItems={[
             {
               key: 'batch-confirm',
-              label: '批量确认',
+              label: t('app.kuaicaiwu.common.batchConfirm'),
               requireConfirm: true,
-              confirmTitle: (count) => `确认批量确认 ${count} 条对账单`,
-              confirmDescription: '仅草稿对账单可确认，不满足条件的记录会由后端拒绝。',
+              confirmTitle: (count) => t(`${PS}.batchConfirmTitle`, { count }),
+              confirmDescription: t(`${PS}.batchConfirmOnlyDraft`),
               onClick: (keys) => handleBatchConfirm(keys, 'Customer'),
             },
           ]}
@@ -343,7 +381,7 @@ const PartnerStatementsPage: React.FC = () => {
 
   const supplierTable = (
     <UniTable<PartnerStatement>
-      headerTitle="供应商对账"
+      headerTitle={t(`${PS}.tabSupplier`)}
       actionRef={supplierActionRef}
       enableRowSelection
       selectedRowKeys={supplierSelectedRowKeys}
@@ -354,7 +392,7 @@ const PartnerStatementsPage: React.FC = () => {
       showAdvancedSearch
       search={{ labelWidth: 100 }}
       showCreateButton
-      createButtonText="新建对账单"
+      createButtonText={t(`${PS}.createButton`)}
       onCreate={() => {
         setActiveTab('Supplier');
         resetCreate();
@@ -362,20 +400,20 @@ const PartnerStatementsPage: React.FC = () => {
       }}
       showDeleteButton
       onDelete={(keys) => handleBatchDelete(keys, 'Supplier')}
-      deleteConfirmTitle="确认批量删除"
-      deleteConfirmDescription={(count) => `确定删除选中的 ${count} 条供应商对账单吗？仅草稿可删除。`}
+      deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+      deleteConfirmDescription={(count) => t(`${PS}.batchDeleteSupplierConfirm`, { count })}
       toolBarActionsAfterDelete={[
         <UniBatchMenuButton
           key="supplier-partner-statement-batch-actions"
           selectedRowKeys={supplierSelectedRowKeys}
-          buttonText="批量操作"
+          buttonText={t('components.uniBatch.batchActions')}
           menuItems={[
             {
               key: 'batch-confirm',
-              label: '批量确认',
+              label: t('app.kuaicaiwu.common.batchConfirm'),
               requireConfirm: true,
-              confirmTitle: (count) => `确认批量确认 ${count} 条对账单`,
-              confirmDescription: '仅草稿对账单可确认，不满足条件的记录会由后端拒绝。',
+              confirmTitle: (count) => t(`${PS}.batchConfirmTitle`, { count }),
+              confirmDescription: t(`${PS}.batchConfirmOnlyDraft`),
               onClick: (keys) => handleBatchConfirm(keys, 'Supplier'),
             },
           ]}
@@ -393,13 +431,13 @@ const PartnerStatementsPage: React.FC = () => {
         onTabChange={(k) => setActiveTab(k as 'Customer' | 'Supplier')}
         preserveMounted
         tabs={[
-          { key: 'Customer', label: '客户对账', children: customerTable },
-          { key: 'Supplier', label: '供应商对账', children: supplierTable },
+          { key: 'Customer', label: t(`${PS}.tabCustomer`), children: customerTable },
+          { key: 'Supplier', label: t(`${PS}.tabSupplier`), children: supplierTable },
         ]}
       />
 
       <Modal
-        title={`新建${partnerType === 'Customer' ? '客户' : '供应商'}对账单`}
+        title={partnerType === 'Customer' ? t(`${PS}.createCustomer`) : t(`${PS}.createSupplier`)}
         open={createOpen}
         width={960}
         onCancel={() => {
@@ -409,10 +447,10 @@ const PartnerStatementsPage: React.FC = () => {
         }}
         footer={[
           <Button {...rowActionKind('revoke')} key="cancel" onClick={() => { setCreateOpen(false); resetCreate(); }}>
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button {...rowActionKind('read')} key="preview" loading={previewLoading} onClick={() => void handlePreview()}>
-            预览
+            {t('app.kuaicaiwu.common.preview')}
           </Button>,
           <Button {...rowActionKind('skip')}
             key="ok"
@@ -421,7 +459,7 @@ const PartnerStatementsPage: React.FC = () => {
             disabled={!preview}
             onClick={() => void handleCreate()}
           >
-            生成对账单
+            {t(`${PS}.generate`)}
           </Button>,
         ]}
         destroyOnHidden
@@ -430,7 +468,7 @@ const PartnerStatementsPage: React.FC = () => {
           <Space wrap>
             <Select
               showSearch
-              placeholder={partnerType === 'Customer' ? '选择客户' : '选择供应商'}
+              placeholder={partnerType === 'Customer' ? t(`${PS}.selectCustomer`) : t(`${PS}.selectSupplier`)}
               style={{ width: 280 }}
               options={partnerOptions}
               value={partnerId ?? undefined}
@@ -455,14 +493,14 @@ const PartnerStatementsPage: React.FC = () => {
           {preview ? (
             <>
               <Descriptions size="small" bordered column={4}>
-                <Descriptions.Item label="往来单位">{preview.partner_name}</Descriptions.Item>
-                <Descriptions.Item label="期间">
+                <Descriptions.Item label={t(`${PS}.col.partner`)}>{preview.partner_name}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.periodRange`)}>
                   {preview.start_date} ~ {preview.end_date}
                 </Descriptions.Item>
-                <Descriptions.Item label="期初余额">{money(preview.summary.opening_balance)}</Descriptions.Item>
-                <Descriptions.Item label="期末余额">{money(preview.summary.closing_balance)}</Descriptions.Item>
-                <Descriptions.Item label="本期借方">{money(preview.summary.debit_total)}</Descriptions.Item>
-                <Descriptions.Item label="本期贷方">{money(preview.summary.credit_total)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.openingBalance`)}>{money(preview.summary.opening_balance)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.closingBalance`)}>{money(preview.summary.closing_balance)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.debitTotal`)}>{money(preview.summary.debit_total)}</Descriptions.Item>
+                <Descriptions.Item label={t(`${PS}.col.creditTotal`)}>{money(preview.summary.credit_total)}</Descriptions.Item>
               </Descriptions>
               <Table
                 size="small"
@@ -470,44 +508,18 @@ const PartnerStatementsPage: React.FC = () => {
                 pagination={{ pageSize: 8 }}
                 scroll={{ x: 800, y: 280 }}
                 dataSource={preview.lines}
-                columns={[
-                  { title: '日期', dataIndex: 'date', width: 110 },
-                  { title: '单据类型', dataIndex: 'doc_type', width: 90 },
-                  { title: '单号', dataIndex: 'doc_code', width: 140, ellipsis: true },
-                  { title: '摘要', dataIndex: 'summary', ellipsis: true },
-                  {
-                    title: '借方',
-                    dataIndex: 'debit',
-                    width: 100,
-                    align: 'right',
-                    render: (v) => (v ? money(v) : '—'),
-                  },
-                  {
-                    title: '贷方',
-                    dataIndex: 'credit',
-                    width: 100,
-                    align: 'right',
-                    render: (v) => (v ? money(v) : '—'),
-                  },
-                  {
-                    title: preview.balance_label,
-                    dataIndex: 'balance',
-                    width: 110,
-                    align: 'right',
-                    render: (v) => money(v),
-                  },
-                ]}
+                columns={previewLineColumns}
               />
               <ProForm form={createForm} submitter={false}>
                 <DocumentAttachmentsField category="partner_statement_attachments" />
               </ProForm>
             </>
           ) : (
-            <Typography.Text type="secondary">选择往来单位与对账月份后，点击「预览」查看明细。</Typography.Text>
+            <Typography.Text type="secondary">{t(`${PS}.previewHint`)}</Typography.Text>
           )}
           <Divider style={{ margin: 0 }} />
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            对账单汇总已审核应收/应付与已确认收/付款；确认生成后可导出 Excel/PDF 发送给对方核对。
+            {t(`${PS}.previewFooter`)}
           </Typography.Text>
         </Space>
       </Modal>

@@ -2,12 +2,13 @@
  * 采购变更单
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Descriptions, Form, Input, Modal, Space, Tag } from 'antd';
-import { CheckOutlined, DeleteOutlined, EditOutlined, EyeOutlined, PlusOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { CheckOutlined, DeleteOutlined, EditOutlined, PlusOutlined, RollbackOutlined, SendOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
@@ -50,6 +51,7 @@ import DocumentAttachmentsField from '../../../components/DocumentAttachmentsFie
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
 const PurchaseOrderChangesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
@@ -65,7 +67,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const [createOpen, setCreateOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [selectedSourceOrder, setSelectedSourceOrder] = useState<OrderChangeSourceOrderOption | null>(null);
-  const [createReason, setCreateReason] = useState('订单变更');
+  const [createReason, setCreateReason] = useState(() => t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
   const [impactOpen, setImpactOpen] = useState(false);
   const [impactLoading, setImpactLoading] = useState(false);
   const [impactData, setImpactData] = useState<Awaited<ReturnType<typeof previewPurchaseOrderChangeImpact>> | null>(null);
@@ -74,9 +76,9 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const openCreate = useCallback(() => {
     setSelectedSourceOrder(null);
-    setCreateReason('订单变更');
+    setCreateReason(t('app.kuaizhizao.purchaseOrderChange.defaultReason'));
     setCreateOpen(true);
-  }, []);
+  }, [t]);
   useNewShortcut(openCreate);
 
   const openDetail = async (record: PurchaseOrderChange) => {
@@ -122,7 +124,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         notes: item.notes,
       })),
     });
-    message.success('保存成功');
+    message.success(t('common.updateSuccess'));
     setEditOpen(false);
     setPendingEditFormValues(null);
     actionRef.current?.reload();
@@ -130,7 +132,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const handleCreateFromOrder = async (orderId: number, reason: string) => {
     const doc = await createPurchaseOrderChangeFromOrder(orderId, reason);
-    message.success(`已创建变更单 ${doc.change_code}`);
+    message.success(t('app.kuaizhizao.purchaseOrderChange.created', { code: doc.change_code }));
     setCreateOpen(false);
     actionRef.current?.reload();
     await openEdit(doc);
@@ -139,7 +141,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
   useEffect(() => {
     const sourceId = searchParams.get('source_order_id');
     if (sourceId) {
-      handleCreateFromOrder(Number(sourceId), '订单变更').finally(() => {
+      handleCreateFromOrder(Number(sourceId), t('app.kuaizhizao.purchaseOrderChange.defaultReason')).finally(() => {
         searchParams.delete('source_order_id');
         setSearchParams(searchParams, { replace: true });
       });
@@ -154,7 +156,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
     try {
       setImpactData(await previewPurchaseOrderChangeImpact(id));
     } catch (e: any) {
-      message.error(e?.message ?? '影响预览失败');
+      message.error(e?.message ?? t('app.kuaizhizao.purchaseOrderChange.impactPreviewFailed'));
       setImpactOpen(false);
     } finally {
       setImpactLoading(false);
@@ -164,93 +166,101 @@ const PurchaseOrderChangesPage: React.FC = () => {
   const confirmSubmit = async () => {
     if (!pendingSubmitId) return;
     await submitPurchaseOrderChange(pendingSubmitId);
-    message.success('提交成功');
+    message.success(t('app.kuaizhizao.purchaseOrderChange.submitSuccess'));
     setImpactOpen(false);
     setPendingSubmitId(null);
     actionRef.current?.reload();
     if (detail?.id === pendingSubmitId) setDetail(await getPurchaseOrderChange(pendingSubmitId));
   };
 
-  const columns: ProColumns<PurchaseOrderChange>[] = [
-    {
-      title: '供应商 / 变更单号',
-      key: 'change_code',
-      dataIndex: 'change_code',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      fixed: 'left',
-      render: (_, record) => (
-        <UniTableStackedPrimaryCell
-          primary={String(record.supplier_name ?? '')}
-          secondary={String(record.change_code ?? '')}
-        />
-      ),
-    },
-    { title: '变更单号', dataIndex: 'change_code', hideInTable: true, copyable: true },
-    { title: '供应商', dataIndex: 'supplier_name', hideInTable: true, ellipsis: true },
-    { title: '原采购订单', dataIndex: 'source_order_code', width: 140 },
-    { title: '版本', dataIndex: 'change_version', width: 70 },
-    {
-      title: '变更类别',
-      dataIndex: 'change_category',
-      width: 100,
-      render: (_, r) => formatOrderChangeCategory(r.change_category),
-    },
-    {
-      title: '差额',
-      dataIndex: 'delta_amount',
-      width: 100,
-      render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      valueType: 'select',
-      valueEnum: buildOrderChangeLifecycleValueEnum(),
-      render: (_, record) => {
-        const lc = getOrderChangeLifecycle(record as Record<string, unknown>);
-        const tag = getDocumentLifecycleStageTagProps(lc.stageName ?? '-');
-        return <Tag color={tag.color}>{lc.stageName}</Tag>;
+  const orderChangeLifecycleValueEnum = useMemo(
+    () => buildOrderChangeLifecycleValueEnum(t),
+    [t],
+  );
+
+  const columns: ProColumns<PurchaseOrderChange>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colSupplierChangeCode'),
+        key: 'change_code',
+        dataIndex: 'change_code',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        fixed: 'left',
+        render: (_, record) => (
+          <UniTableStackedPrimaryCell
+            primary={String(record.supplier_name ?? '')}
+            secondary={String(record.change_code ?? '')}
+          />
+        ),
       },
-    },
-    { title: '变更原因', dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 180,
-      fixed: 'right',
-      render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
-              详情
-            </Button>,
-            isOrderChangeDraft(record) ? (
-              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
-                编辑
-              </Button>
-            ) : null,
-            isOrderChangeDraft(record) ? (
-              <Button {...rowActionKind('delete')}
-                key="del"
-                type="link"
-                size="small"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => {
-                  modal.confirm({
-                    title: '确认删除？',
-                    onOk: async () => {
-                      await deletePurchaseOrderChange(record.id!);
-                      message.success('已删除');
-                      actionRef.current?.reload();
-                    },
-                  });
-                }}
-              >
-                删除
-              </Button>
-            ) : null,
-          ],
-    },
-  ];
+      { title: t('app.kuaizhizao.purchaseOrderChange.colChangeCode'), dataIndex: 'change_code', hideInTable: true, copyable: true },
+      { title: t('app.kuaizhizao.purchaseOrderChange.supplier'), dataIndex: 'supplier_name', hideInTable: true, ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseOrderChange.colSourceOrder'), dataIndex: 'source_order_code', width: 140 },
+      { title: t('app.kuaizhizao.purchaseOrderChange.colVersion'), dataIndex: 'change_version', width: 70 },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colCategory'),
+        dataIndex: 'change_category',
+        width: 100,
+        render: (_, r) => formatOrderChangeCategory(r.change_category),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount'),
+        dataIndex: 'delta_amount',
+        width: 100,
+        render: (_, r) => (r.delta_amount != null ? Number(r.delta_amount).toFixed(2) : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrderChange.colLifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        valueType: 'select',
+        valueEnum: orderChangeLifecycleValueEnum,
+        render: (_, record) => {
+          const lc = getOrderChangeLifecycle(record as Record<string, unknown>, t);
+          const tag = getDocumentLifecycleStageTagProps(lc.stageName ?? '-');
+          return <Tag color={tag.color}>{lc.stageName}</Tag>;
+        },
+      },
+      { title: t('app.kuaizhizao.purchaseOrderChange.colChangeReason'), dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 180,
+        fixed: 'right',
+        render: (_, record) => [
+          <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>
+            {t('common.detail')}
+          </Button>,
+          isOrderChangeDraft(record) ? (
+            <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>
+              {t('common.edit')}
+            </Button>
+          ) : null,
+          isOrderChangeDraft(record) ? (
+            <Button {...rowActionKind('delete')}
+              key="del"
+              type="link"
+              size="small"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => {
+                modal.confirm({
+                  title: t('app.kuaizhizao.purchaseOrderChange.confirmDelete'),
+                  onOk: async () => {
+                    await deletePurchaseOrderChange(record.id!);
+                    message.success(t('app.kuaizhizao.purchaseOrderChange.deleted'));
+                    actionRef.current?.reload();
+                  },
+                });
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          ) : null,
+        ],
+      },
+    ],
+    [message, modal, orderChangeLifecycleValueEnum, t],
+  );
 
   const request = useCallback(async (params: Record<string, unknown>) => {
     const apiParams = resolveOrderChangeListLifecycleParams(params, params);
@@ -265,7 +275,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
 
   const handleBatchDelete = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择需要删除的记录');
+      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToDelete'));
       return;
     }
     let success = 0;
@@ -283,15 +293,15 @@ const PurchaseOrderChangesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已删除 ${success} 条采购变更单`);
-    if (failed > 0) message.warning(`${failed} 条删除失败（仅草稿可删除）`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchDeleteSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message]);
+  }, [message, t]);
 
   const handleBatchSubmit = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择需要提交的记录');
+      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToSubmit'));
       return;
     }
     let success = 0;
@@ -309,15 +319,15 @@ const PurchaseOrderChangesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已提交 ${success} 条采购变更单`);
-    if (failed > 0) message.warning(`${failed} 条提交失败（仅草稿可提交）`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchSubmitSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchSubmitPartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message]);
+  }, [message, t]);
 
   const handleBatchApprove = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择需要审核的记录');
+      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToApprove'));
       return;
     }
     let success = 0;
@@ -335,15 +345,15 @@ const PurchaseOrderChangesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已审核 ${success} 条采购变更单`);
-    if (failed > 0) message.warning(`${failed} 条审核失败（仅待审核可操作）`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchApproveSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchApprovePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message]);
+  }, [message, t]);
 
   const handleBatchWithdraw = useCallback(async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择需要撤回的记录');
+      message.warning(t('app.kuaizhizao.purchaseOrderChange.selectToWithdraw'));
       return;
     }
     let success = 0;
@@ -361,11 +371,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已撤回 ${success} 条采购变更单`);
-    if (failed > 0) message.warning(`${failed} 条撤回失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseOrderChange.batchWithdrawSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseOrderChange.batchWithdrawPartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
-  }, [message]);
+  }, [message, t]);
 
   return (
     <ListPageTemplate>
@@ -379,7 +389,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
         request={request}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-order-changes"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
-        pinnedTabsValueEnum={buildOrderChangeLifecycleValueEnum()}
+        pinnedTabsValueEnum={orderChangeLifecycleValueEnum}
         toolBarRender={() => [
           <Button {...rowActionKind('create')}
             key="create"
@@ -387,12 +397,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
             icon={<PlusOutlined />}
             onClick={openCreate}
           >
-            {'选单创建' + NEW_SHORTCUT_HINT}
+            {t('app.kuaizhizao.purchaseOrderChange.createFromOrder') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确认删除选中的 ${count} 条采购变更单？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseOrderChange.confirmBatchDelete', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="purchase-order-change-batch-menu"
@@ -400,7 +410,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
             menuItems={[
               {
                 key: 'submit',
-                label: '批量提交',
+                label: t('app.kuaizhizao.purchaseOrderChange.batchSubmit'),
                 icon: <SendOutlined />,
                 onClick: handleBatchSubmit,
               },
@@ -408,7 +418,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 ? [
                     {
                       key: 'approve',
-                      label: '批量审核通过',
+                      label: t('app.kuaizhizao.purchaseOrderChange.batchApprove'),
                       icon: <CheckOutlined />,
                       onClick: handleBatchApprove,
                     },
@@ -416,7 +426,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 : []),
               {
                 key: 'withdraw',
-                label: '批量撤回',
+                label: t('app.kuaizhizao.purchaseOrderChange.batchWithdraw'),
                 icon: <RollbackOutlined />,
                 onClick: handleBatchWithdraw,
               },
@@ -426,12 +436,12 @@ const PurchaseOrderChangesPage: React.FC = () => {
       />
 
       <Modal
-        title="从采购订单创建变更单"
+        title={t('app.kuaizhizao.purchaseOrderChange.createModalTitle')}
         open={createOpen}
         onCancel={() => setCreateOpen(false)}
         onOk={async () => {
           if (!selectedSourceOrder?.id) {
-            message.warning('请选择采购订单');
+            message.warning(t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrder'));
             return;
           }
           await handleCreateFromOrder(selectedSourceOrder.id, createReason);
@@ -439,11 +449,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
         {...MODAL_CONFIG}
       >
         <Form layout="vertical">
-          <Form.Item label="采购订单" required>
+          <Form.Item label={t('app.kuaizhizao.purchaseOrderChange.purchaseOrderLabel')} required>
             <Space.Compact style={{ width: '100%' }}>
               <Input
                 readOnly
-                placeholder="请点击右侧选择采购订单"
+                placeholder={t('app.kuaizhizao.purchaseOrderChange.selectPurchaseOrderPlaceholder')}
                 value={
                   selectedSourceOrder
                     ? `${selectedSourceOrder.order_code}${selectedSourceOrder.partner_name ? ` - ${selectedSourceOrder.partner_name}` : ''}`
@@ -451,11 +461,11 @@ const PurchaseOrderChangesPage: React.FC = () => {
                 }
               />
               <Button type="primary" onClick={() => setPickerOpen(true)}>
-                选择
+                {t('app.kuaizhizao.purchaseOrderChange.select')}
               </Button>
             </Space.Compact>
           </Form.Item>
-          <Form.Item label="变更原因" required>
+          <Form.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} required>
             <Input.TextArea rows={2} value={createReason} onChange={(e) => setCreateReason(e.target.value)} />
           </Form.Item>
         </Form>
@@ -472,7 +482,7 @@ const PurchaseOrderChangesPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="编辑采购变更单"
+        title={t('app.kuaizhizao.purchaseOrderChange.editTitle')}
         open={editOpen}
         onClose={() => setEditOpen(false)}
         afterOpenChange={(open) => {
@@ -489,14 +499,14 @@ const PurchaseOrderChangesPage: React.FC = () => {
         form={editForm}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
       >
-        <ProFormTextArea name="change_reason" label="变更原因" rules={[{ required: true }]} />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormTextArea name="change_reason" label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} rules={[{ required: true }]} />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.purchaseOrderChange.notes')} />
         <DocumentAttachmentsField category="purchase_order_change_attachments" />
         <OrderChangeItemsTable items={editItems ?? []} editable onChange={setEditItems} />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={`采购变更单 - ${detail?.change_code ?? ''}`}
+        title={t('app.kuaizhizao.purchaseOrderChange.detailTitle', { code: detail?.change_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH ?? DRAWER_CONFIG.HALF_WIDTH}
@@ -505,17 +515,17 @@ const PurchaseOrderChangesPage: React.FC = () => {
             <Space>
               {isOrderChangeDraft(detail) && (
                 <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); openEdit(detail); }}>
-                  编辑
+                  {t('common.edit')}
                 </Button>
               )}
               {isOrderChangeDraft(detail) && (
                 <Button icon={<ThunderboltOutlined />} onClick={() => runSubmitWithPreview(detail.id!)}>
-                  提交
+                  {t('app.kuaizhizao.purchaseOrderChange.submit')}
                 </Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
-                entityName="采购变更单"
+                entityName={t('app.kuaizhizao.purchaseOrderChange.entityName')}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={['DRAFT', '草稿']}
@@ -535,21 +545,21 @@ const PurchaseOrderChangesPage: React.FC = () => {
       >
         {detail && (
           <>
-            <UniLifecycle {...getOrderChangeLifecycle(detail as Record<string, unknown>)} />
+            <UniLifecycle {...getOrderChangeLifecycle(detail as Record<string, unknown>, t)} />
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="原单号">{detail.source_order_code}</Descriptions.Item>
-              <Descriptions.Item label="版本">V{detail.change_version}</Descriptions.Item>
-              <Descriptions.Item label="供应商">{detail.supplier_name}</Descriptions.Item>
-              <Descriptions.Item label="变更类别">
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colSourceOrderCode')}>{detail.source_order_code}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colVersion')}>V{detail.change_version}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.supplier')}>{detail.supplier_name}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colCategory')}>
                 {formatOrderChangeCategory(detail.change_category)}
               </Descriptions.Item>
-              <Descriptions.Item label="变更前金额">{detail.before_total_amount}</Descriptions.Item>
-              <Descriptions.Item label="变更后金额">{detail.after_total_amount}</Descriptions.Item>
-              <Descriptions.Item label="差额">{detail.delta_amount}</Descriptions.Item>
-              <Descriptions.Item label="生效时间">
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colBeforeAmount')}>{detail.before_total_amount}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAfterAmount')}>{detail.after_total_amount}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colDeltaAmount')}>{detail.delta_amount}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colAppliedAt')}>
                 {detail.applied_at ? dayjs(detail.applied_at).format('YYYY-MM-DD HH:mm') : '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="变更原因" span={2}>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseOrderChange.colChangeReason')} span={2}>
                 {detail.change_reason}
               </Descriptions.Item>
             </Descriptions>

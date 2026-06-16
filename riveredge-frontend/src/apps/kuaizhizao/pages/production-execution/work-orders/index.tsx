@@ -2677,7 +2677,7 @@ const WorkOrdersPage: React.FC = () => {
         const defectOpts = getOperationDefectTypeOptions(quickReportingOperation)
         if (uq > 0 && operationHasSimpleInspection(quickReportingOperation)) {
           if (defectOpts.length > 0 && !values.defect_type) {
-            messageApi.warning('请选择不良品类型')
+            messageApi.warning(t('app.kuaizhizao.workOrder.kioskSelectDefectType'))
             return
           }
           if (defectOpts.length === 0 && !(values.defect_reason_text || '').toString().trim()) {
@@ -3138,7 +3138,7 @@ const WorkOrdersPage: React.FC = () => {
                           getWorkOrderOperationApiId(workOrder),
                           operation.id,
                         )
-                        messageApi.success('工序已开始')
+                        messageApi.success(t('app.kuaizhizao.workOrder.kioskOpStarted'))
                         const res = await workOrderApi.getOperations(getWorkOrderOperationApiId(workOrder), {
                           includeMeta: true,
                         })
@@ -3432,7 +3432,7 @@ const WorkOrdersPage: React.FC = () => {
 
     if (errors.length > 0) {
       Modal.warning({
-        title: '数据验证失败',
+        title: t('app.kuaizhizao.workOrder.modalImportValidating'),
         width: 600,
         content: (
           <div>
@@ -3455,13 +3455,13 @@ const WorkOrdersPage: React.FC = () => {
       const result = await batchImport({
         items: toImport,
         importFn: async (item) => workOrderApi.create(item),
-        title: '正在导入工单',
+        title: t('app.kuaizhizao.workOrder.modalImporting'),
         concurrency: 3,
       })
 
       if (result.failureCount > 0) {
         Modal.warning({
-          title: '导入完成（部分失败）',
+          title: t('app.kuaizhizao.workOrder.modalImportPartialFail'),
           width: 600,
           content: (
             <div>
@@ -3751,15 +3751,15 @@ const WorkOrdersPage: React.FC = () => {
    */
   const detailColumns: ProDescriptionsItemProps<WorkOrder>[] = [
     {
-      title: '工单编号',
+      title: t('app.kuaizhizao.workOrder.colCode'),
       dataIndex: 'code',
     },
     {
-      title: '工单名称',
+      title: t('app.kuaizhizao.workOrder.colName'),
       dataIndex: 'name',
     },
     {
-      title: '产品编号',
+      title: t('app.kuaizhizao.workOrder.colProductCode'),
       dataIndex: 'product_code',
     },
     {
@@ -3767,21 +3767,21 @@ const WorkOrdersPage: React.FC = () => {
       dataIndex: 'product_name',
     },
     {
-      title: '计划数量',
+      title: t('app.kuaizhizao.workOrder.colPlannedQty'),
       dataIndex: 'quantity',
     },
     {
-      title: '批号',
+      title: t('app.kuaizhizao.workOrder.colBatchNo'),
       dataIndex: 'effective_batch_no',
       render: (_, record) => record.effective_batch_no || record.planned_batch_no || '-',
     },
     {
-      title: '序列号',
+      title: t('app.kuaizhizao.workOrder.colSerialNo'),
       dataIndex: 'effective_serial_no',
       render: (_, record) => record.effective_serial_no || record.planned_serial_no || '-',
     },
     {
-      title: '生产模式',
+      title: t('app.kuaizhizao.workOrder.colProductionMode'),
       dataIndex: 'production_mode',
       render: (_, record) => (
         <Tag color={record.production_mode === 'MTO' ? 'blue' : 'green'}>
@@ -3790,12 +3790,12 @@ const WorkOrdersPage: React.FC = () => {
       ),
     },
     {
-      title: '制造模式',
+      title: t('app.kuaizhizao.workOrder.colManufacturingMode'),
       dataIndex: 'manufacturing_mode',
       render: (_, record) => manufacturingModeTag(record.manufacturing_mode),
     },
     {
-      title: '销售订单',
+      title: t('app.kuaizhizao.workOrder.colSalesOrder'),
       dataIndex: 'sales_order_code',
       render: (_, record) =>
         record.production_mode === 'MTO' ? record.sales_order_code || '-' : '-',
@@ -3819,13 +3819,13 @@ const WorkOrdersPage: React.FC = () => {
         return (
           <Space>
             <Tag color={color}>{lifecycle.stageName || '-'}</Tag>
-            {isOverdue && <Tag color="error">逾期</Tag>}
+            {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
           </Space>
         )
       },
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.workOrder.colPriority'),
       dataIndex: 'priority',
       render: (_, record) => {
         const config = WORK_ORDER_PRIORITY_MAP[record.priority || 'normal'] || {
@@ -3836,12 +3836,12 @@ const WorkOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '计划开始时间',
+      title: t('app.kuaizhizao.workOrder.colPlannedStart'),
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
     },
     {
-      title: '计划结束时间',
+      title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
     },
@@ -3860,28 +3860,28 @@ const WorkOrdersPage: React.FC = () => {
         record.actual_end_date ? dayjs(record.actual_end_date).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '已完成数量',
+      title: t('app.kuaizhizao.workOrder.colCompletedQty'),
       dataIndex: 'completed_quantity',
       render: text => text || 0,
     },
     {
-      title: '合格数量',
+      title: t('app.kuaizhizao.workOrder.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       render: text => text || 0,
     },
     {
-      title: '不合格数量',
+      title: t('app.kuaizhizao.workOrder.colUnqualifiedQty'),
       dataIndex: 'unqualified_quantity',
       render: text => text || 0,
     },
     {
-      title: '备注',
+      title: t('app.kuaizhizao.workOrder.colRemarks'),
       dataIndex: 'remarks',
       span: 2,
       render: text => text || '-',
     },
     {
-      title: '附件',
+      title: t('app.kuaizhizao.workOrder.colAttachments'),
       dataIndex: 'attachments',
       span: 2,
       render: (_, record) => {
@@ -4028,7 +4028,7 @@ const WorkOrdersPage: React.FC = () => {
 
       // 确认对话框（优化，新增）
       Modal.confirm({
-        title: '确认批量下达',
+        title: t('app.kuaizhizao.workOrder.modalConfirmBatchRelease'),
         content: `确定要${ignoreErrors ? '强制' : ''}下达 ${idsToRelease.length} 个工单吗？${ignoreErrors ? '（将忽略所有错误和警告）' : ''}`,
         onOk: async () => {
           try {
@@ -4053,7 +4053,7 @@ const WorkOrdersPage: React.FC = () => {
   /** 齐套自动下达 (Phase 2) */
   const handleSmartReleaseKitted = async () => {
     Modal.confirm({
-      title: '齐套自动下达',
+      title: t('app.kuaizhizao.workOrder.actionSmartRelease'),
       content: '系统将自动扫描所有未下达的工单，并将其中 100% 齐套的工单批量下达。是否确认？',
       onOk: async () => {
         try {
@@ -4104,7 +4104,7 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleRevoke = async (record: WorkOrder) => {
     Modal.confirm({
-      title: '确认撤回',
+      title: t('app.kuaizhizao.workOrder.modalConfirmRevoke'),
       content: `确定要撤回工单"${record.code}"吗？撤回后工单将变为草稿状态。`,
       onOk: async () => {
         try {
@@ -4135,7 +4135,7 @@ const WorkOrdersPage: React.FC = () => {
       return
     }
     Modal.confirm({
-      title: '确认指定结束',
+      title: t('app.kuaizhizao.workOrder.modalConfirmComplete'),
       content: `确定要指定结束工单"${record.code}"吗？指定结束的工单如果没有报工记录，可以撤回。`,
       onOk: async () => {
         try {
@@ -4291,7 +4291,7 @@ const WorkOrdersPage: React.FC = () => {
   const handleNotifyInbound = async (record: WorkOrder) => {
     if (!record.id) return
     Modal.confirm({
-      title: '通知入库',
+      title: t('app.kuaizhizao.workOrder.actionNotifyInbound'),
       content: `确认通知工单「${record.code || record.id}」入库吗？`,
       onOk: async () => {
         try {
@@ -4378,7 +4378,7 @@ const WorkOrdersPage: React.FC = () => {
    */
   const handleUnfreeze = async (record: WorkOrder) => {
     Modal.confirm({
-      title: '确认解冻',
+      title: t('app.kuaizhizao.workOrder.modalConfirmUnfreeze'),
       content: `确定要解冻工单"${record.code}"吗？`,
       onOk: async () => {
         try {
@@ -4450,7 +4450,7 @@ const WorkOrdersPage: React.FC = () => {
     }
 
     Modal.confirm({
-      title: '确认批量取消',
+      title: t('app.kuaizhizao.workOrder.modalConfirmBatchCancel'),
       content: `确定要取消 ${selectedWorkOrderIds.length} 个工单吗？`,
       onOk: async () => {
         try {
@@ -4602,7 +4602,7 @@ const WorkOrdersPage: React.FC = () => {
       }
       const label = formatDissolveGroupLabels(uniqueIds)
       Modal.confirm({
-        title: '解除编组',
+        title: t('app.kuaizhizao.workOrder.actionDissolveGroup'),
         content: (
           <div>
             <p>
@@ -4614,7 +4614,7 @@ const WorkOrdersPage: React.FC = () => {
             <p>确定继续？</p>
           </div>
         ),
-        okText: '解除编组',
+        okText: t('app.kuaizhizao.workOrder.actionDissolveGroup'),
         okType: 'danger',
         cancelText: '取消',
         onOk: async () => {
@@ -4909,7 +4909,7 @@ const WorkOrdersPage: React.FC = () => {
               {workOrder.planned_end_date &&
                 ['released', 'in_progress', '已下达', '执行中'].includes(workOrder.status || '') &&
                 dayjs(workOrder.planned_end_date).isBefore(dayjs(), 'day') && (
-                  <Tag color="error">逾期</Tag>
+                  <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>
                 )}
             </Space>
           </div>
@@ -5036,7 +5036,7 @@ const WorkOrdersPage: React.FC = () => {
     }))
     const treeColumns = [
       {
-        title: '产品/工单',
+        title: t('app.kuaizhizao.workOrder.colProductWorkOrder'),
         dataIndex: 'title',
         key: 'title',
         width: 180,
@@ -5048,7 +5048,7 @@ const WorkOrdersPage: React.FC = () => {
           ),
       },
       {
-        title: '数量',
+        title: t('app.kuaizhizao.workOrder.colQuantity'),
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
@@ -5059,24 +5059,24 @@ const WorkOrdersPage: React.FC = () => {
         },
       },
       {
-        title: '模式',
+        title: t('app.kuaizhizao.workOrder.colMode'),
         key: 'productionManufacturingMode',
         dataIndex: 'production_mode',
         width: 120,
         render: (_: any, r: any) => (r.isParent ? null : renderProductionManufacturingStacked(r)),
       },
       {
-        title: '销售订单',
+        title: t('app.kuaizhizao.workOrder.colSalesOrder'),
         dataIndex: 'sales_order_code',
         key: 'sales_order_code',
         width: 130,
         render: (_: any, record: any) =>
           record.isParent ? null : (
-            record.production_mode === 'MTO' ? <Tag color="blue">{record.sales_order_code || '-'}</Tag> : <span style={{ color: '#999' }}>无</span>
+            record.production_mode === 'MTO' ? <Tag color="blue">{record.sales_order_code || '-'}</Tag> : <span style={{ color: '#999' }}>{t('app.kuaizhizao.workOrder.none')}</span>
           ),
       },
       {
-        title: '车间',
+        title: t('app.kuaizhizao.workOrder.colWorkshop'),
         dataIndex: 'workshop_name',
         key: 'workshop_name',
         width: 100,
@@ -5098,21 +5098,21 @@ const WorkOrdersPage: React.FC = () => {
           return (
             <Space size={4}>
               <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
-              {isOverdue && <Tag color="error">逾期</Tag>}
-              {record.is_frozen && <Tag color="warning">已冻结</Tag>}
+              {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
+              {record.is_frozen && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
             </Space>
           )
         },
       },
       {
-        title: '计划开始',
+        title: t('app.kuaizhizao.workOrder.colPlannedStartSearch'),
         dataIndex: 'planned_start_date',
         key: 'planned_start_date',
         width: 110,
         render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
       },
       {
-        title: '计划结束',
+        title: t('app.kuaizhizao.workOrder.colPlannedEndSearch'),
         dataIndex: 'planned_end_date',
         key: 'planned_end_date',
         width: 110,
@@ -5169,7 +5169,7 @@ const WorkOrdersPage: React.FC = () => {
     }))
     const treeColumns = [
       {
-        title: '销售订单/工单',
+        title: t('app.kuaizhizao.workOrder.colSalesOrderWorkOrder'),
         dataIndex: 'title',
         key: 'title',
         width: 180,
@@ -5181,7 +5181,7 @@ const WorkOrdersPage: React.FC = () => {
           ),
       },
       {
-        title: '数量',
+        title: t('app.kuaizhizao.workOrder.colQuantity'),
         dataIndex: 'quantity',
         key: 'quantity',
         width: 100,
@@ -5192,14 +5192,14 @@ const WorkOrdersPage: React.FC = () => {
         },
       },
       {
-        title: '模式',
+        title: t('app.kuaizhizao.workOrder.colMode'),
         key: 'productionManufacturingMode',
         dataIndex: 'production_mode',
         width: 120,
         render: (_: any, r: any) => (r.isParent ? null : renderProductionManufacturingStacked(r)),
       },
       {
-        title: '车间',
+        title: t('app.kuaizhizao.workOrder.colWorkshop'),
         dataIndex: 'workshop_name',
         key: 'workshop_name',
         width: 100,
@@ -5221,21 +5221,21 @@ const WorkOrdersPage: React.FC = () => {
           return (
             <Space size={4}>
               <Tag color={colorMap[lifecycle.status || 'normal'] || 'default'}>{lifecycle.stageName || '-'}</Tag>
-              {isOverdue && <Tag color="error">逾期</Tag>}
-              {record.is_frozen && <Tag color="warning">已冻结</Tag>}
+              {isOverdue && <Tag color="error">{t('app.kuaizhizao.workOrder.tagOverdue')}</Tag>}
+              {record.is_frozen && <Tag color="warning">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
             </Space>
           )
         },
       },
       {
-        title: '计划开始',
+        title: t('app.kuaizhizao.workOrder.colPlannedStartSearch'),
         dataIndex: 'planned_start_date',
         key: 'planned_start_date',
         width: 110,
         render: (_: any, record: any) => (record.isParent ? null : (record.planned_start_date ? dayjs(record.planned_start_date).format('YYYY-MM-DD') : '-')),
       },
       {
-        title: '计划结束',
+        title: t('app.kuaizhizao.workOrder.colPlannedEndSearch'),
         dataIndex: 'planned_end_date',
         key: 'planned_end_date',
         width: 110,
@@ -5268,9 +5268,9 @@ const WorkOrdersPage: React.FC = () => {
    * 表格列定义
    */
   const workOrderCustomFieldColumns = generateWorkOrderCustomFieldColumns()
-  const columns: ProColumns<WorkOrder>[] = [
+  const columns = useMemo<ProColumns<WorkOrder>[]>(() => [
     {
-      title: '产品 / 工单编号',
+      title: t('app.kuaizhizao.workOrder.colProductWorkOrderCode'),
       key: 'code',
       dataIndex: 'code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -5282,14 +5282,14 @@ const WorkOrdersPage: React.FC = () => {
       render: (_, record) => <WorkOrderListPrimaryCell record={record} />,
     },
     {
-      title: '工单编号',
+      title: t('app.kuaizhizao.workOrder.colCode'),
       dataIndex: 'code',
       hideInTable: true,
       sorter: true,
       hideInSearch: false,
     },
     {
-      title: '工单名称',
+      title: t('app.kuaizhizao.workOrder.colName'),
       dataIndex: 'name',
       hideInTable: true,
       sorter: true,
@@ -5297,7 +5297,7 @@ const WorkOrdersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '产品',
+      title: t('app.kuaizhizao.workOrder.colProduct'),
       dataIndex: 'product_name',
       hideInTable: true,
       sorter: true,
@@ -5305,13 +5305,13 @@ const WorkOrdersPage: React.FC = () => {
       ellipsis: true,
     },
     {
-      title: '产品编号',
+      title: t('app.kuaizhizao.workOrder.colProductCode'),
       dataIndex: 'product_code',
       hideInTable: true,
       hideInSearch: false,
     },
     {
-      title: '工单组',
+      title: t('app.kuaizhizao.workOrder.colGroup'),
       dataIndex: 'group_code',
       width: 120,
       ellipsis: true,
@@ -5320,7 +5320,7 @@ const WorkOrdersPage: React.FC = () => {
       render: (_, record) => record.group_code || <Typography.Text type="secondary">—</Typography.Text>,
     },
     {
-      title: '数量',
+      title: t('app.kuaizhizao.workOrder.colQuantity'),
       dataIndex: 'quantity',
       width: 88,
       align: 'right',
@@ -5334,7 +5334,7 @@ const WorkOrdersPage: React.FC = () => {
         ),
     },
     {
-      title: '投产批号 / 序列号',
+      title: t('app.kuaizhizao.workOrder.colBatchSerial'),
       key: 'production_batch_serial',
       dataIndex: 'effective_batch_no',
       width: 168,
@@ -5361,7 +5361,7 @@ const WorkOrdersPage: React.FC = () => {
       },
     },
       {
-        title: '模式',
+        title: t('app.kuaizhizao.workOrder.colMode'),
         key: 'productionManufacturingMode',
         dataIndex: 'production_mode',
         width: 96,
@@ -5379,29 +5379,29 @@ const WorkOrdersPage: React.FC = () => {
       },
       },
       {
-        title: '生产模式',
+        title: t('app.kuaizhizao.workOrder.colProductionMode'),
         dataIndex: 'production_mode',
         hideInTable: true,
         width: 132,
         valueEnum: {
-          MTS: { text: '按库存生产', status: 'processing' },
-          MTO: { text: '按订单生产', status: 'success' },
+          MTS: { text: t('app.kuaizhizao.workOrder.productionModeMTS'), status: 'processing' },
+          MTO: { text: t('app.kuaizhizao.workOrder.productionModeMTO'), status: 'success' },
         },
         hideInSearch: false,
       },
       {
-        title: '制造模式',
+        title: t('app.kuaizhizao.workOrder.colManufacturingMode'),
         dataIndex: 'manufacturing_mode',
         hideInTable: true,
         width: 100,
         hideInSearch: false,
         valueEnum: {
-          fabrication: { text: '工艺型', status: 'processing' },
-          assembly: { text: '装配型', status: 'success' },
+          fabrication: { text: t('app.kuaizhizao.workOrder.manufacturingModeFabrication'), status: 'processing' },
+          assembly: { text: t('app.kuaizhizao.workOrder.manufacturingModeAssembly'), status: 'success' },
         },
       },
     {
-      title: '齐套率',
+      title: t('app.kuaizhizao.workOrder.colReadiness'),
       dataIndex: 'readiness_rate',
       width: 64,
       align: 'center',
@@ -5434,7 +5434,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
       fieldProps: {
-        placeholder: '齐套率 (%)',
+        placeholder: t('app.kuaizhizao.workOrder.formReadinessPlaceholder'),
         min: 0,
         max: 100,
       },
@@ -5442,7 +5442,7 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
     },
     {
-      title: '工序',
+      title: t('app.kuaizhizao.workOrder.colOperations'),
       key: 'operation_steps',
       dataIndex: 'operation_steps',
       minWidth: 240,
@@ -5476,7 +5476,7 @@ const WorkOrdersPage: React.FC = () => {
             role="button"
             tabIndex={0}
             aria-expanded={expanded}
-            title={expanded ? '点击收起工序卡' : '点击展开工序卡'}
+            title={expanded ? t('app.kuaizhizao.workOrder.formCollapseOpCards') : t('app.kuaizhizao.workOrder.formExpandOpCards')}
             onClick={(e) => toggleWorkOrderOperationPanel(record, e)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
@@ -5492,14 +5492,14 @@ const WorkOrdersPage: React.FC = () => {
       },
     },
     {
-      title: '来源订单号',
+      title: t('app.kuaizhizao.workOrder.colSourceOrder'),
       dataIndex: 'sales_order_code',
       hideInTable: true,
       hideInSearch: false,
-      fieldProps: { placeholder: '销售订单编号，如 XS202605280002' },
+      fieldProps: { placeholder: t('app.kuaizhizao.workOrder.formSourceOrderPlaceholder') },
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.workOrder.colPriority'),
       dataIndex: 'priority',
       width: 100,
       sorter: true,
@@ -5507,14 +5507,14 @@ const WorkOrdersPage: React.FC = () => {
       hideInSearch: false,
       valueType: 'select',
       valueEnum: {
-        low: { text: '低' },
-        normal: { text: '正常' },
-        high: { text: '高' },
-        urgent: { text: '紧急' },
+        low: { text: t('app.kuaizhizao.workOrder.priorityLow') },
+        normal: { text: t('app.kuaizhizao.workOrder.priorityNormal') },
+        high: { text: t('app.kuaizhizao.workOrder.priorityHigh') },
+        urgent: { text: t('app.kuaizhizao.workOrder.priorityUrgent') },
       },
     },
     {
-      title: '计划开始 / 结束',
+      title: t('app.kuaizhizao.workOrder.colPlannedRange'),
       key: 'plannedRange',
       dataIndex: 'planned_start_date',
       width: 136,
@@ -5529,7 +5529,7 @@ const WorkOrdersPage: React.FC = () => {
         ),
     },
     {
-      title: '计划开始时间',
+      title: t('app.kuaizhizao.workOrder.colPlannedStart'),
       dataIndex: 'planned_start_date',
       valueType: 'dateTime',
       hideInTable: true,
@@ -5537,16 +5537,16 @@ const WorkOrdersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '计划开始',
+      title: t('app.kuaizhizao.workOrder.colPlannedStartSearch'),
       dataIndex: 'planned_start_date',
       valueType: 'dateRange',
       width: 160,
       hideInTable: true,
       hideInSearch: false,
-      fieldProps: { placeholder: ['开始日期', '结束日期'], style: { width: '100%' } },
+      fieldProps: { placeholder: [t('app.kuaizhizao.workOrder.formDateRangeStart'), t('app.kuaizhizao.workOrder.formDateRangeEnd')], style: { width: '100%' } },
     },
     {
-      title: '计划结束时间',
+      title: t('app.kuaizhizao.workOrder.colPlannedEnd'),
       dataIndex: 'planned_end_date',
       valueType: 'dateTime',
       hideInTable: true,
@@ -5554,16 +5554,16 @@ const WorkOrdersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '计划结束',
+      title: t('app.kuaizhizao.workOrder.colPlannedEndSearch'),
       dataIndex: 'planned_end_date',
       valueType: 'dateRange',
       width: 160,
       hideInTable: true,
       hideInSearch: false,
-      fieldProps: { placeholder: ['开始日期', '结束日期'], style: { width: '100%' } },
+      fieldProps: { placeholder: [t('app.kuaizhizao.workOrder.formDateRangeStart'), t('app.kuaizhizao.workOrder.formDateRangeEnd')], style: { width: '100%' } },
     },
     {
-      title: '创建时间',
+      title: t('app.kuaizhizao.workOrder.colCreatedAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 132,
@@ -5572,7 +5572,7 @@ const WorkOrdersPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.workOrder.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       align: 'left' as const,
       fixed: 'right' as const,
@@ -5597,7 +5597,7 @@ const WorkOrdersPage: React.FC = () => {
     },
     ...workOrderCustomFieldColumns,
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right' as const,
       hideInSearch: true,
@@ -5653,8 +5653,8 @@ const WorkOrdersPage: React.FC = () => {
         const handleDeleteClick = () => {
           if (!canDelete) return
           Modal.confirm({
-            title: '确定要删除吗？',
-            content: '删除后无法恢复',
+            title: t('app.kuaizhizao.workOrder.modalConfirmDelete'),
+            content: t('app.kuaizhizao.workOrder.modalDeleteContent'),
             onOk: async () => {
               try {
                 await workOrderApi.delete(record.id!.toString())
@@ -5687,19 +5687,19 @@ const WorkOrdersPage: React.FC = () => {
         })
 
         const viewEditItems = [
-          makeItem('print', '打印', () => handlePrint(record), { icon: <PrinterOutlined /> }),
+          makeItem('print', t('app.kuaizhizao.workOrder.actionPrint'), () => handlePrint(record), { icon: <PrinterOutlined /> }),
         ]
 
         const derivedItems: any[] = []
         if (!isTerminal) {
           derivedItems.push(
-            makeItem('rework', '创建返工单', () => handleCreateRework(record), { icon: <RetweetOutlined /> }),
+            makeItem('rework', t('app.kuaizhizao.workOrder.actionCreateRework'), () => handleCreateRework(record), { icon: <RetweetOutlined /> }),
           )
           if (isCompleted) {
             derivedItems.push(
               makeItem(
                 'notifyInbound',
-                '通知入库',
+                t('app.kuaizhizao.workOrder.actionNotifyInbound'),
                 () => {
                   void handleNotifyInbound(record)
                 },
@@ -5708,7 +5708,7 @@ const WorkOrdersPage: React.FC = () => {
             )
           } else {
             derivedItems.push(
-              makeItem('outsource', '创建工序委外', () => handleCreateOutsource(record), {
+              makeItem('outsource', t('app.kuaizhizao.workOrder.actionCreateOutsource'), () => handleCreateOutsource(record), {
                 icon: <TeamOutlined />,
               }),
             )
@@ -5716,7 +5716,7 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (canSplit) {
           derivedItems.push(
-            makeItem('split', hasSplitRemaining ? '拆分剩余' : '拆分工单', () => handleSplit(record), {
+            makeItem('split', hasSplitRemaining ? t('app.kuaizhizao.workOrder.actionSplitRemaining') : t('app.kuaizhizao.workOrder.actionSplit'), () => handleSplit(record), {
               icon: <SplitCellsOutlined />,
             }),
           )
@@ -5725,12 +5725,12 @@ const WorkOrdersPage: React.FC = () => {
         const statusControlItems: any[] = []
         if (canComplete) {
           statusControlItems.push(
-            makeItem('complete', '指定结束', () => handleComplete(record), { icon: <StopOutlined /> }),
+            makeItem('complete', t('app.kuaizhizao.workOrder.actionComplete'), () => handleComplete(record), { icon: <StopOutlined /> }),
           )
         }
         if (canRevoke) {
           statusControlItems.push(
-            makeItem('revoke', '撤回', () => handleRevoke(record), {
+            makeItem('revoke', t('app.kuaizhizao.workOrder.actionRevoke'), () => handleRevoke(record), {
               icon: <CloseCircleOutlined />,
               danger: true,
             }),
@@ -5738,11 +5738,11 @@ const WorkOrdersPage: React.FC = () => {
         }
         if (record.is_frozen) {
           statusControlItems.push(
-            makeItem('unfreeze', '解冻工单', () => handleUnfreeze(record), { icon: <UnlockOutlined /> }),
+            makeItem('unfreeze', t('app.kuaizhizao.workOrder.actionUnfreeze'), () => handleUnfreeze(record), { icon: <UnlockOutlined /> }),
           )
         } else if (canFreeze) {
           statusControlItems.push(
-            makeItem('freeze', '冻结工单', () => handleFreeze(record), {
+            makeItem('freeze', t('app.kuaizhizao.workOrder.actionFreeze'), () => handleFreeze(record), {
               icon: <LockOutlined />,
               danger: true,
             }),
@@ -5750,7 +5750,7 @@ const WorkOrdersPage: React.FC = () => {
         }
 
         const dangerItems = [
-          makeItem('delete', '删除', handleDeleteClick, {
+          makeItem('delete', t('app.kuaizhizao.workOrder.actionDelete'), handleDeleteClick, {
             icon: <DeleteOutlined />,
             danger: true,
             disabled: !canDelete,
@@ -5759,16 +5759,16 @@ const WorkOrdersPage: React.FC = () => {
 
         const moreItems: any[] = []
         if (viewEditItems.length) {
-          moreItems.push({ type: 'group', label: '查看与编辑', children: viewEditItems })
+          moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupViewEdit'), children: viewEditItems })
         }
         if (derivedItems.length) {
-          moreItems.push({ type: 'group', label: '派生操作', children: derivedItems })
+          moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupDerived'), children: derivedItems })
         }
         if (statusControlItems.length) {
-          moreItems.push({ type: 'group', label: '状态控制', children: statusControlItems })
+          moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupStatusControl'), children: statusControlItems })
         }
         if (dangerItems.length) {
-          moreItems.push({ type: 'group', label: '危险操作', children: dangerItems })
+          moreItems.push({ type: 'group', label: t('app.kuaizhizao.workOrder.groupDanger'), children: dangerItems })
         }
 
         return (
@@ -5781,7 +5781,7 @@ const WorkOrdersPage: React.FC = () => {
               icon={<EyeOutlined />}
               onClick={() => handleDetail(record)}
             >
-              详情
+              {t('app.kuaizhizao.workOrder.actionDetail')}
             </Button>
             <Button
               {...rowActionKind('update')}
@@ -5791,7 +5791,7 @@ const WorkOrdersPage: React.FC = () => {
               icon={<EditOutlined />}
               onClick={() => handleEdit(record)}
             >
-              编辑
+              {t('app.kuaizhizao.workOrder.actionEdit')}
             </Button>
             {isDraft ? (
               <Button
@@ -5802,7 +5802,7 @@ const WorkOrdersPage: React.FC = () => {
                 icon={<SendOutlined />}
                 onClick={() => handleRelease(record)}
               >
-                下达
+                {t('app.kuaizhizao.workOrder.actionRelease')}
               </Button>
             ) : null}
             {moreItems.length > 0 ? (
@@ -5813,7 +5813,7 @@ const WorkOrdersPage: React.FC = () => {
                 menu={{ items: moreItems }}
               >
                 <Button {...rowActionKind('skip')} type="link" size="small" icon={<DownOutlined />}>
-                  更多
+                  {t('app.kuaizhizao.workOrder.actionMore')}
                 </Button>
               </Dropdown>
             ) : null}
@@ -5821,7 +5821,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ]
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, operationExpandedRowKeys, workOrderTreeExpandedRowKeys])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -6074,7 +6074,7 @@ const WorkOrdersPage: React.FC = () => {
         <UniTable<WorkOrder>
           className="kuaizhizao-work-orders-table"
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.work-orders"
-          headerTitle="工单管理"
+          headerTitle={t('app.kuaizhizao.workOrder.pageTitle')}
           formRef={tableSearchFormRef}
           searchParamsRef={tableSearchParamsRef}
           actionRef={actionRef}
@@ -6082,7 +6082,7 @@ const WorkOrdersPage: React.FC = () => {
           columns={columns}
           showAdvancedSearch={true}
           skipFuzzyPinyinClientFilter
-          fuzzySearchPlaceholder="工单/产品/来源订单号"
+          fuzzySearchPlaceholder={t('app.kuaizhizao.workOrder.fuzzySearchPlaceholder')}
           rowClassName={workOrderTableRowClassName}
           components={workOrderTableComponents}
           expandable={workOrderTableExpandable}
@@ -6131,7 +6131,7 @@ const WorkOrdersPage: React.FC = () => {
                 )
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出')
+                messageApi.warning(t('app.kuaizhizao.workOrder.msgExportNoData'))
                 return
               }
               const blob = new window.Blob([window.JSON.stringify(items, null, 2)], { type: 'application/json' })
@@ -6153,7 +6153,7 @@ const WorkOrdersPage: React.FC = () => {
               key="create-work-order-with-pull"
               compactKey="create-work-order-with-pull"
               createIcon={<PlusOutlined />}
-              createLabel="新建工单"
+              createLabel={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
               onCreate={handleCreate}
               menuItems={buildKuaizhizaoPullCreateMenuItems([
                 {
@@ -6186,11 +6186,11 @@ const WorkOrdersPage: React.FC = () => {
             </Button>,
           ]}
           onDelete={handleDelete}
-          deleteConfirmTitle={(count) => `确定要删除 ${count} 个工单吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.workOrder.msgConfirmDeleteCount', { count })}
           viewTypes={['table', 'productTree', 'orderTree', 'help']}
           customViews={[
-            { key: 'productTree', label: '在制产品', icon: ShoppingOutlined, render: renderProductTree },
-            { key: 'orderTree', label: '在制订单', icon: FileTextOutlined, render: renderOrderTree },
+            { key: 'productTree', label: t('app.kuaizhizao.workOrder.viewProductTree'), icon: ShoppingOutlined, render: renderProductTree },
+            { key: 'orderTree', label: t('app.kuaizhizao.workOrder.viewOrderTree'), icon: FileTextOutlined, render: renderOrderTree },
           ]}
           touchViewConfig={{
             renderCard: renderTouchCard,
@@ -6255,11 +6255,11 @@ const WorkOrdersPage: React.FC = () => {
               },
             })}
             columns={[
-              { title: '运算单号', dataIndex: 'computation_code', width: 220, ellipsis: true },
-              { title: '业务模式', dataIndex: 'business_mode', width: 110, align: 'center' },
-              { title: '运算状态', dataIndex: 'computation_status', width: 110, align: 'center' },
+              { title: t('app.kuaizhizao.workOrder.colComputationCode'), dataIndex: 'computation_code', width: 220, ellipsis: true },
+              { title: t('app.kuaizhizao.workOrder.colBusinessMode'), dataIndex: 'business_mode', width: 110, align: 'center' },
+              { title: t('app.kuaizhizao.workOrder.colComputationStatus'), dataIndex: 'computation_status', width: 110, align: 'center' },
               {
-                title: '创建时间',
+                title: t('app.kuaizhizao.workOrder.colCreatedAt'),
                 dataIndex: 'created_at',
                 width: 180,
                 render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
@@ -6271,7 +6271,7 @@ const WorkOrdersPage: React.FC = () => {
                 render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
               },
               {
-                title: '转单状态',
+                title: t('app.kuaizhizao.workOrder.colConvertStatus'),
                 key: 'convert_status',
                 width: 180,
                 align: 'center',
@@ -6279,7 +6279,7 @@ const WorkOrdersPage: React.FC = () => {
                   record.can_push_work_order === false ? (
                     <Tag color="gold">{record.disabled_reason || '不可创建'}</Tag>
                   ) : (
-                    <Tag color="success">可创建</Tag>
+                    <Tag color="success">{t('app.kuaizhizao.workOrder.tagCanCreate')}</Tag>
                   ),
               },
             ]}
@@ -6340,12 +6340,12 @@ const WorkOrdersPage: React.FC = () => {
               },
             })}
             columns={[
-              { title: '计划编号', dataIndex: 'plan_code', width: 180, ellipsis: true },
-              { title: '计划名称', dataIndex: 'plan_name', width: 260, ellipsis: true },
-              { title: '计划状态', dataIndex: 'status', width: 120, align: 'center' },
-              { title: '执行状态', dataIndex: 'execution_status', width: 120, align: 'center' },
+              { title: t('app.kuaizhizao.workOrder.colPlanCode'), dataIndex: 'plan_code', width: 180, ellipsis: true },
+              { title: t('app.kuaizhizao.workOrder.colPlanName'), dataIndex: 'plan_name', width: 260, ellipsis: true },
+              { title: t('app.kuaizhizao.workOrder.colPlanStatus'), dataIndex: 'status', width: 120, align: 'center' },
+              { title: t('app.kuaizhizao.workOrder.colExecutionStatus'), dataIndex: 'execution_status', width: 120, align: 'center' },
               {
-                title: '计划期间',
+                title: t('app.kuaizhizao.workOrder.colPlanPeriod'),
                 key: 'plan_range',
                 width: 220,
                 render: (_, r) =>
@@ -6360,7 +6360,7 @@ const WorkOrdersPage: React.FC = () => {
                 render: (v) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm:ss') : '-'),
               },
               {
-                title: '转单状态',
+                title: t('app.kuaizhizao.workOrder.colConvertStatus'),
                 key: 'convert_status',
                 width: 180,
                 align: 'center',
@@ -6368,7 +6368,7 @@ const WorkOrdersPage: React.FC = () => {
                   record.can_push_work_order === false ? (
                     <Tag color="gold">{record.disabled_reason || '不可创建'}</Tag>
                   ) : (
-                    <Tag color="success">可创建</Tag>
+                    <Tag color="success">{t('app.kuaizhizao.workOrder.tagCanCreate')}</Tag>
                   ),
               },
             ]}
@@ -6418,8 +6418,8 @@ const WorkOrdersPage: React.FC = () => {
               label="完成状态"
               rules={[{ required: true, message: '请选择完成状态' }]}
               options={[
-                { label: '完成', value: 'completed' },
-                { label: '未完成', value: 'incomplete' },
+                { label: t('app.kuaizhizao.workOrder.formCompleted'), value: 'completed' },
+                { label: t('app.kuaizhizao.workOrder.formIncomplete'), value: 'incomplete' },
               ]}
               colProps={{ span: 24 }}
             />
@@ -6766,8 +6766,8 @@ const WorkOrdersPage: React.FC = () => {
                 value={onlyShowMake ? 'make' : 'all'}
                 onChange={(v) => setOnlyShowMake(v === 'make')}
                 options={[
-                  { label: '自制件', value: 'make' },
-                  { label: '全部', value: 'all' },
+                  { label: t('app.kuaizhizao.workOrder.formSegmentMake'), value: 'make' },
+                  { label: t('app.kuaizhizao.workOrder.formSegmentAll'), value: 'all' },
                 ]}
               />
             </Form.Item>
@@ -6959,10 +6959,10 @@ const WorkOrdersPage: React.FC = () => {
           name="priority"
           label="优先级"
           options={[
-            { label: '低', value: 'low' },
-            { label: '正常', value: 'normal' },
-            { label: '高', value: 'high' },
-            { label: '紧急', value: 'urgent' },
+            { label: t('app.kuaizhizao.workOrder.priorityLow'), value: 'low' },
+            { label: t('app.kuaizhizao.workOrder.priorityNormal'), value: 'normal' },
+            { label: t('app.kuaizhizao.workOrder.priorityHigh'), value: 'high' },
+            { label: t('app.kuaizhizao.workOrder.priorityUrgent'), value: 'urgent' },
           ]}
           initialValue="normal"
           colProps={{ span: 6 }}
@@ -6998,10 +6998,10 @@ const WorkOrdersPage: React.FC = () => {
               showSearch
               allowClear
               advancedSearch={{
-                label: '高级搜索',
+                label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
                 fields: [
-                  { name: 'code', label: '工艺路线编号' },
-                  { name: 'name', label: '工艺路线名称' },
+                  { name: 'code', label: t('app.kuaizhizao.workOrder.formProcessRouteCode') },
+                  { name: 'name', label: t('app.kuaizhizao.workOrder.formProcessRouteName') },
                 ],
                 onSearch: async (values) => {
                   try {
@@ -7353,12 +7353,12 @@ const WorkOrdersPage: React.FC = () => {
           columns={[
             ...(productSourceModalType === 'sales_order'
               ? [
-                  { title: '订单编号', dataIndex: '_order_code', key: '_order_code', width: 140 },
-                  { title: '客户', dataIndex: '_customer_name', key: '_customer_name', width: 160 },
+                  { title: t('app.kuaizhizao.workOrder.colOrderCode'), dataIndex: '_order_code', key: '_order_code', width: 140 },
+                  { title: t('app.kuaizhizao.workOrder.colCustomer'), dataIndex: '_customer_name', key: '_customer_name', width: 160 },
                   { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
-                  { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
+                  { title: t('app.kuaizhizao.workOrder.colModel'), dataIndex: 'material_spec', key: 'material_spec', width: 140 },
                   {
-                    title: '数量',
+                    title: t('app.kuaizhizao.workOrder.colQuantity'),
                     dataIndex: 'required_quantity',
                     key: 'required_quantity',
                     width: 80,
@@ -7367,21 +7367,21 @@ const WorkOrdersPage: React.FC = () => {
               : productSourceModalType === 'sales_forecast'
                 ? [
                     {
-                      title: '预测编号',
+                      title: t('app.kuaizhizao.workOrder.colForecastCode'),
                       dataIndex: '_forecast_code',
                       key: '_forecast_code',
                       width: 120,
                     },
                     {
-                      title: '预测名称',
+                      title: t('app.kuaizhizao.workOrder.colForecastName'),
                       dataIndex: '_forecast_name',
                       key: '_forecast_name',
                       width: 120,
                     },
                     { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
-                    { title: '型号', dataIndex: 'material_spec', key: 'material_spec', width: 140 },
+                    { title: t('app.kuaizhizao.workOrder.colModel'), dataIndex: 'material_spec', key: 'material_spec', width: 140 },
                     {
-                      title: '数量',
+                      title: t('app.kuaizhizao.workOrder.colQuantity'),
                       dataIndex: 'forecast_quantity',
                       key: 'forecast_quantity',
                       width: 80,
@@ -7390,26 +7390,26 @@ const WorkOrdersPage: React.FC = () => {
                 : productSourceModalType === 'demand'
                   ? [
                       {
-                        title: '需求编号',
+                        title: t('app.kuaizhizao.workOrder.colDemandCode'),
                         dataIndex: '_demand_code',
                         key: '_demand_code',
                         width: 120,
                       },
                       {
-                        title: '需求名称',
+                        title: t('app.kuaizhizao.workOrder.colDemandName'),
                         dataIndex: '_demand_name',
                         key: '_demand_name',
                         width: 120,
                       },
                       { title: '产品名称', dataIndex: 'material_name', key: 'material_name' },
                       {
-                        title: '型号',
+                        title: t('app.kuaizhizao.workOrder.colModel'),
                         dataIndex: 'material_spec',
                         key: 'material_spec',
                         width: 140,
                       },
                       {
-                        title: '数量',
+                        title: t('app.kuaizhizao.workOrder.colQuantity'),
                         dataIndex: 'required_quantity',
                         key: 'required_quantity',
                         width: 80,
@@ -7469,10 +7469,10 @@ const WorkOrdersPage: React.FC = () => {
                 disabled={!workOrderDetail}
                 style={{ width: 120 }}
               >
-                <Select.Option value="low">低</Select.Option>
-                <Select.Option value="normal">正常</Select.Option>
-                <Select.Option value="high">高</Select.Option>
-                <Select.Option value="urgent">紧急</Select.Option>
+                <Select.Option value="low">{t('app.kuaizhizao.workOrder.priorityLow')}</Select.Option>
+                <Select.Option value="normal">{t('app.kuaizhizao.workOrder.priorityNormal')}</Select.Option>
+                <Select.Option value="high">{t('app.kuaizhizao.workOrder.priorityHigh')}</Select.Option>
+                <Select.Option value="urgent">{t('app.kuaizhizao.workOrder.priorityUrgent')}</Select.Option>
               </Select>
             </Space>
           )
@@ -7972,7 +7972,7 @@ const WorkOrdersPage: React.FC = () => {
                     mode="multiple"
                     options={personnelOptions}
                     advancedSearch={{
-                      label: '高级搜索',
+                      label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
                       fields: [
                         { name: 'name', label: '名称/用户名', type: 'text' },
                       ],
@@ -7998,7 +7998,7 @@ const WorkOrdersPage: React.FC = () => {
                     mode="multiple"
                     options={resourceOptions}
                     advancedSearch={{
-                      label: '高级搜索',
+                      label: t('app.kuaizhizao.workOrder.formAdvancedSearch'),
                       fields: [
                         { name: 'name', label: '名称/编号', type: 'text' },
                       ],
@@ -8562,7 +8562,7 @@ const WorkOrdersPage: React.FC = () => {
                         </div>
                       </Col>
                       <Col span={6}>
-                        {result.workOrder.is_frozen && <Tag color="error">已冻结</Tag>}
+                        {result.workOrder.is_frozen && <Tag color="error">{t('app.kuaizhizao.workOrder.tagFrozen')}</Tag>}
                       </Col>
                     </Row>
                     {result.errors.length > 0 && (
@@ -8674,10 +8674,10 @@ const WorkOrdersPage: React.FC = () => {
               onChange={value => setBatchPriority(value)}
               style={{ width: '100%' }}
             >
-              <Select.Option value="low">低</Select.Option>
-              <Select.Option value="normal">正常</Select.Option>
-              <Select.Option value="high">高</Select.Option>
-              <Select.Option value="urgent">紧急</Select.Option>
+              <Select.Option value="low">{t('app.kuaizhizao.workOrder.priorityLow')}</Select.Option>
+              <Select.Option value="normal">{t('app.kuaizhizao.workOrder.priorityNormal')}</Select.Option>
+              <Select.Option value="high">{t('app.kuaizhizao.workOrder.priorityHigh')}</Select.Option>
+              <Select.Option value="urgent">{t('app.kuaizhizao.workOrder.priorityUrgent')}</Select.Option>
             </Select>
           </div>
         </div>
@@ -8730,7 +8730,7 @@ const WorkOrdersPage: React.FC = () => {
                   label="优先级"
                   initialValue="urgent"
                   options={[
-                    { label: '紧急', value: 'urgent' },
+                    { label: t('app.kuaizhizao.workOrder.priorityUrgent'), value: 'urgent' },
                     { label: '特急', value: 'critical' },
                   ]}
                 />
@@ -8760,7 +8760,7 @@ const WorkOrdersPage: React.FC = () => {
                         dataSource={simulationResult.shortage_items}
                         pagination={false}
                         columns={[
-                          { title: '物料', dataIndex: 'material_name' },
+                          { title: t('app.kuaizhizao.workOrder.colMaterial'), dataIndex: 'material_name' },
                           { title: '短缺量', dataIndex: 'shortage_quantity' },
                         ]}
                       />

@@ -23,9 +23,12 @@ import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate } from '../../../../../components/layout-templates';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { getPayableLifecycle } from '../../../utils/financeLifecycle';
+import { buildPayableStatusEnum, buildReviewStatusEnum } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
+
+const P = 'app.kuaicaiwu.payable';
 
 const PayableList: React.FC = () => {
     const actionRef = useRef<ActionType>();
@@ -34,6 +37,7 @@ const PayableList: React.FC = () => {
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
     const { t, i18n } = useTranslation();
+    const navigate = useNavigate();
 
     const payableImportTemplate = useMemo(
         () =>
@@ -43,28 +47,27 @@ const PayableList: React.FC = () => {
                     {
                         field: 'supplier',
                         required: true,
-                        labelKey: 'app.kuaicaiwu.payable.import.supplierName',
+                        labelKey: `${P}.import.supplierName`,
                         aliases: ['供应商名称', '供应商'],
                     },
                     {
                         field: 'amount',
                         required: true,
-                        labelKey: 'app.kuaicaiwu.payable.import.amount',
+                        labelKey: `${P}.import.amount`,
                         aliases: ['应付金额', '金额'],
                     },
-                    { field: 'dueDate', labelKey: 'app.kuaicaiwu.payable.import.dueDate', aliases: ['到期日期'] },
-                    { field: 'businessDate', labelKey: 'app.kuaicaiwu.payable.import.businessDate', aliases: ['业务日期'] },
+                    { field: 'dueDate', labelKey: `${P}.import.dueDate`, aliases: ['到期日期'] },
+                    { field: 'businessDate', labelKey: `${P}.import.businessDate`, aliases: ['业务日期'] },
                 ],
                 [
-                    t('app.kuaicaiwu.payable.importExample.supplierName'),
-                    t('app.kuaicaiwu.payable.importExample.amount'),
-                    t('app.kuaicaiwu.payable.importExample.dueDate'),
-                    t('app.kuaicaiwu.payable.importExample.businessDate'),
+                    t(`${P}.importExample.supplierName`),
+                    t(`${P}.importExample.amount`),
+                    t(`${P}.importExample.dueDate`),
+                    t(`${P}.importExample.businessDate`),
                 ],
             ),
         [t, i18n.language],
     );
-    const navigate = useNavigate();
 
     useEffect(() => {
         const load = async () => {
@@ -101,7 +104,7 @@ const PayableList: React.FC = () => {
             attachments: normalizeDocumentAttachments(values.attachments),
         };
         await payableService.createPayable(data);
-        messageApi.success('创建成功');
+        messageApi.success(t('common.createSuccess'));
         setCreateModalVisible(false);
         actionRef.current?.reload();
     };
@@ -111,11 +114,11 @@ const PayableList: React.FC = () => {
             for (const id of keys) {
                 await payableService.deletePayable(Number(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             actionRef.current?.reload();
         } catch (error: any) {
-            messageApi.error(error?.message || '删除失败');
+            messageApi.error(error?.message || t('common.deleteFailed'));
         }
     };
 
@@ -124,17 +127,17 @@ const PayableList: React.FC = () => {
             for (const id of keys) {
                 await payableService.approvePayable(Number(id));
             }
-            messageApi.success(`成功审核 ${keys.length} 条应付单`);
+            messageApi.success(t('app.kuaicaiwu.common.batchApproveSuccess', { count: keys.length, entity: t(`${P}.entityName`) }));
             setSelectedRowKeys([]);
             actionRef.current?.reload();
         } catch (error: any) {
-            messageApi.error(error?.message || '批量审核失败');
+            messageApi.error(error?.message || t('app.kuaicaiwu.common.batchApproveFailed'));
         }
     };
 
-    const columns: ProColumns<Payable>[] = [
+    const columns: ProColumns<Payable>[] = useMemo(() => [
         {
-            title: t('app.kuaicaiwu.common.code', { defaultValue: '编号' }),
+            title: t('app.kuaicaiwu.common.code'),
             dataIndex: 'payable_code',
             width: 168,
             fixed: 'left',
@@ -145,26 +148,26 @@ const PayableList: React.FC = () => {
             ),
         },
         {
-            title: '供应商名称',
+            title: t(`${P}.col.supplierName`),
             dataIndex: 'supplier_name',
             width: 200,
         },
         {
-            title: '应付总额',
+            title: t(`${P}.col.totalAmount`),
             dataIndex: 'total_amount',
             valueType: 'money',
             align: 'right',
             width: 120,
         },
         {
-            title: '已付金额',
+            title: t(`${P}.col.paidAmount`),
             dataIndex: 'paid_amount',
             valueType: 'money',
             align: 'right',
             width: 120,
         },
         {
-            title: '剩余应付',
+            title: t(`${P}.col.remainingAmount`),
             dataIndex: 'remaining_amount',
             valueType: 'money',
             align: 'right',
@@ -178,49 +181,39 @@ const PayableList: React.FC = () => {
             ),
         },
         {
-            title: '到期日期',
+            title: t('app.kuaicaiwu.common.dueDate'),
             dataIndex: 'due_date',
             valueType: 'date',
             width: 120,
         },
         {
-            title: '状态',
+            title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
-            valueEnum: {
-                '未付款': { text: '未付款' },
-                '部分付款': { text: '部分付款' },
-                '已结清': { text: '已结清' },
-            },
+            valueEnum: buildPayableStatusEnum(t),
         },
         {
-            title: '审核状态',
+            title: t('app.kuaicaiwu.common.reviewStatus'),
             dataIndex: 'review_status',
             hideInTable: true,
-            valueEnum: {
-                '待审核': { text: '待审核' },
-                '已审核': { text: '已审核' },
-                '已驳回': { text: '已驳回' },
-                '通过': { text: '已审核' },
-                '驳回': { text: '已驳回' },
-            },
+            valueEnum: buildReviewStatusEnum(t),
         },
         {
-            title: '更新时间',
+            title: t('common.updatedAt'),
             dataIndex: 'updated_at',
             width: 168,
             hideInSearch: true,
             render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
         },
         {
-            title: '生命周期',
+            title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
             align: 'left',
             width: 130,
             hideInSearch: true,
             render: (_, record) => {
-                const lc = getPayableLifecycle(record as unknown as Record<string, unknown>);
+                const lc = getPayableLifecycle(record as unknown as Record<string, unknown>, t);
                 return (
                     <UniLifecycle
                         percent={lc.percent}
@@ -235,7 +228,7 @@ const PayableList: React.FC = () => {
             },
         },
         {
-            title: '操作',
+            title: t('common.actions'),
             valueType: 'option',
             fixed: 'right',
             width: 220,
@@ -247,12 +240,12 @@ const PayableList: React.FC = () => {
                             icon={<EyeOutlined />}
                             onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}
                         >
-                            详情
+                            {t('common.detail')}
                         </Button>,
                         <UniWorkflowActions {...rowActionKind('skip')}
                             key="wf"
                             record={record}
-                            entityName="应付单"
+                            entityName={t(`${P}.entityName`)}
                             statusField="status"
                             reviewStatusField="review_status"
                             draftStatuses={[]}
@@ -271,69 +264,78 @@ const PayableList: React.FC = () => {
                                 icon={<DollarOutlined />}
                                 onClick={() => navigate(`/apps/kuaicaiwu/finance-management/payables/${record.id}`)}
                             >
-                                付款
+                                {t('app.kuaicaiwu.common.pay')}
                             </Button>
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ];
+    ], [t, navigate]);
+
+    const batchMenuItems = useMemo(() => [
+        {
+            key: 'batch-approve',
+            label: t('app.kuaicaiwu.common.batchApprove'),
+            requireConfirm: true,
+            confirmTitle: (count: number) => t(`${P}.batchApproveTitle`, { count }),
+            confirmDescription: t('app.kuaicaiwu.common.batchOnlyPendingApprove'),
+            onClick: handleBatchApprove,
+        },
+    ], [t]);
 
     return (
         <ListPageTemplate>
             <UniTable<Payable>
-                headerTitle="应付账款"
+                headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
-                rowKey="id"
+                columns={columns}
                 columnPersistenceId="apps.kuaicaiwu.pages.finance-management.payables"
                 scroll={{ x: 1680 }}
-                showAdvancedSearch
-                search={{ labelWidth: 120 }}
+                request={async (params, _sort, _filter, searchFormValues) => {
+                    const { current, pageSize } = params;
+                    const apiParams: Record<string, unknown> = {
+                        skip: ((current || 1) - 1) * (pageSize || 20),
+                        limit: pageSize || 20,
+                    };
+                    if (searchFormValues?.status) apiParams.status = searchFormValues.status;
+                    if (searchFormValues?.supplier_id) apiParams.supplier_id = searchFormValues.supplier_id;
+
+                    try {
+                        const res = await payableService.listPayables(apiParams as any);
+                        return {
+                            data: res.items || [],
+                            total: res.total || 0,
+                            success: true,
+                        };
+                    } catch (error: any) {
+                        messageApi.error(error?.message || t('app.kuaicaiwu.common.loadListFailed'));
+                        return { data: [], total: 0, success: false };
+                    }
+                }}
+                rowKey="id"
                 showCreateButton
-                createButtonText="新建应付单"
+                createButtonText={t(`${P}.createTitle`)}
                 onCreate={() => setCreateModalVisible(true)}
                 enableRowSelection
                 selectedRowKeys={selectedRowKeys}
                 onRowSelectionChange={setSelectedRowKeys}
                 showDeleteButton
-                deleteButtonText="批量删除"
+                deleteButtonText={t('common.batchDelete')}
                 onDelete={handleBatchDelete}
-                deleteConfirmTitle="确认批量删除"
-                deleteConfirmDescription={(count) => `确定要删除选中的 ${count} 条应付单吗？仅待审核且无付款记录的应付单可删除。`}
+                deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+                deleteConfirmDescription={(count) => t(`${P}.deleteConfirm`, { count })}
                 toolBarActionsAfterDelete={[
                     <UniBatchMenuButton
                         key="payable-batch-actions"
                         selectedRowKeys={selectedRowKeys}
-                        buttonText="批量操作"
-                        menuItems={[
-                            {
-                                key: 'batch-approve',
-                                label: '批量审核',
-                                requireConfirm: true,
-                                confirmTitle: (count) => `确认审核 ${count} 条应付单`,
-                                confirmDescription: '仅待审核单据会审核通过，不满足条件的单据会在后端返回错误。',
-                                onClick: handleBatchApprove,
-                            },
-                        ]}
+                        buttonText={t('components.uniBatch.batchActions')}
+                        menuItems={batchMenuItems}
                     />,
                 ]}
-                request={async (params) => {
-                    const { current, pageSize, ...rest } = params;
-                    const res = await payableService.listPayables({
-                        skip: ((current || 1) - 1) * (pageSize || 20),
-                        limit: pageSize || 20,
-                        ...rest,
-                    });
-                    return {
-                        data: res.items,
-                        total: res.total,
-                        success: true,
-                    };
-                }}
-                columns={columns}
+                showAdvancedSearch={true}
                 showImportButton
                 onImport={async (data) => {
                     if (!data || data.length < 2) {
-                        messageApi.warning('导入数据为空或格式不正确');
+                        messageApi.warning(t('app.kuaicaiwu.common.importEmpty'));
                         return;
                     }
                     const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -342,7 +344,7 @@ const PayableList: React.FC = () => {
                         payableImportTemplate.importHeaderMap,
                     );
                     if (headerIndexMap.supplier === undefined || headerIndexMap.amount === undefined) {
-                        messageApi.error('导入表头需包含供应商名称和应付金额');
+                        messageApi.error(t(`${P}.importHeaderError`));
                         return;
                     }
                     const items: PayableCreateData[] = [];
@@ -380,21 +382,21 @@ const PayableList: React.FC = () => {
                         });
                     }
                     if (items.length === 0) {
-                        messageApi.warning('没有可导入的有效数据');
+                        messageApi.warning(t('app.kuaicaiwu.common.importNoValidRows'));
                         return;
                     }
                     const result = await batchImport({
                         items,
                         importFn: async (item) => payableService.createPayable(item),
-                        title: '导入应付单',
+                        title: t(`${P}.importTitle`),
                         concurrency: 5,
                     });
                     if (result.successCount > 0) {
-                        messageApi.success(`成功导入 ${result.successCount} 条应付单`);
+                        messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
                         actionRef.current?.reload();
                     }
                     if (result.failureCount > 0) {
-                        messageApi.warning(`部分失败 ${result.failureCount} 条`);
+                        messageApi.warning(t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }));
                     }
                 }}
                 importHeaders={payableImportTemplate.importHeaders}
@@ -411,7 +413,7 @@ const PayableList: React.FC = () => {
                             items = items.filter((d: Payable) => d.id != null && keys.includes(d.id));
                         }
                         if (items.length === 0) {
-                            messageApi.warning('暂无数据可导出');
+                            messageApi.warning(t('common.exportNoData'));
                             return;
                         }
                         const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -421,15 +423,15 @@ const PayableList: React.FC = () => {
                         a.download = `payables-${new Date().toISOString().slice(0, 10)}.json`;
                         a.click();
                         URL.revokeObjectURL(url);
-                        messageApi.success(`已导出 ${items.length} 条记录`);
+                        messageApi.success(t('common.exportCountSuccess', { count: items.length }));
                     } catch (error: any) {
-                        messageApi.error(error?.message || '导出失败');
+                        messageApi.error(error?.message || t('common.exportFailed'));
                     }
                 }}
             />
 
             <ModalForm
-                title="新建应付单"
+                title={t(`${P}.createTitle`)}
                 open={createModalVisible}
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleCreate}
@@ -437,15 +439,15 @@ const PayableList: React.FC = () => {
             >
                 <ProFormSelect
                     name="supplier_id"
-                    label="供应商"
+                    label={t('app.kuaicaiwu.common.supplier')}
                     options={supplierOptions}
-                    rules={[{ required: true, message: '请选择供应商' }]}
-                    placeholder="请选择供应商"
+                    rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
+                    placeholder={t('app.kuaicaiwu.common.selectSupplier')}
                 />
-                <ProFormMoney name="total_amount" label="应付金额" min={0.01} rules={[{ required: true }]} />
-                <ProFormDatePicker name="due_date" label="到期日期" rules={[{ required: true }]} />
-                <ProFormDatePicker name="business_date" label="业务日期" />
-                <ProFormTextArea name="notes" label="备注" />
+                <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
+                <ProFormDatePicker name="due_date" label={t('app.kuaicaiwu.common.dueDate')} rules={[{ required: true }]} />
+                <ProFormDatePicker name="business_date" label={t('app.kuaicaiwu.common.businessDate')} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="payable_attachments" />
             </ModalForm>
         </ListPageTemplate>

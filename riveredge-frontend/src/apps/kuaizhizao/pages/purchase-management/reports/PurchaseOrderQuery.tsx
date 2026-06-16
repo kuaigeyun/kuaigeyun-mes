@@ -1,18 +1,21 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const PurchaseOrderQuery: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    { title: '订单编号', dataIndex: 'order_code', width: 150 },
-    { title: '供应商', dataIndex: 'supplier_name', width: 200 },
-    { title: '订单日期', dataIndex: 'order_date', valueType: 'date', width: 120 },
-    { title: '总金额', dataIndex: 'total_amount', valueType: 'money', width: 120 },
-    { title: '采购员', dataIndex: 'buyer_name', width: 100 },
-    { title: '状态', dataIndex: 'status', width: 100 },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseReports.colOrderCode'), dataIndex: 'order_code', width: 150 },
+      { title: t('app.kuaizhizao.purchaseReports.colSupplier'), dataIndex: 'supplier_name', width: 200 },
+      { title: t('app.kuaizhizao.purchaseReports.colOrderDate'), dataIndex: 'order_date', valueType: 'date', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colTotalAmount'), dataIndex: 'total_amount', valueType: 'money', width: 120 },
+      { title: t('app.kuaizhizao.purchaseReports.colBuyer'), dataIndex: 'buyer_name', width: 100 },
+      { title: t('common.status'), dataIndex: 'status', width: 100 },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

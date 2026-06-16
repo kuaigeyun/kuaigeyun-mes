@@ -4,9 +4,10 @@
  * 展示全量模具使用记录，支持新建使用记录。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormDigit } from '@ant-design/pro-components';
-import { App, Button, message, Modal, Typography } from 'antd';
+import { App, Button, Typography } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCheckoutUsageLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
@@ -38,6 +39,7 @@ interface MoldUsage {
 }
 
 const MoldUsagesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -72,81 +74,93 @@ const MoldUsagesPage: React.FC = () => {
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('使用记录已保存');
+      messageApi.success(t('app.kuaizhizao.moldUsage.saveSuccess'));
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.moldUsage.saveFailed'));
       throw e;
     }
   };
 
-  const columns: ProColumns<MoldUsage>[] = [
-    {
-      title: '使用单号',
-      dataIndex: 'usage_no',
-      width: 150,
-      fixed: 'left',
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
-          {r.usage_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '模具编号',
-      dataIndex: 'mold_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
-          {r.mold_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
-    { title: '使用日期', dataIndex: 'usage_date', valueType: 'dateTime', width: 170 },
-    { title: '使用次数', dataIndex: 'usage_count', width: 100, align: 'right' },
-    { title: '来源类型', dataIndex: 'source_type', width: 100 },
-    {
-      title: '来源单号',
-      dataIndex: 'source_no',
-      width: 140,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
-          {r.source_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '操作人', dataIndex: 'operator_name', width: 100 },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+  const statusOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.moldUsage.statusInUse'), value: '使用中' },
+      { label: t('app.kuaizhizao.moldUsage.statusReturned'), value: '已归还' },
+      { label: t('app.kuaizhizao.moldUsage.statusScrapped'), value: '已报废' },
+    ],
+    [t],
+  );
+
+  const columns: ProColumns<MoldUsage>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.moldUsage.colUsageNo'),
+        dataIndex: 'usage_no',
+        width: 150,
+        fixed: 'left',
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.usage_no ?? '') }} ellipsis>
+            {r.usage_no ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    { title: '备注', dataIndex: 'remark', ellipsis: true, hideInSearch: true },
-  ];
+      {
+        title: t('app.kuaizhizao.moldUsage.colMoldCode'),
+        dataIndex: 'mold_code',
+        width: 120,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+            {r.mold_code ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaizhizao.moldUsage.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.moldUsage.colUsageDate'), dataIndex: 'usage_date', valueType: 'dateTime', width: 170 },
+      { title: t('app.kuaizhizao.moldUsage.colUsageCount'), dataIndex: 'usage_count', width: 100, align: 'right' },
+      { title: t('app.kuaizhizao.moldUsage.colSourceType'), dataIndex: 'source_type', width: 100 },
+      {
+        title: t('app.kuaizhizao.moldUsage.colSourceNo'),
+        dataIndex: 'source_no',
+        width: 140,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.source_no ?? '') }} ellipsis>
+            {r.source_no ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaizhizao.moldUsage.colOperator'), dataIndex: 'operator_name', width: 100 },
+      {
+        title: t('app.kuaizhizao.moldUsage.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getCheckoutUsageLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      { title: t('app.kuaizhizao.moldUsage.colRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<MoldUsage>
-        headerTitle="模具使用记录"
+        headerTitle={t('app.kuaizhizao.moldUsage.title')}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-usages"
         actionRef={actionRef}
         enableRowSelection
@@ -167,7 +181,7 @@ const MoldUsagesPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {'新建使用记录' + NEW_SHORTCUT_HINT}
+            {t('app.kuaizhizao.moldUsage.createUsage') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}
@@ -178,7 +192,7 @@ const MoldUsagesPage: React.FC = () => {
       <FormModalTemplate
         open={modalVisible}
         onClose={() => setModalVisible(false)}
-        title="新建模具使用记录"
+        title={t('app.kuaizhizao.moldUsage.createModalTitle')}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         onFinish={handleSubmit}
@@ -186,33 +200,29 @@ const MoldUsagesPage: React.FC = () => {
       >
         <ProFormSelect
           name="mold_uuid"
-          label="模具"
+          label={t('app.kuaizhizao.moldUsage.formMold')}
           options={moldOptions}
-          placeholder="请选择模具"
-          rules={[{ required: true, message: '请选择模具' }]}
+          placeholder={t('app.kuaizhizao.moldUsage.formSelectMold')}
+          rules={[{ required: true, message: t('app.kuaizhizao.moldUsage.formSelectMoldRequired') }]}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="usage_date"
-          label="使用日期"
+          label={t('app.kuaizhizao.moldUsage.formUsageDate')}
           fieldProps={{ showTime: true }}
-          rules={[{ required: true, message: '请选择使用日期' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.moldUsage.formSelectUsageDateRequired') }]}
           colProps={{ span: 12 }}
         />
-        <ProFormDigit name="usage_count" label="使用次数" min={1} initialValue={1} colProps={{ span: 12 }} />
+        <ProFormDigit name="usage_count" label={t('app.kuaizhizao.moldUsage.formUsageCount')} min={1} initialValue={1} colProps={{ span: 12 }} />
         <ProFormSelect
           name="status"
-          label="状态"
-          options={[
-            { label: '使用中', value: '使用中' },
-            { label: '已归还', value: '已归还' },
-            { label: '已报废', value: '已报废' },
-          ]}
+          label={t('app.kuaizhizao.moldUsage.formStatus')}
+          options={statusOptions}
           colProps={{ span: 12 }}
         />
-        <ProFormText name="source_type" label="来源类型" placeholder="如：工单" colProps={{ span: 12 }} />
-        <ProFormText name="source_no" label="来源单号" colProps={{ span: 12 }} />
-        <ProFormText name="operator_name" label="操作人" colProps={{ span: 12 }} />
+        <ProFormText name="source_type" label={t('app.kuaizhizao.moldUsage.formSourceType')} placeholder={t('app.kuaizhizao.moldUsage.formSourceTypePlaceholder')} colProps={{ span: 12 }} />
+        <ProFormText name="source_no" label={t('app.kuaizhizao.moldUsage.formSourceNo')} colProps={{ span: 12 }} />
+        <ProFormText name="operator_name" label={t('app.kuaizhizao.moldUsage.formOperator')} colProps={{ span: 12 }} />
         <DocumentAttachmentsField category="mold_usage_attachments" />
       </FormModalTemplate>
     </ListPageTemplate>

@@ -4,10 +4,10 @@
  * 查看报工触发的物料倒冲记录，支持按工单、物料、状态筛选，失败记录可重试。
  */
 
-import React, { useRef } from 'react';
+import React, { useMemo, useRef } from 'react';
 import type { ProColumns } from '@ant-design/pro-components';
-import { App, Button, Typography } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { App, Button } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { warehouseApi } from '../../../services/production';
 import { UniTable } from '../../../../../components/uni-table';
 import {
@@ -38,141 +38,141 @@ interface BackflushRecordItem {
 }
 
 const BackflushRecordsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const actionRef = useRef<any>(null);
 
   const handleRetry = (record: BackflushRecordItem) => {
     modal.confirm({
-      title: '重试倒冲',
-      content: `确定要重试物料 "${record.material_name}" 的倒冲吗？请确保线边仓已有足够库存。`,
+      title: t('app.kuaizhizao.backflushRecords.retryTitle'),
+      content: t('app.kuaizhizao.backflushRecords.retryContent', { material: record.material_name }),
       onOk: async () => {
         try {
           const res = await warehouseApi.backflushRecords.retry(String(record.id));
           if (res?.success) {
-            message.success(res?.message || '重试成功');
+            message.success(res?.message || t('app.kuaizhizao.backflushRecords.retrySuccess'));
             actionRef.current?.reload();
           } else {
-            message.warning(res?.message || '重试失败');
+            message.warning(res?.message || t('app.kuaizhizao.backflushRecords.retryFailed'));
           }
         } catch {
-          message.error('重试失败');
+          message.error(t('app.kuaizhizao.backflushRecords.retryFailed'));
         }
       },
     });
   };
 
-  const columns: ProColumns<BackflushRecordItem>[] = [
-    {
-      title: '工单编号',
-      dataIndex: 'work_order_code',
-      width: 130,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }} ellipsis>
-          {r.work_order_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '物料',
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, r) => (
-        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
-      ),
-    },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
-    {
-      title: '批号',
-      dataIndex: 'batch_no',
-      width: 100,
-      render: (_, record) => record.batch_no || '-',
-    },
-    {
-      title: '报工数量',
-      dataIndex: 'report_quantity',
-      width: 90,
-      valueType: 'digit',
-    },
-    {
-      title: 'BOM用量',
-      dataIndex: 'bom_quantity',
-      width: 90,
-      valueType: 'digit',
-    },
-    {
-      title: '倒冲数量',
-      dataIndex: 'backflush_quantity',
-      width: 100,
-      valueType: 'digit',
-      render: (_, record) => `${record.backflush_quantity} ${record.material_unit || ''}`,
-    },
-    {
-      title: '出库仓库',
-      dataIndex: 'warehouse_name',
-      width: 120,
-      render: (_, record) => record.warehouse_name || '-',
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: {
-        pending: { text: '待处理' },
-        completed: { text: '已完成' },
-        failed: { text: '失败' },
-        cancelled: { text: '已取消' },
+  const columns: ProColumns<BackflushRecordItem>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.backflushRecords.colWorkOrderCode'),
+        dataIndex: 'work_order_code',
+        width: 130,
+        fixed: 'left',
+        copyable: true,
       },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+        key: 'material_name',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, r) => (
+          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+        ),
       },
-    },
-    {
-      title: '错误信息',
-      dataIndex: 'error_message',
-      width: 180,
-      ellipsis: true,
-      render: (_, record) => record.error_message || '-',
-    },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 170,
-      valueType: 'dateTime',
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 90,
-      fixed: 'right',
-      render: (_, record) =>
-        record.status === 'failed' ? (
-          <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
-            重试
-          </Button>
-        ) : null,
-    },
-  ];
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', hideInTable: true },
+      {
+        title: t('app.kuaizhizao.batchInventoryQuery.colBatchNo'),
+        dataIndex: 'batch_no',
+        width: 100,
+        render: (_, record) => record.batch_no || '-',
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colReportQty'),
+        dataIndex: 'report_quantity',
+        width: 90,
+        valueType: 'digit',
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colBomQty'),
+        dataIndex: 'bom_quantity',
+        width: 90,
+        valueType: 'digit',
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colBackflushQty'),
+        dataIndex: 'backflush_quantity',
+        width: 100,
+        valueType: 'digit',
+        render: (_, record) => `${record.backflush_quantity} ${record.material_unit || ''}`,
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colOutboundWarehouse'),
+        dataIndex: 'warehouse_name',
+        width: 120,
+        render: (_, record) => record.warehouse_name || '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueEnum: {
+          pending: { text: t('app.kuaizhizao.warehouseCommon.statusPending') },
+          completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted') },
+          failed: { text: t('app.kuaizhizao.backflushRecords.statusFailed') },
+          cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled') },
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getBackflushRecordLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.backflushRecords.colErrorMessage'),
+        dataIndex: 'error_message',
+        width: 180,
+        ellipsis: true,
+        render: (_, record) => record.error_message || '-',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colCreatedAt'),
+        dataIndex: 'created_at',
+        width: 170,
+        valueType: 'dateTime',
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        valueType: 'option',
+        width: 90,
+        fixed: 'right',
+        render: (_, record) =>
+          record.status === 'failed' ? (
+            <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleRetry(record)}>
+              {t('app.kuaizhizao.backflushRecords.retry')}
+            </Button>
+          ) : null,
+      },
+    ],
+    [t]
+  );
 
   const fetchRecords = async (params: any) => {
     try {
@@ -189,7 +189,7 @@ const BackflushRecordsPage: React.FC = () => {
         success: true,
       };
     } catch {
-      message.error('查询失败');
+      message.error(t('app.kuaizhizao.warehouseCommon.queryFailed'));
       return { data: [], total: 0, success: false };
     }
   };
@@ -197,7 +197,7 @@ const BackflushRecordsPage: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<BackflushRecordItem>
-        headerTitle="物料倒冲记录"
+        headerTitle={t('app.kuaizhizao.backflushRecords.headerTitle')}
         actionRef={actionRef}
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.backflush-records"

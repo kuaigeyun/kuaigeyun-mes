@@ -1,4 +1,5 @@
 import { Tag } from 'antd';
+import type { TFunction } from 'i18next';
 
 export function formatPullQty(val: unknown): string {
   if (val == null || val === '') return '—';
@@ -13,8 +14,8 @@ export function formatPullPercent(done: number, total: number): string {
   return `${pct}%`;
 }
 
-export function renderPullableTag(pullable: boolean) {
-  return pullable ? <Tag color="success">可取单</Tag> : <Tag>不可取单</Tag>;
+export function renderPullableTag(t: TFunction, pullable: boolean) {
+  return pullable ? <Tag color="success">{t('app.kuaizhizao.warehouseOutbound.pull.pullable')}</Tag> : <Tag>{t('app.kuaizhizao.warehouseOutbound.pull.notPullable')}</Tag>;
 }
 
 export function renderLifecycleSubStageTag(label?: string) {

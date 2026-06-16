@@ -162,19 +162,19 @@ function renderReportingRowActions(nodes: React.ReactNode[], keyPrefix: string):
 }
 
 /** 获取报工员工信息：优先使用工序派工的 assigned_worker，否则使用当前登录用户 */
-const getWorkerInfo = (operation?: any) => {
+const getWorkerInfo = (operation?: any, translate?: (key: string) => string) => {
   const user = getUserInfo();
   if (operation?.assigned_worker_id) {
     return {
       worker_id: operation.assigned_worker_id,
       worker_name: String(
-        operation.assigned_worker_name || user?.full_name || user?.username || '操作员'
+        operation.assigned_worker_name || user?.full_name || user?.username || translate?.('app.kuaizhizao.workReporting.fallbackOperator') || '操作员'
       ),
     };
   }
   return {
     worker_id: user?.id ?? 0,
-    worker_name: String(user?.full_name || user?.username || '当前用户'),
+    worker_name: String(user?.full_name || user?.username || translate?.('app.kuaizhizao.workReporting.fallbackCurrentUser') || '当前用户'),
   };
 };
 
@@ -182,8 +182,9 @@ const getWorkerInfo = (operation?: any) => {
 function resolveProductionWorker(
   operation: any,
   proxyUser: Pick<User, 'id' | 'full_name' | 'username'> | null | undefined,
+  translate: (key: string) => string,
 ): { worker_id: number; worker_name: string } {
-  const base = getWorkerInfo(operation);
+  const base = getWorkerInfo(operation, translate);
   if (proxyUser?.id) {
     return {
       worker_id: proxyUser.id,
@@ -226,37 +227,37 @@ const ReportingPage: React.FC = () => {
     if (!stats) return [];
     return [
       {
-        title: '累计工时',
+        title: t('app.kuaizhizao.reporting.statCumulativeHours'),
         value: (stats.cumulative_hours ?? 0).toFixed(1),
         unit: 'h',
         trend: stats.trends?.hours,
         icon: <ClockCircleOutlined />,
       },
       {
-        title: '预估工资',
+        title: t('app.kuaizhizao.reporting.statEstimatedWages'),
         value: (stats.estimated_wages ?? 0).toLocaleString(),
         unit: '¥',
         trend: stats.trends?.wages,
         icon: <CheckCircleOutlined />,
       },
       {
-        title: '生产效率',
+        title: t('app.kuaizhizao.reporting.statEfficiency'),
         value: ((stats.efficiency ?? 0) * 100).toFixed(1) + '%',
         trend: stats.trends?.efficiency,
         icon: <CheckCircleOutlined />,
         color: 'green',
         subValue: stats.efficiency_yoy != null ? (stats.efficiency_yoy >= 0 ? '+' : '') + stats.efficiency_yoy + '%' : undefined,
-        subLabel: '同比',
+        subLabel: t('app.kuaizhizao.reporting.statYoy'),
       },
       {
-        title: '异常提报',
+        title: t('app.kuaizhizao.reporting.statExceptionReports'),
         value: stats.exception_reports ?? 0,
-        unit: '项',
+        unit: t('app.kuaizhizao.reporting.statUnitItems'),
         icon: <WarningOutlined />,
         color: (stats.exception_reports ?? 0) > 0 ? 'red' : 'green',
       },
     ];
-  }, [stats]);
+  }, [stats, t]);
 
   const invalidateStatistics = () => {
     queryClient.invalidateQueries({ queryKey: ['reportingStatistics'] });
@@ -313,7 +314,7 @@ const ReportingPage: React.FC = () => {
       (op: any) => op.operation_id === reportOperationId,
     );
     if (!operation) return;
-    const b = getWorkerInfo(operation);
+    const b = getWorkerInfo(operation, t);
     createModalProxyWorkerRef.current = { id: b.worker_id, full_name: b.worker_name, username: '' };
     formRef.current?.setFieldsValue({ proxy_worker_uuid: undefined });
   }, [reportingModalVisible, canProxyReporting, reportOperationId, reportOperations]);
@@ -332,7 +333,7 @@ const ReportingPage: React.FC = () => {
       const list = Array.isArray(workOrders) ? workOrders : (workOrders as any)?.data ?? (workOrders as any)?.items ?? [];
       setReportWorkOrders(Array.isArray(list) ? list : []);
     } catch (e) {
-      messageApi.error('加载工单列表失败');
+      messageApi.error(t('app.kuaizhizao.workReporting.loadWorkOrdersFailed'));
       setReportWorkOrders([]);
     }
   };
@@ -351,7 +352,7 @@ const ReportingPage: React.FC = () => {
       const ops = Array.isArray(operations) ? operations : (operations as any)?.data ?? (operations as any)?.items ?? [];
       setReportOperations(Array.isArray(ops) ? ops : []);
     } catch (e) {
-      messageApi.error('加载工序列表失败');
+      messageApi.error(t('app.kuaizhizao.workReporting.loadOperationsFailed'));
       setReportOperations([]);
     }
   };
@@ -407,7 +408,7 @@ const ReportingPage: React.FC = () => {
         if (!executionConfig?.require_confirmed_picking_before_reporting) return true;
         const status = await workOrderApi.getPickingConfirmationStatus(workOrderId.toString());
         if (!status?.has_confirmed_picking) {
-          messageApi.warning('当前配置要求先确认领料，未确认时不可报工');
+          messageApi.warning(t('app.kuaizhizao.workReporting.pickingGateWarning'));
           return false;
         }
         return true;
@@ -417,12 +418,12 @@ const ReportingPage: React.FC = () => {
       const workOrder = (Array.isArray(reportWorkOrders) ? reportWorkOrders : []).find((wo: any) => wo.id === values.work_order_id);
       const operation = (Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === values.operation_id);
       if (!workOrder || !operation) {
-        messageApi.error('工单或工序信息不存在');
-        throw new Error('工单或工序未选择');
+        messageApi.error(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
+        throw new Error(t('app.kuaizhizao.workReporting.workOrderOrOperationMissing'));
       }
       const canContinue = await ensurePickingGate(workOrder.id);
       if (!canContinue) return;
-      const { worker_id, worker_name } = resolveProductionWorker(operation, createModalProxyWorkerRef.current);
+      const { worker_id, worker_name } = resolveProductionWorker(operation, createModalProxyWorkerRef.current, t);
       const reportingData: any = {
         work_order_id: workOrder.id,
         work_order_code: workOrder.code,
@@ -444,7 +445,7 @@ const ReportingPage: React.FC = () => {
       } else {
         const rq = Number(values.reported_quantity) || 0;
         if (rq <= 0) {
-          messageApi.warning('报工数量须大于 0');
+          messageApi.warning(t('app.kuaizhizao.workReporting.quantityMustBePositive'));
           return;
         }
         const rem = getRemainingReportableQuantity(
@@ -462,7 +463,7 @@ const ReportingPage: React.FC = () => {
         reportingData.unqualified_quantity = rq - (values.qualified_quantity ?? rq ?? 0);
       }
       await reportingApi.create(coerceReportingCreateStrings(reportingData, workOrder));
-      messageApi.success('报工成功');
+      messageApi.success(t('app.kuaizhizao.workReporting.createSuccess'));
       setReportingModalVisible(false);
       formRef.current?.resetFields();
       setReportOperations([]);
@@ -472,7 +473,7 @@ const ReportingPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '报工失败');
+      messageApi.error(error.message || t('app.kuaizhizao.workReporting.createFailed'));
       throw error;
     }
   };
@@ -482,7 +483,7 @@ const ReportingPage: React.FC = () => {
    */
   const handleCreateScrap = (record: ReportingRecord) => {
     if ((record.unqualified_quantity || 0) <= 0) {
-      messageApi.warning('该报工记录没有不合格数量，无法创建报废记录');
+      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedForScrap'));
       return;
     }
     setCurrentReportingRecord(record);
@@ -501,11 +502,11 @@ const ReportingPage: React.FC = () => {
   const handleSubmitScrap = async (values: any): Promise<void> => {
     try {
       if (!currentReportingRecord?.id) {
-        throw new Error('报工记录信息不存在');
+        throw new Error(t('app.kuaizhizao.workReporting.recordNotFound'));
       }
 
       await reportingApi.recordScrap(currentReportingRecord.id.toString(), values);
-      messageApi.success('报废记录创建成功');
+      messageApi.success(t('app.kuaizhizao.workReporting.scrapCreateSuccess'));
       setScrapModalVisible(false);
       setCurrentReportingRecord(null);
       scrapFormRef.current?.resetFields();
@@ -513,7 +514,7 @@ const ReportingPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建报废记录失败');
+      messageApi.error(error.message || t('app.kuaizhizao.workReporting.scrapCreateFailed'));
       throw error;
     }
   };
@@ -523,7 +524,7 @@ const ReportingPage: React.FC = () => {
    */
   const handleCreateDefect = (record: ReportingRecord) => {
     if ((record.unqualified_quantity || 0) <= 0) {
-      messageApi.warning('该报工记录没有不合格数量，无法创建不良品记录');
+      messageApi.warning(t('app.kuaizhizao.workReporting.noUnqualifiedForDefect'));
       return;
     }
     setCurrentReportingRecordForDefect(record);
@@ -543,11 +544,11 @@ const ReportingPage: React.FC = () => {
   const handleSubmitDefect = async (values: any): Promise<void> => {
     try {
       if (!currentReportingRecordForDefect?.id) {
-        throw new Error('报工记录信息不存在');
+        throw new Error(t('app.kuaizhizao.workReporting.recordNotFound'));
       }
 
       await reportingApi.recordDefect(currentReportingRecordForDefect.id.toString(), values);
-      messageApi.success('不良品记录创建成功');
+      messageApi.success(t('app.kuaizhizao.workReporting.defectCreateSuccess'));
       setDefectModalVisible(false);
       setCurrentReportingRecordForDefect(null);
       defectFormRef.current?.resetFields();
@@ -555,7 +556,7 @@ const ReportingPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建不良品记录失败');
+      messageApi.error(error.message || t('app.kuaizhizao.workReporting.defectCreateFailed'));
       throw error;
     }
   };
@@ -578,7 +579,7 @@ const ReportingPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取报工记录详情失败');
+      messageApi.error(t('app.kuaizhizao.workReporting.loadDetailFailed'));
     }
   };
 
@@ -588,12 +589,12 @@ const ReportingPage: React.FC = () => {
   const handleSubmitCorrect = async (values: any): Promise<void> => {
     try {
       if (!currentReportingRecordForCorrect?.id) {
-        throw new Error('报工记录信息不存在');
+        throw new Error(t('app.kuaizhizao.workReporting.recordNotFound'));
       }
 
       if (!values.correction_reason || !values.correction_reason.trim()) {
-        messageApi.error('请输入修正原因');
-        throw new Error('修正原因不能为空');
+        messageApi.error(t('app.kuaizhizao.workReporting.correctionReasonRequired'));
+        throw new Error(t('app.kuaizhizao.workReporting.correctionReasonEmpty'));
       }
 
       const correctedId = currentReportingRecordForCorrect.id;
@@ -610,7 +611,7 @@ const ReportingPage: React.FC = () => {
         currentReportingRecordForCorrect.id.toString(),
         correctPayload
       );
-      messageApi.success('报工数据修正成功');
+      messageApi.success(t('app.kuaizhizao.workReporting.correctSuccess'));
       setCorrectModalVisible(false);
       setCurrentReportingRecordForCorrect(null);
       correctFormRef.current?.resetFields();
@@ -628,12 +629,12 @@ const ReportingPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      if (error.message !== '修正原因不能为空') {
+      if (error.message !== t('app.kuaizhizao.workReporting.correctionReasonEmpty')) {
         const detail = error?.response?.data?.detail;
         const msg =
           (typeof detail === 'string' ? detail : detail?.message) ||
           error?.message ||
-          '修正报工数据失败';
+          t('app.kuaizhizao.workReporting.correctFailed');
         messageApi.error(msg);
       }
       throw error;
@@ -653,7 +654,7 @@ const ReportingPage: React.FC = () => {
         setDetailMaterialBindings([]);
       }
     } catch {
-      messageApi.error('获取报工记录详情失败');
+      messageApi.error(t('app.kuaizhizao.workReporting.loadDetailFailed'));
     }
   };
 
@@ -672,7 +673,7 @@ const ReportingPage: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        详情
+        {t('common.detail')}
       </Button>
     );
     if (isPending) {
@@ -680,7 +681,7 @@ const ReportingPage: React.FC = () => {
         <span {...rowActionKind('skip')} key="wf" onClick={(e) => e.stopPropagation()}>
           <UniWorkflowActions {...rowActionKind('skip')}
             record={record}
-            entityName="报工记录"
+            entityName={t('app.kuaizhizao.workReporting.entityName')}
             statusField="status"
             draftStatuses={[]}
             pendingStatuses={REPORTING_PENDING_STATUSES}
@@ -716,7 +717,7 @@ const ReportingPage: React.FC = () => {
             void handleCorrectReporting(record);
           }}
         >
-          修正
+          {t('app.kuaizhizao.workReporting.correct')}
         </Button>
       );
       nodes.push(
@@ -728,12 +729,12 @@ const ReportingPage: React.FC = () => {
           onClick={(e) => {
             e.stopPropagation();
             Modal.confirm({
-              title: '确认删除',
-              content: '确定要删除这条待审核的报工记录吗？删除后将扣减工单/工序相应的完成数量。',
+              title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
+              content: t('app.kuaizhizao.workReporting.confirmDeletePendingContent'),
               onOk: async () => {
                 try {
                   await reportingApi.delete(record.id.toString());
-                  messageApi.success('删除成功');
+                  messageApi.success(t('common.deleteSuccess'));
                   if (reportingDetail?.id === record.id) {
                     setDetailDrawerVisible(false);
                     setReportingDetail(null);
@@ -743,13 +744,13 @@ const ReportingPage: React.FC = () => {
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
-                  messageApi.error(error.message || '删除失败');
+                  messageApi.error(error.message || t('common.deleteFailed'));
                 }
               },
             });
           }}
         >
-          删除
+          {t('common.delete')}
         </Button>
       );
     }
@@ -762,13 +763,13 @@ const ReportingPage: React.FC = () => {
           onClick={(e) => {
             e.stopPropagation();
             Modal.confirm({
-              title: '确认撤回审核',
+              title: t('app.kuaizhizao.workReporting.confirmRevokeTitle'),
               content:
-                '撤回审核后，该报工记录将变为"待审核"状态，且不再计入工单已完成数量。确定要撤回吗？',
+                t('app.kuaizhizao.workReporting.confirmRevokeContent'),
               onOk: async () => {
                 try {
                   await reportingApi.revoke(record.id.toString());
-                  messageApi.success('已撤回审核');
+                  messageApi.success(t('app.kuaizhizao.workReporting.revokeSuccess'));
                   if (reportingDetail?.id === record.id) {
                     reportingApi
                       .get(record.id.toString())
@@ -783,13 +784,13 @@ const ReportingPage: React.FC = () => {
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
-                  messageApi.error(error.message || '撤回失败');
+                  messageApi.error(error.message || t('app.kuaizhizao.workReporting.revokeFailed'));
                 }
               },
             });
           }}
         >
-          撤回审核
+          {t('app.kuaizhizao.workReporting.revokeReview')}
         </Button>
       );
       if ((record.unqualified_quantity || 0) > 0) {
@@ -804,7 +805,7 @@ const ReportingPage: React.FC = () => {
               handleCreateDefect(record);
             }}
           >
-            不良品
+            {t('app.kuaizhizao.workReporting.defect')}
           </Button>
         );
         nodes.push(
@@ -818,7 +819,7 @@ const ReportingPage: React.FC = () => {
               handleCreateScrap(record);
             }}
           >
-            报废
+            {t('app.kuaizhizao.workReporting.scrap')}
           </Button>
         );
       }
@@ -832,7 +833,7 @@ const ReportingPage: React.FC = () => {
             void handleCorrectReporting(record);
           }}
         >
-          修正
+          {t('app.kuaizhizao.workReporting.correct')}
         </Button>
       );
     }
@@ -846,12 +847,12 @@ const ReportingPage: React.FC = () => {
           onClick={(e) => {
             e.stopPropagation();
             Modal.confirm({
-              title: '确认删除',
-              content: '确定要删除这条被驳回的报工记录吗？',
+              title: t('app.kuaizhizao.workReporting.confirmDeleteTitle'),
+              content: t('app.kuaizhizao.workReporting.confirmDeleteRejectedContent'),
               onOk: async () => {
                 try {
                   await reportingApi.delete(record.id.toString());
-                  messageApi.success('删除成功');
+                  messageApi.success(t('common.deleteSuccess'));
                   if (reportingDetail?.id === record.id) {
                     setDetailDrawerVisible(false);
                     setReportingDetail(null);
@@ -861,13 +862,13 @@ const ReportingPage: React.FC = () => {
                   actionRef.current?.reload();
                   invalidateStatistics();
                 } catch (error: any) {
-                  messageApi.error(error.message || '删除失败');
+                  messageApi.error(error.message || t('common.deleteFailed'));
                 }
               },
             });
           }}
         >
-          删除
+          {t('common.delete')}
         </Button>
       );
     }
@@ -877,9 +878,9 @@ const ReportingPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<ReportingRecord>[] = [
+  const columns: ProColumns<ReportingRecord>[] = useMemo(() => [
     {
-      title: '工单名称 / 编号',
+      title: t('app.kuaizhizao.workReporting.colWorkOrderStacked'),
       key: 'workOrderStacked',
       dataIndex: 'work_order_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -892,30 +893,30 @@ const ReportingPage: React.FC = () => {
       ),
     },
     {
-      title: '工单编号',
+      title: t('app.kuaizhizao.workReporting.colWorkOrderCode'),
       dataIndex: 'work_order_code',
       hideInTable: true,
     },
     {
-      title: '工单名称',
+      title: t('app.kuaizhizao.workReporting.colWorkOrderName'),
       dataIndex: 'work_order_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '工序',
+      title: t('app.kuaizhizao.workReporting.colOperation'),
       dataIndex: 'operation_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '生产人员',
+      title: t('app.kuaizhizao.workReporting.colWorker'),
       dataIndex: 'worker_name',
       width: 100,
       ellipsis: true,
     },
     {
-      title: '记录人员',
+      title: t('app.kuaizhizao.workReporting.colRecordedBy'),
       dataIndex: 'recorded_by_name',
       width: 100,
       ellipsis: true,
@@ -927,13 +928,13 @@ const ReportingPage: React.FC = () => {
       },
     },
     {
-      title: '报工数量',
+      title: t('app.kuaizhizao.workReporting.colReportedQty'),
       dataIndex: 'reported_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '合格数量',
+      title: t('app.kuaizhizao.workReporting.colQualifiedQty'),
       dataIndex: 'qualified_quantity',
       width: 100,
       align: 'right',
@@ -943,7 +944,7 @@ const ReportingPage: React.FC = () => {
       },
     },
     {
-      title: '不合格数量',
+      title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'),
       dataIndex: 'unqualified_quantity',
       width: 100,
       align: 'right',
@@ -953,20 +954,20 @@ const ReportingPage: React.FC = () => {
       },
     },
     {
-      title: '工时(小时)',
+      title: t('app.kuaizhizao.workReporting.colWorkHours'),
       dataIndex: 'work_hours',
       width: 100,
       align: 'right',
     },
     {
-      title: '报工时间',
+      title: t('app.kuaizhizao.workReporting.colReportedAt'),
       dataIndex: 'reported_at',
       valueType: 'dateTime',
       width: 160,
       defaultSortOrder: 'descend',
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.workReporting.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -987,70 +988,70 @@ const ReportingPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       hideInSearch: true,
       render: (_, record) =>
         renderReportingRowActions(renderReportingRowActionNodes(record), `rr-${record.id}`),
     },
-  ];
+  ], [t]);
 
 
   const reportingDetailBaseColumns: ProDescriptionsItemProps<ReportingRecord>[] = useMemo(
     () => [
       {
-        title: '工单编号',
+        title: t('app.kuaizhizao.workReporting.colWorkOrderCode'),
         dataIndex: 'work_order_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.work_order_code ?? '') }}>{r.work_order_code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '工单名称', dataIndex: 'work_order_name' },
-      { title: '工序', dataIndex: 'operation_name' },
-      { title: '生产人员', dataIndex: 'worker_name' },
+      { title: t('app.kuaizhizao.workReporting.colWorkOrderName'), dataIndex: 'work_order_name' },
+      { title: t('app.kuaizhizao.workReporting.colOperation'), dataIndex: 'operation_name' },
+      { title: t('app.kuaizhizao.workReporting.colWorker'), dataIndex: 'worker_name' },
       {
-        title: '记录人员',
+        title: t('app.kuaizhizao.workReporting.colRecordedBy'),
         dataIndex: 'recorded_by_name',
         render: (_: any, r: ReportingRecord) =>
           r.recorded_by_name || r.worker_name || '—',
       },
       {
-        title: '审核状态',
+        title: t('app.kuaizhizao.workReporting.colReviewStatus'),
         dataIndex: 'status',
         render: (s) => {
           const m: Record<string, { text: string; color: string }> = {
-            pending: { text: '待审核', color: 'default' },
-            approved: { text: '已审核', color: 'success' },
-            rejected: { text: '已驳回', color: 'error' },
+            pending: { text: t('app.kuaizhizao.workReporting.statusPending'), color: 'default' },
+            approved: { text: t('app.kuaizhizao.workReporting.statusApproved'), color: 'success' },
+            rejected: { text: t('app.kuaizhizao.workReporting.statusRejected'), color: 'error' },
           };
           const x = m[String(s)] || { text: String(s ?? '-'), color: 'default' };
           return <Tag color={x.color}>{x.text}</Tag>;
         },
       },
-      { title: '报工数量', dataIndex: 'reported_quantity' },
-      { title: '合格数量', dataIndex: 'qualified_quantity' },
-      { title: '不合格数量', dataIndex: 'unqualified_quantity' },
-      { title: '工时(小时)', dataIndex: 'work_hours' },
-      { title: '报工时间', dataIndex: 'reported_at', valueType: 'dateTime' },
-      { title: '审核时间', dataIndex: 'approved_at', valueType: 'dateTime' },
-      { title: '审核人', dataIndex: 'approved_by_name' },
-      { title: '驳回原因', dataIndex: 'rejection_reason', span: 3, render: (t: any) => t || '-' },
+      { title: t('app.kuaizhizao.workReporting.colReportedQty'), dataIndex: 'reported_quantity' },
+      { title: t('app.kuaizhizao.workReporting.colQualifiedQty'), dataIndex: 'qualified_quantity' },
+      { title: t('app.kuaizhizao.workReporting.colUnqualifiedQty'), dataIndex: 'unqualified_quantity' },
+      { title: t('app.kuaizhizao.workReporting.colWorkHours'), dataIndex: 'work_hours' },
+      { title: t('app.kuaizhizao.workReporting.colReportedAt'), dataIndex: 'reported_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.workReporting.colApprovedAt'), dataIndex: 'approved_at', valueType: 'dateTime' },
+      { title: t('app.kuaizhizao.workReporting.colApprovedBy'), dataIndex: 'approved_by_name' },
+      { title: t('app.kuaizhizao.workReporting.colRejectionReason'), dataIndex: 'rejection_reason', span: 3, render: (t: any) => t || '-' },
       {
-        title: '备注',
+        title: t('app.kuaizhizao.workReporting.colRemarks'),
         dataIndex: 'remarks',
         span: 3,
         render: (text: any) => text || '-',
       },
     ],
-    []
+    [t]
   );
 
   return (
     <>
       <ListPageTemplate statCards={statCards}>
       <UniTable
-        headerTitle="报工管理"
+        headerTitle={t('app.kuaizhizao.menu.production-execution.reporting')}
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.reporting"
         actionRef={actionRef}
         rowKey="id"
@@ -1086,7 +1087,7 @@ const ReportingPage: React.FC = () => {
               total,
             };
           } catch (error: any) {
-            messageApi.error(error.message || '获取报工记录失败');
+            messageApi.error(error.message || t('app.kuaizhizao.workReporting.listLoadFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
@@ -1094,7 +1095,7 @@ const ReportingPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showCreateButton={true}
-        createButtonText="新建报工记录"
+        createButtonText={t('app.kuaizhizao.workReporting.createButton')}
         onCreate={handleNewReporting}
         showDeleteButton={true}
         onDelete={async (keys) => {
@@ -1102,7 +1103,7 @@ const ReportingPage: React.FC = () => {
             for (const id of keys) {
               await reportingApi.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             if (reportingDetail?.id != null && keys.includes(reportingDetail.id)) {
               setDetailDrawerVisible(false);
@@ -1112,10 +1113,10 @@ const ReportingPage: React.FC = () => {
             actionRef.current?.reload();
             invalidateStatistics();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('common.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条报工记录吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.workReporting.deleteSelectedConfirm', { count })}
         scroll={{ x: 1700 }}
         onRow={(record) => ({
           onClick: () => void handleDetail(record),
@@ -1128,27 +1129,27 @@ const ReportingPage: React.FC = () => {
             menuItems={[
               {
                 key: 'batch-revoke',
-                label: '批量撤回审核',
+                label: t('app.kuaizhizao.workReporting.batchRevoke'),
                 icon: <RollbackOutlined />,
                 onClick: (keys) => {
                   Modal.confirm({
-                    title: '确认批量撤回审核',
-                    content: `确定要撤回选中的 ${keys.length} 条报工记录的审核吗？只有"已审核"状态的记录会被执行。`,
+                    title: t('app.kuaizhizao.workReporting.confirmBatchRevokeTitle'),
+                    content: t('app.kuaizhizao.workReporting.confirmBatchRevokeContent', { count: keys.length }),
                     onOk: async () => {
                       try {
                         const res = await reportingApi.batchRevoke(keys.map(String));
                         if (res.success > 0) {
-                          messageApi.success(`成功撤回 ${res.success} 条记录审核`);
+                          messageApi.success(t('app.kuaizhizao.workReporting.batchRevokeSuccess', { count: res.success }));
                         }
                         if (res.failed > 0) {
-                          messageApi.warning(`${res.failed} 条记录操作失败`);
+                          messageApi.warning(t('app.kuaizhizao.workReporting.batchRevokePartialFailed', { count: res.failed }));
                         }
                         invalidateMenuBadgeCounts();
                         actionRef.current?.reload();
                         invalidateStatistics();
                         setSelectedRowKeys([]);
                       } catch (error: any) {
-                        messageApi.error(error.message || '批量撤回失败');
+                        messageApi.error(error.message || t('app.kuaizhizao.workReporting.batchRevokeFailed'));
                       }
                     },
                   });
@@ -1160,7 +1161,7 @@ const ReportingPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建报工记录"
+        title={t('app.kuaizhizao.workReporting.createModalTitle')}
         open={reportingModalVisible}
         onClose={() => {
           setReportingModalVisible(false);
@@ -1177,11 +1178,11 @@ const ReportingPage: React.FC = () => {
         <Col span={12}>
           <ProFormItem
             name="work_order_id"
-            label="工单"
-            rules={[{ required: true, message: '请选择工单' }]}
+            label={t('app.kuaizhizao.workReporting.formWorkOrder')}
+            rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formWorkOrderRequired') }]}
           >
             <UniDropdown
-              placeholder="请选择工单"
+              placeholder={t('app.kuaizhizao.workReporting.formWorkOrderPlaceholder')}
               showSearch
               options={(Array.isArray(reportWorkOrders) ? reportWorkOrders : []).map((wo: any) => ({
                 label: `${wo.code || wo.work_order_code || ''} - ${wo.name || wo.work_order_name || ''}`,
@@ -1189,10 +1190,10 @@ const ReportingPage: React.FC = () => {
               }))}
               onChange={(value: any) => handleReportWorkOrderChange(value as number)}
               advancedSearch={{
-                label: '高级搜索工单',
+                label: t('app.kuaizhizao.workReporting.advancedSearchWorkOrder'),
                 fields: [
-                  { name: 'code', label: '工单编号', type: 'text' },
-                  { name: 'name', label: '工单名称', type: 'text' },
+                  { name: 'code', label: t('app.kuaizhizao.workReporting.colWorkOrderCode'), type: 'text' },
+                  { name: 'name', label: t('app.kuaizhizao.workReporting.colWorkOrderName'), type: 'text' },
                 ],
                 onSearch: async (params) => {
                   const res = await workOrderApi.list({ ...params, status: 'in_progress' });
@@ -1209,11 +1210,11 @@ const ReportingPage: React.FC = () => {
         <Col span={12}>
           <ProFormItem
             name="operation_id"
-            label="工序"
-            rules={[{ required: true, message: '请选择工序' }]}
+            label={t('app.kuaizhizao.workReporting.formOperation')}
+            rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formOperationRequired') }]}
           >
             <UniDropdown
-              placeholder={reportWorkOrderId ? "请选择工序" : "请先选择工单"}
+              placeholder={reportWorkOrderId ? t('app.kuaizhizao.workReporting.formOperationPlaceholder') : t('app.kuaizhizao.workReporting.formOperationSelectWorkOrderFirst')}
               showSearch
               disabled={!reportWorkOrderId || (Array.isArray(reportOperations) ? reportOperations : []).length === 0}
               options={(Array.isArray(reportOperations) ? reportOperations : []).map((op: any) => ({
@@ -1228,8 +1229,8 @@ const ReportingPage: React.FC = () => {
           <Col span={24}>
             <UniUserSelect
               name="proxy_worker_uuid"
-              label="生产人员"
-              placeholder="选择实际完成报工的生产人员（不选则按派工/本人默认）"
+              label={t('app.kuaizhizao.workReporting.formProxyWorker')}
+              placeholder={t('app.kuaizhizao.workReporting.formProxyWorkerPlaceholder')}
               onChange={(_uuid, u) => {
                 createModalProxyWorkerRef.current =
                   u && !Array.isArray(u) ? { id: u.id, full_name: u.full_name, username: u.username } : null;
@@ -1237,7 +1238,7 @@ const ReportingPage: React.FC = () => {
             />
             {currentUser ? (
               <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                记录人员（本次登录）：{currentUser.full_name || currentUser.username || '—'}
+                {t('app.kuaizhizao.workReporting.formRecordedByLogin', { name: currentUser.full_name || currentUser.username || '—' })}
               </Typography.Text>
             ) : null}
           </Col>
@@ -1245,11 +1246,11 @@ const ReportingPage: React.FC = () => {
         {(Array.isArray(reportOperations) ? reportOperations : []).find((op: any) => op.operation_id === reportOperationId)?.reporting_type === 'status' ? (
           <ProFormRadio.Group
             name="completed_status"
-            label="完成状态"
-            rules={[{ required: true, message: '请选择完成状态' }]}
+            label={t('app.kuaizhizao.workReporting.formCompletedStatus')}
+            rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formCompletedStatusRequired') }]}
             options={[
-              { label: '完成', value: 'completed' },
-              { label: '未完成', value: 'incomplete' },
+              { label: t('app.kuaizhizao.workReporting.formCompleted'), value: 'completed' },
+              { label: t('app.kuaizhizao.workReporting.formIncomplete'), value: 'incomplete' },
             ]}
             colProps={{ span: 12 }}
           />
@@ -1257,17 +1258,17 @@ const ReportingPage: React.FC = () => {
           <>
             <ProFormDigit
               name="reported_quantity"
-              label="报工数量"
-              placeholder="报工数量"
-              rules={[{ required: true, message: '请输入报工数量' }]}
+              label={t('app.kuaizhizao.workReporting.colReportedQty')}
+              placeholder={t('app.kuaizhizao.workReporting.colReportedQty')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formReportedQtyRequired') }]}
               min={0}
               colProps={{ span: 8 }}
             />
             <ProFormDigit
               name="qualified_quantity"
-              label="合格数量"
-              placeholder="请输入合格数量"
-              rules={[{ required: true, message: '请输入合格数量' }]}
+              label={t('app.kuaizhizao.workReporting.colQualifiedQty')}
+              placeholder={t('app.kuaizhizao.workReporting.formQualifiedQtyRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formQualifiedQtyRequired') }]}
               min={0}
               colProps={{ span: 8 }}
             />
@@ -1275,16 +1276,16 @@ const ReportingPage: React.FC = () => {
         )}
         <ProFormDigit
           name="work_hours"
-          label="工时(小时)"
-          placeholder="选填，默认按 0"
+          label={t('app.kuaizhizao.workReporting.colWorkHours')}
+          placeholder={t('app.kuaizhizao.workReporting.formWorkHoursPlaceholder')}
           min={0}
           fieldProps={{ step: 0.1 }}
           colProps={{ span: 8 }}
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注信息"
+          label={t('app.kuaizhizao.workReporting.colRemarks')}
+          placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
@@ -1293,7 +1294,7 @@ const ReportingPage: React.FC = () => {
 
       {/* 创建报废记录Modal */}
       <FormModalTemplate
-        title="记录报废"
+        title={t('app.kuaizhizao.workReporting.scrapModalTitle')}
         open={scrapModalVisible}
         onClose={() => {
           setScrapModalVisible(false);
@@ -1309,56 +1310,56 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编号：</strong>{currentReportingRecord.work_order_code}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapWorkOrderCode')}{currentReportingRecord.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecord.operation_name}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapOperation')}{currentReportingRecord.operation_name}</div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
-                  <div><strong>不合格数量：</strong>{currentReportingRecord.unqualified_quantity}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapUnqualifiedQty')}{currentReportingRecord.unqualified_quantity}</div>
                 </Col>
               </Row>
             </Card>
             <ProFormDigit
               name="scrap_quantity"
-              label="报废数量"
-              placeholder="请输入报废数量"
-              rules={[{ required: true, message: '请输入报废数量' }]}
+              label={t('app.kuaizhizao.workReporting.scrapQuantity')}
+              placeholder={t('app.kuaizhizao.workReporting.scrapQuantityRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.scrapQuantityRequired') }]}
               min={0}
               max={currentReportingRecord.unqualified_quantity}
               fieldProps={{ precision: 2 }}
             />
             <ProFormSelect
               name="scrap_type"
-              label="报废类型"
-              placeholder="请选择报废类型"
-              rules={[{ required: true, message: '请选择报废类型' }]}
+              label={t('app.kuaizhizao.workReporting.scrapType')}
+              placeholder={t('app.kuaizhizao.workReporting.scrapTypeRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.scrapTypeRequired') }]}
               options={[
-                { label: '工艺问题', value: 'process' },
-                { label: '物料问题', value: 'material' },
-                { label: '质量问题', value: 'quality' },
-                { label: '设备问题', value: 'equipment' },
-                { label: '其他', value: 'other' },
+                { label: t('app.kuaizhizao.workReporting.scrapTypeProcess'), value: 'process' },
+                { label: t('app.kuaizhizao.workReporting.scrapTypeMaterial'), value: 'material' },
+                { label: t('app.kuaizhizao.workReporting.scrapTypeQuality'), value: 'quality' },
+                { label: t('app.kuaizhizao.workReporting.scrapTypeEquipment'), value: 'equipment' },
+                { label: t('app.kuaizhizao.workReporting.scrapTypeOther'), value: 'other' },
               ]}
             />
             <ProFormTextArea
               name="scrap_reason"
-              label="报废原因"
-              placeholder="请输入报废原因"
-              rules={[{ required: true, message: '请输入报废原因' }]}
+              label={t('app.kuaizhizao.workReporting.scrapReason')}
+              placeholder={t('app.kuaizhizao.workReporting.scrapReasonRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.scrapReasonRequired') }]}
               fieldProps={{ rows: 3 }}
             />
             <ProFormDigit
               name="unit_cost"
-              label="单位成本（可选）"
-              placeholder="请输入单位成本"
+              label={t('app.kuaizhizao.workReporting.unitCostOptional')}
+              placeholder={t('app.kuaizhizao.workReporting.unitCostPlaceholder')}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormTextArea
               name="remarks"
-              label="备注（可选）"
-              placeholder="请输入备注"
+              label={t('app.kuaizhizao.workReporting.remarksOptional')}
+              placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
               fieldProps={{ rows: 2 }}
             />
           </>
@@ -1367,7 +1368,7 @@ const ReportingPage: React.FC = () => {
 
       {/* 创建不良品记录Modal */}
       <FormModalTemplate
-        title="记录不良品"
+        title={t('app.kuaizhizao.workReporting.defectModalTitle')}
         open={defectModalVisible}
         onClose={() => {
           setDefectModalVisible(false);
@@ -1383,68 +1384,68 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编号：</strong>{currentReportingRecordForDefect.work_order_code}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapWorkOrderCode')}{currentReportingRecordForDefect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecordForDefect.operation_name}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapOperation')}{currentReportingRecordForDefect.operation_name}</div>
                 </Col>
                 <Col span={12} style={{ marginTop: 8 }}>
-                  <div><strong>不合格数量：</strong>{currentReportingRecordForDefect.unqualified_quantity}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapUnqualifiedQty')}{currentReportingRecordForDefect.unqualified_quantity}</div>
                 </Col>
               </Row>
             </Card>
             <ProFormDigit
               name="defect_quantity"
-              label="不良品数量"
-              placeholder="请输入不良品数量"
-              rules={[{ required: true, message: '请输入不良品数量' }]}
+              label={t('app.kuaizhizao.workReporting.defectQuantity')}
+              placeholder={t('app.kuaizhizao.workReporting.defectQuantityRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.defectQuantityRequired') }]}
               min={0}
               max={currentReportingRecordForDefect.unqualified_quantity}
               fieldProps={{ precision: 2 }}
             />
             <ProFormSelect
               name="defect_type"
-              label="不良品类型"
-              placeholder="请选择不良品类型"
-              rules={[{ required: true, message: '请选择不良品类型' }]}
+              label={t('app.kuaizhizao.workReporting.defectType')}
+              placeholder={t('app.kuaizhizao.workReporting.defectTypeRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.defectTypeRequired') }]}
               options={[
-                { label: '尺寸问题', value: 'dimension' },
-                { label: '外观问题', value: 'appearance' },
-                { label: '功能问题', value: 'function' },
-                { label: '物料问题', value: 'material' },
-                { label: '其他', value: 'other' },
+                { label: t('app.kuaizhizao.workReporting.defectTypeDimension'), value: 'dimension' },
+                { label: t('app.kuaizhizao.workReporting.defectTypeAppearance'), value: 'appearance' },
+                { label: t('app.kuaizhizao.workReporting.defectTypeFunction'), value: 'function' },
+                { label: t('app.kuaizhizao.workReporting.defectTypeMaterial'), value: 'material' },
+                { label: t('app.kuaizhizao.workReporting.defectTypeOther'), value: 'other' },
               ]}
             />
             <ProFormTextArea
               name="defect_reason"
-              label="不良品原因"
-              placeholder="请输入不良品原因"
-              rules={[{ required: true, message: '请输入不良品原因' }]}
+              label={t('app.kuaizhizao.workReporting.defectReason')}
+              placeholder={t('app.kuaizhizao.workReporting.defectReasonRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.defectReasonRequired') }]}
               fieldProps={{ rows: 3 }}
             />
             <ProFormSelect
               name="disposition"
-              label="处理方式"
-              placeholder="请选择处理方式"
-              rules={[{ required: true, message: '请选择处理方式' }]}
+              label={t('app.kuaizhizao.workReporting.disposition')}
+              placeholder={t('app.kuaizhizao.workReporting.dispositionRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.dispositionRequired') }]}
               options={[
-                { label: '隔离', value: 'quarantine' },
-                { label: '返工', value: 'rework' },
-                { label: '报废', value: 'scrap' },
-                { label: '接受', value: 'accept' },
-                { label: '其他', value: 'other' },
+                { label: t('app.kuaizhizao.workReporting.dispositionQuarantine'), value: 'quarantine' },
+                { label: t('app.kuaizhizao.workReporting.dispositionRework'), value: 'rework' },
+                { label: t('app.kuaizhizao.workReporting.dispositionScrap'), value: 'scrap' },
+                { label: t('app.kuaizhizao.workReporting.dispositionAccept'), value: 'accept' },
+                { label: t('app.kuaizhizao.workReporting.dispositionOther'), value: 'other' },
               ]}
             />
             <ProFormTextArea
               name="quarantine_location"
-              label="隔离位置（处理方式为隔离时填写）"
-              placeholder="请输入隔离位置"
+              label={t('app.kuaizhizao.workReporting.quarantineLocation')}
+              placeholder={t('app.kuaizhizao.workReporting.quarantineLocationPlaceholder')}
               fieldProps={{ rows: 2 }}
             />
             <ProFormTextArea
               name="remarks"
-              label="备注（可选）"
-              placeholder="请输入备注"
+              label={t('app.kuaizhizao.workReporting.remarksOptional')}
+              placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
               fieldProps={{ rows: 2 }}
             />
           </>
@@ -1453,7 +1454,7 @@ const ReportingPage: React.FC = () => {
 
       {/* 修正报工数据Modal */}
       <FormModalTemplate
-        title="修正报工记录"
+        title={t('app.kuaizhizao.workReporting.correctModalTitle')}
         open={correctModalVisible}
         onClose={() => {
           setCorrectModalVisible(false);
@@ -1469,32 +1470,32 @@ const ReportingPage: React.FC = () => {
             <Card size="small" style={{ marginBottom: 16 }}>
               <Row gutter={16}>
                 <Col span={12}>
-                  <div><strong>工单编号：</strong>{currentReportingRecordForCorrect.work_order_code}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapWorkOrderCode')}{currentReportingRecordForCorrect.work_order_code}</div>
                 </Col>
                 <Col span={12}>
-                  <div><strong>工序：</strong>{currentReportingRecordForCorrect.operation_name}</div>
+                  <div>{t('app.kuaizhizao.workReporting.scrapOperation')}{currentReportingRecordForCorrect.operation_name}</div>
                 </Col>
               </Row>
             </Card>
             <ProFormDigit
               name="reported_quantity"
-              label="报工数量"
-              placeholder="请输入报工数量"
-              rules={[{ required: true, message: '请输入报工数量' }]}
+              label={t('app.kuaizhizao.workReporting.colReportedQty')}
+              placeholder={t('app.kuaizhizao.workReporting.formReportedQtyRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.formReportedQtyRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDigit
               name="qualified_quantity"
-              label="合格数量"
-              placeholder="请输入合格数量"
+              label={t('app.kuaizhizao.workReporting.colQualifiedQty')}
+              placeholder={t('app.kuaizhizao.workReporting.formQualifiedQtyRequired')}
               rules={[
-                { required: true, message: '请输入合格数量' },
+                { required: true, message: t('app.kuaizhizao.workReporting.formQualifiedQtyRequired') },
                 ({ getFieldValue }: { getFieldValue: (name: string) => number }) => ({
                   validator: (_: any, value: number) => {
                     const reportedQuantity = getFieldValue('reported_quantity');
                     if (reportedQuantity !== undefined && value > reportedQuantity) {
-                      return Promise.reject(new Error('合格数量不能大于完成数量'));
+                      return Promise.reject(new Error(t('app.kuaizhizao.workReporting.qualifiedExceedsReported')));
                     }
                     return Promise.resolve();
                   },
@@ -1505,30 +1506,30 @@ const ReportingPage: React.FC = () => {
             />
             <ProFormDigit
               name="unqualified_quantity"
-              label="不合格数量"
-              placeholder="请输入不合格数量"
-              rules={[{ required: true, message: '请输入不合格数量' }]}
+              label={t('app.kuaizhizao.workReporting.colUnqualifiedQty')}
+              placeholder={t('app.kuaizhizao.workReporting.unqualifiedQtyRequired')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.unqualifiedQtyRequired') }]}
               min={0}
               fieldProps={{ precision: 2 }}
             />
             <ProFormDigit
               name="work_hours"
-              label="工时（小时）"
-              placeholder="选填，默认按 0"
+              label={t('app.kuaizhizao.workReporting.colWorkHours')}
+              placeholder={t('app.kuaizhizao.workReporting.formWorkHoursPlaceholder')}
               min={0}
               fieldProps={{ precision: 2, step: 0.1 }}
             />
             <ProFormTextArea
               name="correction_reason"
-              label="修正原因"
-              placeholder="请输入修正原因（必填）"
-              rules={[{ required: true, message: '请输入修正原因' }]}
+              label={t('app.kuaizhizao.workReporting.correctionReason')}
+              placeholder={t('app.kuaizhizao.workReporting.correctionReasonPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaizhizao.workReporting.correctionReasonRequired') }]}
               fieldProps={{ rows: 3 }}
             />
             <ProFormTextArea
               name="remarks"
-              label="备注（可选）"
-              placeholder="请输入备注"
+              label={t('app.kuaizhizao.workReporting.remarksOptional')}
+              placeholder={t('app.kuaizhizao.workReporting.formRemarksPlaceholder')}
               fieldProps={{ rows: 2 }}
             />
           </>
@@ -1537,7 +1538,7 @@ const ReportingPage: React.FC = () => {
 
 
       <DetailDrawerTemplate
-        title={`报工记录详情${reportingDetail?.work_order_code ? ` - ${reportingDetail.work_order_code}` : ''}`}
+        title={`${t('app.kuaizhizao.workReporting.detailTitle')}${reportingDetail?.work_order_code ? ` - ${reportingDetail.work_order_code}` : ''}`}
         open={detailDrawerVisible}
         zIndex={reportingDetailDrawerZIndex}
         onClose={() => {
@@ -1552,7 +1553,7 @@ const ReportingPage: React.FC = () => {
         customContent={
           reportingDetail && (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionBasicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -1560,7 +1561,7 @@ const ReportingPage: React.FC = () => {
                 />
                 {reportingDetail.sop_parameters && Object.keys(reportingDetail.sop_parameters).length > 0 && (
                   <div style={{ marginTop: 12 }}>
-                    <Typography.Text strong>SOP 参数</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.workReporting.sopParameters')}</Typography.Text>
                     <pre style={{ marginTop: 8, fontSize: 12, whiteSpace: 'pre-wrap' }}>
                       {JSON.stringify(reportingDetail.sop_parameters, null, 2)}
                     </pre>
@@ -1568,7 +1569,7 @@ const ReportingPage: React.FC = () => {
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionLifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getReportingLifecycle(reportingDetail);
@@ -1607,7 +1608,7 @@ const ReportingPage: React.FC = () => {
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionDetailInfo')}>
                 <style>{`
                   .reporting-detail-bindings .ant-table-wrapper .ant-table-body,
                   .reporting-detail-bindings .ant-table-wrapper .ant-table-content {
@@ -1624,12 +1625,12 @@ const ReportingPage: React.FC = () => {
                       tableLayout="fixed"
                       style={{ minWidth: REPORTING_DETAIL_BINDINGS_MIN_WIDTH }}
                       columns={[
-                        { title: '类型', dataIndex: 'binding_type', width: 100, ellipsis: true },
-                        { title: '物料编码', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 160, ellipsis: true },
-                        { title: '数量', dataIndex: 'quantity', width: 100, align: 'right' as const },
-                        { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-                        { title: '绑定方式', dataIndex: 'binding_method', width: 100 },
+                        { title: t('app.kuaizhizao.workReporting.bindingColType'), dataIndex: 'binding_type', width: 100, ellipsis: true },
+                        { title: t('app.kuaizhizao.workReporting.bindingColMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.workReporting.bindingColMaterialName'), dataIndex: 'material_name', width: 160, ellipsis: true },
+                        { title: t('app.kuaizhizao.workReporting.bindingColQuantity'), dataIndex: 'quantity', width: 100, align: 'right' as const },
+                        { title: t('app.kuaizhizao.workReporting.bindingColWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                        { title: t('app.kuaizhizao.workReporting.bindingColMethod'), dataIndex: 'binding_method', width: 100 },
                       ]}
                       dataSource={detailMaterialBindings}
                       pagination={false}
@@ -1638,11 +1639,11 @@ const ReportingPage: React.FC = () => {
                     />
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无物料绑定明细" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noMaterialBindings')} />
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaizhizao.workReporting.sectionOperationLog')}>
                 {reportingTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -1655,7 +1656,7 @@ const ReportingPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={reportingTracking.data} />
                 )}
                 {!reportingTracking.loading && !reportingTracking.data && !reportingTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.workReporting.noOperationLog')} />
                 )}
               </DetailDrawerSection>
             </>

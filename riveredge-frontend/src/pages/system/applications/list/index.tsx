@@ -36,6 +36,7 @@ import {
   ApiOutlined,
   LockOutlined,
   SyncOutlined,
+  ReloadOutlined,
   ShareAltOutlined,
   PrinterOutlined,
   LikeOutlined,
@@ -71,7 +72,22 @@ import {
 } from '../../../../services/applicationDedicatedBindings';
 import { syncAllMenus } from '../../../../services/menu';
 import { apiRequest } from '../../../../services/api';
-import { rowActionKind } from '../../../../components/uni-action';
+import { rowActionKind, rowActionLabelKeep, rowActionToneDestructive } from '../../../../components/uni-action';
+import {
+  resolveApplicationDescription,
+  resolveApplicationDisplayName,
+} from '../../../../utils/menuTranslation';
+
+/** 应用中心行/卡片操作图标（表格与卡片共用，避免 uni-action 按 manifest action 覆盖） */
+const APP_ACTION_ICON = {
+  view: EyeOutlined,
+  settings: SettingOutlined,
+  syncMenu: SyncOutlined,
+  resetData: ReloadOutlined,
+  dedicatedBinding: TeamOutlined,
+  install: DownloadOutlined,
+  uninstall: StopOutlined,
+} as const;
 
 /** 应用中心「其他」分类（占位应用 + 已上线扩展应用） */
 const OTHER_PLACEHOLDER_CODES = [
@@ -1046,7 +1062,9 @@ const ApplicationListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
-      render: (val: any, record: any) => <span>{typeof val === 'string' && val.startsWith('sys.') ? t(val) : (record?.is_system ? t(`sys.app.${record.code}.name`, { defaultValue: val }) : val)}</span>,
+      render: (_val: any, record: Application) => (
+        <span>{resolveApplicationDisplayName(record, t)}</span>
+      ),
     },
     {
       title: t('pages.system.applications.code'),
@@ -1060,7 +1078,9 @@ const ApplicationListPage: React.FC = () => {
       width: 250,
       ellipsis: true,
       hideInSearch: true,
-      render: (val: any, record: any) => <span>{typeof val === 'string' && val.startsWith('sys.') ? t(val) : (record?.is_system && val ? t(`sys.app.${record.code}.desc`, { defaultValue: val }) : val)}</span>,
+      render: (_val: any, record: Application) => (
+        <span>{resolveApplicationDescription(record, t)}</span>
+      ),
     },
     {
       title: t('pages.system.applications.sortOrder'),
@@ -1143,10 +1163,11 @@ const ApplicationListPage: React.FC = () => {
         actions.push(
           <Button
             key="edit"
-            {...rowActionKind('update')}
+            {...rowActionKind('skip')}
+            {...rowActionLabelKeep()}
             type="link"
             size="small"
-            icon={<SettingOutlined />}
+            icon={<APP_ACTION_ICON.settings />}
             onClick={() => {
               setEditingApp(record);
               setEditModalVisible(true);
@@ -1160,7 +1181,7 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="sync"
-              {...rowActionKind('update')}
+              {...rowActionKind('skip')}
               title={t('pages.system.applications.syncMenu')}
               description={t('pages.system.applications.syncMenuConfirm')}
               onConfirm={async () => {
@@ -1180,9 +1201,10 @@ const ApplicationListPage: React.FC = () => {
               }}
             >
               <Button
+                {...rowActionLabelKeep()}
                 type="link"
                 size="small"
-                icon={<SyncOutlined />}
+                icon={<APP_ACTION_ICON.syncMenu />}
               >
                 {t('pages.system.applications.syncMenu')}
               </Button>
@@ -1195,9 +1217,10 @@ const ApplicationListPage: React.FC = () => {
             <Button
               key="dedicated-binding"
               {...rowActionKind('skip')}
+              {...rowActionLabelKeep()}
               type="link"
               size="small"
-              icon={<TeamOutlined />}
+              icon={<APP_ACTION_ICON.dedicatedBinding />}
               onClick={() => openDedicatedBindingModal(record)}
             >
               {t('pages.system.applications.dedicatedOrgBinding')}
@@ -1211,10 +1234,11 @@ const ApplicationListPage: React.FC = () => {
               <Button
                 key="reset"
                 {...rowActionKind('skip')}
+                {...rowActionLabelKeep()}
+                {...rowActionToneDestructive()}
                 type="link"
-                danger
                 size="small"
-                icon={<SyncOutlined />}
+                icon={<APP_ACTION_ICON.resetData />}
                 onClick={() => {
                   setResetTargetApp(record);
                   setResetStage(1);
@@ -1230,17 +1254,18 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="uninstall"
-              {...rowActionKind('update')}
+              {...rowActionKind('skip')}
               title={t('pages.system.applications.uninstallConfirm')}
               onConfirm={() => handleUninstall(record)}
               disabled={record.is_system || !canManageAppLifecycle}
             >
               <Button
+                {...rowActionLabelKeep()}
+                {...rowActionToneDestructive()}
                 type="link"
-                danger
                 size="small"
                 disabled={record.is_system || !canManageAppLifecycle}
-                icon={<StopOutlined />}
+                icon={<APP_ACTION_ICON.uninstall />}
               >
                 {t('pages.system.applications.uninstall')}
               </Button>
@@ -1250,16 +1275,17 @@ const ApplicationListPage: React.FC = () => {
           actions.push(
             <Popconfirm
               key="install"
-              {...rowActionKind('update')}
+              {...rowActionKind('skip')}
               title={t('pages.system.applications.installConfirm')}
               onConfirm={() => handleInstall(record)}
               disabled={!canManageAppLifecycle}
             >
               <Button
+                {...rowActionLabelKeep()}
                 type="link"
                 size="small"
                 disabled={!canManageAppLifecycle}
-                icon={<DownloadOutlined />}
+                icon={<APP_ACTION_ICON.install />}
               >
                 {t('pages.system.applications.install')}
               </Button>
@@ -1289,13 +1315,13 @@ const ApplicationListPage: React.FC = () => {
       {
         key: 'view',
         label: t('pages.system.applications.viewDetail'),
-        icon: <EyeOutlined />,
+        icon: <APP_ACTION_ICON.view />,
         onClick: () => handleView(application),
       },
       {
         key: 'edit-app',
         label: t('pages.system.applications.appSettings'),
-        icon: <SettingOutlined />,
+        icon: <APP_ACTION_ICON.settings />,
         onClick: () => {
           setEditingApp(application);
           setEditModalVisible(true);
@@ -1341,14 +1367,14 @@ const ApplicationListPage: React.FC = () => {
             </div>
           </Popconfirm>
         ),
-        icon: <AppstoreOutlined />,
+        icon: <APP_ACTION_ICON.syncMenu />,
       },
       ...(isDedicatedApplication(application) && currentUser?.is_infra_admin
         ? [
             {
               key: 'dedicated-binding',
               label: t('pages.system.applications.dedicatedOrgBinding'),
-              icon: <TeamOutlined />,
+              icon: <APP_ACTION_ICON.dedicatedBinding />,
               onClick: () => openDedicatedBindingModal(application),
             },
           ]
@@ -1357,7 +1383,7 @@ const ApplicationListPage: React.FC = () => {
       application.code === "kuaizhizao" ? {
         key: 'reset-data',
         label: t('pages.system.applications.resetData', { defaultValue: '重置数据' }),
-        icon: <SyncOutlined />,
+        icon: <APP_ACTION_ICON.resetData />,
         danger: true,
         onClick: () => {
           setResetTargetApp(application);
@@ -1386,7 +1412,7 @@ const ApplicationListPage: React.FC = () => {
               </div>
             </Popconfirm>
           ),
-          icon: <DownloadOutlined />,
+          icon: <APP_ACTION_ICON.install />,
           disabled: !canManageAppLifecycle,
         }
         : {
@@ -1405,7 +1431,7 @@ const ApplicationListPage: React.FC = () => {
               </div>
             </Popconfirm>
           ),
-          icon: <StopOutlined />,
+          icon: <APP_ACTION_ICON.uninstall />,
           danger: true,
           disabled: application.is_system || !canManageAppLifecycle,
         },
@@ -1530,7 +1556,7 @@ const ApplicationListPage: React.FC = () => {
                           flexShrink: 0,
                         }}
                       >
-                        {application.name?.startsWith('sys.') ? t(application.name) : (application.is_system ? t(`sys.app.${application.code}.name`, { defaultValue: application.name }) : application.name)}
+                        {resolveApplicationDisplayName(application, t)}
                       </span>
                       
                       {(() => {
@@ -1606,21 +1632,21 @@ const ApplicationListPage: React.FC = () => {
                                 )}
                               {['kuaizhizao'].includes(application.code) &&
                                 renderBadge(
-                                  '一体版',
+                                  t('pages.system.applications.editionIntegratedTag'),
                                   { bg: '#fff7e6', color: '#d46b08' },
                                   undefined,
                                   { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
                                 )}
                               {['kuaierp', 'kuaimes'].includes(application.code) &&
                                 renderBadge(
-                                  '拆分版',
+                                  t('pages.system.applications.editionSplitTag'),
                                   { bg: '#f0f9ff', color: '#1677ff' },
                                   undefined,
                                   { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
                                 )}
                               {INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
                                 renderBadge(
-                                  '增值包',
+                                  t('pages.system.applications.valuePackTag'),
                                   { bg: '#fff7e6', color: '#ad6800' },
                                   undefined,
                                   { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
@@ -1634,7 +1660,7 @@ const ApplicationListPage: React.FC = () => {
                                 )}
                               {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
                                 renderBadge(
-                                  '其他类',
+                                  t('pages.system.applications.otherCategoryTag'),
                                   { bg: '#f6ffed', color: '#389e0d' },
                                   undefined,
                                   { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
@@ -1700,7 +1726,7 @@ const ApplicationListPage: React.FC = () => {
                         overflow: 'hidden',
                       }}
                     >
-                      {application.description?.startsWith('sys.') ? t(application.description) : (application.is_system && application.description ? t(`sys.app.${application.code}.desc`, { defaultValue: application.description }) : (application.description || t('pages.system.applications.noDescription')))}
+                      {resolveApplicationDescription(application, t, t('pages.system.applications.noDescription'))}
                     </div>
                   </div>
                 </>
@@ -1757,9 +1783,9 @@ const ApplicationListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns: ProDescriptionsItemProps<Application>[] = [
-    { title: t('pages.system.applications.name'), dataIndex: 'name', render: (val: any, record: any) => <span>{val?.startsWith('sys.') ? t(val) : (record?.is_system ? t(`sys.app.${record.code}.name`, { defaultValue: val }) : val)}</span> },
+    { title: t('pages.system.applications.name'), dataIndex: 'name', render: (_val: any, record: Application) => <span>{resolveApplicationDisplayName(record, t)}</span> },
     { title: t('pages.system.applications.code'), dataIndex: 'code' },
-    { title: t('pages.system.applications.description'), dataIndex: 'description', render: (val: any, record: any) => <span>{val?.startsWith('sys.') ? t(val) : (record?.is_system && val ? t(`sys.app.${record.code}.desc`, { defaultValue: val }) : val)}</span> },
+    { title: t('pages.system.applications.description'), dataIndex: 'description', render: (_val: any, record: Application) => <span>{resolveApplicationDescription(record, t)}</span> },
     { title: t('pages.system.applications.version'), dataIndex: 'version' },
     { title: t('pages.system.applications.changelog'), dataIndex: 'changelog', render: (val: any) => <span>{val || '-'}</span> },
     { title: t('pages.system.applications.routePath'), dataIndex: 'route_path' },
@@ -2396,7 +2422,9 @@ const ApplicationListPage: React.FC = () => {
 
       <Modal
         title={t('pages.system.applications.dedicatedBindingModalTitle', {
-          name: dedicatedBindingApp?.name ?? dedicatedBindingApp?.code ?? '',
+          name: dedicatedBindingApp
+            ? resolveApplicationDisplayName(dedicatedBindingApp, t)
+            : '',
         })}
         open={dedicatedBindingModalOpen}
         onCancel={() => {
@@ -2496,7 +2524,7 @@ const ApplicationListPage: React.FC = () => {
             <Descriptions column={1} items={detailDrawerDescriptionItems(detailColumns, detailData)} />
           ) : null}
         lines={detailData?.code ? <ApplicationClientReleasesPanel appCode={detailData.code} /> : null}
-        linesTitle="客户端"
+        linesTitle={t('pages.system.applications.clientReleasesSectionTitle')}
         linesVisible={Boolean(detailData?.code)}
       />
 
@@ -2526,8 +2554,8 @@ const ApplicationListPage: React.FC = () => {
         initialValues={
           editingApp
             ? {
-                name: editingApp.name?.startsWith('sys.') ? t(editingApp.name) : (editingApp.is_system ? t(`sys.app.${editingApp.code}.name`, { defaultValue: editingApp.name }) : editingApp.name),
-                description: editingApp.description?.startsWith('sys.') ? t(editingApp.description) : (editingApp.is_system && editingApp.description ? t(`sys.app.${editingApp.code}.desc`, { defaultValue: editingApp.description }) : (editingApp.description ?? '')),
+                name: resolveApplicationDisplayName(editingApp, t),
+                description: resolveApplicationDescription(editingApp, t),
                 sort_order: editingApp.sort_order ?? 0,
               }
             : undefined

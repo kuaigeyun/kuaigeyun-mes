@@ -3,6 +3,7 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { App, AutoComplete, Form, Modal, Select, Table, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -16,8 +17,8 @@ import {
   loadConfirmPreviewMaterialMeta,
   type ConfirmPreviewMaterialMeta,
 } from './outboundItemTracking';
-import type { OutboundHubOrder } from './outboundHubTypes';
-import { OUTBOUND_ISSUE_TYPE_LABELS, outboundDocumentCode } from './outboundHubTypes';
+import type { OutboundHubOrder, OutboundIssueType } from './outboundHubTypes';
+import { getOutboundIssueTypeLabel, outboundDocumentCode } from './outboundHubTypes';
 
 type SalesBatchPickOption = { value: string; label: string };
 
@@ -78,6 +79,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   onClose,
   onSuccess,
 }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
@@ -122,7 +124,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       executionConfig &&
       executionConfig.current_user_can_confirm_picking === false
     ) {
-      messageApi.warning('当前业务配置下，您无权限确认生产领料');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.msg.noConfirmPickingPermission'));
       onClose();
       return;
     }
@@ -132,7 +134,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       try {
         const detailData = await fetchOutboundDetail(record);
         if (cancelled || !detailData) {
-          messageApi.error('获取出库单详情失败');
+          messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.loadDetailFailed'));
           onClose();
           return;
         }
@@ -169,7 +171,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         }
       } catch {
         if (!cancelled) {
-          messageApi.error('加载确认预览失败');
+          messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.loadPreviewFailed'));
           onClose();
         }
       } finally {
@@ -179,7 +181,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, record, executionConfig, form, messageApi, onClose]);
+  }, [open, record, executionConfig, form, messageApi, onClose, t]);
 
   useEffect(() => {
     if (!open || outboundType !== 'sales_delivery' || !Array.isArray(detail?.items) || !detail.items.length) {
@@ -220,7 +222,10 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
           if (!bn) continue;
           if (!map[mid]) map[mid] = [];
           if (map[mid].some((o) => o.value === bn)) continue;
-          map[mid].push({ value: bn, label: `${bn}（可用 ${qty}）` });
+          map[mid].push({
+            value: bn,
+            label: t('app.kuaizhizao.warehouseOutbound.confirm.batchAvailable', { batch: bn, qty }),
+          });
         }
         if (!cancelled) setBatchOptionsByMaterialId(map);
       } catch {
@@ -232,7 +237,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
     return () => {
       cancelled = true;
     };
-  }, [open, outboundType, detail?.id, detail?.warehouse_id, detail?.items]);
+  }, [open, outboundType, detail?.id, detail?.warehouse_id, detail?.items, t]);
 
   const qtyColumn = (it: Record<string, unknown>) => {
     if (outboundType === 'sales_delivery') {
@@ -253,101 +258,104 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
   const whId = Number(detail?.warehouse_id ?? record?.warehouse_id ?? 0);
   const locOptions = whId > 0 ? locationOptionsByWh[whId] ?? [] : [];
 
-  const columns: ColumnsType<Record<string, unknown>> = [
-    {
-      title: '行',
-      key: 'idx',
-      width: 52,
-      align: 'center',
-      render: (_: unknown, __: unknown, index: number) => index + 1,
-    },
-    { title: '物料编码', dataIndex: 'material_code', width: 112, ellipsis: true },
-    { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
-    {
-      title: '出库数量',
-      key: 'qty',
-      width: 120,
-      align: 'right',
-      render: (_: unknown, it) => qtyColumn(it),
-    },
-    {
-      title: '库位',
-      key: 'location',
-      width: 160,
-      render: (_: unknown, it) => {
-        const lineId = Number(it.id);
-        return (
-          <Form.Item name={`location_${lineId}`} style={{ marginBottom: 0 }}>
-            <Select
-              size="small"
-              allowClear
-              placeholder="选择库位"
-              options={locOptions.map((o) => ({ value: o.value, label: o.label }))}
-              onChange={(v) => {
-                const picked = locOptions.find((o) => o.value === v);
-                form.setFieldValue(`location_code_${lineId}`, picked?.code ?? '');
-              }}
-            />
-          </Form.Item>
-        );
+  const columns: ColumnsType<Record<string, unknown>> = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.lineNo'),
+        key: 'idx',
+        width: 52,
+        align: 'center',
+        render: (_: unknown, __: unknown, index: number) => index + 1,
       },
-    },
-    {
-      title: '批号',
-      key: 'batch',
-      width: 220,
-      render: (_: unknown, it) => {
-        const lineId = Number(it.id);
-        const opts = batchOptionsByMaterialId[Number(it.material_id)] ?? [];
-        return (
-          <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
-            <AutoComplete
-              size="small"
-              allowClear
-              options={opts}
-              placeholder="选择或输入批号"
-              filterOption={(input, option) => {
-                const q = (input || '').toLowerCase();
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 112, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.deliveryQty'),
+        key: 'qty',
+        width: 120,
+        align: 'right',
+        render: (_: unknown, it) => qtyColumn(it),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.location'),
+        key: 'location',
+        width: 160,
+        render: (_: unknown, it) => {
+          const lineId = Number(it.id);
+          return (
+            <Form.Item name={`location_${lineId}`} style={{ marginBottom: 0 }}>
+              <Select
+                size="small"
+                allowClear
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectLocationPlaceholder')}
+                options={locOptions.map((o) => ({ value: o.value, label: o.label }))}
+                onChange={(v) => {
+                  const picked = locOptions.find((o) => o.value === v);
+                  form.setFieldValue(`location_code_${lineId}`, picked?.code ?? '');
+                }}
+              />
+            </Form.Item>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.batchNo'),
+        key: 'batch',
+        width: 220,
+        render: (_: unknown, it) => {
+          const lineId = Number(it.id);
+          const opts = batchOptionsByMaterialId[Number(it.material_id)] ?? [];
+          return (
+            <Form.Item name={`batch_${lineId}`} style={{ marginBottom: 0 }}>
+              <AutoComplete
+                size="small"
+                allowClear
+                options={opts}
+                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectOrInputBatch')}
+                filterOption={(input, option) => {
+                  const q = (input || '').toLowerCase();
+                  return (
+                    String(option?.label ?? '').toLowerCase().includes(q) ||
+                    String(option?.value ?? '').toLowerCase().includes(q)
+                  );
+                }}
+                notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.warehouseOutbound.confirm.loadingBatches') : undefined}
+              />
+            </Form.Item>
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.col.serialNo'),
+        key: 'serial',
+        width: 200,
+        render: (_: unknown, it) => {
+          const lineId = Number(it.id);
+          const meta = materialMeta[lineId];
+          if (!meta?.serialManaged) return '—';
+          const qty = Number(
+            it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
+          );
+          return (
+            <Form.Item noStyle shouldUpdate>
+              {() => {
+                const serials = (form.getFieldValue(`serial_${lineId}`) as string[] | undefined) ?? [];
                 return (
-                  String(option?.label ?? '').toLowerCase().includes(q) ||
-                  String(option?.value ?? '').toLowerCase().includes(q)
+                  <SerialNumbersImportTrigger
+                    serials={serials}
+                    expectedCount={qty > 0 ? qty : undefined}
+                    materialLabel={String(it.material_code ?? it.material_name ?? '')}
+                    onSerialsChange={(next) => form.setFieldValue(`serial_${lineId}`, next)}
+                  />
                 );
               }}
-              notFoundContent={batchOptionsLoading ? '加载批次…' : undefined}
-            />
-          </Form.Item>
-        );
+            </Form.Item>
+          );
+        },
       },
-    },
-    {
-      title: '序列号',
-      key: 'serial',
-      width: 200,
-      render: (_: unknown, it) => {
-        const lineId = Number(it.id);
-        const meta = materialMeta[lineId];
-        if (!meta?.serialManaged) return '—';
-        const qty = Number(
-          it.delivery_quantity ?? it.picked_quantity ?? it.outbound_quantity ?? it.borrow_quantity ?? 0,
-        );
-        return (
-          <Form.Item noStyle shouldUpdate>
-            {() => {
-              const serials = (form.getFieldValue(`serial_${lineId}`) as string[] | undefined) ?? [];
-              return (
-                <SerialNumbersImportTrigger
-                  serials={serials}
-                  expectedCount={qty > 0 ? qty : undefined}
-                  materialLabel={String(it.material_code ?? it.material_name ?? '')}
-                  onSerialsChange={(next) => form.setFieldValue(`serial_${lineId}`, next)}
-                />
-              );
-            }}
-          </Form.Item>
-        );
-      },
-    },
-  ];
+    ],
+    [batchOptionsByMaterialId, batchOptionsLoading, form, locOptions, materialMeta, outboundType, t],
+  );
 
   const handleSubmit = async () => {
     if (!record?.id || !record.outbound_type || !detail) return;
@@ -384,7 +392,7 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       } else if (record.outbound_type === 'material_borrow') {
         raw = await warehouseApi.materialBorrow.confirm(id, payload);
       } else {
-        messageApi.error('该类型不支持确认出库');
+        messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.typeNotSupported'));
         return;
       }
       const updated = parseConfirmResult(raw);
@@ -396,28 +404,30 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
         st === 'completed' ||
         st === '已借出';
       if (!posted && record.outbound_type !== 'production_picking') {
-        messageApi.error(`出库未生效（接口返回状态：${st || '未知'}）`);
+        messageApi.error(t('app.kuaizhizao.warehouseOutbound.confirm.notPosted', { status: st || t('app.kuaizhizao.warehouseOutbound.msg.unknownError') }));
       } else {
-        messageApi.success('出库确认成功，库存已更新');
+        messageApi.success(t('app.kuaizhizao.warehouseOutbound.confirm.success'));
       }
       onSuccess();
       onClose();
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '出库确认失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.confirm.failed'));
     } finally {
       setSubmitting(false);
     }
   };
 
-  const typeLabel = record?.outbound_type ? OUTBOUND_ISSUE_TYPE_LABELS[record.outbound_type] : '出库';
+  const typeLabel = record?.outbound_type
+    ? getOutboundIssueTypeLabel(t, record.outbound_type as OutboundIssueType)
+    : t('app.kuaizhizao.warehouseOutbound.fallbackDoc');
 
   return (
     <Modal
-      title={`确认出库 — ${typeLabel}`}
+      title={`${t('app.kuaizhizao.warehouseOutbound.confirm.title')} — ${typeLabel}`}
       open={open}
-      okText="确认出库并过账"
-      cancelText="取消"
+      okText={t('app.kuaizhizao.warehouseOutbound.action.confirmAndPost')}
+      cancelText={t('app.kuaizhizao.warehouseOutbound.action.cancel')}
       confirmLoading={submitting}
       destroyOnHidden
       width={960}
@@ -426,16 +436,18 @@ const OutboundConfirmPreviewModal: React.FC<OutboundConfirmPreviewModalProps> = 
       onOk={() => void handleSubmit()}
     >
       <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
-        请核对库位、批号与序列号。启用批号/序列号管理的物料在确认时会校验。
+        {t('app.kuaizhizao.warehouseOutbound.confirm.hint')}
       </Typography.Paragraph>
       {outboundType === 'sales_delivery' ? (
         <Typography.Paragraph type="secondary" style={{ marginBottom: 12, fontSize: 12 }}>
-          先进先出/后进先出等策略见 <Link to="/system/config-center">配置中心 → 仓储参数</Link>。
+          {t('app.kuaizhizao.warehouseOutbound.confirm.fifoHint')}{' '}
+          <Link to="/system/config-center">{t('app.kuaizhizao.warehouseOutbound.confirm.fifoLink')}</Link>。
         </Typography.Paragraph>
       ) : null}
       {record ? (
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-          单号：<Typography.Text strong>{outboundDocumentCode(record)}</Typography.Text>
+          {t('app.kuaizhizao.warehouseOutbound.detail.docNo')}：
+          <Typography.Text strong>{outboundDocumentCode(record)}</Typography.Text>
         </Typography.Text>
       ) : null}
       <Form form={form} component={false}>

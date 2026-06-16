@@ -200,7 +200,7 @@ const MoldsPage: React.FC = () => {
   const handleEdit = async (record: Mold) => {
     try {
       if (!record.uuid) {
-        messageApi.error('模具UUID不存在');
+        messageApi.error(t('app.kuaizhizao.mold.uuidNotFound'));
         return;
       }
       const detail = await moldApi.get(record.uuid);
@@ -231,7 +231,7 @@ const MoldsPage: React.FC = () => {
       });
       setModalVisible(true);
     } catch (error) {
-      messageApi.error('获取模具详情失败');
+      messageApi.error(t('app.kuaizhizao.mold.getDetailFailed'));
     }
   };
 
@@ -271,7 +271,7 @@ const MoldsPage: React.FC = () => {
   const handleDetail = async (record: Mold) => {
     try {
       if (!record.uuid) {
-        messageApi.error('模具UUID不存在');
+        messageApi.error(t('app.kuaizhizao.mold.uuidNotFound'));
         return;
       }
       const detail = await moldApi.get(record.uuid);
@@ -284,7 +284,7 @@ const MoldsPage: React.FC = () => {
         await loadMoldFieldValuesForDetail(detail.id);
       }
     } catch (error) {
-      messageApi.error('获取模具详情失败');
+      messageApi.error(t('app.kuaizhizao.mold.getDetailFailed'));
     }
   };
 
@@ -320,7 +320,7 @@ const MoldsPage: React.FC = () => {
     try {
       const moldUuid = moldDetail?.uuid;
       if (!moldUuid) {
-        messageApi.error('未选择模具');
+        messageApi.error(t('app.kuaizhizao.mold.noMoldSelected'));
         return;
       }
       const values = await calibForm.validateFields();
@@ -334,7 +334,7 @@ const MoldsPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(values.attachments),
       };
       await moldApi.createCalibration(data);
-      messageApi.success('校验记录已保存');
+      messageApi.success(t('app.kuaizhizao.mold.calibrationSaved'));
       setCalibModalVisible(false);
       if (moldDetail?.uuid) {
         loadCalibrations(moldDetail.uuid);
@@ -344,7 +344,7 @@ const MoldsPage: React.FC = () => {
       }
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('common.saveFailed'));
     }
   };
 
@@ -365,7 +365,7 @@ const MoldsPage: React.FC = () => {
         attachments: normalizeDocumentAttachments(values.attachments),
       };
       await moldApi.createUsage(data);
-      messageApi.success('使用记录创建成功');
+      messageApi.success(t('app.kuaizhizao.mold.usageCreated'));
       setUsageModalVisible(false);
       if (moldDetail?.uuid) {
         loadUsages(moldDetail.uuid);
@@ -373,7 +373,7 @@ const MoldsPage: React.FC = () => {
       }
     } catch (e: any) {
       if (e?.errorFields) return;
-      messageApi.error(e?.message || '创建失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.mold.createFailed'));
     }
   };
 
@@ -382,21 +382,21 @@ const MoldsPage: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${keys.length} 条模具吗？`,
+      title: t('app.kuaizhizao.mold.confirmBatchDeleteTitle'),
+      content: t('app.kuaizhizao.mold.confirmBatchDeleteContent', { count: keys.length }),
       onOk: async () => {
         try {
           for (const uuid of keys) {
             await moldApi.delete(String(uuid));
           }
-          messageApi.success(`成功删除 ${keys.length} 条记录`);
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           if (moldDetail?.uuid && keys.map(String).includes(String(moldDetail.uuid))) {
             setDrawerVisible(false);
             setMoldDetail(null);
           }
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -420,7 +420,7 @@ const MoldsPage: React.FC = () => {
       const editedUuid = isEdit ? currentMold?.uuid : undefined;
       if (isEdit && editedUuid) {
         await moldApi.update(editedUuid, submitData);
-        messageApi.success('模具更新成功');
+        messageApi.success(t('app.kuaizhizao.mold.updateSuccess'));
         const updated = await moldApi.get(editedUuid);
         if (updated?.id != null) {
           await saveMoldCustomFieldValues(updated.id, customData);
@@ -430,7 +430,7 @@ const MoldsPage: React.FC = () => {
         if (created?.id != null) {
           await saveMoldCustomFieldValues(created.id, customData);
         }
-        messageApi.success('模具创建成功');
+        messageApi.success(t('app.kuaizhizao.mold.createSuccess'));
       }
       setModalVisible(false);
       setCurrentMold(null);
@@ -449,7 +449,7 @@ const MoldsPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -457,132 +457,135 @@ const MoldsPage: React.FC = () => {
   /**
    * 详情列定义
    */
-  const detailColumns: ProDescriptionsItemProps<Mold>[] = [
+  const detailColumns: ProDescriptionsItemProps<Mold>[] = useMemo(
+    () => [
     {
-      title: '模具编号',
+      title: t('app.kuaizhizao.mold.colCode'),
       dataIndex: 'code',
     },
     {
-      title: '模具名称',
+      title: t('app.kuaizhizao.mold.colName'),
       dataIndex: 'name',
     },
     {
-      title: '模具类型',
+      title: t('app.kuaizhizao.mold.colType'),
       dataIndex: 'type',
     },
     {
-      title: '模具分类',
+      title: t('app.kuaizhizao.mold.colCategory'),
       dataIndex: 'category',
     },
     {
-      title: '品牌',
+      title: t('app.kuaizhizao.mold.colBrand'),
       dataIndex: 'brand',
     },
     {
-      title: '型号',
+      title: t('app.kuaizhizao.mold.colModel'),
       dataIndex: 'model',
     },
     {
-      title: '序列号',
+      title: t('app.kuaizhizao.mold.colSerialNumber'),
       dataIndex: 'serial_number',
     },
     {
-      title: '制造商',
+      title: t('app.kuaizhizao.mold.colManufacturer'),
       dataIndex: 'manufacturer',
     },
     {
-      title: '供应商',
+      title: t('app.kuaizhizao.mold.colSupplier'),
       dataIndex: 'supplier',
     },
     {
-      title: '采购日期',
+      title: t('app.kuaizhizao.mold.colPurchaseDate'),
       dataIndex: 'purchase_date',
       valueType: 'date',
     },
     {
-      title: '安装日期',
+      title: t('app.kuaizhizao.mold.colInstallationDate'),
       dataIndex: 'installation_date',
       valueType: 'date',
     },
     {
-      title: '保修期（月）',
+      title: t('app.kuaizhizao.mold.colWarrantyPeriod'),
       dataIndex: 'warranty_period',
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       render: (_, record) => {
         const status = record.status;
         const statusMap: Record<string, { text: string; color: string }> = {
-          '正常': { text: '正常', color: 'success' },
-          '使用中': { text: '使用中', color: 'processing' },
-          '维护中': { text: '维护中', color: 'warning' },
-          '停用': { text: '停用', color: 'default' },
-          '报废': { text: '报废', color: 'error' },
+          '正常': { text: t('app.kuaizhizao.mold.statusNormal'), color: 'success' },
+          '使用中': { text: t('app.kuaizhizao.mold.statusInUse'), color: 'processing' },
+          '维护中': { text: t('app.kuaizhizao.mold.statusMaintaining'), color: 'warning' },
+          '停用': { text: t('app.kuaizhizao.mold.statusDisabled'), color: 'default' },
+          '报废': { text: t('app.kuaizhizao.mold.statusScrapped'), color: 'error' },
         };
         const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
         return <Tag color={config.color}>{config.text}</Tag>;
       },
     },
     {
-      title: '是否启用',
+      title: t('app.kuaizhizao.mold.colIsActive'),
       dataIndex: 'is_active',
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '停用'}
+          {record.is_active ? t('app.kuaizhizao.mold.isActiveEnabled') : t('app.kuaizhizao.mold.isActiveDisabled')}
         </Tag>
       ),
     },
     {
-      title: '腔数（模数）',
+      title: t('app.kuaizhizao.mold.colCavityCount'),
       dataIndex: 'cavity_count',
     },
     {
-      title: '设计寿命（次）',
+      title: t('app.kuaizhizao.mold.colDesignLifetime'),
       dataIndex: 'design_lifetime',
     },
     {
-      title: '累计使用次数',
+      title: t('app.kuaizhizao.mold.colTotalUsageCount'),
       dataIndex: 'total_usage_count',
     },
     {
-      title: '保养间隔（次）',
+      title: t('app.kuaizhizao.mold.colMaintenanceInterval'),
       dataIndex: 'maintenance_interval',
     },
     {
-      title: '需要校验',
+      title: t('app.kuaizhizao.mold.colNeedsCalibration'),
       dataIndex: 'needs_calibration',
-      render: (v) => (v ? '是' : '否'),
+      render: (v) => (v ? t('app.kuaizhizao.mold.yes') : t('app.kuaizhizao.mold.no')),
     },
     {
-      title: '校验周期（天）',
+      title: t('app.kuaizhizao.mold.colCalibrationPeriod'),
       dataIndex: 'calibration_period',
     },
     {
-      title: '上次校验日期',
+      title: t('app.kuaizhizao.mold.colLastCalibrationDate'),
       dataIndex: 'last_calibration_date',
       valueType: 'date',
     },
     {
-      title: '下次校验日期',
+      title: t('app.kuaizhizao.mold.colNextCalibrationDate'),
       dataIndex: 'next_calibration_date',
       valueType: 'date',
     },
     {
-      title: '描述',
+      title: t('app.kuaizhizao.mold.fieldDescription'),
       dataIndex: 'description',
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
-  ];
+  ],
+  [t],
+  );
 
   /**
    * 表格列定义
@@ -591,7 +594,7 @@ const MoldsPage: React.FC = () => {
     const customFieldColumns = generateMoldCustomFieldColumns();
     return [
     {
-      title: '模具编号',
+      title: t('app.kuaizhizao.mold.colCode'),
       dataIndex: 'code',
       width: 140,
       ellipsis: true,
@@ -603,53 +606,53 @@ const MoldsPage: React.FC = () => {
       ),
     },
     {
-      title: '模具名称',
+      title: t('app.kuaizhizao.mold.colName'),
       dataIndex: 'name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '模具类型',
+      title: t('app.kuaizhizao.mold.colType'),
       dataIndex: 'type',
       width: 120,
     },
     {
-      title: '模具分类',
+      title: t('app.kuaizhizao.mold.colCategory'),
       dataIndex: 'category',
       width: 120,
     },
     {
-      title: '品牌',
+      title: t('app.kuaizhizao.mold.colBrand'),
       dataIndex: 'brand',
       width: 100,
     },
     {
-      title: '型号',
+      title: t('app.kuaizhizao.mold.colModel'),
       dataIndex: 'model',
       width: 120,
     },
     {
-      title: '序列号',
+      title: t('app.kuaizhizao.mold.colSerialNumber'),
       dataIndex: 'serial_number',
       width: 150,
     },
     {
-      title: '是否启用',
+      title: t('app.kuaizhizao.mold.colIsActive'),
       dataIndex: 'is_active',
       width: 100,
       render: (isActive) => (
         <Tag color={isActive ? 'success' : 'default'}>
-          {isActive ? '启用' : '停用'}
+          {isActive ? t('app.kuaizhizao.mold.isActiveEnabled') : t('app.kuaizhizao.mold.isActiveDisabled')}
         </Tag>
       ),
     },
     {
-      title: '累计使用次数',
+      title: t('app.kuaizhizao.mold.colTotalUsageCount'),
       dataIndex: 'total_usage_count',
       width: 110,
     },
     {
-      title: '寿命进度',
+      title: t('app.kuaizhizao.mold.colLifeProgress'),
       dataIndex: ['total_usage_count', 'design_lifetime'],
       width: 100,
       render: (_: any, record: Mold) => {
@@ -663,7 +666,7 @@ const MoldsPage: React.FC = () => {
       },
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -672,7 +675,7 @@ const MoldsPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.mold.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -693,7 +696,7 @@ const MoldsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 180,
       fixed: 'right',
       render: (_text, record) => (
@@ -707,7 +710,7 @@ const MoldsPage: React.FC = () => {
               void handleDetail(record);
             }}
           >
-            详情
+            {t('common.detail')}
           </Button>
           <Button
             type="link"
@@ -718,7 +721,7 @@ const MoldsPage: React.FC = () => {
               void handleEdit(record);
             }}
           >
-            编辑
+            {t('common.edit')}
           </Button>
           <Button
             type="link"
@@ -728,25 +731,107 @@ const MoldsPage: React.FC = () => {
             onClick={(e) => {
               e.stopPropagation();
               Modal.confirm({
-                title: '确认删除',
-                content: `确定要删除模具"${record.name}"吗？`,
+                title: t('app.kuaizhizao.mold.confirmDeleteTitle'),
+                content: t('app.kuaizhizao.mold.confirmDeleteContent', { name: record.name }),
                 onOk: () => record.uuid && handleDelete([record.uuid]),
               });
             }}
           >
-            删除
+            {t('common.delete')}
           </Button>
         </Space>
       ),
     },
   ];
-  }, [moldListCustomFields, generateMoldCustomFieldColumns, t, navigate]);
+  }, [moldListCustomFields, generateMoldCustomFieldColumns, t]);
+
+  const moldSourceTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.mold.sourceWorkOrder'), value: 'work_order' },
+      { label: t('app.kuaizhizao.mold.sourceProductionOrder'), value: 'production_order' },
+      { label: t('app.kuaizhizao.mold.sourceOther'), value: 'other' },
+    ],
+    [t],
+  );
+
+  const moldUsageStatusOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.mold.usageStatusInUse'), value: '使用中' },
+      { label: t('app.kuaizhizao.mold.usageStatusReturned'), value: '已归还' },
+      { label: t('app.kuaizhizao.mold.usageStatusScrapped'), value: '已报废' },
+    ],
+    [t],
+  );
+
+  const moldCalibrationResultOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.mold.resultPass'), value: '合格' },
+      { label: t('app.kuaizhizao.mold.resultFail'), value: '不合格' },
+      { label: t('app.kuaizhizao.mold.resultApproved'), value: '准用' },
+    ],
+    [t],
+  );
+
+  const usageTableColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.mold.colUsageNo'), dataIndex: 'usage_no', width: 140 },
+      { title: t('app.kuaizhizao.mold.colSourceType'), dataIndex: 'source_type', width: 100 },
+      { title: t('app.kuaizhizao.mold.colSourceNo'), dataIndex: 'source_no', width: 120 },
+      {
+        title: t('app.kuaizhizao.mold.colUsageDate'),
+        dataIndex: 'usage_date',
+        width: 110,
+        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+      },
+      { title: t('app.kuaizhizao.mold.colUsageCount'), dataIndex: 'usage_count', width: 80 },
+      { title: t('app.kuaizhizao.mold.colOperator'), dataIndex: 'operator_name', width: 90 },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 80,
+        render: (s: string) => <Tag>{s || '-'}</Tag>,
+      },
+      {
+        title: t('app.kuaizhizao.mold.colReturnDate'),
+        dataIndex: 'return_date',
+        width: 110,
+        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+      },
+    ],
+    [t],
+  );
+
+  const calibrationTableColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.mold.colCalibrationDate'),
+        dataIndex: 'calibration_date',
+        width: 120,
+        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+      },
+      {
+        title: t('app.kuaizhizao.mold.colResult'),
+        dataIndex: 'result',
+        width: 100,
+        render: (r: string) => <Tag>{r || '-'}</Tag>,
+      },
+      { title: t('app.kuaizhizao.mold.colCertificateNo'), dataIndex: 'certificate_no', width: 140 },
+      {
+        title: t('app.kuaizhizao.mold.colExpiryDate'),
+        dataIndex: 'expiry_date',
+        width: 120,
+        render: (v: string) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
+      },
+      { title: t('app.kuaizhizao.mold.colRemark'), dataIndex: 'remark', ellipsis: true },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<Mold>
-          headerTitle="模具管理"
+          headerTitle={t('app.kuaizhizao.mold.title')}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.molds"
           actionRef={actionRef}
           rowKey="uuid"
@@ -771,7 +856,7 @@ const MoldsPage: React.FC = () => {
                 total: response.total || 0,
               };
             } catch (error) {
-              messageApi.error('获取模具列表失败');
+              messageApi.error(t('app.kuaizhizao.mold.getListFailed'));
               return {
                 data: [],
                 success: false,
@@ -783,12 +868,12 @@ const MoldsPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText="新建模具"
+          createButtonText={t('app.kuaizhizao.mold.create')}
           onCreate={handleCreate}
           showImportButton
           onImport={async (data) => {
             if (!data || data.length < 2) {
-              messageApi.warning('导入数据为空或格式不正确');
+              messageApi.warning(t('app.kuaizhizao.mold.importEmpty'));
               return;
             }
             const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -797,7 +882,7 @@ const MoldsPage: React.FC = () => {
               moldImportTemplate.importHeaderMap,
             );
             if (headerIndexMap.name === undefined) {
-              messageApi.error('导入表头需包含模具名称');
+              messageApi.error(t('app.kuaizhizao.mold.importHeaderMissingName'));
               return;
             }
             const items: any[] = [];
@@ -832,21 +917,21 @@ const MoldsPage: React.FC = () => {
               });
             }
             if (items.length === 0) {
-              messageApi.warning('没有可导入的有效数据');
+              messageApi.warning(t('app.kuaizhizao.mold.importNoRows'));
               return;
             }
             const result = await batchImport({
               items,
               importFn: async (item) => moldApi.create(item),
-              title: '导入模具',
+              title: t('app.kuaizhizao.mold.importTitle'),
               concurrency: 5,
             });
             if (result.successCount > 0) {
-              messageApi.success(`成功导入 ${result.successCount} 条模具`);
+              messageApi.success(t('app.kuaizhizao.mold.importSuccess', { count: result.successCount }));
               actionRef.current?.reload();
             }
             if (result.failureCount > 0) {
-              messageApi.warning(`部分失败 ${result.failureCount} 条`);
+              messageApi.warning(t('app.kuaizhizao.mold.importPartialFail', { count: result.failureCount }));
             }
           }}
           importHeaders={moldImportTemplate.importHeaders}
@@ -863,7 +948,7 @@ const MoldsPage: React.FC = () => {
                 items = items.filter((d: any) => d.uuid && keys.includes(d.uuid));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('common.noDataToExport'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -873,9 +958,9 @@ const MoldsPage: React.FC = () => {
               a.download = `molds-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('common.exportCountSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('common.exportFailed'));
             }
           }}
           scroll={{ x: 2000 }}
@@ -884,7 +969,7 @@ const MoldsPage: React.FC = () => {
 
       {/* 创建/编辑模具 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑模具' : '新建模具'}
+        title={isEdit ? t('app.kuaizhizao.mold.edit') : t('app.kuaizhizao.mold.create')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -903,7 +988,7 @@ const MoldsPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-equipment-management-mold"
               name="code"
-              label="模具编号"
+              label={t('app.kuaizhizao.mold.fieldCode')}
               required={false}
               autoGenerateOnCreate={!isEdit}
               showGenerateButton={false}
@@ -912,59 +997,59 @@ const MoldsPage: React.FC = () => {
           <Col span={12}>
             <ProFormText
               name="name"
-              label="模具名称"
-              placeholder="请输入模具名称"
-              rules={[{ required: true, message: '请输入模具名称' }]}
+              label={t('app.kuaizhizao.mold.fieldName')}
+              placeholder={t('app.kuaizhizao.mold.phName')}
+              rules={[{ required: true, message: t('app.kuaizhizao.mold.ruleNameRequired') }]}
             />
           </Col>
           <Col span={12}>
             <DictionarySelect
               dictionaryCode="MOLD_TYPE"
               name="type"
-              label="模具类型"
-              placeholder="请选择模具类型"
+              label={t('app.kuaizhizao.mold.fieldType')}
+              placeholder={t('common.selectField', { field: t('app.kuaizhizao.mold.fieldType') })}
               formRef={formRef}
             />
           </Col>
           <Col span={12}>
-            <ProFormText name="category" label="模具分类" placeholder="请输入模具分类" />
+            <ProFormText name="category" label={t('app.kuaizhizao.mold.fieldCategory')} placeholder={t('app.kuaizhizao.mold.phCategory')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="brand" label="品牌" placeholder="请输入品牌" />
+            <ProFormText name="brand" label={t('app.kuaizhizao.mold.fieldBrand')} placeholder={t('app.kuaizhizao.mold.phBrand')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="model" label="型号" placeholder="请输入型号" />
+            <ProFormText name="model" label={t('app.kuaizhizao.mold.fieldModel')} placeholder={t('app.kuaizhizao.mold.phModel')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="serial_number" label="序列号" placeholder="请输入序列号" />
+            <ProFormText name="serial_number" label={t('app.kuaizhizao.mold.fieldSerialNumber')} placeholder={t('app.kuaizhizao.mold.phSerialNumber')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="manufacturer" label="制造商" placeholder="请输入制造商" />
+            <ProFormText name="manufacturer" label={t('app.kuaizhizao.mold.fieldManufacturer')} placeholder={t('app.kuaizhizao.mold.phManufacturer')} />
           </Col>
           <Col span={12}>
-            <ProFormText name="supplier" label="供应商" placeholder="请输入供应商" />
+            <ProFormText name="supplier" label={t('app.kuaizhizao.mold.fieldSupplier')} placeholder={t('app.kuaizhizao.mold.phSupplier')} />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="purchase_date"
-              label="采购日期"
-              placeholder="请选择采购日期"
+              label={t('app.kuaizhizao.mold.fieldPurchaseDate')}
+              placeholder={t('app.kuaizhizao.mold.phPurchaseDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="installation_date"
-              label="安装日期"
-              placeholder="请选择安装日期"
+              label={t('app.kuaizhizao.mold.fieldInstallationDate')}
+              placeholder={t('app.kuaizhizao.mold.phInstallationDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormDigit
               name="warranty_period"
-              label="保修期（月）"
-              placeholder="请输入保修期（月）"
+              label={t('app.kuaizhizao.mold.fieldWarrantyPeriod')}
+              placeholder={t('app.kuaizhizao.mold.phWarrantyPeriod')}
               min={0}
             />
           </Col>
@@ -972,18 +1057,18 @@ const MoldsPage: React.FC = () => {
             <DictionarySelect
               dictionaryCode="MOLD_STATUS"
               name="status"
-              label="模具状态"
-              placeholder="请选择模具状态"
+              label={t('app.kuaizhizao.mold.fieldStatus')}
+              placeholder={t('app.kuaizhizao.mold.phStatus')}
               required={true}
-              rules={[{ required: true, message: '请选择模具状态' }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.mold.ruleStatusRequired') }]}
               formRef={formRef}
             />
           </Col>
           <Col span={12}>
             <ProFormDigit
               name="cavity_count"
-              label="腔数（模数）"
-              placeholder="一次成型产出件数"
+              label={t('app.kuaizhizao.mold.fieldCavityCount')}
+              placeholder={t('app.kuaizhizao.mold.phCavityCount')}
               min={1}
               fieldProps={{ precision: 0 }}
             />
@@ -991,8 +1076,8 @@ const MoldsPage: React.FC = () => {
           <Col span={12}>
             <ProFormDigit
               name="design_lifetime"
-              label="设计寿命（次）"
-              placeholder="模具设计寿命，用于寿命预警"
+              label={t('app.kuaizhizao.mold.fieldDesignLifetime')}
+              placeholder={t('app.kuaizhizao.mold.phDesignLifetime')}
               min={1}
               fieldProps={{ precision: 0 }}
             />
@@ -1010,20 +1095,20 @@ const MoldsPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="description"
-              label="描述"
-              placeholder="请输入描述（可选）"
+              label={t('app.kuaizhizao.mold.fieldDescription')}
+              placeholder={t('app.kuaizhizao.mold.phDescription')}
               fieldProps={{ rows: 3 }}
             />
           </Col>
           <Col span={24}>
-            <ProFormSwitch name="is_active" label="是否启用" />
+            <ProFormSwitch name="is_active" label={t('app.kuaizhizao.mold.fieldIsActive')} />
           </Col>
         </Row>
       </FormModalTemplate>
 
       {/* 模具详情 Drawer */}
       <DetailDrawerTemplate<Mold>
-        title="模具详情"
+        title={t('app.kuaizhizao.mold.detail')}
         open={drawerVisible}
         zIndex={moldDetailDrawerZIndex}
         onClose={() => {
@@ -1040,14 +1125,14 @@ const MoldsPage: React.FC = () => {
           moldDetail && (
             <>
               {hasCustomFieldsDetailContent(moldListCustomFields, moldDetailCustomFieldValues) ? (
-                <DetailDrawerSection title={t('app.master-data.customFields', { defaultValue: '自定义字段' })}>
+                <DetailDrawerSection title={t('app.master-data.customFields')}>
                   <CustomFieldsDetailSection
                     customFields={moldListCustomFields}
                     customFieldValues={moldDetailCustomFieldValues}
                   />
                 </DetailDrawerSection>
               ) : null}
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 {moldDetail.id != null ? (
                   <DetailDrawerInlineFullChain
                     documentType="mold"
@@ -1075,27 +1160,26 @@ const MoldsPage: React.FC = () => {
               items={[
                 {
                   key: 'basic',
-                  label: '基本信息',
+                  label: t('app.uniDetail.sectionBasic'),
                   children: (
                     <>
                       {moldDetail.design_lifetime && moldDetail.design_lifetime > 0 && (() => {
                         const total = moldDetail.total_usage_count ?? 0;
                         const threshold = moldDetail.design_lifetime * 0.9;
                         if (total >= moldDetail.design_lifetime) {
-                          return <Tag color="error" style={{ marginBottom: 12 }}>寿命已到期，请关注</Tag>;
+                          return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpired')}</Tag>;
                         }
                         if (total >= threshold) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>寿命即将到期，请关注</Tag>;
+                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.lifetimeExpiring')}</Tag>;
                         }
                         return null;
                       })()}
                       {moldDetail.maintenance_interval && moldDetail.maintenance_interval > 0 && (() => {
                         const total = moldDetail.total_usage_count ?? 0;
-                        const remainder = total % moldDetail.maintenance_interval;
                         const nextAt = (Math.floor(total / moldDetail.maintenance_interval) + 1) * moldDetail.maintenance_interval;
                         const left = nextAt - total;
                         if (left > 0 && left <= moldDetail.maintenance_interval * 0.2) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>即将到达保养周期（剩余 {left} 次）</Tag>;
+                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.maintenanceDueSoon', { count: left })}</Tag>;
                         }
                         return null;
                       })()}
@@ -1104,10 +1188,10 @@ const MoldsPage: React.FC = () => {
                         const now = dayjs();
                         const daysLeft = next.diff(now, 'day');
                         if (daysLeft < 0) {
-                          return <Tag color="error" style={{ marginBottom: 12 }}>校验已过期，请尽快安排校验</Tag>;
+                          return <Tag color="error" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpired')}</Tag>;
                         }
                         if (daysLeft <= 7) {
-                          return <Tag color="warning" style={{ marginBottom: 12 }}>校验即将到期（{daysLeft} 天内）</Tag>;
+                          return <Tag color="warning" style={{ marginBottom: 12 }}>{t('app.kuaizhizao.mold.calibrationExpiringSoon', { days: daysLeft })}</Tag>;
                         }
                         return null;
                       })()}
@@ -1136,12 +1220,12 @@ const MoldsPage: React.FC = () => {
                 },
                 {
                   key: 'usages',
-                  label: '使用记录',
+                  label: t('app.kuaizhizao.mold.tabUsages'),
                   children: (
                     <>
                       <div style={{ marginBottom: 12 }}>
                         <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleCreateUsage}>
-                          新建使用记录
+                          {t('app.kuaizhizao.mold.createUsage')}
                         </Button>
                       </div>
                       <Table<MoldUsage>
@@ -1150,43 +1234,19 @@ const MoldsPage: React.FC = () => {
                         dataSource={usages}
                         rowKey="uuid"
                         pagination={false}
-                        columns={[
-                          { title: '使用单号', dataIndex: 'usage_no', width: 140 },
-                          { title: '来源类型', dataIndex: 'source_type', width: 100 },
-                          { title: '来源单号', dataIndex: 'source_no', width: 120 },
-                          {
-                            title: '使用日期',
-                            dataIndex: 'usage_date',
-                            width: 110,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                          { title: '使用次数', dataIndex: 'usage_count', width: 80 },
-                          { title: '操作人', dataIndex: 'operator_name', width: 90 },
-                          {
-                            title: '状态',
-                            dataIndex: 'status',
-                            width: 80,
-                            render: (s) => <Tag>{s || '-'}</Tag>,
-                          },
-                          {
-                            title: '归还日期',
-                            dataIndex: 'return_date',
-                            width: 110,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                        ]}
+                        columns={usageTableColumns}
                       />
                     </>
                   ),
                 },
                 {
                   key: 'calibrations',
-                  label: '校验记录',
+                  label: t('app.kuaizhizao.mold.tabCalibrations'),
                   children: (
                     <>
                       <div style={{ marginBottom: 12 }}>
                         <Button type="primary" size="small" icon={<PlusOutlined />} onClick={handleRecordCalibration}>
-                          新建校验记录
+                          {t('app.kuaizhizao.mold.createCalibration')}
                         </Button>
                       </div>
                       <Table<MoldCalibration>
@@ -1195,35 +1255,14 @@ const MoldsPage: React.FC = () => {
                         dataSource={calibrations}
                         rowKey="uuid"
                         pagination={false}
-                        columns={[
-                          {
-                            title: '校验日期',
-                            dataIndex: 'calibration_date',
-                            width: 120,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                          {
-                            title: '结果',
-                            dataIndex: 'result',
-                            width: 100,
-                            render: (r) => <Tag>{r || '-'}</Tag>,
-                          },
-                          { title: '证书编号', dataIndex: 'certificate_no', width: 140 },
-                          {
-                            title: '有效期至',
-                            dataIndex: 'expiry_date',
-                            width: 120,
-                            render: (v) => v ? dayjs(v).format('YYYY-MM-DD') : '-',
-                          },
-                          { title: '备注', dataIndex: 'remark', ellipsis: true },
-                        ]}
+                        columns={calibrationTableColumns}
                       />
                     </>
                   ),
                 },
                 {
                   key: 'tracking_timeline',
-                  label: '操作记录',
+                  label: t('app.uniDetail.sectionTimeline'),
                   children: (
                     <>
                       {moldTracking.loading && (
@@ -1238,7 +1277,7 @@ const MoldsPage: React.FC = () => {
                         <DocumentTrackingTimelineBody data={moldTracking.data} />
                       )}
                       {!moldTracking.loading && !moldTracking.data && !moldTracking.error && (
-                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.mold.noTimeline')} />
                       )}
                     </>
                   ),
@@ -1252,7 +1291,7 @@ const MoldsPage: React.FC = () => {
 
       {/* 新建校验记录 Modal */}
       <Modal
-        title="新建校验记录"
+        title={t('app.kuaizhizao.mold.createCalibration')}
         open={calibModalVisible}
         onOk={handleSubmitCalibration}
         onCancel={() => setCalibModalVisible(false)}
@@ -1263,27 +1302,21 @@ const MoldsPage: React.FC = () => {
           <Form.Item name="mold_uuid" hidden>
             <Input />
           </Form.Item>
-          <Form.Item name="calibration_date" label="校验日期" rules={[{ required: true }]}>
+          <Form.Item name="calibration_date" label={t('app.kuaizhizao.mold.calibrationDate')} rules={[{ required: true }]}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="result" label="校验结果" rules={[{ required: true }]}>
-            <Select
-              options={[
-                { label: '合格', value: '合格' },
-                { label: '不合格', value: '不合格' },
-                { label: '准用', value: '准用' },
-              ]}
-            />
+          <Form.Item name="result" label={t('app.kuaizhizao.mold.calibrationResult')} rules={[{ required: true }]}>
+            <Select options={moldCalibrationResultOptions} />
           </Form.Item>
-          <Form.Item name="certificate_no" label="证书编号">
-            <Input placeholder="请输入证书编号" />
+          <Form.Item name="certificate_no" label={t('app.kuaizhizao.mold.certificateNo')}>
+            <Input placeholder={t('app.kuaizhizao.mold.phCertificateNo')} />
           </Form.Item>
-          <Form.Item name="expiry_date" label="有效期至">
+          <Form.Item name="expiry_date" label={t('app.kuaizhizao.mold.expiryDate')}>
             <DatePicker style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item
             name="attachments"
-            label="附件"
+            label={t('app.kuaizhizao.mold.attachments')}
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
           >
@@ -1296,18 +1329,17 @@ const MoldsPage: React.FC = () => {
                 options.onSuccess?.(res[0], options.file as any);
               }}
             >
-              <Button icon={<UploadOutlined />}>上传</Button>
+              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.mold.upload')}</Button>
             </Upload>
           </Form.Item>
-          <Form.Item name="remark" label="备注">
-            <Input.TextArea rows={2} placeholder="请输入备注" />
+          <Form.Item name="remark" label={t('app.kuaizhizao.mold.colRemark')}>
+            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.mold.phRemark')} />
           </Form.Item>
         </Form>
       </Modal>
 
-      {/* 新建使用记录 Modal */}
       <Modal
-        title="新建使用记录"
+        title={t('app.kuaizhizao.mold.createUsage')}
         open={usageModalVisible}
         onOk={handleSubmitUsage}
         onCancel={() => setUsageModalVisible(false)}
@@ -1318,35 +1350,27 @@ const MoldsPage: React.FC = () => {
           <Form.Item name="mold_uuid" hidden>
             <Input />
           </Form.Item>
-          <Form.Item name="source_type" label="来源类型">
-            <Select placeholder="请选择" allowClear options={[
-              { label: '工单', value: 'work_order' },
-              { label: '生产订单', value: 'production_order' },
-              { label: '其他', value: 'other' },
-            ]} />
+          <Form.Item name="source_type" label={t('app.kuaizhizao.mold.colSourceType')}>
+            <Select placeholder={t('app.kuaizhizao.mold.phSelect')} allowClear options={moldSourceTypeOptions} />
           </Form.Item>
-          <Form.Item name="source_no" label="来源单号">
-            <Input placeholder="请输入来源单号" />
+          <Form.Item name="source_no" label={t('app.kuaizhizao.mold.colSourceNo')}>
+            <Input placeholder={t('app.kuaizhizao.mold.phSourceNo')} />
           </Form.Item>
-          <Form.Item name="usage_date" label="使用日期" rules={[{ required: true }]}>
+          <Form.Item name="usage_date" label={t('app.kuaizhizao.mold.colUsageDate')} rules={[{ required: true }]}>
             <DatePicker showTime style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="usage_count" label="使用次数" initialValue={1} rules={[{ required: true }]}>
+          <Form.Item name="usage_count" label={t('app.kuaizhizao.mold.colUsageCount')} initialValue={1} rules={[{ required: true }]}>
             <InputNumber min={1} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="operator_name" label="操作人">
-            <Input placeholder="请输入操作人" />
+          <Form.Item name="operator_name" label={t('app.kuaizhizao.mold.colOperator')}>
+            <Input placeholder={t('app.kuaizhizao.mold.phOperator')} />
           </Form.Item>
-          <Form.Item name="status" label="状态">
-            <Select options={[
-              { label: '使用中', value: '使用中' },
-              { label: '已归还', value: '已归还' },
-              { label: '已报废', value: '已报废' },
-            ]} />
+          <Form.Item name="status" label={t('common.status')}>
+            <Select options={moldUsageStatusOptions} />
           </Form.Item>
           <Form.Item
             name="attachments"
-            label="附件"
+            label={t('app.kuaizhizao.mold.attachments')}
             valuePropName="fileList"
             getValueFromEvent={(e) => (Array.isArray(e) ? e : e?.fileList)}
           >
@@ -1359,7 +1383,7 @@ const MoldsPage: React.FC = () => {
                 options.onSuccess?.(res[0], options.file as any);
               }}
             >
-              <Button icon={<UploadOutlined />}>上传</Button>
+              <Button icon={<UploadOutlined />}>{t('app.kuaizhizao.mold.upload')}</Button>
             </Upload>
           </Form.Item>
         </Form>

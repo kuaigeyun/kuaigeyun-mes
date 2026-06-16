@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -20,7 +21,6 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { setCustomPageTitle, removeCustomPageTitle } from '../../../../../utils/customPageTitle';
-import { formatDateBySiteSetting } from '../../../../../utils/format';
 import {
   OutboundEntryAttachmentsSection,
   OutboundEntryOperatorField,
@@ -29,9 +29,11 @@ import {
   mapWarehouseSelectOptions,
   useOutboundOperatorSelect,
 } from './outboundEntryShared';
+import { getOutboundIssueTypeLabel } from './outboundHubTypes';
 import { OUTBOUND_LIST_PATH, outboundSalesOrderEntryPath } from './outboundPaths';
 
 const OutboundSalesOrderPullEntryPage: React.FC = () => {
+  const { t } = useTranslation();
   const { soId: soIdParam } = useParams<{ soId: string }>();
   const salesOrderId = Number(soIdParam);
   const navigate = useNavigate();
@@ -54,10 +56,50 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
   const pagePath =
     Number.isFinite(salesOrderId) && salesOrderId > 0 ? outboundSalesOrderEntryPath(salesOrderId) : OUTBOUND_LIST_PATH;
   const orderCode = String(order?.order_code ?? order?.code ?? '');
+  const pageTitle = orderCode
+    ? `${t('app.kuaizhizao.warehouseOutbound.entry.salesDelivery')} — ${orderCode}`
+    : t('app.kuaizhizao.warehouseOutbound.entry.salesDelivery');
 
   const totalQty = useMemo(
     () => items.reduce((sum, it) => sum + Number(quantities[it.id!] ?? 0), 0),
     [items, quantities],
+  );
+
+  const lineColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.orderQty'),
+        dataIndex: 'quantity',
+        width: 100,
+        align: 'right' as const,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.pendingQty'),
+        key: 'pending',
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, it: SalesOrderItem) => Number(it.remaining_quantity ?? 0),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseOutbound.entry.thisOutbound'),
+        key: 'qty',
+        width: 140,
+        render: (_: unknown, it: SalesOrderItem) =>
+          it.id != null ? (
+            <InputNumber
+              min={0}
+              max={Number(it.remaining_quantity ?? 0)}
+              value={quantities[it.id]}
+              onChange={(v) => setQuantities((prev) => ({ ...prev, [it.id!]: Number(v ?? 0) }))}
+              style={{ width: '100%' }}
+            />
+          ) : null,
+      },
+      { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+    ],
+    [quantities, t],
   );
 
   const leavePage = useCallback(() => {
@@ -66,23 +108,22 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
 
   useEffect(() => {
     if (!(Number.isFinite(salesOrderId) && salesOrderId > 0)) {
-      messageApi.error('无效的销售订单');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.invalidSalesOrder'));
       leavePage();
     }
-  }, [salesOrderId, leavePage, messageApi]);
+  }, [salesOrderId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = orderCode ? `销售出库 — ${orderCode}` : '销售出库';
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [orderCode, pagePath]);
+  }, [pagePath, pageTitle]);
 
   useEffect(() => {
     if (!Number.isFinite(salesOrderId) || salesOrderId <= 0 || initRef.current) return;
@@ -106,17 +147,17 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         });
         setQuantities(initQty);
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载销售订单失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseOutbound.entry.loadSalesOrderFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [salesOrderId, leavePage, messageApi]);
+  }, [salesOrderId, leavePage, messageApi, t]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.error('请选择出库仓库');
+      messageApi.error(t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((o) => o.value === warehouseId);
@@ -130,14 +171,19 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       if (qty <= 0) continue;
       const max = Number(it.remaining_quantity ?? 0);
       if (qty > max) {
-        messageApi.error(`物料 ${it.material_code || it.material_name} 出库数量不能超过待交 ${max}`);
+        messageApi.error(
+          t('app.kuaizhizao.warehouseOutbound.entry.qtyExceedsPending', {
+            material: it.material_code || it.material_name,
+            max,
+          }),
+        );
         return;
       }
       deliveryQuantities[it.id] = qty;
       hasPositive = true;
     }
     if (!hasPositive) {
-      messageApi.warning('请至少填写一行出库数量');
+      messageApi.warning(t('app.kuaizhizao.warehouseOutbound.entry.fillOutboundQty'));
       return;
     }
 
@@ -150,7 +196,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
         delivery_quantities: deliveryQuantities,
       })) as { id?: number; delivery_code?: string };
       if (created?.id == null) {
-        messageApi.error('下推成功但未返回出库单 ID');
+        messageApi.error(t('app.kuaizhizao.warehouseOutbound.entry.noDeliveryId'));
         return;
       }
       await warehouseApi.salesDelivery.update(String(created.id), {
@@ -174,12 +220,16 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
           },
         });
       } else {
-        messageApi.success(`已生成销售出库草稿${created.delivery_code ? `：${created.delivery_code}` : ''}`);
+        messageApi.success(
+          t('app.kuaizhizao.warehouseOutbound.entry.draftDeliveryCreated', {
+            code: created.delivery_code ? `：${created.delivery_code}` : '',
+          }),
+        );
         leavePage();
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseOutbound.entry.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -190,20 +240,20 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseOutbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {orderCode ? `销售出库 — ${orderCode}` : '销售出库'}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseOutbound.action.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
-              生成草稿
+              {t('app.kuaizhizao.warehouseOutbound.action.generateDraft')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
-              确认出库
+              {t('app.kuaizhizao.warehouseOutbound.action.confirmOutbound')}
             </Button>
           </Space>
         </>
@@ -215,30 +265,30 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
             <Form layout="vertical" requiredMark={false}>
               <Row gutter={16}>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库类型">
-                    <ReadOnlyFormValue value="销售出库" />
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.outboundType')}>
+                    <ReadOnlyFormValue value={getOutboundIssueTypeLabel(t, 'sales_delivery')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="源单编号">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.sourceDocNo')}>
                     <ReadOnlyFormValue value={orderCode} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="客户">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.col.customer')}>
                     <ReadOnlyFormValue value={String(order.customer_name ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="订单状态">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.entry.orderStatus')}>
                     <ReadOnlyFormValue value={String(order.status ?? '')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库仓库" required>
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.field.warehouse')} required>
                     <Select
                       style={{ width: '100%' }}
-                      placeholder="请选择出库仓库"
+                      placeholder={t('app.kuaizhizao.warehouseOutbound.msg.selectWarehouse')}
                       options={warehouseOptions}
                       value={warehouseId}
                       onChange={setWarehouseId}
@@ -250,7 +300,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={12} lg={6}>
-                  <Form.Item label="出库日期">
+                  <Form.Item label={t('app.kuaizhizao.warehouseOutbound.col.outboundDate')}>
                     <DatePicker
                       style={{ width: '100%' }}
                       value={deliveryTime}
@@ -273,9 +323,9 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 </Col>
               </Row>
               <Typography.Text strong style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>
-                出库明细
+                {t('app.kuaizhizao.warehouseOutbound.entry.outboundDetails')}
                 <Typography.Text type="secondary" style={{ marginLeft: 12, fontWeight: 'normal' }}>
-                  合计出库数量：{totalQty}
+                  {t('app.kuaizhizao.warehouseOutbound.entry.totalOutboundQty', { qty: totalQty })}
                 </Typography.Text>
               </Typography.Text>
               <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
@@ -285,39 +335,7 @@ const OutboundSalesOrderPullEntryPage: React.FC = () => {
                 rowKey={(r) => String(r.id)}
                 pagination={false}
                 dataSource={items}
-                columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                  { title: '物料名称', dataIndex: 'material_name', ellipsis: true },
-                  {
-                    title: '订单数量',
-                    dataIndex: 'quantity',
-                    width: 100,
-                    align: 'right',
-                  },
-                  {
-                    title: '待交数量',
-                    key: 'pending',
-                    width: 100,
-                    align: 'right',
-                    render: (_, it) => Number(it.remaining_quantity ?? 0),
-                  },
-                  {
-                    title: '本次出库',
-                    key: 'qty',
-                    width: 140,
-                    render: (_, it) =>
-                      it.id != null ? (
-                        <InputNumber
-                          min={0}
-                          max={Number(it.remaining_quantity ?? 0)}
-                          value={quantities[it.id]}
-                          onChange={(v) => setQuantities((prev) => ({ ...prev, [it.id!]: Number(v ?? 0) }))}
-                          style={{ width: '100%' }}
-                        />
-                      ) : null,
-                  },
-                  { title: '单位', dataIndex: 'material_unit', width: 60 },
-                ]}
+                columns={lineColumns}
               />
             </Form>
           )}

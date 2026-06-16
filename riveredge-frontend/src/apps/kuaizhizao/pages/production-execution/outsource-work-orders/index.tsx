@@ -140,13 +140,6 @@ interface OutsourceWorkOrder {
   updated_at?: string;
 }
 
-const PRIORITY_FALLBACK = [
-  { label: '低', value: 'low' },
-  { label: '正常', value: 'normal' },
-  { label: '高', value: 'high' },
-  { label: '紧急', value: 'urgent' },
-];
-
 function unwrapMaterialList(response: unknown): any[] {
   if (Array.isArray(response)) return response;
   if (response && typeof response === 'object') {
@@ -212,7 +205,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const [productList, setProductList] = useState<any[]>([]);
   // 供应商列表状态
   const [supplierList, setSupplierList] = useState<any[]>([]);
-  const [priorityOptions, setPriorityOptions] = useState<Array<{ label: string; value: string }>>(PRIORITY_FALLBACK);
+  const [priorityOptions, setPriorityOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [priorityLoading, setPriorityLoading] = useState(false);
 
   // Modal 相关状态（创建/编辑工单委外）
@@ -321,40 +314,89 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         setSupplierList(suppliers);
       } catch (error) {
         window.console.error('获取数据失败:', error);
-        messageApi.error('获取数据失败');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDataFailed'));
       }
     };
     loadData();
-  }, []);
+  }, [messageApi, t]);
 
   useEffect(() => {
     const loadPriority = async () => {
+      const fallback = [
+        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityLow'), value: 'low' },
+        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityNormal'), value: 'normal' },
+        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityHigh'), value: 'high' },
+        { label: t('app.kuaizhizao.outsourceWorkOrder.priorityUrgent'), value: 'urgent' },
+      ];
       setPriorityLoading(true);
       try {
         const dict = await getDataDictionaryByCode('WORK_ORDER_PRIORITY');
         const items = await getDictionaryItemList(dict.uuid, true);
         setPriorityOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
-        setPriorityOptions(PRIORITY_FALLBACK);
+        setPriorityOptions(fallback);
       } finally {
         setPriorityLoading(false);
       }
     };
     loadPriority();
-  }, []);
+  }, [t]);
+
+  const getOwoStatusTag = useCallback(
+    (status?: string) => {
+      const statusMap: Record<string, { color: string; key: string }> = {
+        draft: { color: 'default', key: 'app.kuaizhizao.outsourceWorkOrder.statusDraft' },
+        released: { color: 'processing', key: 'app.kuaizhizao.outsourceWorkOrder.statusReleased' },
+        in_progress: { color: 'processing', key: 'app.kuaizhizao.outsourceWorkOrder.statusInProgress' },
+        completed: { color: 'success', key: 'app.kuaizhizao.outsourceWorkOrder.statusCompleted' },
+        cancelled: { color: 'error', key: 'app.kuaizhizao.outsourceWorkOrder.statusCancelled' },
+      };
+      const s = statusMap[status || 'draft'] || { color: 'default', key: 'app.kuaizhizao.outsourceWorkOrder.statusUnknown' };
+      return <Tag color={s.color}>{t(s.key)}</Tag>;
+    },
+    [t],
+  );
+
+  const getOwoPriorityTag = useCallback(
+    (priority?: string) => {
+      const priorityMap: Record<string, { color: string; key: string }> = {
+        low: { color: 'default', key: 'app.kuaizhizao.outsourceWorkOrder.priorityLow' },
+        normal: { color: 'blue', key: 'app.kuaizhizao.outsourceWorkOrder.priorityNormal' },
+        high: { color: 'orange', key: 'app.kuaizhizao.outsourceWorkOrder.priorityHigh' },
+        urgent: { color: 'red', key: 'app.kuaizhizao.outsourceWorkOrder.priorityUrgent' },
+      };
+      const p = priorityMap[priority || 'normal'] || { color: 'default', key: 'app.kuaizhizao.outsourceWorkOrder.priorityNormal' };
+      return <Tag color={p.color}>{t(p.key)}</Tag>;
+    },
+    [t],
+  );
+
+  const getSourceTypeLabel = useCallback(
+    (sourceType: string) => {
+      const keys: Record<string, string> = {
+        Make: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeMake',
+        Buy: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeBuy',
+        Phantom: 'app.kuaizhizao.outsourceWorkOrder.sourceTypePhantom',
+        Outsource: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeOutsource',
+        Configure: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeConfigure',
+      };
+      return keys[sourceType] ? t(keys[sourceType]) : sourceType;
+    },
+    [t],
+  );
 
   const detailBaseColumns: ProDescriptionsItemProps<OutsourceWorkOrder>[] = useMemo(
     () => [
       {
-        title: '工单委外编号',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colCode'),
         dataIndex: 'code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.code ?? '') }}>{r.code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '工单委外名称', dataIndex: 'name' },
+      { title: t('app.kuaizhizao.outsourceWorkOrder.colName'), dataIndex: 'name' },
       {
-        title: '产品编号',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colProductCode'),
         dataIndex: ['productCode', 'product_code'] as any,
         render: (_, record) => (
           <Typography.Text copyable={{ text: String(record.productCode || record.product_code || '') }}>
@@ -363,27 +405,27 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         ),
       },
       {
-        title: '产品名称',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colProductName'),
         dataIndex: ['productName', 'product_name'] as any,
         render: (_, record) => record.productName || record.product_name || '-',
       },
       {
-        title: '委外数量',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colQuantity'),
         dataIndex: 'quantity',
         render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
       },
       {
-        title: '委外供应商',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colSupplier'),
         dataIndex: ['supplierName', 'supplier_name'] as any,
         render: (_, record) => record.supplierName || record.supplier_name || '-',
       },
       {
-        title: '委外工序',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colOperation'),
         dataIndex: ['outsourceOperation', 'outsource_operation'] as any,
         render: (_, record) => record.outsourceOperation || record.outsource_operation || '-',
       },
       {
-        title: '委外单价',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colUnitPrice'),
         dataIndex: ['unitPrice', 'unit_price'] as any,
         render: (_, record) => {
           const price = record.unitPrice || record.unit_price;
@@ -395,7 +437,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '委外总金额',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colTotalAmount'),
         dataIndex: ['totalAmount', 'total_amount'] as any,
         render: (_, record) => {
           const amount = record.totalAmount || record.total_amount;
@@ -407,36 +449,17 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '状态',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colStatus'),
         dataIndex: 'status',
-        render: (_, record) => {
-          const statusMap: Record<string, { color: string; text: string }> = {
-            draft: { color: 'default', text: '草稿' },
-            released: { color: 'processing', text: '已下达' },
-            in_progress: { color: 'processing', text: '执行中' },
-            completed: { color: 'success', text: '已完成' },
-            cancelled: { color: 'error', text: '已取消' },
-          };
-          const status = statusMap[record.status || 'draft'] || { color: 'default', text: record.status || '未知' };
-          return <Tag color={status.color}>{status.text}</Tag>;
-        },
+        render: (_, record) => getOwoStatusTag(record.status),
       },
       {
-        title: '优先级',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPriority'),
         dataIndex: 'priority',
-        render: (_, record) => {
-          const priorityMap: Record<string, { color: string; text: string }> = {
-            low: { color: 'default', text: '低' },
-            normal: { color: 'blue', text: '正常' },
-            high: { color: 'orange', text: '高' },
-            urgent: { color: 'red', text: '紧急' },
-          };
-          const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
-          return <Tag color={priority.color}>{priority.text}</Tag>;
-        },
+        render: (_, record) => getOwoPriorityTag(record.priority),
       },
       {
-        title: '已发料数量',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colIssuedQty'),
         dataIndex: ['issuedQuantity', 'issued_quantity'] as any,
         render: (_, record) => {
           const qty = record.issuedQuantity || record.issued_quantity;
@@ -444,7 +467,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '已收货数量',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colReceivedQty'),
         dataIndex: ['receivedQuantity', 'received_quantity'] as any,
         render: (_, record) => {
           const qty = record.receivedQuantity || record.received_quantity;
@@ -452,7 +475,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '合格数量',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colQualifiedQty'),
         dataIndex: ['qualifiedQuantity', 'qualified_quantity'] as any,
         render: (_, record) => {
           const qty = record.qualifiedQuantity || record.qualified_quantity;
@@ -460,7 +483,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '不合格数量',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colUnqualifiedQty'),
         dataIndex: ['unqualifiedQuantity', 'unqualified_quantity'] as any,
         render: (_, record) => {
           const qty = record.unqualifiedQuantity || record.unqualified_quantity;
@@ -468,7 +491,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '计划开始时间',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedStart'),
         dataIndex: ['plannedStartDate', 'planned_start_date'] as any,
         valueType: 'dateTime',
         render: (_, record) => {
@@ -477,7 +500,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '计划结束时间',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedEnd'),
         dataIndex: ['plannedEndDate', 'planned_end_date'] as any,
         valueType: 'dateTime',
         render: (_, record) => {
@@ -486,7 +509,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '实际开始时间',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colActualStart'),
         dataIndex: ['actualStartDate', 'actual_start_date'] as any,
         valueType: 'dateTime',
         render: (_, record) => {
@@ -495,7 +518,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
       {
-        title: '实际结束时间',
+        title: t('app.kuaizhizao.outsourceWorkOrder.colActualEnd'),
         dataIndex: ['actualEndDate', 'actual_end_date'] as any,
         valueType: 'dateTime',
         render: (_, record) => {
@@ -504,15 +527,18 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         },
       },
     ],
-    []
+    [getOwoPriorityTag, getOwoStatusTag, t],
   );
 
-  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceWorkOrder> = {
-    title: '备注',
-    dataIndex: 'remarks',
-    span: 3,
-    render: (text) => text || '-',
-  };
+  const detailRemarksColumn: ProDescriptionsItemProps<OutsourceWorkOrder> = useMemo(
+    () => ({
+      title: t('app.kuaizhizao.common.fieldNotes'),
+      dataIndex: 'remarks',
+      span: 3,
+      render: (text) => text || '-',
+    }),
+    [t],
+  );
 
   /** 产品选择变更：获取物料来源信息并自动填充 */
   const handleProductChange = async (value: number | undefined) => {
@@ -525,11 +551,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           const sourceConfig = materialDetail.sourceConfig || materialDetail.source_config || {};
 
           const sourceTypeNames: Record<string, string> = {
-            Make: '自制件',
-            Buy: '采购件',
-            Phantom: '虚拟件',
-            Outsource: '委外件',
-            Configure: '配置件',
+            Make: getSourceTypeLabel('Make'),
+            Buy: getSourceTypeLabel('Buy'),
+            Phantom: getSourceTypeLabel('Phantom'),
+            Outsource: getSourceTypeLabel('Outsource'),
+            Configure: getSourceTypeLabel('Configure'),
           };
 
           if (sourceType === 'Outsource') {
@@ -563,7 +589,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               sourceType,
               sourceTypeName: sourceTypeNames[st] || st,
               canCreateWorkOrder: false,
-              validationErrors: [`物料来源类型不是委外件（Outsource），当前类型：${st}`],
+              validationErrors: [t('app.kuaizhizao.outsourceWorkOrder.validationNotOutsource', { type: st })],
             });
           }
         } catch (error) {
@@ -618,7 +644,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
       }, 100);
     } catch (error) {
-      messageApi.error('获取工单委外详情失败');
+      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
     }
   };
 
@@ -627,7 +653,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     if (keys.length === 0) {
-      messageApi.warning('请选择要删除的工单委外');
+      messageApi.warning(t('app.kuaizhizao.outsourceWorkOrder.selectToDelete'));
       return;
     }
     try {
@@ -635,7 +661,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       for (const id of keys) {
         await outsourceWorkOrderApi.delete(String(id));
       }
-      messageApi.success(`成功删除 ${keys.length} 条记录`);
+      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.deleteSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
       if (workOrderDetail?.id != null && ids.includes(workOrderDetail.id)) {
         setDrawerVisible(false);
@@ -645,7 +671,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('common.deleteFailed'));
     }
   };
 
@@ -662,7 +688,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         await loadOwoFieldValuesForDetail(detail.id);
       }
     } catch (error) {
-      messageApi.error('获取工单委外详情失败');
+      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
     }
   };
 
@@ -680,8 +706,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       // 物料来源验证
       if (values.productId && selectedMaterialSourceInfo) {
         if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
-          messageApi.error('该物料来源类型不允许创建工单委外，请选择其他物料');
-          throw new Error('物料来源类型不允许创建工单委外');
+          messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.materialSourceNotAllowed'));
+          throw new Error(t('app.kuaizhizao.outsourceWorkOrder.materialSourceNotAllowed'));
         }
       }
 
@@ -754,11 +780,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       if (isEdit && wid) {
         await outsourceWorkOrderApi.update(wid.toString(), values);
-        messageApi.success('工单委外更新成功');
+        messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.updateSuccess'));
       } else {
         const created = await outsourceWorkOrderApi.create(values);
         recordId = created?.id;
-        messageApi.success('工单委外创建成功');
+        messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.createSuccess'));
       }
 
       if (recordId != null) {
@@ -783,7 +809,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.operationFailed'));
       throw error;
     }
   };
@@ -824,12 +850,12 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           }),
         );
       } catch (err: any) {
-        messageApi.error(err?.message || '加载待发物料明细失败');
+        messageApi.error(err?.message || t('app.kuaizhizao.outsourceWorkOrder.loadIssueLinesFailed'));
       } finally {
         setIssuePreviewLoading(false);
       }
     } catch (error) {
-      messageApi.error('获取工单委外详情失败');
+      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
     }
   };
 
@@ -839,16 +865,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const handleSubmitIssue = async (values: any): Promise<void> => {
     try {
       if (!currentWorkOrderForIssue?.id) {
-        throw new Error('工单委外信息不存在');
+        throw new Error(t('app.kuaizhizao.outsourceWorkOrder.workOrderNotFound'));
       }
 
       const activeLines = issueLines.filter((l) => l.issueQuantity > 0);
       if (activeLines.length === 0) {
-        messageApi.error('请至少填写一行本次发料数量');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.issueNoLines'));
         throw new Error('no lines');
       }
       if (!values.warehouseId) {
-        messageApi.error('请选择出库仓库');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.issueSelectWarehouse'));
         throw new Error('no warehouse');
       }
 
@@ -866,7 +892,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           unit: l.unit,
         })),
       });
-      messageApi.success(`委外发料成功，共 ${activeLines.length} 条明细`);
+      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.issueSuccess', { count: activeLines.length }));
       setIssueModalVisible(false);
       setCurrentWorkOrderForIssue(null);
       setIssueLines([]);
@@ -878,7 +904,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       if (error?.message && error.message !== 'no lines' && error.message !== 'no warehouse') {
-        messageApi.error(error.message || '创建委外发料单失败');
+        messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.createIssueFailed'));
       }
       throw error;
     }
@@ -897,7 +923,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         receiptFormRef.current?.resetFields();
       }, 100);
     } catch (error) {
-      messageApi.error('获取工单委外详情失败');
+      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchDetailFailed'));
     }
   };
 
@@ -907,18 +933,18 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   const handleSubmitReceipt = async (values: any): Promise<void> => {
     try {
       if (!currentWorkOrderForReceipt?.id || !receiptLine) {
-        throw new Error('工单委外信息不存在');
+        throw new Error(t('app.kuaizhizao.outsourceWorkOrder.workOrderNotFound'));
       }
       if (receiptLine.receiptQuantity <= 0) {
-        messageApi.error('请填写本次收货数量');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptNoQty'));
         throw new Error('no qty');
       }
       if (!values.warehouseId) {
-        messageApi.error('请选择入库仓库');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptSelectWarehouse'));
         throw new Error('no warehouse');
       }
       if (receiptLine.receiptQuantity > receiptLine.pendingQuantity) {
-        messageApi.error('收货数量不能超过待收数量');
+        messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.receiptOverQty'));
         throw new Error('over qty');
       }
 
@@ -936,7 +962,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       };
 
       await outsourceMaterialReceiptApi.create(submitData);
-      messageApi.success('委外收货单创建成功');
+      messageApi.success(t('app.kuaizhizao.outsourceWorkOrder.receiptSuccess'));
       setReceiptModalVisible(false);
       setCurrentWorkOrderForReceipt(null);
       setReceiptLine(null);
@@ -947,7 +973,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       if (error?.message && !['no qty', 'no warehouse', 'over qty'].includes(error.message)) {
-        messageApi.error(error.message || '创建委外收货单失败');
+        messageApi.error(error.message || t('app.kuaizhizao.outsourceWorkOrder.createReceiptFailed'));
       }
       throw error;
     }
@@ -966,7 +992,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        详情
+        {t('common.detail')}
       </Button>
     );
     nodes.push(
@@ -981,7 +1007,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           void handleEdit(record);
         }}
       >
-        编辑
+        {t('common.edit')}
       </Button>
     );
     if (record.status === 'released' || record.status === 'in_progress') {
@@ -995,7 +1021,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             void handleIssue(record);
           }}
         >
-          发料
+          {t('app.kuaizhizao.outsourceWorkOrder.actionIssue')}
         </Button>
       );
       nodes.push(
@@ -1008,7 +1034,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             void handleReceipt(record);
           }}
         >
-          收货
+          {t('app.kuaizhizao.outsourceWorkOrder.actionReceipt')}
         </Button>
       );
     }
@@ -1016,196 +1042,190 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
   };
 
   const owoCustomFieldColumns = generateOwoCustomFieldColumns();
-  const columns: ProColumns<OutsourceWorkOrder>[] = [
-    {
-      title: '工单委外编号',
-      dataIndex: 'code',
-      width: 168,
-      fixed: 'left',
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '工单委外名称',
-      dataIndex: 'name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: '产品编号',
-      dataIndex: ['productCode', 'product_code'],
-      width: 128,
-      ellipsis: true,
-      render: (_, record) => {
-        const c = record.productCode || record.product_code;
-        return (
-          <Typography.Text copyable={{ text: String(c ?? '') }} ellipsis>
-            {c ?? '-'}
+  const columns: ProColumns<OutsourceWorkOrder>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colCode'),
+        dataIndex: 'code',
+        width: 168,
+        fixed: 'left',
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+            {r.code ?? '-'}
           </Typography.Text>
-        );
+        ),
       },
-    },
-    {
-      title: '产品名称',
-      dataIndex: ['productName', 'product_name'],
-      width: 200,
-      ellipsis: true,
-      render: (_, record) => record.productName || record.product_name,
-    },
-    {
-      title: '委外数量',
-      dataIndex: 'quantity',
-      width: 100,
-      render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
-    },
-    {
-      title: '委外供应商',
-      dataIndex: ['supplierName', 'supplier_name'],
-      width: 150,
-      ellipsis: true,
-      render: (_, record) => record.supplierName || record.supplier_name,
-    },
-    {
-      title: '委外工序',
-      dataIndex: ['outsourceOperation', 'outsource_operation'],
-      width: 150,
-      ellipsis: true,
-      render: (_, record) => record.outsourceOperation || record.outsource_operation,
-    },
-    {
-      title: '委外单价',
-      dataIndex: ['unitPrice', 'unit_price'],
-      width: 100,
-      render: (_, record) => {
-        const price = record.unitPrice || record.unit_price;
-        return price != null && !(typeof price === 'string' && price === '') ? (
-          <AmountDisplay resource={OO} fieldName="unit_price" value={Number(price)} />
-        ) : (
-          '-'
-        );
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colName'),
+        dataIndex: 'name',
+        width: 200,
+        ellipsis: true,
       },
-    },
-    {
-      title: '委外总金额',
-      dataIndex: ['totalAmount', 'total_amount'],
-      width: 120,
-      render: (_, record) => {
-        const amount = record.totalAmount || record.total_amount;
-        return amount != null && !(typeof amount === 'string' && amount === '') ? (
-          <AmountDisplay resource={OO} fieldName="total_amount" value={Number(amount)} />
-        ) : (
-          '-'
-        );
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colProductCode'),
+        dataIndex: ['productCode', 'product_code'],
+        width: 128,
+        ellipsis: true,
+        render: (_, record) => {
+          const c = record.productCode || record.product_code;
+          return (
+            <Typography.Text copyable={{ text: String(c ?? '') }} ellipsis>
+              {c ?? '-'}
+            </Typography.Text>
+          );
+        },
       },
-    },
-    {
-      title: '优先级',
-      dataIndex: 'priority',
-      width: 100,
-      render: (_, record) => {
-        const priorityMap: Record<string, { color: string; text: string }> = {
-          low: { color: 'default', text: '低' },
-          normal: { color: 'blue', text: '正常' },
-          high: { color: 'orange', text: '高' },
-          urgent: { color: 'red', text: '紧急' },
-        };
-        const priority = priorityMap[record.priority || 'normal'] || { color: 'default', text: record.priority || '正常' };
-        return <Tag color={priority.color}>{priority.text}</Tag>;
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colProductName'),
+        dataIndex: ['productName', 'product_name'],
+        width: 200,
+        ellipsis: true,
+        render: (_, record) => record.productName || record.product_name,
       },
-    },
-    {
-      title: '已发料数量',
-      dataIndex: ['issuedQuantity', 'issued_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.issuedQuantity || record.issued_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colQuantity'),
+        dataIndex: 'quantity',
+        width: 100,
+        render: (_, record) => (record.quantity != null ? Number(record.quantity).toFixed(2) : '-'),
       },
-    },
-    {
-      title: '已收货数量',
-      dataIndex: ['receivedQuantity', 'received_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.receivedQuantity || record.received_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colSupplier'),
+        dataIndex: ['supplierName', 'supplier_name'],
+        width: 150,
+        ellipsis: true,
+        render: (_, record) => record.supplierName || record.supplier_name,
       },
-    },
-    {
-      title: '合格数量',
-      dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
-      width: 100,
-      render: (_, record) => {
-        const qty = record.qualifiedQuantity || record.qualified_quantity;
-        return qty ? Number(qty).toFixed(2) : '0.00';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colOperation'),
+        dataIndex: ['outsourceOperation', 'outsource_operation'],
+        width: 150,
+        ellipsis: true,
+        render: (_, record) => record.outsourceOperation || record.outsource_operation,
       },
-    },
-    {
-      title: '计划开始时间',
-      dataIndex: ['plannedStartDate', 'planned_start_date'],
-      valueType: 'dateTime',
-      width: 160,
-      render: (_, record) => {
-        const date = record.plannedStartDate || record.planned_start_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colUnitPrice'),
+        dataIndex: ['unitPrice', 'unit_price'],
+        width: 100,
+        render: (_, record) => {
+          const price = record.unitPrice || record.unit_price;
+          return price != null && !(typeof price === 'string' && price === '') ? (
+            <AmountDisplay resource={OO} fieldName="unit_price" value={Number(price)} />
+          ) : (
+            '-'
+          );
+        },
       },
-    },
-    {
-      title: '计划结束时间',
-      dataIndex: ['plannedEndDate', 'planned_end_date'],
-      valueType: 'dateTime',
-      width: 160,
-      render: (_, record) => {
-        const date = record.plannedEndDate || record.planned_end_date;
-        return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colTotalAmount'),
+        dataIndex: ['totalAmount', 'total_amount'],
+        width: 120,
+        render: (_, record) => {
+          const amount = record.totalAmount || record.total_amount;
+          return amount != null && !(typeof amount === 'string' && amount === '') ? (
+            <AmountDisplay resource={OO} fieldName="total_amount" value={Number(amount)} />
+          ) : (
+            '-'
+          );
+        },
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: ['updatedAt', 'updated_at'] as any,
-      width: 168,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, record) => {
-        const d = record.updatedAt || (record as any).updated_at;
-        return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPriority'),
+        dataIndex: 'priority',
+        width: 100,
+        render: (_, record) => getOwoPriorityTag(record.priority),
       },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getOutsourceWorkOrderLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colIssuedQty'),
+        dataIndex: ['issuedQuantity', 'issued_quantity'],
+        width: 100,
+        render: (_, record) => {
+          const qty = record.issuedQuantity || record.issued_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
       },
-    },
-    ...owoCustomFieldColumns,
-    {
-      title: '操作',
-      width: 200,
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) =>
-        renderOwoRowActions(renderOwoRowActionNodes(record), `owo-${record.id ?? 'row'}`),
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colReceivedQty'),
+        dataIndex: ['receivedQuantity', 'received_quantity'],
+        width: 100,
+        render: (_, record) => {
+          const qty = record.receivedQuantity || record.received_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colQualifiedQty'),
+        dataIndex: ['qualifiedQuantity', 'qualified_quantity'],
+        width: 100,
+        render: (_, record) => {
+          const qty = record.qualifiedQuantity || record.qualified_quantity;
+          return qty ? Number(qty).toFixed(2) : '0.00';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedStart'),
+        dataIndex: ['plannedStartDate', 'planned_start_date'],
+        valueType: 'dateTime',
+        width: 160,
+        render: (_, record) => {
+          const date = record.plannedStartDate || record.planned_start_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colPlannedEnd'),
+        dataIndex: ['plannedEndDate', 'planned_end_date'],
+        valueType: 'dateTime',
+        width: 160,
+        render: (_, record) => {
+          const date = record.plannedEndDate || record.planned_end_date;
+          return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colUpdatedAt'),
+        dataIndex: ['updatedAt', 'updated_at'] as any,
+        width: 168,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        render: (_, record) => {
+          const d = record.updatedAt || (record as any).updated_at;
+          return d ? dayjs(d).format('YYYY-MM-DD HH:mm:ss') : '-';
+        },
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getOutsourceWorkOrderLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      ...owoCustomFieldColumns,
+      {
+        title: t('common.actions'),
+        width: 200,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) =>
+          renderOwoRowActions(renderOwoRowActionNodes(record), `owo-${record.id ?? 'row'}`),
+      },
+    ],
+    [getOwoPriorityTag, owoCustomFieldColumns, t],
+  );
 
   const handleWorkOrderListRequest = async (params: any) => {
     try {
@@ -1241,7 +1261,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       };
     } catch (error) {
       console.error('获取工单委外列表失败:', error);
-      messageApi.error('获取工单委外列表失败');
+      messageApi.error(t('app.kuaizhizao.outsourceWorkOrder.fetchListFailed'));
       return {
         data: [],
         success: false,
@@ -1250,32 +1270,35 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
     }
   };
 
-  const statCards: StatCard[] = [
-    {
-      title: '工单委外总数',
-      value: localStats.total,
-      valueStyle: { color: token.colorPrimary },
-      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
-    },
-    {
-      title: '草稿',
-      value: localStats.draft,
-      valueStyle: { color: token.colorWarning },
-      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
-    },
-    {
-      title: '执行中',
-      value: localStats.inProgress,
-      valueStyle: { color: token.colorSuccess },
-      backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
-    },
-  ];
+  const statCards: StatCard[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.statTotal'),
+        value: localStats.total,
+        valueStyle: { color: token.colorPrimary },
+        backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_1} color={token.colorPrimary} />,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.statDraft'),
+        value: localStats.draft,
+        valueStyle: { color: token.colorWarning },
+        backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_2} color={token.colorWarning} />,
+      },
+      {
+        title: t('app.kuaizhizao.outsourceWorkOrder.statInProgress'),
+        value: localStats.inProgress,
+        valueStyle: { color: token.colorSuccess },
+        backgroundChart: <SimpleSparkline data={OWO_STAT_SPARK_3} color={token.colorSuccess} />,
+      },
+    ],
+    [localStats.draft, localStats.inProgress, localStats.total, t, token.colorPrimary, token.colorSuccess, token.colorWarning],
+  );
 
   return (
     <>
       <ListPageTemplate statCards={statCards}>
         <UniTable<OutsourceWorkOrder>
-          headerTitle="工单委外"
+          headerTitle={t('app.kuaizhizao.outsourceWorkOrder.title')}
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.outsource-work-orders"
           actionRef={actionRef}
           rowKey="id"
@@ -1286,11 +1309,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           selectedRowKeys={selectedRowKeys}
           onRowSelectionChange={setSelectedRowKeys}
           showCreateButton={true}
-          createButtonText="新建工单委外"
+          createButtonText={t('app.kuaizhizao.outsourceWorkOrder.createButton')}
           onCreate={handleCreate}
           showDeleteButton={true}
           onDelete={handleDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条工单委外吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.outsourceWorkOrder.confirmBatchDelete', { count })}
           scroll={{ x: 2000 }}
           onRow={(record) => ({
             onClick: () => void handleDetail(record),
@@ -1301,7 +1324,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       {/* 创建/编辑工单委外 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑工单委外' : '新建工单委外'}
+        title={isEdit ? t('app.kuaizhizao.outsourceWorkOrder.editTitle') : t('app.kuaizhizao.outsourceWorkOrder.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -1321,7 +1344,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           <CodeField
             pageCode="kuaizhizao-production-outsource-work-order"
             name="code"
-            label="工单委外编号"
+            label={t('app.kuaizhizao.outsourceWorkOrder.fieldCode')}
             autoGenerateOnCreate={true}
             context={{}}
             colProps={{ span: 12 }}
@@ -1329,16 +1352,16 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         )}
         <ProFormText
           name="name"
-          label="工单委外名称"
-          placeholder="请输入工单委外名称（可选）"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldName')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderName')}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="productId"
-          label="产品选择"
-          placeholder="请选择产品（委外件）"
-          rules={[{ required: true, message: '请选择产品' }]}
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldProduct')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderProduct')}
+          rules={[{ required: true, message: t('app.kuaizhizao.outsourceWorkOrder.ruleSelectProduct') }]}
           colProps={{ span: 12 }}
           options={productList.map((product: any) => ({
             label: `${product.code || product.mainCode || ''} - ${product.name || ''}`.trim() || String(product.id),
@@ -1358,9 +1381,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
           selectedMaterialSourceInfo && (
             <div style={{ marginTop: -16, marginBottom: 16, padding: '12px', background: '#f5f5f5', borderRadius: 4, gridColumn: 'span 24' }}>
               <div style={{ marginBottom: 8 }}>
-                <span style={{ fontWeight: 'bold' }}>物料来源类型：</span>
+                <span style={{ fontWeight: 'bold' }}>{t('app.kuaizhizao.outsourceWorkOrder.materialSourceType')}</span>
                 <Tag color="cyan">
-                  {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || '未配置'}
+                  {selectedMaterialSourceInfo.sourceTypeName || selectedMaterialSourceInfo.sourceType || t('app.kuaizhizao.outsourceWorkOrder.materialSourceNotConfigured')}
                 </Tag>
               </div>
               {selectedMaterialSourceInfo.validationErrors && selectedMaterialSourceInfo.validationErrors.length > 0 && (
@@ -1374,25 +1397,25 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
               )}
               {selectedMaterialSourceInfo.canCreateWorkOrder === false && (
                 <div style={{ marginTop: 8, color: '#ff4d4f', fontWeight: 'bold' }}>
-                  该物料来源类型不允许创建工单委外，请选择委外件物料
+                  {t('app.kuaizhizao.outsourceWorkOrder.materialSourceNotAllowedHint')}
                 </div>
               )}
               {selectedMaterialSourceInfo.canCreateWorkOrder && (
                 <div style={{ marginTop: 8, color: '#52c41a' }}>
-                  √ 物料来源验证通过，可以创建工单委外
+                  {t('app.kuaizhizao.outsourceWorkOrder.materialSourceValidationPass')}
                   {selectedMaterialSourceInfo.supplierName && (
                     <span style={{ marginLeft: 16 }}>
-                      默认供应商：{selectedMaterialSourceInfo.supplierName}
+                      {t('app.kuaizhizao.outsourceWorkOrder.defaultSupplier')}{selectedMaterialSourceInfo.supplierName}
                     </span>
                   )}
                   {selectedMaterialSourceInfo.outsourceOperation && (
                     <span style={{ marginLeft: 16 }}>
-                      委外工序：{selectedMaterialSourceInfo.outsourceOperation}
+                      {t('app.kuaizhizao.outsourceWorkOrder.outsourceOperationLabel')}{selectedMaterialSourceInfo.outsourceOperation}
                     </span>
                   )}
                   {selectedMaterialSourceInfo.unitPrice != null && (
                     <span style={{ marginLeft: 16 }}>
-                      委外单价：
+                      {t('app.kuaizhizao.outsourceWorkOrder.fieldUnitPrice')}：
                       <AmountDisplay resource={OO} fieldName="unit_price" value={Number(selectedMaterialSourceInfo.unitPrice)} />
                     </span>
                   )}
@@ -1403,11 +1426,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         }
         <ProFormDigit
           name="quantity"
-          label="计划委外数量"
-          placeholder="请输入计划委外数量"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldQuantity')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderQuantity')}
           min={0}
           precision={2}
-          rules={[{ required: true, message: '请输入计划委外数量' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.outsourceWorkOrder.ruleEnterQuantity') }]}
           fieldProps={{
             onChange: (value: number | null) => {
               if (value !== null && value !== undefined) {
@@ -1424,9 +1447,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
         <ProFormSelect
           name="supplierId"
-          label="委外供应商"
-          placeholder="请选择委外供应商"
-          rules={[{ required: true, message: '请选择委外供应商' }]}
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldSupplier')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderSupplier')}
+          rules={[{ required: true, message: t('app.kuaizhizao.outsourceWorkOrder.ruleSelectSupplier') }]}
           colProps={{ span: 12 }}
           options={supplierList.map((supplier: any) => ({
             label: `${supplier.code ?? supplier.supplier_code ?? ''} - ${supplier.name ?? supplier.supplier_name ?? ''}`.trim() || String(supplier.id),
@@ -1442,8 +1465,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
         <ProFormDigit
           name="unitPrice"
-          label="委外单价"
-          placeholder="请输入委外单价（将从物料配置中自动填充）"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldUnitPrice')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderUnitPrice')}
           min={0}
           precision={2}
           fieldProps={{
@@ -1463,7 +1486,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         <ProFormDigit name="totalAmount" hidden />
         <ProFormDependency name={['quantity', 'unitPrice']}>
           {({ quantity, unitPrice }) => (
-            <Form.Item label="委外总金额" style={{ marginBottom: 24 }}>
+            <Form.Item label={t('app.kuaizhizao.outsourceWorkOrder.fieldTotalAmount')} style={{ marginBottom: 24 }}>
               <AmountDisplay
                 resource={OO}
                 fieldName="total_amount"
@@ -1475,9 +1498,9 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         <ProFormSelect
           name="priority"
-          label="优先级"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldPriority')}
           initialValue="normal"
-          placeholder="请选择优先级"
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPriority')}
           colProps={{ span: 12 }}
           options={priorityOptions}
           fieldProps={{
@@ -1490,15 +1513,15 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         />
         <ProFormDatePicker
           name="plannedStartDate"
-          label="计划开始时间"
-          placeholder="请选择计划开始时间"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldPlannedStart')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPlannedStart')}
           fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="plannedEndDate"
-          label="计划结束时间"
-          placeholder="请选择计划结束时间"
+          label={t('app.kuaizhizao.outsourceWorkOrder.fieldPlannedEnd')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderPlannedEnd')}
           fieldProps={{ style: { width: '100%' } }}
           colProps={{ span: 12 }}
         />
@@ -1513,8 +1536,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注信息"
+          label={t('app.kuaizhizao.common.fieldNotes')}
+          placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
           fieldProps={{
             rows: 4,
           }}
@@ -1523,7 +1546,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
       </FormModalTemplate >
 
       <DetailDrawerTemplate
-        title={`工单委外详情${workOrderDetail?.code ? ` - ${workOrderDetail.code}` : ''}`}
+        title={`${t('app.kuaizhizao.outsourceWorkOrder.detailTitle')}${workOrderDetail?.code ? ` - ${workOrderDetail.code}` : ''}`}
         open={drawerVisible}
         zIndex={outsourceWorkOrderDetailDrawerZIndex}
         onClose={() => {
@@ -1538,7 +1561,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
         customContent={
           workOrderDetail && (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -1560,7 +1583,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getOutsourceWorkOrderLifecycle(workOrderDetail as Record<string, unknown>);
@@ -1598,11 +1621,11 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="工单委外无明细行表" />
+              <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.outsourceWorkOrder.noLineItems')} />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
                 {outsourceWorkOrderTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -1615,7 +1638,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
                   <DocumentTrackingTimelineBody data={outsourceWorkOrderTracking.data} />
                 )}
                 {!outsourceWorkOrderTracking.loading && !outsourceWorkOrderTracking.data && !outsourceWorkOrderTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('components.documentTrackingPanel.noOperations')} />
                 )}
               </DetailDrawerSection>
             </>
@@ -1625,7 +1648,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       {/* 委外发料 Modal */}
       < FormModalTemplate
-        title="委外发料"
+        title={t('app.kuaizhizao.outsourceWorkOrder.issueTitle')}
         open={issueModalVisible}
         onClose={() => {
           setIssueModalVisible(false);
@@ -1649,8 +1672,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             />
             <UniWarehouseSelect
               name="warehouseId"
-              label="出库仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.outsourceWorkOrder.outboundWarehouse')}
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.selectWarehouse')}
               required
               colProps={{ span: 12 }}
               onChange={(val, wh) => issueFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
@@ -1658,8 +1681,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             <ProFormText name="warehouseName" hidden />
             <ProFormTextArea
               name="remarks"
-              label="备注"
-              placeholder="请输入备注信息"
+              label={t('app.kuaizhizao.common.fieldNotes')}
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
               fieldProps={{ rows: 2 }}
               colProps={{ span: 24 }}
             />
@@ -1669,7 +1692,7 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
 
       {/* 委外收货 Modal */}
       < FormModalTemplate
-        title="委外收货"
+        title={t('app.kuaizhizao.outsourceWorkOrder.receiptTitle')}
         open={receiptModalVisible}
         onClose={() => {
           setReceiptModalVisible(false);
@@ -1690,8 +1713,8 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             />
             <UniWarehouseSelect
               name="warehouseId"
-              label="入库仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.outsourceWorkOrder.inboundWarehouse')}
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.selectWarehouse')}
               required
               colProps={{ span: 12 }}
               onChange={(val, wh) => receiptFormRef.current?.setFieldsValue({ warehouseName: wh?.name ?? '' })}
@@ -1699,14 +1722,14 @@ export const OutsourceWorkOrdersTable: React.FC = () => {
             <ProFormText name="warehouseName" hidden />
             <ProFormText
               name="batchNumber"
-              label="批次号"
-              placeholder="请输入批次号（可选）"
+              label={t('app.kuaizhizao.outsourceWorkOrder.batchNumber')}
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderBatchNumber')}
               colProps={{ span: 12 }}
             />
             <ProFormTextArea
               name="remarks"
-              label="备注"
-              placeholder="请输入备注信息"
+              label={t('app.kuaizhizao.common.fieldNotes')}
+              placeholder={t('app.kuaizhizao.outsourceWorkOrder.placeholderRemarks')}
               fieldProps={{ rows: 2 }}
               colProps={{ span: 24 }}
             />

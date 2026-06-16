@@ -16,14 +16,16 @@ import {
   InboundEntryRemarksSection,
   useInboundReceiverSelect,
 } from '../inbound/inboundEntryShared';
+import { useTranslation } from 'react-i18next';
 
 type OutboundEntryOperatorFieldProps = {
   label?: string;
   hook: ReturnType<typeof useInboundReceiverSelect>;
 };
 
-export function OutboundEntryOperatorField({ label = '出库人', hook }: OutboundEntryOperatorFieldProps) {
-  return <InboundEntryReceiverField label={label} hook={hook} />;
+export function OutboundEntryOperatorField({ label, hook }: OutboundEntryOperatorFieldProps) {
+  const { t } = useTranslation();
+  return <InboundEntryReceiverField label={label ?? t('app.kuaizhizao.warehouseOutbound.field.operator')} hook={hook} />;
 }
 
 type OutboundEntryRemarksSectionProps = {
@@ -36,15 +38,16 @@ type OutboundEntryRemarksSectionProps = {
 export function OutboundEntryRemarksSection({
   value,
   onChange,
-  label = '出库备注',
-  placeholder = '出库单备注',
+  label,
+  placeholder,
 }: OutboundEntryRemarksSectionProps) {
+  const { t } = useTranslation();
   return (
     <InboundEntryRemarksSection
       value={value}
       onChange={onChange}
-      label={label}
-      placeholder={placeholder}
+      label={label ?? t('app.kuaizhizao.warehouseOutbound.field.remarks')}
+      placeholder={placeholder ?? t('app.kuaizhizao.warehouseOutbound.field.remarksPlaceholder')}
     />
   );
 }

@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -28,7 +29,7 @@ import {
   type OutsourceReceiptLine,
 } from '../../../components/OutsourceReceiptFormContent';
 import type { InboundOutsourcePullType } from './inboundCreateConfig';
-import { INBOUND_RECEIPT_TYPE_LABELS } from './inboundHubTypes';
+import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import type { InboundReceiptType } from './inboundHubTypes';
 import {
   InboundEntryReceiverField,
@@ -38,12 +39,6 @@ import {
   useInboundReceiverSelect,
 } from './inboundEntryShared';
 import { INBOUND_LIST_PATH, inboundOutsourceEntryPath } from './inboundPaths';
-
-const PULL_TYPE_OPTIONS: { label: string; value: InboundOutsourcePullType }[] = [
-  { label: '委外收货', value: 'outsource_receipt' },
-  { label: '委外退料', value: 'outsource_material_return' },
-  { label: '委外退货', value: 'outsource_product_return' },
-];
 
 const PULL_TYPE_TO_RECEIPT_TYPE: Record<InboundOutsourcePullType, InboundReceiptType> = {
   outsource_receipt: 'outsource_receipt',
@@ -75,6 +70,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const pullType = parsePullType(searchParams.get('pullType'));
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -90,10 +86,20 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
   const [notes, setNotes] = useState('');
 
   const receiptType = PULL_TYPE_TO_RECEIPT_TYPE[pullType];
-  const inboundTypeLabel = INBOUND_RECEIPT_TYPE_LABELS[receiptType];
+  const inboundTypeLabel = inboundReceiptTypeLabel(t, receiptType);
   const pagePath = Number.isFinite(woId) && woId > 0 ? inboundOutsourceEntryPath(woId, pullType) : INBOUND_LIST_PATH;
   const woCode = String(workOrder?.code || woId || '');
   const needsWarehouse = pullType === 'outsource_receipt' || pullType === 'outsource_material_return';
+  const pageTitle = woCode ? `${inboundTypeLabel} — ${woCode}` : inboundTypeLabel;
+
+  const pullTypeOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.receipt'), value: 'outsource_receipt' as const },
+      { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.materialReturn'), value: 'outsource_material_return' as const },
+      { label: t('app.kuaizhizao.warehouseInbound.pull.outsourceType.productReturn'), value: 'outsource_product_return' as const },
+    ],
+    [t],
+  );
 
   const leavePage = useCallback(() => {
     navigate(INBOUND_LIST_PATH);
@@ -101,23 +107,22 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
   useEffect(() => {
     if (!(Number.isFinite(woId) && woId > 0)) {
-      messageApi.error('无效的委外工单');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.outsource.invalid'));
       leavePage();
     }
-  }, [woId, leavePage, messageApi]);
+  }, [woId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = woCode ? `${inboundTypeLabel} — ${woCode}` : inboundTypeLabel;
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [woCode, pagePath, inboundTypeLabel]);
+  }, [pageTitle, pagePath]);
 
   useEffect(() => {
     if (!Number.isFinite(woId) || woId <= 0) return;
@@ -149,7 +154,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           };
           const lines = preview?.lines ?? preview?.data?.lines ?? [];
           if (!lines.length) {
-            messageApi.warning(preview?.message || '该委外工单暂无可退料明细');
+            messageApi.warning(preview?.message || t('app.kuaizhizao.warehouseInbound.entry.outsource.noMaterialReturnLines'));
             leavePage();
             return;
           }
@@ -178,7 +183,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           };
           const lines = preview?.lines ?? preview?.data?.lines ?? [];
           if (!lines.length) {
-            messageApi.warning(preview?.message || '该委外工单暂无可退货明细');
+            messageApi.warning(preview?.message || t('app.kuaizhizao.warehouseInbound.entry.outsource.noProductReturnLines'));
             leavePage();
             return;
           }
@@ -198,20 +203,174 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           setReceiptLine(null);
         }
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载委外工单失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.outsource.loadFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [woId, pullType, leavePage, messageApi]);
+  }, [woId, pullType, leavePage, messageApi, t]);
 
   const receiptTableData = useMemo(() => (receiptLine ? [receiptLine] : []), [receiptLine]);
+
+  const receiptColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseInbound.col.productCode'), dataIndex: 'productCode', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.productName'), dataIndex: 'productName', width: 160, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.outsourceQty'), dataIndex: 'orderedQuantity', width: 100, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.receivedOutsource'), dataIndex: 'receivedQuantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.pendingReceipt'), dataIndex: 'pendingQuantity', width: 90, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.thisReceiptOutsource'),
+        width: 120,
+        align: 'right' as const,
+        render: (_: unknown, record: OutsourceReceiptLine) => (
+          <InputNumber
+            min={0}
+            max={record.pendingQuantity > 0 ? record.pendingQuantity : undefined}
+            precision={2}
+            value={record.receiptQuantity}
+            disabled={record.pendingQuantity <= 0}
+            style={{ width: '100%' }}
+            onChange={(v) => {
+              const qty = Number(v ?? 0);
+              setReceiptLine((prev) => {
+                if (!prev) return prev;
+                const unqualified = Number(prev.unqualifiedQuantity || 0);
+                return {
+                  ...prev,
+                  receiptQuantity: qty,
+                  qualifiedQuantity: Math.max(0, qty - unqualified),
+                };
+              });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.qualified'),
+        width: 110,
+        align: 'right' as const,
+        render: (_: unknown, record: OutsourceReceiptLine) => (
+          <InputNumber
+            min={0}
+            max={record.receiptQuantity}
+            precision={2}
+            value={record.qualifiedQuantity}
+            style={{ width: '100%' }}
+            onChange={(v) => {
+              const qualified = Number(v ?? 0);
+              setReceiptLine((prev) => {
+                if (!prev) return prev;
+                const unqualified = Number(prev.unqualifiedQuantity || 0);
+                return {
+                  ...prev,
+                  qualifiedQuantity: qualified,
+                  receiptQuantity: qualified + unqualified,
+                };
+              });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.unqualified'),
+        width: 110,
+        align: 'right' as const,
+        render: (_: unknown, record: OutsourceReceiptLine) => (
+          <InputNumber
+            min={0}
+            max={record.receiptQuantity}
+            precision={2}
+            value={record.unqualifiedQuantity}
+            style={{ width: '100%' }}
+            onChange={(v) => {
+              const unqualified = Number(v ?? 0);
+              setReceiptLine((prev) => {
+                if (!prev) return prev;
+                const qualified = Number(prev.qualifiedQuantity || 0);
+                return {
+                  ...prev,
+                  unqualifiedQuantity: unqualified,
+                  receiptQuantity: qualified + unqualified,
+                };
+              });
+            }}
+          />
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const materialReturnColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
+        width: 130,
+        align: 'right' as const,
+        render: (_: unknown, record: PreviewLine) => (
+          <InputNumber
+            min={0}
+            max={record.returnable_quantity}
+            precision={4}
+            value={record.return_quantity}
+            onChange={(v) => {
+              const qty = Number(v) || 0;
+              setPreviewLines((prev) =>
+                prev.map((row) =>
+                  row.key === record.key ? { ...row, return_quantity: qty } : row,
+                ),
+              );
+            }}
+            style={{ width: 110 }}
+          />
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const productReturnColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseInbound.col.receiptDoc'), dataIndex: 'receipt_id', width: 100 },
+      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'unit', width: 70, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.returnableQty'), dataIndex: 'returnable_quantity', width: 100, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.thisSalesReturn'),
+        width: 130,
+        align: 'right' as const,
+        render: (_: unknown, record: PreviewLine) => (
+          <InputNumber
+            min={0}
+            max={record.returnable_quantity}
+            precision={4}
+            value={record.return_quantity}
+            onChange={(v) => {
+              const qty = Number(v) || 0;
+              setPreviewLines((prev) =>
+                prev.map((row) =>
+                  row.key === record.key ? { ...row, return_quantity: qty } : row,
+                ),
+              );
+            }}
+            style={{ width: 110 }}
+          />
+        ),
+      },
+    ],
+    [t],
+  );
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!workOrder) return;
     if (needsWarehouse && (!warehouseId || !(warehouseId > 0))) {
-      messageApi.warning('请选择仓库');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((w) => w.value === warehouseId);
@@ -222,7 +381,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
       if (pullType === 'outsource_receipt') {
         if (!receiptLine || receiptLine.receiptQuantity <= 0) {
-          messageApi.warning('该委外工单暂无可收货数量');
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.noReceiptQty'));
           return;
         }
         const created = (await outsourceMaterialReceiptApi.create({
@@ -238,13 +397,23 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
         })) as { id?: number; receipt_code?: string };
         if (created?.id != null) createdIds.push(Number(created.id));
         if (mode === 'draft') {
-          messageApi.success(`已生成委外收货草稿${created.receipt_code ? `：${created.receipt_code}` : ''}`);
+          messageApi.success(
+            t('app.kuaizhizao.warehouseInbound.entry.outsource.receiptDraftCreated', {
+              code: created.receipt_code
+                ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.receipt_code })
+                : '',
+            }),
+          );
         }
       } else if (pullType === 'outsource_material_return') {
         for (const line of previewLines) {
           if (!line.issue_id || line.return_quantity <= 0) continue;
           if (line.return_quantity > line.returnable_quantity) {
-            messageApi.error(`物料 ${line.material_code || line.material_name} 的退料数量不能超过可退数量`);
+            messageApi.error(
+              t('app.kuaizhizao.warehouseInbound.entry.outsource.materialReturnQtyExceeds', {
+                material: line.material_code || line.material_name,
+              }),
+            );
             return;
           }
           const created = (await outsourceMaterialReturnApi.create({
@@ -263,17 +432,17 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           if (created?.id != null) createdIds.push(Number(created.id));
         }
         if (!createdIds.length) {
-          messageApi.warning('请至少填写一行退料数量');
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.fillMaterialReturnQty'));
           return;
         }
         if (mode === 'draft') {
-          messageApi.success(`已生成 ${createdIds.length} 张委外退料草稿`);
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.entry.outsource.materialReturnDraftsCreated', { count: createdIds.length }));
         }
       } else {
         for (const line of previewLines) {
           if (!line.receipt_id || line.return_quantity <= 0) continue;
           if (line.return_quantity > line.returnable_quantity) {
-            messageApi.error('退货数量不能超过可退数量');
+            messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.outsource.productReturnQtyExceeds'));
             return;
           }
           const created = (await outsourceProductReturnApi.create({
@@ -287,11 +456,11 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
           if (created?.id != null) createdIds.push(Number(created.id));
         }
         if (!createdIds.length) {
-          messageApi.warning('请至少填写一行退货数量');
+          messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.outsource.fillProductReturnQty'));
           return;
         }
         if (mode === 'draft') {
-          messageApi.success(`已生成 ${createdIds.length} 张委外退货草稿`);
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.entry.outsource.productReturnDraftsCreated', { count: createdIds.length }));
         }
       }
 
@@ -307,14 +476,14 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
             },
           });
         } else {
-          messageApi.success(`已生成 ${createdIds.length} 张草稿，请在列表中分别确认`);
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.entry.outsource.multiDraftConfirmInList', { count: createdIds.length }));
           leavePage();
         }
       } else {
         leavePage();
       }
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || '保存失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -325,20 +494,20 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {woCode ? `${inboundTypeLabel} — ${woCode}` : inboundTypeLabel}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading} onClick={() => void submit('draft')}>
-              生成草稿
+              {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
             <Button type="primary" loading={submitting} disabled={loading} onClick={() => void submit('confirm')}>
-              确认入库
+              {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           </Space>
         </>
@@ -351,53 +520,53 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
               <Form layout="vertical" requiredMark={false}>
                 <Row gutter={16}>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="入库类型">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.inboundType')}>
                       <ReadOnlyFormValue value={inboundTypeLabel} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="委外工单号">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.outsourceWoCode')}>
                       <ReadOnlyFormValue value={woCode} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="产品">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.product')}>
                       <ReadOnlyFormValue
                         value={workOrder.product_name ? String(workOrder.product_name) : undefined}
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="委外供应商">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.outsourceSupplier')}>
                       <ReadOnlyFormValue
                         value={workOrder.supplier_name ? String(workOrder.supplier_name) : undefined}
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单状态">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderStatus')}>
                       <ReadOnlyFormValue value={workOrder.status ? String(workOrder.status) : undefined} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="计划数量">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.plannedQty')}>
                       <ReadOnlyFormValue
                         value={workOrder.quantity != null ? String(workOrder.quantity) : undefined}
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="业务类型">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.businessType')}>
                       <Select
                         style={{ width: '100%' }}
                         value={pullType}
-                        options={PULL_TYPE_OPTIONS}
+                        options={pullTypeOptions}
                         onChange={(v) => navigate(inboundOutsourceEntryPath(woId, v))}
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="入库日期">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.receiptDate')}>
                       <DatePicker
                         style={{ width: '100%' }}
                         value={receiptTime}
@@ -410,10 +579,17 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                   </Col>
                   {needsWarehouse && (
                     <Col xs={24} sm={12} lg={6}>
-                      <Form.Item label={pullType === 'outsource_material_return' ? '退料入库仓库' : '入库仓库'} required>
+                      <Form.Item
+                        label={
+                          pullType === 'outsource_material_return'
+                            ? t('app.kuaizhizao.warehouseInbound.field.returnInboundWarehouse')
+                            : t('app.kuaizhizao.warehouseInbound.field.warehouse')
+                        }
+                        required
+                      >
                         <Select
                           style={{ width: '100%' }}
-                          placeholder="请选择仓库"
+                          placeholder={t('app.kuaizhizao.warehouseInbound.entry.outsource.selectWarehouse')}
                           showSearch
                           optionFilterProp="label"
                           value={warehouseId}
@@ -429,7 +605,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
             {pullType === 'outsource_receipt' && receiptLine && (
               <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
-                <UniTableDetailHeader title="收货明细" required />
+                <UniTableDetailHeader title={t('app.kuaizhizao.warehouseInbound.section.receiptDetails')} required />
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <div className="uni-table-detail-body">
                   <div className="uni-table-detail-scroll">
@@ -440,93 +616,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1000 }}
                       dataSource={receiptTableData}
-                      columns={[
-                        { title: '产品编码', dataIndex: 'productCode', width: 120, ellipsis: true },
-                        { title: '产品名称', dataIndex: 'productName', width: 160, ellipsis: true },
-                        { title: '单位', dataIndex: 'unit', width: 70, align: 'center' },
-                        { title: '委外数量', dataIndex: 'orderedQuantity', width: 100, align: 'right' },
-                        { title: '已收', dataIndex: 'receivedQuantity', width: 90, align: 'right' },
-                        { title: '待收', dataIndex: 'pendingQuantity', width: 90, align: 'right' },
-                        {
-                          title: '本次收货',
-                          width: 120,
-                          align: 'right',
-                          render: (_: unknown, record: OutsourceReceiptLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.pendingQuantity > 0 ? record.pendingQuantity : undefined}
-                              precision={2}
-                              value={record.receiptQuantity}
-                              disabled={record.pendingQuantity <= 0}
-                              style={{ width: '100%' }}
-                              onChange={(v) => {
-                                const qty = Number(v ?? 0);
-                                setReceiptLine((prev) => {
-                                  if (!prev) return prev;
-                                  const unqualified = Number(prev.unqualifiedQuantity || 0);
-                                  return {
-                                    ...prev,
-                                    receiptQuantity: qty,
-                                    qualifiedQuantity: Math.max(0, qty - unqualified),
-                                  };
-                                });
-                              }}
-                            />
-                          ),
-                        },
-                        {
-                          title: '合格',
-                          width: 110,
-                          align: 'right',
-                          render: (_: unknown, record: OutsourceReceiptLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.receiptQuantity}
-                              precision={2}
-                              value={record.qualifiedQuantity}
-                              style={{ width: '100%' }}
-                              onChange={(v) => {
-                                const qualified = Number(v ?? 0);
-                                setReceiptLine((prev) => {
-                                  if (!prev) return prev;
-                                  const unqualified = Number(prev.unqualifiedQuantity || 0);
-                                  return {
-                                    ...prev,
-                                    qualifiedQuantity: qualified,
-                                    receiptQuantity: qualified + unqualified,
-                                  };
-                                });
-                              }}
-                            />
-                          ),
-                        },
-                        {
-                          title: '不合格',
-                          width: 110,
-                          align: 'right',
-                          render: (_: unknown, record: OutsourceReceiptLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.receiptQuantity}
-                              precision={2}
-                              value={record.unqualifiedQuantity}
-                              style={{ width: '100%' }}
-                              onChange={(v) => {
-                                const unqualified = Number(v ?? 0);
-                                setReceiptLine((prev) => {
-                                  if (!prev) return prev;
-                                  const qualified = Number(prev.qualifiedQuantity || 0);
-                                  return {
-                                    ...prev,
-                                    unqualifiedQuantity: unqualified,
-                                    receiptQuantity: qualified + unqualified,
-                                  };
-                                });
-                              }}
-                            />
-                          ),
-                        },
-                      ]}
+                      columns={receiptColumns}
                     />
                   </div>
                 </div>
@@ -535,7 +625,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
             {pullType === 'outsource_material_return' && previewLines.length > 0 && (
               <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
-                <UniTableDetailHeader title="退料明细" required />
+                <UniTableDetailHeader title={t('app.kuaizhizao.warehouseInbound.section.returnDetails')} required />
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <div className="uni-table-detail-body">
                   <div className="uni-table-detail-scroll">
@@ -546,34 +636,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 900 }}
                       dataSource={previewLines}
-                      columns={[
-                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
-                        { title: '单位', dataIndex: 'unit', width: 70, align: 'center' },
-                        { title: '可退数量', dataIndex: 'returnable_quantity', width: 100, align: 'right' },
-                        {
-                          title: '本次退料',
-                          width: 130,
-                          align: 'right',
-                          render: (_: unknown, record: PreviewLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.returnable_quantity}
-                              precision={4}
-                              value={record.return_quantity}
-                              onChange={(v) => {
-                                const qty = Number(v) || 0;
-                                setPreviewLines((prev) =>
-                                  prev.map((row) =>
-                                    row.key === record.key ? { ...row, return_quantity: qty } : row,
-                                  ),
-                                );
-                              }}
-                              style={{ width: 110 }}
-                            />
-                          ),
-                        },
-                      ]}
+                      columns={materialReturnColumns}
                     />
                   </div>
                 </div>
@@ -582,7 +645,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
 
             {pullType === 'outsource_product_return' && previewLines.length > 0 && (
               <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
-                <UniTableDetailHeader title="退货明细" required />
+                <UniTableDetailHeader title={t('app.kuaizhizao.warehouseInbound.section.returnDetailsSales')} required />
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <div className="uni-table-detail-body">
                   <div className="uni-table-detail-scroll">
@@ -593,33 +656,7 @@ const InboundOutsourcePullEntryPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 700 }}
                       dataSource={previewLines}
-                      columns={[
-                        { title: '收货单', dataIndex: 'receipt_id', width: 100 },
-                        { title: '单位', dataIndex: 'unit', width: 70, align: 'center' },
-                        { title: '可退数量', dataIndex: 'returnable_quantity', width: 100, align: 'right' },
-                        {
-                          title: '本次退货',
-                          width: 130,
-                          align: 'right',
-                          render: (_: unknown, record: PreviewLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.returnable_quantity}
-                              precision={4}
-                              value={record.return_quantity}
-                              onChange={(v) => {
-                                const qty = Number(v) || 0;
-                                setPreviewLines((prev) =>
-                                  prev.map((row) =>
-                                    row.key === record.key ? { ...row, return_quantity: qty } : row,
-                                  ),
-                                );
-                              }}
-                              style={{ width: 110 }}
-                            />
-                          ),
-                        },
-                      ]}
+                      columns={productReturnColumns}
                     />
                   </div>
                 </div>

@@ -1196,6 +1196,34 @@ code {
     transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Slider 拖拽提示：固定小圆角与 min-width，避免跟随主题大 borderRadius 变形（antd5 为 -container） */
+.ant-slider-tooltip.ant-tooltip {
+  min-width: auto !important;
+}
+.ant-slider-tooltip.ant-tooltip .ant-tooltip-container,
+.ant-slider-tooltip.ant-tooltip .ant-tooltip-inner {
+  border-radius: 4px !important;
+  min-width: auto !important;
+  min-height: auto !important;
+  padding: 2px 6px !important;
+  line-height: 1.4;
+  text-align: center;
+}
+.ant-slider-tooltip.ant-tooltip .ant-tooltip-arrow {
+  width: 8px !important;
+  height: 8px !important;
+}
+/* placement-top 时 antd 对箭头 rotate(180deg)，三角需先朝上，旋转后才朝下指向滑块 */
+.ant-slider-tooltip.ant-tooltip .ant-tooltip-arrow::before {
+  width: 8px !important;
+  height: 4px !important;
+  clip-path: polygon(50% 0%, 0 100%, 100% 100%) !important;
+  background: var(--antd-arrow-background-color, rgba(0, 0, 0, 0.85)) !important;
+}
+.ant-slider-tooltip.ant-tooltip .ant-tooltip-arrow::after {
+  display: none !important;
+}
+
 .ant-modal .ant-modal-close .ant-modal-close-x {
   width: 28px;
   height: 28px;

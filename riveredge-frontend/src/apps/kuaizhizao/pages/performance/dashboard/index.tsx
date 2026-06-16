@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useRequest } from 'ahooks';
 import {
   TeamOutlined,
@@ -21,6 +22,7 @@ import {
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 const PerformanceCenterDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: summary, loading } = useRequest(
     mesDashboardService.getPerformanceSummary,
@@ -32,42 +34,72 @@ const PerformanceCenterDashboard: React.FC = () => {
     () => [
       {
         key: 'pending',
-        title: '待确认绩效',
+        title: t('app.kuaizhizao.performance.dashboard.kpi.pending'),
         value: s?.pending_summaries ?? 0,
-        subtitle: '已计算待确认',
+        subtitle: t('app.kuaizhizao.performance.dashboard.kpi.pendingSubtitle'),
         icon: <FileTextOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         onClick: () => navigate('/apps/kuaizhizao/performance/summaries'),
       },
       {
         key: 'confirmed',
-        title: '已确认汇总',
+        title: t('app.kuaizhizao.performance.dashboard.kpi.confirmed'),
         value: s?.confirmed_summaries ?? 0,
-        subtitle: '可用于薪资结算',
+        subtitle: t('app.kuaizhizao.performance.dashboard.kpi.confirmedSubtitle'),
         icon: <TrophyOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
         onClick: () => navigate('/apps/kuaizhizao/performance/summaries'),
       },
       {
         key: 'skills',
-        title: '技能配置',
+        title: t('app.kuaizhizao.performance.dashboard.kpi.skills'),
         value: s?.skill_records ?? 0,
-        subtitle: '技能种类数',
+        subtitle: t('app.kuaizhizao.performance.dashboard.kpi.skillsSubtitle'),
         icon: <TeamOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
         onClick: () => navigate('/apps/kuaizhizao/performance/skills'),
       },
     ],
-    [navigate, s],
+    [navigate, s, t],
   );
 
-  const shortcuts: ModuleShortcutDef[] = [
-    { key: 'summary', title: '绩效汇总', icon: <BarChartOutlined style={{ fontSize: 22, color: '#1890ff' }} />, path: '/apps/kuaizhizao/performance/summaries' },
-    { key: 'holiday', title: '节假日', icon: <CalendarOutlined style={{ fontSize: 22, color: '#fa8c16' }} />, path: '/apps/kuaizhizao/performance/holidays' },
-    { key: 'shift-rosters', title: '排班管理', icon: <CalendarOutlined style={{ fontSize: 22, color: '#13c2c2' }} />, path: '/apps/kuaizhizao/performance/shift-rosters' },
-    { key: 'shifts', title: '班次定义', icon: <TeamOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/performance/shifts' },
-    { key: 'employee', title: '员工配置', icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />, path: '/apps/kuaizhizao/performance/employee-configs' },
-  ];
+  const shortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'summary',
+        title: t('app.kuaizhizao.menu.performance-management.summaries'),
+        icon: <BarChartOutlined style={{ fontSize: 22, color: '#1890ff' }} />,
+        path: '/apps/kuaizhizao/performance/summaries',
+      },
+      {
+        key: 'holiday',
+        title: t('app.kuaizhizao.menu.performance-management.holidays'),
+        icon: <CalendarOutlined style={{ fontSize: 22, color: '#fa8c16' }} />,
+        path: '/apps/kuaizhizao/performance/holidays',
+      },
+      {
+        key: 'shift-rosters',
+        title: t('app.kuaizhizao.menu.performance-management.shift-rosters'),
+        icon: <CalendarOutlined style={{ fontSize: 22, color: '#13c2c2' }} />,
+        path: '/apps/kuaizhizao/performance/shift-rosters',
+      },
+      {
+        key: 'shifts',
+        title: t('app.kuaizhizao.menu.performance-management.shifts'),
+        icon: <TeamOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaizhizao/performance/shifts',
+      },
+      {
+        key: 'employee',
+        title: t('app.kuaizhizao.menu.performance-management.employee-configs'),
+        icon: <UserOutlined style={{ fontSize: 22, color: '#722ed1' }} />,
+        path: '/apps/kuaizhizao/performance/employee-configs',
+      },
+    ],
+    [t],
+  );
+
+  const pendingCount = s?.pending_summaries ?? 0;
 
   return (
     <ModuleCenterLayout
@@ -75,15 +107,15 @@ const PerformanceCenterDashboard: React.FC = () => {
       kpiRow={<ModuleKpiRow items={kpis} />}
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
-        <ModuleActionPanel title="绩效待办" lg={24}>
+        <ModuleActionPanel title={t('app.kuaizhizao.performance.dashboard.todoPanel')} lg={24}>
           <ModuleTodoList
             items={
-              (s?.pending_summaries ?? 0) > 0
+              pendingCount > 0
                 ? [
                     {
                       id: 'perf-pending',
                       type: 'performance',
-                      title: `${s?.pending_summaries} 条绩效汇总待确认`,
+                      title: t('app.kuaizhizao.performance.dashboard.todoTitle', { count: pendingCount }),
                       priority: 'medium',
                       status: 'pending',
                       link: '/apps/kuaizhizao/performance/summaries',
@@ -92,7 +124,7 @@ const PerformanceCenterDashboard: React.FC = () => {
                   ]
                 : []
             }
-            emptyText="暂无绩效待办"
+            emptyText={t('app.kuaizhizao.performance.common.empty.noTodos')}
           />
         </ModuleActionPanel>
       }

@@ -1,8 +1,8 @@
 import { rowActionKind } from '../../../../../components/uni-action';
 import React, { useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Button, Empty, Modal, Space, Tag } from 'antd';
+import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
+import { App, Button, Empty, Modal, Space } from 'antd';
 import {
   renderUnqualifiedQuantity,
   stackedPrimarySecondaryColumn,
@@ -11,11 +11,16 @@ import { MaterialStackedCell, UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS } from '
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { DefectLedgerItem, qualityImprovementApi } from '../../../services/quality-improvement';
-import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import PermissionGuard from '../../../../../components/permission/PermissionGuard';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useTranslation } from 'react-i18next';
+import {
+  getQualityDispositionValueEnum,
+  getQualityNcLedgerStatusValueEnum,
+  renderNcLedgerStatusTag,
+} from '../components/qualityMeta';
 
 const NC_RESOURCE = 'kuaizhizao:quality-management-nonconforming-ledger';
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
@@ -43,9 +48,9 @@ function sourceInspectionLabel(row: DefectLedgerItem): string | null {
 }
 
 const NonconformingLedgerPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
-  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>(null);
   const [searchParams] = useSearchParams();
@@ -67,130 +72,128 @@ const NonconformingLedgerPage: React.FC = () => {
 
   const handleStart8d = (row: DefectLedgerItem) => {
     Modal.confirm({
-      title: '发起 8D 报告',
-      content: `从不合格品台账 ${row.code} 创建 8D 报告？`,
+      title: t('app.kuaizhizao.quality.nc.modal.start8dTitle'),
+      content: t('app.kuaizhizao.quality.nc.modal.start8dContent', { code: row.code }),
       onOk: async () => {
         const report = await qualityImprovementApi.nonconformingLedger.start8d(
           row.id,
           `8D - ${row.product_name || row.code}`,
         );
-        messageApi.success(`8D 报告已创建：${report.report_code}`);
+        messageApi.success(t('app.kuaizhizao.quality.nc.messages.start8dSuccess', { code: report.report_code }));
         navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
       },
     });
   };
 
-  const columns: ProColumns<DefectLedgerItem>[] = [
-    { title: '台账编号', dataIndex: 'code', width: 150 },
-    {
-      title: '源检验单',
-      width: 150,
-      render: (_, row) => {
-        const label = sourceInspectionLabel(row);
-        const path = sourceInspectionPath(row);
-        if (!label || !path) return '-';
-        return (
-          <Button type="link" size="small" onClick={() => navigate(path)}>
-            {label}
-          </Button>
-        );
-      },
-    },
-    stackedPrimarySecondaryColumn<DefectLedgerItem>(
-      '工序 / 工单',
-      'operationWorkOrder',
-      ['operation_name', 'operationName'],
-      ['work_order_code', 'workOrderCode'],
-      { dataIndex: 'operation_name' },
-    ),
-    { title: '工单', dataIndex: 'work_order_code', hideInTable: true },
-    { title: '工序', dataIndex: 'operation_name', hideInTable: true },
-    {
-      title: '物料',
-      key: 'product',
-      dataIndex: 'product_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, row) => (
-        <MaterialStackedCell
-          material_name={row.product_name}
-          material_code={row.product_code ?? row.material_code}
-        />
-      ),
-    },
-    { title: '物料', dataIndex: 'product_name', hideInTable: true },
-    {
-      title: '不合格数量',
-      dataIndex: 'defect_quantity',
-      width: 100,
-      align: 'right',
-      render: (_, row) => renderUnqualifiedQuantity(row.defect_quantity),
-    },
-    { title: '缺陷类型', dataIndex: 'defect_type', width: 120 },
-    { title: '原因', dataIndex: 'defect_reason', width: 240, ellipsis: true },
-    {
-      title: '处置方式',
-      dataIndex: 'disposition',
-      width: 120,
-      valueEnum: {
-        quarantine: '隔离',
-        rework: '返工',
-        scrap: '报废',
-        accept: '让步接收',
-        return: '退货',
-        other: '其他',
-      },
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (_, row) => <Tag color={row.status === 'processed' ? 'success' : 'processing'}>{row.status || '-'}</Tag>,
-    },
-    { title: '创建时间', dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 180,
-      render: (_, row) => (
-        <Space>
-          {canUpdate && (
-            <Button{...rowActionKind('execute')} key="execute"
-              type="link"
-              onClick={() => {
-                setCurrentRow(row);
-                setOpen(true);
-                setTimeout(
-                  () =>
-                    formRef.current?.setFieldsValue({
-                      disposition: row.disposition,
-                      status: row.status,
-                      attachments: mapAttachmentsToUploadList(row.attachments),
-                    }),
-                  50,
-                );
-              }}
-            >
-              更新处置
+  const columns: ProColumns<DefectLedgerItem>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.quality.nc.columns.ledgerCode'), dataIndex: 'code', width: 150 },
+      {
+        title: t('app.kuaizhizao.quality.nc.columns.sourceInspection'),
+        width: 150,
+        render: (_, row) => {
+          const label = sourceInspectionLabel(row);
+          const path = sourceInspectionPath(row);
+          if (!label || !path) return '-';
+          return (
+            <Button type="link" size="small" onClick={() => navigate(path)}>
+              {label}
             </Button>
-          )}
-          {canStart8d && (
-            <Button key="execute" {...rowActionKind('execute')} onClick={() => handleStart8d(row)}>
-              发起 8D
-            </Button>
-          )}
-        </Space>
+          );
+        },
+      },
+      stackedPrimarySecondaryColumn<DefectLedgerItem>(
+        t('app.kuaizhizao.quality.nc.columns.operationWorkOrder'),
+        'operationWorkOrder',
+        ['operation_name', 'operationName'],
+        ['work_order_code', 'workOrderCode'],
+        { dataIndex: 'operation_name' },
       ),
-    },
-  ];
+      { title: t('app.kuaizhizao.quality.common.columns.workOrderCode'), dataIndex: 'work_order_code', hideInTable: true },
+      { title: t('app.kuaizhizao.quality.common.columns.operationName'), dataIndex: 'operation_name', hideInTable: true },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.material'),
+        key: 'product',
+        dataIndex: 'product_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, row) => (
+          <MaterialStackedCell
+            material_name={row.product_name}
+            material_code={row.product_code ?? row.material_code}
+          />
+        ),
+      },
+      { title: t('app.kuaizhizao.quality.common.columns.materialName'), dataIndex: 'product_name', hideInTable: true },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.unqualifiedQty'),
+        dataIndex: 'defect_quantity',
+        width: 100,
+        align: 'right',
+        render: (_, row) => renderUnqualifiedQuantity(row.defect_quantity),
+      },
+      { title: t('app.kuaizhizao.quality.nc.columns.defectType'), dataIndex: 'defect_type', width: 120 },
+      { title: t('app.kuaizhizao.quality.nc.columns.defectReason'), dataIndex: 'defect_reason', width: 240, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.quality.common.form.disposition'),
+        dataIndex: 'disposition',
+        width: 120,
+        valueEnum: getQualityDispositionValueEnum(t),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (_, row) => renderNcLedgerStatusTag(t, row.status),
+      },
+      { title: t('app.kuaizhizao.quality.common.columns.createdAt'), dataIndex: 'created_at', valueType: 'dateTime', width: 180 },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        valueType: 'option',
+        width: 180,
+        render: (_, row) => (
+          <Space>
+            {canUpdate && (
+              <Button
+                {...rowActionKind('execute')}
+                key="execute"
+                type="link"
+                onClick={() => {
+                  setCurrentRow(row);
+                  setOpen(true);
+                  setTimeout(
+                    () =>
+                      formRef.current?.setFieldsValue({
+                        disposition: row.disposition,
+                        status: row.status,
+                        attachments: mapAttachmentsToUploadList(row.attachments),
+                      }),
+                    50,
+                  );
+                }}
+              >
+                {t('app.kuaizhizao.quality.nc.actions.updateDisposition')}
+              </Button>
+            )}
+            {canStart8d && (
+              <Button key="start8d" {...rowActionKind('execute')} onClick={() => handleStart8d(row)}>
+                {t('app.kuaizhizao.quality.nc.actions.start8d')}
+              </Button>
+            )}
+          </Space>
+        ),
+      },
+    ],
+    [t, canUpdate, canStart8d, navigate],
+  );
 
   return (
     <PermissionGuard
       permission="kuaizhizao:quality-management-nonconforming-ledger:read"
-      fallback={<Empty description="暂无台账查看权限" style={{ marginTop: 120 }} />}
+      fallback={<Empty description={t('app.kuaizhizao.quality.nc.permission.noReadAccess')} style={{ marginTop: 120 }} />}
     >
       <ListPageTemplate>
         <UniTable<DefectLedgerItem>
-          headerTitle="不合格品台账"
+          headerTitle={t('app.kuaizhizao.quality.nc.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           enableRowSelection
@@ -227,7 +230,7 @@ const NonconformingLedgerPage: React.FC = () => {
         />
 
         <FormModalTemplate
-          title={`更新处置 - ${currentRow?.code || ''}`}
+          title={t('app.kuaizhizao.quality.nc.modal.updateDispositionTitle', { code: currentRow?.code || '' })}
           open={open}
           width={MODAL_CONFIG.SMALL_WIDTH}
           formRef={formRef}
@@ -239,14 +242,14 @@ const NonconformingLedgerPage: React.FC = () => {
           onFinish={async (values) => {
             if (!currentRow?.id) return;
             if (!canUpdate) {
-              messageApi.error('无处置更新权限');
+              messageApi.error(t('app.kuaizhizao.quality.nc.messages.noUpdatePermission'));
               return false;
             }
             await qualityImprovementApi.nonconformingLedger.updateDisposition(currentRow.id, {
               ...values,
               attachments: normalizeDocumentAttachments(values.attachments),
             });
-            messageApi.success('台账处置已更新');
+            messageApi.success(t('app.kuaizhizao.quality.nc.messages.updateDispositionSuccess'));
             setOpen(false);
             setCurrentRow(null);
             actionRef.current?.reload();
@@ -254,23 +257,16 @@ const NonconformingLedgerPage: React.FC = () => {
         >
           <ProFormSelect
             name="disposition"
-            label="处置方式"
-            valueEnum={{
-              quarantine: '隔离',
-              rework: '返工',
-              scrap: '报废',
-              accept: '让步接收',
-              return: '退货',
-              other: '其他',
-            }}
+            label={t('app.kuaizhizao.quality.common.form.disposition')}
+            valueEnum={getQualityDispositionValueEnum(t)}
             rules={[{ required: true }]}
           />
           <ProFormSelect
             name="status"
-            label="台账状态"
-            valueEnum={{ draft: '草稿', processed: '已处理', cancelled: '已取消' }}
+            label={t('app.kuaizhizao.quality.nc.form.ledgerStatus')}
+            valueEnum={getQualityNcLedgerStatusValueEnum(t)}
           />
-          <ProFormTextArea name="remarks" label="备注" />
+          <ProFormTextArea name="remarks" label={t('app.kuaizhizao.quality.common.form.remarks')} />
           <DocumentAttachmentsField category="nonconforming_ledger_attachments" />
         </FormModalTemplate>
       </ListPageTemplate>

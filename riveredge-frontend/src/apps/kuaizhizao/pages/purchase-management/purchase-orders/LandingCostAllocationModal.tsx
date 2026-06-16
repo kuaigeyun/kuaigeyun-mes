@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Modal, Form, Input, Button, Space, Select, InputNumber, Divider, message } from 'antd';
 import { PlusOutlined, MinusCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { allocatePurchaseCosts } from '../../../services/purchase';
 
 interface LandingCostAllocationModalProps {
@@ -22,6 +23,7 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
   orderId,
   orderCode,
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
@@ -32,11 +34,11 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
         fee_items: values.fee_items,
         method: values.method,
       });
-      message.success('费用分摊成功，已更新明细落地成本');
+      message.success(t('app.kuaizhizao.purchaseOrder.landingCost.success'));
       onSuccess();
     } catch (error) {
       console.error('Allocation failed:', error);
-      message.error('费用分摊失败，请检查网络或后端日志');
+      message.error(t('app.kuaizhizao.purchaseOrder.landingCost.failed'));
     } finally {
       setLoading(false);
     }
@@ -44,14 +46,14 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
 
   return (
     <Modal
-      title={`采购杂费分摊 - ${orderCode}`}
+      title={t('app.kuaizhizao.purchaseOrder.landingCost.title', { code: orderCode })}
       open={visible}
       onCancel={onCancel}
       onOk={() => form.submit()}
       confirmLoading={loading}
       width={600}
-      okText="确认分摊"
-      cancelText="取消"
+      okText={t('app.kuaizhizao.purchaseOrder.landingCost.confirm')}
+      cancelText={t('common.cancel')}
       destroyOnHidden
     >
       <Form
@@ -60,25 +62,25 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
         onFinish={handleSubmit}
         initialValues={{
           method: 'by_value',
-          fee_items: [{ name: '运费', amount: 0 }],
+          fee_items: [{ name: t('app.kuaizhizao.purchaseOrder.landingCost.defaultFeeName'), amount: 0 }],
         }}
       >
         <Form.Item
           name="method"
-          label="分摊算法/维度"
-          tooltip="系统将根据所选维度，按比例将总杂费分配到各明细行"
+          label={t('app.kuaizhizao.purchaseOrder.landingCost.method')}
+          tooltip={t('app.kuaizhizao.purchaseOrder.landingCost.methodTooltip')}
           rules={[{ required: true }]}
         >
           <Select>
-            <Select.Option value="by_value">按金额比例 (Value Weighted)</Select.Option>
-            <Select.Option value="by_quantity">按数量比例 (Quantity Weighted)</Select.Option>
-            <Select.Option value="by_weight">按重量比例 (Weight Weighted - 需维护物料重量)</Select.Option>
-            <Select.Option value="by_volume">按体积比例 (Volume Weighted - 需维护物料体积)</Select.Option>
+            <Select.Option value="by_value">{t('app.kuaizhizao.purchaseOrder.landingCost.methodByValue')}</Select.Option>
+            <Select.Option value="by_quantity">{t('app.kuaizhizao.purchaseOrder.landingCost.methodByQuantity')}</Select.Option>
+            <Select.Option value="by_weight">{t('app.kuaizhizao.purchaseOrder.landingCost.methodByWeight')}</Select.Option>
+            <Select.Option value="by_volume">{t('app.kuaizhizao.purchaseOrder.landingCost.methodByVolume')}</Select.Option>
           </Select>
         </Form.Item>
 
-        <Divider>待分摊费用清单</Divider>
-        
+        <Divider>{t('app.kuaizhizao.purchaseOrder.landingCost.feeListDivider')}</Divider>
+
         <Form.List name="fee_items">
           {(fields, { add, remove }) => (
             <>
@@ -87,17 +89,17 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
                   <Form.Item
                     {...restField}
                     name={[name, 'name']}
-                    rules={[{ required: true, message: '请输入费用名称' }]}
+                    rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.landingCost.feeNameRequired') }]}
                   >
-                    <Input placeholder="费用名称 (如: 报关费, 包装费)" style={{ width: 320 }} />
+                    <Input placeholder={t('app.kuaizhizao.purchaseOrder.landingCost.feeNamePlaceholder')} style={{ width: 320 }} />
                   </Form.Item>
                   <Form.Item
                     {...restField}
                     name={[name, 'amount']}
-                    rules={[{ required: true, message: '请输入金额' }]}
+                    rules={[{ required: true, message: t('app.kuaizhizao.purchaseOrder.landingCost.feeAmountRequired') }]}
                   >
                     <InputNumber
-                      placeholder="金额"
+                      placeholder={t('app.kuaizhizao.purchaseOrder.landingCost.feeAmount')}
                       min={0}
                       precision={2}
                       style={{ width: 140 }}
@@ -111,27 +113,29 @@ const LandingCostAllocationModal: React.FC<LandingCostAllocationModalProps> = ({
               ))}
               <Form.Item>
                 <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                  继续添加费用项
+                  {t('app.kuaizhizao.purchaseOrder.landingCost.addFee')}
                 </Button>
               </Form.Item>
             </>
           )}
         </Form.List>
 
-        <div style={{ 
-          marginTop: 16, 
-          padding: 12, 
-          backgroundColor: '#f5f5f5', 
-          borderRadius: 4,
-          fontSize: '12px',
-          color: '#8c8c8c',
-          lineHeight: '1.6'
-        }}>
-          <strong>说明：</strong>
+        <div
+          style={{
+            marginTop: 16,
+            padding: 12,
+            backgroundColor: '#f5f5f5',
+            borderRadius: 4,
+            fontSize: '12px',
+            color: '#8c8c8c',
+            lineHeight: '1.6',
+          }}
+        >
+          <strong>{t('app.kuaizhizao.purchaseOrder.landingCost.notesTitle')}</strong>
           <ul style={{ margin: 0, paddingLeft: 18 }}>
-            <li>分摊后的杂费将记录在明细行的 landing_cost 字段中。</li>
-            <li>系统会自动重新计算该订单的实际综合成本 (Actual Total Cost)。</li>
-            <li>如果选择重量/体积分摊但物料资料未维护相关数据，将自动降级为按行等额分摊。</li>
+            <li>{t('app.kuaizhizao.purchaseOrder.landingCost.note1')}</li>
+            <li>{t('app.kuaizhizao.purchaseOrder.landingCost.note2')}</li>
+            <li>{t('app.kuaizhizao.purchaseOrder.landingCost.note3')}</li>
           </ul>
         </div>
       </Form>

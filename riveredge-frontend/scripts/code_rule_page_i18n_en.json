@@ -1,0 +1,567 @@
+{
+  "modules": {
+    "主数据管理": "Master Data",
+    "好力 GO": "Haoli GO",
+    "快格轻制造": "Kuaizhizao",
+    "快研发": "Kuai PLM",
+    "系统配置": "System Configuration",
+    "轻管理会计": "Finance Lite"
+  },
+  "pageName": {
+    "厂区管理": "Plants",
+    "车间管理": "Workshops",
+    "产线管理": "Production Lines",
+    "工位管理": "Workstations",
+    "工作中心": "Work Centers",
+    "工作小组": "Work Groups",
+    "仓库管理": "Warehouses",
+    "库区管理": "Storage Areas",
+    "库位管理": "Storage Locations",
+    "物料分组": "Material Groups",
+    "物料管理": "Materials",
+    "工序管理": "Operations",
+    "工艺路线": "Process Routes",
+    "图纸管理": "Drawings",
+    "物料清单BOM": "Bill of Materials",
+    "不良品项": "Defect Types",
+    "客户管理": "Customers",
+    "供应商管理": "Suppliers",
+    "技能管理": "Skills",
+    "工单管理": "Work Orders",
+    "返工单": "Rework Orders",
+    "委外单": "Outsource Orders",
+    "委外工单": "Outsource Work Orders",
+    "委外收货": "Outsource Material Receipts",
+    "委外退料": "Outsource Material Returns",
+    "委外退货": "Outsource Product Returns",
+    "采购订单": "Purchase Orders",
+    "采购申请": "Purchase Requisitions",
+    "采购询价单": "Purchase Inquiries",
+    "采购入库": "Purchase Receipts",
+    "采购退货": "Purchase Returns",
+    "销售订单": "Sales Orders",
+    "报价单": "Quotations",
+    "销售合同": "Sales Contracts",
+    "销售合同变更": "Sales Contract Changes",
+    "销售发货": "Sales Deliveries",
+    "送货单": "Delivery Notes",
+    "发货通知单": "Shipment Notices",
+    "收货通知单": "Receipt Notices",
+    "销售预测": "Sales Forecasts",
+    "需求计划": "Demand Plans",
+    "销售退货": "Sales Returns",
+    "生产领料": "Production Material Issues",
+    "生产退料": "Production Material Returns",
+    "其他入库": "Other Inbound",
+    "其他出库": "Other Outbound",
+    "代工来料": "Customer Material Registration",
+    "借料单": "Material Borrow",
+    "还料单": "Material Return",
+    "成品入库": "Finished Goods Inbound",
+    "半成品入库": "Semi-finished Inbound",
+    "来料检验": "Incoming Inspection",
+    "过程检验": "Process Inspection",
+    "成品检验": "Finished Goods Inspection",
+    "质检方案": "Inspection Plans",
+    "生产计划": "Production Plans",
+    "设备管理": "Equipment",
+    "模具管理": "Molds",
+    "工装台账": "Tools",
+    "组装单": "Assembly Orders",
+    "组装模板": "Assembly Templates",
+    "拆卸单": "Disassembly Orders",
+    "配料单": "Batching Orders",
+    "盘点单": "Stocktaking",
+    "调拨单": "Inventory Transfers",
+    "模具试模单": "Mold Trial Orders",
+    "模具领用单": "Mold Borrow Orders",
+    "模具还入单": "Mold Return Orders",
+    "模具厂内维修单": "In-house Mold Repair Orders",
+    "模具厂内保养单": "In-house Mold Maintenance Orders",
+    "模具维保完成单": "Mold Maintenance Completion",
+    "外协维修单": "Outsource Repair Orders",
+    "外协维修完成单": "Outsource Repair Completion",
+    "现场巡查登记": "Patrol Registration",
+    "设备点检单": "Equipment Inspection Orders",
+    "设备路线巡检单": "Route Inspection Orders",
+    "设备维保单（保养）": "Equipment Upkeep Orders",
+    "设备维保单（维修）": "Equipment Repair Orders",
+    "设备维保完成单": "Equipment Maintenance Completion",
+    "设备产出单": "Equipment Output Orders",
+    "设备状态调整单": "Equipment Status Adjustments",
+    "部门管理": "Departments",
+    "职位管理": "Positions",
+    "角色管理": "Roles",
+    "应收账款": "Accounts Receivable",
+    "应付账款": "Accounts Payable",
+    "进项发票": "Purchase Invoices",
+    "销售发票": "Sales Invoices",
+    "核销": "Settlement",
+    "往来对账": "Account Reconciliation",
+    "研发项目": "R&D Projects",
+    "交付项目": "Delivery Projects"
+  },
+  "codeFieldLabel": {
+    "厂区编码": "Plant code",
+    "车间编码": "Workshop code",
+    "产线编码": "Production line code",
+    "工位编码": "Workstation code",
+    "工作中心编码": "Work center code",
+    "工作小组编码": "Work group code",
+    "仓库编码": "Warehouse code",
+    "库区编码": "Storage area code",
+    "库位编码": "Storage location code",
+    "分组编号": "Group code",
+    "物料主编码": "Material code",
+    "工序编码": "Operation code",
+    "路线编码": "Route code",
+    "图号": "Drawing no.",
+    "BOM编码": "BOM code",
+    "不良品编码": "Defect code",
+    "客户编码": "Customer code",
+    "供应商编码": "Supplier code",
+    "技能编码": "Skill code",
+    "工单编码": "Work order code",
+    "返工单编码": "Rework order code",
+    "委外单编码": "Outsource order code",
+    "委外工单编码": "Outsource work order code",
+    "委外收货单编号": "Outsource receipt no.",
+    "委外退料单编号": "Outsource material return no.",
+    "委外退货单编号": "Outsource product return no.",
+    "采购订单编码": "Purchase order code",
+    "采购申请编号": "Purchase requisition no.",
+    "询价单编码": "Inquiry code",
+    "采购收货单编码": "Purchase receipt code",
+    "采购退货单编码": "Purchase return code",
+    "销售订单编码": "Sales order code",
+    "报价单编码": "Quotation code",
+    "合同编码": "Contract code",
+    "合同变更编码": "Contract change code",
+    "销售发货单编码": "Sales delivery code",
+    "送货单编码": "Delivery note code",
+    "发货通知单编码": "Shipment notice code",
+    "收货通知单编码": "Receipt notice code",
+    "销售预测编码": "Sales forecast code",
+    "需求计划编码": "Demand plan code",
+    "销售退货单编码": "Sales return code",
+    "领料单编码": "Material issue code",
+    "退料单编码": "Material return code",
+    "入库单编码": "Inbound code",
+    "出库单编码": "Outbound code",
+    "代工来料单编码": "Customer material registration code",
+    "借料单编码": "Borrow code",
+    "还料单编码": "Return code",
+    "成品入库单编码": "Finished goods inbound code",
+    "半成品入库单编码": "Semi-finished inbound code",
+    "来料检验单编码": "Incoming inspection code",
+    "过程检验单编码": "Process inspection code",
+    "成品检验单编码": "Finished goods inspection code",
+    "质检方案编码": "Inspection plan code",
+    "生产计划编码": "Production plan code",
+    "设备编码": "Equipment code",
+    "模具编码": "Mold code",
+    "工装编码": "Tool code",
+    "组装单编码": "Assembly order code",
+    "组装模板编码": "Assembly template code",
+    "拆卸单编码": "Disassembly order code",
+    "配料单编码": "Batching order code",
+    "盘点单编码": "Stocktaking code",
+    "调拨单编码": "Transfer code",
+    "模具试模单单号": "Mold trial no.",
+    "模具领用单单号": "Mold borrow no.",
+    "模具还入单单号": "Mold return no.",
+    "维修单单号": "Repair order no.",
+    "保养单单号": "Maintenance order no.",
+    "模具维保完成单单号": "Mold maintenance completion no.",
+    "外协维修单单号": "Outsource repair no.",
+    "外协维修完成单单号": "Outsource repair completion no.",
+    "登记单号": "Registration no.",
+    "点检单单号": "Inspection order no.",
+    "巡检单单号": "Route inspection no.",
+    "保养维保单号": "Upkeep order no.",
+    "维修维保单号": "Repair upkeep no.",
+    "维保完成单单号": "Maintenance completion no.",
+    "产出单单号": "Output order no.",
+    "调整单单号": "Adjustment no.",
+    "部门代码": "Department code",
+    "职位代码": "Position code",
+    "角色代码": "Role code",
+    "应收单编码": "Receivable code",
+    "应付单编码": "Payable code",
+    "进项发票编码": "Purchase invoice code",
+    "销售发票编码": "Sales invoice code",
+    "核销单编码": "Settlement code",
+    "对账单编码": "Reconciliation code",
+    "项目编码": "Project code"
+  },
+  "pages": {
+    "master-data-factory-plant": {
+      "pageName": "Plants",
+      "codeFieldLabel": "Plant code"
+    },
+    "master-data-factory-workshop": {
+      "pageName": "Workshops",
+      "codeFieldLabel": "Workshop code"
+    },
+    "master-data-factory-production-line": {
+      "pageName": "Production Lines",
+      "codeFieldLabel": "Production line code"
+    },
+    "master-data-factory-workstation": {
+      "pageName": "Workstations",
+      "codeFieldLabel": "Workstation code"
+    },
+    "master-data-factory-work-center": {
+      "pageName": "Work Centers",
+      "codeFieldLabel": "Work center code"
+    },
+    "master-data-factory-work-group": {
+      "pageName": "Work Groups",
+      "codeFieldLabel": "Work group code"
+    },
+    "master-data-warehouse-warehouse": {
+      "pageName": "Warehouses",
+      "codeFieldLabel": "Warehouse code"
+    },
+    "master-data-warehouse-storage-area": {
+      "pageName": "Storage Areas",
+      "codeFieldLabel": "Storage area code"
+    },
+    "master-data-warehouse-storage-location": {
+      "pageName": "Storage Locations",
+      "codeFieldLabel": "Storage location code"
+    },
+    "master-data-material-group": {
+      "pageName": "Material Groups",
+      "codeFieldLabel": "Group code"
+    },
+    "master-data-material": {
+      "pageName": "Materials",
+      "codeFieldLabel": "Material code"
+    },
+    "master-data-process-operation": {
+      "pageName": "Operations",
+      "codeFieldLabel": "Operation code"
+    },
+    "master-data-process-route": {
+      "pageName": "Process Routes",
+      "codeFieldLabel": "Route code"
+    },
+    "master-data-process-drawing": {
+      "pageName": "Drawings",
+      "codeFieldLabel": "Drawing no."
+    },
+    "master-data-engineering-bom": {
+      "pageName": "Bill of Materials",
+      "codeFieldLabel": "BOM code"
+    },
+    "master-data-defect-type": {
+      "pageName": "Defect Types",
+      "codeFieldLabel": "Defect code"
+    },
+    "master-data-supply-chain-customer": {
+      "pageName": "Customers",
+      "codeFieldLabel": "Customer code"
+    },
+    "master-data-supply-chain-supplier": {
+      "pageName": "Suppliers",
+      "codeFieldLabel": "Supplier code"
+    },
+    "master-data-performance-skill": {
+      "pageName": "Skills",
+      "codeFieldLabel": "Skill code"
+    },
+    "kuaizhizao-production-work-order": {
+      "pageName": "Work Orders",
+      "codeFieldLabel": "Work order code"
+    },
+    "kuaizhizao-production-rework-order": {
+      "pageName": "Rework Orders",
+      "codeFieldLabel": "Rework order code"
+    },
+    "kuaizhizao-production-outsource-order": {
+      "pageName": "Outsource Orders",
+      "codeFieldLabel": "Outsource order code"
+    },
+    "kuaizhizao-purchase-order": {
+      "pageName": "Purchase Orders",
+      "codeFieldLabel": "Purchase order code"
+    },
+    "kuaizhizao-purchase-requisition": {
+      "pageName": "Purchase Requisitions",
+      "codeFieldLabel": "Purchase requisition no."
+    },
+    "kuaizhizao-purchase-inquiry": {
+      "pageName": "Purchase Inquiries",
+      "codeFieldLabel": "Inquiry code"
+    },
+    "kuaizhizao-purchase-receipt": {
+      "pageName": "Purchase Receipts",
+      "codeFieldLabel": "Purchase receipt code"
+    },
+    "kuaizhizao-quotation": {
+      "pageName": "Quotations",
+      "codeFieldLabel": "Quotation code"
+    },
+    "kuaizhizao-sales-contract": {
+      "pageName": "Sales Contracts",
+      "codeFieldLabel": "Contract code"
+    },
+    "kuaizhizao-sales-contract-change": {
+      "pageName": "Sales Contract Changes",
+      "codeFieldLabel": "Contract change code"
+    },
+    "kuaizhizao-sales-order": {
+      "pageName": "Sales Orders",
+      "codeFieldLabel": "Sales order code"
+    },
+    "kuaizhizao-sales-delivery": {
+      "pageName": "Sales Deliveries",
+      "codeFieldLabel": "Sales delivery code"
+    },
+    "kuaizhizao-delivery-notice": {
+      "pageName": "Delivery Notes",
+      "codeFieldLabel": "Delivery note code"
+    },
+    "kuaizhizao-shipment-notice": {
+      "pageName": "Shipment Notices",
+      "codeFieldLabel": "Shipment notice code"
+    },
+    "kuaizhizao-receipt-notice": {
+      "pageName": "Receipt Notices",
+      "codeFieldLabel": "Receipt notice code"
+    },
+    "kuaizhizao-sales-forecast": {
+      "pageName": "Sales Forecasts",
+      "codeFieldLabel": "Sales forecast code"
+    },
+    "kuaizhizao-demand-plan": {
+      "pageName": "Demand Plans",
+      "codeFieldLabel": "Demand plan code"
+    },
+    "kuaizhizao-warehouse-inbound": {
+      "pageName": "Production Material Issues",
+      "codeFieldLabel": "Material issue code"
+    },
+    "kuaizhizao-warehouse-production-return": {
+      "pageName": "Production Material Returns",
+      "codeFieldLabel": "Material return code"
+    },
+    "kuaizhizao-warehouse-other-inbound": {
+      "pageName": "Other Inbound",
+      "codeFieldLabel": "Inbound code"
+    },
+    "kuaizhizao-warehouse-customer-material-registration": {
+      "pageName": "Customer Material Registration",
+      "codeFieldLabel": "Customer material registration code"
+    },
+    "kuaizhizao-warehouse-other-outbound": {
+      "pageName": "Other Outbound",
+      "codeFieldLabel": "Outbound code"
+    },
+    "kuaizhizao-warehouse-material-borrow": {
+      "pageName": "Material Borrow",
+      "codeFieldLabel": "Borrow code"
+    },
+    "kuaizhizao-warehouse-material-return": {
+      "pageName": "Material Return",
+      "codeFieldLabel": "Return code"
+    },
+    "kuaizhizao-warehouse-assembly-order": {
+      "pageName": "Assembly Orders",
+      "codeFieldLabel": "Assembly order code"
+    },
+    "kuaizhizao-warehouse-assembly-template": {
+      "pageName": "Assembly Templates",
+      "codeFieldLabel": "Assembly template code"
+    },
+    "kuaizhizao-warehouse-disassembly-order": {
+      "pageName": "Disassembly Orders",
+      "codeFieldLabel": "Disassembly order code"
+    },
+    "kuaizhizao-warehouse-batching-order": {
+      "pageName": "Batching Orders",
+      "codeFieldLabel": "Batching order code"
+    },
+    "kuaizhizao-warehouse-stocktaking": {
+      "pageName": "Stocktaking",
+      "codeFieldLabel": "Stocktaking code"
+    },
+    "kuaizhizao-warehouse-inventory-transfer": {
+      "pageName": "Inventory Transfers",
+      "codeFieldLabel": "Transfer code"
+    },
+    "kuaizhizao-warehouse-finished-goods-inbound": {
+      "pageName": "Finished Goods Inbound",
+      "codeFieldLabel": "Finished goods inbound code"
+    },
+    "kuaizhizao-warehouse-semi-finished-inbound": {
+      "pageName": "Semi-finished Inbound",
+      "codeFieldLabel": "Semi-finished inbound code"
+    },
+    "kuaizhizao-quality-incoming-inspection": {
+      "pageName": "Incoming Inspection",
+      "codeFieldLabel": "Incoming inspection code"
+    },
+    "kuaizhizao-quality-process-inspection": {
+      "pageName": "Process Inspection",
+      "codeFieldLabel": "Process inspection code"
+    },
+    "kuaizhizao-quality-inspection-plan": {
+      "pageName": "Inspection Plans",
+      "codeFieldLabel": "Inspection plan code"
+    },
+    "kuaizhizao-quality-finished-goods-inspection": {
+      "pageName": "Finished Goods Inspection",
+      "codeFieldLabel": "Finished goods inspection code"
+    },
+    "kuaizhizao-plan-production-plan": {
+      "pageName": "Production Plans",
+      "codeFieldLabel": "Production plan code"
+    },
+    "kuaizhizao-purchase-return": {
+      "pageName": "Purchase Returns",
+      "codeFieldLabel": "Purchase return code"
+    },
+    "kuaizhizao-sales-return": {
+      "pageName": "Sales Returns",
+      "codeFieldLabel": "Sales return code"
+    },
+    "kuaizhizao-equipment-management-equipment": {
+      "pageName": "Equipment",
+      "codeFieldLabel": "Equipment code"
+    },
+    "kuaizhizao-equipment-management-mold": {
+      "pageName": "Molds",
+      "codeFieldLabel": "Mold code"
+    },
+    "kuaizhizao-equipment-management-tool": {
+      "pageName": "Tools",
+      "codeFieldLabel": "Tool code"
+    },
+    "kuaizhizao-production-outsource-work-order": {
+      "pageName": "Outsource Work Orders",
+      "codeFieldLabel": "Outsource work order code"
+    },
+    "kuaizhizao-production-outsource-material-receipt": {
+      "pageName": "Outsource Material Receipts",
+      "codeFieldLabel": "Outsource receipt no."
+    },
+    "kuaizhizao-production-outsource-material-return": {
+      "pageName": "Outsource Material Returns",
+      "codeFieldLabel": "Outsource material return no."
+    },
+    "kuaizhizao-production-outsource-product-return": {
+      "pageName": "Outsource Product Returns",
+      "codeFieldLabel": "Outsource product return no."
+    },
+    "haoligo-molds-documents-trial": {
+      "pageName": "Mold Trial Orders",
+      "codeFieldLabel": "Mold trial no."
+    },
+    "haoligo-molds-documents-borrow-out": {
+      "pageName": "Mold Borrow Orders",
+      "codeFieldLabel": "Mold borrow no."
+    },
+    "haoligo-molds-documents-return-in": {
+      "pageName": "Mold Return Orders",
+      "codeFieldLabel": "Mold return no."
+    },
+    "haoligo-molds-documents-maintenance-repair": {
+      "pageName": "In-house Mold Repair Orders",
+      "codeFieldLabel": "Repair order no."
+    },
+    "haoligo-molds-documents-maintenance-upkeep": {
+      "pageName": "In-house Mold Maintenance Orders",
+      "codeFieldLabel": "Maintenance order no."
+    },
+    "haoligo-molds-documents-maintenance-complete": {
+      "pageName": "Mold Maintenance Completion",
+      "codeFieldLabel": "Mold maintenance completion no."
+    },
+    "haoligo-molds-documents-outsource-maintenance": {
+      "pageName": "Outsource Repair Orders",
+      "codeFieldLabel": "Outsource repair no."
+    },
+    "haoligo-molds-documents-outsource-complete": {
+      "pageName": "Outsource Repair Completion",
+      "codeFieldLabel": "Outsource repair completion no."
+    },
+    "haoligo-equipment-documents-spot-check": {
+      "pageName": "Equipment Inspection Orders",
+      "codeFieldLabel": "Inspection order no."
+    },
+    "haoligo-equipment-documents-route-patrol": {
+      "pageName": "Route Inspection Orders",
+      "codeFieldLabel": "Route inspection no."
+    },
+    "haoligo-patrol-hazard-reports": {
+      "pageName": "Patrol Registration",
+      "codeFieldLabel": "Registration no."
+    },
+    "haoligo-equipment-documents-upkeep-sheet": {
+      "pageName": "Equipment Upkeep Orders",
+      "codeFieldLabel": "Upkeep order no."
+    },
+    "haoligo-equipment-documents-upkeep-repair": {
+      "pageName": "Equipment Repair Orders",
+      "codeFieldLabel": "Repair upkeep no."
+    },
+    "haoligo-equipment-documents-upkeep-complete": {
+      "pageName": "Equipment Maintenance Completion",
+      "codeFieldLabel": "Maintenance completion no."
+    },
+    "haoligo-equipment-documents-output-record": {
+      "pageName": "Equipment Output Orders",
+      "codeFieldLabel": "Output order no."
+    },
+    "haoligo-equipment-documents-status-adjustment": {
+      "pageName": "Equipment Status Adjustments",
+      "codeFieldLabel": "Adjustment no."
+    },
+    "system-department": {
+      "pageName": "Departments",
+      "codeFieldLabel": "Department code"
+    },
+    "system-position": {
+      "pageName": "Positions",
+      "codeFieldLabel": "Position code"
+    },
+    "system-role": {
+      "pageName": "Roles",
+      "codeFieldLabel": "Role code"
+    },
+    "kuaicaiwu-finance-receivable": {
+      "pageName": "Accounts Receivable",
+      "codeFieldLabel": "Receivable code"
+    },
+    "kuaicaiwu-finance-payable": {
+      "pageName": "Accounts Payable",
+      "codeFieldLabel": "Payable code"
+    },
+    "kuaicaiwu-finance-purchase-invoice": {
+      "pageName": "Purchase Invoices",
+      "codeFieldLabel": "Purchase invoice code"
+    },
+    "kuaicaiwu-finance-sales-invoice": {
+      "pageName": "Sales Invoices",
+      "codeFieldLabel": "Sales invoice code"
+    },
+    "kuaicaiwu-finance-settlement": {
+      "pageName": "Settlement",
+      "codeFieldLabel": "Settlement code"
+    },
+    "kuaicaiwu-finance-partner-statement": {
+      "pageName": "Account Reconciliation",
+      "codeFieldLabel": "Reconciliation code"
+    },
+    "kuaiplm-rd-project": {
+      "pageName": "R&D Projects",
+      "codeFieldLabel": "Project code"
+    },
+    "kuaiplm-delivery-project": {
+      "pageName": "Delivery Projects",
+      "codeFieldLabel": "Project code"
+    }
+  }
+}

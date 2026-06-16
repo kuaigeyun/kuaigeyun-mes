@@ -2,7 +2,8 @@
  * 工时单价配置页面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -14,8 +15,10 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { employeePerformanceApi } from '../../../services/performance';
 import type { HourlyRate } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
+import { getPerformanceYesNoValueEnum } from '../components/performanceMeta';
 
 const HourlyRatesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
@@ -47,8 +50,8 @@ const HourlyRatesPage: React.FC = () => {
         rate: r.rate,
         is_active: r.is_active !== false,
       });
-    }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
-  }, [modalVisible, editId]);
+    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+  }, [modalVisible, editId, messageApi, t]);
 
   const handleCreate = () => {
     setEditId(null);
@@ -61,98 +64,98 @@ const HourlyRatesPage: React.FC = () => {
   const handleDelete = async (r: HourlyRate) => {
     try {
       await employeePerformanceApi.deleteHourlyRate(r.id);
-      messageApi.success('删除成功');
+      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '删除失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
 
-  const columns: ProColumns<HourlyRate>[] = [
-    {
-      title: '部门',
-      dataIndex: 'department_name',
-      width: 120,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.department_name ?? '') }} ellipsis>
-          {r.department_name ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '职位',
-      dataIndex: 'position_name',
-      width: 120,
-      ellipsis: true,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.position_name ?? '') }} ellipsis>
-          {r.position_name ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '工时单价（元/时）', dataIndex: 'rate', width: 120, align: 'right' },
-    {
-      title: '启用',
-      dataIndex: 'is_active',
-      hideInTable: true,
-      valueEnum: {
-        true: { text: '是' },
-        false: { text: '否' },
+  const columns: ProColumns<HourlyRate>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.performance.common.columns.department'),
+        dataIndex: 'department_name',
+        width: 120,
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.department_name ?? '') }} ellipsis>
+            {r.department_name ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      {
+        title: t('app.kuaizhizao.performance.common.columns.position'),
+        dataIndex: 'position_name',
+        width: 120,
+        ellipsis: true,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.position_name ?? '') }} ellipsis>
+            {r.position_name ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '操作',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
+      { title: t('app.kuaizhizao.performance.hourlyRates.columns.rate'), dataIndex: 'rate', width: 120, align: 'right' },
+      {
+        title: t('app.kuaizhizao.performance.common.form.active'),
+        dataIndex: 'is_active',
+        hideInTable: true,
+        valueEnum: getPerformanceYesNoValueEnum(t),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        width: 150,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('app.kuaizhizao.performance.common.actions.edit')}
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm title={t('app.kuaizhizao.performance.hourlyRates.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('app.kuaizhizao.performance.common.actions.delete')}
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<HourlyRate>
-          headerTitle="工时单价"
+          headerTitle={t('app.kuaizhizao.performance.hourlyRates.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -170,7 +173,7 @@ const HourlyRatesPage: React.FC = () => {
               const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
               return { data: rows, success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || '加载失败');
+              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -182,21 +185,21 @@ const HourlyRatesPage: React.FC = () => {
               for (const id of keys) {
                 await employeePerformanceApi.deleteHourlyRate(Number(id));
               }
-              messageApi.success(`成功删除 ${keys.length} 条记录`);
+              messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || '删除失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
             }
           }}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条时薪单价吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.hourlyRates.messages.deleteBatchConfirm', { count })}
           showCreateButton
-          createButtonText="新建工时单价"
+          createButtonText={t('app.kuaizhizao.performance.hourlyRates.createButton')}
           onCreate={handleCreate}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={editId ? '编辑工时单价' : '新建工时单价'}
+        title={editId ? t('app.kuaizhizao.performance.hourlyRates.modal.editTitle') : t('app.kuaizhizao.performance.hourlyRates.modal.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -212,10 +215,10 @@ const HourlyRatesPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateHourlyRate(editId, payload);
-            messageApi.success('更新成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
           } else {
             await employeePerformanceApi.createHourlyRate(payload);
-            messageApi.success('创建成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
           }
           setModalVisible(false);
           setEditId(null);
@@ -226,20 +229,20 @@ const HourlyRatesPage: React.FC = () => {
       >
         <ProFormSelect
           name="department_id"
-          label="部门"
-          options={[{ label: '（不指定）', value: null }, ...departments.map((d) => ({ label: d.name, value: d.id }))]}
+          label={t('app.kuaizhizao.performance.common.columns.department')}
+          options={[{ label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: null }, ...departments.map((d) => ({ label: d.name, value: d.id }))]}
           colProps={{ span: 12 }}
           disabled={!!editId}
         />
         <ProFormSelect
           name="position_id"
-          label="职位"
-          options={[{ label: '（不指定）', value: null }, ...positions.map((p) => ({ label: p.name, value: p.id }))]}
+          label={t('app.kuaizhizao.performance.common.columns.position')}
+          options={[{ label: t('app.kuaizhizao.performance.common.form.notSpecified'), value: null }, ...positions.map((p) => ({ label: p.name, value: p.id }))]}
           colProps={{ span: 12 }}
           disabled={!!editId}
         />
-        <ProFormDigit name="rate" label="工时单价（元/小时）" rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
+        <ProFormDigit name="rate" label={t('app.kuaizhizao.performance.hourlyRates.form.rate')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>
   );

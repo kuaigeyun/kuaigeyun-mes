@@ -10,4 +10,6 @@ export {
   DEFAULT_MATERIAL_CENTER_TAB,
   DEFAULT_BATCHING_CENTER_TAB,
   isBatchingTaskTab,
+  getMaterialCenterTabs,
+  getBatchingTaskTypeLabel,
 } from './materialCenterTabs';

@@ -7,7 +7,7 @@
  * @date 2026-02-19
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProDescriptionsItemProps, ProFormItem, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Col, DatePicker, Descriptions, Dropdown, Form as AntForm, Input, InputNumber, Modal, Row, Select, Space, Table, Tag, Typography } from 'antd';
@@ -145,9 +145,9 @@ const MaterialBorrowsPage: React.FC = () => {
     void loadDepartments();
   }, []);
 
-  const columns: ProColumns<MaterialBorrow>[] = [
+  const columns: ProColumns<MaterialBorrow>[] = useMemo(() => [
     {
-      title: '借料单号',
+      title: t('app.kuaizhizao.materialBorrow.col.borrowCode'),
       dataIndex: 'borrow_code',
       width: 140,
       ellipsis: true,
@@ -158,13 +158,13 @@ const MaterialBorrowsPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-    { title: '借料人', dataIndex: 'borrower_name', width: 100 },
-    { title: '部门', dataIndex: 'department', width: 100 },
-    { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
-    { title: '借出时间', dataIndex: 'borrow_time', valueType: 'dateTime', width: 160 },
+    { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.materialBorrow.col.borrower'), dataIndex: 'borrower_name', width: 100 },
+    { title: t('app.kuaizhizao.materialBorrow.col.department'), dataIndex: 'department', width: 100 },
+    { title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'), dataIndex: 'expected_return_date', valueType: 'date', width: 120 },
+    { title: t('app.kuaizhizao.materialBorrow.col.borrowTime'), dataIndex: 'borrow_time', valueType: 'dateTime', width: 160 },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseOutbound.col.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -172,7 +172,7 @@ const MaterialBorrowsPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseOutbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -193,7 +193,7 @@ const MaterialBorrowsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
       width: 220,
       fixed: 'right',
       render: (_, record) => {
@@ -209,14 +209,14 @@ const MaterialBorrowsPage: React.FC = () => {
                   {...rowActionLabelKeep()}
                   onClick={() => handleConfirm(record)}
                 >
-                  确认借出
+                  {t('app.kuaizhizao.materialBorrow.action.confirmBorrow')}
                 </Button>
                 <Button {...rowActionKind('delete')} onClick={() => handleDelete(record)} />
               </>
             )}
             {record.status === '已借出' && (
               <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
-                撤回
+                {t('app.kuaizhizao.materialBorrow.action.withdrawBorrow')}
               </Button>
             )}
             {printInMore ? (
@@ -226,7 +226,7 @@ const MaterialBorrowsPage: React.FC = () => {
                     {
                       key: 'print',
                       icon: <PrinterOutlined />,
-                      label: '打印',
+                      label: t('app.kuaizhizao.materialBorrow.action.print'),
                       onClick: () => handlePrint(record),
                     },
                   ],
@@ -234,7 +234,7 @@ const MaterialBorrowsPage: React.FC = () => {
                 trigger={['click']}
               >
                 <Button {...rowActionKind('display')} {...rowActionLabelKeep()} icon={<MoreOutlined />}>
-                  更多
+                  {t('app.kuaizhizao.materialBorrow.action.more')}
                 </Button>
               </Dropdown>
             ) : (
@@ -244,7 +244,7 @@ const MaterialBorrowsPage: React.FC = () => {
         );
       },
     },
-  ];
+  ], [t]);
 
   const handleDetail = async (record: MaterialBorrow) => {
     try {
@@ -252,23 +252,23 @@ const MaterialBorrowsPage: React.FC = () => {
       setBorrowDetail(detail as MaterialBorrowDetail);
       setDetailDrawerVisible(true);
     } catch {
-      messageApi.error('获取借料单详情失败');
+      messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadDetailFailed'));
     }
   };
 
   const handleConfirm = async (record: MaterialBorrow) => {
     Modal.confirm({
-      title: '确认借出',
-      content: `确定要确认借料单 "${record.borrow_code}" 吗？确认后将扣减库存。`,
+      title: t('app.kuaizhizao.materialBorrow.msg.confirmTitle'),
+      content: t('app.kuaizhizao.materialBorrow.msg.confirmContent', { code: record.borrow_code }),
       onOk: async () => {
         try {
           await warehouseApi.materialBorrow.confirm(record.id!.toString());
-          messageApi.success('借出确认成功');
+          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.confirmSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '借出确认失败');
+          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.confirmFailed'));
         }
       },
     });
@@ -276,16 +276,16 @@ const MaterialBorrowsPage: React.FC = () => {
 
   const handleWithdraw = async (record: MaterialBorrow) => {
     Modal.confirm({
-      title: '撤回借出',
-      content: `确定撤回借料单 "${record.borrow_code}" 吗？系统将回冲库存并恢复待借出状态。`,
+      title: t('app.kuaizhizao.materialBorrow.msg.withdrawTitle'),
+      content: t('app.kuaizhizao.materialBorrow.msg.withdrawContent', { code: record.borrow_code }),
       onOk: async () => {
         try {
           await warehouseApi.materialBorrow.withdraw(record.id!.toString());
-          messageApi.success('撤回成功');
+          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.withdrawSuccess'));
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '撤回失败');
+          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.withdrawFailed'));
         }
       },
     });
@@ -293,17 +293,17 @@ const MaterialBorrowsPage: React.FC = () => {
 
   const handleDelete = async (record: MaterialBorrow) => {
     Modal.confirm({
-      title: '删除借料单',
-      content: `确定要删除借料单 "${record.borrow_code}" 吗？`,
+      title: t('app.kuaizhizao.materialBorrow.msg.deleteTitle'),
+      content: t('app.kuaizhizao.materialBorrow.msg.deleteContent', { code: record.borrow_code }),
       onOk: async () => {
         try {
           await warehouseApi.materialBorrow.delete(record.id!.toString());
-          messageApi.success('删除成功');
+          messageApi.success(t('app.kuaizhizao.materialBorrow.msg.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.deleteFailed'));
         }
       },
     });
@@ -315,12 +315,12 @@ const MaterialBorrowsPage: React.FC = () => {
       for (const k of keys) {
         await warehouseApi.materialBorrow.delete(String(k));
       }
-      messageApi.success(`已删除 ${keys.length} 条借料单`);
+      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.batchDeleteSuccess', { count: keys.length }));
       setSelectedRowKeys([]);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.batchDeleteFailed'));
     }
   };
 
@@ -338,12 +338,12 @@ const MaterialBorrowsPage: React.FC = () => {
         await warehouseApi.materialBorrow.create(payload);
         successCount += 1;
       }
-      messageApi.success(`已同步 ${successCount} 条借料单`);
+      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.syncSuccess', { count: successCount }));
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '同步失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.syncFailed'));
     }
   };
 
@@ -379,8 +379,8 @@ const MaterialBorrowsPage: React.FC = () => {
     try {
       const validItems = (values.items ?? []).filter((it: any) => it.material_id && (Number(it.borrow_quantity) || 0) > 0);
       if (!validItems.length) {
-        messageApi.error('请至少添加一条有效明细（选择物料并填写数量）');
-        throw new Error('请至少添加一条有效明细');
+        messageApi.error(t('app.kuaizhizao.materialBorrow.msg.needValidLines'));
+        throw new Error(t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule'));
       }
       const wh = warehouseList.find((w: any) => (w.id ?? w.warehouse_id) === values.warehouse_id);
       const warehouseName = values.warehouse_name ?? wh?.name ?? wh?.warehouse_name ?? '';
@@ -405,25 +405,25 @@ const MaterialBorrowsPage: React.FC = () => {
           warehouse_name: warehouseName,
         })),
       });
-      messageApi.success('创建成功');
+      messageApi.success(t('app.kuaizhizao.materialBorrow.msg.createSuccess'));
       resetSelectedWarehouseId();
       setCreateModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      if (error.message !== '请至少添加一条有效明细') messageApi.error(error.message || '创建失败');
+      if (error.message !== t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule')) messageApi.error(error.message || t('app.kuaizhizao.materialBorrow.msg.createFailed'));
       throw error;
     }
   };
 
-  const detailColumns: ProDescriptionsItemProps<MaterialBorrowDetail>[] = [
-    { title: '借料单号', dataIndex: 'borrow_code' },
-    { title: '仓库', dataIndex: 'warehouse_name' },
-    { title: '借料人', dataIndex: 'borrower_name' },
-    { title: '部门', dataIndex: 'department' },
+  const detailColumns: ProDescriptionsItemProps<MaterialBorrowDetail>[] = useMemo(() => [
+    { title: t('app.kuaizhizao.materialBorrow.col.borrowCode'), dataIndex: 'borrow_code' },
+    { title: t('app.kuaizhizao.warehouseReports.colWarehouse'), dataIndex: 'warehouse_name' },
+    { title: t('app.kuaizhizao.materialBorrow.col.borrower'), dataIndex: 'borrower_name' },
+    { title: t('app.kuaizhizao.materialBorrow.col.department'), dataIndex: 'department' },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseOutbound.col.status'),
       dataIndex: 'status',
       render: (s) => {
         const map: Record<string, { text: string; color: string }> = {
@@ -435,29 +435,29 @@ const MaterialBorrowsPage: React.FC = () => {
         return <Tag color={c.color}>{c.text}</Tag>;
       },
     },
-    { title: '预计归还日期', dataIndex: 'expected_return_date', valueType: 'date' },
-    { title: '借出时间', dataIndex: 'borrow_time', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'notes', span: 2 },
-  ];
+    { title: t('app.kuaizhizao.materialBorrow.col.expectedReturnDate'), dataIndex: 'expected_return_date', valueType: 'date' },
+    { title: t('app.kuaizhizao.materialBorrow.col.borrowTime'), dataIndex: 'borrow_time', valueType: 'dateTime' },
+    { title: t('app.kuaizhizao.common.fieldNotes'), dataIndex: 'notes', span: 2 },
+  ], [t]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable
-          headerTitle="借料单"
+          headerTitle={t('app.kuaizhizao.materialBorrow.title')}
           columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.material-borrows"
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
           showAdvancedSearch={true}
           showCreateButton
-          createButtonText="新建借料单"
+          createButtonText={t('app.kuaizhizao.materialBorrow.create')}
           onCreate={handleCreate}
           enableRowSelection
           onRowSelectionChange={setSelectedRowKeys}
           showDeleteButton
           onDelete={handleBatchDelete}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条借料单吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.materialBorrow.msg.deleteConfirm', { count })}
           showImportButton={false}
           showExportButton
           onExport={async (type, keys, pageData) => {
@@ -471,7 +471,7 @@ const MaterialBorrowsPage: React.FC = () => {
                 items = rawData.filter((d: MaterialBorrow) => d.id != null && keys.includes(d.id));
               }
               if (items.length === 0) {
-                messageApi.warning('暂无数据可导出');
+                messageApi.warning(t('app.kuaizhizao.materialBorrow.msg.noExportData'));
                 return;
               }
               const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -481,9 +481,9 @@ const MaterialBorrowsPage: React.FC = () => {
               a.download = `material-borrows-${new Date().toISOString().slice(0, 10)}.json`;
               a.click();
               URL.revokeObjectURL(url);
-              messageApi.success(`已导出 ${items.length} 条记录`);
+              messageApi.success(t('app.kuaizhizao.materialBorrow.msg.exportSuccess', { count: items.length }));
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.materialBorrow.msg.exportFailed'));
             }
           }}
           showSyncButton
@@ -501,7 +501,7 @@ const MaterialBorrowsPage: React.FC = () => {
               const total = Array.isArray(response) ? response.length : response?.total ?? data.length;
               return { data, success: true, total };
             } catch {
-              messageApi.error('获取借料单列表失败');
+              messageApi.error(t('app.kuaizhizao.materialBorrow.msg.loadListFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -510,7 +510,7 @@ const MaterialBorrowsPage: React.FC = () => {
       </ListPageTemplate>
 
       <DetailDrawerTemplate
-        title={`借料单详情${borrowDetail?.borrow_code ? ` - ${borrowDetail.borrow_code}` : ''}`}
+        title={`${t('app.kuaizhizao.materialBorrow.detailTitle')}${borrowDetail?.borrow_code ? ` - ${borrowDetail.borrow_code}` : ''}`}
         open={detailDrawerVisible}
         onClose={() => { setDetailDrawerVisible(false); setBorrowDetail(null); }}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -528,13 +528,13 @@ const MaterialBorrowsPage: React.FC = () => {
                 size="small"
                 rowKey="id"
                 columns={[
-                  { title: '物料编号', dataIndex: 'material_code', width: 120 },
-                  { title: '物料名称', dataIndex: 'material_name', width: 150 },
-                  { title: '单位', dataIndex: 'material_unit', width: 60 },
-                  { title: '库位', dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
-                  { title: '借出数量', dataIndex: 'borrow_quantity', width: 100, align: 'right' },
-                  { title: '已归还数量', dataIndex: 'returned_quantity', width: 100, align: 'right' },
-                  { title: '状态', dataIndex: 'status', width: 80 },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialCode'), dataIndex: 'material_code', width: 120 },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.materialName'), dataIndex: 'material_name', width: 150 },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.unit'), dataIndex: 'material_unit', width: 60 },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.location'), dataIndex: 'location_code', width: 120, render: (v) => v || '-' },
+                  { title: t('app.kuaizhizao.materialBorrow.col.borrowQty'), dataIndex: 'borrow_quantity', width: 100, align: 'right' },
+                  { title: t('app.kuaizhizao.materialBorrow.col.returnedQty'), dataIndex: 'returned_quantity', width: 100, align: 'right' },
+                  { title: t('app.kuaizhizao.warehouseOutbound.col.status'), dataIndex: 'status', width: 80 },
                 ]}
                 dataSource={borrowDetail.items}
                 pagination={false}
@@ -545,7 +545,7 @@ const MaterialBorrowsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="新建借料单"
+        title={t('app.kuaizhizao.materialBorrow.createModal')}
         open={createModalVisible}
         onClose={() => {
           resetSelectedWarehouseId();
@@ -561,7 +561,7 @@ const MaterialBorrowsPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-warehouse-material-borrow"
               name="borrow_code"
-              label="借料单编号"
+              label={t('app.kuaizhizao.materialBorrow.field.borrowCode')}
               autoGenerateOnCreate={true}
               showGenerateButton={false}
               context={{}}
@@ -570,8 +570,8 @@ const MaterialBorrowsPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
+              placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectWarehouse')}
               required
               onChange={(val, wh) => {
                 updateSelectedWarehouseId(val);
@@ -587,8 +587,8 @@ const MaterialBorrowsPage: React.FC = () => {
           <Col span={12}>
             <UniUserSelect
               name="borrower_uuid"
-              label="借料人"
-              placeholder="请选择借料人"
+              label={t('app.kuaizhizao.materialBorrow.field.borrower')}
+              placeholder={t('app.kuaizhizao.materialBorrow.field.selectBorrower')}
               onChange={(_value: any, user: any) => {
                 const picked = Array.isArray(user) ? user[0] : user;
                 formRef.current?.setFieldsValue({
@@ -602,9 +602,9 @@ const MaterialBorrowsPage: React.FC = () => {
             </AntForm.Item>
           </Col>
           <Col span={12}>
-            <ProFormItem name="department_uuid" label="部门">
+            <ProFormItem name="department_uuid" label={t('app.kuaizhizao.materialBorrow.col.department')}>
               <UniDropdown
-                placeholder="请选择部门"
+                placeholder={t('app.kuaizhizao.materialBorrow.field.selectDepartment')}
                 options={departmentOptions}
                 showSearch
                 optionFilterProp="label"
@@ -623,20 +623,20 @@ const MaterialBorrowsPage: React.FC = () => {
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="expected_return_date" label="预计归还日期">
+            <ProFormItem name="expected_return_date" label={t('app.kuaizhizao.materialBorrow.field.expectedReturnDate')}>
               <DatePicker style={{ width: '100%' }} />
             </ProFormItem>
           </Col>
           <Col span={12} />
         </Row>
         <div className="uni-table-detail" style={{ width: '100%' }}>
-          <UniTableDetailHeader title="明细" required />
-          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: '请至少添加一条有效明细' }]}>
+          <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOutbound.section.lines')} required />
+          <AntForm.Item name="items" noStyle rules={[{ type: 'array', min: 1, message: t('app.kuaizhizao.materialBorrow.msg.needValidLinesRule') }]}>
             <AntForm.List name="items">
               {(fields, { add, remove }) => {
                 const cols = [
                   {
-                    title: '物料',
+                    title: t('app.kuaizhizao.warehouseOutbound.field.material'),
                     dataIndex: 'material_id',
                     width: 260,
                     render: (_: any, __: any, index: number) => (
@@ -652,7 +652,7 @@ const MaterialBorrowsPage: React.FC = () => {
                               <UniMaterialSelect
                                 name={[index, 'material_id']}
                                 label=""
-                                placeholder="请选择物料"
+                                placeholder={t('app.kuaizhizao.warehouseOutbound.field.selectMaterial')}
                                 required
                                 size="small"
                                 listFieldKey={index}
@@ -674,24 +674,24 @@ const MaterialBorrowsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: '单位',
+                    title: t('app.kuaizhizao.warehouseOutbound.col.unit'),
                     dataIndex: 'material_unit',
                     width: 80,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                        <Input placeholder="单位" size="small" />
+                        <Input placeholder={t('app.kuaizhizao.warehouseOutbound.col.unit')} size="small" />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: '库位',
+                    title: t('app.kuaizhizao.warehouseOutbound.col.location'),
                     dataIndex: 'location_code',
                     width: 180,
                     render: (_: any, __: any, index: number) => (
                       <AntForm.Item name={[index, 'location_code']} style={{ margin: 0 }}>
                         <Select
                           options={locationOptions}
-                          placeholder={selectedWarehouseId ? '请选择库位' : '请先选择仓库'}
+                          placeholder={selectedWarehouseId ? t('app.kuaizhizao.warehouseOutbound.field.selectLocation') : t('app.kuaizhizao.warehouseOutbound.field.selectWarehouseFirst')}
                           style={{ width: '100%' }}
                           size="small"
                           showSearch
@@ -703,18 +703,18 @@ const MaterialBorrowsPage: React.FC = () => {
                     ),
                   },
                   {
-                    title: '数量',
+                    title: t('app.kuaizhizao.warehouseOutbound.field.quantity'),
                     dataIndex: 'borrow_quantity',
                     width: 100,
                     align: 'right' as const,
                     render: (_: any, __: any, index: number) => (
-                      <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: '必填' }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
-                        <InputNumber placeholder="数量" min={0} precision={2} style={{ width: '100%' }} size="small" />
+                      <AntForm.Item name={[index, 'borrow_quantity']} rules={[{ required: true, message: t('app.kuaizhizao.warehouseOutbound.field.required') }, { type: 'number', min: 0.01, message: '>0' }]} style={{ margin: 0 }}>
+                        <InputNumber placeholder={t('app.kuaizhizao.warehouseOutbound.field.quantity')} min={0} precision={2} style={{ width: '100%' }} size="small" />
                       </AntForm.Item>
                     ),
                   },
                   {
-                    title: '操作',
+                    title: t('app.kuaizhizao.warehouseOutbound.col.actions'),
                     width: 60,
                     render: (_: any, __: any, index: number) => (
                       <Button type="link" danger size="small" icon={<DeleteOutlined />} onClick={() => remove(index)} disabled={fields.length <= 1} />
@@ -738,7 +738,7 @@ const MaterialBorrowsPage: React.FC = () => {
                         footer={() => (
                           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', width: '100%' }}>
                             <Button type="dashed" icon={<PlusOutlined />} style={{ flex: 1, minWidth: 120 }} onClick={() => add(defaultBorrowItem)}>
-                              添加明细
+                              {t('app.kuaizhizao.warehouseOutbound.action.addLine')}
                             </Button>
                             <Button
                               type="default"
@@ -759,14 +759,14 @@ const MaterialBorrowsPage: React.FC = () => {
           </AntForm.Item>
         </div>
         <DocumentAttachmentsField category="material_borrow_attachments" />
-        <ProFormTextArea name="notes" label="备注" placeholder="可选" fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.common.fieldNotes')} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <SyncFromDatasetModal
         open={syncModalVisible}
         onClose={() => setSyncModalVisible(false)}
         onConfirm={handleSyncConfirm}
-        title="从数据集同步借料单"
+        title={t('app.kuaizhizao.materialBorrow.syncTitle')}
       />
 
       <UniMaterialBatchPicker

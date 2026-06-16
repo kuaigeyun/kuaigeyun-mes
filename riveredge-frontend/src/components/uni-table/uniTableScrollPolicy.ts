@@ -12,6 +12,8 @@ export interface UniTableScrollPolicyInput {
   allowCustomScrollY: boolean
   /** 页面传入的 scroll.y（allowCustomScrollY 为 true 时生效） */
   restTableScrollY?: unknown
+  /** 始终占满视口剩余高度（报表等场景，忽略「当前页未装满」natural-height 规则） */
+  fillViewportBody?: boolean
   virtualized: boolean
   restTableVirtual: boolean
   /** 当前页表格行数（树表为根节点数） */
@@ -27,6 +29,7 @@ export interface UniTableScrollPolicyInput {
  * 由 UniTable 的 `viewportScrollForced` 补开 scroll.y（见 measureTableBodyOverflowsViewport）。
  */
 export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput): boolean {
+  if (input.fillViewportBody) return false
   if (input.allowCustomScrollY) return false
   if (input.virtualized || input.restTableVirtual) return false
 
@@ -39,6 +42,7 @@ export function shouldUseUniTableNaturalHeight(input: UniTableScrollPolicyInput)
 
 /** 是否向 ProTable 注入 scroll.y（限高模式） */
 export function shouldEnableUniTableBodyScrollY(input: UniTableScrollPolicyInput): boolean {
+  if (input.fillViewportBody) return true
   if (input.allowCustomScrollY && input.restTableScrollY != null) return true
   if (input.virtualized || input.restTableVirtual) return true
   return !shouldUseUniTableNaturalHeight(input)

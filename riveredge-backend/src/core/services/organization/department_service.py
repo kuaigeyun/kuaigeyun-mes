@@ -679,14 +679,14 @@ class DepartmentService:
 
     # 中国中小制造业极简部门预设（扁平结构）
     PRESET_DEPARTMENTS = [
-        {"name": "总经办", "code": "ZJB", "sort_order": 10},
-        {"name": "生产部", "code": "SCB", "sort_order": 20},
-        {"name": "采购部", "code": "CGB", "sort_order": 30},
-        {"name": "销售部", "code": "XSB", "sort_order": 40},
-        {"name": "仓储部", "code": "CCB", "sort_order": 50},
-        {"name": "质量部", "code": "ZLB", "sort_order": 60},
-        {"name": "财务部", "code": "CWB", "sort_order": 70},
-        {"name": "行政人事部", "code": "XZRSB", "sort_order": 80},
+        {"name": "总经办", "code": "EXEC", "sort_order": 10},
+        {"name": "生产部", "code": "PROD", "sort_order": 20},
+        {"name": "采购部", "code": "PURCH", "sort_order": 30},
+        {"name": "销售部", "code": "SALES", "sort_order": 40},
+        {"name": "仓储部", "code": "WH", "sort_order": 50},
+        {"name": "质量部", "code": "QC", "sort_order": 60},
+        {"name": "财务部", "code": "FIN", "sort_order": 70},
+        {"name": "行政人事部", "code": "HR", "sort_order": 80},
     ]
 
     @staticmethod

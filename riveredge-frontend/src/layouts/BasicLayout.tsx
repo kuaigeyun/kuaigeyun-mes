@@ -3270,7 +3270,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .riveredge-footer-settings-btn,
         .riveredge-footer-collapse-btn {
           width: 100% !important;
-          border-radius: ${Number(token.borderRadius || 6)}px !important;
+          border-radius: ${Number(token.borderRadius ?? 6)}px !important;
         }
         /* 系统设置入口：深色侧栏中性底 + 主题色字；浅色侧栏主色浅底 */
         .riveredge-footer-settings-btn {
@@ -3439,7 +3439,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           gap: 10px;
           color: ${startMenuTheme.panelItemColor};
           padding: 10px 8px;
-          border-radius: ${Number(token.borderRadius || 6)}px;
+          border-radius: ${Number(token.borderRadius ?? 6)}px;
           min-height: 76px;
           cursor: pointer;
           transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;

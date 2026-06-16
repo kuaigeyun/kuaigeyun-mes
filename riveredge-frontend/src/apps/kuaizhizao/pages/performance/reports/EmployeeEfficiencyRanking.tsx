@@ -1,14 +1,11 @@
-import React from 'react';
-import { ProColumns } from '@ant-design/pro-components';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
+import { buildPerformanceEfficiencyReportColumns } from '../components/performanceMeta';
 
 const EmployeeEfficiencyRanking: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    { title: '员工', dataIndex: 'worker_name', width: 140 },
-    { title: '合格产量', dataIndex: 'total_qty', valueType: 'digit', width: 120, align: 'right' },
-  ];
+  const columns = useMemo(() => buildPerformanceEfficiencyReportColumns(t), [t]);
 
   return (
     <KuaizhizaoReport

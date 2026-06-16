@@ -7,7 +7,8 @@
  * Date: 2026-01-15
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormDigit, ProFormSwitch } from '@ant-design/pro-components';
@@ -76,9 +77,11 @@ interface StocktakingItem {
 
 const STOCKTAKING_RESOURCE = 'kuaizhizao:warehouse-management-stocktaking';
 
-const granularityLabel = (value?: string) => (value === 'material' ? '物料汇总' : '批次行');
+const granularityLabel = (value: string | undefined, t: (key: string) => string) =>
+  value === 'material' ? t('app.kuaizhizao.stocktaking.granularityMaterial') : t('app.kuaizhizao.stocktaking.granularityBatch');
 
 const StocktakingPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const { canCreate, canUpdate, canDelete, canAction } = useResourcePermissions(STOCKTAKING_RESOURCE);
@@ -154,14 +157,14 @@ const StocktakingPage: React.FC = () => {
         remarks: values.remarks,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('盘点单创建成功');
+      messageApi.success(t('app.kuaizhizao.stocktaking.msgCreateSuccess'));
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '创建盘点单失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgCreateFailed'));
       throw error;
     }
   };
@@ -180,7 +183,7 @@ const StocktakingPage: React.FC = () => {
       await refreshCurrentDetail(record.id!);
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取盘点单详情失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgGetDetailFailed'));
     }
   };
 
@@ -190,11 +193,14 @@ const StocktakingPage: React.FC = () => {
   const handleStart = async (record: Stocktaking) => {
     const isFull = record.stocktaking_type === 'full';
     const content = isFull
-      ? `将按【${granularityLabel(record.line_granularity)}】载入仓库「${record.warehouse_name || ''}」的账面库存并进入盘点，确定开始吗？`
-      : `确定要开始盘点单 "${record.code}" 吗？抽盘/循环盘点可在开始后从仓库库存勾选明细。`;
+      ? t('app.kuaizhizao.stocktaking.msgStartFullContent', {
+          granularity: granularityLabel(record.line_granularity, t),
+          warehouse: record.warehouse_name || '',
+        })
+      : t('app.kuaizhizao.stocktaking.msgStartPartialContent', { code: record.code });
 
     Modal.confirm({
-      title: '开始盘点',
+      title: t('app.kuaizhizao.stocktaking.msgStartTitle'),
       content,
       onOk: async () => {
         try {
@@ -202,13 +208,13 @@ const StocktakingPage: React.FC = () => {
             line_granularity: record.line_granularity,
             include_zero_stock: record.include_zero_stock,
           });
-          messageApi.success('盘点已开始');
+          messageApi.success(t('app.kuaizhizao.stocktaking.msgStartSuccess'));
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
           await refreshCurrentDetail(record.id!);
           setDetailDrawerVisible(true);
         } catch (error: any) {
-          messageApi.error(error.message || '开始盘点失败');
+          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgStartFailed'));
         }
       },
     });
@@ -228,7 +234,7 @@ const StocktakingPage: React.FC = () => {
 
   const loadInventoryPicker = async (record: Stocktaking) => {
     if (!record.warehouse_id) {
-      messageApi.error('盘点单未指定仓库');
+      messageApi.error(t('app.kuaizhizao.stocktaking.msgNoWarehouse'));
       return;
     }
     setInventoryLoading(true);
@@ -246,7 +252,7 @@ const StocktakingPage: React.FC = () => {
       setSelectedInventoryKeys([]);
       setInventoryPickerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '加载仓库库存失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgLoadInventoryFailed'));
     } finally {
       setInventoryLoading(false);
     }
@@ -256,7 +262,7 @@ const StocktakingPage: React.FC = () => {
     if (!currentStocktaking?.id) return;
     const selected = inventoryRows.filter((row) => selectedInventoryKeys.includes(row.id));
     if (!selected.length) {
-      messageApi.warning('请至少选择一条库存');
+      messageApi.warning(t('app.kuaizhizao.stocktaking.msgSelectInventory'));
       return;
     }
     try {
@@ -271,13 +277,13 @@ const StocktakingPage: React.FC = () => {
           unit_price: 0,
         })),
       );
-      messageApi.success(`已添加 ${selected.length} 条盘点明细`);
+      messageApi.success(t('app.kuaizhizao.stocktaking.msgBulkAddSuccess', { count: selected.length }));
       setInventoryPickerVisible(false);
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       await refreshCurrentDetail(currentStocktaking.id);
     } catch (error: any) {
-      messageApi.error(error.message || '批量添加盘点明细失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgBulkAddFailed'));
     }
   };
 
@@ -287,13 +293,13 @@ const StocktakingPage: React.FC = () => {
   const handleAddItemSubmit = async (values: any) => {
     try {
       if (!currentStocktakingForItem?.id) {
-        messageApi.error('盘点单ID不存在');
+        messageApi.error(t('app.kuaizhizao.stocktaking.msgStocktakingIdNotFound'));
         return;
       }
 
       const material = materialList.find((m: any) => m.id === values.material_id);
       if (!material) {
-        messageApi.error('物料不存在');
+        messageApi.error(t('app.kuaizhizao.warehouseCommon.materialNotFound'));
         return;
       }
 
@@ -309,7 +315,7 @@ const StocktakingPage: React.FC = () => {
         remarks: values.remarks,
       });
       const stocktakingId = currentStocktakingForItem.id;
-      messageApi.success('盘点明细添加成功');
+      messageApi.success(t('app.kuaizhizao.stocktaking.msgAddItemSuccess'));
       setItemModalVisible(false);
       setCurrentStocktakingForItem(null);
       itemFormRef.current?.resetFields();
@@ -319,7 +325,7 @@ const StocktakingPage: React.FC = () => {
         await refreshCurrentDetail(stocktakingId);
       }
     } catch (error: any) {
-      messageApi.error(error.message || '添加盘点明细失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgAddItemFailed'));
       throw error;
     }
   };
@@ -335,12 +341,12 @@ const StocktakingPage: React.FC = () => {
         Number(actualQty),
         item.remarks,
       );
-      messageApi.success('实盘数量已保存');
+      messageApi.success(t('app.kuaizhizao.stocktaking.msgSaveActualSuccess'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
       await refreshCurrentDetail(currentStocktaking.id);
     } catch (error: any) {
-      messageApi.error(error.message || '保存实盘数量失败');
+      messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgSaveActualFailed'));
     } finally {
       setSavingItemId(null);
     }
@@ -354,21 +360,24 @@ const StocktakingPage: React.FC = () => {
   const handleComplete = async (record: Stocktaking) => {
     const hasDiff = (record.total_differences ?? 0) > 0;
     Modal.confirm({
-      title: '完成盘点',
+      title: t('app.kuaizhizao.stocktaking.msgCompleteTitle'),
       content: hasDiff
-        ? `盘点单 "${record.code}" 存在 ${record.total_differences} 处差异，完成后将调整库存。确定吗？`
-        : `盘点单 "${record.code}" 账实相符，确定完成盘点吗？`,
+        ? t('app.kuaizhizao.stocktaking.msgCompleteWithDiff', {
+            code: record.code,
+            count: record.total_differences,
+          })
+        : t('app.kuaizhizao.stocktaking.msgCompleteNoDiff', { code: record.code }),
       onOk: async () => {
         try {
           await stocktakingApi.complete(record.id!.toString());
-          messageApi.success('盘点已完成');
+          messageApi.success(t('app.kuaizhizao.stocktaking.msgCompleteSuccess'));
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
           if (detailDrawerVisible && currentStocktaking?.id === record.id) {
             await refreshCurrentDetail(record.id!);
           }
         } catch (error: any) {
-          messageApi.error(error.message || '完成盘点失败');
+          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgCompleteFailed'));
         }
       },
     });
@@ -376,20 +385,20 @@ const StocktakingPage: React.FC = () => {
 
   const handleWithdraw = (record: Stocktaking) => {
     Modal.confirm({
-      title: '撤回盘点',
-      content: `确定将盘点单 "${record.code}" 撤回到草稿吗？未录入实盘的明细将被清空，之后可删除该盘点单。`,
-      okText: '撤回',
+      title: t('app.kuaizhizao.stocktaking.msgWithdrawTitle'),
+      content: t('app.kuaizhizao.stocktaking.msgWithdrawContent', { code: record.code }),
+      okText: t('app.kuaizhizao.stocktaking.actionWithdraw'),
       onOk: async () => {
         try {
           await stocktakingApi.withdraw(record.id!.toString());
-          messageApi.success('盘点单已撤回为草稿');
+          messageApi.success(t('app.kuaizhizao.stocktaking.msgWithdrawSuccess'));
           invalidateMenuBadgeCounts();
           actionRef.current?.reload();
           if (detailDrawerVisible && currentStocktaking?.id === record.id) {
             await refreshCurrentDetail(record.id!);
           }
         } catch (error: any) {
-          messageApi.error(error.message || '撤回失败');
+          messageApi.error(error.message || t('app.kuaizhizao.stocktaking.msgWithdrawFailed'));
         }
       },
     });
@@ -398,9 +407,9 @@ const StocktakingPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<Stocktaking>[] = [
+  const columns: ProColumns<Stocktaking>[] = useMemo(() => [
     {
-      title: '仓库 / 盘点单号',
+      title: t('app.kuaizhizao.stocktaking.colWarehouseAndCode'),
       key: 'code',
       dataIndex: 'code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -412,42 +421,42 @@ const StocktakingPage: React.FC = () => {
         />
       ),
     },
-    { title: '盘点单号', dataIndex: 'code', hideInTable: true },
+    { title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'), dataIndex: 'code', hideInTable: true },
     {
-      title: '仓库',
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
       dataIndex: 'warehouse_name',
       hideInTable: true,
     },
     {
-      title: '盘点日期',
+      title: t('app.kuaizhizao.stocktaking.colStocktakingDate'),
       dataIndex: 'stocktaking_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '盘点类型',
+      title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
       dataIndex: 'stocktaking_type',
       width: 100,
       valueEnum: {
-        full: { text: '全盘', status: 'default' },
-        partial: { text: '抽盘', status: 'default' },
-        cycle: { text: '循环盘点', status: 'default' },
+        full: { text: t('app.kuaizhizao.stocktaking.typeFull'), status: 'default' },
+        partial: { text: t('app.kuaizhizao.stocktaking.typePartial'), status: 'default' },
+        cycle: { text: t('app.kuaizhizao.stocktaking.typeCycle'), status: 'default' },
       },
     },
     {
-      title: '盘点物料总数',
+      title: t('app.kuaizhizao.stocktaking.colTotalItems'),
       dataIndex: 'total_items',
       width: 120,
       align: 'right',
     },
     {
-      title: '已盘点物料数',
+      title: t('app.kuaizhizao.stocktaking.colCountedItems'),
       dataIndex: 'counted_items',
       width: 120,
       align: 'right',
     },
     {
-      title: '差异总数',
+      title: t('app.kuaizhizao.stocktaking.colTotalDiff'),
       dataIndex: 'total_differences',
       width: 100,
       align: 'right',
@@ -458,7 +467,7 @@ const StocktakingPage: React.FC = () => {
       ),
     },
     {
-      title: '差异总金额',
+      title: t('app.kuaizhizao.stocktaking.colTotalDiffAmount'),
       dataIndex: 'total_difference_amount',
       width: 120,
       align: 'right',
@@ -472,7 +481,7 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -480,7 +489,7 @@ const StocktakingPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -501,7 +510,7 @@ const StocktakingPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 300,
       fixed: 'right',
       render: (_, record) => (
@@ -509,45 +518,227 @@ const StocktakingPage: React.FC = () => {
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'draft' && canUpdate && (
             <Button {...rowActionKind('execute')} {...rowActionLabelKeep()} onClick={() => handleStart(record)}>
-              开始盘点
+              {t('app.kuaizhizao.stocktaking.actionStart')}
             </Button>
           )}
           {record.status === 'draft' && isPartialType(record) && canCreate && (
             <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
-              添加明细
+              {t('app.kuaizhizao.stocktaking.actionAddItem')}
             </Button>
           )}
           {record.status === 'in_progress' && isPartialType(record) && canCreate && (
             <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => handleAddItem(record)}>
-              添加明细
+              {t('app.kuaizhizao.stocktaking.actionAddItem')}
             </Button>
           )}
           {record.status === 'in_progress' && canComplete(record) && canUpdate && (
             <Button {...rowActionKind('complete')} {...rowActionLabelKeep()} onClick={() => handleComplete(record)}>
-              完成盘点
+              {t('app.kuaizhizao.stocktaking.actionComplete')}
             </Button>
           )}
           {record.status === 'in_progress' && canRevoke && (
             <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()} onClick={() => handleWithdraw(record)}>
-              撤回
+              {t('app.kuaizhizao.stocktaking.actionWithdraw')}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
+
+  const detailColumns = useMemo(() => [
+    {
+      title: t('app.kuaizhizao.warehouseReports.colStocktakingCode'),
+      dataIndex: 'code',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colWarehouse'),
+      dataIndex: 'warehouse_name',
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colStocktakingDate'),
+      dataIndex: 'stocktaking_date',
+      valueType: 'date',
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colStocktakingType'),
+      dataIndex: 'stocktaking_type',
+      valueEnum: {
+        full: t('app.kuaizhizao.stocktaking.typeFull'),
+        partial: t('app.kuaizhizao.stocktaking.typePartial'),
+        cycle: t('app.kuaizhizao.stocktaking.typeCycle'),
+      },
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.formLineGranularity'),
+      dataIndex: 'line_granularity',
+      render: (_: unknown, entity: Stocktaking) => granularityLabel(entity.line_granularity, t),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueEnum: {
+        draft: { text: t('app.kuaizhizao.warehouseCommon.statusDraft'), status: 'default' },
+        in_progress: { text: t('app.kuaizhizao.stocktaking.statusInProgress'), status: 'processing' },
+        completed: { text: t('app.kuaizhizao.warehouseCommon.statusCompleted'), status: 'success' },
+        cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled'), status: 'error' },
+      },
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colTotalItems'),
+      dataIndex: 'total_items',
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colCountedItems'),
+      dataIndex: 'counted_items',
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colTotalDiff'),
+      dataIndex: 'total_differences',
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colTotalDiffAmount'),
+      dataIndex: 'total_difference_amount',
+      render: (dom: React.ReactNode, entity: Stocktaking) => `¥${Number(entity.total_difference_amount ?? 0).toFixed(2)}`,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colRemarks'),
+      dataIndex: 'remarks',
+    },
+  ], [t]);
+
+  const inventoryPickerColumns = useMemo(() => [
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialCode'), dataIndex: 'material_code', width: 120 },
+    { title: t('app.kuaizhizao.warehouseReports.colMaterialName'), dataIndex: 'material_name', width: 160 },
+    { title: t('app.kuaizhizao.warehouseReports.colBatchNo'), dataIndex: 'batch_no', width: 120, render: (v: string) => v || '-' },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colBookQty'),
+      dataIndex: 'quantity',
+      width: 100,
+      align: 'right' as const,
+      render: (v: number) => Number(v ?? 0).toFixed(2),
+    },
+  ], [t]);
+
+  const detailItemColumns = useMemo(() => [
+    {
+      title: t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+      dataIndex: 'material_code',
+      width: 120,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+      dataIndex: 'material_name',
+      width: 150,
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
+      dataIndex: 'batch_no',
+      width: 100,
+      render: (v: string) => v || '-',
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colBookQty'),
+      dataIndex: 'book_quantity',
+      width: 100,
+      align: 'right' as const,
+      render: (v: number) => Number(v ?? 0).toFixed(2),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colActualQty'),
+      dataIndex: 'actual_quantity',
+      width: 140,
+      align: 'right' as const,
+      render: (_: unknown, item: StocktakingItem) => {
+        if (currentStocktaking?.status !== 'in_progress' || item.status !== 'pending') {
+          return Number(item.actual_quantity ?? 0).toFixed(2);
+        }
+        const itemId = item.id!;
+        return (
+          <InputNumber
+            size="small"
+            min={0}
+            precision={2}
+            style={{ width: '100%' }}
+            value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
+            onChange={(val) => {
+              setEditingActualQty((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));
+            }}
+          />
+        );
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseReports.colDiffQty'),
+      dataIndex: 'difference_quantity',
+      width: 100,
+      align: 'right' as const,
+      render: (value: number) => {
+        const qty = Number(value ?? 0);
+        return (
+          <span style={{ color: qty > 0 ? '#ff4d4f' : qty < 0 ? '#1890ff' : '#52c41a' }}>
+            {qty > 0 ? '+' : ''}{qty.toFixed(2)}
+          </span>
+        );
+      },
+    },
+    {
+      title: t('app.kuaizhizao.stocktaking.colDiffAmount'),
+      dataIndex: 'difference_amount',
+      width: 100,
+      align: 'right' as const,
+      render: (value: number) => {
+        const amount = Number(value ?? 0);
+        return (
+          <span style={{ color: amount > 0 ? '#ff4d4f' : amount < 0 ? '#1890ff' : '#52c41a' }}>
+            ¥{amount.toFixed(2)}
+          </span>
+        );
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      width: 100,
+      render: (status: string) => {
+        const statusMap: Record<string, { text: string; color: string }> = {
+          pending: { text: t('app.kuaizhizao.stocktaking.statusItemPending'), color: 'default' },
+          counted: { text: t('app.kuaizhizao.stocktaking.statusItemCounted'), color: 'processing' },
+          adjusted: { text: t('app.kuaizhizao.stocktaking.statusItemAdjusted'), color: 'success' },
+        };
+        const statusInfo = statusMap[status] || { text: status, color: 'default' };
+        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+      },
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
+      width: 100,
+      render: (_: unknown, item: StocktakingItem) => (
+        currentStocktaking?.status === 'in_progress' && item.status === 'pending' && canUpdate ? (
+          <Button
+            type="link"
+            size="small"
+            loading={savingItemId === item.id}
+            onClick={() => handleSaveActualQuantity(item)}
+          >
+            {t('app.kuaizhizao.warehouseCommon.save')}
+          </Button>
+        ) : null
+      ),
+    },
+  ], [t, currentStocktaking, editingActualQty, savingItemId, canUpdate]);
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="成品盘点"
+        headerTitle={t('app.kuaizhizao.stocktaking.headerTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.stocktaking"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch={true}
         showCreateButton={canCreate}
-        createButtonText="新建盘点单"
+        createButtonText={t('app.kuaizhizao.stocktaking.createButton')}
         onCreate={canCreate ? handleCreate : undefined}
         request={async (params, _sort, _filter, searchFormValues) => {
           try {
@@ -581,20 +772,20 @@ const StocktakingPage: React.FC = () => {
             for (const id of keys) {
               await stocktakingApi.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条盘点单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.stocktaking.deleteConfirm', { count })}
         scroll={{ x: 2200 }}
       />
 
       {/* 创建盘点单Modal */}
       <FormModalTemplate
-        title="创建盘点单"
+        title={t('app.kuaizhizao.stocktaking.modalCreate')}
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
@@ -609,8 +800,8 @@ const StocktakingPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.warehouseReports.colWarehouse')}
+              placeholder={t('app.kuaizhizao.stocktaking.formWarehousePlaceholder')}
               required
               onChange={(_value, warehouse) => {
                 formRef.current?.setFieldsValue({ _warehouse_name: warehouse?.name ?? '' });
@@ -620,8 +811,8 @@ const StocktakingPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="stocktaking_date"
-              label="盘点日期"
-              rules={[{ required: true, message: '请选择盘点日期' }]}
+              label={t('app.kuaizhizao.stocktaking.colStocktakingDate')}
+              rules={[{ required: true, message: t('app.kuaizhizao.stocktaking.formStocktakingDateRequired') }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -630,45 +821,45 @@ const StocktakingPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="stocktaking_type"
-              label="盘点类型"
-              rules={[{ required: true, message: '请选择盘点类型' }]}
+              label={t('app.kuaizhizao.stocktaking.formStocktakingType')}
+              rules={[{ required: true, message: t('app.kuaizhizao.stocktaking.formStocktakingTypeRequired') }]}
               options={[
-                { label: '全盘', value: 'full' },
-                { label: '抽盘', value: 'partial' },
-                { label: '循环盘点', value: 'cycle' },
+                { label: t('app.kuaizhizao.stocktaking.typeFull'), value: 'full' },
+                { label: t('app.kuaizhizao.stocktaking.typePartial'), value: 'partial' },
+                { label: t('app.kuaizhizao.stocktaking.typeCycle'), value: 'cycle' },
               ]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="line_granularity"
-              label="明细粒度"
-              rules={[{ required: true, message: '请选择明细粒度' }]}
+              label={t('app.kuaizhizao.stocktaking.formLineGranularity')}
+              rules={[{ required: true, message: t('app.kuaizhizao.stocktaking.formLineGranularityRequired') }]}
               options={[
-                { label: '批次行', value: 'batch' },
-                { label: '物料汇总', value: 'material' },
+                { label: t('app.kuaizhizao.stocktaking.granularityBatch'), value: 'batch' },
+                { label: t('app.kuaizhizao.stocktaking.granularityMaterial'), value: 'material' },
               ]}
             />
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormSwitch name="include_zero_stock" label="包含零库存" />
+            <ProFormSwitch name="include_zero_stock" label={t('app.kuaizhizao.stocktaking.formIncludeZeroStock')} />
           </Col>
           <Col span={12} />
         </Row>
         <DocumentAttachmentsField category="stocktaking_attachments" />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       {/* 添加盘点明细Modal */}
       <FormModalTemplate
-        title="添加盘点明细"
+        title={t('app.kuaizhizao.stocktaking.modalAddItem')}
         open={itemModalVisible}
         onClose={() => {
           setItemModalVisible(false);
@@ -681,9 +872,9 @@ const StocktakingPage: React.FC = () => {
       >
         <ProFormSelect
           name="material_id"
-          label="物料"
-          placeholder="请选择物料"
-          rules={[{ required: true, message: '请选择物料' }]}
+          label={t('app.kuaizhizao.warehouseCommon.colMaterial')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
+          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectMaterial') }]}
           options={materialList.map((m: any) => ({
             label: `${m.mainCode ?? m.code ?? ''} - ${m.name}`,
             value: m.id,
@@ -696,36 +887,36 @@ const StocktakingPage: React.FC = () => {
         />
         <ProFormDigit
           name="unit_price"
-          label="单价"
-          placeholder="请输入单价"
+          label={t('app.kuaizhizao.warehouseCommon.colUnitPrice')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.colUnitPrice')}
           min={0}
           fieldProps={{ precision: 2 }}
         />
         <ProFormText
           name="location_code"
-          label="库位编号（可选）"
-          placeholder="请输入库位编号"
+          label={t('app.kuaizhizao.stocktaking.formLocationCodeOptional')}
+          placeholder={t('app.kuaizhizao.stocktaking.formLocationCodePlaceholder')}
         />
         <ProFormText
           name="batch_no"
-          label="批次号（可选）"
-          placeholder="请输入批次号"
+          label={t('app.kuaizhizao.stocktaking.formBatchNoOptional')}
+          placeholder={t('app.kuaizhizao.stocktaking.formBatchNoPlaceholder')}
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')}
           fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
 
       <Modal
-        title="从仓库库存选择"
+        title={t('app.kuaizhizao.stocktaking.modalInventoryPicker')}
         open={inventoryPickerVisible}
         onCancel={() => setInventoryPickerVisible(false)}
         onOk={handleInventoryPickerSubmit}
         width={900}
-        okText="添加到盘点单"
+        okText={t('app.kuaizhizao.stocktaking.modalInventoryPickerOk')}
       >
         <Table
           rowKey="id"
@@ -738,24 +929,13 @@ const StocktakingPage: React.FC = () => {
           pagination={false}
           scroll={{ y: 400 }}
           size="small"
-          columns={[
-            { title: '物料编码', dataIndex: 'material_code', width: 120 },
-            { title: '物料名称', dataIndex: 'material_name', width: 160 },
-            { title: '批次号', dataIndex: 'batch_no', width: 120, render: (v) => v || '-' },
-            {
-              title: '账面数量',
-              dataIndex: 'quantity',
-              width: 100,
-              align: 'right',
-              render: (v) => Number(v ?? 0).toFixed(2),
-            },
-          ]}
+          columns={inventoryPickerColumns}
         />
       </Modal>
 
       {/* 详情Drawer */}
       <DetailDrawerTemplate
-        title="盘点单详情"
+        title={t('app.kuaizhizao.stocktaking.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -763,66 +943,7 @@ const StocktakingPage: React.FC = () => {
         }}
         dataSource={currentStocktaking || {}}
         width={DRAWER_CONFIG.HALF_WIDTH}
-        columns={[
-          {
-            title: '盘点单号',
-            dataIndex: 'code',
-          },
-          {
-            title: '仓库',
-            dataIndex: 'warehouse_name',
-          },
-          {
-            title: '盘点日期',
-            dataIndex: 'stocktaking_date',
-            valueType: 'date',
-          },
-          {
-            title: '盘点类型',
-            dataIndex: 'stocktaking_type',
-            valueEnum: {
-              full: '全盘',
-              partial: '抽盘',
-              cycle: '循环盘点',
-            },
-          },
-          {
-            title: '明细粒度',
-            dataIndex: 'line_granularity',
-            render: (_: unknown, entity: Stocktaking) => granularityLabel(entity.line_granularity),
-          },
-          {
-            title: '状态',
-            dataIndex: 'status',
-            valueEnum: {
-              draft: { text: '草稿', status: 'default' },
-              in_progress: { text: '盘点中', status: 'processing' },
-              completed: { text: '已完成', status: 'success' },
-              cancelled: { text: '已取消', status: 'error' },
-            },
-          },
-          {
-            title: '盘点物料总数',
-            dataIndex: 'total_items',
-          },
-          {
-            title: '已盘点物料数',
-            dataIndex: 'counted_items',
-          },
-          {
-            title: '差异总数',
-            dataIndex: 'total_differences',
-          },
-          {
-            title: '差异总金额',
-            dataIndex: 'total_difference_amount',
-            render: (dom: React.ReactNode, entity: Stocktaking) => `¥${Number(entity.total_difference_amount ?? 0).toFixed(2)}`,
-          },
-          {
-            title: '备注',
-            dataIndex: 'remarks',
-          },
-        ]}
+        columns={detailColumns}
         customContent={
           currentStocktaking && (
             <>
@@ -834,13 +955,13 @@ const StocktakingPage: React.FC = () => {
                         icon={<DatabaseOutlined />}
                         onClick={() => loadInventoryPicker(currentStocktaking)}
                       >
-                        从仓库库存选择
+                        {t('app.kuaizhizao.stocktaking.actionPickFromInventory')}
                       </Button>
                       <Button
                         icon={<PlusOutlined />}
                         onClick={() => handleAddItem(currentStocktaking)}
                       >
-                        手工添加明细
+                        {t('app.kuaizhizao.stocktaking.actionManualAddItem')}
                       </Button>
                     </>
                   )}
@@ -850,128 +971,22 @@ const StocktakingPage: React.FC = () => {
                       icon={<CheckCircleOutlined />}
                       onClick={() => handleComplete(currentStocktaking)}
                     >
-                      完成盘点
+                      {t('app.kuaizhizao.stocktaking.actionComplete')}
                     </Button>
                   )}
                   {canRevoke && (
                     <Button icon={<RollbackOutlined />} onClick={() => handleWithdraw(currentStocktaking)}>
-                      撤回
+                      {t('app.kuaizhizao.stocktaking.actionWithdraw')}
                     </Button>
                   )}
                 </Space>
               )}
               {currentStocktaking.items && currentStocktaking.items.length > 0 ? (
-            <Card title="盘点明细" style={{ marginTop: 16 }}>
+            <Card title={t('app.kuaizhizao.stocktaking.detailItemsTitle')} style={{ marginTop: 16 }}>
               <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
               <Table
                 className="warehouse-detail-table"
-                columns={[
-                  {
-                    title: '物料编号',
-                    dataIndex: 'material_code',
-                    width: 120,
-                  },
-                  {
-                    title: '物料名称',
-                    dataIndex: 'material_name',
-                    width: 150,
-                  },
-                  {
-                    title: '批次号',
-                    dataIndex: 'batch_no',
-                    width: 100,
-                    render: (v) => v || '-',
-                  },
-                  {
-                    title: '账面数量',
-                    dataIndex: 'book_quantity',
-                    width: 100,
-                    align: 'right',
-                    render: (v) => Number(v ?? 0).toFixed(2),
-                  },
-                  {
-                    title: '实盘数量',
-                    dataIndex: 'actual_quantity',
-                    width: 140,
-                    align: 'right',
-                    render: (_: unknown, item: StocktakingItem) => {
-                      if (currentStocktaking.status !== 'in_progress' || item.status !== 'pending') {
-                        return Number(item.actual_quantity ?? 0).toFixed(2);
-                      }
-                      const itemId = item.id!;
-                      return (
-                        <InputNumber
-                          size="small"
-                          min={0}
-                          precision={2}
-                          style={{ width: '100%' }}
-                          value={editingActualQty[itemId] ?? item.actual_quantity ?? item.book_quantity ?? 0}
-                          onChange={(val) => {
-                            setEditingActualQty((prev) => ({ ...prev, [itemId]: Number(val ?? 0) }));
-                          }}
-                        />
-                      );
-                    },
-                  },
-                  {
-                    title: '差异数量',
-                    dataIndex: 'difference_quantity',
-                    width: 100,
-                    align: 'right',
-                    render: (value: number) => {
-                      const qty = Number(value ?? 0);
-                      return (
-                        <span style={{ color: qty > 0 ? '#ff4d4f' : qty < 0 ? '#1890ff' : '#52c41a' }}>
-                          {qty > 0 ? '+' : ''}{qty.toFixed(2)}
-                        </span>
-                      );
-                    },
-                  },
-                  {
-                    title: '差异金额',
-                    dataIndex: 'difference_amount',
-                    width: 100,
-                    align: 'right',
-                    render: (value: number) => {
-                      const amount = Number(value ?? 0);
-                      return (
-                        <span style={{ color: amount > 0 ? '#ff4d4f' : amount < 0 ? '#1890ff' : '#52c41a' }}>
-                          ¥{amount.toFixed(2)}
-                        </span>
-                      );
-                    },
-                  },
-                  {
-                    title: '状态',
-                    dataIndex: 'status',
-                    width: 100,
-                    render: (status: string) => {
-                      const statusMap: Record<string, { text: string; color: string }> = {
-                        pending: { text: '待盘点', color: 'default' },
-                        counted: { text: '已盘点', color: 'processing' },
-                        adjusted: { text: '已调整', color: 'success' },
-                      };
-                      const statusInfo = statusMap[status] || { text: status, color: 'default' };
-                      return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-                    },
-                  },
-                  {
-                    title: '操作',
-                    width: 100,
-                    render: (_: unknown, item: StocktakingItem) => (
-                      currentStocktaking.status === 'in_progress' && item.status === 'pending' && canUpdate ? (
-                        <Button
-                          type="link"
-                          size="small"
-                          loading={savingItemId === item.id}
-                          onClick={() => handleSaveActualQuantity(item)}
-                        >
-                          保存
-                        </Button>
-                      ) : null
-                    ),
-                  },
-                ]}
+                columns={detailItemColumns}
                 dataSource={currentStocktaking.items}
                 rowKey="id"
                 pagination={false}
@@ -982,8 +997,8 @@ const StocktakingPage: React.FC = () => {
               ) : (
                 <Card style={{ marginTop: 16 }}>
                   {currentStocktaking.status === 'draft'
-                    ? '开始盘点后将自动载入账面库存（全盘）或从仓库库存勾选明细（抽盘）。'
-                    : '暂无盘点明细'}
+                    ? t('app.kuaizhizao.stocktaking.emptyDraftHint')
+                    : t('app.kuaizhizao.stocktaking.emptyNoItems')}
                 </Card>
               )}
             </>

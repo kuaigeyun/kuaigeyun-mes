@@ -33,6 +33,11 @@ import {
 } from '../../../utils/factoryImportTemplate';
 import { useCustomFieldsForList } from '../../../../../hooks/useCustomFieldsForList';
 import {
+  resolvePresetOperationIndustryName,
+  resolvePresetOperationNameByKey,
+  resolvePresetOperationNameByName,
+} from '../../../../../utils/presetEntityI18n';
+import {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,
 } from '../../../../../components/custom-fields';
@@ -120,7 +125,11 @@ const OperationsPage: React.FC = () => {
   const operationDetailColumns: ProDescriptionsItemProps<Operation>[] = useMemo(
     () => [
       { title: t('field.operation.code'), dataIndex: 'code' },
-      { title: t('field.operation.name'), dataIndex: 'name' },
+      {
+        title: t('field.operation.name'),
+        dataIndex: 'name',
+        render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
+      },
       { title: t('field.operation.description'), dataIndex: 'description', span: 2 },
       {
         title: t('field.route.isActive'),
@@ -498,6 +507,7 @@ const OperationsPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       sorter: true,
+      render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
     },
     {
       title: '描述',
@@ -865,7 +875,7 @@ const OperationsPage: React.FC = () => {
             value={presetIndustryId || undefined}
             options={(presetCatalog?.industries ?? []).map((ind) => ({
               value: ind.id,
-              label: ind.name,
+              label: resolvePresetOperationIndustryName(ind.id, ind.name, t),
             }))}
             onChange={(v: string) => {
               setPresetIndustryId(v);
@@ -888,7 +898,14 @@ const OperationsPage: React.FC = () => {
             onChange: (keys) => setSelectedPresetKeys(keys as string[]),
           }}
           columns={[
-            { title: t('field.operation.name'), dataIndex: 'name', width: 140, ellipsis: true },
+            {
+              title: t('field.operation.name'),
+              dataIndex: 'name',
+              width: 140,
+              ellipsis: true,
+              render: (_: unknown, row: OperationPresetRow) =>
+                resolvePresetOperationNameByKey(row.presetKey, row.name, t),
+            },
             {
               title: t('field.department.sortOrder'),
               dataIndex: 'sortOrder',

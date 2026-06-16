@@ -7,7 +7,8 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Tag, Button, Space } from 'antd';
@@ -20,6 +21,8 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { apiRequest } from '../../../../../services/api';
 import { materialApi } from '../../../../master-data/services/material';
+
+const P = 'app.kuaizhizao.productionException';
 
 /**
  * 缺料异常接口定义
@@ -49,6 +52,7 @@ interface MaterialShortageException {
  * 缺料异常处理页面组件
  */
 const MaterialShortageExceptionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -59,6 +63,54 @@ const MaterialShortageExceptionsPage: React.FC = () => {
   const [materialList, setMaterialList] = useState<any[]>([]);
   const handleFormRef = useRef<any>(null);
 
+  const alertLevelLabel = useCallback(
+    (level?: string) => {
+      const map: Record<string, string> = {
+        critical: t(`${P}.alertLevel.critical`),
+        high: t(`${P}.alertLevel.high`),
+        medium: t(`${P}.alertLevel.medium`),
+        low: t(`${P}.alertLevel.low`),
+      };
+      return level ? (map[level] ?? level) : '-';
+    },
+    [t],
+  );
+
+  const statusLabel = useCallback(
+    (status?: string) => {
+      const map: Record<string, string> = {
+        pending: t(`${P}.status.pending`),
+        processing: t(`${P}.status.processing`),
+        resolved: t(`${P}.status.resolved`),
+        cancelled: t(`${P}.status.cancelled`),
+      };
+      return status ? (map[status] ?? status) : '-';
+    },
+    [t],
+  );
+
+  const suggestedActionLabel = useCallback(
+    (action?: string) => {
+      const map: Record<string, string> = {
+        purchase: t(`${P}.suggestedAction.purchase`),
+        substitute: t(`${P}.suggestedAction.substitute`),
+        adjust: t(`${P}.suggestedAction.adjust`),
+      };
+      return action ? (map[action] ?? action) : '-';
+    },
+    [t],
+  );
+
+  const handleModalTitle = useMemo(() => {
+    const map: Record<string, string> = {
+      purchase: t(`${P}.materialShortage.modal.handlePurchase`),
+      substitute: t(`${P}.materialShortage.modal.handleSubstitute`),
+      resolve: t(`${P}.materialShortage.modal.handleResolve`),
+      cancel: t(`${P}.materialShortage.modal.handleCancel`),
+    };
+    return map[currentAction] ?? t(`${P}.materialShortage.modal.handleDefault`);
+  }, [currentAction, t]);
+
   /**
    * 处理查看详情
    */
@@ -67,7 +119,6 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     setDetailDrawerVisible(true);
   };
 
-  // 加载物料列表
   useEffect(() => {
     const loadMaterials = async () => {
       try {
@@ -80,9 +131,6 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     loadMaterials();
   }, []);
 
-  /**
-   * 打开处理异常Modal
-   */
   const openHandleModal = (record: MaterialShortageException, action: string) => {
     setCurrentRecord(record);
     setCurrentAction(action);
@@ -92,13 +140,10 @@ const MaterialShortageExceptionsPage: React.FC = () => {
     }, 100);
   };
 
-  /**
-   * 处理缺料异常
-   */
   const handleException = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('异常记录不存在');
+        throw new Error(t(`${P}.message.recordNotFound`));
       }
 
       const params: any = {
@@ -123,12 +168,12 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       if (handled?.scheduling_deep_link) {
         messageApi.success(
           <span>
-            {handled.scheduling_notice || '处理成功'}，
-            <a href={handled.scheduling_deep_link}>前往可视排产</a>
+            {handled.scheduling_notice || t(`${P}.message.handleSuccess`)}，
+            <a href={handled.scheduling_deep_link}>{t(`${P}.message.goToVisualScheduling`)}</a>
           </span>
         );
       } else {
-        messageApi.success('处理成功');
+        messageApi.success(t(`${P}.message.handleSuccess`));
       }
       setHandleModalVisible(false);
       setCurrentRecord(null);
@@ -137,23 +182,20 @@ const MaterialShortageExceptionsPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '处理失败');
+      messageApi.error(error.message || t(`${P}.message.handleFailed`));
       throw error;
     }
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<MaterialShortageException>[] = [
+  const columns: ProColumns<MaterialShortageException>[] = useMemo(() => [
     {
-      title: '工单编号',
+      title: t(`${P}.col.workOrderCode`),
       dataIndex: 'work_order_code',
       width: 140,
       fixed: 'left',
     },
     {
-      title: '物料',
+      title: t(`${P}.col.material`),
       key: 'material_name',
       dataIndex: 'material_name',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -164,22 +206,22 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         />
       ),
     },
-    { title: '物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '物料名称', dataIndex: 'material_name', hideInTable: true },
+    { title: t(`${P}.col.materialCode`), dataIndex: 'material_code', hideInTable: true },
+    { title: t(`${P}.col.materialName`), dataIndex: 'material_name', hideInTable: true },
     {
-      title: '需求数量',
+      title: t(`${P}.col.requiredQty`),
       dataIndex: 'required_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '可用数量',
+      title: t(`${P}.col.availableQty`),
       dataIndex: 'available_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '缺料数量',
+      title: t(`${P}.col.shortageQty`),
       dataIndex: 'shortage_quantity',
       width: 100,
       align: 'right',
@@ -190,45 +232,45 @@ const MaterialShortageExceptionsPage: React.FC = () => {
       ),
     },
     {
-      title: '预警级别',
+      title: t(`${P}.col.alertLevel`),
       dataIndex: 'alert_level',
       width: 100,
       valueEnum: {
-        low: { text: '低', status: 'default' },
-        medium: { text: '中', status: 'warning' },
-        high: { text: '高', status: 'error' },
-        critical: { text: '紧急', status: 'error' },
+        low: { text: t(`${P}.alertLevel.low`), status: 'default' },
+        medium: { text: t(`${P}.alertLevel.medium`), status: 'warning' },
+        high: { text: t(`${P}.alertLevel.high`), status: 'error' },
+        critical: { text: t(`${P}.alertLevel.critical`), status: 'error' },
       },
     },
     {
-      title: '状态',
+      title: t(`${P}.col.status`),
       dataIndex: 'status',
       width: 100,
       valueEnum: {
-        pending: { text: '待处理', status: 'default' },
-        processing: { text: '处理中', status: 'processing' },
-        resolved: { text: '已解决', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        pending: { text: t(`${P}.status.pending`), status: 'default' },
+        processing: { text: t(`${P}.status.processing`), status: 'processing' },
+        resolved: { text: t(`${P}.status.resolved`), status: 'success' },
+        cancelled: { text: t(`${P}.status.cancelled`), status: 'error' },
       },
     },
     {
-      title: '建议操作',
+      title: t(`${P}.col.suggestedAction`),
       dataIndex: 'suggested_action',
       width: 100,
       valueEnum: {
-        purchase: { text: '采购', status: 'processing' },
-        substitute: { text: '替代', status: 'warning' },
-        adjust: { text: '调整', status: 'default' },
+        purchase: { text: t(`${P}.suggestedAction.purchase`), status: 'processing' },
+        substitute: { text: t(`${P}.suggestedAction.substitute`), status: 'warning' },
+        adjust: { text: t(`${P}.suggestedAction.adjust`), status: 'default' },
       },
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => (
@@ -239,7 +281,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            详情
+            {t('common.detail')}
           </Button>
           {record.status === 'pending' && (
             <>
@@ -249,7 +291,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
                 icon={<ShoppingOutlined />}
                 onClick={() => openHandleModal(record, 'purchase')}
               >
-                采购
+                {t(`${P}.action.purchase`)}
               </Button>
               <Button
                 type="link"
@@ -257,7 +299,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
                 icon={<SwapOutlined />}
                 onClick={() => openHandleModal(record, 'substitute')}
               >
-                替代
+                {t(`${P}.action.substitute`)}
               </Button>
               <Button
                 type="link"
@@ -265,7 +307,7 @@ const MaterialShortageExceptionsPage: React.FC = () => {
                 icon={<CheckCircleOutlined />}
                 onClick={() => openHandleModal(record, 'resolve')}
               >
-                已解决
+                {t(`${P}.action.resolve`)}
               </Button>
               <Button
                 type="link"
@@ -274,20 +316,20 @@ const MaterialShortageExceptionsPage: React.FC = () => {
                 onClick={() => openHandleModal(record, 'cancel')}
                 danger
               >
-                取消
+                {t(`${P}.action.cancel`)}
               </Button>
             </>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
 
   return (
     <ListPageTemplate>
       <UniTable
         columnPersistenceId="apps.kuaizhizao.pages.production-execution.material-shortage-exceptions"
-        headerTitle="缺料异常"
+        headerTitle={t(`${P}.materialShortage.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -307,8 +349,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
               success: true,
               total: result?.length || 0,
             };
-          } catch (error) {
-            messageApi.error('获取异常列表失败');
+          } catch {
+            messageApi.error(t(`${P}.message.fetchListFailed`));
             return {
               data: [],
               success: false,
@@ -319,9 +361,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         showAdvancedSearch={true}
       />
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title={`缺料异常详情 - ${currentRecord?.work_order_code || ''}`}
+        title={t(`${P}.materialShortage.detailTitle`, { code: currentRecord?.work_order_code || '' })}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -332,46 +373,42 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
-              <p><strong>物料编号：</strong>{currentRecord.material_code}</p>
-              <p><strong>物料名称：</strong>{currentRecord.material_name}</p>
-              <p><strong>需求数量：</strong>{currentRecord.required_quantity}</p>
-              <p><strong>可用数量：</strong>{currentRecord.available_quantity}</p>
-              <p><strong>缺料数量：</strong>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
+              <p><strong>{t(`${P}.col.materialCode`)}:</strong> {currentRecord.material_code}</p>
+              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name}</p>
+              <p><strong>{t(`${P}.col.requiredQty`)}:</strong> {currentRecord.required_quantity}</p>
+              <p><strong>{t(`${P}.col.availableQty`)}:</strong> {currentRecord.available_quantity}</p>
+              <p><strong>{t(`${P}.col.shortageQty`)}:</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
                   {currentRecord.shortage_quantity}
                 </span>
               </p>
-              <p><strong>预警级别：</strong>
+              <p><strong>{t(`${P}.col.alertLevel`)}:</strong>
                 <Tag color={
                   currentRecord.alert_level === 'critical' ? 'red' :
                     currentRecord.alert_level === 'high' ? 'orange' :
                       currentRecord.alert_level === 'medium' ? 'gold' : 'default'
                 }>
-                  {currentRecord.alert_level === 'critical' ? '紧急' :
-                    currentRecord.alert_level === 'high' ? '高' :
-                      currentRecord.alert_level === 'medium' ? '中' : '低'}
+                  {alertLevelLabel(currentRecord.alert_level)}
                 </Tag>
               </p>
-              <p><strong>状态：</strong>
+              <p><strong>{t(`${P}.col.status`)}:</strong>
                 <Tag color={
                   currentRecord.status === 'resolved' ? 'success' :
                     currentRecord.status === 'processing' ? 'processing' :
                       currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
-                  {currentRecord.status === 'resolved' ? '已解决' :
-                    currentRecord.status === 'processing' ? '处理中' :
-                      currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                  {statusLabel(currentRecord.status)}
                 </Tag>
               </p>
-              <p><strong>建议操作：</strong>{currentRecord.suggested_action || '-'}</p>
+              <p><strong>{t(`${P}.col.suggestedAction`)}:</strong> {suggestedActionLabel(currentRecord.suggested_action)}</p>
               {currentRecord.alternative_material_name && (
-                <p><strong>替代物料：</strong>{currentRecord.alternative_material_name}</p>
+                <p><strong>{t(`${P}.field.alternativeMaterial`)}:</strong> {currentRecord.alternative_material_name}</p>
               )}
               {currentRecord.handled_by_name && (
                 <>
-                  <p><strong>处理人：</strong>{currentRecord.handled_by_name}</p>
-                  <p><strong>处理时间：</strong>{currentRecord.handled_at}</p>
+                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
+                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
                 </>
               )}
             </div>
@@ -379,15 +416,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         }
       />
 
-      {/* 处理异常 Modal */}
       <FormModalTemplate
-        title={
-          currentAction === 'purchase' ? '处理缺料异常 - 采购' :
-            currentAction === 'substitute' ? '处理缺料异常 - 替代物料' :
-              currentAction === 'resolve' ? '处理缺料异常 - 已解决' :
-                currentAction === 'cancel' ? '处理缺料异常 - 取消' :
-                  '处理缺料异常'
-        }
+        title={handleModalTitle}
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
@@ -402,9 +432,9 @@ const MaterialShortageExceptionsPage: React.FC = () => {
         {currentRecord && (
           <>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code}</p>
-              <p><strong>物料名称：</strong>{currentRecord.material_name}</p>
-              <p><strong>缺料数量：</strong>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code}</p>
+              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name}</p>
+              <p><strong>{t(`${P}.col.shortageQty`)}:</strong>
                 <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
                   {currentRecord.shortage_quantity}
                 </span>
@@ -413,15 +443,15 @@ const MaterialShortageExceptionsPage: React.FC = () => {
             {currentAction === 'substitute' && (
               <ProFormSelect
                 name="alternativeMaterialId"
-                label="替代物料"
-                placeholder="请选择替代物料"
+                label={t(`${P}.field.alternativeMaterial`)}
+                placeholder={t(`${P}.materialShortage.placeholder.alternativeMaterial`)}
                 options={materialList
                   .filter(m => m.id !== currentRecord.material_id)
                   .map(material => ({
                     label: `${material.code || material.mainCode} - ${material.name}`,
                     value: material.id,
                   }))}
-                rules={[{ required: true, message: '请选择替代物料' }]}
+                rules={[{ required: true, message: t(`${P}.materialShortage.validation.alternativeMaterialRequired`) }]}
                 fieldProps={{
                   showSearch: true,
                   filterOption: (input: string, option: any) =>
@@ -431,8 +461,8 @@ const MaterialShortageExceptionsPage: React.FC = () => {
             )}
             <ProFormTextArea
               name="remarks"
-              label="备注"
-              placeholder="请输入处理备注（可选）"
+              label={t(`${P}.field.remarks`)}
+              placeholder={t(`${P}.placeholder.handleRemarksOptional`)}
               fieldProps={{
                 rows: 4,
               }}
@@ -445,4 +475,3 @@ const MaterialShortageExceptionsPage: React.FC = () => {
 };
 
 export default MaterialShortageExceptionsPage;
-

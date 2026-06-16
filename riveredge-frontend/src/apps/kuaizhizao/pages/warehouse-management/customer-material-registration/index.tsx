@@ -4,7 +4,8 @@
  * 支持普通登记与扫码登记，确认后写入客供库存。
  */
 
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import {
   ActionType,
@@ -99,6 +100,7 @@ interface CustomerMaterialRegistration {
 }
 
 const CustomerMaterialRegistrationPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -177,9 +179,9 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       }
       formRef.current?.setFieldsValue({ items });
       setMaterialPickerOpen(false);
-      messageApi.success(`已添加 ${selected.length} 条物料明细`);
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.itemsAdded', { count: selected.length }));
     },
-    [messageApi],
+    [messageApi, t],
   );
 
   const onMaterialSelectForBatchSerial = async (
@@ -245,7 +247,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     const items = formRef.current?.getFieldValue('items') ?? [];
     const row = items[idx];
     if (!row?.material_uuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialFirst'));
       return;
     }
     setGeneratingBatchIdx(idx);
@@ -254,9 +256,9 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         ruleId: row.default_batch_rule_id,
       });
       formRef.current?.setFieldValue(['items', idx, 'batch_number'], res.batch_no);
-      messageApi.success('批号生成成功');
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchGenerated'));
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || '批号生成失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.customerMaterialRegistration.batchGenerateFailed'));
     } finally {
       setGeneratingBatchIdx(null);
     }
@@ -266,12 +268,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
     const items = formRef.current?.getFieldValue('items') ?? [];
     const row = items[idx];
     if (!row?.material_uuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialFirst'));
       return [];
     }
     const count = Math.max(1, Math.floor(Number(row.quantity) || 1));
     if (count > 100) {
-      messageApi.warning('单次最多生成100个序列号');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.serialMax100'));
       return [];
     }
     setGeneratingSerialIdx(idx);
@@ -281,10 +283,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       });
       const serialNos = res.serial_nos ?? [];
       formRef.current?.setFieldValue(['items', idx, 'serial_numbers'], serialNos);
-      messageApi.success(`已生成 ${res.count} 个序列号`);
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.serialGenerated', { count: res.count }));
       return serialNos;
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || '序列号生成失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.customerMaterialRegistration.serialGenerateFailed'));
       return [];
     } finally {
       setGeneratingSerialIdx(null);
@@ -293,16 +295,16 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
 
   const handleGenerateScanBatch = async () => {
     if (!scanMaterialUuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialFirst'));
       return;
     }
     setGeneratingScanBatch(true);
     try {
       const res = await materialBatchApi.generate(scanMaterialUuid, { ruleId: scanDefaultBatchRuleId });
       formRef.current?.setFieldValue('batch_number', res.batch_no);
-      messageApi.success('批号生成成功');
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchGenerated'));
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || '批号生成失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.customerMaterialRegistration.batchGenerateFailed'));
     } finally {
       setGeneratingScanBatch(false);
     }
@@ -310,12 +312,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
 
   const handleGenerateScanSerials = async (): Promise<string[]> => {
     if (!scanMaterialUuid) {
-      messageApi.warning('请先选择物料');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialFirst'));
       return [];
     }
     const count = Math.max(1, Math.floor(Number(formRef.current?.getFieldValue('quantity') || 1)));
     if (count > 100) {
-      messageApi.warning('单次最多生成100个序列号');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.serialMax100'));
       return [];
     }
     setGeneratingScanSerial(true);
@@ -325,10 +327,10 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       });
       const serialNos = res.serial_nos ?? [];
       formRef.current?.setFieldValue('serial_numbers', serialNos);
-      messageApi.success(`已生成 ${res.count} 个序列号`);
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.serialGenerated', { count: res.count }));
       return serialNos;
     } catch (e: unknown) {
-      messageApi.error((e as Error)?.message || '序列号生成失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.customerMaterialRegistration.serialGenerateFailed'));
       return [];
     } finally {
       setGeneratingScanSerial(false);
@@ -337,7 +339,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
 
   const buildCreatePayload = (values: any) => {
     if (!values.customer_id) {
-      messageApi.error('请选择客户');
+      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.selectCustomer'));
       throw new Error('no customer');
     }
     const payload: any = {
@@ -355,7 +357,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         (it: RegistrationItem) => it.material_id && (it.quantity || 0) > 0
       );
       if (!validItems.length) {
-        messageApi.error('请至少添加一条有效明细');
+        messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.minOneValidItem'));
         throw new Error('no items');
       }
       payload.items = validItems.map((it: RegistrationItem) => ({
@@ -371,7 +373,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       }));
     } else {
       if (!values.material_id) {
-        messageApi.error('请选择来料物料，或快速新建物料');
+        messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.selectMaterialOrCreate'));
         throw new Error('no material');
       }
       payload.barcode = values.barcode;
@@ -416,12 +418,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           material_code: result.mapped_material_code,
           material_name: result.mapped_material_name,
         });
-        messageApi.success('条码解析成功，已匹配内部物料');
+        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.barcodeMatched'));
       } else {
-        messageApi.warning('未匹配到内部物料，请手动选择或快速新建物料');
+        messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.barcodeNotMatched'));
       }
     } catch (error: any) {
-      messageApi.warning(error.message || '条码解析失败，请手动填写物料信息');
+      messageApi.warning(error.message || t('app.kuaizhizao.customerMaterialRegistration.barcodeParseFailed'));
     } finally {
       setScanning(false);
     }
@@ -433,16 +435,16 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       const payload = buildCreatePayload(values);
       const created = await customerMaterialRegistrationApi.create(payload);
       if (!created?.id) {
-        throw new Error('客供料入库单创建失败');
+        throw new Error(t('app.kuaizhizao.customerMaterialRegistration.createFailed'));
       }
-      messageApi.success('代工来料已保存为待入库草稿');
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.draftSaved'));
       setCreateModalVisible(false);
       formRef.current?.resetFields();
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
       if (error?.message !== 'no items' && error?.message !== 'no material' && error?.message !== 'no customer') {
-        messageApi.error(error.message || '客供料入库失败');
+        messageApi.error(error.message || t('app.kuaizhizao.customerMaterialRegistration.inboundFailed'));
       }
       throw error;
     } finally {
@@ -457,13 +459,17 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       const payload = buildCreatePayload(values);
       const result = await customerMaterialRegistrationApi.createAndStartProduction(payload);
       const woLabel = result.work_order_group_code
-        ? `组工单 ${result.work_order_group_code}`
-        : (result.work_order_codes || []).join('、') || '—';
+        ? t('app.kuaizhizao.customerMaterialRegistration.workOrderGroup', { code: result.work_order_group_code })
+        : (result.work_order_codes || []).join('、') || t('app.kuaizhizao.warehouseCommon.notApplicable');
       const batchLabel = (result.batching_order_codes || []).join('、');
       messageApi.success(
-        `已客供入库并开工：${result.registration?.registration_code || ''} → ${woLabel}${
-          batchLabel ? `，配料单 ${batchLabel}` : ''
-        }`
+        t('app.kuaizhizao.customerMaterialRegistration.startProductionSuccess', {
+          registration: result.registration?.registration_code || '',
+          workOrder: woLabel,
+          batching: batchLabel
+            ? t('app.kuaizhizao.customerMaterialRegistration.batchingOrders', { codes: batchLabel })
+            : '',
+        }),
       );
       if (result.warnings?.length) {
         messageApi.warning(result.warnings.join('；'));
@@ -474,7 +480,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       actionRef.current?.reload();
     } catch (error: any) {
       if (error?.message !== 'no items' && error?.message !== 'no material' && error?.message !== 'no customer') {
-        messageApi.error(error.message || '直接发料开工失败');
+        messageApi.error(error.message || t('app.kuaizhizao.customerMaterialRegistration.startProductionFailed'));
       }
     } finally {
       setStartProductionLoading(false);
@@ -490,88 +496,88 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
   const handleProcess = async (record: CustomerMaterialRegistration) => {
     try {
       await customerMaterialRegistrationApi.process(record.id!.toString());
-      messageApi.success('代工来料已确认入库');
+      messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.processSuccess'));
       invalidateMenuBadgeCounts();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '确认入库失败');
+      messageApi.error(error.message || t('app.kuaizhizao.customerMaterialRegistration.processFailed'));
     }
   };
 
   const handleWithdraw = async (record: CustomerMaterialRegistration) => {
     await customerMaterialRegistrationApi.withdraw(record.id!.toString());
-    messageApi.success('已撤回代工来料入库');
+    messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.withdrawSuccess'));
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
   };
 
   const handleCancel = async (record: CustomerMaterialRegistration) => {
     await customerMaterialRegistrationApi.cancel(record.id!.toString());
-    messageApi.success('代工来料单已取消');
+    messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.cancelSuccess'));
     invalidateMenuBadgeCounts();
     actionRef.current?.reload();
   };
 
   const handleBatchProcess = async () => {
     if (!selectedRowKeys.length) {
-      messageApi.warning('请先选择代工来料记录');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
       return;
     }
     try {
       const result = await customerMaterialRegistrationApi.batchProcess(selectedRowKeys);
       const successCount = Number(result?.success_count || 0);
       if (successCount > 0) {
-        messageApi.success(`已确认入库 ${successCount} 条记录`);
+        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchProcessSuccess', { count: successCount }));
         invalidateMenuBadgeCounts();
         setSelectedRowKeys([]);
         actionRef.current?.reload();
         return;
       }
-      messageApi.error('批量确认入库失败');
+      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchProcessFailed'));
     } catch (error: any) {
-      messageApi.error(error?.message || '批量确认入库失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchProcessFailed'));
     }
   };
 
   const handleBatchWithdraw = async () => {
     if (!selectedRowKeys.length) {
-      messageApi.warning('请先选择代工来料记录');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
       return;
     }
     try {
       const result = await customerMaterialRegistrationApi.batchWithdraw(selectedRowKeys);
       const successCount = Number(result?.success_count || 0);
       if (successCount > 0) {
-        messageApi.success(`已撤回入库 ${successCount} 条记录`);
+        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawSuccess', { count: successCount }));
         invalidateMenuBadgeCounts();
         setSelectedRowKeys([]);
         actionRef.current?.reload();
         return;
       }
-      messageApi.error('批量撤回失败');
+      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawFailed'));
     } catch (error: any) {
-      messageApi.error(error?.message || '批量撤回失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchWithdrawFailed'));
     }
   };
 
   const handleBatchCancel = async () => {
     if (!selectedRowKeys.length) {
-      messageApi.warning('请先选择代工来料记录');
+      messageApi.warning(t('app.kuaizhizao.customerMaterialRegistration.selectRecordsFirst'));
       return;
     }
     try {
       const result = await customerMaterialRegistrationApi.batchCancel(selectedRowKeys);
       const successCount = Number(result?.success_count || 0);
       if (successCount > 0) {
-        messageApi.success(`已取消 ${successCount} 条记录`);
+        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchCancelSuccess', { count: successCount }));
         invalidateMenuBadgeCounts();
         setSelectedRowKeys([]);
         actionRef.current?.reload();
         return;
       }
-      messageApi.error('批量取消失败');
+      messageApi.error(t('app.kuaizhizao.customerMaterialRegistration.batchCancelFailed'));
     } catch (error: any) {
-      messageApi.error(error?.message || '批量取消失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.customerMaterialRegistration.batchCancelFailed'));
     }
   };
 
@@ -580,21 +586,21 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       const result = await customerMaterialRegistrationApi.batchDelete(keys);
       const successCount = Number(result?.success_count || 0);
       if (successCount > 0) {
-        messageApi.success(`已删除 ${successCount} 条记录`);
+        messageApi.success(t('app.kuaizhizao.customerMaterialRegistration.batchDeleteSuccess', { count: successCount }));
         invalidateMenuBadgeCounts();
         setSelectedRowKeys([]);
         actionRef.current?.reload();
         return;
       }
-      messageApi.error('批量删除失败');
+      messageApi.error(t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
     } catch (error: any) {
-      messageApi.error(error?.message || '批量删除失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.batchDeleteFailed'));
     }
   };
 
-  const columns: ProColumns<CustomerMaterialRegistration>[] = [
+  const columns: ProColumns<CustomerMaterialRegistration>[] = useMemo(() => [
     {
-      title: '单号',
+      title: t('app.kuaizhizao.warehouseCommon.colCode'),
       dataIndex: 'registration_code',
       width: 150,
       fixed: 'left',
@@ -604,35 +610,35 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         </Typography.Text>
       ),
     },
-    { title: '客户', dataIndex: 'customer_name', width: 140, ellipsis: true },
-    { title: '工单', dataIndex: 'work_order_code', width: 120, ellipsis: true },
-    { title: '物料', dataIndex: 'mapped_material_name', width: 140, ellipsis: true, hideInSearch: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colCustomer'), dataIndex: 'customer_name', width: 140, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colMaterial'), dataIndex: 'mapped_material_name', width: 140, ellipsis: true, hideInSearch: true },
     {
-      title: '数量',
+      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
       dataIndex: 'total_quantity',
       width: 90,
       align: 'right',
       render: (_, r) => r.total_quantity ?? r.quantity ?? '-',
     },
-    { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     {
-      title: '登记日期',
+      title: t('app.kuaizhizao.warehouseCommon.colRegistrationDate'),
       dataIndex: 'registration_date',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       hideInTable: true,
       valueEnum: {
-        pending: { text: '待入库', status: 'warning' },
-        processed: { text: '已入库', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        pending: { text: t('app.kuaizhizao.warehouseCommon.statusPendingInbound'), status: 'warning' },
+        processed: { text: t('app.kuaizhizao.warehouseCommon.statusInbound'), status: 'success' },
+        cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled'), status: 'error' },
       },
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       hideInSearch: true,
@@ -652,7 +658,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 280,
       fixed: 'right',
       render: (_, record) => (
@@ -660,72 +666,270 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           <Button {...rowActionKind('read')} onClick={() => handleDetail(record)} />
           {record.status === 'pending' && (
             <>
-              <Popconfirm title="确定确认入库吗？" onConfirm={() => handleProcess(record)}>
+              <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmProcess')} onConfirm={() => handleProcess(record)}>
                 <Button {...rowActionKind('execute')} {...rowActionLabelKeep()}>
-                  确认入库
+                  {t('app.kuaizhizao.customerMaterialRegistration.confirmInbound')}
                 </Button>
               </Popconfirm>
-              <Popconfirm title="确定取消吗？" onConfirm={() => handleCancel(record)}>
+              <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmCancel')} onConfirm={() => handleCancel(record)}>
                 <Button {...rowActionKind('reject')} {...rowActionLabelKeep()}>
-                  取消
+                  {t('app.kuaizhizao.warehouseCommon.cancel')}
                 </Button>
               </Popconfirm>
             </>
           )}
           {record.status === 'processed' && (
-            <Popconfirm title="确定撤回入库吗？将冲减客供库存。" onConfirm={() => handleWithdraw(record)}>
+            <Popconfirm title={t('app.kuaizhizao.customerMaterialRegistration.confirmWithdraw')} onConfirm={() => handleWithdraw(record)}>
               <Button {...rowActionKind('revoke')} {...rowActionLabelKeep()}>
-                撤回
+                {t('app.kuaizhizao.customerMaterialRegistration.withdraw')}
               </Button>
             </Popconfirm>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t]);
+
+  const detailColumns = useMemo(() => [
+    { title: t('app.kuaizhizao.warehouseCommon.colCode'), dataIndex: 'registration_code' },
+    { title: t('app.kuaizhizao.warehouseCommon.colCustomer'), dataIndex: 'customer_name' },
+    { title: t('app.kuaizhizao.warehouseCommon.colWorkOrder'), dataIndex: 'work_order_code' },
+    { title: t('app.kuaizhizao.warehouseCommon.colSalesOrder'), dataIndex: 'sales_order_code' },
+    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
+    { title: t('app.kuaizhizao.warehouseCommon.colTotalQuantity'), dataIndex: 'total_quantity' },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+      dataIndex: 'status',
+      valueEnum: {
+        pending: { text: t('app.kuaizhizao.warehouseCommon.statusPendingInbound') },
+        processed: { text: t('app.kuaizhizao.warehouseCommon.statusInbound') },
+        cancelled: { text: t('app.kuaizhizao.warehouseCommon.statusCancelled') },
+      },
+    },
+    { title: t('app.kuaizhizao.warehouseCommon.colConfirmedBy'), dataIndex: 'processed_by_name' },
+    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+  ], [t]);
+
+  const detailItemColumns = useMemo(() => [
+    { title: t('app.kuaizhizao.warehouseCommon.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colMaterialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colSpec'), dataIndex: 'material_spec', width: 100, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colUnit'), dataIndex: 'material_unit', width: 70 },
+    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' as const },
+    { title: t('app.kuaizhizao.warehouseCommon.colBatchNo'), dataIndex: 'batch_number', width: 120, ellipsis: true },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+      dataIndex: 'serial_numbers',
+      width: 140,
+      ellipsis: true,
+      render: (val: unknown) => {
+        const list = Array.isArray(val) ? val : [];
+        return list.length > 0 ? list.join('、') : t('app.kuaizhizao.warehouseCommon.notApplicable');
+      },
+    },
+  ], [t]);
+
+  const formItemColumns = useMemo(() => [
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
+      dataIndex: 'material_id',
+      width: 220,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+        >
+          {({ getFieldValue }) => {
+            const row = getFieldValue('items')?.[index];
+            const mid = row?.material_id ? Number(row.material_id) : null;
+            const fallback =
+              mid && (row?.material_code || row?.material_name)
+                ? {
+                    value: mid,
+                    label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
+                  }
+                : undefined;
+            return (
+              <div className="uni-detail-material-cell">
+                <UniMaterialSelect
+                  name={[index, 'material_id']}
+                  label=""
+                  placeholder={t('app.kuaizhizao.customerMaterialRegistration.selectIncomingMaterial')}
+                  required
+                  size="small"
+                  listFieldKey={index}
+                  listFieldName="items"
+                  fillMapping={{
+                    material_code: 'mainCode',
+                    material_name: 'name',
+                    material_spec: 'specification',
+                    material_unit: 'baseUnit',
+                  }}
+                  fallbackOption={fallback}
+                  formItemProps={{ style: { margin: 0 } }}
+                  showQuickCreate
+                  showAdvancedSearch
+                  onChange={(v, m) => void onMaterialSelectForBatchSerial(index, v, m as Material | undefined)}
+                />
+              </div>
+            );
+          }}
+        </AntForm.Item>
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colSpec'),
+      dataIndex: 'material_spec',
+      width: 120,
+      ellipsis: true,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
+          <Input placeholder={t('app.kuaizhizao.warehouseCommon.colSpec')} size="small" readOnly />
+        </AntForm.Item>
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colUnit'),
+      dataIndex: 'material_unit',
+      width: 90,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) =>
+            prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
+          }
+        >
+          {({ getFieldValue }) => {
+            const materialId = getFieldValue(['items', index, 'material_id']);
+            return (
+              <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
+                <MaterialUnitSelect materialId={materialId} size="small" noStyle />
+              </AntForm.Item>
+            );
+          }}
+        </AntForm.Item>
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+      dataIndex: 'quantity',
+      width: 100,
+      align: 'right' as const,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item
+          name={[index, 'quantity']}
+          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.required') }]}
+          style={{ margin: 0 }}
+        >
+          <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
+        </AntForm.Item>
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
+      dataIndex: 'batch_number',
+      width: 130,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+        >
+          {({ getFieldValue }) => {
+            const row = getFieldValue('items')?.[index];
+            if (!row?.batch_managed) return t('app.kuaizhizao.warehouseCommon.notApplicable');
+            return (
+              <Space size={2}>
+                <AntForm.Item name={[index, 'batch_number']} style={{ margin: 0 }}>
+                  <Input placeholder={t('app.kuaizhizao.warehouseCommon.optional')} size="small" style={{ width: 96 }} />
+                </AntForm.Item>
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<ThunderboltOutlined />}
+                  loading={generatingBatchIdx === index}
+                  onClick={() => void handleGenerateBatch(index)}
+                  style={{ padding: 0 }}
+                />
+              </Space>
+            );
+          }}
+        </AntForm.Item>
+      ),
+    },
+    {
+      title: t('app.kuaizhizao.warehouseCommon.colSerialNo'),
+      dataIndex: 'serial_numbers',
+      width: 150,
+      render: (_: unknown, __: unknown, index: number) => (
+        <AntForm.Item
+          noStyle
+          shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
+        >
+          {({ getFieldValue }) => {
+            const row = getFieldValue('items')?.[index];
+            if (!row?.serial_managed) return t('app.kuaizhizao.warehouseCommon.notApplicable');
+            const qty = Number(row?.quantity ?? 0);
+            const sn = getFieldValue(['items', index, 'serial_numbers']);
+            return (
+              <SerialNumbersImportTrigger
+                serials={Array.isArray(sn) ? sn : []}
+                expectedCount={qty > 0 ? qty : undefined}
+                materialLabel={row?.material_code || row?.material_name}
+                generateLoading={generatingSerialIdx === index}
+                onSerialsChange={(next) =>
+                  formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
+                }
+                onGenerate={() => handleGenerateSerials(index)}
+              />
+            );
+          }}
+        </AntForm.Item>
+      ),
+    },
+  ], [t, generatingBatchIdx, generatingSerialIdx]);
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="代工来料"
+        headerTitle={t('app.kuaizhizao.customerMaterialRegistration.headerTitle')}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.customer-material-registration"
         showAdvancedSearch
         showCreateButton
-        createButtonText="客供料入库"
+        createButtonText={t('app.kuaizhizao.customerMaterialRegistration.createButton')}
         onCreate={handleCreate}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条代工来料吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.customerMaterialRegistration.deleteConfirm', { count })}
         toolBarActionsAfterBatch={[
           <UniBatchMenuButton
             key="customer-material-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            label="批量操作"
+            label={t('app.kuaizhizao.warehouseCommon.batchOps')}
             disabled={selectedRowKeys.length === 0}
             menuItems={[
               {
                 key: 'batch-process',
-                label: '批量确认入库',
+                label: t('app.kuaizhizao.customerMaterialRegistration.batchConfirmInbound'),
                 onClick: () => {
                   void handleBatchProcess();
                 },
               },
               {
                 key: 'batch-withdraw',
-                label: '批量撤回入库',
+                label: t('app.kuaizhizao.customerMaterialRegistration.batchWithdraw'),
                 onClick: () => {
                   void handleBatchWithdraw();
                 },
               },
               {
                 key: 'batch-cancel',
-                label: '批量取消',
+                label: t('app.kuaizhizao.customerMaterialRegistration.batchCancel'),
                 onClick: () => {
                   void handleBatchCancel();
                 },
@@ -750,7 +954,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title="代工来料"
+        title={t('app.kuaizhizao.customerMaterialRegistration.modalTitle')}
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
@@ -761,19 +965,19 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         grid={false}
         loading={submitLoading || startProductionLoading}
-        submitText="保存草稿"
+        submitText={t('app.kuaizhizao.customerMaterialRegistration.submitDraft')}
         extraFooter={
           canStartProduction ? (
             <Button type="default" loading={startProductionLoading} onClick={() => void handleStartProduction()}>
-              直接发料开工
+              {t('app.kuaizhizao.customerMaterialRegistration.startProduction')}
             </Button>
           ) : null
         }
       >
         <Segmented
           options={[
-            { label: '普通登记', value: 'document' },
-            { label: '扫码登记', value: 'scan' },
+            { label: t('app.kuaizhizao.customerMaterialRegistration.entryDocument'), value: 'document' },
+            { label: t('app.kuaizhizao.customerMaterialRegistration.entryScan'), value: 'scan' },
           ]}
           value={entryMode}
           onChange={(v) => {
@@ -789,12 +993,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           <Col span={12}>
             <ProForm.Item
               name="customer_id"
-              label="客户"
-              rules={[{ required: true, message: '请选择客户' }]}
+              label={t('app.kuaizhizao.warehouseCommon.colCustomer')}
+              rules={[{ required: true, message: t('app.kuaizhizao.customerMaterialRegistration.selectCustomer') }]}
             >
               <CustomerSelectDropdown
                 hostResource="kuaizhizao:warehouse-management-customer-material-registration"
-                placeholder="请选择客户"
+                placeholder={t('app.kuaizhizao.customerMaterialRegistration.selectCustomer')}
                 style={{ width: '100%' }}
                 onCustomerPick={(c) => {
                   formRef.current?.setFieldsValue({
@@ -807,8 +1011,8 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           <Col span={12}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="入库仓库"
-              placeholder="请选择入库仓库"
+              label={t('app.kuaizhizao.customerMaterialRegistration.inboundWarehouse')}
+              placeholder={t('app.kuaizhizao.customerMaterialRegistration.selectInboundWarehouse')}
               required
               onChange={(_val, wh) => formRef.current?.setFieldsValue({ warehouse_name: wh?.name ?? '' })}
             />
@@ -818,7 +1022,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="registration_date"
-              label="登记日期"
+              label={t('app.kuaizhizao.warehouseCommon.colRegistrationDate')}
               rules={[{ required: true }]}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
@@ -831,7 +1035,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               <Col span={12}>
                 <ProFormText
                   name="barcode"
-                  label="客户条码"
+                  label={t('app.kuaizhizao.customerMaterialRegistration.customerBarcode')}
                   rules={[{ required: true }]}
                   fieldProps={{
                     onBlur: (e: any) => e.target.value && handleScanBarcode(e.target.value),
@@ -842,18 +1046,18 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
               <Col span={12}>
                 <ProFormSelect
                   name="barcode_type"
-                  label="条码类型"
+                  label={t('app.kuaizhizao.barcodeMapping.colBarcodeType')}
                   options={[
-                    { label: '一维码', value: '1d' },
-                    { label: '二维码', value: '2d' },
+                    { label: t('app.kuaizhizao.warehouseCommon.barcodeType1d'), value: '1d' },
+                    { label: t('app.kuaizhizao.warehouseCommon.barcodeType2d'), value: '2d' },
                   ]}
                 />
               </Col>
             </Row>
             <UniMaterialSelect
               name="material_id"
-              label="来料物料"
-              placeholder="请选择或快速新建物料"
+              label={t('app.kuaizhizao.customerMaterialRegistration.incomingMaterial')}
+              placeholder={t('app.kuaizhizao.customerMaterialRegistration.selectIncomingMaterial')}
               required
               showQuickCreate
               showAdvancedSearch
@@ -865,13 +1069,13 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
             />
             <Row gutter={16}>
               <Col span={12}>
-                <ProFormDigit name="quantity" label="来料数量" rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} />
+                <ProFormDigit name="quantity" label={t('app.kuaizhizao.customerMaterialRegistration.incomingQty')} rules={[{ required: true }]} min={0} fieldProps={{ precision: 2 }} />
               </Col>
               <Col span={12}>
                 {scanBatchManaged ? (
-                  <ProForm.Item label="批号">
+                  <ProForm.Item label={t('app.kuaizhizao.warehouseCommon.colBatchNo')}>
                     <Space size={4}>
-                      <ProFormText name="batch_number" noStyle fieldProps={{ placeholder: '可选' }} />
+                      <ProFormText name="batch_number" noStyle fieldProps={{ placeholder: t('app.kuaizhizao.warehouseCommon.optional') }} />
                       <Button
                         type="link"
                         icon={<ThunderboltOutlined />}
@@ -881,12 +1085,12 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                     </Space>
                   </ProForm.Item>
                 ) : (
-                  <ProFormText name="batch_number" label="批号" fieldProps={{ placeholder: '—' }} disabled />
+                  <ProFormText name="batch_number" label={t('app.kuaizhizao.warehouseCommon.colBatchNo')} fieldProps={{ placeholder: t('app.kuaizhizao.warehouseCommon.notApplicable') }} disabled />
                 )}
               </Col>
             </Row>
             {scanSerialManaged ? (
-              <ProForm.Item label="序列号" shouldUpdate>
+              <ProForm.Item label={t('app.kuaizhizao.warehouseCommon.colSerialNo')} shouldUpdate>
                 {({ getFieldValue }) => {
                   const qty = Number(getFieldValue('quantity') ?? 0);
                   const sn = getFieldValue('serial_numbers');
@@ -908,174 +1112,17 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         ) : (
           <UniTableDetail
             name="items"
-            title="明细"
+            title={t('app.kuaizhizao.customerMaterialRegistration.itemsTitle')}
             required
-            requiredMessage="请至少添加一条明细"
+            requiredMessage={t('app.kuaizhizao.customerMaterialRegistration.minOneItem')}
             initialValue={{ ...defaultRegistrationItem }}
             containerStyle={{ width: '100%' }}
             onBatchSelect={() => setMaterialPickerOpen(true)}
-            columns={[
-              {
-                title: '物料',
-                dataIndex: 'material_id',
-                width: 220,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item
-                    noStyle
-                    shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
-                  >
-                    {({ getFieldValue }) => {
-                      const row = getFieldValue('items')?.[index];
-                      const mid = row?.material_id ? Number(row.material_id) : null;
-                      const fallback =
-                        mid && (row?.material_code || row?.material_name)
-                          ? {
-                              value: mid,
-                              label: `${row.material_code || ''} - ${row.material_name || ''}`.trim() || String(mid),
-                            }
-                          : undefined;
-                      return (
-                        <div className="uni-detail-material-cell">
-                          <UniMaterialSelect
-                            name={[index, 'material_id']}
-                            label=""
-                            placeholder="请选择或快速新建物料"
-                            required
-                            size="small"
-                            listFieldKey={index}
-                            listFieldName="items"
-                            fillMapping={{
-                              material_code: 'mainCode',
-                              material_name: 'name',
-                              material_spec: 'specification',
-                              material_unit: 'baseUnit',
-                            }}
-                            fallbackOption={fallback}
-                            formItemProps={{ style: { margin: 0 } }}
-                                showQuickCreate
-                                showAdvancedSearch
-                                onChange={(v, m) => void onMaterialSelectForBatchSerial(index, v, m as Material | undefined)}
-                              />
-                        </div>
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: '规格',
-                dataIndex: 'material_spec',
-                width: 120,
-                ellipsis: true,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item name={[index, 'material_spec']} style={{ margin: 0 }}>
-                    <Input placeholder="规格" size="small" readOnly />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: '单位',
-                dataIndex: 'material_unit',
-                width: 90,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item
-                    noStyle
-                    shouldUpdate={(prev, curr) =>
-                      prev?.items?.[index]?.material_id !== curr?.items?.[index]?.material_id
-                    }
-                  >
-                    {({ getFieldValue }) => {
-                      const materialId = getFieldValue(['items', index, 'material_id']);
-                      return (
-                        <AntForm.Item name={[index, 'material_unit']} style={{ margin: 0 }}>
-                          <MaterialUnitSelect materialId={materialId} size="small" noStyle />
-                        </AntForm.Item>
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: '数量',
-                dataIndex: 'quantity',
-                width: 100,
-                align: 'right' as const,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item
-                    name={[index, 'quantity']}
-                    rules={[{ required: true, message: '必填' }]}
-                    style={{ margin: 0 }}
-                  >
-                    <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: '批号',
-                dataIndex: 'batch_number',
-                width: 130,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item
-                    noStyle
-                    shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
-                  >
-                    {({ getFieldValue }) => {
-                      const row = getFieldValue('items')?.[index];
-                      if (!row?.batch_managed) return '—';
-                      return (
-                        <Space size={2}>
-                          <AntForm.Item name={[index, 'batch_number']} style={{ margin: 0 }}>
-                            <Input placeholder="可选" size="small" style={{ width: 96 }} />
-                          </AntForm.Item>
-                          <Button
-                            type="link"
-                            size="small"
-                            icon={<ThunderboltOutlined />}
-                            loading={generatingBatchIdx === index}
-                            onClick={() => void handleGenerateBatch(index)}
-                            style={{ padding: 0 }}
-                          />
-                        </Space>
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-              {
-                title: '序列号',
-                dataIndex: 'serial_numbers',
-                width: 150,
-                render: (_: unknown, __: unknown, index: number) => (
-                  <AntForm.Item
-                    noStyle
-                    shouldUpdate={(prev, curr) => prev?.items?.[index] !== curr?.items?.[index]}
-                  >
-                    {({ getFieldValue }) => {
-                      const row = getFieldValue('items')?.[index];
-                      if (!row?.serial_managed) return '—';
-                      const qty = Number(row?.quantity ?? 0);
-                      const sn = getFieldValue(['items', index, 'serial_numbers']);
-                      return (
-                        <SerialNumbersImportTrigger
-                          serials={Array.isArray(sn) ? sn : []}
-                          expectedCount={qty > 0 ? qty : undefined}
-                          materialLabel={row?.material_code || row?.material_name}
-                          generateLoading={generatingSerialIdx === index}
-                          onSerialsChange={(next) =>
-                            formRef.current?.setFieldValue(['items', index, 'serial_numbers'], next)
-                          }
-                          onGenerate={() => handleGenerateSerials(index)}
-                        />
-                      );
-                    }}
-                  </AntForm.Item>
-                ),
-              },
-            ]}
+            columns={formItemColumns}
           />
         )}
         <DocumentAttachmentsField category="customer_material_registration_attachments" />
-        <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} fieldProps={{ rows: 2 }} />
       </FormModalTemplate>
 
       <UniMaterialBatchPicker
@@ -1086,7 +1133,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
       />
 
       <DetailDrawerTemplate
-        title="代工来料详情"
+        title={t('app.kuaizhizao.customerMaterialRegistration.detailTitle')}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -1094,25 +1141,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
         }}
         width={DRAWER_CONFIG.HALF_WIDTH}
         dataSource={currentRegistration || {}}
-        columns={[
-          { title: '单号', dataIndex: 'registration_code' },
-          { title: '客户', dataIndex: 'customer_name' },
-          { title: '工单', dataIndex: 'work_order_code' },
-          { title: '销售订单', dataIndex: 'sales_order_code' },
-          { title: '仓库', dataIndex: 'warehouse_name' },
-          { title: '总数量', dataIndex: 'total_quantity' },
-          {
-            title: '状态',
-            dataIndex: 'status',
-            valueEnum: {
-              pending: { text: '待入库' },
-              processed: { text: '已入库' },
-              cancelled: { text: '已取消' },
-            },
-          },
-          { title: '确认人', dataIndex: 'processed_by_name' },
-          { title: '备注', dataIndex: 'remarks' },
-        ]}
+        columns={detailColumns}
         lines={
           currentRegistration?.items && currentRegistration.items.length > 0 ? (
             <>
@@ -1123,24 +1152,7 @@ const CustomerMaterialRegistrationPage: React.FC = () => {
                 rowKey={(r) => String(r.id ?? `${r.material_id}-${r.material_code}`)}
                 pagination={false}
                 dataSource={currentRegistration.items}
-                columns={[
-                  { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                  { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
-                  { title: '规格', dataIndex: 'material_spec', width: 100, ellipsis: true },
-                  { title: '单位', dataIndex: 'material_unit', width: 70 },
-                  { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-                  { title: '批号', dataIndex: 'batch_number', width: 120, ellipsis: true },
-                  {
-                    title: '序列号',
-                    dataIndex: 'serial_numbers',
-                    width: 140,
-                    ellipsis: true,
-                    render: (val) => {
-                      const list = Array.isArray(val) ? val : [];
-                      return list.length > 0 ? list.join('、') : '—';
-                    },
-                  },
-                ]}
+                columns={detailItemColumns}
               />
             </>
           ) : undefined

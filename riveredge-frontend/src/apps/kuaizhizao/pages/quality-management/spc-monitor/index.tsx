@@ -1,11 +1,10 @@
 import React, { useMemo, useRef, useState, Suspense, lazy } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDateTimePicker, ProFormDigit, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Card, Empty, Skeleton, Space, Tag, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { FormModalTemplate, ListPageTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { qualityImprovementApi, SPCSample } from '../../../services/quality-improvement';
-import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
 
 const SPC_RESOURCE = 'kuaizhizao:quality-management-spc-monitor';
@@ -19,8 +18,8 @@ const SpcLineChart = lazy(async () => {
 });
 
 const SPCMonitorPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
-  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
   const [createVisible, setCreateVisible] = useState(false);
@@ -28,13 +27,16 @@ const SPCMonitorPage: React.FC = () => {
   const [chartData, setChartData] = useState<any>(null);
   const { canCreate } = useResourcePermissions(SPC_RESOURCE);
 
-  const columns: ProColumns<SPCSample>[] = [
-    { title: '质量特性', dataIndex: 'characteristic_name', width: 180 },
-    { title: '控制图类型', dataIndex: 'chart_type', width: 120, valueEnum: { imr: 'I-MR' } },
-    { title: '采样值', dataIndex: 'sample_value', width: 120, valueType: 'digit' },
-    { title: '样本量', dataIndex: 'sample_size', width: 100, valueType: 'digit' },
-    { title: '采样时间', dataIndex: 'sample_time', width: 180, valueType: 'dateTime' },
-  ];
+  const columns: ProColumns<SPCSample>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.quality.spc.characteristicName'), dataIndex: 'characteristic_name', width: 180 },
+      { title: t('app.kuaizhizao.quality.spc.chartType'), dataIndex: 'chart_type', width: 120, valueEnum: { imr: 'I-MR' } },
+      { title: t('app.kuaizhizao.quality.spc.sampleValue'), dataIndex: 'sample_value', width: 120, valueType: 'digit' },
+      { title: t('app.kuaizhizao.quality.spc.sampleSize'), dataIndex: 'sample_size', width: 100, valueType: 'digit' },
+      { title: t('app.kuaizhizao.quality.spc.sampleTime'), dataIndex: 'sample_time', width: 180, valueType: 'dateTime' },
+    ],
+    [t],
+  );
 
   const lineChartConfig = useMemo(() => {
     const points = chartData?.points || [];
@@ -63,11 +65,11 @@ const SPCMonitorPage: React.FC = () => {
   return (
     <PermissionGuard
       permission="kuaizhizao:quality-management-spc-monitor:read"
-      fallback={<Empty description="暂无SPC查看权限" style={{ marginTop: 120 }} />}
+      fallback={<Empty description={t('app.kuaizhizao.quality.spc.noPermission')} style={{ marginTop: 120 }} />}
     >
       <ListPageTemplate>
         <UniTable<SPCSample>
-          headerTitle="SPC 监控（I-MR）"
+          headerTitle={t('app.kuaizhizao.quality.spc.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -76,7 +78,7 @@ const SPCMonitorPage: React.FC = () => {
             ...(canCreate
               ? [
                   <Button key="addSample" type="primary" onClick={() => setCreateVisible(true)}>
-                    新增采样
+                    {t('app.kuaizhizao.quality.spc.addSample')}
                   </Button>,
                 ]
               : []),
@@ -84,14 +86,14 @@ const SPCMonitorPage: React.FC = () => {
               key="refreshChart"
               onClick={async () => {
                 if (!characteristicName) {
-                  messageApi.warning('请先选择一条数据后再查看控制线');
+                  messageApi.warning(t('app.kuaizhizao.quality.spc.selectRowFirst'));
                   return;
                 }
                 const chart = await qualityImprovementApi.spc.getImrChart(characteristicName, 100);
                 setChartData(chart);
               }}
             >
-              刷新控制线
+              {t('app.kuaizhizao.quality.spc.refreshChart')}
             </Button>,
           ]}
           request={async (params) => {
@@ -118,12 +120,18 @@ const SPCMonitorPage: React.FC = () => {
           })}
         />
 
-        <Card title={`控制图 - ${characteristicName || '-'}`} style={{ marginTop: 16 }}>
+        <Card title={t('app.kuaizhizao.quality.spc.chartTitle', { name: characteristicName || '-' })} style={{ marginTop: 16 }}>
           {chartData ? (
             <Space orientation="vertical" style={{ width: '100%' }}>
-              <Typography.Text>中心线(CL): {Number(chartData.mean || 0).toFixed(4)}</Typography.Text>
-              <Typography.Text>上控制线(UCL): {Number(chartData.ucl || 0).toFixed(4)}</Typography.Text>
-              <Typography.Text>下控制线(LCL): {Number(chartData.lcl || 0).toFixed(4)}</Typography.Text>
+              <Typography.Text>
+                {t('app.kuaizhizao.quality.spc.centerLine', { value: Number(chartData.mean || 0).toFixed(4) })}
+              </Typography.Text>
+              <Typography.Text>
+                {t('app.kuaizhizao.quality.spc.ucl', { value: Number(chartData.ucl || 0).toFixed(4) })}
+              </Typography.Text>
+              <Typography.Text>
+                {t('app.kuaizhizao.quality.spc.lcl', { value: Number(chartData.lcl || 0).toFixed(4) })}
+              </Typography.Text>
               <div>
                 {(chartData.triggered_summary || []).map((r: string) => (
                   <Tag key={r} color="warning">
@@ -136,12 +144,12 @@ const SPCMonitorPage: React.FC = () => {
               </Suspense>
             </Space>
           ) : (
-            <Typography.Text type="secondary">点击任一采样记录即可加载该质量特性的 I-MR 控制图。</Typography.Text>
+            <Typography.Text type="secondary">{t('app.kuaizhizao.quality.spc.chartHint')}</Typography.Text>
           )}
         </Card>
 
         <FormModalTemplate
-          title="新增 SPC 采样"
+          title={t('app.kuaizhizao.quality.spc.createModalTitle')}
           open={createVisible}
           width={MODAL_CONFIG.SMALL_WIDTH}
           formRef={createFormRef}
@@ -151,22 +159,22 @@ const SPCMonitorPage: React.FC = () => {
           }}
           onFinish={async (values) => {
             if (!canCreate) {
-              messageApi.error('无采样新增权限');
+              messageApi.error(t('app.kuaizhizao.quality.spc.messages.noCreatePermission'));
               return false;
             }
             await qualityImprovementApi.spc.createSample({
               ...values,
               chart_type: 'imr',
             });
-            messageApi.success('采样已保存');
+            messageApi.success(t('app.kuaizhizao.quality.spc.messages.saveSuccess'));
             setCreateVisible(false);
             actionRef.current?.reload();
           }}
         >
-          <ProFormText name="characteristic_name" label="质量特性" rules={[{ required: true }]} />
-          <ProFormDigit name="sample_value" label="采样值" rules={[{ required: true }]} />
-          <ProFormDigit name="sample_size" label="样本量" initialValue={1} rules={[{ required: true }]} />
-          <ProFormDateTimePicker name="sample_time" label="采样时间" rules={[{ required: true }]} />
+          <ProFormText name="characteristic_name" label={t('app.kuaizhizao.quality.spc.characteristicName')} rules={[{ required: true }]} />
+          <ProFormDigit name="sample_value" label={t('app.kuaizhizao.quality.spc.sampleValue')} rules={[{ required: true }]} />
+          <ProFormDigit name="sample_size" label={t('app.kuaizhizao.quality.spc.sampleSize')} initialValue={1} rules={[{ required: true }]} />
+          <ProFormDateTimePicker name="sample_time" label={t('app.kuaizhizao.quality.spc.sampleTime')} rules={[{ required: true }]} />
         </FormModalTemplate>
       </ListPageTemplate>
     </PermissionGuard>

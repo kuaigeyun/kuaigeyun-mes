@@ -1,16 +1,18 @@
 /**
- * 成本优化建议（物料来源维度），用于成本核算「优化建议」一级 Tab（原成本报表能力并入）。
+ * 成本优化建议（物料来源维度）
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Tag, List, Badge, Alert, Space } from 'antd';
 import { BulbOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../components/layout-templates';
 import { costOptimizationApi } from '../../services/cost';
 import { materialApi } from '../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from './costSelectData';
+import { formatSourceType, getPriorityTag, getSourceTypeTag } from '../../utils/costUiLabels';
 
 export interface OptimizationSuggestion {
   suggestion_type: string;
@@ -40,6 +42,7 @@ export interface OptimizationResult {
 }
 
 const CostOptimizationPanel: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -55,7 +58,7 @@ const CostOptimizationPanel: React.FC = () => {
         const list = await materialApi.list({ limit: 1000, isActive: true });
         setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -79,9 +82,9 @@ const CostOptimizationPanel: React.FC = () => {
         });
       }
       setResult(res);
-      messageApi.success('成本优化建议生成成功');
+      messageApi.success(t('app.kuaicaiwu.costOptimization.generateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '成本优化建议生成失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costOptimization.generateFailed'));
     } finally {
       setLoading(false);
     }
@@ -92,47 +95,44 @@ const CostOptimizationPanel: React.FC = () => {
     setModalVisible(true);
     setResult(null);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      quantity: 1,
-    });
+    formRef.current?.setFieldsValue({ calculation_date: dayjs(), quantity: 1 });
   };
 
-  const getPriorityTag = (priority: string) => {
-    const priorityMap: Record<string, { color: string; text: string }> = {
-      高: { color: 'red', text: '高' },
-      中: { color: 'orange', text: '中' },
-      低: { color: 'blue', text: '低' },
-    };
-    const p = priorityMap[priority] || { color: 'default', text: priority };
-    return <Tag color={p.color}>{p.text}</Tag>;
-  };
+  const summaryColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
+      { title: t('app.kuaicaiwu.costOptimization.col.currentSourceType'), dataIndex: 'current_source_type' },
+      { title: t('app.kuaicaiwu.costOptimization.col.currentCost'), dataIndex: 'current_cost' },
+    ],
+    [t],
+  );
 
-  const getSourceTypeTag = (sourceType: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      Make: { color: 'blue', text: '自制件' },
-      Buy: { color: 'green', text: '采购件' },
-      Outsource: { color: 'orange', text: '委外件' },
-      Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
-    };
-    const type = typeMap[sourceType] || { color: 'default', text: sourceType };
-    return <Tag color={type.color}>{type.text}</Tag>;
-  };
+  const suggestionColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costOptimization.col.from'), dataIndex: 'from' },
+      { title: t('app.kuaicaiwu.costOptimization.col.to'), dataIndex: 'to' },
+      { title: t('app.kuaicaiwu.costOptimization.col.currentCost'), dataIndex: 'current_cost' },
+      { title: t('app.kuaicaiwu.costOptimization.col.alternativeCost'), dataIndex: 'alternative_cost' },
+      { title: t('app.kuaicaiwu.costOptimization.col.potentialSavings'), dataIndex: 'potential_savings' },
+      { title: t('app.kuaicaiwu.costOptimization.col.savingsRate'), dataIndex: 'savings_rate' },
+    ],
+    [t],
+  );
 
   return (
     <div>
       <Space wrap style={{ marginBottom: 16 }}>
         <Button type="primary" icon={<BulbOutlined />} onClick={() => handleOpenModal('single')}>
-          生成单个物料优化建议
+          {t('app.kuaicaiwu.costOptimization.generateSingle')}
         </Button>
         <Button icon={<BulbOutlined />} onClick={() => handleOpenModal('batch')}>
-          批量生成优化建议
+          {t('app.kuaicaiwu.costOptimization.generateBatch')}
         </Button>
       </Space>
 
       {result && (
-        <Card title="优化建议结果" style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
+        <Card title={t('app.kuaicaiwu.costOptimization.resultTitle')} style={{ marginBottom: 16 }} styles={{ body: { padding: 16 } }}>
           {mode === 'single' && result.material_code && (
             <ProDescriptions
               bordered
@@ -141,15 +141,10 @@ const CostOptimizationPanel: React.FC = () => {
               dataSource={{
                 material_code: result.material_code,
                 material_name: result.material_name,
-                current_source_type: getSourceTypeTag(result.current_source_type),
+                current_source_type: getSourceTypeTag(result.current_source_type, t),
                 current_cost: `¥${result.current_cost?.total_cost?.toFixed(2)}`,
               }}
-              columns={[
-                { title: '物料编号', dataIndex: 'material_code' },
-                { title: '物料名称', dataIndex: 'material_name' },
-                { title: '当前来源类型', dataIndex: 'current_source_type' },
-                { title: '当前成本', dataIndex: 'current_cost' },
-              ]}
+              columns={summaryColumns}
             />
           )}
 
@@ -168,12 +163,14 @@ const CostOptimizationPanel: React.FC = () => {
                           }
                         />
                         <span>{item.suggestion_type}</span>
-                        {getPriorityTag(item.priority)}
+                        {getPriorityTag(item.priority, t)}
                       </Space>
                     }
                     extra={
                       <span style={{ fontSize: '18px', fontWeight: 'bold', color: '#52c41a' }}>
-                        预计节约：¥{item.potential_savings.toFixed(2)}
+                        {t('app.kuaicaiwu.costOptimization.estimatedSavings', {
+                          amount: item.potential_savings.toFixed(2),
+                        })}
                       </span>
                     }
                   >
@@ -181,21 +178,14 @@ const CostOptimizationPanel: React.FC = () => {
                       column={2}
                       size="small"
                       dataSource={{
-                        from: getSourceTypeTag(item.from_source_type),
-                        to: getSourceTypeTag(item.to_source_type),
+                        from: getSourceTypeTag(item.from_source_type, t),
+                        to: getSourceTypeTag(item.to_source_type, t),
                         current_cost: `¥${item.current_cost.toFixed(2)}`,
                         alternative_cost: `¥${item.alternative_cost.toFixed(2)}`,
                         potential_savings: `¥${item.potential_savings.toFixed(2)}`,
                         savings_rate: `${item.savings_rate.toFixed(2)}%`,
                       }}
-                      columns={[
-                        { title: '从', dataIndex: 'from' },
-                        { title: '转为', dataIndex: 'to' },
-                        { title: '当前成本', dataIndex: 'current_cost' },
-                        { title: '替代方案成本', dataIndex: 'alternative_cost' },
-                        { title: '潜在节约成本', dataIndex: 'potential_savings' },
-                        { title: '节约率', dataIndex: 'savings_rate' },
-                      ]}
+                      columns={suggestionColumns}
                     />
                     <Alert title={item.description} type="info" showIcon style={{ marginTop: 12 }} />
                   </Card>
@@ -204,8 +194,8 @@ const CostOptimizationPanel: React.FC = () => {
             />
           ) : (
             <Alert
-              title="暂无优化建议"
-              description="当前物料的成本已经是最优的，或者无法找到更优的替代方案。"
+              title={t('app.kuaicaiwu.costOptimization.noSuggestions')}
+              description={t('app.kuaicaiwu.costOptimization.noSuggestionsDesc')}
               type="info"
               showIcon
             />
@@ -214,7 +204,7 @@ const CostOptimizationPanel: React.FC = () => {
       )}
 
       <FormModalTemplate
-        title={mode === 'single' ? '生成单个物料优化建议' : '批量生成优化建议'}
+        title={mode === 'single' ? t('app.kuaicaiwu.costOptimization.modalSingle') : t('app.kuaicaiwu.costOptimization.modalBatch')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -229,11 +219,11 @@ const CostOptimizationPanel: React.FC = () => {
           <>
             <ProFormSelect
               name="material_id"
-              label="物料"
-              placeholder="请选择物料"
-              rules={[{ required: true, message: '请选择物料' }]}
+              label={t('app.kuaicaiwu.costCommon.field.material')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.materialPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
               options={materials.map((m) => ({
-                label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+                label: `${m.mainCode || m.code} - ${m.name} (${formatSourceType(m.sourceType || m.source_type || 'Make', t)})`,
                 value: m.id,
               }))}
               fieldProps={{
@@ -244,27 +234,23 @@ const CostOptimizationPanel: React.FC = () => {
             />
             <ProFormDigit
               name="quantity"
-              label="数量"
-              placeholder="请输入数量（用于计算成本）"
+              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              placeholder={t('app.kuaicaiwu.costOptimization.field.quantityPlaceholder')}
               rules={[
-                { required: true, message: '请输入数量' },
-                { type: 'number', min: 0.0001, message: '数量必须大于0' },
+                { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+                { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
               ]}
-              fieldProps={{
-                precision: 4,
-                style: { width: '100%' },
-                defaultValue: 1,
-              }}
+              fieldProps={{ precision: 4, style: { width: '100%' }, defaultValue: 1 }}
             />
           </>
         ) : (
           <ProFormSelect
             name="material_ids"
-            label="物料列表"
-            placeholder="请选择多个物料"
-            rules={[{ required: true, message: '请选择物料' }]}
+            label={t('app.kuaicaiwu.costOptimization.field.materialList')}
+            placeholder={t('app.kuaicaiwu.costOptimization.field.materialListPlaceholder')}
+            rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
             options={materials.map((m) => ({
-              label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+              label: `${m.mainCode || m.code} - ${m.name} (${formatSourceType(m.sourceType || m.source_type || 'Make', t)})`,
               value: m.id,
             }))}
             fieldProps={{
@@ -277,11 +263,9 @@ const CostOptimizationPanel: React.FC = () => {
         )}
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
       </FormModalTemplate>
     </div>

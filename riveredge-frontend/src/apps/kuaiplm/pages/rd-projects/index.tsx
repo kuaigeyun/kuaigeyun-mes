@@ -3,12 +3,13 @@ import { rowActionKind } from '../../../../components/uni-action';
  * 研发项目列表
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { App, Button, Tag, Typography } from 'antd';
 import { EyeOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { UniUserSelect } from '../../../../components/uni-user-select';
@@ -23,8 +24,6 @@ import {
   spawnDeliveryProject,
   pushTrialWorkOrder,
   updateRdProject,
-  buildProjectStatusValueEnum,
-  PROJECT_TYPE_LABELS,
   type ProjectType,
   type RdProject,
 } from '../../services/rd-project';
@@ -34,6 +33,11 @@ import {
   resolveRdProjectListLifecycleParams,
   LIST_LIFECYCLE_STAGE_FIELD,
 } from '../../utils/rdProjectLifecycle';
+import {
+  buildKuaiplmProjectStatusValueEnum,
+  getKuaiplmProjectStatusText,
+  getKuaiplmProjectTypeText,
+} from '../../components/kuaiplmMeta';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
 
@@ -41,6 +45,7 @@ const PAGE_CODE_RD = 'kuaiplm-rd-project';
 const PAGE_CODE_DELIVERY = 'kuaiplm-delivery-project';
 
 const RdProjectsListPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -52,6 +57,8 @@ const RdProjectsListPage: React.FC = () => {
   const selectedOwnerRef = useRef<{ id: number; name: string } | null>(null);
 
   const activePageCode = createProjectType === 'DELIVERY' ? PAGE_CODE_DELIVERY : PAGE_CODE_RD;
+  const lifecycleValueEnum = useMemo(() => buildRdProjectLifecycleValueEnum(t), [t]);
+  const projectStatusValueEnum = useMemo(() => buildKuaiplmProjectStatusValueEnum(t), [t]);
 
   useEffect(() => {
     if (!createOpen) return;
@@ -84,7 +91,7 @@ const RdProjectsListPage: React.FC = () => {
   const handleBatchDelete = async (keys: React.Key[]) => {
     const ids = toProjectIds(keys);
     if (!ids.length) {
-      messageApi.warning('请先选择项目');
+      messageApi.warning(t('app.kuaiplm.common.messages.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -97,18 +104,18 @@ const RdProjectsListPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`成功删除 ${successCount} 个项目`);
+      messageApi.success(t('app.kuaiplm.common.messages.batchDeleteSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量删除失败');
+    messageApi.error(t('app.kuaiplm.common.messages.batchDeleteFailed'));
   };
 
   const handleBatchSpawnDelivery = async () => {
     const ids = toProjectIds(selectedRowKeys);
     if (!ids.length) {
-      messageApi.warning('请先选择项目');
+      messageApi.warning(t('app.kuaiplm.common.messages.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -121,17 +128,17 @@ const RdProjectsListPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`成功下推 ${successCount} 个交付项目`);
+      messageApi.success(t('app.kuaiplm.common.messages.batchExecuteSuccess', { count: successCount }));
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量下推交付项目失败');
+    messageApi.error(t('app.kuaiplm.rdProjects.messages.pushDeliveryFailed'));
   };
 
   const handleBatchPushTrialWorkOrder = async () => {
     const ids = toProjectIds(selectedRowKeys);
     if (!ids.length) {
-      messageApi.warning('请先选择项目');
+      messageApi.warning(t('app.kuaiplm.common.messages.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -144,17 +151,17 @@ const RdProjectsListPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`成功下推 ${successCount} 个试制工单`);
+      messageApi.success(t('app.kuaiplm.common.messages.batchExecuteSuccess', { count: successCount }));
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量下推试制工单失败');
+    messageApi.error(t('app.kuaiplm.rdProjects.messages.pushTrialWoFailed'));
   };
 
-  const handleBatchUpdateStatus = async (status: string, label: string) => {
+  const handleBatchUpdateStatus = async (status: string) => {
     const ids = toProjectIds(selectedRowKeys);
     if (!ids.length) {
-      messageApi.warning('请先选择项目');
+      messageApi.warning(t('app.kuaiplm.common.messages.selectFirst'));
       return;
     }
     let successCount = 0;
@@ -167,136 +174,145 @@ const RdProjectsListPage: React.FC = () => {
       }
     }
     if (successCount > 0) {
-      messageApi.success(`已将 ${successCount} 个项目设置为${label}`);
+      messageApi.success(
+        t('app.kuaiplm.common.messages.batchExecuteSuccess', {
+          count: successCount,
+        }),
+      );
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量更新状态失败');
+    messageApi.error(t('app.kuaiplm.common.messages.batchUpdateFailed'));
   };
 
-  const columns: ProColumns<RdProject>[] = [
-    {
-      title: '项目编号',
-      dataIndex: 'project_code',
-      width: 160,
-      fixed: 'left',
-      render: (_, row) => (
-        <Typography.Text copyable={{ text: String(row.project_code ?? '') }} ellipsis>
-          <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${row.id}`)}>{row.project_code}</a>
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '项目类型',
-      dataIndex: 'project_type',
-      width: 100,
-      valueEnum: {
-        RD: { text: PROJECT_TYPE_LABELS.RD },
-        DELIVERY: { text: PROJECT_TYPE_LABELS.DELIVERY },
+  const columns: ProColumns<RdProject>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaiplm.common.columns.projectCode'),
+        dataIndex: 'project_code',
+        width: 160,
+        fixed: 'left',
+        render: (_, row) => (
+          <Typography.Text copyable={{ text: String(row.project_code ?? '') }} ellipsis>
+            <a onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${row.id}`)}>{row.project_code}</a>
+          </Typography.Text>
+        ),
       },
-      render: (_, row) => {
-        const type = (row.project_type ?? 'RD') as ProjectType;
-        return (
-          <Tag color={type === 'DELIVERY' ? 'blue' : 'purple'}>
-            {PROJECT_TYPE_LABELS[type] ?? type}
-          </Tag>
-        );
+      {
+        title: t('app.kuaiplm.common.columns.projectType'),
+        dataIndex: 'project_type',
+        width: 100,
+        valueEnum: {
+          RD: { text: getKuaiplmProjectTypeText(t, 'RD') },
+          DELIVERY: { text: getKuaiplmProjectTypeText(t, 'DELIVERY') },
+        },
+        render: (_, row) => {
+          const type = (row.project_type ?? 'RD') as ProjectType;
+          return (
+            <Tag color={type === 'DELIVERY' ? 'blue' : 'purple'}>
+              {getKuaiplmProjectTypeText(t, type)}
+            </Tag>
+          );
+        },
       },
-    },
-    {
-      title: '项目名称',
-      dataIndex: 'project_name',
-      width: 200,
-      ellipsis: true,
-    },
-    {
-      title: '产品物料',
-      dataIndex: 'material_name',
-      width: 160,
-      hideInSearch: true,
-      render: (_, row) => row.material_name || row.material_code || '-',
-    },
-    {
-      title: '负责人',
-      dataIndex: 'owner_name',
-      width: 100,
-      hideInSearch: true,
-    },
-    {
-      title: '当前阶段门',
-      dataIndex: 'current_gate_name',
-      width: 120,
-      hideInSearch: true,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      hideInSearch: true,
-      valueEnum: buildProjectStatusValueEnum(),
-    },
-    {
-      title: LIST_LIFECYCLE_STAGE_FIELD,
-      dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
-      hideInTable: true,
-      valueEnum: buildRdProjectLifecycleValueEnum(),
-    },
-    {
-      title: '计划完成',
-      dataIndex: 'planned_end_date',
-      width: 120,
-      hideInSearch: true,
-      render: (_, row) => (row.planned_end_date ? dayjs(row.planned_end_date).format('YYYY-MM-DD') : '-'),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) => (row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lc = getRdProjectLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lc.percent}
-            stageName={lc.stageName}
-            status={lc.status}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      {
+        title: t('app.kuaiplm.common.columns.projectName'),
+        dataIndex: 'project_name',
+        width: 200,
+        ellipsis: true,
       },
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      fixed: 'right',
-      width: 120,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')}
-              key="detail"
-              type="link"
+      {
+        title: t('app.kuaiplm.common.columns.productMaterial'),
+        dataIndex: 'material_name',
+        width: 160,
+        hideInSearch: true,
+        render: (_, row) => row.material_name || row.material_code || '-',
+      },
+      {
+        title: t('app.kuaiplm.common.columns.owner'),
+        dataIndex: 'owner_name',
+        width: 100,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.common.columns.currentGate'),
+        dataIndex: 'current_gate_name',
+        width: 120,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.common.columns.status'),
+        dataIndex: 'status',
+        width: 100,
+        hideInSearch: true,
+        valueEnum: projectStatusValueEnum,
+        render: (_, row) => getKuaiplmProjectStatusText(t, row.status),
+      },
+      {
+        title: t('app.kuaiplm.common.columns.lifecycle'),
+        dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
+        hideInTable: true,
+        valueEnum: lifecycleValueEnum,
+      },
+      {
+        title: t('app.kuaiplm.common.columns.plannedCompletion'),
+        dataIndex: 'planned_end_date',
+        width: 120,
+        hideInSearch: true,
+        render: (_, row) => (row.planned_end_date ? dayjs(row.planned_end_date).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaiplm.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, row) => (row.updated_at ? dayjs(row.updated_at).format('YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaiplm.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lc = getRdProjectLifecycle(record as unknown as Record<string, unknown>, t);
+          return (
+            <UniLifecycle
+              percent={lc.percent}
+              stageName={lc.stageName}
+              status={lc.status}
+              showLabel
               size="small"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
-            >
-              工作台
-            </Button>,
-          ],
-    },
-  ];
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaiplm.common.columns.actions'),
+        valueType: 'option',
+        fixed: 'right',
+        width: 120,
+        render: (_, record) => [
+          <Button
+            {...rowActionKind('read')}
+            key="detail"
+            type="link"
+            size="small"
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/apps/kuaiplm/rd-projects/detail/${record.id}`)}
+          >
+            {t('app.kuaiplm.common.actions.detail')}
+          </Button>,
+        ],
+      },
+    ],
+    [t, navigate, lifecycleValueEnum, projectStatusValueEnum],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<RdProject>
-        headerTitle="项目管理"
+        headerTitle={t('app.kuaiplm.rdProjects.pageTitle')}
         actionRef={actionRef}
         rowKey="id"
         enableRowSelection
@@ -306,28 +322,28 @@ const RdProjectsListPage: React.FC = () => {
         columnPersistenceId="apps.kuaiplm.pages.rd-projects"
         scroll={{ x: 1400 }}
         showCreateButton
-        createButtonText={'新建项目' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.kuaiplm.rdProjects.createButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         toolBarActionsAfterCreate={[
           <UniBatchMenuButton
             key="rd-project-push-actions"
-            buttonText="下推"
+            buttonText={t('app.kuaiplm.common.actions.pushDown')}
             selectedRowKeys={selectedRowKeys}
             menuItems={[
               {
                 key: 'batch-spawn-delivery',
-                label: '批量下推交付项目',
+                label: t('app.kuaiplm.rdProjects.batch.pushDelivery'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确定下推选中的 ${count} 个项目为交付项目吗？`,
+                confirmTitle: (count) => `${t('app.kuaiplm.rdProjects.batch.pushDelivery')} (${count})`,
                 onClick: () => {
                   void handleBatchSpawnDelivery();
                 },
               },
               {
                 key: 'batch-push-trial-work-order',
-                label: '批量下推试制工单',
+                label: t('app.kuaiplm.rdProjects.batch.pushTrialWo'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确定为选中的 ${count} 个项目下推试制工单吗？`,
+                confirmTitle: (count) => `${t('app.kuaiplm.rdProjects.batch.pushTrialWo')} (${count})`,
                 onClick: () => {
                   void handleBatchPushTrialWorkOrder();
                 },
@@ -337,32 +353,32 @@ const RdProjectsListPage: React.FC = () => {
         ]}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 个项目吗？`}
+        deleteConfirmTitle={(count) => `${t('app.kuaiplm.common.actions.delete')} (${count})?`}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="rd-project-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaiplm.common.actions.batchActions')}
             menuItems={[
               {
                 key: 'batch-set-in-progress',
-                label: '批量设为进行中',
+                label: t('app.kuaiplm.rdProjects.batch.setInProgress'),
                 onClick: () => {
-                  void handleBatchUpdateStatus('IN_PROGRESS', '进行中');
+                  void handleBatchUpdateStatus('IN_PROGRESS');
                 },
               },
               {
                 key: 'batch-set-on-hold',
-                label: '批量设为已暂停',
+                label: t('app.kuaiplm.rdProjects.batch.setOnHold'),
                 onClick: () => {
-                  void handleBatchUpdateStatus('ON_HOLD', '已暂停');
+                  void handleBatchUpdateStatus('ON_HOLD');
                 },
               },
               {
                 key: 'batch-set-completed',
-                label: '批量设为已结案',
+                label: t('app.kuaiplm.rdProjects.batch.setCompleted'),
                 onClick: () => {
-                  void handleBatchUpdateStatus('COMPLETED', '已结案');
+                  void handleBatchUpdateStatus('COMPLETED');
                 },
               },
             ]}
@@ -381,14 +397,14 @@ const RdProjectsListPage: React.FC = () => {
             });
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || '加载失败');
+            messageApi.error(e?.message || t('app.kuaiplm.common.messages.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}
       />
 
       <FormModalTemplate
-        title="新建项目"
+        title={t('app.kuaiplm.rdProjects.modal.createTitle')}
         open={createOpen}
         grid
         onClose={() => {
@@ -413,7 +429,7 @@ const RdProjectsListPage: React.FC = () => {
               : undefined,
             notes: values.notes,
           });
-          messageApi.success('创建成功');
+          messageApi.success(t('app.kuaiplm.common.messages.createSuccess'));
           setCreateOpen(false);
           setCreateProjectType('RD');
           selectedOwnerRef.current = null;
@@ -422,13 +438,13 @@ const RdProjectsListPage: React.FC = () => {
       >
         <ProFormSelect
           name="project_type"
-          label="项目类型"
+          label={t('app.kuaiplm.rdProjects.form.projectType')}
           initialValue="RD"
           rules={[{ required: true }]}
           colProps={{ span: 24 }}
           options={[
-            { label: PROJECT_TYPE_LABELS.RD, value: 'RD' },
-            { label: PROJECT_TYPE_LABELS.DELIVERY, value: 'DELIVERY' },
+            { label: getKuaiplmProjectTypeText(t, 'RD'), value: 'RD' },
+            { label: getKuaiplmProjectTypeText(t, 'DELIVERY'), value: 'DELIVERY' },
           ]}
           fieldProps={{
             onChange: (val: ProjectType) => {
@@ -440,8 +456,8 @@ const RdProjectsListPage: React.FC = () => {
         {createProjectType === 'DELIVERY' ? (
           <ProFormSelect
             name="source_project_id"
-            label="来源研发项目"
-            placeholder="可选，选择后将继承物料与工程关联"
+            label={t('app.kuaiplm.rdProjects.form.sourceProject')}
+            placeholder={t('app.kuaiplm.rdProjects.form.sourceProjectHint')}
             colProps={{ span: 24 }}
             showSearch
             request={async () => {
@@ -455,22 +471,22 @@ const RdProjectsListPage: React.FC = () => {
         ) : null}
         <ProFormText
           name="project_code"
-          label="项目编号"
+          label={t('app.kuaiplm.rdProjects.form.projectCode')}
           rules={[{ required: !isAutoGenerateEnabled(activePageCode) }]}
           disabled={isAutoGenerateEnabled(activePageCode)}
-          extra={previewCode ? `预览编号：${previewCode}` : undefined}
+          extra={previewCode ? `${t('app.kuaiplm.rdProjects.form.projectCode')}: ${previewCode}` : undefined}
           colProps={{ span: 24 }}
         />
         <ProFormText
           name="project_name"
-          label="项目名称"
+          label={t('app.kuaiplm.rdProjects.form.projectName')}
           rules={[{ required: true }]}
           colProps={{ span: 24 }}
         />
         <UniUserSelect
           name="owner_uuid"
-          label="项目负责人"
-          placeholder="请选择项目负责人"
+          label={t('app.kuaiplm.rdProjects.form.owner')}
+          placeholder={t('app.kuaiplm.rdProjects.form.ownerPlaceholder')}
           colProps={{ span: 24 }}
           onChange={(_uuid, user) => {
             if (user && !Array.isArray(user)) {
@@ -485,19 +501,19 @@ const RdProjectsListPage: React.FC = () => {
         />
         <ProFormDatePicker
           name="planned_start_date"
-          label="计划开始"
+          label={t('app.kuaiplm.rdProjects.form.plannedStart')}
           colProps={{ span: 12 }}
           width="100%"
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="planned_end_date"
-          label="计划完成"
+          label={t('app.kuaiplm.rdProjects.form.plannedEnd')}
           colProps={{ span: 12 }}
           width="100%"
           fieldProps={{ style: { width: '100%' } }}
         />
-        <ProFormTextArea name="notes" label="备注" colProps={{ span: 24 }} />
+        <ProFormTextArea name="notes" label={t('app.kuaiplm.rdProjects.form.notes')} colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

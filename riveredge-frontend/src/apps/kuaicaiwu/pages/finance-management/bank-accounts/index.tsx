@@ -1,8 +1,9 @@
 import { rowActionKind } from '../../../../../components/uni-action';
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Popconfirm, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
 import {
   DetailDrawerTemplate,
   DRAWER_CONFIG,
@@ -13,13 +14,16 @@ import {
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
-import { CURRENCY_SELECT_OPTIONS, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
+import { getCurrencySelectOptions, formatBankDirection, formatCurrency } from '../../../utils/financeUiLabels';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 
 type BankTx = Record<string, unknown>;
 
+const BA = 'app.kuaicaiwu.bankAccount';
+
 const BankAccountsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const txRef = useRef<ActionType>();
@@ -31,64 +35,69 @@ const BankAccountsPage: React.FC = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [importAccount, setImportAccount] = useState<BankAccount | null>(null);
 
-  const columns: ProColumns<BankAccount>[] = [
-    { title: '账户编码', dataIndex: 'account_code', width: 120 },
-    { title: '账户名称', dataIndex: 'account_name', ellipsis: true },
-    { title: '开户行', dataIndex: 'bank_name', ellipsis: true },
-    { title: '账号', dataIndex: 'account_number', width: 180, ellipsis: true },
-    { title: '币种', dataIndex: 'currency', width: 100, render: (_, r) => formatCurrency(String(r.currency ?? '')) },
-    { title: '当前余额', dataIndex: 'current_balance', valueType: 'money', align: 'right' },
+  const columns: ProColumns<BankAccount>[] = useMemo(() => [
+    { title: t(`${BA}.col.accountCode`), dataIndex: 'account_code', width: 120 },
+    { title: t(`${BA}.col.accountName`), dataIndex: 'account_name', ellipsis: true },
+    { title: t(`${BA}.col.bankName`), dataIndex: 'bank_name', ellipsis: true },
+    { title: t(`${BA}.col.accountNumber`), dataIndex: 'account_number', width: 180, ellipsis: true },
+    { title: t(`${BA}.col.currency`), dataIndex: 'currency', width: 100, render: (_, r) => formatCurrency(String(r.currency ?? ''), t) },
+    { title: t(`${BA}.col.balance`), dataIndex: 'current_balance', valueType: 'money', align: 'right' },
     {
-      title: '状态',
+      title: t(`${BA}.col.status`),
       dataIndex: 'is_active',
       width: 80,
-      render: (_, r) => (r.is_active ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
+      render: (_, r) => (r.is_active
+        ? <Tag color="success">{t(`${BA}.status.enabled`)}</Tag>
+        : <Tag>{t(`${BA}.status.disabled`)}</Tag>),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 180,
       render: (_, record) => [
-        <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>流水</a>,
-        <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>导入</a>,
-        <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>编辑</a>,
+        <a key="tx" onClick={() => { setTxAccount(record); setTxDrawerOpen(true); }}>{t(`${BA}.action.transactions`)}</a>,
+        <a key="import" onClick={() => { setImportAccount(record); setImportOpen(true); }}>{t(`${BA}.action.import`)}</a>,
+        <a key="edit" onClick={() => { setEditing(record); setModalVisible(true); }}>{t('common.edit')}</a>,
         <Popconfirm {...rowActionKind('delete')}
           key="del"
-          title="确认删除该银行账户？"
+          title={t(`${BA}.confirmDelete`)}
           onConfirm={async () => {
             await bankAccountService.delete(record.id);
-            messageApi.success('已删除');
+            messageApi.success(t('common.deleteSuccess'));
             actionRef.current?.reload();
           }}
         >
-          <a>删除</a>
+          <a>{t('common.delete')}</a>
         </Popconfirm>,
       ],
     },
-  ];
+  ], [t, messageApi]);
 
-  const txColumns: ProColumns<BankTx>[] = [
-    { title: '日期', dataIndex: 'transaction_date', valueType: 'date', width: 120 },
+  const txColumns: ProColumns<BankTx>[] = useMemo(() => [
+    { title: t(`${BA}.col.date`), dataIndex: 'transaction_date', valueType: 'date', width: 120 },
     {
-      title: '方向',
+      title: t(`${BA}.col.direction`),
       dataIndex: 'direction',
       width: 80,
       render: (_, r) => {
-        const label = formatBankDirection(String(r.direction ?? ''));
-        return label === '收入' ? <Tag color="green">收入</Tag> : label === '支出' ? <Tag color="red">支出</Tag> : <Tag>{label}</Tag>;
+        const direction = String(r.direction ?? '');
+        const label = formatBankDirection(direction, t);
+        if (direction === 'in') return <Tag color="green">{label}</Tag>;
+        if (direction === 'out') return <Tag color="red">{label}</Tag>;
+        return <Tag>{label}</Tag>;
       },
     },
-    { title: '金额', dataIndex: 'amount', valueType: 'money', align: 'right' },
-    { title: '余额', dataIndex: 'balance_after', valueType: 'money', align: 'right' },
-    { title: '来源单号', dataIndex: 'source_doc_code', width: 140, ellipsis: true },
-    { title: '摘要', dataIndex: 'summary', ellipsis: true },
-  ];
+    { title: t('app.kuaicaiwu.invoice.line.amount'), dataIndex: 'amount', valueType: 'money', align: 'right' },
+    { title: t(`${BA}.col.balance`), dataIndex: 'balance_after', valueType: 'money', align: 'right' },
+    { title: t(`${BA}.col.sourceCode`), dataIndex: 'source_doc_code', width: 140, ellipsis: true },
+    { title: t(`${BA}.col.summary`), dataIndex: 'summary', ellipsis: true },
+  ], [t]);
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     for (const key of keys) {
       await bankAccountService.delete(Number(key));
     }
-    messageApi.success(`已删除 ${keys.length} 个银行账户`);
+    messageApi.success(t(`${BA}.batchDeleted`, { count: keys.length }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -97,7 +106,7 @@ const BankAccountsPage: React.FC = () => {
     for (const key of keys) {
       await bankAccountService.update(Number(key), { is_active: isActive });
     }
-    messageApi.success(`已将 ${keys.length} 个银行账户设为${isActive ? '启用' : '停用'}`);
+    messageApi.success(t(isActive ? `${BA}.batchEnabled` : `${BA}.batchDisabled`, { count: keys.length }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -118,26 +127,26 @@ const BankAccountsPage: React.FC = () => {
         }}
         search={false}
         showCreateButton
-        createButtonText="新建账户"
+        createButtonText={t(`${BA}.createButton`)}
         onCreate={() => { setEditing(null); setModalVisible(true); }}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle="确认批量删除"
-        deleteConfirmDescription={(count) => `确定删除选中的 ${count} 个银行账户吗？`}
+        deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t(`${BA}.batchDeleteConfirm`, { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="bank-account-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('components.uniBatch.batchActions')}
             menuItems={[
               {
                 key: 'batch-enable',
-                label: '批量启用',
+                label: t(`${BA}.batchEnable`),
                 onClick: (keys) => handleBatchSetActive(keys, true),
               },
               {
                 key: 'batch-disable',
-                label: '批量停用',
+                label: t(`${BA}.batchDisable`),
                 onClick: (keys) => handleBatchSetActive(keys, false),
               },
             ]}
@@ -146,7 +155,9 @@ const BankAccountsPage: React.FC = () => {
       />
 
       <DetailDrawerTemplate
-        title={txAccount ? `${txAccount.account_name} · 银行流水` : '银行流水'}
+        title={txAccount
+          ? t(`${BA}.transactionsTitleWithAccount`, { name: txAccount.account_name })
+          : t(`${BA}.transactionsTitle`)}
         open={txDrawerOpen}
         onClose={() => setTxDrawerOpen(false)}
         width={DRAWER_CONFIG.HALF_WIDTH}
@@ -170,34 +181,39 @@ const BankAccountsPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={importAccount ? `导入对账单 · ${importAccount.account_name}` : '导入对账单'}
+        title={importAccount
+          ? t(`${BA}.importTitleWithAccount`, { name: importAccount.account_name })
+          : t(`${BA}.importStatementTitle`)}
         open={importOpen}
         onClose={() => setImportOpen(false)}
         width={MODAL_CONFIG.LARGE_WIDTH}
         onFinish={async (values) => {
           if (!importAccount) return;
           const result = await bankAccountService.importStatement(importAccount.id, values.csv_content);
-          messageApi.success(`已导入 ${result.imported_count} 条，当前余额 ¥${result.current_balance}`);
+          messageApi.success(t(`${BA}.importSuccess`, {
+            count: result.imported_count,
+            balance: result.current_balance,
+          }));
           setImportOpen(false);
           actionRef.current?.reload();
         }}
       >
         <p style={{ color: 'var(--ant-color-text-secondary)', marginBottom: 8 }}>
-          将网银或柜台导出的对账单粘贴到下方（暂不支持银企直联）。首行表头示例：交易日期,收支方向,金额,摘要；收支方向填「收入」或「支出」。
+          {t(`${BA}.importHint`)}
         </p>
         <ProFormTextArea
           name="csv_content"
-          label="对账单内容"
-          rules={[{ required: true, message: '请粘贴对账单内容' }]}
+          label={t(`${BA}.importContent`)}
+          rules={[{ required: true, message: t(`${BA}.importContentRequired`) }]}
           fieldProps={{
             rows: 10,
-            placeholder: '交易日期,收支方向,金额,摘要\n2026-05-01,收入,10000.00,期初调账',
+            placeholder: t(`${BA}.importPlaceholder`),
           }}
         />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={editing ? '编辑银行账户' : '新建银行账户'}
+        title={editing ? t(`${BA}.editTitle`) : t(`${BA}.createTitle`)}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -209,10 +225,10 @@ const BankAccountsPage: React.FC = () => {
           };
           if (editing) {
             await bankAccountService.update(editing.id, payload);
-            messageApi.success('更新成功');
+            messageApi.success(t('common.updateSuccess'));
           } else {
             await bankAccountService.create(payload);
-            messageApi.success('创建成功');
+            messageApi.success(t('common.createSuccess'));
           }
           setModalVisible(false);
           actionRef.current?.reload();
@@ -223,20 +239,23 @@ const BankAccountsPage: React.FC = () => {
             : { currency: 'CNY', is_active: true }
         }
       >
-        <ProFormText name="account_code" label="账户编码" rules={[{ required: true }]} disabled={!!editing} />
-        <ProFormText name="account_name" label="账户名称" rules={[{ required: true }]} />
-        <ProFormText name="bank_name" label="开户行" rules={[{ required: true }]} />
-        <ProFormText name="account_number" label="银行账号" rules={[{ required: true }]} />
-        <ProFormSelect name="currency" label="币种" options={CURRENCY_SELECT_OPTIONS} />
-        {!editing && <ProFormMoney name="opening_balance" label="期初余额" min={0} />}
+        <ProFormText name="account_code" label={t(`${BA}.col.accountCode`)} rules={[{ required: true }]} disabled={!!editing} />
+        <ProFormText name="account_name" label={t(`${BA}.col.accountName`)} rules={[{ required: true }]} />
+        <ProFormText name="bank_name" label={t(`${BA}.col.bankName`)} rules={[{ required: true }]} />
+        <ProFormText name="account_number" label={t(`${BA}.form.accountNumber`)} rules={[{ required: true }]} />
+        <ProFormSelect name="currency" label={t(`${BA}.col.currency`)} options={getCurrencySelectOptions(t)} />
+        {!editing && <ProFormMoney name="opening_balance" label={t(`${BA}.col.openingBalance`)} min={0} />}
         {editing && (
           <ProFormSelect
             name="is_active"
-            label="状态"
-            options={[{ label: '启用', value: true }, { label: '停用', value: false }]}
+            label={t(`${BA}.col.status`)}
+            options={[
+              { label: t(`${BA}.status.enabled`), value: true },
+              { label: t(`${BA}.status.disabled`), value: false },
+            ]}
           />
         )}
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="bank_account_attachments" />
       </FormModalTemplate>
     </ListPageTemplate>

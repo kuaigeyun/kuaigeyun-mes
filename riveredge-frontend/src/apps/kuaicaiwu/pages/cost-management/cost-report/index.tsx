@@ -1,14 +1,8 @@
 /**
  * 成本报表分析页面
- *
- * 三个一级 Tab：综合报表、成本趋势分析、成本结构分析（综合报表为首）。
- * 物料来源类「优化建议」已并入成本核算页。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { useSearchParams, useNavigate, useLocation } from 'react-router-dom';
 import {
   ProForm,
@@ -20,11 +14,13 @@ import {
 import type { TabsProps } from 'antd';
 import { App, Tag, Divider, Row, Col, Statistic, Space, Tabs, Empty, Descriptions, Typography, Timeline, theme } from 'antd';
 import { BarChartOutlined, LineChartOutlined, FileTextOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { MultiTabListPageTemplate, DetailDrawerSection } from '../../../../../components/layout-templates';
 import { costReportApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
+import { getSourceTypeSelectOptions, getSourceTypeTag } from '../../../utils/costUiLabels';
 
 type ReportSection = 'comprehensive' | 'trend' | 'structure';
 
@@ -82,13 +78,8 @@ const defaultFormValues = {
   group_by: 'month',
 };
 
-const REPORT_TYPE_LABEL: Record<string, string> = {
-  comprehensive: '综合报表',
-  trend: '成本趋势分析',
-  structure: '成本结构分析',
-};
-
 const CostReportPage: React.FC = () => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const { message: messageApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -104,6 +95,15 @@ const CostReportPage: React.FC = () => {
   const [loadingSection, setLoadingSection] = useState<ReportSection | null>(null);
   const [materials, setMaterials] = useState<any[]>([]);
 
+  const reportTypeLabel = useMemo(
+    () => ({
+      comprehensive: t('app.kuaicaiwu.costReport.tab.comprehensive'),
+      trend: t('app.kuaicaiwu.costReport.tab.trend'),
+      structure: t('app.kuaicaiwu.costReport.tab.structure'),
+    }),
+    [t],
+  );
+
   useEffect(() => {
     if (searchParams.get('section') === 'optimization') {
       const path = location.pathname.replace(/\/cost-report\/?$/, '/cost-calculations');
@@ -114,10 +114,10 @@ const CostReportPage: React.FC = () => {
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(normalizeCostListRows(result));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -125,11 +125,10 @@ const CostReportPage: React.FC = () => {
 
   const handleGenerateReport = useCallback(
     async (section: ReportSection, values: any) => {
-      const report_type = section;
       try {
         setLoadingSection(section);
         const data = {
-          report_type,
+          report_type: section,
           start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : undefined,
           end_date: values.end_date ? values.end_date.format('YYYY-MM-DD') : undefined,
           material_id: values.material_id,
@@ -138,68 +137,49 @@ const CostReportPage: React.FC = () => {
         };
         const result = await costReportApi.generate(data);
         setResultBySection((prev) => ({ ...prev, [section]: result }));
-        messageApi.success('成本报表生成成功');
+        messageApi.success(t('app.kuaicaiwu.costReport.generateSuccess'));
       } catch (error: any) {
-        messageApi.error(error.message || '成本报表生成失败');
+        messageApi.error(error.message || t('app.kuaicaiwu.costReport.generateFailed'));
       } finally {
         setLoadingSection(null);
       }
     },
-    [messageApi]
+    [messageApi, t],
   );
 
-  const getSourceTypeTag = (sourceType: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      Make: { color: 'blue', text: '自制件' },
-      Buy: { color: 'green', text: '采购件' },
-      Outsource: { color: 'orange', text: '委外件' },
-      Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
-    };
-    const type = typeMap[sourceType] || { color: 'default', text: sourceType };
-    return <Tag color={type.color}>{type.text}</Tag>;
-  };
+  const structureBySourceColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.laborCost'), dataIndex: 'labor_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'), dataIndex: 'manufacturing_cost' },
+      { title: t('app.kuaicaiwu.costReport.col.recordCount'), dataIndex: 'count' },
+    ],
+    [t],
+  );
 
   const renderReportResult = (result: CostReportResult) => {
     const tabItems: NonNullable<TabsProps['items']> = [];
     if (result.trend_analysis) {
       tabItems.push({
         key: 'trend',
-        label: '成本趋势',
+        label: t('app.kuaicaiwu.costReport.innerTab.trend'),
         children: (
           <>
             <Row gutter={16} style={{ marginBottom: 24 }}>
               <Col xs={24} sm={8}>
-                <Statistic title="总期间数" value={result.trend_analysis!.summary.total_periods} />
+                <Statistic title={t('app.kuaicaiwu.costReport.col.totalPeriods')} value={result.trend_analysis!.summary.total_periods} />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic
-                  title="总成本"
-                  value={result.trend_analysis!.summary.total_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={result.trend_analysis!.summary.total_cost} prefix="¥" precision={2} />
               </Col>
               <Col xs={24} sm={8}>
-                <Statistic
-                  title="平均成本/期间"
-                  value={result.trend_analysis!.summary.avg_cost_per_period}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.costReport.col.avgCostPerPeriod')} value={result.trend_analysis!.summary.avg_cost_per_period} prefix="¥" precision={2} />
               </Col>
             </Row>
-            <Typography.Text type="secondary">趋势数据（JSON）</Typography.Text>
+            <Typography.Text type="secondary">{t('app.kuaicaiwu.costReport.trendDataJson')}</Typography.Text>
             <div style={{ overflowX: 'auto', overflowY: 'hidden', marginTop: 8 }}>
-              <pre
-                style={{
-                  margin: 0,
-                  whiteSpace: 'pre-wrap',
-                  wordBreak: 'break-word',
-                  maxHeight: 400,
-                  overflow: 'auto',
-                }}
-              >
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', maxHeight: 400, overflow: 'auto' }}>
                 {JSON.stringify(result.trend_analysis.trend_data, null, 2)}
               </pre>
             </div>
@@ -210,92 +190,63 @@ const CostReportPage: React.FC = () => {
     if (result.structure_analysis) {
       tabItems.push({
         key: 'structure',
-        label: '成本结构',
+        label: t('app.kuaicaiwu.costReport.innerTab.structure'),
         children: (
           <>
-            <Typography.Text strong>总成本</Typography.Text>
+            <Typography.Text strong>{t('app.kuaicaiwu.costCommon.col.totalCost')}</Typography.Text>
             <Statistic
               value={result.structure_analysis.total_cost}
               prefix="¥"
               precision={2}
-              styles={{ content: {fontSize: 22, fontWeight: 600, color: token.colorPrimary } }}
+              styles={{ content: { fontSize: 22, fontWeight: 600, color: token.colorPrimary } }}
             />
             <Divider style={{ margin: '16px 0' }} />
             <Row gutter={[16, 16]}>
               <Col xs={24} md={8}>
-                <Statistic
-                  title="材料成本"
-                  value={result.structure_analysis.cost_composition.material_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={result.structure_analysis.cost_composition.material_cost} prefix="¥" precision={2} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  占比：{result.structure_analysis.cost_rates.material_cost_rate.toFixed(2)}%
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.material_cost_rate.toFixed(2) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
-                <Statistic
-                  title="人工成本"
-                  value={result.structure_analysis.cost_composition.labor_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={result.structure_analysis.cost_composition.labor_cost} prefix="¥" precision={2} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  占比：{result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2)}%
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.labor_cost_rate.toFixed(2) })}
                 </div>
               </Col>
               <Col xs={24} md={8}>
-                <Statistic
-                  title="制造费用"
-                  value={result.structure_analysis.cost_composition.manufacturing_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={result.structure_analysis.cost_composition.manufacturing_cost} prefix="¥" precision={2} />
                 <div style={{ marginTop: 8, fontSize: 12, color: token.colorTextSecondary }}>
-                  占比：{result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2)}%
+                  {t('app.kuaicaiwu.costReport.shareRate', { rate: result.structure_analysis.cost_rates.manufacturing_cost_rate.toFixed(2) })}
                 </div>
               </Col>
             </Row>
-            {result.structure_analysis.by_source_type &&
-              Object.keys(result.structure_analysis.by_source_type).length > 0 && (
-                <>
-                  <Divider>按物料来源类型统计</Divider>
-                  <Row gutter={[16, 16]}>
-                    {Object.entries(result.structure_analysis.by_source_type).map(([sourceType, data]: [string, any]) => (
-                      <Col xs={24} lg={12} key={sourceType}>
-                        <div
-                          style={{
-                            padding: 12,
-                            border: `1px solid ${token.colorBorder}`,
-                            borderRadius: token.borderRadius,
-                            background: token.colorFillAlter,
+            {result.structure_analysis.by_source_type && Object.keys(result.structure_analysis.by_source_type).length > 0 && (
+              <>
+                <Divider>{t('app.kuaicaiwu.costReport.bySourceType')}</Divider>
+                <Row gutter={[16, 16]}>
+                  {Object.entries(result.structure_analysis.by_source_type).map(([sourceType, data]: [string, any]) => (
+                    <Col xs={24} lg={12} key={sourceType}>
+                      <div style={{ padding: 12, border: `1px solid ${token.colorBorder}`, borderRadius: token.borderRadius, background: token.colorFillAlter }}>
+                        <div style={{ marginBottom: 8 }}>{getSourceTypeTag(sourceType, t)}</div>
+                        <ProDescriptions
+                          column={1}
+                          size="small"
+                          dataSource={{
+                            total_cost: `¥${data.total_cost.toFixed(2)}`,
+                            material_cost: `¥${data.material_cost.toFixed(2)}`,
+                            labor_cost: `¥${data.labor_cost.toFixed(2)}`,
+                            manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
+                            count: data.count,
                           }}
-                        >
-                          <div style={{ marginBottom: 8 }}>{getSourceTypeTag(sourceType)}</div>
-                          <ProDescriptions
-                            column={1}
-                            size="small"
-                            dataSource={{
-                              total_cost: `¥${data.total_cost.toFixed(2)}`,
-                              material_cost: `¥${data.material_cost.toFixed(2)}`,
-                              labor_cost: `¥${data.labor_cost.toFixed(2)}`,
-                              manufacturing_cost: `¥${data.manufacturing_cost.toFixed(2)}`,
-                              count: data.count,
-                            }}
-                            columns={[
-                              { title: '总成本', dataIndex: 'total_cost' },
-                              { title: '材料成本', dataIndex: 'material_cost' },
-                              { title: '人工成本', dataIndex: 'labor_cost' },
-                              { title: '制造费用', dataIndex: 'manufacturing_cost' },
-                              { title: '记录数', dataIndex: 'count' },
-                            ]}
-                          />
-                        </div>
-                      </Col>
-                    ))}
-                  </Row>
-                </>
-              )}
+                          columns={structureBySourceColumns}
+                        />
+                      </div>
+                    </Col>
+                  ))}
+                </Row>
+              </>
+            )}
           </>
         ),
       });
@@ -303,39 +254,43 @@ const CostReportPage: React.FC = () => {
 
     return (
       <div style={{ marginTop: 16 }}>
-        <DetailDrawerSection title="基本信息">
+        <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
           <Descriptions bordered column={{ xs: 1, sm: 2, md: 3 }} size="small">
-            <Descriptions.Item label="报表类型">
-              {REPORT_TYPE_LABEL[result.report_type] ?? result.report_type}
+            <Descriptions.Item label={t('app.kuaicaiwu.costReport.col.reportType')}>
+              {reportTypeLabel[result.report_type as ReportSection] ?? result.report_type}
             </Descriptions.Item>
-            <Descriptions.Item label="生成时间">
+            <Descriptions.Item label={t('app.kuaicaiwu.costReport.col.generatedAt')}>
               {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
             </Descriptions.Item>
-            <Descriptions.Item label="开始日期">{dayjs(result.start_date).format('YYYY-MM-DD')}</Descriptions.Item>
-            <Descriptions.Item label="结束日期">{dayjs(result.end_date).format('YYYY-MM-DD')}</Descriptions.Item>
+            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.startDate')}>{dayjs(result.start_date).format('YYYY-MM-DD')}</Descriptions.Item>
+            <Descriptions.Item label={t('app.kuaicaiwu.costCommon.col.endDate')}>{dayjs(result.end_date).format('YYYY-MM-DD')}</Descriptions.Item>
           </Descriptions>
         </DetailDrawerSection>
 
-        <DetailDrawerSection title="生命周期">
+        <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            报表为分析型快照，无单据生命周期与上下游关联。
+            {t('app.kuaicaiwu.costReport.lifecycleHint')}
           </Typography.Paragraph>
         </DetailDrawerSection>
 
-        <DetailDrawerSection title="明细信息">
+        <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
           {tabItems.length > 0 ? (
             <Tabs defaultActiveKey={tabItems[0].key} items={tabItems} />
           ) : (
-            <Empty description="当前报表未返回趋势或结构数据" />
+            <Empty description={t('app.kuaicaiwu.costReport.noTrendOrStructure')} />
           )}
         </DetailDrawerSection>
 
-        <DetailDrawerSection title="操作记录" marginBottom={0}>
+        <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')} marginBottom={0}>
           <Timeline
             items={[
               {
                 color: 'blue',
-                children: <>报表生成 · {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}</>,
+                children: (
+                  <>
+                    {t('app.kuaicaiwu.costReport.reportGenerated')} · {dayjs(result.generated_at).format('YYYY-MM-DD HH:mm:ss')}
+                  </>
+                ),
               },
             ]}
           />
@@ -347,16 +302,15 @@ const CostReportPage: React.FC = () => {
   const materialSelectField = (
     <ProFormSelect
       name="material_id"
-      label="物料（可选）"
-      placeholder="请选择物料（可选，用于分析特定物料）"
+      label={t('app.kuaicaiwu.costReport.field.materialOptional')}
+      placeholder={t('app.kuaicaiwu.costReport.field.materialOptionalPlaceholder')}
       options={materials.map((m) => ({
         label: `${m.mainCode || m.code} - ${m.name}`,
         value: m.id,
       }))}
       fieldProps={{
         showSearch: true,
-        filterOption: (input: string, option: any) =>
-          option?.label?.toLowerCase().includes(input.toLowerCase()),
+        filterOption: (input: string, option: any) => option?.label?.toLowerCase().includes(input.toLowerCase()),
       }}
     />
   );
@@ -364,26 +318,20 @@ const CostReportPage: React.FC = () => {
   const sourceTypeField = (
     <ProFormSelect
       name="source_type"
-      label="物料来源类型（可选）"
-      placeholder="请选择物料来源类型（可选）"
-      options={[
-        { label: '自制件', value: 'Make' },
-        { label: '采购件', value: 'Buy' },
-        { label: '委外件', value: 'Outsource' },
-        { label: '虚拟件', value: 'Phantom' },
-        { label: '配置件', value: 'Configure' },
-      ]}
+      label={t('app.kuaicaiwu.costReport.field.sourceTypeOptional')}
+      placeholder={t('app.kuaicaiwu.costReport.field.sourceTypeOptionalPlaceholder')}
+      options={getSourceTypeSelectOptions(t)}
     />
   );
 
   const groupByField = (
     <ProFormRadio.Group
       name="group_by"
-      label="分组方式"
+      label={t('app.kuaicaiwu.costReport.field.groupBy')}
       options={[
-        { label: '按月', value: 'month' },
-        { label: '按周', value: 'week' },
-        { label: '按日', value: 'day' },
+        { label: t('app.kuaicaiwu.costReport.groupBy.month'), value: 'month' },
+        { label: t('app.kuaicaiwu.costReport.groupBy.week'), value: 'week' },
+        { label: t('app.kuaicaiwu.costReport.groupBy.day'), value: 'day' },
       ]}
     />
   );
@@ -392,16 +340,16 @@ const CostReportPage: React.FC = () => {
     <>
       <ProFormDatePicker
         name="start_date"
-        label="开始日期"
-        placeholder="请选择开始日期"
-        rules={[{ required: true, message: '请选择开始日期' }]}
+        label={t('app.kuaicaiwu.costCommon.col.startDate')}
+        placeholder={t('app.kuaicaiwu.costReport.field.startDatePlaceholder')}
+        rules={[{ required: true, message: t('app.kuaicaiwu.costReport.field.startDateRequired') }]}
         fieldProps={{ style: { width: '100%' } }}
       />
       <ProFormDatePicker
         name="end_date"
-        label="结束日期"
-        placeholder="请选择结束日期"
-        rules={[{ required: true, message: '请选择结束日期' }]}
+        label={t('app.kuaicaiwu.costCommon.col.endDate')}
+        placeholder={t('app.kuaicaiwu.costReport.field.endDatePlaceholder')}
+        rules={[{ required: true, message: t('app.kuaicaiwu.costReport.field.endDateRequired') }]}
         fieldProps={{ style: { width: '100%' } }}
       />
     </>
@@ -415,7 +363,7 @@ const CostReportPage: React.FC = () => {
         initialValues={defaultFormValues}
         onFinish={(v) => handleGenerateReport('comprehensive', v)}
         submitter={{
-          searchConfig: { submitText: '生成综合报表' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costReport.submit.comprehensive') },
           resetButtonProps: { style: { display: 'none' } },
           submitButtonProps: { loading: loadingSection === 'comprehensive' },
         }}
@@ -426,11 +374,7 @@ const CostReportPage: React.FC = () => {
         {groupByField}
       </ProForm>
       {!resultBySection.comprehensive && (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="填写条件后点击「生成综合报表」查看趋势与结构汇总。"
-          style={{ margin: '32px 0' }}
-        />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.costReport.empty.comprehensive')} style={{ margin: '32px 0' }} />
       )}
       {resultBySection.comprehensive && renderReportResult(resultBySection.comprehensive)}
     </div>
@@ -444,7 +388,7 @@ const CostReportPage: React.FC = () => {
         initialValues={defaultFormValues}
         onFinish={(v) => handleGenerateReport('trend', v)}
         submitter={{
-          searchConfig: { submitText: '生成趋势分析' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costReport.submit.trend') },
           resetButtonProps: { style: { display: 'none' } },
           submitButtonProps: { loading: loadingSection === 'trend' },
         }}
@@ -455,11 +399,7 @@ const CostReportPage: React.FC = () => {
         {groupByField}
       </ProForm>
       {!resultBySection.trend && (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="填写条件后点击「生成趋势分析」查看成本趋势。"
-          style={{ margin: '32px 0' }}
-        />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.costReport.empty.trend')} style={{ margin: '32px 0' }} />
       )}
       {resultBySection.trend && renderReportResult(resultBySection.trend)}
     </div>
@@ -470,13 +410,10 @@ const CostReportPage: React.FC = () => {
       <ProForm
         formRef={structureFormRef}
         layout="vertical"
-        initialValues={{
-          start_date: defaultFormValues.start_date,
-          end_date: defaultFormValues.end_date,
-        }}
+        initialValues={{ start_date: defaultFormValues.start_date, end_date: defaultFormValues.end_date }}
         onFinish={(v) => handleGenerateReport('structure', v)}
         submitter={{
-          searchConfig: { submitText: '生成结构分析' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costReport.submit.structure') },
           resetButtonProps: { style: { display: 'none' } },
           submitButtonProps: { loading: loadingSection === 'structure' },
         }}
@@ -486,11 +423,7 @@ const CostReportPage: React.FC = () => {
         {sourceTypeField}
       </ProForm>
       {!resultBySection.structure && (
-        <Empty
-          image={Empty.PRESENTED_IMAGE_SIMPLE}
-          description="填写条件后点击「生成结构分析」查看成本结构。"
-          style={{ margin: '32px 0' }}
-        />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.costReport.empty.structure')} style={{ margin: '32px 0' }} />
       )}
       {resultBySection.structure && renderReportResult(resultBySection.structure)}
     </div>
@@ -512,7 +445,7 @@ const CostReportPage: React.FC = () => {
           label: (
             <Space>
               <FileTextOutlined />
-              综合报表
+              {t('app.kuaicaiwu.costReport.tab.comprehensive')}
             </Space>
           ),
           children: comprehensivePanel,
@@ -522,7 +455,7 @@ const CostReportPage: React.FC = () => {
           label: (
             <Space>
               <LineChartOutlined />
-              成本趋势分析
+              {t('app.kuaicaiwu.costReport.tab.trend')}
             </Space>
           ),
           children: trendPanel,
@@ -532,7 +465,7 @@ const CostReportPage: React.FC = () => {
           label: (
             <Space>
               <BarChartOutlined />
-              成本结构分析
+              {t('app.kuaicaiwu.costReport.tab.structure')}
             </Space>
           ),
           children: structurePanel,

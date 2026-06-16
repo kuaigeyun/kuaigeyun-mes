@@ -47,6 +47,8 @@ import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../
 import { InspectionPlanStepEditor, type InspectionPlanStepItem } from '../../../components/InspectionPlanStepEditor';
 import { countWithPagedRequests } from '../../../../../utils/pagedCount';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
+import { getQualityPlanTypeFallback, getQualityTypeText } from '../components/qualityMeta';
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -75,19 +77,23 @@ function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   });
 }
 
-function getInspectionPlanLifecycle(record: InspectionPlan | null | undefined): LifecycleResult {
+function getInspectionPlanLifecycle(t: (key: string) => string, record: InspectionPlan | null | undefined): LifecycleResult {
   if (!record) return { percent: 0, stageName: '-', mainStages: [] };
   const active = record.is_active === true;
   return {
     percent: active ? 100 : 35,
-    stageName: active ? '启用' : '停用',
+    stageName: active ? t('app.kuaizhizao.quality.plans.lifecycle.active') : t('app.kuaizhizao.quality.plans.lifecycle.inactive'),
     status: active ? 'success' : 'normal',
     mainStages: [
-      { key: 'maintain', label: '维护', status: 'done' },
-      { key: 'active', label: active ? '启用' : '停用', status: 'active' },
+      { key: 'maintain', label: t('app.kuaizhizao.quality.plans.lifecycle.maintain'), status: 'done' },
+      {
+        key: 'active',
+        label: active ? t('app.kuaizhizao.quality.plans.lifecycle.active') : t('app.kuaizhizao.quality.plans.lifecycle.inactive'),
+        status: 'active',
+      },
     ],
     subStages: [],
-    nextStepSuggestions: active ? [] : ['可在列表中启用方案'],
+    nextStepSuggestions: active ? [] : [t('app.kuaizhizao.quality.plans.lifecycle.enableSuggestion')],
   };
 }
 
@@ -111,21 +117,20 @@ interface InspectionPlan {
   steps?: InspectionPlanStepItem[];
 }
 
-const PLAN_TYPE_FALLBACK = [
-  { label: '来料检验', value: 'incoming' },
-  { label: '过程检验', value: 'process' },
-  { label: '成品检验', value: 'finished' },
-  { label: '出货检验', value: 'outbound' },
-];
-
 const InspectionPlansPage: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(PLAN_TYPE_FALLBACK);
+  const planTypeFallback = useMemo(() => getQualityPlanTypeFallback(t), [t]);
+  const [planTypeOptions, setPlanTypeOptions] = useState<Array<{ label: string; value: string }>>(planTypeFallback);
   const [planTypeLoading, setPlanTypeLoading] = useState(false);
+
+  useEffect(() => {
+    setPlanTypeOptions(planTypeFallback);
+  }, [planTypeFallback]);
 
   useEffect(() => {
     const load = async () => {
@@ -134,19 +139,19 @@ const InspectionPlansPage: React.FC = () => {
         const dictList = await getDataDictionaryList({ code: 'INSPECTION_PLAN_TYPE', page: 1, page_size: 1 });
         const dict = dictList.items?.[0];
         if (!dict) {
-          setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+          setPlanTypeOptions(planTypeFallback);
           return;
         }
         const items = await getDictionaryItemList(dict.uuid, true);
         setPlanTypeOptions(items.sort((a, b) => a.sort_order - b.sort_order).map((it) => ({ label: it.label, value: it.value })));
       } catch {
-        setPlanTypeOptions(PLAN_TYPE_FALLBACK);
+        setPlanTypeOptions(planTypeFallback);
       } finally {
         setPlanTypeLoading(false);
       }
     };
     load();
-  }, []);
+  }, [planTypeFallback]);
 
   /** 当 URL 含 materialId 或 operationId 时，自动打开新建弹窗（仅首次） */
   const hasAutoOpenedRef = useRef(false);
@@ -245,7 +250,7 @@ const InspectionPlansPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取质检方案详情失败');
+      messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
     }
   };
 
@@ -255,17 +260,17 @@ const InspectionPlansPage: React.FC = () => {
       setPlanDetail(detail);
       setDrawerVisible(true);
     } catch (error) {
-      messageApi.error('获取质检方案详情失败');
+      messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadDetailFailed'));
     }
   };
 
   const handleDelete = async (record: InspectionPlan) => {
     try {
       await inspectionPlanApi.delete(record.id!.toString());
-      messageApi.success('删除成功');
+      messageApi.success(t('app.kuaizhizao.quality.plans.messages.deleteSuccess'));
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '删除失败');
+      messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
     }
   };
 
@@ -279,10 +284,10 @@ const InspectionPlansPage: React.FC = () => {
 
       if (isEdit && currentPlan?.id) {
         await inspectionPlanApi.update(currentPlan.id.toString(), submitData);
-        messageApi.success('质检方案更新成功');
+        messageApi.success(t('app.kuaizhizao.quality.plans.messages.updateSuccess'));
       } else {
         await inspectionPlanApi.create(submitData);
-        messageApi.success('质检方案创建成功');
+        messageApi.success(t('app.kuaizhizao.quality.plans.messages.createSuccess'));
       }
       setModalVisible(false);
       setCurrentPlan(null);
@@ -290,165 +295,172 @@ const InspectionPlansPage: React.FC = () => {
       formRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('app.kuaizhizao.quality.plans.messages.operationFailed'));
       throw error;
     }
   };
 
-  const planTypeLabel = (planType: string | undefined) => {
-    const map: Record<string, string> = { incoming: '来料检验', process: '过程检验', finished: '成品检验', outbound: '出货检验' };
-    return map[planType || ''] || planType || '-';
-  };
+  const planTypeLabel = (planType: string | undefined) => getQualityTypeText(t, planType);
 
   const detailBaseColumns: ProDescriptionsItemProps<InspectionPlan>[] = useMemo(
     () => [
       {
-        title: '方案编号',
+        title: t('app.kuaizhizao.quality.plans.columns.planCode'),
         dataIndex: 'plan_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.plan_code ?? '') }}>{r.plan_code ?? '-'}</Typography.Text>
         ),
       },
-      { title: '方案名称', dataIndex: 'plan_name' },
+      { title: t('app.kuaizhizao.quality.plans.columns.planName'), dataIndex: 'plan_name' },
       {
-        title: '方案类型',
+        title: t('app.kuaizhizao.quality.plans.columns.planType'),
         dataIndex: 'plan_type',
         render: (_, r) => planTypeLabel(r?.plan_type),
       },
       {
-        title: '适用物料编号',
+        title: t('app.kuaizhizao.quality.plans.columns.applicableMaterialCode'),
         dataIndex: 'material_code',
         render: (_, r) => (
           <Typography.Text copyable={{ text: String(r.material_code ?? '') }}>{r.material_code || '-'}</Typography.Text>
         ),
       },
-      { title: '适用物料', dataIndex: 'material_name', render: (t) => t || '-' },
-      { title: '版本', dataIndex: 'version' },
+      { title: t('app.kuaizhizao.quality.plans.columns.applicableMaterial'), dataIndex: 'material_name', render: (val) => val || '-' },
+      { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version' },
       {
-        title: '启用状态',
+        title: t('app.kuaizhizao.quality.plans.columns.activeStatus'),
         dataIndex: 'is_active',
-        render: (_, r) => (r ? <Tag color={r.is_active ? 'success' : 'default'}>{r.is_active ? '启用' : '停用'}</Tag> : '-'),
+        render: (_, r) =>
+          r ? (
+            <Tag color={r.is_active ? 'success' : 'default'}>
+              {r.is_active ? t('app.kuaizhizao.quality.plans.active.enabled') : t('app.kuaizhizao.quality.plans.active.disabled')}
+            </Tag>
+          ) : (
+            '-'
+          ),
       },
-      { title: '备注', dataIndex: 'remarks', span: 2, render: (t) => t || '-' },
+      { title: t('app.kuaizhizao.quality.common.form.remarks'), dataIndex: 'remarks', span: 2, render: (val) => val || '-' },
     ],
-    []
+    [t],
   );
 
-  const columns: ProColumns<InspectionPlan>[] = [
-    {
-      title: '方案编号',
-      dataIndex: 'plan_code',
-      hideInTable: true,
-    },
-    stackedPrimarySecondaryColumn<InspectionPlan>(
-      '方案名称 / 编号',
-      'planStacked',
-      ['plan_name', 'planName'],
-      ['plan_code', 'planCode'],
-      { dataIndex: 'plan_name', fixed: 'left' },
-    ),
-    { title: '方案名称', dataIndex: 'plan_name', hideInTable: true, ellipsis: true },
-    {
-      title: '方案类型',
-      dataIndex: 'plan_type',
-      width: 100,
-      render: (_, record) => {
-        if (!record) return '-';
-        return planTypeLabel(record.plan_type);
+  const columns: ProColumns<InspectionPlan>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.planCode'),
+        dataIndex: 'plan_code',
+        hideInTable: true,
       },
-    },
-    {
-      title: '适用物料',
-      key: 'material_name',
-      dataIndex: 'material_name',
-      ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
-      render: (_, r) => (
-        <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+      stackedPrimarySecondaryColumn<InspectionPlan>(
+        t('app.kuaizhizao.quality.plans.columns.planStacked'),
+        'planStacked',
+        ['plan_name', 'planName'],
+        ['plan_code', 'planCode'],
+        { dataIndex: 'plan_name', fixed: 'left' },
       ),
-    },
-    { title: '适用物料编号', dataIndex: 'material_code', hideInTable: true },
-    { title: '适用物料', dataIndex: 'material_name', hideInTable: true },
-    { title: '版本', dataIndex: 'version', width: 80 },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      defaultSortOrder: 'descend',
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getInspectionPlanLifecycle(record);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      { title: t('app.kuaizhizao.quality.plans.columns.planName'), dataIndex: 'plan_name', hideInTable: true, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.planType'),
+        dataIndex: 'plan_type',
+        width: 100,
+        render: (_, record) => {
+          if (!record) return '-';
+          return planTypeLabel(record.plan_type);
+        },
       },
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 200,
-      fixed: 'right',
-      hideInSearch: true,
-      render: (_, record) => (
-        <Space size="small" wrap>
-          <Button
-            type="link"
-            size="small"
-            icon={<EyeOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleDetail(record);
-            }}
-          >
-            详情
-          </Button>
-          <Button
-            type="link"
-            size="small"
-            icon={<EditOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleEdit(record);
-            }}
-          >
-            编辑
-          </Button>
-          <Button
-            type="link"
-            danger
-            size="small"
-            icon={<DeleteOutlined />}
-            onClick={(e) => {
-              e.stopPropagation();
-              void handleDelete(record);
-            }}
-          >
-            删除
-          </Button>
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.quality.plans.columns.applicableMaterial'),
+        key: 'material_name',
+        dataIndex: 'material_name',
+        ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
+        render: (_, r) => (
+          <MaterialStackedCell material_name={r.material_name} material_code={r.material_code} />
+        ),
+      },
+      { title: t('app.kuaizhizao.quality.plans.columns.applicableMaterialCode'), dataIndex: 'material_code', hideInTable: true },
+      { title: t('app.kuaizhizao.quality.plans.columns.applicableMaterial'), dataIndex: 'material_name', hideInTable: true },
+      { title: t('app.kuaizhizao.quality.plans.columns.version'), dataIndex: 'version', width: 80 },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        defaultSortOrder: 'descend',
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getInspectionPlanLifecycle(t, record);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.quality.common.columns.actions'),
+        key: 'action',
+        width: 200,
+        fixed: 'right',
+        hideInSearch: true,
+        render: (_, record) => (
+          <Space size="small" wrap>
+            <Button
+              type="link"
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleDetail(record);
+              }}
+            >
+              {t('app.kuaizhizao.quality.common.actions.detail')}
+            </Button>
+            <Button
+              type="link"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleEdit(record);
+              }}
+            >
+              {t('common.edit')}
+            </Button>
+            <Button
+              type="link"
+              danger
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                void handleDelete(record);
+              }}
+            >
+              {t('common.delete')}
+            </Button>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<InspectionPlan>
-        headerTitle="质检方案"
+        headerTitle={t('app.kuaizhizao.quality.plans.pageTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.quality-management.inspection-plans"
         actionRef={actionRef}
         rowKey="id"
@@ -477,12 +489,12 @@ const InspectionPlansPage: React.FC = () => {
             const data = Array.isArray(response) ? response : response?.data || [];
             return { data, success: true, total };
           } catch (error) {
-            messageApi.error('获取质检方案列表失败');
+            messageApi.error(t('app.kuaizhizao.quality.plans.messages.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
         showCreateButton
-        createButtonText="新建质检方案"
+        createButtonText={t('app.kuaizhizao.quality.plans.createButton')}
         onCreate={handleCreate}
         enableRowSelection={true}
         onRowSelectionChange={setSelectedRowKeys}
@@ -497,7 +509,7 @@ const InspectionPlansPage: React.FC = () => {
             for (const id of keys) {
               await inspectionPlanApi.delete(String(id));
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.quality.common.messages.deleteSuccess', { count: keys.length }));
             setSelectedRowKeys([]);
             if (planDetail?.id != null && ids.includes(planDetail.id)) {
               setDrawerVisible(false);
@@ -505,15 +517,15 @@ const InspectionPlansPage: React.FC = () => {
             }
             actionRef.current?.reload();
           } catch (error: any) {
-            messageApi.error(error.message || '删除失败');
+            messageApi.error(error.message || t('app.kuaizhizao.quality.common.messages.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条质检方案吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.quality.plans.messages.deleteConfirm', { count })}
         scroll={{ x: 1600 }}
       />
 
       <FormModalTemplate
-        title={isEdit ? '编辑质检方案' : '新建质检方案'}
+        title={isEdit ? t('app.kuaizhizao.quality.plans.modal.editTitle') : t('app.kuaizhizao.quality.plans.modal.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -541,36 +553,60 @@ const InspectionPlansPage: React.FC = () => {
         </ProFormItem>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="plan_code" label="方案编号" placeholder="留空则自动生成" />
+            <ProFormText
+              name="plan_code"
+              label={t('app.kuaizhizao.quality.plans.form.planCode')}
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.autoGenerate')}
+            />
           </Col>
           <Col span={12}>
-            <ProFormText name="plan_name" label="方案名称" rules={[{ required: true, message: '请输入方案名称' }]} placeholder="请输入" />
+            <ProFormText
+              name="plan_name"
+              label={t('app.kuaizhizao.quality.plans.form.planName')}
+              rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanName') }]}
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.enterPlanName')}
+            />
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormItem name="plan_type" label="方案类型" rules={[{ required: true, message: '请选择方案类型' }]}>
+            <ProFormItem
+              name="plan_type"
+              label={t('app.kuaizhizao.quality.plans.form.planType')}
+              rules={[{ required: true, message: t('app.kuaizhizao.quality.plans.validation.requiredPlanType') }]}
+            >
               <UniDropdown
-                placeholder="请选择方案类型"
+                placeholder={t('app.kuaizhizao.quality.plans.placeholder.selectPlanType')}
                 showSearch
                 allowClear
                 loading={planTypeLoading}
                 options={planTypeOptions}
-                quickCreate={{ label: '数据字典管理', onClick: () => navigate('/system/data-dictionaries') }}
+                quickCreate={{
+                  label: t('app.kuaizhizao.quality.common.form.dataDictionaryManage'),
+                  onClick: () => navigate('/system/data-dictionaries'),
+                }}
                 style={{ width: '100%' }}
               />
             </ProFormItem>
           </Col>
           <Col span={12}>
-            <ProFormText name="material_code" label="物料编号" placeholder="可选" />
+            <ProFormText
+              name="material_code"
+              label={t('app.kuaizhizao.quality.plans.form.materialCode')}
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
+            />
           </Col>
         </Row>
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormText name="material_name" label="物料名称" placeholder="可选" />
+            <ProFormText
+              name="material_name"
+              label={t('app.kuaizhizao.quality.plans.form.materialName')}
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
+            />
           </Col>
           <Col span={12}>
-            <ProFormText name="version" label="版本号" initialValue="1.0" />
+            <ProFormText name="version" label={t('app.kuaizhizao.quality.plans.form.version')} initialValue="1.0" />
           </Col>
         </Row>
 
@@ -581,7 +617,7 @@ const InspectionPlansPage: React.FC = () => {
           style={{ width: '100%' }}
         >
           <div style={{ width: '100%', minWidth: 0 }}>
-            <Card title="检验步骤" size="small" style={{ marginTop: 16 }}>
+            <Card title={t('app.kuaizhizao.quality.plans.form.steps')} size="small" style={{ marginTop: 16 }}>
               <InspectionPlanStepEditor value={steps} onChange={setSteps} disabled={false} />
             </Card>
           </div>
@@ -589,19 +625,23 @@ const InspectionPlansPage: React.FC = () => {
 
         <Row gutter={16}>
           <Col span={24}>
-            <ProFormTextArea name="remarks" label="备注" placeholder="可选" />
+            <ProFormTextArea
+              name="remarks"
+              label={t('app.kuaizhizao.quality.common.form.remarks')}
+              placeholder={t('app.kuaizhizao.quality.plans.placeholder.optional')}
+            />
           </Col>
         </Row>
         <DocumentAttachmentsField category="inspection_plan_attachments" />
         <Row gutter={16}>
           <Col span={12}>
-            <ProFormSwitch name="is_active" label="启用状态" initialValue={true} />
+            <ProFormSwitch name="is_active" label={t('app.kuaizhizao.quality.plans.form.isActive')} initialValue={true} />
           </Col>
         </Row>
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title="质检方案详情"
+        title={t('app.kuaizhizao.quality.plans.modal.detailTitle')}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -613,7 +653,7 @@ const InspectionPlansPage: React.FC = () => {
         customContent={
           planDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -621,10 +661,10 @@ const InspectionPlansPage: React.FC = () => {
                 />
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getInspectionPlanLifecycle(planDetail);
+                    const lc = getInspectionPlanLifecycle(t, planDetail);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
@@ -636,11 +676,11 @@ const InspectionPlansPage: React.FC = () => {
                       />
                     );
                   })()}
-                  <Typography.Text type="secondary">质检方案无上下游业务单据关联</Typography.Text>
+                  <Typography.Text type="secondary">{t('app.kuaizhizao.quality.plans.detail.noUpstreamDocs')}</Typography.Text>
                 </div>
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.detailInfo')}>
                 {planDetail.steps && planDetail.steps.length > 0 ? (
                   <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
                     <Table
@@ -650,26 +690,34 @@ const InspectionPlansPage: React.FC = () => {
                       pagination={false}
                       size="small"
                       columns={[
-                        { title: '序号', key: 'index', width: 60, render: (_, __, i) => i + 1 },
-                        { title: '检验项目', dataIndex: 'inspection_item' },
-                        { title: '检验方法', dataIndex: 'inspection_method', width: 120 },
-                        { title: '合格标准', dataIndex: 'acceptance_criteria', width: 150 },
                         {
-                          title: '抽样方式',
+                          title: t('app.kuaizhizao.quality.plans.step.sequence'),
+                          key: 'index',
+                          width: 60,
+                          render: (_, __, i) => i + 1,
+                        },
+                        { title: t('app.kuaizhizao.quality.plans.step.inspectionItem'), dataIndex: 'inspection_item' },
+                        { title: t('app.kuaizhizao.quality.plans.step.inspectionMethod'), dataIndex: 'inspection_method', width: 120 },
+                        { title: t('app.kuaizhizao.quality.plans.step.acceptanceCriteria'), dataIndex: 'acceptance_criteria', width: 150 },
+                        {
+                          title: t('app.kuaizhizao.quality.plans.step.samplingType'),
                           dataIndex: 'sampling_type',
                           width: 90,
-                          render: (v: string) => (v === 'sampling' ? '抽检' : '全检'),
+                          render: (v: string) =>
+                            v === 'sampling'
+                              ? t('app.kuaizhizao.quality.plans.step.sampling')
+                              : t('app.kuaizhizao.quality.plans.step.fullInspection'),
                         },
                       ]}
                     />
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无检验步骤" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.plans.detail.noSteps')} />
                 )}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="操作记录">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+              <DetailDrawerSection title={t('app.kuaizhizao.quality.common.sections.operationLog')}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.quality.common.empty.noActivityLog')} />
               </DetailDrawerSection>
             </>
           ) : null

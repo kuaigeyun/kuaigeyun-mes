@@ -8,25 +8,26 @@ import { rowActionKind } from '../../../../../components/uni-action';
  * @date 2026-01-16
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormSelect, ProFormTextArea } from '@ant-design/pro-components';
-import { App, Tag, Button, Space, Modal, message, Steps, Timeline, Card, Divider } from 'antd';
+import { ActionType, ProColumns } from '@ant-design/pro-components';
+import { App, Tag, Button, Space, Modal, Steps, Timeline, Card, Divider } from 'antd';
 import { ProDescriptions } from '@ant-design/pro-components';
-import { EyeOutlined, PlayCircleOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
+import { EyeOutlined, UserOutlined, ArrowRightOutlined, CheckCircleOutlined, CloseCircleOutlined, RollbackOutlined } from '@ant-design/icons';
 import { UniUserSelect } from '../../../../../components/uni-user-select';
 import { UniTable } from '../../../../../components/uni-table';
+import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { exceptionApi } from '../../../services/production';
 import { getExceptionProcessLifecycle } from '../../../utils/exceptionProcessLifecycle';
-import { getDocumentLifecycleStageTagProps } from '../../../../../utils/documentLifecycleStatusTag';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 
-/**
- * 异常处理流程接口定义
- */
+const P = 'app.kuaizhizao.productionException';
+const PROC = `${P}.process`;
+
 interface ExceptionProcessRecord {
   id?: number;
   uuid?: string;
@@ -55,10 +56,8 @@ interface ExceptionProcessHistory {
   comment?: string;
 }
 
-/**
- * 异常处理流程管理页面组件
- */
 const ExceptionProcessPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -69,29 +68,96 @@ const ExceptionProcessPage: React.FC = () => {
   const [stepTransitionModalVisible, setStepTransitionModalVisible] = useState(false);
   const [resolveModalVisible, setResolveModalVisible] = useState(false);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
-  // 用户列表交由 UniUserSelect 内置管理
   const [exceptionList, setExceptionList] = useState<any[]>([]);
 
-  /**
-   * 处理查看详情
-   */
+  const getStatusTag = useCallback(
+    (status?: string) => {
+      const statusMap: Record<string, { color: string; text: string }> = {
+        pending: { color: 'default', text: t(`${P}.status.pending`) },
+        processing: { color: 'processing', text: t(`${P}.status.processing`) },
+        resolved: { color: 'success', text: t(`${P}.status.resolved`) },
+        cancelled: { color: 'error', text: t(`${P}.status.cancelled`) },
+      };
+      const item = statusMap[status || 'pending'] || statusMap.pending;
+      return <Tag color={item.color}>{item.text}</Tag>;
+    },
+    [t],
+  );
+
+  const getExceptionTypeTag = useCallback(
+    (type?: string) => {
+      const typeMap: Record<string, { color: string; text: string }> = {
+        material_shortage: { color: 'orange', text: t(`${P}.exceptionType.materialShortage`) },
+        delivery_delay: { color: 'red', text: t(`${P}.exceptionType.deliveryDelay`) },
+        quality: { color: 'purple', text: t(`${P}.exceptionType.quality`) },
+      };
+      const item = typeMap[type || ''] || { color: 'default', text: type || t(`${P}.exceptionType.unknown`) };
+      return <Tag color={item.color}>{item.text}</Tag>;
+    },
+    [t],
+  );
+
+  const getStepTag = useCallback(
+    (step?: string) => {
+      const stepMap: Record<string, { color: string; text: string }> = {
+        detected: { color: 'blue', text: t(`${P}.step.detected`) },
+        assigned: { color: 'cyan', text: t(`${P}.step.assigned`) },
+        investigating: { color: 'orange', text: t(`${P}.step.investigating`) },
+        handling: { color: 'processing', text: t(`${P}.step.handling`) },
+        verifying: { color: 'purple', text: t(`${P}.step.verifying`) },
+        closed: { color: 'success', text: t(`${P}.step.closed`) },
+        cancelled: { color: 'error', text: t(`${P}.status.cancelled`) },
+      };
+      const item = stepMap[step || ''] || { color: 'default', text: step || t(`${P}.exceptionType.unknown`) };
+      return <Tag color={item.color}>{item.text}</Tag>;
+    },
+    [t],
+  );
+
+  const stepValueEnum = useMemo(
+    () => ({
+      detected: t(`${P}.step.detected`),
+      assigned: t(`${P}.step.assigned`),
+      investigating: t(`${P}.step.investigating`),
+      handling: t(`${P}.step.handling`),
+      verifying: t(`${P}.step.verifying`),
+      closed: t(`${P}.step.closed`),
+    }),
+    [t],
+  );
+
+  const exceptionTypeValueEnum = useMemo(
+    () => ({
+      material_shortage: t(`${P}.exceptionType.materialShortage`),
+      delivery_delay: t(`${P}.exceptionType.deliveryDelay`),
+      quality: t(`${P}.exceptionType.quality`),
+    }),
+    [t],
+  );
+
+  const processStatusValueEnum = useMemo(
+    () => ({
+      pending: t(`${P}.status.pending`),
+      processing: t(`${P}.status.processing`),
+      resolved: t(`${P}.status.resolved`),
+      cancelled: t(`${P}.status.cancelled`),
+    }),
+    [t],
+  );
+
   const handleDetail = async (record: ExceptionProcessRecord) => {
     try {
       const detail = await exceptionApi.process.get(String(record.id));
       setCurrentRecord(detail);
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error?.message || '获取详情失败');
+      messageApi.error(error?.message || t(`${P}.message.fetchDetailFailed`));
     }
   };
 
-  // 获取用户列表逻辑已由 UniUserSelect 接管
-
-  // 加载异常列表
   useEffect(() => {
     const loadExceptions = async () => {
       try {
-        // 加载缺料异常、延期异常、质量异常
         const [materialShortage, deliveryDelay, quality] = await Promise.all([
           exceptionApi.materialShortage.list({ limit: 1000 }).catch(() => []),
           exceptionApi.deliveryDelay.list({ limit: 1000 }).catch(() => []),
@@ -100,13 +166,27 @@ const ExceptionProcessPage: React.FC = () => {
 
         const exceptions: any[] = [];
         (Array.isArray(materialShortage) ? materialShortage : []).forEach((item: any) => {
-          exceptions.push({ ...item, exception_type: 'material_shortage', display_name: `缺料异常 - ${item.work_order_code}` });
+          exceptions.push({
+            ...item,
+            exception_type: 'material_shortage',
+            display_name: t(`${PROC}.displayName.materialShortage`, { code: item.work_order_code }),
+          });
         });
         (Array.isArray(deliveryDelay) ? deliveryDelay : []).forEach((item: any) => {
-          exceptions.push({ ...item, exception_type: 'delivery_delay', display_name: `延期异常 - ${item.work_order_code}` });
+          exceptions.push({
+            ...item,
+            exception_type: 'delivery_delay',
+            display_name: t(`${PROC}.displayName.deliveryDelay`, { code: item.work_order_code }),
+          });
         });
         (Array.isArray(quality) ? quality : []).forEach((item: any) => {
-          exceptions.push({ ...item, exception_type: 'quality', display_name: `质量异常 - ${item.work_order_code || item.material_code}` });
+          exceptions.push({
+            ...item,
+            exception_type: 'quality',
+            display_name: t(`${PROC}.displayName.quality`, {
+              code: item.work_order_code || item.material_code,
+            }),
+          });
         });
 
         setExceptionList(exceptions);
@@ -115,11 +195,8 @@ const ExceptionProcessPage: React.FC = () => {
       }
     };
     loadExceptions();
-  }, []);
+  }, [t]);
 
-  /**
-   * 打开启动流程Modal
-   */
   const openStartModal = (record?: ExceptionProcessRecord) => {
     if (record) {
       setCurrentRecord(record);
@@ -127,9 +204,6 @@ const ExceptionProcessPage: React.FC = () => {
     setStartModalVisible(true);
   };
 
-  /**
-   * 启动异常处理流程
-   */
   const handleStart = async (values: any) => {
     try {
       await exceptionApi.process.start({
@@ -138,37 +212,31 @@ const ExceptionProcessPage: React.FC = () => {
         assigned_to: values.assigned_to,
         remarks: values.remarks,
       });
-      messageApi.success('异常处理流程启动成功');
+      messageApi.success(t(`${PROC}.message.startSuccess`));
       setStartModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '启动异常处理流程失败');
+      messageApi.error(error?.message || t(`${PROC}.message.startFailed`));
     }
   };
 
-  /**
-   * 打开分配Modal
-   */
   const openAssignModal = (record: ExceptionProcessRecord) => {
     setCurrentRecord(record);
     setAssignModalVisible(true);
   };
 
-  /**
-   * 分配异常处理流程
-   */
   const handleAssign = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('处理记录不存在');
+        throw new Error(t(`${P}.message.processRecordNotFound`));
       }
       await exceptionApi.process.assign(String(currentRecord.id), {
         assigned_to: values.assigned_to,
         comment: values.comment,
       });
-      messageApi.success('分配成功');
+      messageApi.success(t(`${PROC}.message.assignSuccess`));
       setAssignModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -177,31 +245,25 @@ const ExceptionProcessPage: React.FC = () => {
         handleDetail(currentRecord);
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '分配失败');
+      messageApi.error(error?.message || t(`${PROC}.message.assignFailed`));
     }
   };
 
-  /**
-   * 打开步骤流转Modal
-   */
   const openStepTransitionModal = (record: ExceptionProcessRecord) => {
     setCurrentRecord(record);
     setStepTransitionModalVisible(true);
   };
 
-  /**
-   * 步骤流转
-   */
   const handleStepTransition = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('处理记录不存在');
+        throw new Error(t(`${P}.message.processRecordNotFound`));
       }
       await exceptionApi.process.stepTransition(String(currentRecord.id), {
         to_step: values.to_step,
         comment: values.comment,
       });
-      messageApi.success('步骤流转成功');
+      messageApi.success(t(`${PROC}.message.transitionSuccess`));
       setStepTransitionModalVisible(false);
       invalidateMenuBadgeCounts();
 
@@ -210,210 +272,178 @@ const ExceptionProcessPage: React.FC = () => {
         handleDetail(currentRecord);
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '步骤流转失败');
+      messageApi.error(error?.message || t(`${PROC}.message.transitionFailed`));
     }
   };
 
-  /**
-   * 打开解决Modal
-   */
   const openResolveModal = (record: ExceptionProcessRecord) => {
     setCurrentRecord(record);
     setResolveModalVisible(true);
   };
 
-  /**
-   * 解决异常处理流程
-   */
   const handleResolve = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('处理记录不存在');
+        throw new Error(t(`${P}.message.processRecordNotFound`));
       }
       await exceptionApi.process.resolve(String(currentRecord.id), {
         comment: values.comment,
         verification_result: values.verification_result,
       });
-      messageApi.success('异常已解决');
+      messageApi.success(t(`${PROC}.message.resolveSuccess`));
       setResolveModalVisible(false);
       invalidateMenuBadgeCounts();
 
       actionRef.current?.reload();
       setDetailDrawerVisible(false);
     } catch (error: any) {
-      messageApi.error(error?.message || '解决失败');
+      messageApi.error(error?.message || t(`${PROC}.message.resolveFailed`));
     }
   };
 
-  /**
-   * 取消异常处理流程
-   */
   const handleCancel = async (record: ExceptionProcessRecord) => {
     Modal.confirm({
-      title: '确认取消',
-      content: '确定要取消该异常处理流程吗？',
+      title: t(`${PROC}.confirm.cancelTitle`),
+      content: t(`${PROC}.confirm.cancelContent`),
       onOk: async () => {
         try {
           await exceptionApi.process.cancel(String(record.id));
-          messageApi.success('已取消');
+          messageApi.success(t(`${PROC}.message.cancelSuccess`));
           invalidateMenuBadgeCounts();
 
           actionRef.current?.reload();
           setDetailDrawerVisible(false);
         } catch (error: any) {
-          messageApi.error(error?.message || '取消失败');
+          messageApi.error(error?.message || t(`${PROC}.message.cancelFailed`));
         }
       },
     });
   };
 
-  /**
-   * 获取状态标签
-   */
-  const getStatusTag = (status?: string) => {
-    const statusMap: Record<string, { color: string; text: string }> = {
-      pending: { color: 'default', text: '待处理' },
-      processing: { color: 'processing', text: '处理中' },
-      resolved: { color: 'success', text: '已解决' },
-      cancelled: { color: 'error', text: '已取消' },
-    };
-    const item = statusMap[status || 'pending'] || statusMap.pending;
-    return <Tag color={item.color}>{item.text}</Tag>;
-  };
-
-  /**
-   * 获取异常类型标签
-   */
-  const getExceptionTypeTag = (type?: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      material_shortage: { color: 'orange', text: '缺料异常' },
-      delivery_delay: { color: 'red', text: '延期异常' },
-      quality: { color: 'purple', text: '质量异常' },
-    };
-    const item = typeMap[type || ''] || { color: 'default', text: type || '未知' };
-    return <Tag color={item.color}>{item.text}</Tag>;
-  };
-
-  /**
-   * 获取步骤标签
-   */
-  const getStepTag = (step?: string) => {
-    const stepMap: Record<string, { color: string; text: string }> = {
-      detected: { color: 'blue', text: '已检测' },
-      assigned: { color: 'cyan', text: '已分配' },
-      investigating: { color: 'orange', text: '调查中' },
-      handling: { color: 'processing', text: '处理中' },
-      verifying: { color: 'purple', text: '验证中' },
-      closed: { color: 'success', text: '已关闭' },
-      cancelled: { color: 'error', text: '已取消' },
-    };
-    const item = stepMap[step || ''] || { color: 'default', text: step || '未知' };
-    return <Tag color={item.color}>{item.text}</Tag>;
-  };
-
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<ExceptionProcessRecord>[] = [
+  const columns: ProColumns<ExceptionProcessRecord>[] = useMemo(() => [
     {
-      title: '异常类型',
+      title: t(`${P}.col.exceptionType`),
       dataIndex: 'exception_type',
       width: 120,
       render: (_, record) => getExceptionTypeTag(record.exception_type),
     },
     {
-      title: '异常ID',
+      title: t(`${P}.col.exceptionId`),
       dataIndex: 'exception_id',
       width: 100,
     },
     {
-      title: '生命周期',
+      title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       render: (_, record) => {
-        const lifecycle = getExceptionProcessLifecycle(record as unknown as Record<string, unknown>);
-        const stageName = lifecycle.stageName ?? record.process_status ?? '待处理';
-        return <Tag {...getDocumentLifecycleStageTagProps(stageName)}>{stageName}</Tag>;
+        const lifecycle = getExceptionProcessLifecycle(record as unknown as Record<string, unknown>, t);
+        return (
+          <UniLifecycle
+            percent={lifecycle.percent}
+            stageName={lifecycle.stageName}
+            status={lifecycle.status}
+            subStages={lifecycle.subStages}
+            showLabel
+            size="small"
+            showCircleTooltip={false}
+          />
+        );
       },
     },
     {
-      title: '当前步骤',
+      title: t(`${P}.col.currentStep`),
       dataIndex: 'current_step',
       width: 120,
       render: (_, record) => getStepTag(record.current_step),
     },
     {
-      title: '分配给',
+      title: t(`${P}.col.assignedTo`),
       dataIndex: 'assigned_to_name',
       width: 120,
     },
     {
-      title: '开始时间',
+      title: t(`${P}.col.startTime`),
       dataIndex: 'started_at',
       width: 180,
       render: (_, record) =>
         record.started_at ? dayjs(record.started_at).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '完成时间',
+      title: t(`${P}.col.endTime`),
       dataIndex: 'completed_at',
       width: 180,
       render: (_, record) =>
         record.completed_at ? dayjs(record.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
       render: (_, record) => (
         <Space>
           <Button key="view" {...rowActionKind('read')} onClick={() => handleDetail(record)}>
-            详情
+            {t('common.detail')}
           </Button>
           {record.process_status === 'pending' && (
-            <Button{...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
-              分配
+            <Button {...rowActionKind('audit')} key="approve" onClick={() => openAssignModal(record)}>
+              {t(`${P}.action.assign`)}
             </Button>
           )}
           {record.process_status === 'processing' && (
             <>
-              <Button{...rowActionKind('audit')} key="approve" onClick={() => openStepTransitionModal(record)}>
-                流转
+              <Button {...rowActionKind('audit')} key="transition" onClick={() => openStepTransitionModal(record)}>
+                {t(`${P}.action.transition`)}
               </Button>
-              <Button key="approve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
-                解决
+              <Button key="resolve" {...rowActionKind('audit')} onClick={() => openResolveModal(record)}>
+                {t(`${P}.lifecycleNext.resolve`)}
               </Button>
             </>
           )}
           {['pending', 'processing'].includes(record.process_status || '') && (
             <Button key="reject" {...rowActionKind('reject')} onClick={() => handleCancel(record)}>
-              取消
+              {t(`${P}.action.cancel`)}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t, getExceptionTypeTag, getStepTag]);
 
-  /**
-   * 获取步骤配置
-   */
-  const getStepsConfig = (currentStep?: string) => {
-    const steps = [
-      { title: '已检测', key: 'detected' },
-      { title: '已分配', key: 'assigned' },
-      { title: '调查中', key: 'investigating' },
-      { title: '处理中', key: 'handling' },
-      { title: '验证中', key: 'verifying' },
-      { title: '已关闭', key: 'closed' },
-    ];
+  const getStepsConfig = useCallback(
+    (currentStep?: string) => {
+      const steps = [
+        { title: t(`${P}.step.detected`), key: 'detected' },
+        { title: t(`${P}.step.assigned`), key: 'assigned' },
+        { title: t(`${P}.step.investigating`), key: 'investigating' },
+        { title: t(`${P}.step.handling`), key: 'handling' },
+        { title: t(`${P}.step.verifying`), key: 'verifying' },
+        { title: t(`${P}.step.closed`), key: 'closed' },
+      ];
 
-    const currentIndex = steps.findIndex((s) => s.key === currentStep);
-    return {
-      current: currentIndex >= 0 ? currentIndex : 0,
-      steps,
-    };
-  };
+      const currentIndex = steps.findIndex((s) => s.key === currentStep);
+      return {
+        current: currentIndex >= 0 ? currentIndex : 0,
+        steps,
+      };
+    },
+    [t],
+  );
+
+  const detailDescriptionColumns = useMemo(
+    () => [
+      { title: t(`${P}.col.exceptionType`), dataIndex: 'exception_type' },
+      { title: t(`${P}.col.exceptionId`), dataIndex: 'exception_id' },
+      { title: t(`${P}.col.processStatus`), dataIndex: 'process_status' },
+      { title: t(`${P}.col.currentStep`), dataIndex: 'current_step' },
+      { title: t(`${P}.col.assignedTo`), dataIndex: 'assigned_to_name' },
+      { title: t(`${P}.col.assignedAt`), dataIndex: 'assigned_at' },
+      { title: t(`${P}.col.startTime`), dataIndex: 'started_at' },
+      { title: t(`${P}.col.endTime`), dataIndex: 'completed_at' },
+      { title: t(`${P}.field.remarks`), dataIndex: 'remarks', span: 2 },
+    ],
+    [t],
+  );
 
   return (
     <>
@@ -422,7 +452,7 @@ const ExceptionProcessPage: React.FC = () => {
           columnPersistenceId="apps.kuaizhizao.pages.production-execution.exception-process"
           actionRef={actionRef}
           columns={columns}
-          request={async (params, sort, _filter, searchFormValues) => {
+          request={async (params, _sort, _filter, searchFormValues) => {
             const apiParams: any = {
               skip: ((params.current || 1) - 1) * (params.pageSize || 20),
               limit: params.pageSize || 20,
@@ -447,7 +477,7 @@ const ExceptionProcessPage: React.FC = () => {
               };
             } catch (error: any) {
               console.error('获取异常处理流程列表失败:', error);
-              messageApi.error(error?.message || '获取列表失败');
+              messageApi.error(error?.message || t(`${P}.message.fetchListFailed`));
               return {
                 data: [],
                 success: false,
@@ -458,7 +488,7 @@ const ExceptionProcessPage: React.FC = () => {
           rowKey="id"
           showAdvancedSearch={true}
           showCreateButton={true}
-          createButtonText="新建异常处理"
+          createButtonText={t(`${PROC}.createButton`)}
           onCreate={() => openStartModal()}
           enableRowSelection={true}
           selectedRowKeys={selectedRowKeys}
@@ -469,14 +499,14 @@ const ExceptionProcessPage: React.FC = () => {
               for (const id of keys) {
                 await exceptionApi.process.cancel(String(id));
               }
-              messageApi.success(`成功取消 ${keys.length} 条记录`);
+              messageApi.success(t(`${PROC}.message.batchCancelSuccess`, { count: keys.length }));
               invalidateMenuBadgeCounts();
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || '取消失败');
+              messageApi.error(error?.message || t(`${PROC}.message.cancelFailed`));
             }
           }}
-          deleteConfirmTitle={(count) => `确定要取消选中的 ${count} 条异常处理流程吗？`}
+          deleteConfirmTitle={(count) => t(`${PROC}.confirm.batchCancel`, { count })}
           toolBarActionsAfterDelete={[
             <UniBatchMenuButton
               key="exception-process-batch-menu"
@@ -484,11 +514,11 @@ const ExceptionProcessPage: React.FC = () => {
               menuItems={[
                 {
                   key: 'cancel',
-                  label: '批量取消流程',
+                  label: t(`${PROC}.batch.cancel`),
                   icon: <RollbackOutlined />,
                   onClick: async (keys) => {
                     if (!keys || keys.length === 0) {
-                      messageApi.warning('请先选择异常处理流程');
+                      messageApi.warning(t(`${PROC}.message.selectFirst`));
                       return;
                     }
                     let success = 0;
@@ -506,8 +536,12 @@ const ExceptionProcessPage: React.FC = () => {
                         failed += 1;
                       }
                     }
-                    if (success > 0) messageApi.success(`成功取消 ${success} 条流程`);
-                    if (failed > 0) messageApi.warning(`${failed} 条取消失败`);
+                    if (success > 0) {
+                      messageApi.success(t(`${PROC}.message.batchCancelPartialSuccess`, { success }));
+                    }
+                    if (failed > 0) {
+                      messageApi.warning(t(`${PROC}.message.batchCancelPartialFailed`, { failed }));
+                    }
                     setSelectedRowKeys([]);
                     invalidateMenuBadgeCounts();
                     actionRef.current?.reload();
@@ -519,28 +553,19 @@ const ExceptionProcessPage: React.FC = () => {
           searchFormItems={[
             {
               name: 'exception_type',
-              label: '异常类型',
+              label: t(`${P}.col.exceptionType`),
               valueType: 'select',
-              valueEnum: {
-                material_shortage: '缺料异常',
-                delivery_delay: '延期异常',
-                quality: '质量异常',
-              },
+              valueEnum: exceptionTypeValueEnum,
             },
             {
               name: 'process_status',
-              label: '处理状态',
+              label: t(`${P}.col.processStatus`),
               valueType: 'select',
-              valueEnum: {
-                pending: '待处理',
-                processing: '处理中',
-                resolved: '已解决',
-                cancelled: '已取消',
-              },
+              valueEnum: processStatusValueEnum,
             },
             {
               name: 'assigned_to',
-              label: '分配给',
+              label: t(`${P}.col.assignedTo`),
               renderFormItem: () => <UniUserSelect name="assigned_to" />
             },
           ]}
@@ -551,9 +576,8 @@ const ExceptionProcessPage: React.FC = () => {
         />
       </ListPageTemplate>
 
-      {/* 详情抽屉 */}
       <DetailDrawerTemplate
-        title="异常处理流程详情"
+        title={t(`${PROC}.detailTitle`)}
         visible={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -565,21 +589,21 @@ const ExceptionProcessPage: React.FC = () => {
             <Space>
               {currentRecord.process_status === 'pending' && (
                 <Button icon={<UserOutlined />} onClick={() => openAssignModal(currentRecord)}>
-                  分配
+                  {t(`${P}.action.assign`)}
                 </Button>
               )}
               {currentRecord.process_status === 'processing' && (
                 <>
                   <Button icon={<ArrowRightOutlined />} onClick={() => openStepTransitionModal(currentRecord)}>
-                    步骤流转
+                    {t(`${P}.action.stepTransition`)}
                   </Button>
                   <Button type="primary" icon={<CheckCircleOutlined />} onClick={() => openResolveModal(currentRecord)}>
-                    解决
+                    {t(`${P}.lifecycleNext.resolve`)}
                   </Button>
                 </>
               )}
               <Button danger icon={<CloseCircleOutlined />} onClick={() => handleCancel(currentRecord)}>
-                取消
+                {t(`${P}.action.cancel`)}
               </Button>
             </Space>
           ) : null
@@ -601,22 +625,12 @@ const ExceptionProcessPage: React.FC = () => {
                 completed_at: currentRecord.completed_at ? dayjs(currentRecord.completed_at).format('YYYY-MM-DD HH:mm:ss') : '-',
                 remarks: currentRecord.remarks || '-',
               }}
-              columns={[
-                { title: '异常类型', dataIndex: 'exception_type' },
-                { title: '异常ID', dataIndex: 'exception_id' },
-                { title: '处理状态', dataIndex: 'process_status' },
-                { title: '当前步骤', dataIndex: 'current_step' },
-                { title: '分配给', dataIndex: 'assigned_to_name' },
-                { title: '分配时间', dataIndex: 'assigned_at' },
-                { title: '开始时间', dataIndex: 'started_at' },
-                { title: '完成时间', dataIndex: 'completed_at' },
-                { title: '备注', dataIndex: 'remarks', span: 2 },
-              ]}
+              columns={detailDescriptionColumns}
             />
 
             <Divider />
 
-            <Card title="处理流程" style={{ marginBottom: 16 }}>
+            <Card title={t(`${PROC}.section.flow`)} style={{ marginBottom: 16 }}>
               <Steps
                 {...getStepsConfig(currentRecord.current_step)}
                 items={getStepsConfig(currentRecord.current_step).steps.map((step) => ({ title: step.title }))}
@@ -624,7 +638,7 @@ const ExceptionProcessPage: React.FC = () => {
             </Card>
 
             {currentRecord.histories && currentRecord.histories.length > 0 && (
-              <Card title="处理历史">
+              <Card title={t(`${PROC}.section.history`)}>
                 <Timeline>
                   {currentRecord.histories.map((history, index) => (
                     <Timeline.Item key={index}>
@@ -652,9 +666,8 @@ const ExceptionProcessPage: React.FC = () => {
         )}
       </DetailDrawerTemplate>
 
-      {/* 启动流程Modal */}
       <FormModalTemplate
-        title="启动异常处理流程"
+        title={t(`${PROC}.modal.start`)}
         open={startModalVisible}
         onClose={() => {
           setStartModalVisible(false);
@@ -665,17 +678,12 @@ const ExceptionProcessPage: React.FC = () => {
         formItems={[
           {
             name: 'exception_type',
-            label: '异常类型',
+            label: t(`${P}.col.exceptionType`),
             valueType: 'select',
-            rules: [{ required: true, message: '请选择异常类型' }],
-            valueEnum: {
-              material_shortage: '缺料异常',
-              delivery_delay: '延期异常',
-              quality: '质量异常',
-            },
+            rules: [{ required: true, message: t(`${PROC}.validation.exceptionTypeRequired`) }],
+            valueEnum: exceptionTypeValueEnum,
             fieldProps: {
               onChange: (_: string) => {
-                // 清空exception_id选择
                 const form = (document.querySelector('.ant-pro-form') as any)?.__form;
                 if (form) {
                   form.setFieldsValue({ exception_id: undefined });
@@ -685,9 +693,9 @@ const ExceptionProcessPage: React.FC = () => {
           },
           {
             name: 'exception_id',
-            label: '异常记录',
+            label: t(`${PROC}.field.exceptionRecord`),
             valueType: 'select',
-            rules: [{ required: true, message: '请选择异常记录' }],
+            rules: [{ required: true, message: t(`${PROC}.validation.exceptionRecordRequired`) }],
             dependencies: ['exception_type'],
             request: async (params: any) => {
               const exceptionType = params.exception_type;
@@ -703,12 +711,12 @@ const ExceptionProcessPage: React.FC = () => {
           },
           {
             name: 'assigned_to',
-            label: '分配给',
+            label: t(`${P}.col.assignedTo`),
             renderFormItem: () => <UniUserSelect name="assigned_to" />
           },
           {
             name: 'remarks',
-            label: '备注',
+            label: t(`${P}.field.remarks`),
             valueType: 'textarea',
             fieldProps: {
               rows: 4,
@@ -717,9 +725,8 @@ const ExceptionProcessPage: React.FC = () => {
         ]}
       />
 
-      {/* 分配Modal */}
       <FormModalTemplate
-        title="分配异常处理流程"
+        title={t(`${PROC}.modal.assign`)}
         open={assignModalVisible}
         onClose={() => {
           setAssignModalVisible(false);
@@ -729,13 +736,13 @@ const ExceptionProcessPage: React.FC = () => {
         formItems={[
           {
             name: 'assigned_to',
-            label: '分配给',
-            rules: [{ required: true, message: '请选择分配给谁' }],
+            label: t(`${P}.col.assignedTo`),
+            rules: [{ required: true, message: t(`${PROC}.validation.assigneeRequired`) }],
             renderFormItem: () => <UniUserSelect name="assigned_to" />
           },
           {
             name: 'comment',
-            label: '备注',
+            label: t(`${P}.field.remarks`),
             valueType: 'textarea',
             fieldProps: {
               rows: 4,
@@ -744,9 +751,8 @@ const ExceptionProcessPage: React.FC = () => {
         ]}
       />
 
-      {/* 步骤流转Modal */}
       <FormModalTemplate
-        title="步骤流转"
+        title={t(`${PROC}.modal.stepTransition`)}
         open={stepTransitionModalVisible}
         onClose={() => {
           setStepTransitionModalVisible(false);
@@ -756,21 +762,14 @@ const ExceptionProcessPage: React.FC = () => {
         formItems={[
           {
             name: 'to_step',
-            label: '目标步骤',
+            label: t(`${PROC}.field.targetStep`),
             valueType: 'select',
-            rules: [{ required: true, message: '请选择目标步骤' }],
-            valueEnum: {
-              detected: '已检测',
-              assigned: '已分配',
-              investigating: '调查中',
-              handling: '处理中',
-              verifying: '验证中',
-              closed: '已关闭',
-            },
+            rules: [{ required: true, message: t(`${PROC}.validation.targetStepRequired`) }],
+            valueEnum: stepValueEnum,
           },
           {
             name: 'comment',
-            label: '备注',
+            label: t(`${P}.field.remarks`),
             valueType: 'textarea',
             fieldProps: {
               rows: 4,
@@ -779,9 +778,8 @@ const ExceptionProcessPage: React.FC = () => {
         ]}
       />
 
-      {/* 解决Modal */}
       <FormModalTemplate
-        title="解决异常处理流程"
+        title={t(`${PROC}.modal.resolve`)}
         open={resolveModalVisible}
         onClose={() => {
           setResolveModalVisible(false);
@@ -791,7 +789,7 @@ const ExceptionProcessPage: React.FC = () => {
         formItems={[
           {
             name: 'comment',
-            label: '备注',
+            label: t(`${P}.field.remarks`),
             valueType: 'textarea',
             fieldProps: {
               rows: 4,
@@ -799,7 +797,7 @@ const ExceptionProcessPage: React.FC = () => {
           },
           {
             name: 'verification_result',
-            label: '验证结果',
+            label: t(`${P}.quality.field.verificationResult`),
             valueType: 'textarea',
             fieldProps: {
               rows: 4,

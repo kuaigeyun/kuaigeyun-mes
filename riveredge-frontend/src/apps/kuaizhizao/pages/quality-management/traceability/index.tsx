@@ -11,6 +11,7 @@ import {
   getTraceabilityNodeStyle,
   getTraceabilityNodeTypeLabel,
 } from '../components/inspectionTemplateUtils';
+import { renderQualityQualityStatusTag } from '../components/qualityMeta';
 
 const { useToken } = theme;
 
@@ -35,7 +36,7 @@ const TraceabilityPage: React.FC = () => {
     {
       manual: true,
       onError: (err) => {
-        message.error('追溯数据加载失败：' + (err?.message || String(err)));
+        message.error(t('app.kuaizhizao.quality.traceability.messages.loadFailed', { message: err?.message || String(err) }));
       },
     },
   );
@@ -49,12 +50,18 @@ const TraceabilityPage: React.FC = () => {
   const navigateFromNode = (node: { type?: string; id?: string; data?: Record<string, unknown> }) => {
     const path = buildTraceabilityNodePath(node);
     if (!path) {
-      message.info('该节点暂无业务详情页可跳转');
+      message.info(t('app.kuaizhizao.quality.traceability.messages.noDetailPage'));
       return;
     }
     setDetailVisible(false);
     setSelectedNode(null);
     navigate(path);
+  };
+
+  const getNavigateButtonLabel = (nodeType?: string) => {
+    if (nodeType === 'work_order') return t('app.kuaizhizao.quality.traceability.viewWorkOrder');
+    if (nodeType === 'defect_record') return t('app.kuaizhizao.quality.traceability.viewDefectRecord');
+    return t('app.kuaizhizao.quality.traceability.viewInspectionDetail');
   };
 
   const config = {
@@ -127,7 +134,7 @@ const TraceabilityPage: React.FC = () => {
       <div style={{ margin: -16, padding: 16 }}>
         <Space style={{ marginBottom: 16 }}>
           <Input.Search
-            placeholder={t('pages.traceability.searchPlaceholder', { defaultValue: '请输入批次号 / 条码' })}
+            placeholder={t('app.kuaizhizao.quality.traceability.searchPlaceholder')}
             enterButton
             onSearch={handleSearch}
             style={{ width: 400 }}
@@ -137,9 +144,9 @@ const TraceabilityPage: React.FC = () => {
             style={{ width: 150 }}
             onChange={(val) => setSearchParams({ ...searchParams, direction: val })}
             options={[
-              { value: 'forward', label: t('pages.traceability.forward', { defaultValue: '正向 (-> 成品)' }) },
-              { value: 'backward', label: t('pages.traceability.backward', { defaultValue: '反向 (-> 原料)' }) },
-              { value: 'both', label: t('pages.traceability.both', { defaultValue: '双向' }) },
+              { value: 'forward', label: t('app.kuaizhizao.quality.traceability.forward') },
+              { value: 'backward', label: t('app.kuaizhizao.quality.traceability.backward') },
+              { value: 'both', label: t('app.kuaizhizao.quality.traceability.both') },
             ]}
           />
         </Space>
@@ -160,14 +167,14 @@ const TraceabilityPage: React.FC = () => {
           )}
 
           {!data && !loading && (
-            <Empty description={t('pages.traceability.empty', { defaultValue: '请输入批次号进行查询' })} style={{ paddingTop: 150 }} />
+            <Empty description={t('app.kuaizhizao.quality.traceability.empty')} style={{ paddingTop: 150 }} />
           )}
 
           {data && <FlowGraph {...config} />}
         </div>
 
         <DetailDrawerTemplate
-          title={t('pages.traceability.details', { defaultValue: '详情信息' })}
+          title={t('app.kuaizhizao.quality.traceability.details')}
           open={detailVisible}
           onClose={() => {
             setDetailVisible(false);
@@ -178,48 +185,42 @@ const TraceabilityPage: React.FC = () => {
           customContent={
             selectedNode ? (
               <>
-                <DetailDrawerSection title="基本信息">
+                <DetailDrawerSection title={t('app.kuaizhizao.quality.traceability.basicInfo')}>
                   <Descriptions column={1} bordered size="small">
-                    <Descriptions.Item label={t('pages.traceability.nodeType', { defaultValue: '类型' })}>
-                      <Tag color="blue">{getTraceabilityNodeTypeLabel(selectedNode.type)}</Tag>
+                    <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.nodeType')}>
+                      <Tag color="blue">{getTraceabilityNodeTypeLabel(selectedNode.type, t)}</Tag>
                     </Descriptions.Item>
-                    <Descriptions.Item label={t('pages.traceability.nodeId', { defaultValue: '标识' })}>
+                    <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.nodeId')}>
                       <Typography.Text copyable={{ text: String(selectedNode.id) }}>{selectedNode.id}</Typography.Text>
                     </Descriptions.Item>
                     {selectedNode.data?.material_name && (
-                      <Descriptions.Item label={t('pages.traceability.materialName', { defaultValue: '物料名称' })}>
+                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.materialName')}>
                         {selectedNode.data.material_name}
                       </Descriptions.Item>
                     )}
                     {selectedNode.data?.material_code && (
-                      <Descriptions.Item label={t('pages.traceability.materialCode', { defaultValue: '物料编号' })}>
+                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.materialCode')}>
                         <Typography.Text copyable={{ text: String(selectedNode.data.material_code) }}>
                           {selectedNode.data.material_code}
                         </Typography.Text>
                       </Descriptions.Item>
                     )}
                     {selectedNode.data?.operation_name && (
-                      <Descriptions.Item label={t('pages.traceability.operationName', { defaultValue: '执行工序' })}>
+                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.operationName')}>
                         {selectedNode.data.operation_name}
                       </Descriptions.Item>
                     )}
                     {selectedNode.data?.quality_status && (
-                      <Descriptions.Item label="质量状态">
-                        <Tag color={selectedNode.data.quality_status === '合格' ? 'success' : 'error'}>
-                          {String(selectedNode.data.quality_status)}
-                        </Tag>
+                      <Descriptions.Item label={t('app.kuaizhizao.quality.traceability.qualityStatus')}>
+                        {renderQualityQualityStatusTag(t, String(selectedNode.data.quality_status))}
                       </Descriptions.Item>
                     )}
                   </Descriptions>
                 </DetailDrawerSection>
                 {nodePath ? (
-                  <DetailDrawerSection title="业务跳转">
+                  <DetailDrawerSection title={t('app.kuaizhizao.quality.traceability.businessNav')}>
                     <Button type="primary" block onClick={() => navigateFromNode(selectedNode)}>
-                      {selectedNode.type === 'work_order'
-                        ? t('pages.traceability.viewWorkOrder', { defaultValue: '查看工单详情' })
-                        : selectedNode.type === 'defect_record'
-                          ? '查看不合格品台账'
-                          : '查看检验单详情'}
+                      {getNavigateButtonLabel(selectedNode.type)}
                     </Button>
                   </DetailDrawerSection>
                 ) : null}

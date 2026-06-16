@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProDescriptions, ModalForm, ProFormMoney, ProFormDatePicker, ProFormTextArea, ProFormSelect } from '@ant-design/pro-components';
 import { Button, message, Statistic, Row, Col, Spin, Empty, Typography, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { receivableService } from '../../../services/finance/receivable';
 import { Receivable } from '../../../types/finance/receivable';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -19,9 +20,13 @@ import {
   useDocumentTracking,
 } from '../../../../../components/document-tracking-panel';
 import { getReceivableLifecycle } from '../../../utils/receivableLifecycle';
+import { getPaymentMethodOptions } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
 
+const P = 'app.kuaicaiwu.receivable';
+
 const ReceivableDetail: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
@@ -29,7 +34,11 @@ const ReceivableDetail: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [receiptModalVisible, setReceiptModalVisible] = useState(false);
 
-  const pageTitle = data?.receivable_code ? `应收账款 · ${data.receivable_code}` : '应收账款';
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+
+  const pageTitle = data?.receivable_code
+    ? `${t(`${P}.detailTitle`)} · ${data.receivable_code}`
+    : t(`${P}.detailTitle`);
 
   useEffect(() => {
     if (!data?.receivable_code) return;
@@ -73,7 +82,7 @@ const ReceivableDetail: React.FC = () => {
         receipt_method: values.receipt_method || '银行转账',
         notes: values.notes,
       });
-      message.success('收款单已创建并完成核销');
+      message.success(t(`${P}.receiptSuccess`));
       setReceiptModalVisible(false);
       loadData();
     } catch {
@@ -83,10 +92,10 @@ const ReceivableDetail: React.FC = () => {
 
   const pageActions = data ? (
     <>
-      <Button onClick={() => navigate(-1)}>返回</Button>
+      <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
       <UniWorkflowActions
         record={data}
-        entityName="应收单"
+        entityName={t(`${P}.entityName`)}
         statusField="status"
         reviewStatusField="review_status"
         draftStatuses={[]}
@@ -99,7 +108,7 @@ const ReceivableDetail: React.FC = () => {
       />
       {data.status !== '已结清' && (
         <Button type="primary" onClick={() => setReceiptModalVisible(true)}>
-          登记收款
+          {t(`${P}.recordReceipt`)}
         </Button>
       )}
     </>
@@ -128,7 +137,7 @@ const ReceivableDetail: React.FC = () => {
   }
 
   if (!data) {
-    return renderShell(<Empty description="未找到应收单" />);
+    return renderShell(<Empty description={t(`${P}.detailNotFound`)} />);
   }
 
   return (
@@ -136,45 +145,45 @@ const ReceivableDetail: React.FC = () => {
       {renderShell(
         <Row gutter={PAGE_SPACING.BLOCK_GAP} wrap={false} align="stretch">
           <Col flex="70%" style={{ minWidth: 0 }}>
-            <DetailDrawerSection title="基本信息">
+            <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
               <ProDescriptions column={3} dataSource={data as unknown as Record<string, unknown>} loading={loading}>
-                <ProDescriptions.Item label="客户名称">{data.customer_name}</ProDescriptions.Item>
-                <ProDescriptions.Item label="系统编号">{data.receivable_code}</ProDescriptions.Item>
-                <ProDescriptions.Item label="业务日期">{data.business_date}</ProDescriptions.Item>
-                <ProDescriptions.Item label="到期日期">{data.due_date}</ProDescriptions.Item>
-                <ProDescriptions.Item label="来源单据">
+                <ProDescriptions.Item label={t(`${P}.col.customerName`)}>{data.customer_name}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.systemCode')}>{data.receivable_code}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessDate')}>{data.business_date}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.dueDate')}>{data.due_date}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.sourceDoc')}>
                   {data.source_code} ({data.source_type})
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="发票状态">
+                <ProDescriptions.Item label={t(`${P}.invoiceStatus.label`)}>
                   {data.invoice_issued ? (
-                    <span style={{ color: 'green' }}>已开票 ({data.invoice_number})</span>
+                    <span style={{ color: 'green' }}>{t(`${P}.invoiceStatus.issued`, { number: data.invoice_number })}</span>
                   ) : (
-                    <span style={{ color: 'orange' }}>未开票</span>
+                    <span style={{ color: 'orange' }}>{t(`${P}.invoiceStatus.notIssued`)}</span>
                   )}
                 </ProDescriptions.Item>
-                <ProDescriptions.Item label="业务状态">{data.status}</ProDescriptions.Item>
-                <ProDescriptions.Item label="审核状态">{data.review_status}</ProDescriptions.Item>
-                <ProDescriptions.Item label="备注" span={3}>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
+                <ProDescriptions.Item label={t('app.kuaicaiwu.common.notes')} span={3}>
                   {data.notes || '-'}
                 </ProDescriptions.Item>
               </ProDescriptions>
               <Row gutter={24} style={{ marginTop: 16 }}>
                 <Col xs={24} sm={8}>
-                  <Statistic title="应收总额" value={data.total_amount} precision={2} prefix="¥" />
+                  <Statistic title={t(`${P}.col.totalAmount`)} value={data.total_amount} precision={2} prefix="¥" />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="已收金额" value={data.received_amount} precision={2} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
+                  <Statistic title={t(`${P}.col.receivedAmount`)} value={data.received_amount} precision={2} prefix="¥" styles={{ content: {color: '#3f8600' } }} />
                 </Col>
                 <Col xs={24} sm={8}>
-                  <Statistic title="剩余应收" value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
+                  <Statistic title={t(`${P}.col.remainingAmount`)} value={data.remaining_amount} precision={2} prefix="¥" styles={{ content: {color: '#cf1322' } }} />
                 </Col>
               </Row>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="生命周期">
+            <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {(() => {
-                  const lc = getReceivableLifecycle(data as unknown as Record<string, unknown>);
+                  const lc = getReceivableLifecycle(data as unknown as Record<string, unknown>, t);
                   const mainStages = lc.mainStages ?? [];
                   if (mainStages.length === 0) return null;
                   return (
@@ -193,7 +202,7 @@ const ReceivableDetail: React.FC = () => {
                   }}
                 >
                   <div style={{ marginBottom: 8, fontWeight: 600, fontSize: 13, color: 'var(--ant-color-text)' }}>
-                    上下游单据
+                    {t('app.kuaicaiwu.common.upstreamDownstream')}
                   </div>
                   {documentTracking.loading && (
                     <div style={{ padding: '8px 0' }}>
@@ -207,7 +216,7 @@ const ReceivableDetail: React.FC = () => {
                     <DocumentTrackingRelationsBody
                       data={documentTracking.data}
                       onDocumentClick={(docType, docId) =>
-                        message.info(`打开关联单据 ${docType} #${docId}`)
+                        message.info(t('app.kuaicaiwu.common.openLinkedDoc', { docType, docId }))
                       }
                     />
                   )}
@@ -215,13 +224,13 @@ const ReceivableDetail: React.FC = () => {
               </div>
             </DetailDrawerSection>
 
-            <DetailDrawerSection title="明细信息" marginBottom={0}>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无关联明细（需对接来源订单/明细 API）" />
+            <DetailDrawerSection title={t('app.uniDetail.sectionLines')} marginBottom={0}>
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.noLineItems`)} />
             </DetailDrawerSection>
           </Col>
 
           <Col flex="30%" style={{ minWidth: 0 }}>
-            <DetailDrawerSection title="操作记录" marginBottom={0} style={{ height: '100%' }}>
+            <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')} marginBottom={0} style={{ height: '100%' }}>
               {documentTracking.loading && (
                 <div style={{ textAlign: 'center', padding: 24 }}>
                   <Spin />
@@ -234,7 +243,7 @@ const ReceivableDetail: React.FC = () => {
                 <DocumentTrackingTimelineBody data={documentTracking.data} />
               )}
               {!documentTracking.loading && !documentTracking.data && !documentTracking.error && (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaicaiwu.common.noActivityLog')} />
               )}
             </DetailDrawerSection>
           </Col>
@@ -242,7 +251,7 @@ const ReceivableDetail: React.FC = () => {
       )}
 
       <ModalForm
-        title="登记收款"
+        title={t(`${P}.recordReceipt`)}
         open={receiptModalVisible}
         onOpenChange={setReceiptModalVisible}
         onFinish={handleReceipt}
@@ -254,24 +263,18 @@ const ReceivableDetail: React.FC = () => {
       >
         <ProFormMoney
           name="receipt_amount"
-          label="本次收款金额"
+          label={t(`${P}.receiptAmount`)}
           rules={[{ required: true }]}
           fieldProps={{ max: data.remaining_amount }}
         />
-        <ProFormDatePicker name="receipt_date" label="收款日期" rules={[{ required: true }]} width="md" />
+        <ProFormDatePicker name="receipt_date" label={t(`${P}.receiptDate`)} rules={[{ required: true }]} width="md" />
         <ProFormSelect
           name="receipt_method"
-          label="收款方式"
-          options={[
-            { label: '银行转账', value: '银行转账' },
-            { label: '现金', value: '现金' },
-            { label: '支票', value: '支票' },
-            { label: '承兑汇票', value: '承兑汇票' },
-            { label: '其他', value: '其他' },
-          ]}
+          label={t(`${P}.receiptMethod`)}
+          options={paymentMethodOptions}
           rules={[{ required: true }]}
         />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
       </ModalForm>
     </>
   );

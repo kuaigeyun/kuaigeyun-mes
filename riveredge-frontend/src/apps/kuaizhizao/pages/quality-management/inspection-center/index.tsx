@@ -20,6 +20,7 @@ import { useRequest } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
+import 'dayjs/locale/en';
 import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
 import { mesDashboardService } from '../../../services/dashboard';
 import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
@@ -35,7 +36,6 @@ import {
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module-center';
 
 dayjs.extend(relativeTime);
-dayjs.locale('zh-cn');
 
 const PassRateLineChart = lazy(async () => {
   const { Line } = await import('@ant-design/charts');
@@ -46,16 +46,16 @@ const PassRateLineChart = lazy(async () => {
 
 const { Text } = Typography;
 
-const INSPECTION_TYPE_LABEL: Record<string, string> = {
-  incoming: '来料',
-  process: '过程',
-  finished: '成品',
-};
-
 const INSPECTION_LIST_PATH: Record<string, string> = {
   incoming: '/apps/kuaizhizao/quality-management/incoming-inspection',
   process: '/apps/kuaizhizao/quality-management/process-inspection',
   finished: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+};
+
+const INSPECTION_TYPE_KEY: Record<string, string> = {
+  incoming: 'app.kuaizhizao.quality.common.type.incoming',
+  process: 'app.kuaizhizao.quality.common.type.process',
+  finished: 'app.kuaizhizao.quality.common.type.finished',
 };
 
 function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
@@ -70,20 +70,30 @@ function anomalySeverity(a: QualityAnomalyItem): 'high' | 'medium' | 'low' {
 
 const InspectionCenter: React.FC = () => {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message } = App.useApp();
+
+  const dayjsLocale =
+    i18n.language === 'en-US' || i18n.language?.startsWith('en') ? 'en' : 'zh-cn';
+  dayjs.locale(dayjsLocale);
 
   const { data: summary, loading: summaryLoading } = useRequest(
     () => qualityApi.qualityStatistics.getInspectionCenterSummary(),
     dashboardRequestOptions('kz:quality-dashboard:summary', {
-      onError: (e: any) => message.error(e?.message || '加载质检中心数据失败'),
+      onError: (e: any) =>
+        message.error(
+          e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadSummaryFailed'),
+        ),
     }),
   );
 
   const { data: anomaliesResp } = useRequest(
     () => qualityApi.qualityStatistics.getAnomalies({ limit: 12 }),
     dashboardRequestOptions('kz:quality-dashboard:anomalies', {
-      onError: (e: any) => message.error(e?.message || '加载质量异常失败'),
+      onError: (e: any) =>
+        message.error(
+          e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadAnomaliesFailed'),
+        ),
     }),
   );
 
@@ -104,7 +114,10 @@ const InspectionCenter: React.FC = () => {
   const { data: stageToggles } = useRequest(
     () => qualityApi.stageToggles.get(),
     dashboardRequestOptions('kz:quality-dashboard:stage-toggles', {
-      onError: (e: any) => message.error(e?.message || '加载质检环节开关失败'),
+      onError: (e: any) =>
+        message.error(
+          e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadStageTogglesFailed'),
+        ),
     }),
   );
 
@@ -117,102 +130,126 @@ const InspectionCenter: React.FC = () => {
     () => [
       {
         key: 'pending',
-        title: '待检任务总数',
+        title: t('app.kuaizhizao.quality.inspectionCenter.kpi.pendingTotal'),
         value: pendingTotal,
-        subtitle: '当前所有待检单据/工序',
+        subtitle: t('app.kuaizhizao.quality.inspectionCenter.kpi.pendingSubtitle'),
         icon: <ClockCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #1890ff 0%, #36cfc9 100%)',
         onClick: () => navigate('/apps/kuaizhizao/quality-management/incoming-inspection'),
         sideMetrics: [
-          { label: '来料/过程', value: `${summary?.pending_incoming || 0} / ${summary?.pending_process || 0}` },
-          { label: '成品/OQC', value: `${summary?.pending_finished || 0} / ${summary?.pending_oqc || 0}` },
+          {
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.incomingProcess'),
+            value: `${summary?.pending_incoming || 0} / ${summary?.pending_process || 0}`,
+          },
+          {
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.finishedOqc'),
+            value: `${summary?.pending_finished || 0} / ${summary?.pending_oqc || 0}`,
+          },
         ],
       },
       {
         key: 'today',
-        title: '今日质量达标',
+        title: t('app.kuaizhizao.quality.inspectionCenter.kpi.todayQualified'),
         value: `${summary?.today_qualified_rate ?? 0}%`,
-        subtitle: `今日已检验 ${summary?.total_inspected_today || 0} 批次`,
+        subtitle: t('app.kuaizhizao.quality.inspectionCenter.kpi.todaySubtitle', {
+          count: summary?.total_inspected_today || 0,
+        }),
         icon: <ThunderboltOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #722ed1 0%, #b37feb 100%)',
         sideMetrics: [
-          { label: '今日报检', value: summary?.total_inspected_today || 0 },
           {
-            label: '状态',
-            value: summary && summary.today_qualified_rate >= 98 ? '优良' : '受控',
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.todayReported'),
+            value: summary?.total_inspected_today || 0,
+          },
+          {
+            label: t('app.kuaizhizao.quality.common.columns.status'),
+            value:
+              summary && summary.today_qualified_rate >= 98
+                ? t('app.kuaizhizao.quality.inspectionCenter.kpi.statusExcellent')
+                : t('app.kuaizhizao.quality.inspectionCenter.kpi.statusControlled'),
           },
         ],
       },
       {
         key: 'month',
-        title: '本月合格率',
+        title: t('app.kuaizhizao.quality.inspectionCenter.kpi.monthRate'),
         value: `${summary?.month_qualified_rate ?? 0}%`,
-        subtitle: `环比上月 ${summary?.last_month_qualified_rate || 0}%`,
+        subtitle: t('app.kuaizhizao.quality.inspectionCenter.kpi.monthSubtitle', {
+          rate: summary?.last_month_qualified_rate || 0,
+        }),
         icon: <CheckCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
         gradient: 'linear-gradient(135deg, #52c41a 0%, #95de64 100%)',
         sideMetrics: [
-          { label: '上月同期', value: `${summary?.last_month_qualified_rate || 0}%` },
           {
-            label: '趋势',
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.lastMonth'),
+            value: `${summary?.last_month_qualified_rate || 0}%`,
+          },
+          {
+            label: t('app.kuaizhizao.quality.inspectionCenter.kpi.trend'),
             value:
-              summary && summary.month_qualified_rate >= (summary.last_month_qualified_rate || 0) ? '↑' : '↓',
+              summary && summary.month_qualified_rate >= (summary.last_month_qualified_rate || 0)
+                ? '↑'
+                : '↓',
           },
         ],
       },
     ],
-    [summary, pendingTotal, navigate],
+    [summary, pendingTotal, navigate, t],
   );
 
-  const shortcuts: ModuleShortcutDef[] = [
-    {
-      key: 'incoming',
-      title: '来料检验',
-      icon: <DatabaseOutlined style={{ fontSize: 20, color: '#1890ff' }} />,
-      path: '/apps/kuaizhizao/quality-management/incoming-inspection',
-    },
-    {
-      key: 'process',
-      title: '过程检验',
-      icon: <PartitionOutlined style={{ fontSize: 20, color: '#722ed1' }} />,
-      path: '/apps/kuaizhizao/quality-management/process-inspection',
-    },
-    {
-      key: 'finished',
-      title: '成品检验 (FQC)',
-      icon: <SafetyCertificateOutlined style={{ fontSize: 20, color: '#52c41a' }} />,
-      path: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
-    },
-    {
-      key: 'oqc',
-      title: '出货检验 (OQC)',
-      icon: <ExportOutlined style={{ fontSize: 20, color: '#13c2c2' }} />,
-      path: '/apps/kuaizhizao/quality-management/oqc-inspection',
-    },
-    {
-      key: 'nc',
-      title: '不合格品台账',
-      icon: <AlertOutlined style={{ fontSize: 20, color: '#f5222d' }} />,
-      path: '/apps/kuaizhizao/quality-management/nonconforming-ledger',
-    },
-    {
-      key: '8d',
-      title: '8D 报告',
-      icon: <AuditOutlined style={{ fontSize: 20, color: '#eb2f96' }} />,
-      path: '/apps/kuaizhizao/quality-management/eight-d-reports',
-    },
-    {
-      key: 'trace',
-      title: '质量追溯',
-      icon: <NodeIndexOutlined style={{ fontSize: 20, color: '#2f54eb' }} />,
-      path: '/apps/kuaizhizao/quality-management/traceability',
-    },
-    {
-      key: 'reports',
-      title: '质量报表',
-      icon: <LineChartOutlined style={{ fontSize: 20, color: '#fa541c' }} />,
-      path: '/apps/kuaizhizao/quality-management/reports/incoming-inspection',
-    },
-  ];
+  const shortcuts: ModuleShortcutDef[] = useMemo(
+    () => [
+      {
+        key: 'incoming',
+        title: t('app.kuaizhizao.menu.quality-management.incoming-inspection'),
+        icon: <DatabaseOutlined style={{ fontSize: 20, color: '#1890ff' }} />,
+        path: '/apps/kuaizhizao/quality-management/incoming-inspection',
+      },
+      {
+        key: 'process',
+        title: t('app.kuaizhizao.menu.quality-management.process-inspection'),
+        icon: <PartitionOutlined style={{ fontSize: 20, color: '#722ed1' }} />,
+        path: '/apps/kuaizhizao/quality-management/process-inspection',
+      },
+      {
+        key: 'finished',
+        title: t('app.kuaizhizao.menu.quality-management.finished-goods-inspection'),
+        icon: <SafetyCertificateOutlined style={{ fontSize: 20, color: '#52c41a' }} />,
+        path: '/apps/kuaizhizao/quality-management/finished-goods-inspection',
+      },
+      {
+        key: 'oqc',
+        title: t('app.kuaizhizao.menu.quality-management.oqc-inspection'),
+        icon: <ExportOutlined style={{ fontSize: 20, color: '#13c2c2' }} />,
+        path: '/apps/kuaizhizao/quality-management/oqc-inspection',
+      },
+      {
+        key: 'nc',
+        title: t('app.kuaizhizao.menu.quality-management.nonconforming-ledger'),
+        icon: <AlertOutlined style={{ fontSize: 20, color: '#f5222d' }} />,
+        path: '/apps/kuaizhizao/quality-management/nonconforming-ledger',
+      },
+      {
+        key: '8d',
+        title: t('app.kuaizhizao.menu.quality-management.eight-d-reports'),
+        icon: <AuditOutlined style={{ fontSize: 20, color: '#eb2f96' }} />,
+        path: '/apps/kuaizhizao/quality-management/eight-d-reports',
+      },
+      {
+        key: 'trace',
+        title: t('app.kuaizhizao.menu.quality-management.traceability'),
+        icon: <NodeIndexOutlined style={{ fontSize: 20, color: '#2f54eb' }} />,
+        path: '/apps/kuaizhizao/quality-management/traceability',
+      },
+      {
+        key: 'reports',
+        title: t('app.kuaizhizao.menu.quality-management.reports'),
+        icon: <LineChartOutlined style={{ fontSize: 20, color: '#fa541c' }} />,
+        path: '/apps/kuaizhizao/quality-management/reports/incoming-inspection',
+      },
+    ],
+    [t],
+  );
 
   const chartData = useMemo(
     () =>
@@ -253,24 +290,31 @@ const InspectionCenter: React.FC = () => {
       shortcutRow={<ModuleShortcutGrid items={shortcuts} />}
       actionRow={
         <>
-          <ModuleActionPanel title="质检待办" lg={8} loading={todosLoading}>
-            <ModuleTodoList items={qualityTodos} emptyText="暂无质检待办" />
+          <ModuleActionPanel
+            title={t('app.kuaizhizao.quality.inspectionCenter.todoPanel')}
+            lg={8}
+            loading={todosLoading}
+          >
+            <ModuleTodoList
+              items={qualityTodos}
+              emptyText={t('app.kuaizhizao.quality.common.empty.noTodos')}
+            />
           </ModuleActionPanel>
           <ModuleActionPanel
-            title="质量异常处置"
+            title={t('app.kuaizhizao.quality.inspectionCenter.anomalyPanel')}
             lg={16}
             extra={
               <Button
                 type="link"
                 onClick={() => navigate('/apps/kuaizhizao/production-execution/quality-exceptions')}
               >
-                全部
+                {t('app.kuaizhizao.quality.common.actions.viewAll')}
               </Button>
             }
           >
             <div style={{ maxHeight: 320, overflowY: 'auto' }}>
               {anomalies.length === 0 ? (
-                <Text type="secondary">暂无质量异常</Text>
+                <Text type="secondary">{t('app.kuaizhizao.quality.common.empty.noAnomalies')}</Text>
               ) : (
                 anomalies.map((item) => (
                   <div
@@ -284,7 +328,9 @@ const InspectionCenter: React.FC = () => {
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                       <Tag color={anomalySeverity(item) === 'high' ? 'red' : 'orange'}>
-                        {INSPECTION_TYPE_LABEL[item.inspection_type]}
+                        {INSPECTION_TYPE_KEY[item.inspection_type]
+                          ? t(INSPECTION_TYPE_KEY[item.inspection_type])
+                          : item.inspection_type}
                       </Tag>
                       <Text type="secondary" style={{ fontSize: 12 }}>
                         {dayjs(item.inspection_time).fromNow()}
@@ -294,7 +340,8 @@ const InspectionCenter: React.FC = () => {
                       {item.material_name || item.inspection_code}
                     </Text>
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      {item.nonconformance_reason || '质量判定不合格'}
+                      {item.nonconformance_reason ||
+                        t('app.kuaizhizao.quality.inspectionCenter.anomalyDefaultReason')}
                     </Text>
                   </div>
                 ))
@@ -330,7 +377,7 @@ const InspectionCenter: React.FC = () => {
             title={
               <Space>
                 <BarChartOutlined />
-                <span>质量合格率趋势</span>
+                <span>{t('app.kuaizhizao.quality.inspectionCenter.passRateTrend')}</span>
               </Space>
             }
             lg={16}

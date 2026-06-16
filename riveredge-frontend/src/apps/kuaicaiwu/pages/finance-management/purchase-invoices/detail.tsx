@@ -1,7 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { ProDescriptions } from '@ant-design/pro-components';
 import { Button, Spin, Empty, Typography, Timeline, Space } from 'antd';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
@@ -13,21 +14,27 @@ import {
   uniTabsChildPageVerticalInsetStyle,
 } from '../../../../../components/layout-templates';
 import { getChineseInvoiceLifecycle } from '../../../utils/financeLifecycle';
-import {
-  formatPurchaseInvoiceDetailPageTitle,
-  formatPurchaseInvoiceTabTitle,
-  formatPurchaseInvoiceTypeZh,
-} from '../../../utils/purchaseInvoiceUi';
+import { formatChineseInvoiceType } from '../../../utils/financeSharedOptions';
+
+const P = 'app.kuaicaiwu.purchaseInvoice';
 
 const PurchaseInvoiceDetail: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
   const [data, setData] = useState<PurchaseInvoice>();
   const [loading, setLoading] = useState(false);
 
-  const pageTitle = formatPurchaseInvoiceDetailPageTitle(data?.invoice_number);
-  const tabTitle = formatPurchaseInvoiceTabTitle(data?.invoice_number);
+  const pageTitle = useMemo(() => {
+    const num = String(data?.invoice_number ?? '').trim();
+    return num ? t(`${P}.detailTitleWithNumber`, { number: num }) : t(`${P}.detailTitle`);
+  }, [data?.invoice_number, t]);
+
+  const tabTitle = useMemo(() => {
+    const num = String(data?.invoice_number ?? '').trim();
+    return num || t(`${P}.detailTitle`);
+  }, [data?.invoice_number, t]);
 
   useEffect(() => {
     if (!data) return;
@@ -58,11 +65,11 @@ const PurchaseInvoiceDetail: React.FC = () => {
 
   const pageActions = data ? (
     <>
-      <Button onClick={() => navigate(-1)}>返回</Button>
+      <Button onClick={() => navigate(-1)}>{t('app.kuaicaiwu.common.back')}</Button>
       {data.review_status === '待审核' && (
         <UniWorkflowActions
           record={data}
-          entityName="采购发票"
+          entityName={t(`${P}.entityName`)}
           statusField="status"
           reviewStatusField="review_status"
           draftStatuses={[]}
@@ -100,34 +107,34 @@ const PurchaseInvoiceDetail: React.FC = () => {
   }
 
   if (!data) {
-    return renderShell(<Empty description="未找到采购发票" />);
+    return renderShell(<Empty description={t(`${P}.detailNotFound`)} />);
   }
 
-  const lc = getChineseInvoiceLifecycle(data as unknown as Record<string, unknown>);
+  const lc = getChineseInvoiceLifecycle(data as unknown as Record<string, unknown>, t);
 
   return renderShell(
     <>
-      <DetailDrawerSection title="基本信息">
+      <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
         <ProDescriptions column={3} dataSource={data as unknown as Record<string, unknown>} loading={loading}>
-          <ProDescriptions.Item label="采购订单">{data.purchase_order_code || '-'}</ProDescriptions.Item>
-          <ProDescriptions.Item label="供应商">{data.supplier_name}</ProDescriptions.Item>
-          <ProDescriptions.Item label="发票号码">{data.invoice_number || '-'}</ProDescriptions.Item>
-          <ProDescriptions.Item label="开票日期">{data.invoice_date}</ProDescriptions.Item>
-          <ProDescriptions.Item label="发票类型">{formatPurchaseInvoiceTypeZh(data.invoice_type)}</ProDescriptions.Item>
-          <ProDescriptions.Item label="发票金额">{data.invoice_amount}</ProDescriptions.Item>
-          <ProDescriptions.Item label="税额">{data.tax_amount}</ProDescriptions.Item>
-          <ProDescriptions.Item label="价税合计">{data.total_amount}</ProDescriptions.Item>
-          <ProDescriptions.Item label="税率">{data.tax_rate}%</ProDescriptions.Item>
-          <ProDescriptions.Item label="业务状态">{data.status}</ProDescriptions.Item>
-          <ProDescriptions.Item label="审核状态">{data.review_status}</ProDescriptions.Item>
-          <ProDescriptions.Item label="应付单">{data.payable_code || '-'}</ProDescriptions.Item>
-          <ProDescriptions.Item label="备注" span={3}>
+          <ProDescriptions.Item label={t(`${P}.col.purchaseOrder`)}>{data.purchase_order_code || '-'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.supplier')}>{data.supplier_name}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.invoiceNumber`)}>{data.invoice_number || '-'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.invoiceDate')}>{data.invoice_date}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.invoiceType`)}>{formatChineseInvoiceType(data.invoice_type, t)}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.invoiceAmount`)}>{data.invoice_amount}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.taxAmount`)}>{data.tax_amount}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.totalAmount`)}>{data.total_amount}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.taxRate`)}>{data.tax_rate}%</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.businessStatus')}>{data.status}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.reviewStatus')}>{data.review_status}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t(`${P}.col.linkedPayable`)}>{data.payable_code || '-'}</ProDescriptions.Item>
+          <ProDescriptions.Item label={t('app.kuaicaiwu.common.notes')} span={3}>
             {data.notes || '-'}
           </ProDescriptions.Item>
         </ProDescriptions>
       </DetailDrawerSection>
 
-      <DetailDrawerSection title="生命周期">
+      <DetailDrawerSection title={t('app.uniDetail.sectionCollaboration')}>
         <UniLifecycle
           percent={lc.percent}
           stageName={lc.stageName}
@@ -138,20 +145,20 @@ const PurchaseInvoiceDetail: React.FC = () => {
           showCircleTooltip={false}
         />
         <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-          采购发票未接入单据跟踪中心；与应付单、采购订单的关联以编号跳转业务系统为准。
+          {t(`${P}.lifecycleHint`)}
         </Typography.Paragraph>
       </DetailDrawerSection>
 
-      <DetailDrawerSection title="明细信息">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无票面明细行（单头登记模式）" />
+      <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.noLines`)} />
       </DetailDrawerSection>
 
-      <DetailDrawerSection title="操作记录" marginBottom={0}>
+      <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')} marginBottom={0}>
         <Timeline
           items={[
-            { color: 'green', children: `创建于 ${data.created_at}` },
+            { color: 'green', children: t(`${P}.activityCreated`, { time: data.created_at }) },
             ...(data.updated_at && data.updated_at !== data.created_at
-              ? [{ color: 'blue', children: `更新于 ${data.updated_at}` }]
+              ? [{ color: 'blue', children: t(`${P}.activityUpdated`, { time: data.updated_at }) }]
               : []),
           ]}
         />

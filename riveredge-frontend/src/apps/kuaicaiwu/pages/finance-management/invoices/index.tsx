@@ -26,7 +26,10 @@ import { UniTable } from '../../../../../components/uni-table';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { ListPageTemplate, type StatCard } from '../../../../../components/layout-templates';
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
+import { buildUnifiedInvoiceStatusEnum } from '../../../utils/financeSharedOptions';
 import dayjs from 'dayjs';
+
+const P = 'app.kuaicaiwu.invoice';
 
 const InvoiceList: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -87,7 +90,11 @@ const InvoiceList: React.FC = () => {
 
   const initialTab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
   const [activeTabKey, setActiveTabKey] = useState<string>(initialTab);
-  const headerTitle = location.pathname.includes('sales-invoices') ? '销售发票' : location.pathname.includes('purchase-invoices') ? '采购发票' : '发票列表';
+  const headerTitle = useMemo(() => {
+    if (location.pathname.includes('sales-invoices')) return t(`${P}.pageTitleSales`);
+    if (location.pathname.includes('purchase-invoices')) return t(`${P}.pageTitlePurchase`);
+    return t(`${P}.pageTitleAll`);
+  }, [location.pathname, t]);
 
   useEffect(() => {
     const tab = location.pathname.includes('sales-invoices') ? 'OUT' : location.pathname.includes('purchase-invoices') ? 'IN' : 'all';
@@ -95,143 +102,143 @@ const InvoiceList: React.FC = () => {
     actionRef.current?.reload();
   }, [location.pathname]);
 
-  const columns: ProColumns<Invoice>[] = [
-    {
-      title: t('common.code', { defaultValue: '编号' }),
-      dataIndex: 'invoice_code',
-      width: 168,
-      fixed: 'left',
-      render: (_, entity) => (
-        <Typography.Text copyable={{ text: String(entity.invoice_code ?? '') }} ellipsis>
-          <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${entity.invoice_code}`)}>{entity.invoice_code}</a>
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '发票号码',
-      dataIndex: 'invoice_number',
-      copyable: true,
-      width: 150,
-    },
-    {
-      title: '业务类型',
-      dataIndex: 'category',
-      valueEnum: {
-        IN: { text: '采购发票', status: 'Processing' },
-        OUT: { text: '销售发票', status: 'Success' },
+  const columns: ProColumns<Invoice>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaicaiwu.common.code'),
+        dataIndex: 'invoice_code',
+        width: 168,
+        fixed: 'left',
+        render: (_, entity) => (
+          <Typography.Text copyable={{ text: String(entity.invoice_code ?? '') }} ellipsis>
+            <a onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${entity.invoice_code}`)}>
+              {entity.invoice_code}
+            </a>
+          </Typography.Text>
+        ),
       },
-      width: 100,
-    },
-    {
-      title: '往来单位',
-      dataIndex: 'partner_name',
-      width: 200,
-    },
-    {
-      title: '价税合计',
-      dataIndex: 'total_amount',
-      valueType: 'money',
-      align: 'right',
-      width: 120,
-    },
-    {
-      title: '开票日期',
-      dataIndex: 'invoice_date',
-      valueType: 'date',
-      width: 120,
-    },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      hideInTable: true,
-      valueEnum: {
-        DRAFT: { text: '草稿' },
-        CONFIRMED: { text: '已确认' },
-        VERIFIED: { text: '已认证' },
-        CANCELLED: { text: '已作废' },
+      {
+        title: t(`${P}.col.invoiceNumber`),
+        dataIndex: 'invoice_number',
+        copyable: true,
+        width: 150,
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      width: 120,
-      hideInSearch: true,
-      render: (_, record) => {
-        const lc = getUnifiedInvoiceLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lc.percent}
-            stageName={lc.stageName}
-            status={lc.status}
-            showLabel
+      {
+        title: t(`${P}.col.category`),
+        dataIndex: 'category',
+        valueEnum: {
+          IN: { text: t(`${P}.category.in`), status: 'Processing' },
+          OUT: { text: t(`${P}.category.out`), status: 'Success' },
+        },
+        width: 100,
+      },
+      {
+        title: t(`${P}.col.partner`),
+        dataIndex: 'partner_name',
+        width: 200,
+      },
+      {
+        title: t(`${P}.col.totalAmount`),
+        dataIndex: 'total_amount',
+        valueType: 'money',
+        align: 'right',
+        width: 120,
+      },
+      {
+        title: t('app.kuaicaiwu.common.invoiceDate'),
+        dataIndex: 'invoice_date',
+        valueType: 'date',
+        width: 120,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        hideInTable: true,
+        valueEnum: buildUnifiedInvoiceStatusEnum(t),
+      },
+      {
+        title: t('common.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.common.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        width: 120,
+        hideInSearch: true,
+        render: (_, record) => {
+          const lc = getUnifiedInvoiceLifecycle(record as unknown as Record<string, unknown>, t);
+          return (
+            <UniLifecycle
+              percent={lc.percent}
+              stageName={lc.stageName}
+              status={lc.status}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        fixed: 'right',
+        width: 200,
+        render: (_, record) => [
+          <Button {...rowActionKind('read')}
+            key="det"
+            type="link"
             size="small"
-            showCircleTooltip={false}
-          />
-        );
+            icon={<EyeOutlined />}
+            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
+          >
+            {t('common.detail')}
+          </Button>,
+          <Button {...rowActionKind('update')}
+            key="ed"
+            type="link"
+            size="small"
+            icon={<EditOutlined />}
+            onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
+          >
+            {t('common.edit')}
+          </Button>,
+          <Popconfirm {...rowActionKind('delete')}
+            key="del"
+            title={t('common.confirmDelete')}
+            onConfirm={async () => {
+              await invoiceService.deleteInvoice(record.invoice_code);
+              messageApi.success(t('common.deleteSuccess'));
+              invalidateInvoiceStatistics();
+              actionRef.current?.reload();
+            }}
+          >
+            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+              {t('common.delete')}
+            </Button>
+          </Popconfirm>,
+        ],
       },
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      fixed: 'right',
-      width: 200,
-      render: (_, record) => [
-            <Button {...rowActionKind('read')}
-              key="det"
-              type="link"
-              size="small"
-              icon={<EyeOutlined />}
-              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
-            >
-              详情
-            </Button>,
-            <Button {...rowActionKind('update')}
-              key="ed"
-              type="link"
-              size="small"
-              icon={<EditOutlined />}
-              onClick={() => navigate(`/apps/kuaicaiwu/finance-management/invoices/${record.invoice_code}`)}
-            >
-              编辑
-            </Button>,
-            <Popconfirm {...rowActionKind('delete')}
-              key="del"
-              title="确定要删除吗？"
-              onConfirm={async () => {
-                await invoiceService.deleteInvoice(record.invoice_code);
-                messageApi.success('删除成功');
-                invalidateInvoiceStatistics();
-                actionRef.current?.reload();
-              }}
-            >
-              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-                删除
-              </Button>
-            </Popconfirm>,
-          ],
-    },
-  ];
+    ],
+    [t, navigate, messageApi],
+  );
 
   const handleBatchDelete = async (keys: React.Key[]) => {
     try {
       for (const code of keys) {
         await invoiceService.deleteInvoice(String(code));
       }
-      messageApi.success(`成功删除 ${keys.length} 张发票`);
+      messageApi.success(t(`${P}.batchDeleteSuccess`, { count: keys.length }));
       setSelectedRowKeys([]);
       invalidateInvoiceStatistics();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '删除失败');
+      messageApi.error(error?.message || t('common.deleteFailed'));
     }
   };
 
@@ -239,37 +246,55 @@ const InvoiceList: React.FC = () => {
     const s = invoiceStatistics;
     if (!s) {
       return [
-        { title: '总发票数', value: 0, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
-        { title: '进项金额', value: 0, prefix: <AccountBookOutlined />, valueStyle: { color: '#52c41a' }, precision: 2 },
-        { title: '销项金额', value: 0, prefix: <AccountBookOutlined />, valueStyle: { color: '#faad14' }, precision: 2 },
-        { title: '待认证', value: 0, prefix: <PayCircleOutlined />, suffix: '张', valueStyle: { color: '#f5222d' } },
+        { title: t(`${P}.stat.total`), value: 0, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
+        {
+          title: t(`${P}.stat.inAmount`),
+          value: 0,
+          prefix: <AccountBookOutlined />,
+          valueStyle: { color: '#52c41a' },
+          precision: 2,
+        },
+        {
+          title: t(`${P}.stat.outAmount`),
+          value: 0,
+          prefix: <AccountBookOutlined />,
+          valueStyle: { color: '#faad14' },
+          precision: 2,
+        },
+        {
+          title: t(`${P}.stat.pendingVerify`),
+          value: 0,
+          prefix: <PayCircleOutlined />,
+          suffix: t(`${P}.stat.unit`),
+          valueStyle: { color: '#f5222d' },
+        },
       ];
     }
     return [
-      { title: '总发票数', value: s.total_count, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
+      { title: t(`${P}.stat.total`), value: s.total_count, prefix: <FileTextOutlined />, valueStyle: { color: '#1890ff' } },
       {
-        title: '进项金额',
+        title: t(`${P}.stat.inAmount`),
         value: s.in_total_amount,
         prefix: <AccountBookOutlined />,
         valueStyle: { color: '#52c41a' },
         precision: 2,
       },
       {
-        title: '销项金额',
+        title: t(`${P}.stat.outAmount`),
         value: s.out_total_amount,
         prefix: <AccountBookOutlined />,
         valueStyle: { color: '#faad14' },
         precision: 2,
       },
       {
-        title: '待认证',
+        title: t(`${P}.stat.pendingVerify`),
         value: s.pending_verification_count,
         prefix: <PayCircleOutlined />,
-        suffix: '张',
+        suffix: t(`${P}.stat.unit`),
         valueStyle: { color: '#f5222d' },
       },
     ];
-  }, [invoiceStatistics]);
+  }, [invoiceStatistics, t]);
 
   return (
     <ListPageTemplate statCards={statCards}>
@@ -282,16 +307,16 @@ const InvoiceList: React.FC = () => {
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton
-        createButtonText="新建发票"
+        createButtonText={t(`${P}.createTitle`)}
         onCreate={() => navigate('/apps/kuaicaiwu/finance-management/invoices/new')}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
-        deleteButtonText="批量删除"
+        deleteButtonText={t('common.batchDelete')}
         onDelete={handleBatchDelete}
-        deleteConfirmTitle="确认批量删除"
-        deleteConfirmDescription={(count) => `确定要删除选中的 ${count} 张发票吗？`}
+        deleteConfirmTitle={t('app.kuaicaiwu.common.confirmBatchDelete')}
+        deleteConfirmDescription={(count) => t(`${P}.batchDeleteConfirm`, { count })}
         request={async (params) => {
           const { current, pageSize, ...rest } = params;
           const res = await invoiceService.listInvoices({
@@ -306,7 +331,7 @@ const InvoiceList: React.FC = () => {
         showImportButton
         onImport={async (data) => {
           if (!data || data.length < 2) {
-            messageApi.warning('导入数据为空或格式不正确');
+            messageApi.warning(t('app.kuaicaiwu.common.importEmpty'));
             return;
           }
           const headers = (data[0] || []).map((h: any) => String(h || '').trim());
@@ -319,7 +344,7 @@ const InvoiceList: React.FC = () => {
             headerIndexMap.partner === undefined ||
             headerIndexMap.totalAmount === undefined
           ) {
-            messageApi.error('导入表头需包含发票号码、往来单位、价税合计');
+            messageApi.error(t(`${P}.importHeaderError`));
             return;
           }
           const [customers, suppliers] = await Promise.all([
@@ -366,26 +391,26 @@ const InvoiceList: React.FC = () => {
               tax_rate: taxRate,
               invoice_date: invDate,
               status: 'DRAFT',
-              items: [{ item_name: '导入明细', amount: amountExcl, tax_rate: taxRate, tax_amount: taxAmount }],
+              items: [{ item_name: t(`${P}.importLineItem`), amount: amountExcl, tax_rate: taxRate, tax_amount: taxAmount }],
             });
           }
           if (items.length === 0) {
-            messageApi.warning('没有可导入的有效数据（请确保往来单位在客户/供应商中存在）');
+            messageApi.warning(t(`${P}.importNoValidRows`));
             return;
           }
           const result = await batchImport({
             items,
             importFn: async (item) => invoiceService.createInvoice(item),
-            title: '导入发票',
+            title: t(`${P}.importTitle`),
             concurrency: 5,
           });
           if (result.successCount > 0) {
-            messageApi.success(`成功导入 ${result.successCount} 张发票`);
+            messageApi.success(t(`${P}.importSuccess`, { count: result.successCount }));
             invalidateInvoiceStatistics();
             actionRef.current?.reload();
           }
           if (result.failureCount > 0) {
-            messageApi.warning(`部分失败 ${result.failureCount} 张`);
+            messageApi.warning(t('app.kuaicaiwu.common.importPartialFail', { count: result.failureCount }));
           }
         }}
         importHeaders={invoiceImportTemplate.importHeaders}
@@ -399,7 +424,7 @@ const InvoiceList: React.FC = () => {
             if (type === 'currentPage' && pageData?.length) items = pageData;
             else if (type === 'selected' && keys?.length) items = items.filter((d: Invoice) => d.invoice_code && keys.includes(d.invoice_code));
             if (items.length === 0) {
-              messageApi.warning('暂无数据可导出');
+              messageApi.warning(t('common.noDataToExport'));
               return;
             }
             const blob = new Blob([JSON.stringify(items, null, 2)], { type: 'application/json' });
@@ -409,18 +434,18 @@ const InvoiceList: React.FC = () => {
             a.download = `invoices-${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             URL.revokeObjectURL(url);
-            messageApi.success(`已导出 ${items.length} 条记录`);
+            messageApi.success(t('common.exportSuccess', { count: items.length }));
           } catch (error: any) {
-            messageApi.error(error?.message || '导出失败');
+            messageApi.error(error?.message || t('common.exportFailed'));
           }
         }}
         toolbar={{
           menu: {
             activeKey: activeTabKey,
             items: [
-              { key: 'all', label: '全部发票' },
-              { key: 'OUT', label: '销售发票' },
-              { key: 'IN', label: '采购发票' },
+              { key: 'all', label: t(`${P}.tabAll`) },
+              { key: 'OUT', label: t(`${P}.tabSales`) },
+              { key: 'IN', label: t(`${P}.tabPurchase`) },
             ],
             onChange: (key) => {
               setActiveTabKey(key as string);

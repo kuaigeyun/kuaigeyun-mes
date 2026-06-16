@@ -15,6 +15,8 @@ import { getToken } from '../../utils/auth';
 import { useThemeStore, resolveThemeFromCloud, type ThemeStyle } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
+import { clampBorderRadius, readBorderRadius, THEME_BORDER_RADIUS_MARKS } from '../../utils/themeBorderRadius';
+import { clampFontSize, readFontSize, THEME_FONT_SIZE_MARKS } from '../../utils/themeFontSize';
 import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
@@ -48,6 +50,28 @@ function normalizeBgColorField(raw: unknown, fallback = ''): string {
   return fallback;
 }
 
+type SliderMarkConfig = string | { label: React.ReactNode; style?: React.CSSProperties };
+
+/** 滑块刻度：首项左对齐、末项右对齐，中间仍居中于刻度点 */
+function buildEdgeAlignedSliderMarks(
+  points: number[],
+  labelFor: (value: number) => string,
+): Record<number, SliderMarkConfig> {
+  const lastIndex = points.length - 1;
+  return Object.fromEntries(
+    points.map((value, index) => {
+      const label = labelFor(value);
+      if (index === 0) {
+        return [value, { label, style: { transform: 'translateX(0)', whiteSpace: 'nowrap' } }];
+      }
+      if (index === lastIndex) {
+        return [value, { label, style: { transform: 'translateX(-100%)', whiteSpace: 'nowrap' } }];
+      }
+      return [value, { label, style: { whiteSpace: 'nowrap' } }];
+    }),
+  );
+}
+
 /** 与保存逻辑一致：供实时 applyTheme 与持久化共用 */
 function buildThemeConfigFromForm(
   values: Record<string, unknown>,
@@ -79,8 +103,8 @@ function buildThemeConfigFromForm(
     themeMode,
     themeConfigForPreference: {
       colorPrimary: colorPrimaryValue,
-      borderRadius: Number(values.borderRadius) || 6,
-      fontSize: Number(values.fontSize) || 14,
+      borderRadius: readBorderRadius(values.borderRadius),
+      fontSize: readFontSize(values.fontSize),
       compact: false,
       themeStyle: savingThemeStyle,
       siderBgColor: savingPlain || !isLight ? '' : siderBgColorValue || '',
@@ -412,8 +436,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
       const colorPrimaryValue = applied.colorPrimary || '#1890ff';
 
-      const currentBorderRadius = Math.min(16, Math.max(0, parseDim(applied.borderRadius, 6)));
-      const currentFontSize = Math.min(20, Math.max(12, parseDim(applied.fontSize, 14)));
+      const currentBorderRadius = clampBorderRadius(applied.borderRadius);
+      const currentFontSize = clampFontSize(applied.fontSize);
 
       const tabsPersistence = 'tabs_persistence' in prefs ? Boolean(prefs.tabs_persistence) : false;
       const loadedThemeStyle = applied.themeStyle === 'plain' ? 'plain' : 'vivid';
@@ -471,8 +495,8 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
     const token = {
       colorPrimary: values.colorPrimary || '#1890ff',
-      borderRadius: values.borderRadius || 6,
-      fontSize: values.fontSize || 14,
+      borderRadius: readBorderRadius(values.borderRadius),
+      fontSize: readFontSize(values.fontSize),
     };
 
     setPreviewTheme({ algorithm, token });
@@ -524,6 +548,14 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
 
     if (changedValues.themeStyle) {
       setThemeStyleValue(changedValues.themeStyle);
+    }
+
+    if (changedValues.borderRadius !== undefined) {
+      allValues.borderRadius = clampBorderRadius(changedValues.borderRadius);
+    }
+
+    if (changedValues.fontSize !== undefined) {
+      allValues.fontSize = clampFontSize(changedValues.fontSize);
     }
 
     const { themeMode, themeConfigForPreference } = buildThemeConfigFromForm(
@@ -767,13 +799,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
         }
         /* slide-in/out 见 layout-templates/drawerSlideMotion.css（drawer-slide-motion） */
-        /* 修复大圆角时 Tooltip 变成圆形或变形的问题（Tooltip 在 portal，勿挂在 drawer 根下） */
-        .ant-tooltip-inner {
-          border-radius: 6px !important;
-          padding: 4px 8px !important;
-          min-width: 32px;
-          text-align: center;
-        }
+        /* Slider 拖拽 Tooltip 见 global.less（.ant-slider-tooltip） */
       `}</style>
       {open && form && (
         <Spin spinning={loading}>
@@ -1407,7 +1433,9 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   <div>
                     <div>{t('components.themeEditor.borderRadius.label')}</div>
                     <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      {t('components.themeEditor.borderRadius.desc', { value: form.getFieldValue('borderRadius') || 6 })}
+                      {t('components.themeEditor.borderRadius.desc', {
+                        value: readBorderRadius(form.getFieldValue('borderRadius')),
+                      })}
                     </Text>
                   </div>
                 }
@@ -1415,12 +1443,11 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <Slider
                   min={0}
                   max={16}
-                  marks={{
-                    0: t('components.themeEditor.borderRadius.mark.0'),
-                    6: t('components.themeEditor.borderRadius.mark.6'),
-                    12: t('components.themeEditor.borderRadius.mark.12'),
-                    16: t('components.themeEditor.borderRadius.mark.16'),
-                  }}
+                  step={1}
+                  marks={buildEdgeAlignedSliderMarks(
+                    [...THEME_BORDER_RADIUS_MARKS],
+                    (value) => t(`components.themeEditor.borderRadius.mark.${value}`),
+                  )}
                 />
               </Form.Item>
             </Card>
@@ -1443,21 +1470,21 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   <div>
                     <div>{t('components.themeEditor.fontSize.label')}</div>
                     <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      {t('components.themeEditor.fontSize.desc', { value: form.getFieldValue('fontSize') || 14 })}
+                      {t('components.themeEditor.fontSize.desc', {
+                        value: readFontSize(form.getFieldValue('fontSize')),
+                      })}
                     </Text>
                   </div>
                 }
               >
                 <Slider
                   min={12}
-                  max={20}
-                  marks={{
-                    12: t('components.themeEditor.fontSize.mark.12'),
-                    14: t('components.themeEditor.fontSize.mark.14'),
-                    16: t('components.themeEditor.fontSize.mark.16'),
-                    18: t('components.themeEditor.fontSize.mark.18'),
-                    20: t('components.themeEditor.fontSize.mark.20'),
-                  }}
+                  max={18}
+                  step={1}
+                  marks={buildEdgeAlignedSliderMarks(
+                    [...THEME_FONT_SIZE_MARKS],
+                    (value) => t(`components.themeEditor.fontSize.mark.${value}`),
+                  )}
                 />
               </Form.Item>
             </Card>
@@ -1518,13 +1545,16 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                 <Card
                   size="small"
                   style={{
-                    fontSize: `${previewTheme?.token?.fontSize || 14}px`,
-                    borderRadius: `${previewTheme?.token?.borderRadius || 6}px`,
+                    fontSize: `${readFontSize(previewTheme?.token?.fontSize)}px`,
+                    borderRadius: `${readBorderRadius(previewTheme?.token?.borderRadius)}px`,
                   }}
                 >
                   <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('components.themeEditor.preview.sampleText')}</div>
-                  <div style={{ fontSize: `${(previewTheme?.token?.fontSize || 14) - 2}px`, opacity: 0.65 }}>
-                    {t('components.themeEditor.preview.current', { fontSize: previewTheme?.token?.fontSize || 14, borderRadius: previewTheme?.token?.borderRadius || 6 })}
+                  <div style={{ fontSize: `${readFontSize(previewTheme?.token?.fontSize) - 2}px`, opacity: 0.65 }}>
+                    {t('components.themeEditor.preview.current', {
+                      fontSize: readFontSize(previewTheme?.token?.fontSize),
+                      borderRadius: readBorderRadius(previewTheme?.token?.borderRadius),
+                    })}
                   </div>
                 </Card>
               </div>
@@ -1537,7 +1567,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
                   width: '100%',
                   height: 60,
                   background: previewTheme?.token?.colorPrimary || '#1890ff',
-                  borderRadius: `${previewTheme?.token?.borderRadius || 6}px`,
+                  borderRadius: `${readBorderRadius(previewTheme?.token?.borderRadius)}px`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',

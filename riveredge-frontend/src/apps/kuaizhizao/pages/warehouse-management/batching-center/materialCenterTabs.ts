@@ -4,6 +4,8 @@
  * 排序：配料执行 → 产线叫料 → 委外收发 → 备料建议 → 倒冲异常
  */
 
+import type { TFunction } from 'i18next';
+
 export type BatchingTaskTabKey =
   | 'material_call'
   | 'batching_draft'
@@ -24,63 +26,72 @@ export type MaterialCenterTabMeta = {
   hint: string;
 };
 
-export const MATERIAL_CENTER_TABS: MaterialCenterTabMeta[] = [
-  {
-    key: 'batching_draft',
-    label: '配料执行',
-    hint: '已有配料单：同步缺料、选批号并完成主仓→线边拣选',
-  },
-  {
-    key: 'material_call',
-    label: '产线叫料',
-    hint: '产线临时发起的要料请求，需尽快配料送达',
-  },
-  {
-    key: 'outsource_issue',
-    label: '委外发料',
-    hint: '向委外供应商发出原材料，关联工单委外单',
-  },
-  {
-    key: 'outsource_receipt',
-    label: '委外收货',
-    hint: '委外加工完成后收回半成品/成品入库',
-  },
-  {
-    key: 'outsource_material_return',
-    label: '委外退料',
-    hint: '供应商退回未使用的委外发料原料，增加库存',
-  },
-  {
-    key: 'outsource_product_return',
-    label: '委外退货',
-    hint: '委外成品不合格退回供应商，扣减库存',
-  },
-  {
-    key: 'proactive_prep',
-    label: '备料建议',
-    hint: '系统根据工单与库存推算的缺料提醒，可生成配料单后再到「配料执行」处理',
-  },
-  {
-    key: 'backflush_alert',
-    label: '倒冲异常',
-    hint: '报工倒冲扣账失败记录，需核对库存后重试',
-  },
-];
+export function getMaterialCenterTabs(t: TFunction): MaterialCenterTabMeta[] {
+  return [
+    {
+      key: 'batching_draft',
+      label: t('app.kuaizhizao.batchingCenter.tab.batchingDraft'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.batchingDraftHint'),
+    },
+    {
+      key: 'material_call',
+      label: t('app.kuaizhizao.batchingCenter.tab.materialCall'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.materialCallHint'),
+    },
+    {
+      key: 'outsource_issue',
+      label: t('app.kuaizhizao.batchingCenter.tab.outsourceIssue'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.outsourceIssueHint'),
+    },
+    {
+      key: 'outsource_receipt',
+      label: t('app.kuaizhizao.batchingCenter.tab.outsourceReceipt'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.outsourceReceiptHint'),
+    },
+    {
+      key: 'outsource_material_return',
+      label: t('app.kuaizhizao.batchingCenter.tab.outsourceMaterialReturn'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.outsourceMaterialReturnHint'),
+    },
+    {
+      key: 'outsource_product_return',
+      label: t('app.kuaizhizao.batchingCenter.tab.outsourceProductReturn'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.outsourceProductReturnHint'),
+    },
+    {
+      key: 'proactive_prep',
+      label: t('app.kuaizhizao.batchingCenter.tab.proactivePrep'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.proactivePrepHint'),
+    },
+    {
+      key: 'backflush_alert',
+      label: t('app.kuaizhizao.batchingCenter.tab.backflushAlert'),
+      hint: t('app.kuaizhizao.batchingCenter.tab.backflushAlertHint'),
+    },
+  ];
+}
 
-/** @deprecated 使用 MATERIAL_CENTER_TABS */
-export const BATCHING_CENTER_TABS = MATERIAL_CENTER_TABS.filter(
-  (t): t is MaterialCenterTabMeta & { key: BatchingTaskTabKey } =>
-    t.key !== 'outsource_issue' &&
-    t.key !== 'outsource_receipt' &&
-    t.key !== 'outsource_material_return' &&
-    t.key !== 'outsource_product_return',
-);
+/** @deprecated 使用 getMaterialCenterTabs(t) */
+export const MATERIAL_CENTER_TABS: MaterialCenterTabMeta[] = [];
 
+/** @deprecated 使用 getMaterialCenterTabs(t) */
+export const BATCHING_CENTER_TABS: MaterialCenterTabMeta[] = [];
+
+export function getBatchingTaskTypeLabel(t: TFunction): Record<BatchingTaskTabKey, string> {
+  return {
+    batching_draft: t('app.kuaizhizao.batchingCenter.taskType.batchingDraft'),
+    material_call: t('app.kuaizhizao.batchingCenter.taskType.materialCall'),
+    proactive_prep: t('app.kuaizhizao.batchingCenter.taskType.proactivePrep'),
+    backflush_alert: t('app.kuaizhizao.batchingCenter.taskType.backflushAlert'),
+  };
+}
+
+/** @deprecated 使用 getBatchingTaskTypeLabel(t) */
 export const BATCHING_TASK_TYPE_LABEL: Record<BatchingTaskTabKey, string> = {
-  batching_draft: '配料执行',
-  material_call: '产线叫料',
-  proactive_prep: '备料建议',
-  backflush_alert: '倒冲异常',
+  batching_draft: '',
+  material_call: '',
+  proactive_prep: '',
+  backflush_alert: '',
 };
 
 export const DEFAULT_MATERIAL_CENTER_TAB: MaterialCenterTabKey = 'batching_draft';

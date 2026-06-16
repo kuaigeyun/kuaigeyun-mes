@@ -5,7 +5,7 @@
  * 支持站点基本信息、Logo、邀请注册开关等配置。
  */
 
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { App, Form, Input, Switch, Button, Upload, Space, Select, Row, Col, InputNumber, Card, ColorPicker, Modal, Table, Tag, Typography, theme } from 'antd';
 import dayjs from 'dayjs';
@@ -35,6 +35,13 @@ import {
 import { getLanguageList } from '../../../services/language';
 import ImageCropper from '../../../components/image-cropper';
 import { getSiteSettingsDictCache, setSiteSettingsDictCache } from '../../../utils/siteSettingsDictCache';
+import { cacheTenantDefaultLanguage } from '../../../utils/localeBootstrap';
+import {
+  buildFallbackCurrencyOptions,
+  buildFallbackTimezoneOptions,
+  mapCurrencyDictionaryOptions,
+  mapTimezoneDictionaryOptions,
+} from '../../../utils/systemDictionaryLabels';
 import { TenantInitDataPanel } from '../config-center/TenantInitDataPanel';
 
 /**
@@ -147,6 +154,16 @@ const SiteSettingsPage: React.FC = () => {
   const [timezoneOptions, setTimezoneOptions] = useState<DictionaryItem[]>(
     () => (getSiteSettingsDictCache()?.timezone ?? []) as DictionaryItem[]
   );
+  const localizedCurrencyOptions = useMemo(
+    () => mapCurrencyDictionaryOptions(currencyOptions, t),
+    [currencyOptions, t],
+  );
+  const localizedTimezoneOptions = useMemo(
+    () => mapTimezoneDictionaryOptions(timezoneOptions, t),
+    [timezoneOptions, t],
+  );
+  const fallbackCurrencyOptions = useMemo(() => buildFallbackCurrencyOptions(t), [t]);
+  const fallbackTimezoneOptions = useMemo(() => buildFallbackTimezoneOptions(t), [t]);
   const [branchOrgCapability, setBranchOrgCapability] = useState<BranchOrganizationCapability | null>(null);
   const [branchOrgList, setBranchOrgList] = useState<BranchOrganizationItem[]>([]);
   const [branchOrgTotal, setBranchOrgTotal] = useState(0);
@@ -534,7 +551,7 @@ const SiteSettingsPage: React.FC = () => {
         default_language: setting.settings?.default_language || 'zh-CN',
         timezone: setting.settings?.timezone || 'Asia/Shanghai',
         theme_color: normalizedThemeColor,
-        theme_borderRadius: themeConfig.borderRadius || 6,
+        theme_borderRadius: themeConfig.borderRadius ?? 6,
         theme_fontSize: themeConfig.fontSize || 14,
         theme_compact: false,
         enable_invitation: setting.settings?.enable_invitation !== false,
@@ -858,6 +875,9 @@ const SiteSettingsPage: React.FC = () => {
       }
 
       await updateSiteSetting({ settings });
+      if (values.default_language) {
+        cacheTenantDefaultLanguage(values.default_language);
+      }
       messageApi.success(t('pages.system.siteSettings.saveSuccess'));
 
       if (settings.security || settings.ui || settings.theme_config || settings.network || settings.system) {
@@ -1041,20 +1061,17 @@ const SiteSettingsPage: React.FC = () => {
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="default_currency" label={t('pages.system.siteSettings.defaultCurrency')}>
           <Select placeholder={t('pages.system.siteSettings.defaultCurrencyPlaceholder')} loading={loading} allowClear>
-            {currencyOptions.map((item) => (
-              <Select.Option key={item.uuid} value={item.value}>
+            {localizedCurrencyOptions.map((item) => (
+              <Select.Option key={item.value} value={item.value}>
                 {item.label}
               </Select.Option>
             ))}
-            {currencyOptions.length === 0 && (
-              <>
-                <Select.Option value="CNY">{t('pages.system.siteSettings.currencyCNY')}</Select.Option>
-                <Select.Option value="USD">{t('pages.system.siteSettings.currencyUSD')}</Select.Option>
-                <Select.Option value="EUR">{t('pages.system.siteSettings.currencyEUR')}</Select.Option>
-                <Select.Option value="JPY">{t('pages.system.siteSettings.currencyJPY')}</Select.Option>
-                <Select.Option value="GBP">{t('pages.system.siteSettings.currencyGBP')}</Select.Option>
-              </>
-            )}
+            {localizedCurrencyOptions.length === 0 &&
+              fallbackCurrencyOptions.map((item) => (
+                <Select.Option key={item.value} value={item.value}>
+                  {item.label}
+                </Select.Option>
+              ))}
           </Select>
         </Form.Item>
       </Col>
@@ -1088,21 +1105,17 @@ const SiteSettingsPage: React.FC = () => {
       <Col xs={24} sm={24} md={12} lg={12}>
         <Form.Item name="timezone" label={t('pages.system.siteSettings.timezone')}>
           <Select placeholder={t('pages.system.siteSettings.timezonePlaceholder')} loading={loading} allowClear>
-            {timezoneOptions.map((item) => (
-              <Select.Option key={item.uuid} value={item.value}>
+            {localizedTimezoneOptions.map((item) => (
+              <Select.Option key={item.value} value={item.value}>
                 {item.label}
               </Select.Option>
             ))}
-            {timezoneOptions.length === 0 && (
-              <>
-                <Select.Option value="Asia/Shanghai">{t('pages.system.siteSettings.tzShanghai')}</Select.Option>
-                <Select.Option value="Asia/Tokyo">{t('pages.system.siteSettings.tzTokyo')}</Select.Option>
-                <Select.Option value="Asia/Seoul">{t('pages.system.siteSettings.tzSeoul')}</Select.Option>
-                <Select.Option value="America/New_York">{t('pages.system.siteSettings.tzNewYork')}</Select.Option>
-                <Select.Option value="Europe/London">{t('pages.system.siteSettings.tzLondon')}</Select.Option>
-                <Select.Option value="Europe/Paris">{t('pages.system.siteSettings.tzParis')}</Select.Option>
-              </>
-            )}
+            {localizedTimezoneOptions.length === 0 &&
+              fallbackTimezoneOptions.map((item) => (
+                <Select.Option key={item.value} value={item.value}>
+                  {item.label}
+                </Select.Option>
+              ))}
           </Select>
         </Form.Item>
       </Col>

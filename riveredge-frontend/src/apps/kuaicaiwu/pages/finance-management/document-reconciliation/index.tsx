@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Card, DatePicker, Form, InputNumber, Select, Space, Steps, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { LinkOutlined, SearchOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
@@ -28,11 +30,13 @@ type ChainStep = {
   amount?: number;
 };
 
-const DOC_TYPE_LABEL: Record<string, string> = {
-  receivable: '应收单',
-  receipt: '收款单',
-  payable: '应付单',
-  payment: '付款单',
+const D = 'app.kuaicaiwu.documentReconciliation';
+
+const DOC_TYPE_I18N_KEY: Record<string, string> = {
+  receivable: `${D}.docType.receivable`,
+  receipt: `${D}.docType.receipt`,
+  payable: `${D}.docType.payable`,
+  payment: `${D}.docType.payment`,
 };
 
 const CHAIN_FLOW_BY_DOC: Record<string, 'sales' | 'purchase'> = {
@@ -42,7 +46,14 @@ const CHAIN_FLOW_BY_DOC: Record<string, 'sales' | 'purchase'> = {
   payment: 'purchase',
 };
 
+const formatDocType = (docType: string | undefined, t: TFunction): string => {
+  if (!docType) return '';
+  const key = DOC_TYPE_I18N_KEY[docType];
+  return key ? t(key) : docType;
+};
+
 const DocumentReconciliationPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>();
   const gapRowsRef = useRef<GapRow[]>([]);
@@ -87,7 +98,7 @@ const DocumentReconciliationPage: React.FC = () => {
       gapRowsRef.current = nextRows;
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '查询失败');
+      messageApi.error(error.message || t(`${D}.queryFailed`));
     } finally {
       setLoading(false);
     }
@@ -104,7 +115,7 @@ const DocumentReconciliationPage: React.FC = () => {
         total_steps: (result as any)?.total_steps,
       });
     } catch (error: any) {
-      messageApi.error(error.message || '关联链查询失败');
+      messageApi.error(error.message || t(`${D}.chainQueryFailed`));
     } finally {
       setChainLoading(false);
     }
@@ -119,7 +130,7 @@ const DocumentReconciliationPage: React.FC = () => {
     const docType = row.doc_type || '';
     const flowType = CHAIN_FLOW_BY_DOC[docType];
     if (!flowType || !row.doc_id) {
-      messageApi.warning('该单据类型暂不支持查看关联链');
+      messageApi.warning(t(`${D}.unsupportedChain`));
       return;
     }
     chainForm.setFieldsValue({
@@ -131,24 +142,24 @@ const DocumentReconciliationPage: React.FC = () => {
     await loadChain(flowType, docType, row.doc_id);
   };
 
-  const columns: ProColumns<GapRow>[] = [
+  const columns: ProColumns<GapRow>[] = useMemo(() => [
     {
-      title: '单据类型',
+      title: t(`${D}.col.docType`),
       dataIndex: 'doc_type',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        receivable: { text: '应收单' },
-        receipt: { text: '收款单' },
-        payable: { text: '应付单' },
-        payment: { text: '付款单' },
+        receivable: { text: t(`${D}.docType.receivable`) },
+        receipt: { text: t(`${D}.docType.receipt`) },
+        payable: { text: t(`${D}.docType.payable`) },
+        payment: { text: t(`${D}.docType.payment`) },
       },
-      render: (_, r) => DOC_TYPE_LABEL[r.doc_type || ''] || r.doc_type,
+      render: (_, r) => formatDocType(r.doc_type, t),
     },
-    { title: '单据编号', dataIndex: 'doc_code', width: 160, ellipsis: true },
-    { title: '金额', dataIndex: 'amount', valueType: 'money', align: 'right' },
+    { title: t(`${D}.col.docCode`), dataIndex: 'doc_code', width: 160, ellipsis: true },
+    { title: t(`${D}.col.amount`), dataIndex: 'amount', valueType: 'money', align: 'right' },
     {
-      title: '未结清',
+      title: t(`${D}.col.unsettled`),
       align: 'right',
       width: 120,
       render: (_, r) => {
@@ -157,27 +168,27 @@ const DocumentReconciliationPage: React.FC = () => {
       },
     },
     {
-      title: '业财关联',
+      title: t(`${D}.col.link`),
       dataIndex: 'finance_related_count',
       width: 100,
-      render: (v) => (Number(v) > 0 ? <Tag color="success">{v}</Tag> : <Tag color="warning">未关联</Tag>),
+      render: (v) => (Number(v) > 0 ? <Tag color="success">{v}</Tag> : <Tag color="warning">{t(`${D}.unlinked`)}</Tag>),
     },
     {
-      title: '结算方式',
+      title: t(`${D}.col.settlementMethod`),
       dataIndex: 'settlement_type',
       width: 100,
-      render: (_, r) => (r.settlement_type ? formatSettlementType(String(r.settlement_type)) : '—'),
+      render: (_, r) => (r.settlement_type ? formatSettlementType(String(r.settlement_type), t) : '—'),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 100,
       render: (_, r) => (
         <Button type="link" size="small" icon={<LinkOutlined />} onClick={() => openChainFromGap(r)}>
-          关联链
+          {t(`${D}.col.linkChain`)}
         </Button>
       ),
     },
-  ];
+  ], [t]);
 
   useEffect(() => {
     loadPartners('Customer');
@@ -200,10 +211,16 @@ const DocumentReconciliationPage: React.FC = () => {
           }
         }}
       >
-        <Form.Item name="partner_type" label="往来类型" rules={[{ required: true }]}>
-          <Select style={{ width: 120 }} options={[{ label: '客户', value: 'Customer' }, { label: '供应商', value: 'Supplier' }]} />
+        <Form.Item name="partner_type" label={t(`${D}.partnerType`)} rules={[{ required: true }]}>
+          <Select
+            style={{ width: 120 }}
+            options={[
+              { label: t(`${D}.partnerTypeCustomer`), value: 'Customer' },
+              { label: t(`${D}.partnerTypeSupplier`), value: 'Supplier' },
+            ]}
+          />
         </Form.Item>
-        <Form.Item name="partner_id" label="往来单位" rules={[{ required: true }]}>
+        <Form.Item name="partner_id" label={t(`${D}.col.partner`)} rules={[{ required: true }]}>
           <Select
             showSearch
             optionFilterProp="label"
@@ -212,17 +229,17 @@ const DocumentReconciliationPage: React.FC = () => {
             onFocus={() => loadPartners(gapForm.getFieldValue('partner_type') || 'Customer')}
           />
         </Form.Item>
-        <Form.Item name="period" label="期间" rules={[{ required: true }]}>
+        <Form.Item name="period" label={t(`${D}.period`)} rules={[{ required: true }]}>
           <DatePicker.RangePicker />
         </Form.Item>
         <Form.Item>
           <Button type="primary" icon={<SearchOutlined />} loading={loading} onClick={handleSearch}>
-            查询缺口
+            {t(`${D}.queryGap`)}
           </Button>
         </Form.Item>
       </Form>
     ),
-    [gapForm, loading, partnerOptions],
+    [gapForm, loading, partnerOptions, t],
   );
 
   const gapRequest = useCallback(
@@ -240,8 +257,8 @@ const DocumentReconciliationPage: React.FC = () => {
         typeof searchFormValues?.keyword === 'string' ? searchFormValues.keyword.trim().toLowerCase() : '';
       if (keyword) {
         filtered = filtered.filter((row) => {
-          const docTypeLabel = DOC_TYPE_LABEL[row.doc_type || ''] || row.doc_type || '';
-          const settlementLabel = row.settlement_type ? formatSettlementType(String(row.settlement_type)) : '';
+          const docTypeLabel = formatDocType(row.doc_type, t);
+          const settlementLabel = row.settlement_type ? formatSettlementType(String(row.settlement_type), t) : '';
           const hay = [
             docTypeLabel,
             row.doc_code,
@@ -275,8 +292,17 @@ const DocumentReconciliationPage: React.FC = () => {
         total,
       };
     },
-    [],
+    [t],
   );
+
+  const chainStartDocOptions = useMemo(() => [
+    { label: t(`${D}.chain.salesDelivery`), value: 'sales_delivery' },
+    { label: t(`${D}.chain.salesOrder`), value: 'sales_order' },
+    { label: t(`${D}.docType.receivable`), value: 'receivable' },
+    { label: t(`${D}.chain.purchaseReceipt`), value: 'purchase_receipt' },
+    { label: t(`${D}.chain.purchaseOrder`), value: 'purchase_order' },
+    { label: t(`${D}.docType.payable`), value: 'payable' },
+  ], [t]);
 
   const gapPanel = (
     <UniTable<GapRow>
@@ -302,35 +328,39 @@ const DocumentReconciliationPage: React.FC = () => {
         style={{ marginBottom: 16 }}
         initialValues={{ flow_type: 'sales', document_type: 'sales_delivery' }}
       >
-        <Form.Item name="flow_type" label="业务方向" rules={[{ required: true }]}>
-          <Select style={{ width: 120 }} options={[{ label: '销售业务', value: 'sales' }, { label: '采购业务', value: 'purchase' }]} />
-        </Form.Item>
-        <Form.Item name="document_type" label="起始单据" rules={[{ required: true }]}>
+        <Form.Item name="flow_type" label={t(`${D}.businessDirection`)} rules={[{ required: true }]}>
           <Select
-            style={{ width: 160 }}
+            style={{ width: 120 }}
             options={[
-              { label: '销售出库', value: 'sales_delivery' },
-              { label: '销售订单', value: 'sales_order' },
-              { label: '应收单', value: 'receivable' },
-              { label: '采购入库', value: 'purchase_receipt' },
-              { label: '采购订单', value: 'purchase_order' },
-              { label: '应付单', value: 'payable' },
+              { label: t(`${D}.directionSales`), value: 'sales' },
+              { label: t(`${D}.directionPurchase`), value: 'purchase' },
             ]}
           />
         </Form.Item>
-        <Form.Item name="document_id" label="单据内码" rules={[{ required: true }]} tooltip="系统中该单据的数字编号，可在单据详情页地址栏查看">
-          <InputNumber min={1} style={{ width: 120 }} placeholder="编号" />
+        <Form.Item name="document_type" label={t(`${D}.startDoc`)} rules={[{ required: true }]}>
+          <Select style={{ width: 160 }} options={chainStartDocOptions} />
+        </Form.Item>
+        <Form.Item
+          name="document_id"
+          label={t(`${D}.chain.docId`)}
+          rules={[{ required: true }]}
+          tooltip={t(`${D}.chain.docIdTooltip`)}
+        >
+          <InputNumber min={1} style={{ width: 120 }} placeholder={t(`${D}.chain.docIdPlaceholder`)} />
         </Form.Item>
         <Form.Item>
           <Button type="primary" loading={chainLoading} onClick={handleChainSearch}>
-            查看关联链
+            {t(`${D}.viewChain`)}
           </Button>
         </Form.Item>
       </Form>
       {chainMeta.total_steps ? (
         <Card size="small" style={{ marginBottom: 16 }}>
-          单据链条完整度：{Math.round((chainMeta.completion_rate ?? 0) * 100)}%
-          （已关联 {chainMeta.linked_count}/{chainMeta.total_steps} 个环节）
+          {t(`${D}.chain.completion`, {
+            rate: Math.round((chainMeta.completion_rate ?? 0) * 100),
+            linked: chainMeta.linked_count,
+            total: chainMeta.total_steps,
+          })}
         </Card>
       ) : null}
       <Steps
@@ -340,25 +370,34 @@ const DocumentReconciliationPage: React.FC = () => {
           description: (
             <Space orientation="vertical" size={0}>
               <span>{step.document_code || '—'}</span>
-              {step.amount != null ? <span>金额 ¥{Number(step.amount).toFixed(2)}</span> : null}
+              {step.amount != null ? (
+                <span>
+                  {t('app.kuaicaiwu.invoice.line.amount')}
+                  {' '}
+                  ¥
+                  {Number(step.amount).toFixed(2)}
+                </span>
+              ) : null}
             </Space>
           ),
           status: step.status === 'linked' ? 'finish' : 'wait',
-          icon: step.status === 'linked' ? undefined : <Tag color="warning">缺失</Tag>,
+          icon: step.status === 'linked' ? undefined : <Tag color="warning">{t(`${D}.chain.missing`)}</Tag>,
         }))}
       />
     </>
   );
+
+  const tabs = useMemo(() => [
+    { key: 'gaps', label: t(`${D}.tabGap`), children: gapPanel },
+    { key: 'chain', label: t(`${D}.tabChain`), children: chainPanel },
+  ], [chainPanel, gapPanel, t]);
 
   return (
     <MultiTabListPageTemplate
       activeTabKey={activeTab}
       onTabChange={setActiveTab}
       preserveMounted
-      tabs={[
-        { key: 'gaps', label: '往来缺口', children: gapPanel },
-        { key: 'chain', label: '业财单据链条', children: chainPanel },
-      ]}
+      tabs={tabs}
     />
   );
 };

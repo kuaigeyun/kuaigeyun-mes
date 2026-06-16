@@ -36,6 +36,10 @@ import {
   CreateMessageTemplateData,
   UpdateMessageTemplateData,
 } from '../../../../services/messageTemplate';
+import {
+  resolvePresetMessageTemplateDescription,
+  resolvePresetMessageTemplateName,
+} from '../../../../utils/presetEntityI18n';
 
 /**
  * 消息模板管理列表页面组件
@@ -238,6 +242,7 @@ const MessageTemplateListPage: React.FC = () => {
       dataIndex: 'name',
       width: 200,
       fixed: 'left',
+      render: (_, record) => resolvePresetMessageTemplateName(record, t),
     },
     {
       title: t('pages.system.messageTemplate.templateCode'),
@@ -277,6 +282,7 @@ const MessageTemplateListPage: React.FC = () => {
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
+      render: (_, record) => resolvePresetMessageTemplateDescription(record, t),
     },
     {
       title: t('pages.system.messageConfig.activeStatus'),
@@ -329,7 +335,11 @@ const MessageTemplateListPage: React.FC = () => {
    * 详情列定义
    */
   const detailColumns: ProDescriptionsItemProps<MessageTemplate>[] = [
-    { title: t('pages.system.messageTemplate.templateName'), dataIndex: 'name' },
+    {
+      title: t('pages.system.messageTemplate.templateName'),
+      dataIndex: 'name',
+      render: (_, r) => resolvePresetMessageTemplateName(r, t),
+    },
     { title: t('pages.system.messageTemplate.templateCode'), dataIndex: 'code' },
     {
       title: t('pages.system.messageConfig.type'),
@@ -380,7 +390,11 @@ const MessageTemplateListPage: React.FC = () => {
         </pre>
       ) : '-',
     },
-    { title: t('pages.system.messageTemplate.remark'), dataIndex: 'description' },
+    {
+      title: t('pages.system.messageTemplate.remark'),
+      dataIndex: 'description',
+      render: (_, r) => resolvePresetMessageTemplateDescription(r, t),
+    },
     {
       title: t('pages.system.messageConfig.activeStatus'),
       dataIndex: 'is_active',

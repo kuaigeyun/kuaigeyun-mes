@@ -1,22 +1,19 @@
 /**
  * 质量成本核算页面
- *
- * 提供质量成本核算功能，包括预防成本、鉴定成本、内部损失成本、外部损失成本。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ProFormSelect, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
 import { App, Button, Card, Divider, Row, Col, Statistic } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { qualityCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { loadWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
+import { formatCalculationType } from '../../../utils/costUiLabels';
 
 interface QualityCostResult {
   prevention_cost: number;
@@ -29,8 +26,6 @@ interface QualityCostResult {
   calculation_date: string;
   start_date?: string;
   end_date?: string;
-  material_id?: number;
-  work_order_id?: number;
 }
 
 export interface QualityCostPageProps {
@@ -38,6 +33,7 @@ export interface QualityCostPageProps {
 }
 
 const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -47,16 +43,13 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
   const [materials, setMaterials] = useState<any[]>([]);
   const [workOrderOptions, setWorkOrderOptions] = useState<CostSelectOption[]>([]);
 
-  /**
-   * 加载物料列表
-   */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(normalizeCostListRows(result));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -69,7 +62,7 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         const opts = await loadWorkOrderSelectOptions(400);
         if (!cancelled) setWorkOrderOptions(opts);
       } catch (e) {
-        console.error('加载工单下拉失败:', e);
+        console.error('load work orders failed:', e);
       }
     })();
     return () => {
@@ -77,9 +70,6 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
     };
   }, []);
 
-  /**
-   * 处理核算
-   */
   const handleCalculate = async (values: any) => {
     try {
       setLoading(true);
@@ -90,19 +80,16 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         work_order_id: values.work_order_id,
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
       };
-      const result = await qualityCostApi.calculate(data);
-      setResult(result);
-      messageApi.success('质量成本核算成功');
+      const res = await qualityCostApi.calculate(data);
+      setResult(res);
+      messageApi.success(t('app.kuaicaiwu.qualityCost.calculateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '质量成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.qualityCost.calculateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 打开核算弹窗
-   */
   const handleOpenModal = () => {
     setModalVisible(true);
     setResult(null);
@@ -114,63 +101,48 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
     });
   };
 
+  const resultColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.qualityCost.col.totalQualityCost'), dataIndex: 'total_quality_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationType'), dataIndex: 'calculation_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.startDate'), dataIndex: 'start_date', hide: !result?.start_date },
+      { title: t('app.kuaicaiwu.costCommon.col.endDate'), dataIndex: 'end_date', hide: !result?.end_date },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationDate'), dataIndex: 'calculation_date' },
+    ],
+    [t, result],
+  );
+
   return (
     <PageContainer
       ghost={embedded}
-      title={embedded ? false : '质量成本核算'}
+      title={embedded ? false : t('app.kuaicaiwu.qualityCost.title')}
       extra={[
-        <Button
-          key="calculate"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleOpenModal}
-        >
-          核算质量成本
+        <Button key="calculate" type="primary" icon={<CalculatorOutlined />} onClick={handleOpenModal}>
+          {t('app.kuaicaiwu.qualityCost.calculate')}
         </Button>,
       ]}
     >
-      {/* 核算结果展示 */}
       {result && (
-        <Card title="核算结果" style={{ marginBottom: 16 }}>
+        <Card title={t('app.kuaicaiwu.costCommon.resultTitle')} style={{ marginBottom: 16 }}>
           <Row gutter={16} style={{ marginBottom: 24 }}>
             <Col span={6}>
               <Card>
-                <Statistic
-                  title="预防成本"
-                  value={result.prevention_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.preventionCost')} value={result.prevention_cost} prefix="¥" precision={2} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic
-                  title="鉴定成本"
-                  value={result.appraisal_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.appraisalCost')} value={result.appraisal_cost} prefix="¥" precision={2} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic
-                  title="内部损失成本"
-                  value={result.internal_failure_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.internalFailureCost')} value={result.internal_failure_cost} prefix="¥" precision={2} />
               </Card>
             </Col>
             <Col span={6}>
               <Card>
-                <Statistic
-                  title="外部损失成本"
-                  value={result.external_failure_cost}
-                  prefix="¥"
-                  precision={2}
-                />
+                <Statistic title={t('app.kuaicaiwu.qualityCost.col.externalFailureCost')} value={result.external_failure_cost} prefix="¥" precision={2} />
               </Card>
             </Col>
           </Row>
@@ -184,23 +156,17 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
                   ¥{result.total_quality_cost?.toFixed(2)}
                 </span>
               ),
-              calculation_type: result.calculation_type,
+              calculation_type: formatCalculationType(result.calculation_type, t),
               start_date: result.start_date ? dayjs(result.start_date).format('YYYY-MM-DD') : undefined,
               end_date: result.end_date ? dayjs(result.end_date).format('YYYY-MM-DD') : undefined,
               calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
             }}
-            columns={[
-              { title: '总质量成本', dataIndex: 'total_quality_cost' },
-              { title: '核算类型', dataIndex: 'calculation_type' },
-              { title: '开始日期', dataIndex: 'start_date', hide: !result.start_date },
-              { title: '结束日期', dataIndex: 'end_date', hide: !result.end_date },
-              { title: '核算日期', dataIndex: 'calculation_date' },
-            ]}
+            columns={resultColumns}
           />
 
           {result.cost_details && (
             <>
-              <Divider>成本明细</Divider>
+              <Divider>{t('app.kuaicaiwu.costCommon.costDetails')}</Divider>
               <div style={{ maxHeight: 400, overflow: 'auto' }}>
                 <StructuredCostDataView data={result.cost_details} />
               </div>
@@ -209,9 +175,8 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         </Card>
       )}
 
-      {/* 核算弹窗 */}
       <FormModalTemplate
-        title="核算质量成本"
+        title={t('app.kuaicaiwu.qualityCost.modalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -224,25 +189,21 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
       >
         <ProFormDatePicker
           name="start_date"
-          label="开始日期"
-          placeholder="请选择开始日期（可选）"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.startDate')}
+          placeholder={t('app.kuaicaiwu.qualityCost.field.startDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="end_date"
-          label="结束日期"
-          placeholder="请选择结束日期（可选）"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.endDate')}
+          placeholder={t('app.kuaicaiwu.qualityCost.field.endDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormSelect
           name="material_id"
-          label="物料（可选）"
-          placeholder="请选择物料（可选，用于核算特定物料的质量成本）"
-          options={materials.map(m => ({
+          label={t('app.kuaicaiwu.qualityCost.field.materialOptional')}
+          placeholder={t('app.kuaicaiwu.qualityCost.field.materialOptionalPlaceholder')}
+          options={materials.map((m) => ({
             label: `${m.mainCode || m.code} - ${m.name}`,
             value: m.id,
           }))}
@@ -254,8 +215,8 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         />
         <ProFormSelect
           name="work_order_id"
-          label="工单（可选）"
-          placeholder="可选，用于核算特定工单的质量成本"
+          label={t('app.kuaicaiwu.qualityCost.field.workOrderOptional')}
+          placeholder={t('app.kuaicaiwu.qualityCost.field.workOrderOptionalPlaceholder')}
           allowClear
           options={workOrderOptions}
           showSearch
@@ -267,11 +228,9 @@ const QualityCostPage: React.FC<QualityCostPageProps> = ({ embedded = false }) =
         />
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
       </FormModalTemplate>
     </PageContainer>

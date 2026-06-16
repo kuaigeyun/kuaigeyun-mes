@@ -1,7 +1,8 @@
 /**
  * 物料中心任务队列（配料执行 / 产线叫料 / 备料建议 / 倒冲异常）
  */
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import {
@@ -31,7 +32,7 @@ import { warehouseApi } from '../../../services/warehouse-execution';
 import { batchingOrderApi } from '../../../services/batching-order';
 import { getBatchingOrderStageName } from '../../../utils/batchingOrderLifecycle';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { BATCHING_TASK_TYPE_LABEL } from './batchingCenterTabs';
+import { getBatchingTaskTypeLabel, type BatchingTaskTabKey } from './materialCenterTabs';
 
 type BatchPickOption = { value: string; label: string };
 
@@ -63,46 +64,34 @@ export type BatchingTaskRow = {
   error_message?: string;
 };
 
-export type { BatchingTaskTabKey } from './batchingCenterTabs';
-export { BATCHING_TASK_TYPE_LABEL } from './batchingCenterTabs';
+export type { BatchingTaskTabKey } from './materialCenterTabs';
 
-const TASK_TYPE_MAP: Record<string, { text: string; color: string }> = {
-  batching_draft: { text: BATCHING_TASK_TYPE_LABEL.batching_draft, color: 'green' },
-  material_call: { text: BATCHING_TASK_TYPE_LABEL.material_call, color: 'orange' },
-  proactive_prep: { text: BATCHING_TASK_TYPE_LABEL.proactive_prep, color: 'blue' },
-  backflush_alert: { text: BATCHING_TASK_TYPE_LABEL.backflush_alert, color: 'red' },
-};
-
-const PROACTIVE_PREP_STATUS: Record<string, string> = {
-  pending_prep: '缺料待备',
-};
-
-const MATERIAL_CALL_STATUS: Record<string, string> = {
-  pending: '待处理',
-  processing: '配料中',
-  partial: '部分送达',
-  completed: '已完成',
-  cancelled: '已取消',
-  picking: '配料中',
-};
-
-const BACKFLUSH_STATUS: Record<string, string> = {
-  failed: '倒冲失败',
-  success: '倒冲成功',
-};
-
-function formatTaskStatusLabel(r: BatchingTaskRow): string {
+function formatTaskStatusLabel(r: BatchingTaskRow, t: (key: string) => string): string {
   const st = String(r.status ?? '').trim();
   if (!st) return '-';
   switch (r.task_type) {
     case 'proactive_prep':
-      return PROACTIVE_PREP_STATUS[st] ?? st;
-    case 'material_call':
-      return MATERIAL_CALL_STATUS[st] ?? st;
+      return st === 'pending_prep' ? t('app.kuaizhizao.warehouseCommon.statusPendingPrep') : st;
+    case 'material_call': {
+      const map: Record<string, string> = {
+        pending: t('app.kuaizhizao.warehouseCommon.statusPending'),
+        processing: t('app.kuaizhizao.warehouseCommon.statusPicking'),
+        partial: t('app.kuaizhizao.warehouseCommon.statusPartial'),
+        completed: t('app.kuaizhizao.warehouseCommon.statusCompleted'),
+        cancelled: t('app.kuaizhizao.warehouseCommon.statusCancelled'),
+        picking: t('app.kuaizhizao.warehouseCommon.statusPicking'),
+      };
+      return map[st] ?? st;
+    }
     case 'batching_draft':
       return getBatchingOrderStageName(st);
-    case 'backflush_alert':
-      return BACKFLUSH_STATUS[st] ?? st;
+    case 'backflush_alert': {
+      const map: Record<string, string> = {
+        failed: t('app.kuaizhizao.warehouseCommon.statusBackflushFailed'),
+        success: t('app.kuaizhizao.warehouseCommon.statusBackflushSuccess'),
+      };
+      return map[st] ?? st;
+    }
     default:
       return st;
   }
@@ -122,7 +111,18 @@ type Props = {
 };
 
 const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatchingDetail, onRefreshBatchingList }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+  const taskTypeLabel = useMemo(() => getBatchingTaskTypeLabel(t), [t]);
+  const taskTypeMap = useMemo(
+    () => ({
+      batching_draft: { text: taskTypeLabel.batching_draft, color: 'green' },
+      material_call: { text: taskTypeLabel.material_call, color: 'orange' },
+      proactive_prep: { text: taskTypeLabel.proactive_prep, color: 'blue' },
+      backflush_alert: { text: taskTypeLabel.backflush_alert, color: 'red' },
+    }),
+    [taskTypeLabel],
+  );
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
 
@@ -153,11 +153,11 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
     }
     await warehouseApi.materialCall.update(id, payload);
     const statusMap: Record<string, string> = {
-      processing: '已开始配料',
-      completed: '叫料已完成',
-      cancelled: '叫料已取消',
+      processing: t('app.kuaizhizao.batchingCenter.msg.pickingStarted'),
+      completed: t('app.kuaizhizao.batchingCenter.msg.callCompleted'),
+      cancelled: t('app.kuaizhizao.batchingCenter.msg.callCancelled'),
     };
-    messageApi.success(statusMap[status] || '操作成功');
+    messageApi.success(statusMap[status] || t('app.kuaizhizao.warehouseCommon.operationSuccess'));
     reload();
   };
 
@@ -165,8 +165,8 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
     const items = Array.isArray(record?.items) ? record.items : [];
     if (items.length === 0) {
       Modal.confirm({
-        title: '确认完成',
-        content: '该叫料单无明细行，确认标记为已完成？',
+        title: t('app.kuaizhizao.batchingCenter.confirmCompleteTitle'),
+        content: t('app.kuaizhizao.batchingCenter.confirmCompleteNoItems'),
         onOk: async () => handleMaterialCallUpdate(record.task_id, 'completed'),
       });
       return;
@@ -183,7 +183,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       const allItems = detail?.items ?? [];
       const pendingItems = allItems.filter((it: { status?: string }) => it.status !== 'picked');
       if (!pendingItems.length) {
-        messageApi.info('所有明细已配料完成');
+        messageApi.info(t('app.kuaizhizao.batchingCenter.allItemsPicked'));
         reload();
         return;
       }
@@ -203,7 +203,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       setCompleteOpen(true);
       reload();
     } catch (e: any) {
-      messageApi.error(e.message || '加载配料单失败');
+      messageApi.error(e.message || t('app.kuaizhizao.batchingCenter.loadBatchingFailed'));
     }
   };
 
@@ -211,10 +211,10 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
     try {
       const detail = await batchingOrderApi.syncFromWorkOrder(record.task_id);
       const count = detail?.items?.length ?? 0;
-      messageApi.success(count > 0 ? `已同步 ${count} 项缺料` : '当前无待配料缺料行');
+      messageApi.success(count > 0 ? t('app.kuaizhizao.batchingCenter.syncShortageSuccess', { count }) : t('app.kuaizhizao.batchingCenter.syncShortageEmpty'));
       reload();
     } catch (e: any) {
-      messageApi.error(e.message || '同步缺料失败');
+      messageApi.error(e.message || t('app.kuaizhizao.batchingCenter.syncShortageFailed'));
     }
   };
 
@@ -230,7 +230,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           batch_no: String(vals[`batch_${it.id}`] ?? '').trim(),
         }));
         if (completion_batches.some((b) => !b.batch_no)) {
-          messageApi.warning('请填写全部明细的批号');
+          messageApi.warning(t('app.kuaizhizao.batchingCenter.fillAllBatchNos'));
           return;
         }
         await handleMaterialCallUpdate(completingRecord.task_id, 'completed', completion_batches);
@@ -254,7 +254,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           }
           const batch_no = String(vals[`batch_${it.id}`] ?? '').trim();
           if (!batch_no) {
-            messageApi.warning(`请填写 ${it.material_name ?? it.material_code} 的批号，或关闭「本次配料」跳过`);
+            messageApi.warning(t('app.kuaizhizao.batchingCenter.fillBatchOrSkip', { name: it.material_name ?? it.material_code }));
             return;
           }
           item_batches.push({
@@ -265,12 +265,12 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           });
         }
         if (!item_batches.some((b) => !b.skip)) {
-          messageApi.warning('请至少选择一项进行配料');
+          messageApi.warning(t('app.kuaizhizao.batchingCenter.selectAtLeastOnePick'));
           return;
         }
         const result = await batchingOrderApi.confirm(String(completingRecord.task_id), { item_batches });
         const st = (result as { status?: string })?.status;
-        messageApi.success(st === 'completed' ? '配料确认成功' : '部分配料完成，剩余行可继续配料');
+        messageApi.success(st === 'completed' ? t('app.kuaizhizao.batchingCenter.confirmPickSuccess') : t('app.kuaizhizao.batchingCenter.confirmPickPartial'));
         reload();
       }
       setCompleteOpen(false);
@@ -288,20 +288,20 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         work_order_id: record.work_order_id,
         allow_existing_draft: true,
       });
-      messageApi.success('已生成配料单，请到「配料执行」继续处理');
+      messageApi.success(t('app.kuaizhizao.batchingCenter.generateBatchingSuccess'));
       reload();
     } catch (e: any) {
-      messageApi.error(e.message || '生成配料单失败');
+      messageApi.error(e.message || t('app.kuaizhizao.batchingCenter.generateBatchingFailed'));
     }
   };
 
   const handleBackflushRetry = async (record: BatchingTaskRow) => {
     try {
       await warehouseApi.backflushRecords.retry(String(record.task_id));
-      messageApi.success('倒冲重试已提交');
+      messageApi.success(t('app.kuaizhizao.batchingCenter.backflushRetrySubmitted'));
       reload();
     } catch (e: any) {
-      messageApi.error(e.message || '重试失败');
+      messageApi.error(e.message || t('app.kuaizhizao.batchingCenter.backflushRetryFailed'));
     }
   };
 
@@ -335,7 +335,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           const mid = row.material_id as number;
           if (!mid) continue;
           const isMainBatch =
-            row.warehouse_name === '主仓' ||
+            row.warehouse_name === t('app.kuaizhizao.batchingCenter.mainWarehouse') ||
             (typeof row.id === 'number' && row.id >= 1_000_000 && row.id < 2_000_000);
           if (!isMainBatch) continue;
           const qty = Number(row.quantity ?? 0);
@@ -344,7 +344,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           if (!bn) continue;
           if (!map[mid]) map[mid] = [];
           if (map[mid].some((o) => o.value === bn)) continue;
-          map[mid].push({ value: bn, label: `${bn}（可用 ${qty}）` });
+          map[mid].push({ value: bn, label: t('app.kuaizhizao.batchingCenter.batchAvailable', { batchNo: bn, qty }) });
         }
         if (!cancelled) setBatchOptionsByMaterialId(map);
       } catch {
@@ -356,29 +356,30 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
     return () => {
       cancelled = true;
     };
-  }, [completeOpen, completeMode, completingRecord?.task_id, batchingItems]);
+  }, [completeOpen, completeMode, completingRecord?.task_id, batchingItems, t]);
 
-  const columns: ProColumns<BatchingTaskRow>[] = [
+  const columns: ProColumns<BatchingTaskRow>[] = useMemo(
+    () => [
     {
-      title: '任务类型',
+      title: t('app.kuaizhizao.warehouseCommon.colTaskType'),
       dataIndex: 'task_type',
       width: 110,
       hideInTable: true,
       hideInSearch: true,
       valueType: 'select',
       valueEnum: {
-        batching_draft: { text: BATCHING_TASK_TYPE_LABEL.batching_draft },
-        material_call: { text: BATCHING_TASK_TYPE_LABEL.material_call },
-        proactive_prep: { text: BATCHING_TASK_TYPE_LABEL.proactive_prep },
-        backflush_alert: { text: BATCHING_TASK_TYPE_LABEL.backflush_alert },
+        batching_draft: { text: taskTypeLabel.batching_draft },
+        material_call: { text: taskTypeLabel.material_call },
+        proactive_prep: { text: taskTypeLabel.proactive_prep },
+        backflush_alert: { text: taskTypeLabel.backflush_alert },
       },
       render: (_, r) => {
-        const m = TASK_TYPE_MAP[r.task_type] ?? { text: r.task_type, color: 'default' };
+        const m = taskTypeMap[r.task_type as keyof typeof taskTypeMap] ?? { text: r.task_type, color: 'default' };
         return <Tag color={m.color}>{m.text}</Tag>;
       },
     },
     {
-      title: '单号/工单',
+      title: t('app.kuaizhizao.warehouseCommon.colDocCode'),
       dataIndex: 'doc_code',
       width: 140,
       render: (_, r) => (
@@ -393,7 +394,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       ),
     },
     {
-      title: '产品/物料',
+      title: t('app.kuaizhizao.warehouseCommon.colProductOrMaterial'),
       key: 'material',
       width: 180,
       hideInSearch: true,
@@ -421,7 +422,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       },
     },
     {
-      title: '齐套率',
+      title: t('app.kuaizhizao.warehouseCommon.colKittingRate'),
       dataIndex: 'kitting_rate',
       width: 90,
       hideInSearch: true,
@@ -429,7 +430,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         r.kitting_rate != null ? <Tag color="green">{Math.round(r.kitting_rate)}%</Tag> : '-',
     },
     {
-      title: '数量',
+      title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
       dataIndex: 'requested_quantity',
       width: 90,
       hideInSearch: true,
@@ -440,28 +441,28 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
           : '-',
     },
     {
-      title: '优先级',
+      title: t('app.kuaizhizao.warehouseCommon.colPriority'),
       dataIndex: 'priority',
       width: 90,
       valueType: 'select',
       valueEnum: {
-        low: { text: '低' },
-        normal: { text: '正常' },
-        high: { text: '高' },
-        urgent: { text: '紧急' },
+        low: { text: t('app.kuaizhizao.warehouseCommon.priorityLow') },
+        normal: { text: t('app.kuaizhizao.warehouseCommon.priorityNormal') },
+        high: { text: t('app.kuaizhizao.warehouseCommon.priorityHigh') },
+        urgent: { text: t('app.kuaizhizao.warehouseCommon.priorityUrgent') },
       },
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       width: 110,
       hideInSearch: true,
       render: (_, r) => {
-        const label = formatTaskStatusLabel(r);
+        const label = formatTaskStatusLabel(r, t);
         if (r.sla_overdue) {
           return (
             <Space size={4}>
-              <Tag color="error">超时</Tag>
+              <Tag color="error">{t('app.kuaizhizao.warehouseCommon.slaOverdue')}</Tag>
               <span>{label}</span>
             </Space>
           );
@@ -470,14 +471,14 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       },
     },
     {
-      title: '时间',
+      title: t('app.kuaizhizao.warehouseCommon.colTime'),
       dataIndex: 'created_at',
       width: 180,
       hideInSearch: true,
       render: (_, r) => formatTaskDateTime(r.updated_at || r.created_at),
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 200,
       fixed: 'right',
       hideInSearch: true,
@@ -487,7 +488,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         if (record.task_type === 'proactive_prep') {
           actions.push(
             <Button key="create-batching" type="link" size="small" onClick={() => handleProactivePrep(record)}>
-              生成配料单
+              {t('app.kuaizhizao.batchingCenter.generateBatchingOrder')}
             </Button>,
           );
           return <Space>{actions}</Space>;
@@ -502,7 +503,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
                 icon={<ClockCircleOutlined />}
                 onClick={() => handleMaterialCallUpdate(record.task_id, 'processing')}
               >
-                开始配料
+                {t('app.kuaizhizao.batchingCenter.startPicking')}
               </Button>,
             );
           }
@@ -516,7 +517,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
                 style={{ color: '#52c41a' }}
                 onClick={() => openMaterialCallComplete(record)}
               >
-                完成
+                {t('app.kuaizhizao.warehouseCommon.complete')}
               </Button>,
             );
           }
@@ -530,13 +531,13 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
                 icon={<CloseCircleOutlined />}
                 onClick={() => {
                   Modal.confirm({
-                    title: '确认取消',
-                    content: '确认要取消该叫料请求吗？',
+                    title: t('app.kuaizhizao.batchingCenter.confirmCancelTitle'),
+                    content: t('app.kuaizhizao.batchingCenter.confirmCancelCall'),
                     onOk: () => handleMaterialCallUpdate(record.task_id, 'cancelled'),
                   });
                 }}
               >
-                取消
+                {t('app.kuaizhizao.warehouseCommon.cancel')}
               </Button>,
             );
           }
@@ -545,7 +546,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         if (record.task_type === 'batching_draft') {
           actions.push(
             <Button key="batching-detail" type="link" size="small" onClick={() => onOpenBatchingDetail?.(record.task_id)}>
-              详情
+              {t('app.kuaizhizao.warehouseCommon.detail')}
             </Button>,
           );
           if (['draft', 'picking'].includes(record.status ?? '')) {
@@ -557,12 +558,12 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
                 icon={<ReloadOutlined />}
                 onClick={() => handleSyncBatchingDraft(record)}
               >
-                刷新缺料
+                {t('app.kuaizhizao.batchingCenter.refreshShortage')}
               </Button>,
             );
             actions.push(
               <Button key="confirm-batching" type="link" size="small" onClick={() => openBatchingConfirm(record)}>
-                {record.status === 'picking' ? '继续配料' : '确认配料'}
+                {record.status === 'picking' ? t('app.kuaizhizao.batchingCenter.continuePickingAction') : t('app.kuaizhizao.batchingCenter.confirmPickingAction')}
               </Button>,
             );
           }
@@ -571,7 +572,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         if (record.task_type === 'backflush_alert') {
           actions.push(
             <Button key="retry-backflush" type="link" size="small" icon={<ReloadOutlined />} onClick={() => handleBackflushRetry(record)}>
-              重试倒冲
+              {t('app.kuaizhizao.batchingCenter.retryBackflush')}
             </Button>,
           );
           return <Space>{actions}</Space>;
@@ -579,7 +580,9 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         return null;
       },
     },
-  ];
+  ],
+    [t, taskTypeLabel, taskTypeMap, onOpenBatchingDetail],
+  );
 
   const completeItems: any[] =
     completeMode === 'material_call'
@@ -588,126 +591,129 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         : []
       : batchingItems;
 
-  const completeBatchColumns: ColumnsType<any> =
-    completeMode === 'batching'
-      ? [
-          { title: '物料', key: 'mat', render: (_, it) => `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() },
-          {
-            title: '本次配料',
-            key: 'pick',
-            width: 88,
-            align: 'center',
-            render: (_, it) => (
-              <Form.Item name={`pick_${it.id}`} valuePropName="checked" initialValue style={{ marginBottom: 0 }}>
-                <Switch size="small" checkedChildren="是" unCheckedChildren="否" />
-              </Form.Item>
-            ),
-          },
-          {
-            title: '数量',
-            key: 'qty',
-            width: 120,
-            align: 'right',
-            render: (_, it) => (
-              <Form.Item noStyle shouldUpdate={(prev, cur) => prev[`pick_${it.id}`] !== cur[`pick_${it.id}`]}>
-                {({ getFieldValue }) => {
-                  const enabled = getFieldValue(`pick_${it.id}`) !== false;
-                  const maxQty = Number(it.required_quantity ?? 0);
-                  return (
-                    <Form.Item name={`qty_${it.id}`} style={{ marginBottom: 0 }}>
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        max={maxQty > 0 ? maxQty : undefined}
-                        precision={2}
-                        disabled={!enabled}
-                        style={{ width: '100%' }}
-                      />
-                    </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            ),
-          },
-          {
-            title: '批号',
-            key: 'batch',
-            width: 240,
-            render: (_, it: any) => (
-              <Form.Item noStyle shouldUpdate={(prev, cur) => prev[`pick_${it.id}`] !== cur[`pick_${it.id}`]}>
-                {({ getFieldValue }) => {
-                  const enabled = getFieldValue(`pick_${it.id}`) !== false;
-                  if (!enabled) {
-                    return (
-                      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                        本次不配料
-                      </Typography.Text>
-                    );
-                  }
-                  const opts = batchOptionsByMaterialId[it.material_id] ?? [];
-                  return (
-                    <Form.Item name={`batch_${it.id}`} style={{ marginBottom: 0 }}>
-                      <AutoComplete
-                        size="small"
-                        allowClear
-                        options={opts}
-                        placeholder="下拉选择或扫描/输入批号"
-                        notFoundContent={batchOptionsLoading ? '加载批次…' : '无主仓可选批次，请手输'}
-                      />
-                    </Form.Item>
-                  );
-                }}
-              </Form.Item>
-            ),
-          },
-        ]
-      : [
-          { title: '物料', key: 'mat', render: (_, it) => `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() },
-          {
-            title: '数量',
-            key: 'qty',
-            width: 100,
-            align: 'right',
-            render: (_, it) => it.requested_quantity ?? it.required_quantity ?? '-',
-          },
-          {
-            title: '批号',
-            key: 'batch',
-            width: 260,
-            render: (_, it: any) => {
-              const opts = batchOptionsByMaterialId[it.material_id] ?? [];
-              return (
-                <Form.Item
-                  name={`batch_${it.id}`}
-                  rules={[{ required: true, message: '请选择或输入批号' }]}
-                  style={{ marginBottom: 0 }}
-                >
-                  <AutoComplete
-                    size="small"
-                    allowClear
-                    options={opts}
-                    placeholder="下拉选择或扫描/输入批号"
-                    notFoundContent={batchOptionsLoading ? '加载批次…' : '无主仓可选批次，请手输'}
-                  />
+  const completeBatchColumns: ColumnsType<any> = useMemo(
+    () =>
+      completeMode === 'batching'
+        ? [
+            { title: t('app.kuaizhizao.warehouseCommon.colMaterial'), key: 'mat', render: (_, it) => `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() },
+            {
+              title: t('app.kuaizhizao.batchingCenter.thisPick'),
+              key: 'pick',
+              width: 88,
+              align: 'center',
+              render: (_, it) => (
+                <Form.Item name={`pick_${it.id}`} valuePropName="checked" initialValue style={{ marginBottom: 0 }}>
+                  <Switch size="small" checkedChildren={t('app.kuaizhizao.warehouseCommon.yes')} unCheckedChildren={t('app.kuaizhizao.warehouseCommon.no')} />
                 </Form.Item>
-              );
+              ),
             },
-          },
-        ];
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+              key: 'qty',
+              width: 120,
+              align: 'right',
+              render: (_, it) => (
+                <Form.Item noStyle shouldUpdate={(prev, cur) => prev[`pick_${it.id}`] !== cur[`pick_${it.id}`]}>
+                  {({ getFieldValue }) => {
+                    const enabled = getFieldValue(`pick_${it.id}`) !== false;
+                    const maxQty = Number(it.required_quantity ?? 0);
+                    return (
+                      <Form.Item name={`qty_${it.id}`} style={{ marginBottom: 0 }}>
+                        <InputNumber
+                          size="small"
+                          min={0}
+                          max={maxQty > 0 ? maxQty : undefined}
+                          precision={2}
+                          disabled={!enabled}
+                          style={{ width: '100%' }}
+                        />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+              ),
+            },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
+              key: 'batch',
+              width: 240,
+              render: (_, it: any) => (
+                <Form.Item noStyle shouldUpdate={(prev, cur) => prev[`pick_${it.id}`] !== cur[`pick_${it.id}`]}>
+                  {({ getFieldValue }) => {
+                    const enabled = getFieldValue(`pick_${it.id}`) !== false;
+                    if (!enabled) {
+                      return (
+                        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                          {t('app.kuaizhizao.batchingCenter.skipThisPick')}
+                        </Typography.Text>
+                      );
+                    }
+                    const opts = batchOptionsByMaterialId[it.material_id] ?? [];
+                    return (
+                      <Form.Item name={`batch_${it.id}`} style={{ marginBottom: 0 }}>
+                        <AutoComplete
+                          size="small"
+                          allowClear
+                          options={opts}
+                          placeholder={t('app.kuaizhizao.batchingCenter.batchPlaceholder')}
+                          notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.batchingCenter.loadingBatches') : t('app.kuaizhizao.batchingCenter.noMainWarehouseBatch')}
+                        />
+                      </Form.Item>
+                    );
+                  }}
+                </Form.Item>
+              ),
+            },
+          ]
+        : [
+            { title: t('app.kuaizhizao.warehouseCommon.colMaterial'), key: 'mat', render: (_, it) => `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim() },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colQuantity'),
+              key: 'qty',
+              width: 100,
+              align: 'right',
+              render: (_, it) => it.requested_quantity ?? it.required_quantity ?? '-',
+            },
+            {
+              title: t('app.kuaizhizao.warehouseCommon.colBatchNo'),
+              key: 'batch',
+              width: 260,
+              render: (_, it: any) => {
+                const opts = batchOptionsByMaterialId[it.material_id] ?? [];
+                return (
+                  <Form.Item
+                    name={`batch_${it.id}`}
+                    rules={[{ required: true, message: t('app.kuaizhizao.batchingCenter.selectOrEnterBatch') }]}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <AutoComplete
+                      size="small"
+                      allowClear
+                      options={opts}
+                      placeholder={t('app.kuaizhizao.batchingCenter.batchPlaceholder')}
+                      notFoundContent={batchOptionsLoading ? t('app.kuaizhizao.batchingCenter.loadingBatches') : t('app.kuaizhizao.batchingCenter.noMainWarehouseBatch')}
+                    />
+                  </Form.Item>
+                );
+              },
+            },
+          ],
+    [batchOptionsByMaterialId, batchOptionsLoading, completeMode, t],
+  );
 
   return (
     <>
       <Modal
         title={
           completeMode === 'material_call'
-            ? '确认完成叫料'
+            ? t('app.kuaizhizao.batchingCenter.confirmCompleteCall')
             : completingRecord?.status === 'picking'
-              ? '继续配料（主仓→线边）'
-              : '确认配料（主仓→线边）'
+              ? t('app.kuaizhizao.batchingCenter.continuePicking')
+              : t('app.kuaizhizao.batchingCenter.confirmPicking')
         }
         open={completeOpen}
-        okText="确认"
-        cancelText="取消"
+        okText={t('app.kuaizhizao.warehouseCommon.confirm')}
+        cancelText={t('app.kuaizhizao.warehouseCommon.cancel')}
         confirmLoading={completeSubmitting}
         destroyOnHidden
         width={840}
@@ -730,11 +736,12 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
       >
         <Typography.Paragraph type="secondary" style={{ marginBottom: 8 }}>
           {completeMode === 'batching'
-            ? '可关闭「本次配料」跳过部分行，或调整数量；至少需确认一行。未指定批号时按配置中心 FIFO 策略出库。'
-            : '请核对批号；未指定时按配置中心 FIFO 策略出库。'}
+            ? t('app.kuaizhizao.batchingCenter.batchingHint')
+            : t('app.kuaizhizao.batchingCenter.callHint')}
         </Typography.Paragraph>
         <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          仓储参数见 <Link to="/system/config-center">配置中心</Link>。
+          {t('app.kuaizhizao.batchingCenter.configCenterHint')}{' '}
+          <Link to="/system/config-center">{t('app.kuaizhizao.batchingCenter.configCenter')}</Link>
         </Typography.Paragraph>
         <Form form={completeForm} component={false}>
           <Table
@@ -758,7 +765,7 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
         scroll={{ x: 1400 }}
         showCreateButton={Boolean(onCreate)}
         onCreate={onCreate}
-        createButtonText="新建配料单"
+        createButtonText={t('app.kuaizhizao.batchingCenter.createBatchingOrder')}
         expandable={{
           rowExpandable: (r) => r.task_type === 'material_call' && Array.isArray(r.items) && r.items.length > 0,
           expandedRowRender: (r) => (
@@ -768,15 +775,15 @@ const BatchingTaskQueue: React.FC<Props> = ({ taskType, onCreate, onOpenBatching
               rowKey={(it: any) => String(it.id ?? it.material_id)}
               dataSource={r.items ?? []}
               columns={[
-                { title: '行', dataIndex: 'line_no', width: 56 },
+                { title: t('app.kuaizhizao.warehouseCommon.colLineNo'), dataIndex: 'line_no', width: 56 },
                 {
-                  title: '物料',
+                  title: t('app.kuaizhizao.warehouseCommon.colMaterial'),
                   key: 'mat',
                   render: (_: unknown, it: any) =>
                     `${it.material_code ?? ''} ${it.material_name ?? ''}`.trim(),
                 },
-                { title: '需求', dataIndex: 'requested_quantity', align: 'right', width: 100 },
-                { title: '已送', dataIndex: 'delivered_quantity', align: 'right', width: 100 },
+                { title: t('app.kuaizhizao.warehouseCommon.colDemandQty'), dataIndex: 'requested_quantity', align: 'right', width: 100 },
+                { title: t('app.kuaizhizao.warehouseCommon.colDeliveredQty'), dataIndex: 'delivered_quantity', align: 'right', width: 100 },
               ]}
             />
           ),

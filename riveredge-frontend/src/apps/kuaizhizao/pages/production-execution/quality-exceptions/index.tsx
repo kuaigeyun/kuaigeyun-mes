@@ -7,10 +7,11 @@
  * @date 2025-01-15
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
-import { ActionType, ProColumns, ProFormTextArea, ProFormSelect, ProFormDatePicker } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProFormTextArea, ProFormDatePicker } from '@ant-design/pro-components';
 import { App, Tag, Button, Space, Divider, Typography } from 'antd';
 import { EyeOutlined, CheckCircleOutlined, SearchOutlined, ToolOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -21,14 +22,13 @@ import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFI
 import { apiRequest } from '../../../../../services/api';
 import { qualityImprovementApi } from '../../../services/quality-improvement';
 import { buildInspectionDetailPath } from '../../quality-management/components/inspectionTemplateUtils';
-import { useGlobalStore } from '../../../../../stores/globalStore';
 import { useResourcePermissions } from '../../../../../hooks/useResourcePermissions';
+
+const P = 'app.kuaizhizao.productionException';
+const Q = `${P}.quality`;
 
 const EIGHT_D_RESOURCE = 'kuaizhizao:quality-management-eight-d-reports';
 
-/**
- * 质量异常接口定义
- */
 interface QualityException {
   id?: number;
   exception_type?: string;
@@ -56,16 +56,13 @@ interface QualityException {
   created_at?: string;
 }
 
-/**
- * 质量异常处理页面组件
- */
 const QualityExceptionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const [urlSearchParams] = useSearchParams();
   const initialInspectionRecordId = urlSearchParams.get('inspection_record_id');
   const initialInspectionSourceType = urlSearchParams.get('inspection_source_type');
-  const currentUser = useGlobalStore((s) => s.currentUser);
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const [detailDrawerVisible, setDetailDrawerVisible] = useState(false);
@@ -73,22 +70,61 @@ const QualityExceptionsPage: React.FC = () => {
   const [handleModalVisible, setHandleModalVisible] = useState(false);
   const [currentAction, setCurrentAction] = useState<string>('');
   const { canCreate: canCreate8D } = useResourcePermissions(EIGHT_D_RESOURCE);
-  // 用户列表交由 UniUserSelect 内置管理
   const handleFormRef = useRef<any>(null);
 
-  /**
-   * 处理查看详情
-   */
+  const exceptionTypeLabel = useCallback(
+    (type?: string) => {
+      const map: Record<string, string> = {
+        inspection_failure: t(`${Q}.exceptionType.inspectionFailure`),
+        process_deviation: t(`${Q}.exceptionType.processDeviation`),
+        customer_complaint: t(`${Q}.exceptionType.customerComplaint`),
+      };
+      return type ? (map[type] ?? type) : '-';
+    },
+    [t],
+  );
+
+  const severityLabel = useCallback(
+    (severity?: string) => {
+      const map: Record<string, string> = {
+        minor: t(`${Q}.severity.minor`),
+        major: t(`${Q}.severity.major`),
+        critical: t(`${Q}.severity.critical`),
+      };
+      return severity ? (map[severity] ?? severity) : '-';
+    },
+    [t],
+  );
+
+  const statusLabel = useCallback(
+    (status?: string) => {
+      const map: Record<string, string> = {
+        pending: t(`${P}.status.pending`),
+        investigating: t(`${P}.status.investigating`),
+        correcting: t(`${P}.status.correcting`),
+        closed: t(`${P}.status.closed`),
+        cancelled: t(`${P}.status.cancelled`),
+      };
+      return status ? (map[status] ?? status) : '-';
+    },
+    [t],
+  );
+
+  const handleModalTitle = useMemo(() => {
+    const map: Record<string, string> = {
+      investigate: t(`${Q}.modal.handleInvestigate`),
+      correct: t(`${Q}.modal.handleCorrect`),
+      close: t(`${Q}.modal.handleClose`),
+      cancel: t(`${Q}.modal.handleCancel`),
+    };
+    return map[currentAction] ?? t(`${Q}.modal.handleDefault`);
+  }, [currentAction, t]);
+
   const handleDetail = async (record: QualityException) => {
     setCurrentRecord(record);
     setDetailDrawerVisible(true);
   };
 
-  // 获取用户列表逻辑已由 UniUserSelect 接管
-
-  /**
-   * 打开处理异常Modal
-   */
   const openHandleModal = (record: QualityException, action: string) => {
     setCurrentRecord(record);
     setCurrentAction(action);
@@ -98,20 +134,16 @@ const QualityExceptionsPage: React.FC = () => {
     }, 100);
   };
 
-  /**
-   * 处理质量异常
-   */
   const handleException = async (values: any) => {
     try {
       if (!currentRecord?.id) {
-        throw new Error('异常记录不存在');
+        throw new Error(t(`${P}.message.recordNotFound`));
       }
 
       const params: any = {
         action: currentAction,
       };
 
-      // 根据不同的操作，传递不同的参数
       if (currentAction === 'investigate' && values.rootCause) {
         params.root_cause = values.rootCause;
       } else if (currentAction === 'correct') {
@@ -123,7 +155,6 @@ const QualityExceptionsPage: React.FC = () => {
         }
         if (values.responsiblePersonId) {
           params.responsible_person_id = values.responsiblePersonId;
-          // _responsible_person_name 将由 onChange 处理注入，或者如果没有注入也不强制抛错
           params.responsible_person_name = values._responsible_person_name || '';
         }
         if (values.plannedCompletionDate) {
@@ -141,7 +172,7 @@ const QualityExceptionsPage: React.FC = () => {
         method: 'POST',
         params,
       });
-      messageApi.success('处理成功');
+      messageApi.success(t(`${P}.message.handleSuccess`));
       setHandleModalVisible(false);
       setCurrentRecord(null);
       setCurrentAction('');
@@ -149,27 +180,24 @@ const QualityExceptionsPage: React.FC = () => {
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '处理失败');
+      messageApi.error(error.message || t(`${P}.message.handleFailed`));
       throw error;
     }
   };
 
-  /**
-   * 表格列定义
-   */
-  const columns: ProColumns<QualityException>[] = [
+  const columns: ProColumns<QualityException>[] = useMemo(() => [
     {
-      title: '异常类型',
+      title: t(`${P}.col.exceptionType`),
       dataIndex: 'exception_type',
       width: 120,
       valueEnum: {
-        inspection_failure: { text: '检验不合格', status: 'error' },
-        process_deviation: { text: '工艺偏差', status: 'warning' },
-        customer_complaint: { text: '客户投诉', status: 'error' },
+        inspection_failure: { text: t(`${Q}.exceptionType.inspectionFailure`), status: 'error' },
+        process_deviation: { text: t(`${Q}.exceptionType.processDeviation`), status: 'warning' },
+        customer_complaint: { text: t(`${Q}.exceptionType.customerComplaint`), status: 'error' },
       },
     },
     {
-      title: '工单编号',
+      title: t(`${P}.col.workOrderCode`),
       dataIndex: 'work_order_code',
       width: 140,
       render: (_, r) => (
@@ -179,7 +207,7 @@ const QualityExceptionsPage: React.FC = () => {
       ),
     },
     {
-      title: '物料编号',
+      title: t(`${P}.col.materialCode`),
       dataIndex: 'material_code',
       width: 120,
       render: (_, r) => (
@@ -189,13 +217,13 @@ const QualityExceptionsPage: React.FC = () => {
       ),
     },
     {
-      title: '物料名称',
+      title: t(`${P}.col.materialName`),
       dataIndex: 'material_name',
       width: 150,
       ellipsis: true,
     },
     {
-      title: '批次号',
+      title: t(`${P}.col.batchNo`),
       dataIndex: 'batch_no',
       width: 100,
       render: (_, r) => (
@@ -205,41 +233,41 @@ const QualityExceptionsPage: React.FC = () => {
       ),
     },
     {
-      title: '问题描述',
+      title: t(`${Q}.col.problemDescription`),
       dataIndex: 'problem_description',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '严重程度',
+      title: t(`${Q}.col.severity`),
       dataIndex: 'severity',
       width: 100,
       valueEnum: {
-        minor: { text: '轻微', status: 'default' },
-        major: { text: '严重', status: 'warning' },
-        critical: { text: '紧急', status: 'error' },
+        minor: { text: t(`${Q}.severity.minor`), status: 'default' },
+        major: { text: t(`${Q}.severity.major`), status: 'warning' },
+        critical: { text: t(`${Q}.severity.critical`), status: 'error' },
       },
     },
     {
-      title: '状态',
+      title: t(`${P}.col.status`),
       dataIndex: 'status',
       hideInTable: true,
       valueEnum: {
-        pending: { text: '待处理', status: 'default' },
-        investigating: { text: '调查中', status: 'processing' },
-        correcting: { text: '纠正中', status: 'processing' },
-        closed: { text: '已关闭', status: 'success' },
-        cancelled: { text: '已取消', status: 'error' },
+        pending: { text: t(`${P}.status.pending`), status: 'default' },
+        investigating: { text: t(`${P}.status.investigating`), status: 'processing' },
+        correcting: { text: t(`${P}.status.correcting`), status: 'processing' },
+        closed: { text: t(`${P}.status.closed`), status: 'success' },
+        cancelled: { text: t(`${P}.status.cancelled`), status: 'error' },
       },
     },
     {
-      title: '生命周期',
+      title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
       render: (_, record) => {
-        const lifecycle = getQualityExceptionLifecycle(record as Record<string, unknown>);
+        const lifecycle = getQualityExceptionLifecycle(record as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lifecycle.percent}
@@ -254,18 +282,18 @@ const QualityExceptionsPage: React.FC = () => {
       },
     },
     {
-      title: '责任人',
+      title: t(`${P}.col.responsiblePerson`),
       dataIndex: 'responsible_person_name',
       width: 100,
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       valueType: 'dateTime',
       width: 160,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       width: 250,
       fixed: 'right',
       render: (_, record) => (
@@ -276,7 +304,7 @@ const QualityExceptionsPage: React.FC = () => {
             icon={<EyeOutlined />}
             onClick={() => handleDetail(record)}
           >
-            详情
+            {t('common.detail')}
           </Button>
           {record.status === 'pending' && (
             <Button
@@ -285,7 +313,7 @@ const QualityExceptionsPage: React.FC = () => {
               icon={<SearchOutlined />}
               onClick={() => openHandleModal(record, 'investigate')}
             >
-              调查
+              {t(`${P}.action.investigate`)}
             </Button>
           )}
           {record.status === 'investigating' && (
@@ -295,7 +323,7 @@ const QualityExceptionsPage: React.FC = () => {
               icon={<ToolOutlined />}
               onClick={() => openHandleModal(record, 'correct')}
             >
-              纠正
+              {t(`${P}.action.correct`)}
             </Button>
           )}
           {record.status === 'correcting' && (
@@ -305,7 +333,7 @@ const QualityExceptionsPage: React.FC = () => {
               icon={<CheckCircleOutlined />}
               onClick={() => openHandleModal(record, 'close')}
             >
-              关闭
+              {t(`${P}.action.close`)}
             </Button>
           )}
           {(record.status === 'pending' || record.status === 'investigating' || record.status === 'correcting') && (
@@ -316,7 +344,7 @@ const QualityExceptionsPage: React.FC = () => {
               onClick={() => openHandleModal(record, 'cancel')}
               danger
             >
-              取消
+              {t(`${P}.action.cancel`)}
             </Button>
           )}
           {canCreate8D && (
@@ -327,29 +355,29 @@ const QualityExceptionsPage: React.FC = () => {
                 try {
                   const report = await qualityImprovementApi.eightD.startFromException(
                     Number(record.id),
-                    `${record.work_order_code || '质量异常'}-${record.problem_description || '8D报告'}`
+                    `${record.work_order_code || t(`${Q}.defaultReportTitle`)}-${record.problem_description || t(`${Q}.defaultReportSuffix`)}`
                   );
-                  messageApi.success('已发起 8D 报告');
+                  messageApi.success(t(`${Q}.message.start8DSuccess`));
                   if (report?.id) {
                     navigate(`/apps/kuaizhizao/quality-management/eight-d-reports?report_id=${report.id}`);
                   }
                 } catch (error: any) {
-                  messageApi.error(error?.message || '发起8D失败');
+                  messageApi.error(error?.message || t(`${Q}.message.start8DFailed`));
                 }
               }}
             >
-              发起8D
+              {t(`${Q}.action.start8D`)}
             </Button>
           )}
         </Space>
       ),
     },
-  ];
+  ], [t, canCreate8D, navigate, messageApi]);
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="质量异常"
+        headerTitle={t(`${Q}.pageTitle`)}
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
@@ -378,8 +406,8 @@ const QualityExceptionsPage: React.FC = () => {
               success: true,
               total,
             };
-          } catch (error) {
-            messageApi.error('获取异常列表失败');
+          } catch {
+            messageApi.error(t(`${P}.message.fetchListFailed`));
             return {
               data: [],
               success: false,
@@ -391,9 +419,8 @@ const QualityExceptionsPage: React.FC = () => {
         scroll={{ x: 1680 }}
       />
 
-      {/* 详情 Drawer */}
       <DetailDrawerTemplate
-        title={`质量异常详情 - ${currentRecord?.work_order_code || ''}`}
+        title={t(`${Q}.detailTitle`, { code: currentRecord?.work_order_code || '' })}
         open={detailDrawerVisible}
         onClose={() => {
           setDetailDrawerVisible(false);
@@ -404,18 +431,14 @@ const QualityExceptionsPage: React.FC = () => {
         customContent={
           currentRecord ? (
             <div style={{ padding: '16px 0' }}>
-              <p><strong>异常类型：</strong>
-                {currentRecord.exception_type === 'inspection_failure' ? '检验不合格' :
-                  currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
-                    currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
-              </p>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code || '-'}</p>
-              <p><strong>物料编号：</strong>{currentRecord.material_code || '-'}</p>
-              <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>
+              <p><strong>{t(`${P}.col.exceptionType`)}:</strong> {exceptionTypeLabel(currentRecord.exception_type)}</p>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code || '-'}</p>
+              <p><strong>{t(`${P}.col.materialCode`)}:</strong> {currentRecord.material_code || '-'}</p>
+              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name || '-'}</p>
               {currentRecord.batch_no && (
-                <p><strong>批次号：</strong>{currentRecord.batch_no}</p>
+                <p><strong>{t(`${P}.col.batchNo`)}:</strong> {currentRecord.batch_no}</p>
               )}
-              <p><strong>问题描述：</strong>{currentRecord.problem_description}</p>
+              <p><strong>{t(`${Q}.col.problemDescription`)}:</strong> {currentRecord.problem_description}</p>
               {currentRecord.inspection_record_id ? (
                 <Space wrap style={{ marginBottom: 8 }}>
                   <Button
@@ -432,7 +455,7 @@ const QualityExceptionsPage: React.FC = () => {
                       }
                     }}
                   >
-                    查看源检验单
+                    {t(`${Q}.action.viewSourceInspection`)}
                   </Button>
                   <Button
                     type="link"
@@ -450,75 +473,64 @@ const QualityExceptionsPage: React.FC = () => {
                       navigate(`/apps/kuaizhizao/quality-management/nonconforming-ledger?${q.toString()}`);
                     }}
                   >
-                    查看不合格品台账
+                    {t(`${Q}.action.viewNonconformingLedger`)}
                   </Button>
                 </Space>
               ) : null}
-              <p><strong>严重程度：</strong>
+              <p><strong>{t(`${Q}.col.severity`)}:</strong>
                 <Tag color={
                   currentRecord.severity === 'critical' ? 'red' :
                     currentRecord.severity === 'major' ? 'orange' : 'default'
                 }>
-                  {currentRecord.severity === 'critical' ? '紧急' :
-                    currentRecord.severity === 'major' ? '严重' : '轻微'}
+                  {severityLabel(currentRecord.severity)}
                 </Tag>
               </p>
-              <p><strong>状态：</strong>
+              <p><strong>{t(`${P}.col.status`)}:</strong>
                 <Tag color={
                   currentRecord.status === 'closed' ? 'success' :
                     currentRecord.status === 'correcting' || currentRecord.status === 'investigating' ? 'processing' :
                       currentRecord.status === 'cancelled' ? 'error' : 'default'
                 }>
-                  {currentRecord.status === 'closed' ? '已关闭' :
-                    currentRecord.status === 'correcting' ? '纠正中' :
-                      currentRecord.status === 'investigating' ? '调查中' :
-                        currentRecord.status === 'cancelled' ? '已取消' : '待处理'}
+                  {statusLabel(currentRecord.status)}
                 </Tag>
               </p>
               {currentRecord.root_cause && (
-                <p><strong>根本原因：</strong>{currentRecord.root_cause}</p>
+                <p><strong>{t(`${Q}.field.rootCause`)}:</strong> {currentRecord.root_cause}</p>
               )}
               {currentRecord.corrective_action && (
-                <p><strong>纠正措施：</strong>{currentRecord.corrective_action}</p>
+                <p><strong>{t(`${Q}.field.correctiveAction`)}:</strong> {currentRecord.corrective_action}</p>
               )}
               {currentRecord.preventive_action && (
-                <p><strong>预防措施：</strong>{currentRecord.preventive_action}</p>
+                <p><strong>{t(`${Q}.field.preventiveAction`)}:</strong> {currentRecord.preventive_action}</p>
               )}
               {currentRecord.responsible_person_name && (
-                <p><strong>责任人：</strong>{currentRecord.responsible_person_name}</p>
+                <p><strong>{t(`${P}.col.responsiblePerson`)}:</strong> {currentRecord.responsible_person_name}</p>
               )}
               {currentRecord.planned_completion_date && (
-                <p><strong>计划完成日期：</strong>{currentRecord.planned_completion_date}</p>
+                <p><strong>{t(`${Q}.field.plannedCompletionDate`)}:</strong> {currentRecord.planned_completion_date}</p>
               )}
               {currentRecord.actual_completion_date && (
-                <p><strong>实际完成日期：</strong>{currentRecord.actual_completion_date}</p>
+                <p><strong>{t(`${Q}.field.actualCompletionDate`)}:</strong> {currentRecord.actual_completion_date}</p>
               )}
               {currentRecord.verification_result && (
-                <p><strong>验证结果：</strong>{currentRecord.verification_result}</p>
+                <p><strong>{t(`${Q}.field.verificationResult`)}:</strong> {currentRecord.verification_result}</p>
               )}
               {currentRecord.handled_by_name && (
                 <>
-                  <p><strong>处理人：</strong>{currentRecord.handled_by_name}</p>
-                  <p><strong>处理时间：</strong>{currentRecord.handled_at}</p>
+                  <p><strong>{t(`${P}.field.handler`)}:</strong> {currentRecord.handled_by_name}</p>
+                  <p><strong>{t(`${P}.field.handledAt`)}:</strong> {currentRecord.handled_at}</p>
                 </>
               )}
               {currentRecord.remarks && (
-                <p><strong>备注：</strong>{currentRecord.remarks}</p>
+                <p><strong>{t(`${P}.field.remarks`)}:</strong> {currentRecord.remarks}</p>
               )}
             </div>
           ) : null
         }
       />
 
-      {/* 处理异常 Modal */}
       <FormModalTemplate
-        title={
-          currentAction === 'investigate' ? '处理质量异常 - 调查' :
-            currentAction === 'correct' ? '处理质量异常 - 纠正' :
-              currentAction === 'close' ? '处理质量异常 - 关闭' :
-                currentAction === 'cancel' ? '处理质量异常 - 取消' :
-                  '处理质量异常'
-        }
+        title={handleModalTitle}
         open={handleModalVisible}
         onClose={() => {
           setHandleModalVisible(false);
@@ -533,22 +545,18 @@ const QualityExceptionsPage: React.FC = () => {
         {currentRecord && (
           <>
             <div style={{ marginBottom: 16, padding: 12, background: '#f5f5f5', borderRadius: 4 }}>
-              <p><strong>异常类型：</strong>
-                {currentRecord.exception_type === 'inspection_failure' ? '检验不合格' :
-                  currentRecord.exception_type === 'process_deviation' ? '工艺偏差' :
-                    currentRecord.exception_type === 'customer_complaint' ? '客户投诉' : currentRecord.exception_type}
-              </p>
-              <p><strong>工单编号：</strong>{currentRecord.work_order_code || '-'}</p>
-              <p><strong>物料名称：</strong>{currentRecord.material_name || '-'}</p>
-              <p><strong>问题描述：</strong>{currentRecord.problem_description}</p>
+              <p><strong>{t(`${P}.col.exceptionType`)}:</strong> {exceptionTypeLabel(currentRecord.exception_type)}</p>
+              <p><strong>{t(`${P}.col.workOrderCode`)}:</strong> {currentRecord.work_order_code || '-'}</p>
+              <p><strong>{t(`${P}.col.materialName`)}:</strong> {currentRecord.material_name || '-'}</p>
+              <p><strong>{t(`${Q}.col.problemDescription`)}:</strong> {currentRecord.problem_description}</p>
             </div>
             {currentAction === 'investigate' && (
               <>
-                <Divider>调查信息</Divider>
+                <Divider>{t(`${Q}.section.investigation`)}</Divider>
                 <ProFormTextArea
                   name="rootCause"
-                  label="根本原因"
-                  placeholder="请输入根本原因（可选）"
+                  label={t(`${Q}.field.rootCause`)}
+                  placeholder={t(`${Q}.placeholder.rootCause`)}
                   fieldProps={{
                     rows: 4,
                   }}
@@ -557,27 +565,27 @@ const QualityExceptionsPage: React.FC = () => {
             )}
             {currentAction === 'correct' && (
               <>
-                <Divider>纠正措施</Divider>
+                <Divider>{t(`${Q}.section.corrective`)}</Divider>
                 <ProFormTextArea
                   name="correctiveAction"
-                  label="纠正措施"
-                  placeholder="请输入纠正措施（可选）"
+                  label={t(`${Q}.field.correctiveAction`)}
+                  placeholder={t(`${Q}.placeholder.correctiveAction`)}
                   fieldProps={{
                     rows: 4,
                   }}
                 />
                 <ProFormTextArea
                   name="preventiveAction"
-                  label="预防措施"
-                  placeholder="请输入预防措施（可选）"
+                  label={t(`${Q}.field.preventiveAction`)}
+                  placeholder={t(`${Q}.placeholder.preventiveAction`)}
                   fieldProps={{
                     rows: 4,
                   }}
                 />
                 <UniUserSelect
                   name="responsiblePersonId"
-                  label="责任人"
-                  placeholder="请选择责任人（可选）"
+                  label={t(`${P}.col.responsiblePerson`)}
+                  placeholder={t(`${Q}.placeholder.responsiblePerson`)}
                   onChange={(_, user) => {
                     const u = Array.isArray(user) ? user[0] : user;
                     handleFormRef.current?.setFieldsValue({
@@ -587,30 +595,30 @@ const QualityExceptionsPage: React.FC = () => {
                 />
                 <ProFormDatePicker
                   name="plannedCompletionDate"
-                  label="计划完成日期"
-                  placeholder="请选择计划完成日期（可选）"
+                  label={t(`${Q}.field.plannedCompletionDate`)}
+                  placeholder={t(`${Q}.placeholder.plannedCompletionDate`)}
                   width="md"
                 />
               </>
             )}
             {currentAction === 'close' && (
               <>
-                <Divider>验证信息</Divider>
+                <Divider>{t(`${Q}.section.verification`)}</Divider>
                 <ProFormTextArea
                   name="verificationResult"
-                  label="验证结果"
-                  placeholder="请输入验证结果（可选）"
+                  label={t(`${Q}.field.verificationResult`)}
+                  placeholder={t(`${Q}.placeholder.verificationResult`)}
                   fieldProps={{
                     rows: 4,
                   }}
                 />
               </>
             )}
-            <Divider>备注</Divider>
+            <Divider>{t(`${P}.field.remarks`)}</Divider>
             <ProFormTextArea
               name="remarks"
-              label="备注"
-              placeholder="请输入备注（可选）"
+              label={t(`${P}.field.remarks`)}
+              placeholder={t(`${P}.placeholder.remarksOptional`)}
               fieldProps={{
                 rows: 4,
               }}
@@ -623,4 +631,3 @@ const QualityExceptionsPage: React.FC = () => {
 };
 
 export default QualityExceptionsPage;
-

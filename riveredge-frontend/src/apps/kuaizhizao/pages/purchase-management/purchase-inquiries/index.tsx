@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useSearchParams } from 'react-router-dom';
 import { ActionType, ProColumns, ProFormDatePicker, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
@@ -97,6 +98,7 @@ function canUseRequisitionForInquiryPull(status: string): boolean {
 }
 
 const PurchaseInquiriesPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message, modal } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const actionRef = useRef<ActionType>();
@@ -191,7 +193,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         notes: v.notes,
       })),
     });
-    message.success('保存成功');
+    message.success(t('common.updateSuccess'));
     setEditOpen(false);
     setPendingEditFormValues(null);
     actionRef.current?.reload();
@@ -207,7 +209,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       items: [],
       vendors: [],
     });
-    message.success(`已创建 ${doc.inquiry_code}`);
+    message.success(t('app.kuaizhizao.purchaseInquiry.created', { code: doc.inquiry_code }));
     setCreateOpen(false);
     actionRef.current?.reload();
     await openEdit(doc);
@@ -249,7 +251,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         delivery_date: values[`date_${item.id}`]?.format('YYYY-MM-DD'),
       })),
     });
-    message.success('报价已保存');
+    message.success(t('app.kuaizhizao.purchaseInquiry.quoteSaved'));
     setQuoteOpen(false);
     setDetail(await getPurchaseInquiry(detail.id));
     actionRef.current?.reload();
@@ -280,11 +282,11 @@ const PurchaseInquiriesPage: React.FC = () => {
         quote_item_id: Number(quoteItemId),
       }));
     if (!awards.length) {
-      message.warning('请选择定标报价');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectAwardQuote'));
       return;
     }
     await awardInquiryQuotes(detail.id, awards);
-    message.success('定标成功');
+    message.success(t('app.kuaizhizao.purchaseInquiry.awardSuccess'));
     setCompareOpen(false);
     setDetail(await getPurchaseInquiry(detail.id));
     actionRef.current?.reload();
@@ -292,11 +294,11 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const handleConvertPO = async (inquiry: PurchaseInquiry) => {
     modal.confirm({
-      title: '下推采购订单',
-      content: '将按定标供应商自动生成采购订单，是否继续？',
+      title: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder'),
+      content: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrderConfirm'),
       onOk: async () => {
         const res = await convertInquiryToPurchaseOrder(inquiry.id!);
-        message.success(`已生成 ${res.purchase_orders?.length ?? 0} 张采购订单`);
+        message.success(t('app.kuaizhizao.purchaseInquiry.purchaseOrdersGenerated', { count: res.purchase_orders?.length ?? 0 }));
         setDetail(await getPurchaseInquiry(inquiry.id!));
         actionRef.current?.reload();
       },
@@ -350,7 +352,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       setPullRequisitionLineCandidates(details.flat());
     } catch (e: unknown) {
       const err = e as { message?: string };
-      message.error(err?.message || '加载采购申请列表失败');
+      message.error(err?.message || t('app.kuaizhizao.purchaseInquiry.loadRequisitionsFailed'));
       setPullRequisitionLineCandidates([]);
     } finally {
       setPullRequisitionLoading(false);
@@ -368,7 +370,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const handlePullFromRequisitionConfirm = async () => {
     const selectedLines = pullRequisitionLineCandidates.filter((line) => selectedPullRequisitionLineKeys.includes(line.key));
     if (!selectedLines.length) {
-      message.warning('请先选择采购申请明细');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectRequisitionLinesFirst'));
       return;
     }
     try {
@@ -391,8 +393,14 @@ const PurchaseInquiriesPage: React.FC = () => {
       }
       message.success(
         createdCodes.length
-          ? `已创建${pullFromRequisitionAction.targetLabel}：${createdCodes.join('、')}`
-          : `已从${pullFromRequisitionAction.sourceLabel}创建${pullFromRequisitionAction.targetLabel}`,
+          ? t('app.kuaizhizao.purchaseInquiry.createdFromPullWithCodes', {
+              target: pullFromRequisitionAction.targetLabel,
+              codes: createdCodes.join('、'),
+            })
+          : t('app.kuaizhizao.purchaseInquiry.createdFromPull', {
+              source: pullFromRequisitionAction.sourceLabel,
+              target: pullFromRequisitionAction.targetLabel,
+            }),
       );
       setPullFromRequisitionVisible(false);
       actionRef.current?.reload();
@@ -404,7 +412,10 @@ const PurchaseInquiriesPage: React.FC = () => {
       const err = e as { response?: { data?: { detail?: string | { message?: string } } }; message?: string };
       const detail = err?.response?.data?.detail;
       const detailMsg = typeof detail === 'string' ? detail : detail?.message;
-      message.error(detailMsg || err?.message || `从${pullFromRequisitionAction.sourceLabel}创建${pullFromRequisitionAction.targetLabel}失败`);
+      message.error(detailMsg || err?.message || t('app.kuaizhizao.purchaseInquiry.createFromPullFailed', {
+        source: pullFromRequisitionAction.sourceLabel,
+        target: pullFromRequisitionAction.targetLabel,
+      }));
     } finally {
       setPullRequisitionSubmitting(false);
     }
@@ -434,15 +445,15 @@ const PurchaseInquiriesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已删除 ${success} 条询价单`);
-    if (failed > 0) message.warning(`${failed} 条删除失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchDeleteSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchDeletePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
   const handleBatchSubmit = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择询价单');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
       return;
     }
     let success = 0;
@@ -460,15 +471,15 @@ const PurchaseInquiriesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已提交 ${success} 条询价单`);
-    if (failed > 0) message.warning(`${failed} 条提交失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchSubmitSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchSubmitPartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
   const handleBatchApprove = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择询价单');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
       return;
     }
     let success = 0;
@@ -486,15 +497,15 @@ const PurchaseInquiriesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已审核 ${success} 条询价单`);
-    if (failed > 0) message.warning(`${failed} 条审核失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchApproveSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchApprovePartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
 
   const handleBatchWithdraw = async (keys: React.Key[]) => {
     if (!keys || keys.length === 0) {
-      message.warning('请先选择询价单');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectInquiriesFirst'));
       return;
     }
     let success = 0;
@@ -512,8 +523,8 @@ const PurchaseInquiriesPage: React.FC = () => {
         failed += 1;
       }
     }
-    if (success > 0) message.success(`已撤回 ${success} 条询价单审核`);
-    if (failed > 0) message.warning(`${failed} 条撤回失败`);
+    if (success > 0) message.success(t('app.kuaizhizao.purchaseInquiry.batchWithdrawSuccess', { count: success }));
+    if (failed > 0) message.warning(t('app.kuaizhizao.purchaseInquiry.batchWithdrawPartial', { count: failed }));
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -526,7 +537,7 @@ const PurchaseInquiriesPage: React.FC = () => {
         ? buildUniPushMenuItems([
             {
               key: 'push-purchase-order',
-              label: '下推采购订单',
+              label: t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder'),
               icon: <SwapOutlined />,
               onClick: () => {
                 void handleConvertPO(selectedInquiryForToolbar);
@@ -534,7 +545,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             },
           ])
         : [],
-    [selectedInquiryForToolbar, canUseToolbarPush],
+    [selectedInquiryForToolbar, canUseToolbarPush, t],
   );
 
   useEffect(() => {
@@ -548,9 +559,15 @@ const PurchaseInquiriesPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const columns: ProColumns<PurchaseInquiry>[] = [
+  const purchaseInquiryLifecycleValueEnum = useMemo(
+    () => buildPurchaseInquiryLifecycleValueEnum(t),
+    [t],
+  );
+
+  const columns: ProColumns<PurchaseInquiry>[] = useMemo(
+    () => [
     {
-      title: '名称 / 询价单号',
+      title: t('app.kuaizhizao.purchaseInquiry.colNameInquiryCode'),
       key: 'inquiry_code',
       dataIndex: 'inquiry_code',
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -562,21 +579,21 @@ const PurchaseInquiriesPage: React.FC = () => {
         />
       ),
     },
-    { title: '询价单号', dataIndex: 'inquiry_code', hideInTable: true, copyable: true },
-    { title: '名称', dataIndex: 'inquiry_name', hideInTable: true, ellipsis: true },
-    { title: '来源单号', dataIndex: 'source_code', width: 140 },
-    { title: '采购员', dataIndex: 'buyer_name', width: 100 },
+    { title: t('app.kuaizhizao.purchaseInquiry.colInquiryCode'), dataIndex: 'inquiry_code', hideInTable: true, copyable: true },
+    { title: t('app.kuaizhizao.purchaseInquiry.colName'), dataIndex: 'inquiry_name', hideInTable: true, ellipsis: true },
+    { title: t('app.kuaizhizao.purchaseInquiry.colSourceCode'), dataIndex: 'source_code', width: 140 },
+    { title: t('app.kuaizhizao.purchaseInquiry.colBuyer'), dataIndex: 'buyer_name', width: 100 },
     {
-      title: '报价截止',
+      title: t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline'),
       dataIndex: 'quote_deadline',
       width: 120,
       render: (_, r) => (r.quote_deadline ? dayjs(r.quote_deadline).format('YYYY-MM-DD') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.purchaseInquiry.colLifecycle'),
       dataIndex: LIST_LIFECYCLE_STAGE_FIELD,
       valueType: 'select',
-      valueEnum: buildPurchaseInquiryLifecycleValueEnum(),
+      valueEnum: purchaseInquiryLifecycleValueEnum,
       render: (_, record) => {
         const lc = getPurchaseInquiryLifecycle(record as Record<string, unknown>);
         const tag = getDocumentLifecycleStageTagProps(lc.stageName ?? '-');
@@ -584,30 +601,32 @@ const PurchaseInquiriesPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 160,
       fixed: 'right',
       render: (_, record) => [
-            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>详情</Button>,
+            <Button {...rowActionKind('read')} key="view" onClick={() => openDetail(record)}>{t('common.detail')}</Button>,
             isInquiryDraft(record) ? (
-              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>编辑</Button>
+              <Button {...rowActionKind('update')} key="edit" onClick={() => openEdit(record)}>{t('common.edit')}</Button>
             ) : null,
             isInquiryDraft(record) ? (
               <Button {...rowActionKind('delete')} key="del" onClick={() => {
                 modal.confirm({
-                  title: '确认删除？',
+                  title: t('app.kuaizhizao.purchaseInquiry.confirmDelete'),
                   onOk: async () => {
                     await deletePurchaseInquiry(record.id!);
-                    message.success('已删除');
+                    message.success(t('app.kuaizhizao.purchaseInquiry.deleted'));
                     actionRef.current?.reload();
                   },
                 });
-              }}>删除</Button>
+              }}>{t('common.delete')}</Button>
             ) : null,
           ],
     },
-  ];
+  ],
+    [message, modal, purchaseInquiryLifecycleValueEnum, t],
+  );
 
   const request = useCallback(async (params: Record<string, unknown>) => {
     const apiParams = resolvePurchaseInquiryListLifecycleParams(params, params);
@@ -642,14 +661,14 @@ const PurchaseInquiriesPage: React.FC = () => {
 
   const handleConfirmAddVendors = () => {
     if (!selectedSupplierIdsForAdd.length) {
-      message.warning('请选择要添加的供应商');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.selectSuppliersFirst'));
       return;
     }
     const toAdd = supplierOptions.filter(
       (s) => selectedSupplierIdsForAdd.includes(s.id) && !editVendors.some((v) => v.supplier_id === s.id),
     );
     if (!toAdd.length) {
-      message.warning('所选供应商均已添加');
+      message.warning(t('app.kuaizhizao.purchaseInquiry.suppliersAlreadyAdded'));
       return;
     }
     setEditVendors((prev) => [
@@ -658,11 +677,285 @@ const PurchaseInquiriesPage: React.FC = () => {
     ]);
     setAddVendorModalOpen(false);
     setSelectedSupplierIdsForAdd([]);
-    message.success(`已添加 ${toAdd.length} 家供应商`);
+    message.success(t('app.kuaizhizao.purchaseInquiry.vendorsAdded', { count: toAdd.length }));
   };
 
-  const formatSupplierLabel = (s: { id: number; name: string; code?: string }) =>
-    s.code ? `${s.code} - ${s.name}` : s.name;
+  const formatSupplierLabel = useCallback(
+    (s: { id: number; name: string; code?: string }) => (s.code ? `${s.code} - ${s.name}` : s.name),
+    [],
+  );
+
+  const editVendorColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.supplier'),
+        dataIndex: 'supplier_name',
+        render: (name: string, record: PurchaseInquiryVendor) => {
+          const matched = supplierOptions.find((s) => s.id === record.supplier_id);
+          return matched ? formatSupplierLabel(matched) : name;
+        },
+      },
+      {
+        title: t('common.actions'),
+        width: 80,
+        render: (_: unknown, r: PurchaseInquiryVendor) => (
+          <Button type="link" danger size="small" onClick={() => setEditVendors((prev) => prev.filter((v) => v.supplier_id !== r.supplier_id))}>
+            {t('app.kuaizhizao.purchaseInquiry.remove')}
+          </Button>
+        ),
+      },
+    ],
+    [supplierOptions, t, formatSupplierLabel],
+  );
+
+  const editItemColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.material'),
+        width: 280,
+        render: (_: unknown, r: PurchaseInquiryItem, idx: number) => (
+          <UniMaterialSelect
+            name={['__inquiry_edit_item', idx, 'material_id']}
+            label=""
+            size="small"
+            formItemProps={{ style: { margin: 0 } }}
+            fallbackOption={
+              r.material_id
+                ? { value: r.material_id, label: `${r.material_code || ''} - ${r.material_name || ''}`.trim() || String(r.material_id) }
+                : undefined
+            }
+            onChange={(_, mat) => {
+              if (!mat) return;
+              setEditItems((prev) => {
+                const next = [...prev];
+                next[idx] = {
+                  ...next[idx],
+                  material_id: mat.id,
+                  material_code: mat.code,
+                  material_name: mat.name,
+                  material_spec: mat.spec,
+                  unit: mat.unit ?? '件',
+                };
+                return next;
+              });
+            }}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.quantity'),
+        width: 120,
+        render: (_: unknown, r: PurchaseInquiryItem, idx: number) => (
+          <InputNumber
+            min={0}
+            size="small"
+            style={{ width: '100%' }}
+            value={r.quantity}
+            onChange={(v) => setEditItems((prev) => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], quantity: v ?? 0 };
+              return next;
+            })}
+          />
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.requiredDate'),
+        width: 160,
+        render: (_: unknown, r: PurchaseInquiryItem, idx: number) => (
+          <DatePicker
+            size="small"
+            style={{ width: '100%' }}
+            value={r.required_date ? dayjs(r.required_date) : undefined}
+            onChange={(d) => setEditItems((prev) => {
+              const next = [...prev];
+              next[idx] = { ...next[idx], required_date: d?.format('YYYY-MM-DD') };
+              return next;
+            })}
+          />
+        ),
+      },
+      {
+        title: t('common.actions'),
+        width: 60,
+        fixed: 'right' as const,
+        render: (_: unknown, __: PurchaseInquiryItem, idx: number) => (
+          <Button type="link" danger size="small" onClick={() => setEditItems((prev) => prev.filter((_, i) => i !== idx))}>{t('app.kuaizhizao.purchaseInquiry.deleteLine')}</Button>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const detailVendorColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseInquiry.supplier'), dataIndex: 'supplier_name', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.quoteStatus'),
+        width: 100,
+        render: (_: unknown, v: PurchaseInquiryVendor) => (
+          <Tag color={v.status === 'QUOTED' ? 'success' : 'default'}>
+            {v.status === 'QUOTED' ? t('app.kuaizhizao.purchaseInquiry.quoted') : t('app.kuaizhizao.purchaseInquiry.pendingQuote')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('common.actions'),
+        width: 160,
+        render: (_: unknown, v: PurchaseInquiryVendor) => {
+          if (!detail) return null;
+          const canQuote = isInquiryQuoting(detail) || isInquiryPendingCompare(detail);
+          if (!canQuote) {
+            return v.status === 'QUOTED' ? (
+              <Typography.Text type="secondary">{t('app.kuaizhizao.purchaseInquiry.recorded')}</Typography.Text>
+            ) : (
+              <Typography.Text type="secondary">—</Typography.Text>
+            );
+          }
+          const quoted = v.status === 'QUOTED';
+          return (
+            <Button
+              type={quoted ? 'link' : 'primary'}
+              size="small"
+              icon={<FormOutlined />}
+              onClick={() => openQuoteEntry(detail, v.supplier_id!)}
+            >
+              {quoted ? t('app.kuaizhizao.purchaseInquiry.editQuote') : t('app.kuaizhizao.purchaseInquiry.enterQuoteHere')}
+            </Button>
+          );
+        },
+      },
+    ],
+    [detail, t],
+  );
+
+  const detailItemColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name' },
+      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90 },
+      { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 60 },
+      { title: t('app.kuaizhizao.purchaseInquiry.requiredDate'), dataIndex: 'required_date', width: 110, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+    ],
+    [t],
+  );
+
+  const quoteItemColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name', width: 180, ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.inquiryQuantity'),
+        width: 100,
+        align: 'right' as const,
+        render: (_: unknown, item: PurchaseInquiryItem) => `${item.quantity ?? '-'} ${item.unit ?? ''}`.trim(),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.quotedQuantity'),
+        width: 110,
+        render: (_: unknown, item: PurchaseInquiryItem) => (
+          <Form.Item
+            name={`qty_${item.id}`}
+            style={{ margin: 0 }}
+            rules={[{ required: true, message: t('common.required') }]}
+          >
+            <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
+          </Form.Item>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.unitPrice'),
+        width: 120,
+        render: (_: unknown, item: PurchaseInquiryItem) => (
+          <Form.Item
+            name={`price_${item.id}`}
+            style={{ margin: 0 }}
+            rules={[{ required: true, message: t('common.required') }]}
+          >
+            <InputNumber min={0} precision={4} style={{ width: '100%' }} size="small" />
+          </Form.Item>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.promisedDeliveryDate'),
+        width: 140,
+        render: (_: unknown, item: PurchaseInquiryItem) => (
+          <Form.Item name={`date_${item.id}`} style={{ margin: 0 }}>
+            <DatePicker style={{ width: '100%' }} size="small" />
+          </Form.Item>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const compareColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseInquiry.material'), width: 220, render: (_: unknown, r: ComparisonRow) => `${r.material_code} ${r.material_name}` },
+      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 80, align: 'right' as const },
+      ...(compareRows[0]?.cells ?? []).map((cell, idx) => ({
+        title: cell.supplier_name ?? t('app.kuaizhizao.purchaseInquiry.supplierFallback', { index: idx + 1 }),
+        width: 148,
+        align: 'center' as const,
+        render: (_: unknown, row: ComparisonRow) => {
+          const c = row.cells[idx];
+          if (!c?.quote_item_id) return '-';
+          const selected = awardSelection[row.inquiry_item_id] === c.quote_item_id;
+          const priceText = c.unit_price != null ? Number(c.unit_price).toFixed(4) : '-';
+          return (
+            <Space size={4} align="center" wrap={false} style={{ whiteSpace: 'nowrap' }}>
+              <Button
+                type={selected ? 'primary' : 'default'}
+                size="small"
+                icon={selected ? <CheckOutlined /> : undefined}
+                onClick={() => setAwardSelection((prev) => ({ ...prev, [row.inquiry_item_id]: c.quote_item_id! }))}
+                style={c.is_lowest_price && !selected ? { borderColor: '#52c41a', color: '#389e0d' } : undefined}
+              >
+                {priceText}
+              </Button>
+              {c.is_lowest_price ? (
+                <Tag color="success" style={{ margin: 0, fontSize: 11, lineHeight: '18px', flexShrink: 0 }}>
+                  {t('app.kuaizhizao.purchaseInquiry.lowest')}
+                </Tag>
+              ) : null}
+            </Space>
+          );
+        },
+      })),
+    ],
+    [awardSelection, compareRows, t],
+  );
+
+  const pullRequisitionColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseInquiry.colRequisitionCode'), dataIndex: 'requisition_code', width: 170 },
+      { title: t('app.kuaizhizao.purchaseInquiry.colRequisitionName'), dataIndex: 'requisition_name', width: 160, ellipsis: true, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialCode'), dataIndex: 'material_code', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.purchaseInquiry.colMaterialName'), dataIndex: 'material_name', width: 170, ellipsis: true, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.purchaseInquiry.colSpec'), dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.purchaseInquiry.quantity'), dataIndex: 'quantity', width: 90, align: 'right' as const },
+      { title: t('app.kuaizhizao.purchaseInquiry.colUnit'), dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
+      { title: t('app.kuaizhizao.purchaseInquiry.colRequiredDate'), dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
+      { title: t('app.kuaizhizao.purchaseInquiry.colApplicant'), dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
+      {
+        title: t('common.status'),
+        dataIndex: 'requisition_status',
+        width: 100,
+        render: (v: string) => <Tag color={v?.includes('转单') ? 'gold' : 'blue'}>{v || '-'}</Tag>,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseInquiry.colConvertStatus'),
+        width: 160,
+        render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
+          record.converted ? (
+            <Tag color="gold">{t('app.kuaizhizao.purchaseInquiry.convertedToPurchaseOrder', { id: record.purchase_order_id })}</Tag>
+          ) : (
+            <Tag color="green">{t('app.kuaizhizao.purchaseInquiry.eligibleForInquiry')}</Tag>
+          ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
@@ -673,13 +966,13 @@ const PurchaseInquiriesPage: React.FC = () => {
         request={request}
         columnPersistenceId="apps.kuaizhizao.pages.purchase-management.purchase-inquiries"
         pinnedTabsField={LIST_LIFECYCLE_STAGE_FIELD}
-        pinnedTabsValueEnum={buildPurchaseInquiryLifecycleValueEnum()}
+        pinnedTabsValueEnum={purchaseInquiryLifecycleValueEnum}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条询价单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.purchaseInquiry.confirmBatchDelete', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="purchase-inquiry-batch-menu"
@@ -687,7 +980,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             menuItems={[
               {
                 key: 'submit',
-                label: '批量提交',
+                label: t('app.kuaizhizao.purchaseInquiry.batchSubmit'),
                 icon: <ThunderboltOutlined />,
                 onClick: handleBatchSubmit,
               },
@@ -695,7 +988,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 ? [
                     {
                       key: 'approve',
-                      label: '批量审核通过',
+                      label: t('app.kuaizhizao.purchaseInquiry.batchApprove'),
                       icon: <CheckOutlined />,
                       onClick: handleBatchApprove,
                     },
@@ -703,7 +996,7 @@ const PurchaseInquiriesPage: React.FC = () => {
                 : []),
               {
                 key: 'withdraw',
-                label: '批量撤回审核',
+                label: t('app.kuaizhizao.purchaseInquiry.batchWithdrawReview'),
                 icon: <EditOutlined />,
                 onClick: handleBatchWithdraw,
               },
@@ -715,7 +1008,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             key="create-purchase-inquiry-with-pull"
             compactKey="create-purchase-inquiry-with-pull"
             createIcon={<PlusOutlined />}
-            createLabel="新建询价单"
+            createLabel={t('app.kuaizhizao.purchaseInquiry.createInquiry')}
             onCreate={() => { createForm.resetFields(); setCreateOpen(true); }}
             menuItems={buildKuaizhizaoPullCreateMenuItems([
               {
@@ -733,33 +1026,33 @@ const PurchaseInquiriesPage: React.FC = () => {
         ]}
       />
 
-      <Modal title="新建询价单" open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => void handleCreate()} {...MODAL_CONFIG}>
+      <Modal title={t('app.kuaizhizao.purchaseInquiry.createModalTitle')} open={createOpen} onCancel={() => setCreateOpen(false)} onOk={() => void handleCreate()} {...MODAL_CONFIG}>
         <Form form={createForm} layout="vertical">
           <Row gutter={16}>
             <Col span={10}>
-              <Form.Item name="inquiry_name" label="询价名称" rules={[{ required: true }]}>
+              <Form.Item name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]}>
                 <Input />
               </Form.Item>
             </Col>
             <Col span={7}>
-              <Form.Item name="inquiry_date" label="询价日期" initialValue={dayjs()}>
+              <Form.Item name="inquiry_date" label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')} initialValue={dayjs()}>
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={7}>
-              <Form.Item name="quote_deadline" label="报价截止日期">
+              <Form.Item name="quote_deadline" label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}>
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item name="notes" label="备注">
+          <Form.Item name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
       </Modal>
 
       <FormModalTemplate
-        title="编辑询价单"
+        title={t('app.kuaizhizao.purchaseInquiry.editTitle')}
         open={editOpen}
         onClose={() => setEditOpen(false)}
         afterOpenChange={(open) => {
@@ -779,19 +1072,19 @@ const PurchaseInquiriesPage: React.FC = () => {
       >
         <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
           <Col span={10}>
-            <ProFormText name="inquiry_name" label="询价名称" rules={[{ required: true }]} />
+            <ProFormText name="inquiry_name" label={t('app.kuaizhizao.purchaseInquiry.inquiryName')} rules={[{ required: true }]} />
           </Col>
           <Col span={7}>
             <ProFormDatePicker
               name="inquiry_date"
-              label="询价日期"
+              label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
           <Col span={7}>
             <ProFormDatePicker
               name="quote_deadline"
-              label="报价截止日期"
+              label={t('app.kuaizhizao.purchaseInquiry.quoteDeadline')}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -799,10 +1092,10 @@ const PurchaseInquiriesPage: React.FC = () => {
 
         <div className="uni-table-detail" style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <span style={{ fontWeight: 500 }}>受邀供应商</span>
+            <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.invitedVendors')}</span>
             {editVendors.length > 0 && (
               <Button type="dashed" size="small" icon={<PlusOutlined />} onClick={openAddVendorModal}>
-                新增供应商
+                {t('app.kuaizhizao.purchaseInquiry.addVendor')}
               </Button>
             )}
           </div>
@@ -812,25 +1105,7 @@ const PurchaseInquiriesPage: React.FC = () => {
               pagination={false}
               rowKey={(r) => r.supplier_id!}
               dataSource={editVendors}
-              columns={[
-                {
-                  title: '供应商',
-                  dataIndex: 'supplier_name',
-                  render: (name: string, record) => {
-                    const matched = supplierOptions.find((s) => s.id === record.supplier_id);
-                    return matched ? formatSupplierLabel(matched) : name;
-                  },
-                },
-                {
-                  title: '操作',
-                  width: 80,
-                  render: (_, r) => (
-                    <Button type="link" danger size="small" onClick={() => setEditVendors((prev) => prev.filter((v) => v.supplier_id !== r.supplier_id))}>
-                      移除
-                    </Button>
-                  ),
-                },
-              ]}
+              columns={editVendorColumns}
             />
           ) : (
             <div
@@ -843,9 +1118,9 @@ const PurchaseInquiriesPage: React.FC = () => {
                 color: '#999',
               }}
             >
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无受邀供应商，点击下方按钮添加" />
+              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseInquiry.emptyInvitedVendors')} />
               <Button type="primary" ghost icon={<PlusOutlined />} onClick={openAddVendorModal} style={{ marginTop: 12 }}>
-                新增供应商
+                {t('app.kuaizhizao.purchaseInquiry.addVendor')}
               </Button>
             </div>
           )}
@@ -853,8 +1128,8 @@ const PurchaseInquiriesPage: React.FC = () => {
 
         <div className="uni-table-detail" style={{ marginBottom: 24 }}>
           <Space style={{ marginBottom: 8 }}>
-            <span style={{ fontWeight: 500 }}>询价明细</span>
-            <Button size="small" onClick={addEditItem}>添加行</Button>
+            <span style={{ fontWeight: 500 }}>{t('app.kuaizhizao.purchaseInquiry.inquiryItems')}</span>
+            <Button size="small" onClick={addEditItem}>{t('app.kuaizhizao.purchaseInquiry.addLine')}</Button>
           </Space>
           <Table
             size="small"
@@ -863,104 +1138,30 @@ const PurchaseInquiriesPage: React.FC = () => {
             scroll={{ x: 720 }}
             rowKey={(_, idx) => String(idx)}
             dataSource={editItems}
-            columns={[
-              {
-                title: '物料',
-                width: 280,
-                render: (_, r, idx) => (
-                  <UniMaterialSelect
-                    name={['__inquiry_edit_item', idx, 'material_id']}
-                    label=""
-                    size="small"
-                    formItemProps={{ style: { margin: 0 } }}
-                    fallbackOption={
-                      r.material_id
-                        ? { value: r.material_id, label: `${r.material_code || ''} - ${r.material_name || ''}`.trim() || String(r.material_id) }
-                        : undefined
-                    }
-                    onChange={(_, mat) => {
-                      if (!mat) return;
-                      setEditItems((prev) => {
-                        const next = [...prev];
-                        next[idx] = {
-                          ...next[idx],
-                          material_id: mat.id,
-                          material_code: mat.code,
-                          material_name: mat.name,
-                          material_spec: mat.spec,
-                          unit: mat.unit ?? '件',
-                        };
-                        return next;
-                      });
-                    }}
-                  />
-                ),
-              },
-              {
-                title: '数量',
-                width: 120,
-                render: (_, r, idx) => (
-                  <InputNumber
-                    min={0}
-                    size="small"
-                    style={{ width: '100%' }}
-                    value={r.quantity}
-                    onChange={(v) => setEditItems((prev) => {
-                      const next = [...prev];
-                      next[idx] = { ...next[idx], quantity: v ?? 0 };
-                      return next;
-                    })}
-                  />
-                ),
-              },
-              {
-                title: '要求交期',
-                width: 160,
-                render: (_, r, idx) => (
-                  <DatePicker
-                    size="small"
-                    style={{ width: '100%' }}
-                    value={r.required_date ? dayjs(r.required_date) : undefined}
-                    onChange={(d) => setEditItems((prev) => {
-                      const next = [...prev];
-                      next[idx] = { ...next[idx], required_date: d?.format('YYYY-MM-DD') };
-                      return next;
-                    })}
-                  />
-                ),
-              },
-              {
-                title: '操作',
-                width: 60,
-                fixed: 'right',
-                render: (_, __, idx) => (
-                  <Button type="link" danger size="small" onClick={() => setEditItems((prev) => prev.filter((_, i) => i !== idx))}>删</Button>
-                ),
-              },
-            ]}
+            columns={editItemColumns}
           />
         </div>
 
-        <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 2 }} />
+        <ProFormTextArea name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')} fieldProps={{ rows: 2 }} />
         <DocumentAttachmentsField category="purchase_inquiry_attachments" />
       </FormModalTemplate>
 
       <Modal
-        title="选择供应商"
+        title={t('app.kuaizhizao.purchaseInquiry.selectVendorTitle')}
         open={addVendorModalOpen}
         onOk={handleConfirmAddVendors}
         onCancel={() => {
           setAddVendorModalOpen(false);
           setSelectedSupplierIdsForAdd([]);
         }}
-        okText="确定"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ disabled: selectedSupplierIdsForAdd.length === 0 }}
         destroyOnHidden
       >
         <Select
           mode="multiple"
-          placeholder="搜索并选择供应商（可多选）"
+          placeholder={t('app.kuaizhizao.purchaseInquiry.searchVendorPlaceholder')}
           options={availableSuppliersForAdd.map((s) => ({
             label: formatSupplierLabel(s),
             value: s.id,
@@ -972,17 +1173,17 @@ const PurchaseInquiriesPage: React.FC = () => {
           allowClear
           maxTagCount="responsive"
           filterOption={(input, option) => (option?.label ?? '').toString().toLowerCase().includes(input.toLowerCase())}
-          notFoundContent={availableSuppliersForAdd.length === 0 ? '暂无可选供应商（可能已全部添加）' : undefined}
+          notFoundContent={availableSuppliersForAdd.length === 0 ? t('app.kuaizhizao.purchaseInquiry.noAvailableVendors') : undefined}
         />
         {availableSuppliersForAdd.length === 0 && (
           <Typography.Text type="secondary" style={{ display: 'block', marginTop: 12, fontSize: 12 }}>
-            没有可用的供应商，请先在「供应商档案」中维护供应商。
+            {t('app.kuaizhizao.purchaseInquiry.noSuppliersHint')}
           </Typography.Text>
         )}
       </Modal>
 
       <DetailDrawerTemplate
-        title={`采购询价单 - ${detail?.inquiry_code ?? ''}`}
+        title={t('app.kuaizhizao.purchaseInquiry.detailTitle', { code: detail?.inquiry_code ?? '' })}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
         width={DRAWER_CONFIG.LARGE_WIDTH ?? DRAWER_CONFIG.HALF_WIDTH}
@@ -990,41 +1191,41 @@ const PurchaseInquiriesPage: React.FC = () => {
           detail ? (
             <Space wrap>
               {isInquiryDraft(detail) && (
-                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); void openEdit(detail); }}>编辑</Button>
+                <Button icon={<EditOutlined />} onClick={() => { setDetailOpen(false); void openEdit(detail); }}>{t('common.edit')}</Button>
               )}
               {isInquiryDraft(detail) && (
                 <Button icon={<ThunderboltOutlined />} onClick={async () => {
                   await submitPurchaseInquiry(detail.id!);
-                  message.success('已提交');
+                  message.success(t('app.kuaizhizao.purchaseInquiry.submitSuccess'));
                   setDetail(await getPurchaseInquiry(detail.id!));
                   actionRef.current?.reload();
-                }}>提交</Button>
+                }}>{t('app.kuaizhizao.purchaseInquiry.submit')}</Button>
               )}
               {isInquiryDraft(detail) && (
                 <Button type="primary" onClick={async () => {
                   await publishPurchaseInquiry(detail.id!);
-                  message.success('已发布询价');
+                  message.success(t('app.kuaizhizao.purchaseInquiry.publishSuccess'));
                   setDetail(await getPurchaseInquiry(detail.id!));
                   actionRef.current?.reload();
-                }}>发布询价</Button>
+                }}>{t('app.kuaizhizao.purchaseInquiry.publishInquiry')}</Button>
               )}
               {isInquiryQuoting(detail) && (
                 <Button onClick={async () => {
                   await closeInquiryQuoting(detail.id!);
-                  message.success('已截止询价');
+                  message.success(t('app.kuaizhizao.purchaseInquiry.closeQuotingSuccess'));
                   setDetail(await getPurchaseInquiry(detail.id!));
                   actionRef.current?.reload();
-                }}>截止询价</Button>
+                }}>{t('app.kuaizhizao.purchaseInquiry.closeQuoting')}</Button>
               )}
               {(isInquiryPendingCompare(detail) || isInquiryQuoting(detail)) && (
-                <Button onClick={() => void openCompare(detail)}>比价定标</Button>
+                <Button onClick={() => void openCompare(detail)}>{t('app.kuaizhizao.purchaseInquiry.compareAward')}</Button>
               )}
               {isInquiryAwarded(detail) && (
-                <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>下推采购订单</Button>
+                <Button icon={<SwapOutlined />} onClick={() => void handleConvertPO(detail)}>{t('app.kuaizhizao.purchaseInquiry.pushPurchaseOrder')}</Button>
               )}
               <UniWorkflowActions {...rowActionKind('skip')}
                 record={detail}
-                entityName="采购询价单"
+                entityName={t('app.kuaizhizao.purchaseInquiry.entityName')}
                 statusField="status"
                 reviewStatusField="review_status"
                 draftStatuses={['DRAFT', '草稿']}
@@ -1046,22 +1247,22 @@ const PurchaseInquiriesPage: React.FC = () => {
           <>
             <UniLifecycle {...getPurchaseInquiryLifecycle(detail as Record<string, unknown>)} />
             <Descriptions column={2} size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="来源">{detail.source_code || '-'}</Descriptions.Item>
-              <Descriptions.Item label="采购员">{detail.buyer_name || '-'}</Descriptions.Item>
-              <Descriptions.Item label="询价日期">{detail.inquiry_date ? dayjs(detail.inquiry_date).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
-              <Descriptions.Item label="报价截止">{detail.quote_deadline ? dayjs(detail.quote_deadline).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
-              <Descriptions.Item label="备注" span={2}>{detail.notes || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.source')}>{detail.source_code || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colBuyer')}>{detail.buyer_name || '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.inquiryDate')}>{detail.inquiry_date ? dayjs(detail.inquiry_date).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.colQuoteDeadline')}>{detail.quote_deadline ? dayjs(detail.quote_deadline).format('YYYY-MM-DD') : '-'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaizhizao.purchaseInquiry.notes')} span={2}>{detail.notes || '-'}</Descriptions.Item>
             </Descriptions>
             <div style={{ marginTop: 16 }}>
-              <h4 style={{ marginBottom: 8 }}>受邀供应商</h4>
+              <h4 style={{ marginBottom: 8 }}>{t('app.kuaizhizao.purchaseInquiry.invitedVendors')}</h4>
               {isInquiryDraft(detail) && (
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                  发布询价后，请在此逐行录入各供应商报价。
+                  {t('app.kuaizhizao.purchaseInquiry.hintAfterPublish')}
                 </Typography.Text>
               )}
               {(isInquiryQuoting(detail) || isInquiryPendingCompare(detail)) && (
                 <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
-                  请逐行选择供应商，点击「在此录入报价」填写单价与交期。
+                  {t('app.kuaizhizao.purchaseInquiry.hintQuoting')}
                 </Typography.Text>
               )}
               {(detail.vendors ?? []).length > 0 ? (
@@ -1070,62 +1271,20 @@ const PurchaseInquiriesPage: React.FC = () => {
                   pagination={false}
                   rowKey="supplier_id"
                   dataSource={detail.vendors ?? []}
-                  columns={[
-                    { title: '供应商', dataIndex: 'supplier_name', ellipsis: true },
-                    {
-                      title: '报价状态',
-                      width: 100,
-                      render: (_, v) => (
-                        <Tag color={v.status === 'QUOTED' ? 'success' : 'default'}>
-                          {v.status === 'QUOTED' ? '已报价' : '待报价'}
-                        </Tag>
-                      ),
-                    },
-                    {
-                      title: '操作',
-                      width: 160,
-                      render: (_, v) => {
-                        const canQuote = isInquiryQuoting(detail) || isInquiryPendingCompare(detail);
-                        if (!canQuote) {
-                          return v.status === 'QUOTED' ? (
-                            <Typography.Text type="secondary">已录入</Typography.Text>
-                          ) : (
-                            <Typography.Text type="secondary">—</Typography.Text>
-                          );
-                        }
-                        const quoted = v.status === 'QUOTED';
-                        return (
-                          <Button
-                            type={quoted ? 'link' : 'primary'}
-                            size="small"
-                            icon={<FormOutlined />}
-                            onClick={() => openQuoteEntry(detail, v.supplier_id!)}
-                          >
-                            {quoted ? '修改报价' : '在此录入报价'}
-                          </Button>
-                        );
-                      },
-                    },
-                  ]}
+                  columns={detailVendorColumns}
                 />
               ) : (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无受邀供应商，请编辑询价单添加" />
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.purchaseInquiry.emptyVendorsInDetail')} />
               )}
             </div>
             <div style={{ marginTop: 16 }}>
-              <h4>询价明细</h4>
+              <h4>{t('app.kuaizhizao.purchaseInquiry.inquiryItems')}</h4>
               <Table
                 size="small"
                 rowKey="id"
                 pagination={false}
                 dataSource={detail.items ?? []}
-                columns={[
-                  { title: '物料编码', dataIndex: 'material_code', width: 120 },
-                  { title: '物料名称', dataIndex: 'material_name' },
-                  { title: '数量', dataIndex: 'quantity', width: 90 },
-                  { title: '单位', dataIndex: 'unit', width: 60 },
-                  { title: '要求交期', dataIndex: 'required_date', width: 110, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-                ]}
+                columns={detailItemColumns}
               />
             </div>
           </>
@@ -1133,7 +1292,7 @@ const PurchaseInquiriesPage: React.FC = () => {
       </DetailDrawerTemplate>
 
       <Modal
-        title={`录入供应商报价${quoteSupplierId && detail?.vendors ? ` - ${detail.vendors.find((v) => v.supplier_id === quoteSupplierId)?.supplier_name ?? ''}` : ''}`}
+        title={`${t('app.kuaizhizao.purchaseInquiry.enterSupplierQuoteTitle')}${quoteSupplierId && detail?.vendors ? ` - ${detail.vendors.find((v) => v.supplier_id === quoteSupplierId)?.supplier_name ?? ''}` : ''}`}
         open={quoteOpen}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={() => {
@@ -1156,21 +1315,21 @@ const PurchaseInquiriesPage: React.FC = () => {
         <Form form={quoteForm} layout="vertical">
           <Row gutter={FORM_LAYOUT.GRID_GUTTER}>
             <Col span={12}>
-              <Form.Item name="quote_date" label="报价日期" rules={[{ required: true, message: '请选择报价日期' }]}>
+              <Form.Item name="quote_date" label={t('app.kuaizhizao.purchaseInquiry.quoteDate')} rules={[{ required: true, message: t('app.kuaizhizao.purchaseInquiry.selectQuoteDateRequired') }]}>
                 <DatePicker style={{ width: '100%' }} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item name="valid_until" label="有效期至">
-                <DatePicker style={{ width: '100%' }} placeholder="请选择日期" />
+              <Form.Item name="valid_until" label={t('app.kuaizhizao.purchaseInquiry.validUntil')}>
+                <DatePicker style={{ width: '100%' }} placeholder={t('app.kuaizhizao.purchaseInquiry.selectDatePlaceholder')} />
               </Form.Item>
             </Col>
           </Row>
 
           <div className="uni-table-detail" style={{ marginBottom: 16 }}>
-            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>报价明细</Typography.Text>
+            <Typography.Text strong style={{ display: 'block', marginBottom: 8 }}>{t('app.kuaizhizao.purchaseInquiry.quoteItems')}</Typography.Text>
             <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 8, fontSize: 12 }}>
-              请为每条询价物料填写报价数量、单价与承诺交期。
+              {t('app.kuaizhizao.purchaseInquiry.quoteItemsHint')}
             </Typography.Text>
             <Table
               size="small"
@@ -1178,69 +1337,25 @@ const PurchaseInquiriesPage: React.FC = () => {
               rowKey="id"
               scroll={{ x: 860 }}
               dataSource={detail?.items ?? []}
-              columns={[
-                { title: '物料编码', dataIndex: 'material_code', width: 120, ellipsis: true },
-                { title: '物料名称', dataIndex: 'material_name', width: 180, ellipsis: true },
-                {
-                  title: '询价数量',
-                  width: 100,
-                  align: 'right',
-                  render: (_, item) => `${item.quantity ?? '-'} ${item.unit ?? ''}`.trim(),
-                },
-                {
-                  title: '报价数量',
-                  width: 110,
-                  render: (_, item) => (
-                    <Form.Item
-                      name={`qty_${item.id}`}
-                      style={{ margin: 0 }}
-                      rules={[{ required: true, message: '必填' }]}
-                    >
-                      <InputNumber min={0} precision={2} style={{ width: '100%' }} size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '单价',
-                  width: 120,
-                  render: (_, item) => (
-                    <Form.Item
-                      name={`price_${item.id}`}
-                      style={{ margin: 0 }}
-                      rules={[{ required: true, message: '必填' }]}
-                    >
-                      <InputNumber min={0} precision={4} style={{ width: '100%' }} size="small" />
-                    </Form.Item>
-                  ),
-                },
-                {
-                  title: '承诺交期',
-                  width: 140,
-                  render: (_, item) => (
-                    <Form.Item name={`date_${item.id}`} style={{ margin: 0 }}>
-                      <DatePicker style={{ width: '100%' }} size="small" />
-                    </Form.Item>
-                  ),
-                },
-              ]}
+              columns={quoteItemColumns}
             />
           </div>
 
-          <Form.Item name="notes" label="备注">
-            <Input.TextArea rows={2} placeholder="可填写报价说明、付款条件等" />
+          <Form.Item name="notes" label={t('app.kuaizhizao.purchaseInquiry.notes')}>
+            <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.purchaseInquiry.quoteNotesPlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
 
       <Modal
-        title="比价定标"
+        title={t('app.kuaizhizao.purchaseInquiry.compareAwardTitle')}
         open={compareOpen}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         onCancel={() => setCompareOpen(false)}
         onOk={() => void confirmAward()}
       >
         <Typography.Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: 12 }}>
-          绿色「最低」为系统推荐；点击价格按钮选定本条物料的中标报价（选中后显示勾选）。
+          {t('app.kuaizhizao.purchaseInquiry.compareAwardHint')}
         </Typography.Text>
         <Table
           size="small"
@@ -1248,39 +1363,7 @@ const PurchaseInquiriesPage: React.FC = () => {
           rowKey="inquiry_item_id"
           dataSource={compareRows}
           scroll={{ x: 'max-content' }}
-          columns={[
-            { title: '物料', width: 220, render: (_, r) => `${r.material_code} ${r.material_name}` },
-            { title: '数量', dataIndex: 'quantity', width: 80, align: 'right' },
-            ...(compareRows[0]?.cells ?? []).map((cell, idx) => ({
-              title: cell.supplier_name ?? `供应商${idx + 1}`,
-              width: 148,
-              align: 'center' as const,
-              render: (_: unknown, row: ComparisonRow) => {
-                const c = row.cells[idx];
-                if (!c?.quote_item_id) return '-';
-                const selected = awardSelection[row.inquiry_item_id] === c.quote_item_id;
-                const priceText = c.unit_price != null ? Number(c.unit_price).toFixed(4) : '-';
-                return (
-                  <Space size={4} align="center" wrap={false} style={{ whiteSpace: 'nowrap' }}>
-                    <Button
-                      type={selected ? 'primary' : 'default'}
-                      size="small"
-                      icon={selected ? <CheckOutlined /> : undefined}
-                      onClick={() => setAwardSelection((prev) => ({ ...prev, [row.inquiry_item_id]: c.quote_item_id! }))}
-                      style={c.is_lowest_price && !selected ? { borderColor: '#52c41a', color: '#389e0d' } : undefined}
-                    >
-                      {priceText}
-                    </Button>
-                    {c.is_lowest_price ? (
-                      <Tag color="success" style={{ margin: 0, fontSize: 11, lineHeight: '18px', flexShrink: 0 }}>
-                        最低
-                      </Tag>
-                    ) : null}
-                  </Space>
-                );
-              },
-            })),
-          ]}
+          columns={compareColumns}
         />
       </Modal>
 
@@ -1290,8 +1373,8 @@ const PurchaseInquiriesPage: React.FC = () => {
         width={1280}
         onCancel={() => setPullFromRequisitionVisible(false)}
         onOk={() => void handlePullFromRequisitionConfirm()}
-        okText="创建询价单"
-        cancelText="取消"
+        okText={t('app.kuaizhizao.purchaseInquiry.createInquiryOk')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ disabled: selectedPullRequisitionLineKeys.length === 0 || pullRequisitionLoading }}
         confirmLoading={pullRequisitionSubmitting}
         destroyOnHidden
@@ -1300,8 +1383,8 @@ const PurchaseInquiriesPage: React.FC = () => {
           <Input.Search
             allowClear
             value={pullRequisitionKeyword}
-            placeholder="搜索采购申请明细（申请单号/申请名称）"
-            enterButton="搜索"
+            placeholder={t('app.kuaizhizao.purchaseInquiry.searchRequisitionPlaceholder')}
+            enterButton={t('common.search')}
             onChange={(e) => setPullRequisitionKeyword(e.target.value)}
             onSearch={(value) => {
               const keyword = value?.trim?.() || '';
@@ -1314,7 +1397,11 @@ const PurchaseInquiriesPage: React.FC = () => {
             loading={pullRequisitionLoading}
             size="small"
             pagination={false}
-            locale={{ emptyText: pullRequisitionKeyword ? '未找到匹配采购申请明细' : '暂无可选采购申请明细' }}
+            locale={{
+              emptyText: pullRequisitionKeyword
+                ? t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionSearchResults')
+                : t('app.kuaizhizao.purchaseInquiry.emptyNoRequisitionLines'),
+            }}
             rowSelection={{
               type: 'checkbox',
               selectedRowKeys: selectedPullRequisitionLineKeys,
@@ -1334,38 +1421,12 @@ const PurchaseInquiriesPage: React.FC = () => {
                 );
               },
             })}
-            columns={[
-              { title: '申请单号', dataIndex: 'requisition_code', width: 170 },
-              { title: '申请名称', dataIndex: 'requisition_name', width: 160, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '物料编码', dataIndex: 'material_code', width: 140, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '物料名称', dataIndex: 'material_name', width: 170, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '规格', dataIndex: 'material_spec', width: 140, ellipsis: true, render: (v: string) => v || '-' },
-              { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
-              { title: '单位', dataIndex: 'unit', width: 70, render: (v: string) => v || '-' },
-              { title: '需求日期', dataIndex: 'required_date', width: 120, render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              { title: '申请人', dataIndex: 'applicant_name', width: 100, render: (v: string) => v || '-' },
-              {
-                title: '状态',
-                dataIndex: 'requisition_status',
-                width: 100,
-                render: (v: string) => <Tag color={v?.includes('转单') ? 'gold' : 'blue'}>{v || '-'}</Tag>,
-              },
-              {
-                title: '转单状态',
-                width: 160,
-                render: (_: unknown, record: PullPurchaseRequisitionLineCandidate) =>
-                  record.converted ? (
-                    <Tag color="gold">已转采购订单#{record.purchase_order_id}</Tag>
-                  ) : (
-                    <Tag color="green">可询价</Tag>
-                  ),
-              },
-            ]}
+            columns={pullRequisitionColumns}
             dataSource={pullRequisitionLineCandidates}
             scroll={{ x: 1400, y: 320 }}
           />
           <Typography.Text type="secondary">
-            已选择 {selectedPullRequisitionLineKeys.length} 条明细，同一采购申请将合并创建一张询价单。
+            {t('app.kuaizhizao.purchaseInquiry.pullSelectionHint', { count: selectedPullRequisitionLineKeys.length })}
           </Typography.Text>
         </Space>
       </Modal>

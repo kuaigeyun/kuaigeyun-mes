@@ -4,6 +4,7 @@ import type { ActionType } from '@ant-design/pro-components';
 import { ProColumns } from '@ant-design/pro-components';
 import { Modal, message, Space, InputNumber, Divider, Typography, Row, Col, Alert, Button } from 'antd';
 import { QuestionCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { MultiTabListPageTemplate } from '../../../../../components/layout-templates';
 import { settlementService } from '../../../services/finance/settlement';
@@ -12,7 +13,11 @@ import { receiptService } from '../../../services/finance/receipt';
 import { payableService } from '../../../services/finance/payable';
 import { paymentService } from '../../../services/finance/payment';
 
+const P = 'app.kuaicaiwu.settlement';
+const C = 'app.kuaicaiwu.common';
+
 const SettlementPage: React.FC = () => {
+  const { t } = useTranslation();
   const receivableActionRef = useRef<ActionType>();
   const receiptActionRef = useRef<ActionType>();
   const payableActionRef = useRef<ActionType>();
@@ -25,12 +30,11 @@ const SettlementPage: React.FC = () => {
   const [settleAmount, setSettleAmount] = useState<number>(0);
   const [helpOpen, setHelpOpen] = useState(false);
 
-  /** 双栏列表仅表格视图，不展示 UniView 切换 */
   const tableOnlyViewTypes = ['table'] as const;
 
   const handleManualSettleReceivable = async () => {
     if (!selectedReceivable || !selectedReceipt || settleAmount <= 0) {
-      message.error('请选择单据并输入正确的核销金额');
+      message.error(t(`${P}.invalidAmount`));
       return;
     }
     try {
@@ -39,19 +43,19 @@ const SettlementPage: React.FC = () => {
         selectedReceipt.id as number,
         settleAmount,
       );
-      message.success('核销成功');
+      message.success(t(`${P}.settleSuccess`));
       setSelectedReceivable(null);
       setSelectedReceipt(null);
       receivableActionRef.current?.reload();
       receiptActionRef.current?.reload();
     } catch (error: any) {
-      message.error(`核销失败: ${error.message}`);
+      message.error(t(`${P}.settleFailed`, { message: error.message }));
     }
   };
 
   const handleManualSettlePayable = async () => {
     if (!selectedPayable || !selectedPayment || settleAmount <= 0) {
-      message.error('请选择单据并输入正确的核销金额');
+      message.error(t(`${P}.invalidAmount`));
       return;
     }
     try {
@@ -60,126 +64,137 @@ const SettlementPage: React.FC = () => {
         selectedPayment.id as number,
         settleAmount,
       );
-      message.success('核销成功');
+      message.success(t(`${P}.settleSuccess`));
       setSelectedPayable(null);
       setSelectedPayment(null);
       payableActionRef.current?.reload();
       paymentActionRef.current?.reload();
     } catch (error: any) {
-      message.error(`核销失败: ${error.message}`);
+      message.error(t(`${P}.settleFailed`, { message: error.message }));
     }
   };
 
-  const receivableColumns: ProColumns<Record<string, unknown>>[] = [
-    {
-      title: '编号',
-      dataIndex: 'receivable_code',
-      width: 160,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.receivable_code ?? '') }} ellipsis>
-          {String(r.receivable_code ?? '-')}
-        </Typography.Text>
-      ),
-    },
-    { title: '客户', dataIndex: 'customer_name', ellipsis: true },
-    { title: '待收金额', dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 80,
-      render: (_, record) => [
-        <a key="sel" onClick={() => {
-          setSelectedReceivable(record);
-          setSettleAmount(Number(record.remaining_amount) || 0);
-        }}
-        >
-          选择
-        </a>,
-      ],
-    },
-  ];
+  const receivableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
+    () => [
+      {
+        title: t(`${C}.code`),
+        dataIndex: 'receivable_code',
+        width: 160,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.receivable_code ?? '') }} ellipsis>
+            {String(r.receivable_code ?? '-')}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaicaiwu.common.customer'), dataIndex: 'customer_name', ellipsis: true },
+      { title: t(`${P}.col.pendingReceive`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 80,
+        render: (_, record) => [
+          <a
+            key="sel"
+            onClick={() => {
+              setSelectedReceivable(record);
+              setSettleAmount(Number(record.remaining_amount) || 0);
+            }}
+          >
+            {t(`${P}.select`)}
+          </a>,
+        ],
+      },
+    ],
+    [t],
+  );
 
-  const receiptColumns: ProColumns<Record<string, unknown>>[] = [
-    {
-      title: '编号',
-      dataIndex: 'receipt_code',
-      width: 160,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
-          {String(r.receipt_code ?? '-')}
-        </Typography.Text>
-      ),
-    },
-    { title: '余额', dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 80,
-      render: (_, record) => [<a key="m" onClick={() => setSelectedReceipt(record)}>匹配</a>],
-    },
-  ];
+  const receiptColumns: ProColumns<Record<string, unknown>>[] = useMemo(
+    () => [
+      {
+        title: t(`${C}.code`),
+        dataIndex: 'receipt_code',
+        width: 160,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.receipt_code ?? '') }} ellipsis>
+            {String(r.receipt_code ?? '-')}
+          </Typography.Text>
+        ),
+      },
+      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 80,
+        render: (_, record) => [<a key="m" onClick={() => setSelectedReceipt(record)}>{t(`${P}.match`)}</a>],
+      },
+    ],
+    [t],
+  );
 
-  const payableColumns: ProColumns<Record<string, unknown>>[] = [
-    {
-      title: '编号',
-      dataIndex: 'payable_code',
-      width: 160,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.payable_code ?? '') }} ellipsis>
-          {String(r.payable_code ?? '-')}
-        </Typography.Text>
-      ),
-    },
-    { title: '供应商', dataIndex: 'supplier_name', ellipsis: true },
-    { title: '待付金额', dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 80,
-      render: (_, record) => [
-        <a key="sel" onClick={() => {
-          setSelectedPayable(record);
-          setSettleAmount(Number(record.remaining_amount) || 0);
-        }}
-        >
-          选择
-        </a>,
-      ],
-    },
-  ];
+  const payableColumns: ProColumns<Record<string, unknown>>[] = useMemo(
+    () => [
+      {
+        title: t(`${C}.code`),
+        dataIndex: 'payable_code',
+        width: 160,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.payable_code ?? '') }} ellipsis>
+            {String(r.payable_code ?? '-')}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', ellipsis: true },
+      { title: t(`${P}.col.pendingPay`), dataIndex: 'remaining_amount', valueType: 'money', align: 'right' },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 80,
+        render: (_, record) => [
+          <a
+            key="sel"
+            onClick={() => {
+              setSelectedPayable(record);
+              setSettleAmount(Number(record.remaining_amount) || 0);
+            }}
+          >
+            {t(`${P}.select`)}
+          </a>,
+        ],
+      },
+    ],
+    [t],
+  );
 
-  const paymentColumns: ProColumns<Record<string, unknown>>[] = [
-    {
-      title: '编号',
-      dataIndex: 'payment_code',
-      width: 160,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
-          {String(r.payment_code ?? '-')}
-        </Typography.Text>
-      ),
-    },
-    { title: '余额', dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 80,
-      render: (_, record) => [<a key="m" onClick={() => setSelectedPayment(record)}>匹配</a>],
-    },
-  ];
+  const paymentColumns: ProColumns<Record<string, unknown>>[] = useMemo(
+    () => [
+      {
+        title: t(`${C}.code`),
+        dataIndex: 'payment_code',
+        width: 160,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.payment_code ?? '') }} ellipsis>
+            {String(r.payment_code ?? '-')}
+          </Typography.Text>
+        ),
+      },
+      { title: t(`${P}.col.balance`), dataIndex: 'unsettled_amount', valueType: 'money', align: 'right' },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 80,
+        render: (_, record) => [<a key="m" onClick={() => setSelectedPayment(record)}>{t(`${P}.match`)}</a>],
+      },
+    ],
+    [t],
+  );
 
   const receivableSettlement = (
     <>
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        title="将「有余额的收款单」手动匹配到「有待收金额的应收单」。若已在应收详情登记收款并自动核销，或单据已全部结清，则此处不会显示数据。"
-      />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.arAlertExtended`)} />
       <Row gutter={16}>
         <Col span={12}>
           <UniTable
-            headerTitle="待核销应收单"
+            headerTitle={t(`${P}.pendingReceivables`)}
             actionRef={receivableActionRef}
             enableRowSelection
             rowKey="id"
@@ -207,7 +222,7 @@ const SettlementPage: React.FC = () => {
         </Col>
         <Col span={12}>
           <UniTable
-            headerTitle="可用收款单"
+            headerTitle={t(`${P}.availableReceipts`)}
             actionRef={receiptActionRef}
             enableRowSelection
             rowKey="id"
@@ -235,7 +250,7 @@ const SettlementPage: React.FC = () => {
       </Row>
 
       <Modal
-        title="确认手动核销（应收）"
+        title={t(`${P}.confirmArTitle`)}
         open={!!(selectedReceivable && selectedReceipt)}
         onOk={handleManualSettleReceivable}
         onCancel={() => {
@@ -245,11 +260,13 @@ const SettlementPage: React.FC = () => {
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
           <p>
-            将收款单 <b>{String(selectedReceipt?.receipt_code ?? '')}</b> 的金额核销至应收单{' '}
-            <b>{String(selectedReceivable?.receivable_code ?? '')}</b>
+            {t(`${P}.confirmArContent`, {
+              receiptCode: String(selectedReceipt?.receipt_code ?? ''),
+              receivableCode: String(selectedReceivable?.receivable_code ?? ''),
+            })}
           </p>
           <Divider />
-          <Typography.Text>核销金额：</Typography.Text>
+          <Typography.Text>{t(`${P}.settleAmount`)}：</Typography.Text>
           <InputNumber
             style={{ width: '100%' }}
             value={settleAmount}
@@ -266,16 +283,11 @@ const SettlementPage: React.FC = () => {
 
   const payableSettlement = (
     <>
-      <Alert
-        type="info"
-        showIcon
-        style={{ marginBottom: 16 }}
-        title="将「有余额的付款单」手动匹配到「有待付金额的应付单」。若已在应付详情登记付款并自动核销，或单据已全部结清，则此处不会显示数据。"
-      />
+      <Alert type="info" showIcon style={{ marginBottom: 16 }} title={t(`${P}.apAlertExtended`)} />
       <Row gutter={16}>
         <Col span={12}>
           <UniTable
-            headerTitle="待核销应付单"
+            headerTitle={t(`${P}.pendingPayables`)}
             actionRef={payableActionRef}
             enableRowSelection
             rowKey="id"
@@ -303,7 +315,7 @@ const SettlementPage: React.FC = () => {
         </Col>
         <Col span={12}>
           <UniTable
-            headerTitle="可用付款单"
+            headerTitle={t(`${P}.availablePayments`)}
             actionRef={paymentActionRef}
             enableRowSelection
             rowKey="id"
@@ -331,7 +343,7 @@ const SettlementPage: React.FC = () => {
       </Row>
 
       <Modal
-        title="确认手动核销（应付）"
+        title={t(`${P}.confirmApTitle`)}
         open={!!(selectedPayable && selectedPayment)}
         onOk={handleManualSettlePayable}
         onCancel={() => {
@@ -341,11 +353,13 @@ const SettlementPage: React.FC = () => {
       >
         <Space orientation="vertical" style={{ width: '100%' }}>
           <p>
-            将付款单 <b>{String(selectedPayment?.payment_code ?? '')}</b> 的金额核销至应付单{' '}
-            <b>{String(selectedPayable?.payable_code ?? '')}</b>
+            {t(`${P}.confirmApContent`, {
+              paymentCode: String(selectedPayment?.payment_code ?? ''),
+              payableCode: String(selectedPayable?.payable_code ?? ''),
+            })}
           </p>
           <Divider />
-          <Typography.Text>核销金额：</Typography.Text>
+          <Typography.Text>{t(`${P}.settleAmount`)}：</Typography.Text>
           <InputNumber
             style={{ width: '100%' }}
             value={settleAmount}
@@ -371,10 +385,10 @@ const SettlementPage: React.FC = () => {
   const tabBarExtraContent = useMemo(
     () => (
       <Button type="default" icon={<QuestionCircleOutlined />} onClick={() => setHelpOpen(true)}>
-        帮助
+        {t(`${P}.help`)}
       </Button>
     ),
-    [],
+    [t],
   );
 
   return (
@@ -385,36 +399,34 @@ const SettlementPage: React.FC = () => {
         preserveMounted
         tabBarExtraContent={tabBarExtraContent}
         tabs={[
-          { key: 'receivable', label: '应收核销', children: receivableSettlement },
-          { key: 'payable', label: '应付核销', children: payableSettlement },
+          { key: 'receivable', label: t(`${P}.tabReceivable`), children: receivableSettlement },
+          { key: 'payable', label: t(`${P}.tabPayable`), children: payableSettlement },
         ]}
       />
 
       <Modal
-        title="往来核销帮助"
+        title={t(`${P}.helpTitle`)}
         open={helpOpen}
         onCancel={() => setHelpOpen(false)}
         footer={[
           <Button {...rowActionKind('close')} key="close" type="primary" onClick={() => setHelpOpen(false)}>
-            知道了
+            {t(`${P}.helpGotIt`)}
           </Button>,
         ]}
         width={560}
       >
         <Space orientation="vertical" size={16} style={{ width: '100%' }}>
           <div>
-            <Typography.Text strong>应收核销</Typography.Text>
+            <Typography.Text strong>{t(`${P}.helpArTitle`)}</Typography.Text>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
-              将「有余额的收款单」手动匹配到「有待收金额的应收单」。左侧选择应收单，右侧匹配收款单，确认核销金额即可。
-              若已在应收详情登记收款并自动核销，或单据已全部结清，则列表不会显示数据。
+              {t(`${P}.helpArDesc`)}
             </Typography.Paragraph>
           </div>
           <Divider style={{ margin: 0 }} />
           <div>
-            <Typography.Text strong>应付核销</Typography.Text>
+            <Typography.Text strong>{t(`${P}.helpApTitle`)}</Typography.Text>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, marginTop: 8 }}>
-              将「有余额的付款单」手动匹配到「有待付金额的应付单」。操作方式与应收核销相同。
-              若已在应付详情登记付款并自动核销，或单据已全部结清，则列表不会显示数据。
+              {t(`${P}.helpApDesc`)}
             </Typography.Paragraph>
           </div>
         </Space>

@@ -4,9 +4,10 @@
  * 展示全量模具校准记录，支持新建校准记录。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormSelect, ProFormText, ProFormDatePicker } from '@ant-design/pro-components';
-import { App, Button, Tag, message, Typography } from 'antd';
+import { App, Button, Tag, Typography } from 'antd';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getCalibrationResultLifecycle } from '../../../utils/equipmentLifecycle';
 import { PlusOutlined } from '@ant-design/icons';
@@ -33,7 +34,14 @@ interface MoldCalibration {
   created_at?: string;
 }
 
+const CALIBRATION_RESULT_LABEL_KEYS: Record<string, string> = {
+  合格: 'app.kuaizhizao.moldCalibration.resultPass',
+  不合格: 'app.kuaizhizao.moldCalibration.resultFail',
+  准用: 'app.kuaizhizao.moldCalibration.resultConditional',
+};
+
 const MoldCalibrationsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -66,76 +74,89 @@ const MoldCalibrationsPage: React.FC = () => {
         remark: values.remark,
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('校准记录已保存');
+      messageApi.success(t('app.kuaizhizao.moldCalibration.saveSuccess'));
       setModalVisible(false);
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '保存失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.moldCalibration.saveFailed'));
       throw e;
     }
   };
 
-  const columns: ProColumns<MoldCalibration>[] = [
-    {
-      title: '模具编号',
-      dataIndex: 'mold_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
-          {r.mold_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
-    { title: '校准日期', dataIndex: 'calibration_date', valueType: 'date', width: 120 },
-    {
-      title: '结果',
-      dataIndex: 'result',
-      width: 100,
-      render: (_, r) => {
-        const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
-        return <Tag color={color}>{r.result || '-'}</Tag>;
+  const resultOptions = useMemo(
+    () => [
+      { label: t('app.kuaizhizao.moldCalibration.resultPass'), value: '合格' },
+      { label: t('app.kuaizhizao.moldCalibration.resultFail'), value: '不合格' },
+      { label: t('app.kuaizhizao.moldCalibration.resultConditional'), value: '准用' },
+    ],
+    [t],
+  );
+
+  const columns: ProColumns<MoldCalibration>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.moldCalibration.colMoldCode'),
+        dataIndex: 'mold_code',
+        width: 120,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+            {r.mold_code ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '证书编号',
-      dataIndex: 'certificate_no',
-      width: 140,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
-          {r.certificate_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '有效期至', dataIndex: 'expiry_date', valueType: 'date', width: 120 },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      { title: t('app.kuaizhizao.moldCalibration.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.moldCalibration.colCalibrationDate'), dataIndex: 'calibration_date', valueType: 'date', width: 120 },
+      {
+        title: t('app.kuaizhizao.moldCalibration.colResult'),
+        dataIndex: 'result',
+        width: 100,
+        render: (_, r) => {
+          const color = r.result === '合格' ? 'success' : r.result === '不合格' ? 'error' : 'warning';
+          const labelKey = r.result ? CALIBRATION_RESULT_LABEL_KEYS[r.result] : undefined;
+          return <Tag color={color}>{labelKey ? t(labelKey) : r.result || '-'}</Tag>;
+        },
       },
-    },
-    { title: '备注', dataIndex: 'remark', ellipsis: true, hideInSearch: true },
-  ];
+      {
+        title: t('app.kuaizhizao.moldCalibration.colCertificateNo'),
+        dataIndex: 'certificate_no',
+        width: 140,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.certificate_no ?? '') }} ellipsis>
+            {r.certificate_no ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      { title: t('app.kuaizhizao.moldCalibration.colExpiryDate'), dataIndex: 'expiry_date', valueType: 'date', width: 120 },
+      {
+        title: t('app.kuaizhizao.moldCalibration.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getCalibrationResultLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      { title: t('app.kuaizhizao.moldCalibration.colRemark'), dataIndex: 'remark', ellipsis: true, hideInSearch: true },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<MoldCalibration>
-        headerTitle="模具校准记录"
+        headerTitle={t('app.kuaizhizao.moldCalibration.title')}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-calibrations"
         actionRef={actionRef}
         enableRowSelection
@@ -154,7 +175,7 @@ const MoldCalibrationsPage: React.FC = () => {
         }}
         toolBarRender={() => [
           <Button key="create" type="primary" icon={<PlusOutlined />} onClick={handleCreate}>
-            {'新建校准记录' + NEW_SHORTCUT_HINT}
+            {t('app.kuaizhizao.moldCalibration.createCalibration') + NEW_SHORTCUT_HINT}
           </Button>,
         ]}
         search={{ labelWidth: 'auto' }}
@@ -165,7 +186,7 @@ const MoldCalibrationsPage: React.FC = () => {
       <FormModalTemplate
         open={modalVisible}
         onClose={() => setModalVisible(false)}
-        title="新建模具校准记录"
+        title={t('app.kuaizhizao.moldCalibration.createModalTitle')}
         width={MODAL_CONFIG.STANDARD_WIDTH}
         formRef={formRef}
         onFinish={handleSubmit}
@@ -173,33 +194,29 @@ const MoldCalibrationsPage: React.FC = () => {
       >
         <ProFormSelect
           name="mold_uuid"
-          label="模具"
+          label={t('app.kuaizhizao.moldCalibration.formMold')}
           options={moldOptions}
-          placeholder="请选择模具"
-          rules={[{ required: true, message: '请选择模具' }]}
+          placeholder={t('app.kuaizhizao.moldCalibration.formSelectMold')}
+          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectMoldRequired') }]}
           colProps={{ span: 12 }}
         />
         <ProFormDatePicker
           name="calibration_date"
-          label="校准日期"
-          rules={[{ required: true, message: '请选择校准日期' }]}
+          label={t('app.kuaizhizao.moldCalibration.formCalibrationDate')}
+          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectCalibrationDateRequired') }]}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="result"
-          label="结果"
-          options={[
-            { label: '合格', value: '合格' },
-            { label: '不合格', value: '不合格' },
-            { label: '准用', value: '准用' },
-          ]}
-          rules={[{ required: true, message: '请选择结果' }]}
+          label={t('app.kuaizhizao.moldCalibration.formResult')}
+          options={resultOptions}
+          rules={[{ required: true, message: t('app.kuaizhizao.moldCalibration.formSelectResultRequired') }]}
           colProps={{ span: 12 }}
         />
-        <ProFormText name="certificate_no" label="证书编号" colProps={{ span: 12 }} />
-        <ProFormDatePicker name="expiry_date" label="有效期至" colProps={{ span: 12 }} />
+        <ProFormText name="certificate_no" label={t('app.kuaizhizao.moldCalibration.formCertificateNo')} colProps={{ span: 12 }} />
+        <ProFormDatePicker name="expiry_date" label={t('app.kuaizhizao.moldCalibration.formExpiryDate')} colProps={{ span: 12 }} />
         <DocumentAttachmentsField category="mold_calibration_attachments" />
-        <ProFormText name="remark" label="备注" colProps={{ span: 24 }} />
+        <ProFormText name="remark" label={t('app.kuaizhizao.moldCalibration.formRemark')} colProps={{ span: 24 }} />
       </FormModalTemplate>
     </ListPageTemplate>
   );

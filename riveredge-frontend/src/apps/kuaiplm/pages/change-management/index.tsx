@@ -3,11 +3,12 @@ import { rowActionKind } from '../../../../components/uni-action';
  * ECR/ECO 变更工作台
  */
 
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Tag } from 'antd';
 import { CheckOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
 import { ListPageTemplate } from '../../../../components/layout-templates';
@@ -26,6 +27,7 @@ import {
 import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../services/master-data-links';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
+import { getKuaiplmChangeCategoryText } from '../../components/kuaiplmMeta';
 
 type TabKey = 'all' | 'bom' | 'route';
 
@@ -37,6 +39,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 const ChangeManagementPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const [activeTab, setActiveTab] = useState<TabKey>('all');
@@ -61,31 +64,37 @@ const ChangeManagementPage: React.FC = () => {
     return listUnifiedChanges({ ...base, change_category: undefined });
   };
 
-  const handleApprove = (row: UnifiedChangeRow) => {
-    const uuid = row.uuid;
-    if (!uuid || !row.change_category) return;
-    modalApi.confirm({
-      title: '审批通过该变更？',
-      onOk: async () => {
-        await approveChange(row.change_category as ChangeDeskCategory, uuid);
-        messageApi.success('已审批');
-        actionRef.current?.reload();
-      },
-    });
-  };
+  const handleApprove = useCallback(
+    (row: UnifiedChangeRow) => {
+      const uuid = row.uuid;
+      if (!uuid || !row.change_category) return;
+      modalApi.confirm({
+        title: t('app.kuaiplm.change.approveConfirm'),
+        onOk: async () => {
+          await approveChange(row.change_category as ChangeDeskCategory, uuid);
+          messageApi.success(t('app.kuaiplm.common.messages.approveSuccess'));
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [modalApi, messageApi, t],
+  );
 
-  const handleExecute = (row: UnifiedChangeRow) => {
-    const uuid = row.uuid;
-    if (!uuid || !row.change_category) return;
-    modalApi.confirm({
-      title: '执行该变更？执行后将写入正式工程数据。',
-      onOk: async () => {
-        await executeChange(row.change_category as ChangeDeskCategory, uuid);
-        messageApi.success('已执行');
-        actionRef.current?.reload();
-      },
-    });
-  };
+  const handleExecute = useCallback(
+    (row: UnifiedChangeRow) => {
+      const uuid = row.uuid;
+      if (!uuid || !row.change_category) return;
+      modalApi.confirm({
+        title: t('app.kuaiplm.change.executeConfirm'),
+        onOk: async () => {
+          await executeChange(row.change_category as ChangeDeskCategory, uuid);
+          messageApi.success(t('app.kuaiplm.common.messages.executeSuccess'));
+          actionRef.current?.reload();
+        },
+      });
+    },
+    [modalApi, messageApi, t],
+  );
 
   const selectedBatchItems = selectedRowKeys
     .map((key) => rowsByUuid[String(key)])
@@ -95,130 +104,153 @@ const ChangeManagementPage: React.FC = () => {
       change_type: row.change_category === 'route' ? 'process_route' : 'bom',
     }));
 
-  const handleBatchApprove = async () => {
+  const handleBatchApprove = useCallback(async () => {
     if (!selectedBatchItems.length) {
-      messageApi.warning('请先选择变更记录');
+      messageApi.warning(t('app.kuaiplm.change.messages.selectFirst'));
       return;
     }
     const result = await batchApproveChanges(selectedBatchItems, true);
     const successCount = Number(result?.success_count || 0);
     if (successCount > 0) {
-      messageApi.success(`已审批 ${successCount} 条变更`);
+      messageApi.success(t('app.kuaiplm.common.messages.batchApproveSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量审批失败');
-  };
+    messageApi.error(t('app.kuaiplm.common.messages.batchUpdateFailed'));
+  }, [messageApi, selectedBatchItems, t]);
 
-  const handleBatchExecute = async () => {
+  const handleBatchExecute = useCallback(async () => {
     if (!selectedBatchItems.length) {
-      messageApi.warning('请先选择变更记录');
+      messageApi.warning(t('app.kuaiplm.change.messages.selectFirst'));
       return;
     }
     const result = await batchExecuteChanges(selectedBatchItems);
     const successCount = Number(result?.success_count || 0);
     if (successCount > 0) {
-      messageApi.success(`已执行 ${successCount} 条变更`);
+      messageApi.success(t('app.kuaiplm.common.messages.batchExecuteSuccess', { count: successCount }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
       return;
     }
-    messageApi.error('批量执行失败');
-  };
+    messageApi.error(t('app.kuaiplm.common.messages.batchUpdateFailed'));
+  }, [messageApi, selectedBatchItems, t]);
 
-  const handleBatchDelete = async (keys: React.Key[]) => {
-    const items = keys
-      .map((key) => rowsByUuid[String(key)])
-      .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
-      .map((row) => ({
-        change_uuid: String(row.uuid),
-        change_type: row.change_category === 'route' ? 'process_route' : 'bom',
-      }));
-    if (!items.length) {
-      messageApi.warning('请先选择变更记录');
-      return;
-    }
-    const result = await batchDeleteChanges(items);
-    const successCount = Number(result?.success_count || 0);
-    if (successCount > 0) {
-      messageApi.success(`已删除 ${successCount} 条变更`);
-      setSelectedRowKeys([]);
-      actionRef.current?.reload();
-      return;
-    }
-    messageApi.error('批量删除失败');
-  };
+  const handleBatchDelete = useCallback(
+    async (keys: React.Key[]) => {
+      const items = keys
+        .map((key) => rowsByUuid[String(key)])
+        .filter((row): row is UnifiedChangeRow => !!row?.uuid && !!row?.change_category)
+        .map((row) => ({
+          change_uuid: String(row.uuid),
+          change_type: row.change_category === 'route' ? 'process_route' : 'bom',
+        }));
+      if (!items.length) {
+        messageApi.warning(t('app.kuaiplm.change.messages.selectFirst'));
+        return;
+      }
+      const result = await batchDeleteChanges(items);
+      const successCount = Number(result?.success_count || 0);
+      if (successCount > 0) {
+        messageApi.success(t('app.kuaiplm.common.messages.batchDeleteSuccess', { count: successCount }));
+        setSelectedRowKeys([]);
+        actionRef.current?.reload();
+        return;
+      }
+      messageApi.error(t('app.kuaiplm.common.messages.batchDeleteFailed'));
+    },
+    [messageApi, rowsByUuid, t],
+  );
 
-  const columns: ProColumns<UnifiedChangeRow>[] = [
-    {
-      title: '类别',
-      dataIndex: 'change_category',
-      width: 90,
-      render: (_, row) => (
-        <Tag color={row.change_category === 'bom' ? 'blue' : 'purple'}>
-          {row.change_category === 'bom' ? 'BOM' : '工艺'}
-        </Tag>
-      ),
-    },
-    { title: '变更编号', dataIndex: 'change_code', width: 140 },
-    { title: '变更类型', dataIndex: 'change_type', width: 120 },
-    { title: '对象', dataIndex: 'target_name', ellipsis: true },
-    {
-      title: '状态',
-      dataIndex: 'status',
-      width: 100,
-      render: (_, row) => (
-        <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>{row.status}</Tag>
-      ),
-    },
-    { title: '变更原因', dataIndex: 'change_reason', ellipsis: true, hideInSearch: true },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, row) => (row.created_at ? dayjs(row.created_at).format('YYYY-MM-DD HH:mm') : '-'),
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      fixed: 'right',
-      width: 200,
-      render: (_, row) => {
-        const pending = (row.status ?? '').toLowerCase().includes('pending') || row.status === '待审批';
-        return [
+  const columns: ProColumns<UnifiedChangeRow>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaiplm.common.columns.category'),
+        dataIndex: 'change_category',
+        width: 90,
+        render: (_, row) => (
+          <Tag color={row.change_category === 'bom' ? 'blue' : 'purple'}>
+            {getKuaiplmChangeCategoryText(t, row.change_category)}
+          </Tag>
+        ),
+      },
+      { title: t('app.kuaiplm.common.columns.changeCode'), dataIndex: 'change_code', width: 140 },
+      { title: t('app.kuaiplm.common.columns.changeType'), dataIndex: 'change_type', width: 120 },
+      { title: t('app.kuaiplm.common.columns.target'), dataIndex: 'target_name', ellipsis: true },
+      {
+        title: t('app.kuaiplm.common.columns.status'),
+        dataIndex: 'status',
+        width: 100,
+        render: (_, row) => (
+          <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>{row.status}</Tag>
+        ),
+      },
+      {
+        title: t('app.kuaiplm.common.columns.changeReason'),
+        dataIndex: 'change_reason',
+        ellipsis: true,
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaiplm.common.columns.createdAt'),
+        dataIndex: 'created_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, row) => (row.created_at ? dayjs(row.created_at).format('YYYY-MM-DD HH:mm') : '-'),
+      },
+      {
+        title: t('app.kuaiplm.common.columns.actions'),
+        valueType: 'option',
+        fixed: 'right',
+        width: 200,
+        render: (_, row) => {
+          const pending =
+            (row.status ?? '').toLowerCase().includes('pending') || row.status === '待审批';
+          return [
             pending ? (
-              <Button {...rowActionKind('audit')}
+              <Button
+                {...rowActionKind('audit')}
                 key="approve"
                 type="link"
                 size="small"
                 icon={<CheckOutlined />}
                 onClick={() => handleApprove(row)}
               >
-                审批
+                {t('app.kuaiplm.common.actions.approve')}
               </Button>
             ) : null,
             row.status === 'approved' || row.status === '已审批' ? (
-              <Button {...rowActionKind('execute')}
+              <Button
+                {...rowActionKind('execute')}
                 key="execute"
                 type="link"
                 size="small"
                 icon={<PlayCircleOutlined />}
                 onClick={() => handleExecute(row)}
               >
-                执行
+                {t('app.kuaiplm.common.actions.execute')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[];
+        },
       },
-    },
-  ];
+    ],
+    [handleApprove, handleExecute, t],
+  );
+
+  const toolbarMenuItems = useMemo(
+    () => [
+      { key: 'all', label: t('app.kuaiplm.change.tab.all') },
+      { key: 'bom', label: t('app.kuaiplm.change.tab.bom') },
+      { key: 'route', label: t('app.kuaiplm.change.tab.route') },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<UnifiedChangeRow>
-        headerTitle="设计变更"
+        headerTitle={t('app.kuaiplm.change.pageTitle')}
         actionRef={actionRef}
         rowKey="uuid"
         enableRowSelection
@@ -228,31 +260,31 @@ const ChangeManagementPage: React.FC = () => {
         columnPersistenceId={`apps.kuaiplm.pages.change-management.${activeTab}`}
         scroll={{ x: 1200 }}
         showCreateButton
-        createButtonText={'在主数据新建 BOM 变更' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.kuaiplm.change.createBomButton') + NEW_SHORTCUT_HINT}
         onCreate={handleCreateBomChange}
         showDeleteButton
         onDelete={handleBatchDelete}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条变更记录吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaiplm.change.deleteConfirm', { count })}
         toolBarActionsAfterDelete={[
           <UniBatchMenuButton
             key="change-desk-batch-actions"
-            buttonText="批量操作"
+            buttonText={t('app.kuaiplm.common.actions.batchActions')}
             selectedRowKeys={selectedRowKeys}
             menuItems={[
               {
                 key: 'batch-approve',
-                label: '批量审批',
+                label: t('app.kuaiplm.common.actions.approve'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确定审批选中的 ${count} 条变更吗？`,
+                confirmTitle: (count) => t('app.kuaiplm.change.batchApproveConfirm', { count }),
                 onClick: () => {
                   void handleBatchApprove();
                 },
               },
               {
                 key: 'batch-execute',
-                label: '批量执行',
+                label: t('app.kuaiplm.common.actions.execute'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确定执行选中的 ${count} 条变更吗？`,
+                confirmTitle: (count) => t('app.kuaiplm.change.batchExecuteConfirm', { count }),
                 onClick: () => {
                   void handleBatchExecute();
                 },
@@ -275,7 +307,7 @@ const ChangeManagementPage: React.FC = () => {
             setRowsByUuid(map);
             return { data: res.items, total: res.total, success: true };
           } catch (e: any) {
-            messageApi.error(e?.message || '加载失败');
+            messageApi.error(e?.message || t('app.kuaiplm.common.messages.loadFailed'));
             return { data: [], total: 0, success: false };
           }
         }}
@@ -283,11 +315,7 @@ const ChangeManagementPage: React.FC = () => {
           menu: {
             type: 'tab',
             activeKey: activeTab,
-            items: [
-              { key: 'all', label: '全部变更' },
-              { key: 'bom', label: 'BOM 变更' },
-              { key: 'route', label: '工艺路线变更' },
-            ],
+            items: toolbarMenuItems,
             onChange: (key) => {
               setActiveTab((key as TabKey) || 'all');
               setSelectedRowKeys([]);
@@ -298,7 +326,7 @@ const ChangeManagementPage: React.FC = () => {
         toolBarRender={() => [
           <Space key="create">
             <Button onClick={() => window.open(buildRouteChangeCreateUrl(), '_blank')}>
-              在主数据新建工艺变更
+              {t('app.kuaiplm.change.createRouteButton')}
             </Button>
           </Space>,
         ]}

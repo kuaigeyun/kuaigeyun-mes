@@ -3,6 +3,7 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useParams } from 'react-router-dom';
 import { App, Button, Card, Col, DatePicker, Form, InputNumber, Row, Select, Space, Spin, Table, Typography } from 'antd';
 import { ArrowLeftOutlined } from '@ant-design/icons';
@@ -27,6 +28,7 @@ import {
   mapWarehouseSelectOptions,
   useInboundReceiverSelect,
 } from './inboundEntryShared';
+import { inboundReceiptTypeLabel } from './inboundHubTypes';
 import { INBOUND_LIST_PATH, inboundProductionReturnEntryPath } from './inboundPaths';
 
 type ReturnLine = {
@@ -46,6 +48,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
   const workOrderId = Number(woIdParam);
   const navigate = useNavigate();
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
   const receiverHook = useInboundReceiverSelect();
   const initRef = useRef(false);
@@ -68,6 +71,9 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       ? inboundProductionReturnEntryPath(workOrderId)
       : INBOUND_LIST_PATH;
   const woCode = String(workOrder?.code || workOrderId || '');
+  const pageTitle = woCode
+    ? t('app.kuaizhizao.warehouseInbound.entry.productionReturn.titleWithCode', { code: woCode })
+    : t('app.kuaizhizao.warehouseInbound.entry.productionReturn.title');
 
   const totalReturnQty = useMemo(
     () => lines.reduce((sum, it) => sum + Number(it.return_quantity ?? 0), 0),
@@ -102,11 +108,11 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
       );
     } catch {
       setPickingOptions([]);
-      messageApi.error('加载领料单失败');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.loadPickingFailed'));
     } finally {
       setPickingLoading(false);
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   const loadPickingLines = useCallback(async (nextPickingId: number) => {
     setPickingLoading(true);
@@ -135,35 +141,34 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         });
       setLines(nextLines);
       if (!nextLines.length) {
-        messageApi.warning('所选领料单无可用退料明细');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.noReturnLines'));
       }
     } catch (e: unknown) {
       setLines([]);
-      messageApi.error((e as Error)?.message || '加载领料明细失败');
+      messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.productionReturn.loadPickingLinesFailed'));
     } finally {
       setPickingLoading(false);
     }
-  }, [messageApi]);
+  }, [messageApi, t]);
 
   useEffect(() => {
     if (!(Number.isFinite(workOrderId) && workOrderId > 0)) {
-      messageApi.error('无效的生产工单');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.workOrder.invalid'));
       leavePage();
     }
-  }, [workOrderId, leavePage, messageApi]);
+  }, [workOrderId, leavePage, messageApi, t]);
 
   useEffect(() => {
-    const title = woCode ? `生产退料 — ${woCode}` : '生产退料';
-    setCustomPageTitle(pagePath, title);
+    setCustomPageTitle(pagePath, pageTitle);
     window.dispatchEvent(
       new CustomEvent('riveredge:update-tab-title', {
-        detail: { key: pagePath, path: pagePath, title },
+        detail: { key: pagePath, path: pagePath, title: pageTitle },
       }),
     );
     return () => {
       removeCustomPageTitle(pagePath);
     };
-  }, [woCode, pagePath]);
+  }, [pageTitle, pagePath]);
 
   useEffect(() => {
     if (!Number.isFinite(workOrderId) || workOrderId <= 0 || initRef.current) return;
@@ -179,21 +184,21 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         setWarehouseOptions(mapWarehouseSelectOptions(whRes));
         await loadPickings(workOrderId);
       } catch (e: unknown) {
-        messageApi.error((e as Error)?.message || '加载生产工单失败');
+        messageApi.error((e as Error)?.message || t('app.kuaizhizao.warehouseInbound.entry.workOrder.loadFailed'));
         leavePage();
       } finally {
         setLoading(false);
       }
     })();
-  }, [workOrderId, leavePage, loadPickings, messageApi]);
+  }, [workOrderId, leavePage, loadPickings, messageApi, t]);
 
   const submit = async (mode: 'draft' | 'confirm') => {
     if (!pickingId) {
-      messageApi.warning('请选择领料单');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.selectPicking'));
       return;
     }
     if (!warehouseId || !(warehouseId > 0)) {
-      messageApi.warning('请选择退料仓库');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.selectWarehouse'));
       return;
     }
     const whOpt = warehouseOptions.find((w) => w.value === warehouseId);
@@ -201,12 +206,17 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
 
     const activeLines = lines.filter((it) => it.return_quantity > 0);
     if (!activeLines.length) {
-      messageApi.warning('请至少填写一行退料数量');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.fillReturnQty'));
       return;
     }
     for (const it of activeLines) {
       if (it.return_quantity > it.picked_quantity) {
-        messageApi.error(`物料 ${it.material_code || it.material_name} 的退料数量不能超过已领数量 ${it.picked_quantity}`);
+        messageApi.error(
+          t('app.kuaizhizao.warehouseInbound.entry.productionReturn.qtyExceedsPicked', {
+            material: it.material_code || it.material_name,
+            max: it.picked_quantity,
+          }),
+        );
         return;
       }
     }
@@ -236,7 +246,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
         })),
       })) as { id?: number; return_code?: string };
       if (created?.id == null) {
-        messageApi.error('创建成功但未返回退料单 ID');
+        messageApi.error(t('app.kuaizhizao.warehouseInbound.entry.productionReturn.noReturnId'));
         return;
       }
       invalidateMenuBadgeCounts();
@@ -250,33 +260,72 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
           },
         });
       } else {
-        messageApi.success(`已生成生产退料草稿${created.return_code ? `：${created.return_code}` : ''}`);
+        messageApi.success(
+          t('app.kuaizhizao.warehouseInbound.entry.productionReturn.draftCreated', {
+            code: created.return_code
+              ? t('app.kuaizhizao.warehouseInbound.entry.purchase.draftCreatedSuffix', { code: created.return_code })
+              : '',
+          }),
+        );
         leavePage();
       }
     } catch (e: unknown) {
       const err = e as { message?: string; response?: { data?: { detail?: string } } };
-      messageApi.error(err?.message || err?.response?.data?.detail || '保存失败');
+      messageApi.error(err?.message || err?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
     } finally {
       setSubmitting(false);
     }
   };
+
+  const entryColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
+      { title: t('app.kuaizhizao.warehouseInbound.col.spec'), dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v: unknown) => v || '—' },
+      { title: t('app.kuaizhizao.warehouseInbound.col.unit'), dataIndex: 'material_unit', width: 70, align: 'center' as const },
+      { title: t('app.kuaizhizao.warehouseInbound.col.pickedQty'), dataIndex: 'picked_quantity', width: 100, align: 'right' as const },
+      {
+        title: t('app.kuaizhizao.warehouseInbound.col.thisReturn'),
+        width: 130,
+        align: 'right' as const,
+        render: (_: unknown, record: ReturnLine) => (
+          <InputNumber
+            min={0}
+            max={record.picked_quantity}
+            precision={4}
+            value={record.return_quantity}
+            onChange={(v) => {
+              const qty = Number(v) || 0;
+              setLines((prev) =>
+                prev.map((row) =>
+                  row.key === record.key ? { ...row, return_quantity: qty } : row,
+                ),
+              );
+            }}
+            style={{ width: 110 }}
+          />
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <DocumentFormPageLayout
       header={
         <>
           <Space align="center" size={8}>
-            <Button type="text" icon={<ArrowLeftOutlined />} aria-label="返回" onClick={leavePage} />
+            <Button type="text" icon={<ArrowLeftOutlined />} aria-label={t('app.kuaizhizao.warehouseInbound.action.back')} onClick={leavePage} />
             <Typography.Title level={4} style={DOCUMENT_DETAIL_PAGE_TITLE_STYLE}>
-              {woCode ? `生产退料 — ${woCode}` : '生产退料'}
+              {pageTitle}
             </Typography.Title>
           </Space>
           <Space wrap>
             <Button disabled={submitting || loading} onClick={leavePage}>
-              取消
+              {t('app.kuaizhizao.warehouseInbound.action.cancel')}
             </Button>
             <Button loading={submitting} disabled={loading || pickingLoading} onClick={() => void submit('draft')}>
-              生成草稿
+              {t('app.kuaizhizao.warehouseInbound.action.generateDraft')}
             </Button>
             <Button
               type="primary"
@@ -284,7 +333,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
               disabled={loading || pickingLoading}
               onClick={() => void submit('confirm')}
             >
-              确认入库
+              {t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           </Space>
         </>
@@ -297,31 +346,31 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
               <Form layout="vertical" requiredMark={false}>
                 <Row gutter={16}>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="入库类型">
-                      <ReadOnlyFormValue value="生产退料" />
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.inboundType')}>
+                      <ReadOnlyFormValue value={inboundReceiptTypeLabel(t, 'production_return')} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单号">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderCode')}>
                       <ReadOnlyFormValue value={woCode} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="产品">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.product')}>
                       <ReadOnlyFormValue
                         value={workOrder.product_name ? String(workOrder.product_name) : undefined}
                       />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="工单状态">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.workOrderStatus')}>
                       <ReadOnlyFormValue value={workOrder.status ? String(workOrder.status) : undefined} />
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="领料单" required>
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.picking')} required>
                       <Select
-                        placeholder="请选择领料单"
+                        placeholder={t('app.kuaizhizao.warehouseInbound.field.selectPicking')}
                         showSearch
                         style={{ width: '100%' }}
                         value={pickingId ?? undefined}
@@ -339,7 +388,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="退料日期">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.returnDate')}>
                       <DatePicker
                         style={{ width: '100%' }}
                         value={returnTime}
@@ -348,12 +397,12 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <InboundEntryReceiverField label="退料人" hook={receiverHook} />
+                    <InboundEntryReceiverField label={t('app.kuaizhizao.warehouseInbound.field.returner')} hook={receiverHook} />
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="退料仓库" required>
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.returnWarehouse')} required>
                       <Select
-                        placeholder="请选择退料仓库"
+                        placeholder={t('app.kuaizhizao.warehouseInbound.field.selectReturnWarehouse')}
                         showSearch
                         style={{ width: '100%' }}
                         value={warehouseId}
@@ -366,7 +415,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                     </Form.Item>
                   </Col>
                   <Col xs={24} sm={12} lg={6}>
-                    <Form.Item label="本次合计数量">
+                    <Form.Item label={t('app.kuaizhizao.warehouseInbound.field.totalQty')}>
                       <ReadOnlyFormValue value={totalReturnQty.toLocaleString()} />
                     </Form.Item>
                   </Col>
@@ -376,7 +425,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
 
             {lines.length > 0 && (
               <div className="uni-table-detail" style={{ marginTop: PAGE_SPACING.BLOCK_GAP }}>
-                <UniTableDetailHeader title="退料明细" required />
+                <UniTableDetailHeader title={t('app.kuaizhizao.warehouseInbound.section.returnDetails')} required />
                 <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
                 <div className="uni-table-detail-body">
                   <div className="uni-table-detail-scroll">
@@ -387,35 +436,7 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                       pagination={false}
                       scroll={{ x: 1000 }}
                       dataSource={lines}
-                      columns={[
-                        { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                        { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
-                        { title: '规格', dataIndex: 'material_spec', width: 120, ellipsis: true, render: (v) => v || '—' },
-                        { title: '单位', dataIndex: 'material_unit', width: 70, align: 'center' },
-                        { title: '已领数量', dataIndex: 'picked_quantity', width: 100, align: 'right' },
-                        {
-                          title: '本次退料',
-                          width: 130,
-                          align: 'right',
-                          render: (_: unknown, record: ReturnLine) => (
-                            <InputNumber
-                              min={0}
-                              max={record.picked_quantity}
-                              precision={4}
-                              value={record.return_quantity}
-                              onChange={(v) => {
-                                const qty = Number(v) || 0;
-                                setLines((prev) =>
-                                  prev.map((row) =>
-                                    row.key === record.key ? { ...row, return_quantity: qty } : row,
-                                  ),
-                                );
-                              }}
-                              style={{ width: 110 }}
-                            />
-                          ),
-                        },
-                      ]}
+                      columns={entryColumns}
                     />
                   </div>
                 </div>
@@ -427,8 +448,8 @@ const InboundProductionReturnPullEntryPage: React.FC = () => {
                 <InboundEntryRemarksSection
                   value={returnNotes}
                   onChange={setReturnNotes}
-                  label="退料备注"
-                  placeholder="退料单备注"
+                  label={t('app.kuaizhizao.warehouseInbound.field.returnRemarks')}
+                  placeholder={t('app.kuaizhizao.warehouseInbound.field.returnRemarksPlaceholder')}
                 />
               </Form>
             )}

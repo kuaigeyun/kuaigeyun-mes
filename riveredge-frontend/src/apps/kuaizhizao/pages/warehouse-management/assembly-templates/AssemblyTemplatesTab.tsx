@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -11,6 +11,7 @@ import {
 import { App, Button, Card, Form as AntForm, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, EyeOutlined, ImportOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import {
@@ -54,12 +55,8 @@ type AssemblyTemplate = {
   items?: TemplateItem[];
 };
 
-const sourceTypeMap: Record<string, string> = {
-  manual: '手工维护',
-  bom: 'BOM 导入',
-};
-
 export const AssemblyTemplatesTab: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const { canCreate, canUpdate, canDelete } = useResourcePermissions(ASSEMBLY_ORDERS_RESOURCE);
   const actionRef = useRef<ActionType>(null);
@@ -74,6 +71,14 @@ export const AssemblyTemplatesTab: React.FC = () => {
   const [editingItem, setEditingItem] = useState<TemplateItem | null>(null);
   const [bomPreviewLines, setBomPreviewLines] = useState<TemplateItem[]>([]);
   const [bomPreviewVisible, setBomPreviewVisible] = useState(false);
+
+  const sourceTypeMap = useMemo(
+    () => ({
+      manual: t('app.kuaizhizao.assemblyTemplate.sourceManual'),
+      bom: t('app.kuaizhizao.assemblyTemplate.sourceBom'),
+    }),
+    [t],
+  );
 
   const reloadList = () => actionRef.current?.reload();
 
@@ -114,7 +119,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         });
       }, 0);
     } catch (error: any) {
-      messageApi.error(error?.message || '加载模板失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.loadFailed'));
     }
   };
 
@@ -124,7 +129,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
       setCurrentTemplate(detail as AssemblyTemplate);
       setDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error?.message || '加载模板详情失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.loadDetailFailed'));
     }
   };
 
@@ -141,10 +146,10 @@ export const AssemblyTemplatesTab: React.FC = () => {
       };
       if (editingTemplate?.id) {
         await assemblyTemplateApi.update(String(editingTemplate.id), payload);
-        messageApi.success('组装模板更新成功');
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.updateSuccess'));
       } else {
         await assemblyTemplateApi.create(payload);
-        messageApi.success('组装模板创建成功');
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.createSuccess'));
       }
       setModalVisible(false);
       setEditingTemplate(null);
@@ -154,26 +159,26 @@ export const AssemblyTemplatesTab: React.FC = () => {
         await refreshCurrentTemplate(currentTemplate.id);
       }
     } catch (error: any) {
-      messageApi.error(error?.message || '保存组装模板失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.saveFailed'));
       throw error;
     }
   };
 
   const confirmDeleteTemplate = (record: AssemblyTemplate) => {
     Modal.confirm({
-      title: '删除组装模板',
-      content: `确定删除模板 "${record.template_code}" 吗？`,
+      title: t('app.kuaizhizao.assemblyTemplate.deleteTitle'),
+      content: t('app.kuaizhizao.assemblyTemplate.deleteConfirm', { code: record.template_code }),
       onOk: async () => {
         try {
           await assemblyTemplateApi.delete(String(record.id));
-          messageApi.success('删除组装模板成功');
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteSuccess'));
           if (currentTemplate?.id === record.id) {
             setDrawerVisible(false);
             setCurrentTemplate(null);
           }
           reloadList();
         } catch (error: any) {
-          messageApi.error(error?.message || '删除组装模板失败');
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteFailed'));
         }
       },
     });
@@ -207,7 +212,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
           unit_price: Number(values.unit_price || 0),
           remarks: values.remarks,
         });
-        messageApi.success('模板明细更新成功');
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.updateItemSuccess'));
       } else {
         await assemblyTemplateApi.createItem(String(currentTemplate.id), {
           material_id: values.material_id,
@@ -217,7 +222,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
           unit_price: Number(values.unit_price || 0),
           remarks: values.remarks,
         });
-        messageApi.success('模板明细添加成功');
+        messageApi.success(t('app.kuaizhizao.assemblyTemplate.addItemSuccess'));
       }
       setItemModalVisible(false);
       setEditingItem(null);
@@ -225,24 +230,26 @@ export const AssemblyTemplatesTab: React.FC = () => {
       reloadList();
       await refreshCurrentTemplate(currentTemplate.id);
     } catch (error: any) {
-      messageApi.error(error?.message || '保存模板明细失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.saveItemFailed'));
       throw error;
     }
   };
 
   const confirmDeleteItem = (template: AssemblyTemplate, item: TemplateItem) => {
     Modal.confirm({
-      title: '删除模板明细',
-      content: `确定删除明细 "${item.material_code || item.material_name}" 吗？`,
+      title: t('app.kuaizhizao.assemblyTemplate.deleteItemTitle'),
+      content: t('app.kuaizhizao.assemblyTemplate.deleteItemConfirm', {
+        name: item.material_code || item.material_name,
+      }),
       onOk: async () => {
         try {
           if (!template.id || !item.id) return;
           await assemblyTemplateApi.deleteItem(String(template.id), String(item.id));
-          messageApi.success('模板明细删除成功');
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.deleteItemSuccess'));
           reloadList();
           await refreshCurrentTemplate(template.id);
         } catch (error: any) {
-          messageApi.error(error?.message || '删除模板明细失败');
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.deleteItemFailed'));
         }
       },
     });
@@ -250,7 +257,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
 
   const previewBom = async (template: AssemblyTemplate) => {
     if (!template.product_material_id) {
-      messageApi.warning('请先设置成品物料');
+      messageApi.warning(t('app.kuaizhizao.assemblyTemplate.setProductFirst'));
       return;
     }
     try {
@@ -264,127 +271,236 @@ export const AssemblyTemplatesTab: React.FC = () => {
       setCurrentTemplate(template);
       setBomPreviewVisible(true);
     } catch (error: any) {
-      messageApi.error(error?.message || 'BOM 预览失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.bomPreviewFailed'));
     }
   };
 
   const confirmImportFromBom = (template: AssemblyTemplate) => {
     Modal.confirm({
-      title: '从 BOM 读取',
-      content: '将替换模板全部明细，是否继续？',
+      title: t('app.kuaizhizao.assemblyTemplate.importFromBomTitle'),
+      content: t('app.kuaizhizao.assemblyTemplate.importFromBomConfirm'),
       onOk: async () => {
         try {
           const updated = await assemblyTemplateApi.importFromBom(String(template.id));
-          messageApi.success('已从 BOM 导入模板明细');
+          messageApi.success(t('app.kuaizhizao.assemblyTemplate.importFromBomSuccess'));
           setCurrentTemplate(updated as AssemblyTemplate);
           reloadList();
         } catch (error: any) {
-          messageApi.error(error?.message || 'BOM 导入失败');
+          messageApi.error(error?.message || t('app.kuaizhizao.assemblyTemplate.importFromBomFailed'));
         }
       },
     });
   };
 
-  const columns: ProColumns<AssemblyTemplate>[] = [
-    {
-      title: '模板编码',
-      dataIndex: 'template_code',
-      width: 140,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.template_code ?? '') }} ellipsis>
-          {r.template_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '模板名称', dataIndex: 'template_name', width: 160, ellipsis: true },
-    { title: '成品物料', dataIndex: 'product_material_name', width: 160, ellipsis: true },
-    { title: '基准数量', dataIndex: 'base_quantity', width: 100, align: 'right', hideInSearch: true },
-    { title: '行数', dataIndex: 'total_items', width: 80, align: 'right', hideInSearch: true },
-    {
-      title: '来源',
-      dataIndex: 'source_type',
-      width: 100,
-      hideInSearch: true,
-      render: (_, r) => sourceTypeMap[String(r.source_type ?? 'manual')] || r.source_type,
-    },
-    {
-      title: '状态',
-      dataIndex: 'is_active',
-      width: 90,
-      valueType: 'select',
-      valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '停用', status: 'Default' },
+  const columns: ProColumns<AssemblyTemplate>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'),
+        dataIndex: 'template_code',
+        width: 140,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.template_code ?? '') }} ellipsis>
+            {r.template_code ?? '-'}
+          </Typography.Text>
+        ),
       },
-      render: (_, r) => (
-        <Tag color={r.is_active ? 'success' : 'default'}>{r.is_active ? '启用' : '停用'}</Tag>
-      ),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '操作',
-      width: 260,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
-          {canUpdate && <Button {...rowActionKind('update')} onClick={() => openEditModal(record)} />}
-          {canUpdate && (
-            <Button {...rowActionKind('import')} {...rowActionLabelKeep()} onClick={() => previewBom(record)}>
-              预览 BOM
-            </Button>
-          )}
-          {canDelete && <Button {...rowActionKind('delete')} onClick={() => confirmDeleteTemplate(record)} />}
-        </Space>
-      ),
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'),
+        dataIndex: 'template_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'),
+        dataIndex: 'product_material_name',
+        width: 160,
+        ellipsis: true,
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'),
+        dataIndex: 'base_quantity',
+        width: 100,
+        align: 'right',
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colLineCount'),
+        dataIndex: 'total_items',
+        width: 80,
+        align: 'right',
+        hideInSearch: true,
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colSource'),
+        dataIndex: 'source_type',
+        width: 100,
+        hideInSearch: true,
+        render: (_, r) => sourceTypeMap[String(r.source_type ?? 'manual') as keyof typeof sourceTypeMap] || r.source_type,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'is_active',
+        width: 90,
+        valueType: 'select',
+        valueEnum: {
+          true: { text: t('app.kuaizhizao.warehouseCommon.enabled'), status: 'Success' },
+          false: { text: t('app.kuaizhizao.warehouseCommon.disabled'), status: 'Default' },
+        },
+        render: (_, r) => (
+          <Tag color={r.is_active ? 'success' : 'default'}>
+            {r.is_active ? t('app.kuaizhizao.warehouseCommon.enabled') : t('app.kuaizhizao.warehouseCommon.disabled')}
+          </Tag>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        width: 260,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button {...rowActionKind('read')} onClick={() => openDetailDrawer(record)} />
+            {canUpdate && <Button {...rowActionKind('update')} onClick={() => openEditModal(record)} />}
+            {canUpdate && (
+              <Button {...rowActionKind('import')} {...rowActionLabelKeep()} onClick={() => previewBom(record)}>
+                {t('app.kuaizhizao.assemblyTemplate.previewBom')}
+              </Button>
+            )}
+            {canDelete && <Button {...rowActionKind('delete')} onClick={() => confirmDeleteTemplate(record)} />}
+          </Space>
+        ),
+      },
+    ],
+    [t, sourceTypeMap, canUpdate, canDelete],
+  );
 
-  const detailColumns: ProDescriptionsItemProps<AssemblyTemplate>[] = [
-    { title: '模板编码', dataIndex: 'template_code' },
-    { title: '模板名称', dataIndex: 'template_name' },
-    { title: '成品物料', dataIndex: 'product_material_name' },
-    { title: '基准数量', dataIndex: 'base_quantity' },
-    {
-      title: '来源',
-      dataIndex: 'source_type',
-      render: (value) => sourceTypeMap[String(value ?? 'manual')] || String(value ?? '-'),
-    },
-    {
-      title: '状态',
-      dataIndex: 'is_active',
-      render: (value) => (value ? <Tag color="success">启用</Tag> : <Tag>停用</Tag>),
-    },
-    { title: '行数', dataIndex: 'total_items' },
-    { title: '备注', dataIndex: 'remarks', span: 2 },
-  ];
+  const detailColumns: ProDescriptionsItemProps<AssemblyTemplate>[] = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateCode'), dataIndex: 'template_code' },
+      { title: t('app.kuaizhizao.assemblyTemplate.colTemplateName'), dataIndex: 'template_name' },
+      { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
+      { title: t('app.kuaizhizao.assemblyTemplate.colBaseQuantity'), dataIndex: 'base_quantity' },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colSource'),
+        dataIndex: 'source_type',
+        render: (value) =>
+          sourceTypeMap[String(value ?? 'manual') as keyof typeof sourceTypeMap] || String(value ?? '-'),
+      },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colStatus'),
+        dataIndex: 'is_active',
+        render: (value) =>
+          value ? (
+            <Tag color="success">{t('app.kuaizhizao.warehouseCommon.enabled')}</Tag>
+          ) : (
+            <Tag>{t('app.kuaizhizao.warehouseCommon.disabled')}</Tag>
+          ),
+      },
+      { title: t('app.kuaizhizao.assemblyTemplate.colLineCount'), dataIndex: 'total_items' },
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+    ],
+    [t, sourceTypeMap],
+  );
+
+  const itemTableColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colQtyPerBase'),
+        dataIndex: 'quantity_per_base',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => Number(v || 0).toFixed(4),
+      },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colDefaultUnitPrice'),
+        dataIndex: 'unit_price',
+        width: 90,
+        align: 'right' as const,
+        render: (v: number) => Number(v || 0).toFixed(2),
+      },
+      { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
+      {
+        title: t('app.kuaizhizao.warehouseCommon.colActions'),
+        width: 140,
+        render: (_: unknown, item: TemplateItem) =>
+          canUpdate || canDelete ? (
+            <Space size={0}>
+              {canUpdate && (
+                <Button
+                  type="link"
+                  size="small"
+                  icon={<EditOutlined />}
+                  onClick={() => openItemModal(currentTemplate!, item)}
+                >
+                  {t('app.kuaizhizao.warehouseCommon.edit')}
+                </Button>
+              )}
+              {canDelete && (
+                <Button
+                  type="link"
+                  size="small"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => confirmDeleteItem(currentTemplate!, item)}
+                >
+                  {t('app.kuaizhizao.warehouseCommon.delete')}
+                </Button>
+              )}
+            </Space>
+          ) : null,
+      },
+    ],
+    [t, canUpdate, canDelete, currentTemplate],
+  );
+
+  const bomPreviewColumns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+      { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name' },
+      {
+        title: t('app.kuaizhizao.assemblyTemplate.colQtyPerBase'),
+        dataIndex: 'quantity_per_base',
+        width: 100,
+        align: 'right' as const,
+        render: (v: number) => Number(v || 0).toFixed(4),
+      },
+    ],
+    [t],
+  );
 
   const draftActions = currentTemplate ? (
     <Space>
       {canUpdate && (
         <Button size="small" onClick={() => openEditModal(currentTemplate)}>
-          编辑主单
+          {t('app.kuaizhizao.warehouseCommon.editMainOrder')}
         </Button>
       )}
       {canCreate && (
         <Button size="small" icon={<PlusOutlined />} onClick={() => openItemModal(currentTemplate)}>
-          添加明细
+          {t('app.kuaizhizao.warehouseCommon.addItem')}
         </Button>
       )}
       {canUpdate && (
         <>
           <Button size="small" icon={<ImportOutlined />} onClick={() => previewBom(currentTemplate)}>
-            预览 BOM
+            {t('app.kuaizhizao.assemblyTemplate.previewBom')}
           </Button>
-          <Button size="small" type="primary" icon={<ImportOutlined />} onClick={() => confirmImportFromBom(currentTemplate)}>
-            从 BOM 读取
+          <Button
+            size="small"
+            type="primary"
+            icon={<ImportOutlined />}
+            onClick={() => confirmImportFromBom(currentTemplate)}
+          >
+            {t('app.kuaizhizao.assemblyTemplate.importFromBom')}
           </Button>
         </>
       )}
@@ -394,14 +510,14 @@ export const AssemblyTemplatesTab: React.FC = () => {
   return (
     <ListPageTemplate>
       <UniTable<AssemblyTemplate>
-        headerTitle="组装模板"
+        headerTitle={t('app.kuaizhizao.assemblyTemplate.headerTitle')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.assembly-templates"
         actionRef={actionRef}
         rowKey="id"
         columns={columns}
         showAdvancedSearch
         showCreateButton={canCreate}
-        createButtonText="新建模板"
+        createButtonText={t('app.kuaizhizao.assemblyTemplate.createButton')}
         onCreate={openCreateModal}
         request={async (params) => {
           const result = await assemblyTemplateApi.list({
@@ -417,12 +533,16 @@ export const AssemblyTemplatesTab: React.FC = () => {
             total: result.total || 0,
           };
         }}
-        locale={{ emptyText: '暂无组装模板。' }}
+        locale={{ emptyText: t('app.kuaizhizao.assemblyTemplate.listEmpty') }}
         scroll={{ x: 1400 }}
       />
 
       <FormModalTemplate
-        title={editingTemplate ? '编辑组装模板' : '新建组装模板'}
+        title={
+          editingTemplate
+            ? t('app.kuaizhizao.assemblyTemplate.editModalTitle')
+            : t('app.kuaizhizao.assemblyTemplate.createModalTitle')
+        }
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -436,13 +556,13 @@ export const AssemblyTemplatesTab: React.FC = () => {
       >
         <ProFormText
           name="template_name"
-          label="模板名称"
-          rules={[{ required: true, message: '请输入模板名称' }]}
+          label={t('app.kuaizhizao.assemblyTemplate.colTemplateName')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterTemplateName') }]}
         />
         <UniMaterialSelect
           name="product_material_id"
-          label="成品/半成品物料"
-          placeholder="请选择成品或半成品"
+          label={t('app.kuaizhizao.assemblyTemplate.productMaterial')}
+          placeholder={t('app.kuaizhizao.assemblyTemplate.selectProductMaterial')}
           required
           showQuickCreate
           showAdvancedSearch
@@ -453,19 +573,27 @@ export const AssemblyTemplatesTab: React.FC = () => {
         />
         <ProFormDigit
           name="base_quantity"
-          label="基准数量"
-          rules={[{ required: true, message: '请输入基准数量' }]}
+          label={t('app.kuaizhizao.assemblyTemplate.colBaseQuantity')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterBaseQuantity') }]}
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
-        <ProFormSwitch name="is_active" label="启用" />
-        <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 3 }} />
+        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.warehouseCommon.enabled')} />
+        <ProFormTextArea
+          name="remarks"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          fieldProps={{ rows: 3 }}
+        />
         <AntForm.Item name="product_material_code" hidden />
         <AntForm.Item name="product_material_name" hidden />
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={editingItem ? '编辑模板明细' : '添加模板明细'}
+        title={
+          editingItem
+            ? t('app.kuaizhizao.assemblyTemplate.editItemModalTitle')
+            : t('app.kuaizhizao.assemblyTemplate.addItemModalTitle')
+        }
         open={itemModalVisible}
         onClose={() => {
           setItemModalVisible(false);
@@ -478,7 +606,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
       >
         <UniMaterialSelect
           name="material_id"
-          label="组件物料"
+          label={t('app.kuaizhizao.warehouseCommon.componentMaterial')}
           required
           disabled={!!editingItem}
           showQuickCreate
@@ -490,17 +618,26 @@ export const AssemblyTemplatesTab: React.FC = () => {
         />
         <ProFormDigit
           name="quantity_per_base"
-          label="单位用量"
-          rules={[{ required: true, message: '请输入单位用量' }]}
+          label={t('app.kuaizhizao.assemblyTemplate.colQtyPerBase')}
+          rules={[{ required: true, message: t('app.kuaizhizao.assemblyTemplate.enterQtyPerBase') }]}
           min={0.0001}
           fieldProps={{ precision: 4 }}
         />
-        <ProFormDigit name="unit_price" label="默认单价" min={0} fieldProps={{ precision: 2 }} />
-        <ProFormTextArea name="remarks" label="备注" fieldProps={{ rows: 2 }} />
+        <ProFormDigit
+          name="unit_price"
+          label={t('app.kuaizhizao.assemblyTemplate.colDefaultUnitPrice')}
+          min={0}
+          fieldProps={{ precision: 2 }}
+        />
+        <ProFormTextArea
+          name="remarks"
+          label={t('app.kuaizhizao.warehouseCommon.colRemarks')}
+          fieldProps={{ rows: 2 }}
+        />
       </FormModalTemplate>
 
       <DetailDrawerTemplate
-        title={`组装模板${currentTemplate?.template_code ? ` - ${currentTemplate.template_code}` : ''}`}
+        title={`${t('app.kuaizhizao.assemblyTemplate.detailTitle')}${currentTemplate?.template_code ? ` - ${currentTemplate.template_code}` : ''}`}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -510,7 +647,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
         dataSource={currentTemplate || {}}
         columns={detailColumns}
         customContent={
-          <Card title="组件明细" extra={draftActions}>
+          <Card title={t('app.kuaizhizao.assemblyTemplate.componentItems')} extra={draftActions}>
             <style>{WAREHOUSE_DETAIL_TABLE_STYLES}</style>
             {currentTemplate?.items && currentTemplate.items.length > 0 ? (
               <Table<TemplateItem>
@@ -519,61 +656,24 @@ export const AssemblyTemplatesTab: React.FC = () => {
                 rowKey="id"
                 pagination={false}
                 dataSource={currentTemplate.items}
-                columns={[
-                  { title: '组件编码', dataIndex: 'material_code', width: 120 },
-                  { title: '组件名称', dataIndex: 'material_name', width: 150 },
-                  {
-                    title: '单位用量',
-                    dataIndex: 'quantity_per_base',
-                    width: 100,
-                    align: 'right',
-                    render: (v) => Number(v || 0).toFixed(4),
-                  },
-                  {
-                    title: '默认单价',
-                    dataIndex: 'unit_price',
-                    width: 90,
-                    align: 'right',
-                    render: (v) => Number(v || 0).toFixed(2),
-                  },
-                  { title: '备注', dataIndex: 'remarks' },
-                  {
-                    title: '操作',
-                    width: 140,
-                    render: (_, item) =>
-                      canUpdate || canDelete ? (
-                        <Space size={0}>
-                          {canUpdate && (
-                            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentTemplate!, item)}>
-                              编辑
-                            </Button>
-                          )}
-                          {canDelete && (
-                            <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentTemplate!, item)}>
-                              删除
-                            </Button>
-                          )}
-                        </Space>
-                      ) : null,
-                  },
-                ]}
+                columns={itemTableColumns}
               />
             ) : (
-              <Typography.Text type="secondary">暂无明细，可手工添加或从 BOM 读取。</Typography.Text>
+              <Typography.Text type="secondary">{t('app.kuaizhizao.assemblyTemplate.noItemsHint')}</Typography.Text>
             )}
           </Card>
         }
       />
 
       <Modal
-        title="BOM 预览"
+        title={t('app.kuaizhizao.assemblyTemplate.bomPreviewTitle')}
         open={bomPreviewVisible}
         onCancel={() => setBomPreviewVisible(false)}
         footer={
           currentTemplate && canUpdate
             ? [
                 <Button key="cancel" onClick={() => setBomPreviewVisible(false)}>
-                  关闭
+                  {t('app.kuaizhizao.warehouseCommon.close')}
                 </Button>,
                 <Button
                   key="import"
@@ -583,12 +683,12 @@ export const AssemblyTemplatesTab: React.FC = () => {
                     confirmImportFromBom(currentTemplate);
                   }}
                 >
-                  确认导入
+                  {t('app.kuaizhizao.assemblyTemplate.confirmImport')}
                 </Button>,
               ]
             : [
                 <Button key="close" onClick={() => setBomPreviewVisible(false)}>
-                  关闭
+                  {t('app.kuaizhizao.warehouseCommon.close')}
                 </Button>,
               ]
         }
@@ -599,17 +699,7 @@ export const AssemblyTemplatesTab: React.FC = () => {
           rowKey={(row, idx) => `${row.material_id}-${idx}`}
           pagination={false}
           dataSource={bomPreviewLines}
-          columns={[
-            { title: '组件编码', dataIndex: 'material_code', width: 120 },
-            { title: '组件名称', dataIndex: 'material_name' },
-            {
-              title: '单位用量',
-              dataIndex: 'quantity_per_base',
-              width: 100,
-              align: 'right',
-              render: (v) => Number(v || 0).toFixed(4),
-            },
-          ]}
+          columns={bomPreviewColumns}
         />
       </Modal>
     </ListPageTemplate>

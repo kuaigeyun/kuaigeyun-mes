@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -6,22 +6,43 @@ import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const EquipmentStatusLog: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    {
-      title: '设备名称',
-      dataIndex: 'equipment_name',
-      width: 150,
-      render: (_, r: any) => (
-        <Typography.Text copyable={{ text: String(r?.equipment_name ?? '') }} ellipsis>
-          {r?.equipment_name ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '状态变更', dataIndex: 'status_change', width: 150 },
-    { title: '发生时间', dataIndex: 'event_time', valueType: 'dateTime', width: 180 },
-    { title: '持续时长(分)', dataIndex: 'duration_mins', valueType: 'digit', width: 120 },
-    { title: '备注', dataIndex: 'remark', ellipsis: true },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.equipmentReports.colEquipmentName'),
+        dataIndex: 'equipment_name',
+        width: 150,
+        render: (_, r: { equipment_name?: string }) => (
+          <Typography.Text copyable={{ text: String(r?.equipment_name ?? '') }} ellipsis>
+            {r?.equipment_name ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaizhizao.equipmentReports.colStatusChange'),
+        dataIndex: 'status_change',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.equipmentReports.colEventTime'),
+        dataIndex: 'event_time',
+        valueType: 'dateTime',
+        width: 180,
+      },
+      {
+        title: t('app.kuaizhizao.equipmentReports.colDurationMins'),
+        dataIndex: 'duration_mins',
+        valueType: 'digit',
+        width: 120,
+      },
+      {
+        title: t('app.kuaizhizao.equipmentReports.colRemark'),
+        dataIndex: 'remark',
+        ellipsis: true,
+      },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

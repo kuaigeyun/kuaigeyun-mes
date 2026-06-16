@@ -8,6 +8,8 @@ import { Gantt, Willow } from '@svar-ui/react-gantt';
 import '@svar-ui/react-gantt/all.css';
 import '../../kuaizhizao/components/gantt-scrollbar.less';
 import dayjs from 'dayjs';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
 import { ensureGanttIconsCssLoaded } from '../../../utils/loadGanttIconsCss';
 
 export interface RdProjectGanttItem {
@@ -34,13 +36,15 @@ interface GanttTask {
   lazy: false;
 }
 
-const SCALES = [
-  { unit: 'month' as const, step: 1, format: '%Y年%m月' },
-  { unit: 'week' as const, step: 1, format: '第%W周' },
-  { unit: 'day' as const, step: 1, format: '%d' },
-];
+function buildGanttScales(t: TFunction) {
+  return [
+    { unit: 'month' as const, step: 1, format: t('app.kuaiplm.gantt.scale.month') },
+    { unit: 'week' as const, step: 1, format: t('app.kuaiplm.gantt.scale.week') },
+    { unit: 'day' as const, step: 1, format: '%d' },
+  ];
+}
 
-function toGanttTask(item: RdProjectGanttItem, index: number): GanttTask {
+function toGanttTask(t: TFunction, item: RdProjectGanttItem, index: number): GanttTask {
   const startStr = item.planned_start_date || dayjs().format('YYYY-MM-DD');
   const endStr = item.planned_end_date || dayjs(startStr).add(90, 'day').format('YYYY-MM-DD');
   const start = dayjs(startStr).toDate();
@@ -52,7 +56,8 @@ function toGanttTask(item: RdProjectGanttItem, index: number): GanttTask {
   const duration = Math.max(1, Math.ceil(durationMs / (24 * 60 * 60 * 1000)));
   const gateHint = item.current_gate_name ? ` · ${item.current_gate_name}` : '';
   const text =
-    [item.project_code, item.project_name].filter(Boolean).join(' - ') + gateHint || `项目 ${index + 1}`;
+    [item.project_code, item.project_name].filter(Boolean).join(' - ') + gateHint ||
+    `${t('app.kuaiplm.common.columns.project')} ${index + 1}`;
   return {
     id: item.id ?? index,
     text,
@@ -70,21 +75,36 @@ interface RdProjectGanttChartProps {
 }
 
 const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
+  const { t } = useTranslation();
+
   useEffect(() => {
     ensureGanttIconsCssLoaded();
   }, []);
 
-  const tasks = useMemo(() => items.map(toGanttTask), [items]);
+  const tasks = useMemo(() => items.map((item, index) => toGanttTask(t, item, index)), [items, t]);
+
+  const scales = useMemo(() => buildGanttScales(t), [t]);
+
+  const columns = useMemo(
+    () => [
+      { id: 'text', header: t('app.kuaiplm.gantt.columns.projectGate'), width: 260 },
+      { id: 'start', header: t('app.kuaiplm.gantt.columns.plannedStart'), width: 100 },
+      { id: 'end', header: t('app.kuaiplm.gantt.columns.plannedEnd'), width: 100 },
+      { id: 'duration', header: t('app.kuaiplm.gantt.columns.durationDays'), width: 80 },
+      { id: 'progress', header: t('app.kuaiplm.gantt.columns.progressPercent'), width: 72 },
+    ],
+    [t],
+  );
 
   const { start, end } = useMemo(() => {
     if (tasks.length === 0) {
-      const t = dayjs();
+      const now = dayjs();
       return {
-        start: t.subtract(14, 'day').toDate(),
-        end: t.add(120, 'day').toDate(),
+        start: now.subtract(14, 'day').toDate(),
+        end: now.add(120, 'day').toDate(),
       };
     }
-    const dates = tasks.flatMap((t) => [t.start.getTime(), t.end.getTime()]);
+    const dates = tasks.flatMap((task) => [task.start.getTime(), task.end.getTime()]);
     const min = Math.min(...dates);
     const max = Math.max(...dates);
     return {
@@ -94,7 +114,7 @@ const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
   }, [tasks]);
 
   if (tasks.length === 0) {
-    return <Empty description="暂无在研项目，创建项目后将在此展示 NPI 进度时间轴" />;
+    return <Empty description={t('app.kuaiplm.gantt.empty')} />;
   }
 
   return (
@@ -103,18 +123,12 @@ const RdProjectGanttChart: React.FC<RdProjectGanttChartProps> = ({ items }) => {
         <Gantt
           tasks={tasks}
           links={[]}
-          scales={SCALES}
+          scales={scales}
           start={start}
           end={end}
           zoom
           readonly
-          columns={[
-            { id: 'text', header: '项目 / 阶段门', width: 260 },
-            { id: 'start', header: '计划开始', width: 100 },
-            { id: 'end', header: '计划完成', width: 100 },
-            { id: 'duration', header: '工期(天)', width: 80 },
-            { id: 'progress', header: '进度%', width: 72 },
-          ]}
+          columns={columns}
         />
       </Willow>
     </div>

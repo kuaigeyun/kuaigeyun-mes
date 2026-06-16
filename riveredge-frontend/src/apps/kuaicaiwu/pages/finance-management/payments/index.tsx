@@ -3,14 +3,15 @@
  *
  * 记录向供应商支付的款项，可用于核销应付单。
  */
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo, useCallback } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
-import { App, Button, Modal, Typography, Space, Dropdown, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
+import { App, Button, Modal, Typography, Space, Input, Table, Tag, Drawer, Descriptions, Spin } from 'antd';
 import { ModalForm, ProFormDatePicker, ProFormMoney, ProFormSelect, ProFormText, ProFormTextArea } from '@ant-design/pro-components';
-import { CheckOutlined, EyeOutlined, StopOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
+import { PlusOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../../components/uni-batch';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
@@ -22,6 +23,13 @@ import { payableService } from '../../../services/finance/payable';
 import { bankAccountService, type BankAccount } from '../../../services/finance/bank-account';
 import { paymentService } from '../../../services/finance/payment';
 import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '../../../constants/documentActionRegistry';
+import {
+  buildVoucherStatusEnum,
+  formatPaymentMethod,
+  formatPaymentSettlementType,
+  getPaymentMethodOptions,
+  getPaymentSettlementTypeOptions,
+} from '../../../utils/financeSharedOptions';
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
@@ -55,14 +63,7 @@ type PullPayableCandidate = {
   remaining_amount: number;
 };
 
-const PAYMENT_METHOD_OPTIONS = [
-  { label: '银行转账', value: '银行转账' },
-  { label: '现金', value: '现金' },
-  { label: '承兑汇票', value: '承兑汇票' },
-  { label: '支票', value: '支票' },
-  { label: '在线支付', value: '在线支付' },
-  { label: '其他', value: '其他' },
-];
+const P = 'app.kuaicaiwu.payment';
 
 const PaymentsPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
@@ -82,8 +83,20 @@ const PaymentsPage: React.FC = () => {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailRecord, setDetailRecord] = useState<PaymentVoucher | null>(null);
   const { message: messageApi } = App.useApp();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const pullFromPayableAction = getKuaicaiwuDocumentAction('payment.pull_from_payable');
+
+  const paymentMethodOptions = useMemo(() => getPaymentMethodOptions(t), [t]);
+  const paymentSettlementTypeOptions = useMemo(() => getPaymentSettlementTypeOptions(t), [t]);
+
+  const formatVoucherStatus = useCallback(
+    (status: string) => {
+      const enumMap = buildVoucherStatusEnum(t);
+      return (enumMap as Record<string, { text: string }>)[status]?.text ?? status;
+    },
+    [t],
+  );
 
   useEffect(() => {
     const load = async () => {
@@ -121,7 +134,7 @@ const PaymentsPage: React.FC = () => {
       const detail = await paymentService.getPayment(record.id);
       setDetailRecord(detail);
     } catch (error: any) {
-      messageApi.error(error.message || '加载详情失败');
+      messageApi.error(error.message || t(`${P}.loadDetailFailed`));
       setDetailOpen(false);
     } finally {
       setDetailLoading(false);
@@ -143,7 +156,7 @@ const PaymentsPage: React.FC = () => {
       attachments: normalizeDocumentAttachments(values.attachments),
     };
     await apiRequest('/apps/kuaicaiwu/payments', { method: 'POST', data });
-    messageApi.success('付款单创建成功');
+    messageApi.success(t(`${P}.createSuccess`));
     setCreateModalVisible(false);
     actionRef.current?.reload();
   };
@@ -171,7 +184,7 @@ const PaymentsPage: React.FC = () => {
       setPullCandidates(rows);
     } catch (e: any) {
       setPullCandidates([]);
-      messageApi.error(e?.response?.data?.detail || e?.message || '加载应付单失败');
+      messageApi.error(e?.response?.data?.detail || e?.message || t(`${P}.loadPayableFailed`));
     } finally {
       setPullLoading(false);
     }
@@ -186,13 +199,16 @@ const PaymentsPage: React.FC = () => {
 
   const handlePullNext = () => {
     if (!selectedPullPayableId) {
-      messageApi.warning(`请选择${pullFromPayableAction.sourceLabel}`);
+      messageApi.warning(t('app.kuaicaiwu.common.selectSource', { source: pullFromPayableAction.sourceLabel }));
       return;
     }
     const selected = pullCandidates.find((x) => x.id === selectedPullPayableId);
     if (!selected) return;
     if (selected.remaining_amount <= 0) {
-      messageApi.warning(`${pullFromPayableAction.sourceLabel}剩余应付为 0，无法创建${pullFromPayableAction.targetLabel}`);
+      messageApi.warning(t('app.kuaicaiwu.common.sourceNoRemaining', {
+        source: pullFromPayableAction.sourceLabel,
+        target: pullFromPayableAction.targetLabel,
+      }));
       return;
     }
     setPullSelectedPayable(selected);
@@ -204,7 +220,7 @@ const PaymentsPage: React.FC = () => {
     if (!pullSelectedPayable) return false;
     const totalAmount = Number(values.total_amount) || 0;
     if (totalAmount <= 0) {
-      messageApi.warning('付款金额必须大于 0');
+      messageApi.warning(t(`${P}.amountMustPositive`));
       return false;
     }
     setPullSubmitting(true);
@@ -222,18 +238,24 @@ const PaymentsPage: React.FC = () => {
           bank_account_id: values.bank_account_id,
           bank_account: bankAccountOptions.find((o) => o.value === values.bank_account_id)?.account_number || values.bank_account,
           settlement_type: values.settlement_type || 'normal',
-          notes: String(values.notes ?? '').trim() || `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
+          notes: String(values.notes ?? '').trim() || t('app.kuaicaiwu.common.createdFromSourceNote', {
+            source: pullFromPayableAction.sourceLabel,
+            code: pullSelectedPayable.payable_code,
+          }),
           attachments: normalizeDocumentAttachments(values.attachments),
         },
       });
-      messageApi.success(`已创建${pullFromPayableAction.targetLabel}`);
+      messageApi.success(t('app.kuaicaiwu.common.createdFromSource', {
+        source: pullFromPayableAction.sourceLabel,
+        target: pullFromPayableAction.targetLabel,
+      }));
       setPullFormVisible(false);
       setPullSelectedPayable(null);
       setSelectedPullPayableId(null);
       actionRef.current?.reload();
       return true;
     } catch (e: any) {
-      messageApi.error(e?.response?.data?.detail || e?.message || '创建失败');
+      messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
       return false;
     } finally {
       setPullSubmitting(false);
@@ -242,15 +264,15 @@ const PaymentsPage: React.FC = () => {
 
   const handleConfirm = async (record: PaymentVoucher) => {
     Modal.confirm({
-      title: '确认付款单',
-      content: `确定要确认付款单 ${record.payment_code} 吗？确认后不可修改。`,
+      title: t(`${P}.confirmTitle`),
+      content: t(`${P}.confirmContent`, { code: record.payment_code }),
       onOk: async () => {
         try {
           await apiRequest(`/apps/kuaicaiwu/payments/${record.id}/confirm`, { method: 'POST' });
-          messageApi.success('确认成功');
+          messageApi.success(t(`${P}.confirmSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
-          messageApi.error(e?.message || '操作失败');
+          messageApi.error(e?.message || t('common.operationFailed'));
         }
       },
     });
@@ -258,15 +280,15 @@ const PaymentsPage: React.FC = () => {
 
   const handleCancelVoucher = async (record: PaymentVoucher) => {
     Modal.confirm({
-      title: '作废付款单',
-      content: `确定要作废付款单 ${record.payment_code} 吗？已核销的付款单不能作废。`,
+      title: t(`${P}.voidTitle`),
+      content: t(`${P}.voidContent`, { code: record.payment_code }),
       onOk: async () => {
         try {
           await apiRequest(`/apps/kuaicaiwu/payments/${record.id}/cancel`, { method: 'POST' });
-          messageApi.success('作废成功');
+          messageApi.success(t(`${P}.voidSuccess`));
           actionRef.current?.reload();
         } catch (e: any) {
-          messageApi.error(e?.message || '操作失败');
+          messageApi.error(e?.message || t('common.operationFailed'));
         }
       },
     });
@@ -277,11 +299,11 @@ const PaymentsPage: React.FC = () => {
       for (const key of keys) {
         await apiRequest(`/apps/kuaicaiwu/payments/${key}/confirm`, { method: 'POST' });
       }
-      messageApi.success(`已确认 ${keys.length} 条付款单`);
+      messageApi.success(t(`${P}.batchConfirmed`, { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量确认失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchConfirmFailed'));
     }
   };
 
@@ -290,17 +312,76 @@ const PaymentsPage: React.FC = () => {
       for (const key of keys) {
         await apiRequest(`/apps/kuaicaiwu/payments/${key}/cancel`, { method: 'POST' });
       }
-      messageApi.success(`已作废 ${keys.length} 条付款单`);
+      messageApi.success(t(`${P}.batchVoided`, { count: keys.length }));
       setSelectedRowKeys([]);
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '批量作废失败');
+      messageApi.error(error?.message || t('app.kuaicaiwu.common.batchVoidFailed'));
     }
   };
 
-  const columns: ProColumns<PaymentVoucher>[] = [
+  const pullTableColumns = useMemo(() => [
+    { title: t(`${P}.pullCol.payableCode`), dataIndex: 'payable_code', width: 220, ellipsis: true },
+    { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 220, ellipsis: true },
     {
-      title: '付款单号',
+      title: t(`${P}.pullCol.docStatus`),
+      dataIndex: 'status',
+      width: 120,
+      align: 'center' as const,
+      render: (v: string) => {
+        const { text, color } = getStatusDisplay(v);
+        return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+      },
+    },
+    { title: t('app.kuaicaiwu.common.reviewStatus'), dataIndex: 'review_status', width: 120, align: 'center' as const },
+    {
+      title: t('app.kuaicaiwu.common.dueDate'),
+      dataIndex: 'due_date',
+      width: 120,
+      render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD') : '-'),
+    },
+    {
+      title: t('app.kuaicaiwu.payable.col.remainingAmount'),
+      dataIndex: 'remaining_amount',
+      width: 140,
+      align: 'right' as const,
+      render: (v: number) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+    },
+    {
+      title: t('app.kuaicaiwu.receipt.pullCol.canCreate'),
+      key: 'can_create',
+      width: 100,
+      align: 'center' as const,
+      render: (_: unknown, r: PullPayableCandidate) => (
+        Number(r.remaining_amount || 0) > 0
+          ? <Tag color="success">{t('app.kuaicaiwu.receipt.pullTag.canCreate')}</Tag>
+          : <Tag>{t('app.kuaicaiwu.receipt.pullTag.cannotCreate')}</Tag>
+      ),
+    },
+  ], [t]);
+
+  const batchMenuItems = useMemo(() => [
+    {
+      key: 'batch-confirm',
+      label: t('app.kuaicaiwu.common.batchConfirm'),
+      requireConfirm: true,
+      confirmTitle: (count: number) => t(`${P}.batchConfirmTitle`, { count }),
+      confirmDescription: t(`${P}.batchConfirmDesc`),
+      onClick: handleBatchConfirm,
+    },
+    {
+      key: 'batch-cancel',
+      label: t('app.kuaicaiwu.common.batchVoid'),
+      requireConfirm: true,
+      confirmTitle: (count: number) => t(`${P}.batchVoidTitle`, { count }),
+      confirmDescription: t(`${P}.batchVoidDesc`),
+      onClick: handleBatchCancel,
+    },
+  ], [t]);
+
+  const columns: ProColumns<PaymentVoucher>[] = useMemo(() => [
+    {
+      title: t(`${P}.col.code`),
       dataIndex: 'payment_code',
       width: 168,
       fixed: 'left',
@@ -311,26 +392,26 @@ const PaymentsPage: React.FC = () => {
       ),
     },
     {
-      title: '供应商名称',
+      title: t('app.kuaicaiwu.common.supplier'),
       dataIndex: 'supplier_name',
       width: 200,
     },
     {
-      title: '付款总额',
+      title: t(`${P}.col.totalAmount`),
       dataIndex: 'total_amount',
       valueType: 'money',
       align: 'right',
       width: 130,
     },
     {
-      title: '已核销金额',
+      title: t(`${P}.col.settledAmount`),
       dataIndex: 'settled_amount',
       valueType: 'money',
       align: 'right',
       width: 120,
     },
     {
-      title: '待核销金额',
+      title: t(`${P}.col.unsettledAmount`),
       dataIndex: 'unsettled_amount',
       align: 'right',
       width: 120,
@@ -341,42 +422,39 @@ const PaymentsPage: React.FC = () => {
       ),
     },
     {
-      title: '付款日期',
+      title: t(`${P}.col.paymentDate`),
       dataIndex: 'payment_date',
       valueType: 'date',
       width: 110,
     },
     {
-      title: '付款方式',
+      title: t(`${P}.col.paymentMethod`),
       dataIndex: 'payment_method',
       width: 110,
+      render: (_, record) => formatPaymentMethod(record.payment_method, t),
     },
     {
-      title: '状态',
+      title: t('common.status'),
       dataIndex: 'status',
       hideInTable: true,
-      valueEnum: {
-        Draft: { text: '草稿' },
-        Confirmed: { text: '已确认' },
-        Cancelled: { text: '已作废' },
-      },
+      valueEnum: buildVoucherStatusEnum(t),
     },
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 168,
       hideInSearch: true,
       render: (_, r) => (r.created_at ? dayjs(r.created_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaicaiwu.common.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       width: 120,
       hideInSearch: true,
       render: (_, record) => {
-        const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>);
+        const lc = getFinanceVoucherLifecycle(record as unknown as Record<string, unknown>, t);
         return (
           <UniLifecycle
             percent={lc.percent}
@@ -390,37 +468,37 @@ const PaymentsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       fixed: 'right',
       width: 220,
       render: (_, record) => [
             <Button {...rowActionKind('read')} key="det" onClick={() => openDetail(record)}>
-              详情
+              {t('common.detail')}
             </Button>,
             record.status === 'Draft' ? (
               <Button {...rowActionKind('audit')} key="cf" onClick={() => handleConfirm(record)}>
-                确认
+                {t('app.kuaicaiwu.common.confirm')}
               </Button>
             ) : null,
             record.status === 'Confirmed' ? (
               <Button {...rowActionKind('submit')} key="st" onClick={() => navigate(`/apps/kuaicaiwu/finance-management/settlement`)}>
-                核销
+                {t('app.kuaicaiwu.common.settle')}
               </Button>
             ) : null,
             record.status !== 'Cancelled' && record.settled_amount === 0 ? (
               <Button {...rowActionKind('revoke')} key="ca" onClick={() => handleCancelVoucher(record)}>
-                作废
+                {t('app.kuaicaiwu.common.void')}
               </Button>
             ) : null,
           ].filter(Boolean) as React.ReactNode[],
     },
-  ];
+  ], [t, navigate]);
 
   return (
     <ListPageTemplate>
       <UniTable<PaymentVoucher>
-        headerTitle="付款单管理"
+        headerTitle={t(`${P}.pageTitle`)}
         actionRef={actionRef}
         enableRowSelection
         selectedRowKeys={selectedRowKeys}
@@ -431,38 +509,21 @@ const PaymentsPage: React.FC = () => {
         showAdvancedSearch
         search={{ labelWidth: 120 }}
         showCreateButton={false}
-        createButtonText="新建付款单"
+        createButtonText={t(`${P}.createTitle`)}
         onCreate={() => setCreateModalVisible(true)}
         toolBarActionsAfterBatch={[
           <UniBatchMenuButton
             key="payment-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
-            menuItems={[
-              {
-                key: 'batch-confirm',
-                label: '批量确认',
-                requireConfirm: true,
-                confirmTitle: (count) => `确认批量确认 ${count} 条付款单`,
-                confirmDescription: '仅草稿付款单可确认，不满足条件的记录会由后端拒绝。',
-                onClick: handleBatchConfirm,
-              },
-              {
-                key: 'batch-cancel',
-                label: '批量作废',
-                requireConfirm: true,
-                confirmTitle: (count) => `确认批量作废 ${count} 条付款单`,
-                confirmDescription: '已核销的付款单不能作废，不满足条件的记录会由后端拒绝。',
-                onClick: handleBatchCancel,
-              },
-            ]}
+            buttonText={t('components.uniBatch.batchActions')}
+            menuItems={batchMenuItems}
           />,
         ]}
         toolBarRender={() => [
           <UniPullCreateToolbar
             compactKey="create-payment-with-pull"
             createIcon={<PlusOutlined />}
-            createLabel="新建付款单"
+            createLabel={t(`${P}.createTitle`)}
             onCreate={() => setCreateModalVisible(true)}
             menuItems={buildKuaicaiwuPullCreateMenuItems([
               {
@@ -505,21 +566,21 @@ const PaymentsPage: React.FC = () => {
         onOk={() => {
           void handlePullNext();
         }}
-        okText="下一步"
+        okText={t('components.uniLifecycle.nextStep')}
         confirmLoading={false}
         destroyOnHidden
       >
         <Space orientation="vertical" size={12} style={{ width: '100%' }}>
           <Input.Search
             allowClear
-            placeholder="按应付单号/供应商搜索"
+            placeholder={t(`${P}.pullSearchPlaceholder`)}
             value={pullKeyword}
             onChange={(e) => setPullKeyword(e.target.value)}
             onSearch={(value) => {
               setPullKeyword(value);
               void loadPullPayableCandidates(value);
             }}
-            enterButton="搜索"
+            enterButton={t('common.search')}
           />
           <Table<PullPayableCandidate>
             rowKey="id"
@@ -535,42 +596,13 @@ const PaymentsPage: React.FC = () => {
             onRow={(record) => ({
               onClick: () => setSelectedPullPayableId(record.id),
             })}
-            columns={[
-              { title: '应付单号', dataIndex: 'payable_code', width: 220, ellipsis: true },
-              { title: '供应商', dataIndex: 'supplier_name', width: 220, ellipsis: true },
-              {
-                title: '业务状态',
-                dataIndex: 'status',
-                width: 120,
-                align: 'center',
-                render: (v) => {
-                  const { text, color } = getStatusDisplay(v);
-                  return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
-                },
-              },
-              { title: '审核状态', dataIndex: 'review_status', width: 120, align: 'center' },
-              { title: '到期日期', dataIndex: 'due_date', width: 120, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-              {
-                title: '剩余应付',
-                dataIndex: 'remaining_amount',
-                width: 140,
-                align: 'right',
-                render: (v) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
-              },
-              {
-                title: '可转单',
-                key: 'can_create',
-                width: 100,
-                align: 'center',
-                render: (_, r) => (Number(r.remaining_amount || 0) > 0 ? <Tag color="success">可创建</Tag> : <Tag>不可创建</Tag>),
-              },
-            ]}
+            columns={pullTableColumns}
           />
         </Space>
       </Modal>
 
       <ModalForm
-        title="填写付款单信息"
+        title={t(`${P}.fillInfoTitle`)}
         open={pullFormVisible}
         onOpenChange={(open) => {
           if (pullSubmitting) return;
@@ -592,51 +624,51 @@ const PaymentsPage: React.FC = () => {
                 total_amount: pullSelectedPayable.remaining_amount,
                 payment_date: dayjs(),
                 payment_method: '银行转账',
-                notes: `从${pullFromPayableAction.sourceLabel} ${pullSelectedPayable.payable_code} 创建`,
+                notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+                  source: pullFromPayableAction.sourceLabel,
+                  code: pullSelectedPayable.payable_code,
+                }),
               }
             : undefined
         }
       >
-        <ProFormText name="payable_code" label="来源应付单" readonly />
-        <ProFormText name="supplier_name" label="供应商" readonly />
+        <ProFormText name="payable_code" label={t(`${P}.sourcePayable`)} readonly />
+        <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
         <ProFormMoney
           name="total_amount"
-          label="付款金额"
+          label={t(`${P}.col.amount`)}
           min={0.01}
           rules={[{ required: true }]}
           fieldProps={{ max: pullSelectedPayable?.remaining_amount }}
         />
-        <ProFormDatePicker name="payment_date" label="付款日期" rules={[{ required: true }]} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormDatePicker name="payment_date" label={t(`${P}.col.paymentDate`)} rules={[{ required: true }]} fieldProps={{ style: { width: '100%' } }} />
         <ProFormSelect
           name="payment_method"
-          label="付款方式"
-          options={PAYMENT_METHOD_OPTIONS}
-          rules={[{ required: true, message: '请选择付款方式' }]}
+          label={t(`${P}.col.paymentMethod`)}
+          options={paymentMethodOptions}
+          rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
         />
         <ProFormSelect
           name="settlement_type"
-          label="结算类型"
+          label={t(`${P}.settlementType.label`)}
           initialValue="normal"
-          options={[
-            { label: '普通付款', value: 'normal' },
-            { label: '预付款', value: 'prepayment' },
-          ]}
+          options={paymentSettlementTypeOptions}
         />
         <ProFormSelect
           name="bank_account_id"
-          label="出账银行账户"
+          label={t(`${P}.outBankAccount`)}
           options={bankAccountOptions}
-          placeholder="选择后确认付款将自动记银行流水"
+          placeholder={t('app.kuaicaiwu.receipt.bankAccountPlaceholder')}
           showSearch
           allowClear
         />
-        <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormText name="bank_account" label={t(`${P}.outAccountNote`)} placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
 
       <ModalForm
-        title="新建付款单"
+        title={t(`${P}.createTitle`)}
         open={createModalVisible}
         onOpenChange={setCreateModalVisible}
         onFinish={handleCreate}
@@ -644,45 +676,44 @@ const PaymentsPage: React.FC = () => {
       >
         <ProFormSelect
           name="supplier_id"
-          label="供应商"
+          label={t('app.kuaicaiwu.common.supplier')}
           options={supplierOptions}
-          rules={[{ required: true, message: '请选择供应商' }]}
-          placeholder="请选择供应商"
+          rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
+          placeholder={t('app.kuaicaiwu.common.selectSupplier')}
           showSearch
         />
-        <ProFormMoney name="total_amount" label="付款金额" min={0.01} rules={[{ required: true }]} />
-        <ProFormDatePicker name="payment_date" label="付款日期" rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+        <ProFormMoney name="total_amount" label={t(`${P}.col.amount`)} min={0.01} rules={[{ required: true }]} />
+        <ProFormDatePicker name="payment_date" label={t(`${P}.col.paymentDate`)} rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
         <ProFormSelect
           name="payment_method"
-          label="付款方式"
-          options={PAYMENT_METHOD_OPTIONS}
-          rules={[{ required: true, message: '请选择付款方式' }]}
-          placeholder="请选择付款方式"
+          label={t(`${P}.col.paymentMethod`)}
+          options={paymentMethodOptions}
+          rules={[{ required: true, message: t(`${P}.selectPaymentMethod`) }]}
+          placeholder={t(`${P}.selectPaymentMethod`)}
         />
         <ProFormSelect
           name="settlement_type"
-          label="结算类型"
+          label={t(`${P}.settlementType.label`)}
           initialValue="normal"
-          options={[
-            { label: '普通付款', value: 'normal' },
-            { label: '预付款', value: 'prepayment' },
-          ]}
+          options={paymentSettlementTypeOptions}
         />
         <ProFormSelect
           name="bank_account_id"
-          label="出账银行账户"
+          label={t(`${P}.outBankAccount`)}
           options={bankAccountOptions}
-          placeholder="选择后确认付款将自动记银行流水"
+          placeholder={t('app.kuaicaiwu.receipt.bankAccountPlaceholder')}
           showSearch
           allowClear
         />
-        <ProFormText name="bank_account" label="出款账号（备注）" placeholder="未选银行账户时可手工填写" />
-        <ProFormTextArea name="notes" label="备注" />
+        <ProFormText name="bank_account" label={t(`${P}.outAccountNote`)} placeholder={t('app.kuaicaiwu.receipt.bankAccountNotePlaceholder')} />
+        <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
         <DocumentAttachmentsField category="payment_attachments" />
       </ModalForm>
 
       <Drawer
-        title={detailRecord ? `付款单 · ${detailRecord.payment_code}` : '付款单详情'}
+        title={detailRecord
+          ? t(`${P}.detailDrawerTitle`, { code: detailRecord.payment_code })
+          : t(`${P}.detailTitle`)}
         open={detailOpen}
         size={520}
         onClose={() => { setDetailOpen(false); setDetailRecord(null); }}
@@ -691,21 +722,21 @@ const PaymentsPage: React.FC = () => {
         <Spin spinning={detailLoading}>
           {detailRecord ? (
             <Descriptions column={1} bordered size="small">
-              <Descriptions.Item label="单号">{detailRecord.payment_code}</Descriptions.Item>
-              <Descriptions.Item label="供应商">{detailRecord.supplier_name}</Descriptions.Item>
-              <Descriptions.Item label="状态">{detailRecord.status}</Descriptions.Item>
-              <Descriptions.Item label="付款日期">{detailRecord.payment_date}</Descriptions.Item>
-              <Descriptions.Item label="付款方式">{detailRecord.payment_method}</Descriptions.Item>
-              <Descriptions.Item label="结算类型">
-                {detailRecord.settlement_type === 'prepayment' ? '预付款' : '普通付款'}
+              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.code')}>{detailRecord.payment_code}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.common.supplier')}>{detailRecord.supplier_name}</Descriptions.Item>
+              <Descriptions.Item label={t('common.status')}>{formatVoucherStatus(detailRecord.status)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${P}.col.paymentDate`)}>{detailRecord.payment_date}</Descriptions.Item>
+              <Descriptions.Item label={t(`${P}.col.paymentMethod`)}>{formatPaymentMethod(detailRecord.payment_method, t)}</Descriptions.Item>
+              <Descriptions.Item label={t(`${P}.settlementType.label`)}>
+                {formatPaymentSettlementType(detailRecord.settlement_type, t)}
               </Descriptions.Item>
-              <Descriptions.Item label="付款金额">¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="已核销">¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="未核销">¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
-              <Descriptions.Item label="银行账户">{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
-              <Descriptions.Item label="账号备注">{detailRecord.bank_account || '—'}</Descriptions.Item>
-              <Descriptions.Item label="备注">{detailRecord.notes || '—'}</Descriptions.Item>
-              <Descriptions.Item label="创建时间">
+              <Descriptions.Item label={t(`${P}.col.amount`)}>¥{Number(detailRecord.total_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.settled')}>¥{Number(detailRecord.settled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.unsettled')}>¥{Number(detailRecord.unsettled_amount).toFixed(2)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.bankAccount')}>{resolveBankLabel(detailRecord.bank_account_id)}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.receipt.detail.accountNote')}>{detailRecord.bank_account || '—'}</Descriptions.Item>
+              <Descriptions.Item label={t('app.kuaicaiwu.common.notes')}>{detailRecord.notes || '—'}</Descriptions.Item>
+              <Descriptions.Item label={t('common.createdAt')}>
                 {detailRecord.created_at ? dayjs(detailRecord.created_at).format('YYYY-MM-DD HH:mm') : '—'}
               </Descriptions.Item>
             </Descriptions>

@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Card, Row, Col, Tag, Popover, Table, Progress, Space, Typography, Empty, Spin } from 'antd';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import {
   InfoCircleOutlined,
   ThunderboltOutlined,
@@ -27,6 +28,7 @@ function trackingGroupPercent(nodes: PurchaseTrackingNode[]): number {
 
 /** 多供应商比价助手 */
 export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSelectSupplier?: (id: number) => void }> = ({ materialId, onSelectSupplier }) => {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['priceComparison', materialId],
     queryFn: () => getPriceComparison([materialId]),
@@ -35,56 +37,61 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
 
   const comparison = data?.results?.find(r => r.material_id === materialId);
 
+  const columns = useMemo(
+    () => [
+      { title: t('app.kuaizhizao.purchaseOrder.col.supplier'), dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.empower.dealPrice'),
+        dataIndex: 'last_price',
+        key: 'price',
+        width: 100,
+        align: 'right' as const,
+        render: (p: number) => <Text strong>¥{Number(p).toFixed(2)}</Text>,
+      },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.empower.purchaseDate'),
+        dataIndex: 'last_order_date',
+        key: 'date',
+        width: 110,
+        render: (d: string) => (d ? dayjs(d).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('common.actions'),
+        key: 'action',
+        width: 70,
+        align: 'center' as const,
+        render: (_: unknown, record: { supplier_id: number }) => (
+          <a style={{ fontSize: 13 }} onClick={() => onSelectSupplier?.(record.supplier_id)}>
+            {t('app.kuaizhizao.purchaseOrder.empower.select')}
+          </a>
+        ),
+      },
+    ],
+    [t, onSelectSupplier],
+  );
+
   const content = (
     <div style={{ width: 550 }}>
       {isLoading ? (
         <div style={{ padding: 20, textAlign: 'center' }}><Spin size="small" /></div>
       ) : !comparison || !comparison.comparison?.length ? (
-        <Empty description="暂无其他供应商历史成交记录" />
+        <Empty description={t('app.kuaizhizao.purchaseOrder.empower.compareEmpty')} />
       ) : (
         <>
           <div style={{ marginBottom: 12, fontSize: 13, color: 'rgba(0,0,0,0.65)' }}>
-            为物料{' '}
-            <Text strong>
-              {comparison.material_name}
-              {comparison.material_code ? ` (${comparison.material_code})` : ''}
-            </Text>{' '}
-            找到以下成交记录：
+            {t('app.kuaizhizao.purchaseOrder.empower.compareIntro', {
+              name: comparison.material_name,
+              code: comparison.material_code
+                ? t('app.kuaizhizao.purchaseOrder.empower.compareIntroCode', { code: comparison.material_code })
+                : '',
+            })}
           </div>
           <Table
             size="small"
             dataSource={comparison.comparison}
             pagination={false}
             rowKey="supplier_id"
-            columns={[
-              { title: '供应商', dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
-              { 
-                title: '成交价', 
-                dataIndex: 'last_price', 
-                key: 'price',
-                width: 100,
-                align: 'right',
-                render: (p) => <Text strong>¥{Number(p).toFixed(2)}</Text>
-              },
-              { 
-                title: '进货日期', 
-                dataIndex: 'last_order_date', 
-                key: 'date',
-                width: 110,
-                render: (d) => d ? dayjs(d).format('YYYY-MM-DD') : '-'
-              },
-              {
-                title: '操作',
-                key: 'action',
-                width: 70,
-                align: 'center',
-                render: (_, record) => (
-                  <a style={{ fontSize: 13 }} onClick={() => onSelectSupplier?.(record.supplier_id)}>
-                    选用
-                  </a>
-                )
-              }
-            ]}
+            columns={columns}
           />
         </>
       )}
@@ -92,13 +99,13 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
   );
 
   return (
-    <Popover content={content} title="伙计比价助手" trigger="click" placement="right">
-      <Tag 
-        color="orange" 
-        icon={<ThunderboltOutlined />} 
+    <Popover content={content} title={t('app.kuaizhizao.purchaseOrder.empower.compareTitle')} trigger="click" placement="right">
+      <Tag
+        color="orange"
+        icon={<ThunderboltOutlined />}
         style={{ cursor: 'pointer', borderRadius: 4, padding: '2px 8px' }}
       >
-        比价
+        {t('app.kuaizhizao.purchaseOrder.empower.compare')}
       </Tag>
     </Popover>
   );
@@ -108,6 +115,7 @@ export const MultiSupplierPriceComparison: React.FC<{ materialId: number; onSele
  * 履约全链路追踪（与销售订单 SalesOrderTrackingRadar 一致的卡片式进度 + 分组明细）
  */
 export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ orderId }) => {
+  const { t } = useTranslation();
   const { data, isLoading, isError } = useQuery({
     queryKey: ['purchaseTracking', orderId],
     queryFn: () => getPurchaseOrderTracking(orderId),
@@ -165,7 +173,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
 
   const renderNodeSummary = (nodes: PurchaseTrackingNode[]) => {
     if (!nodes.length) {
-      return <Text type="secondary" style={{ fontSize: 13 }}>暂无环节数据。</Text>;
+      return <Text type="secondary" style={{ fontSize: 13 }}>{t('app.kuaizhizao.purchaseOrder.empower.noNodeData')}</Text>;
     }
     return (
       <div style={{ maxHeight: 140, overflowY: 'auto' }}>
@@ -222,7 +230,16 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
   }
 
   if (isError || !data?.nodes?.length) {
-    return <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={isError ? '加载履约追踪失败' : '暂无追踪数据'} />;
+    return (
+      <Empty
+        image={Empty.PRESENTED_IMAGE_SIMPLE}
+        description={
+          isError
+            ? t('app.kuaizhizao.purchaseOrder.empower.trackingLoadFailed')
+            : t('app.kuaizhizao.purchaseOrder.empower.trackingEmpty')
+        }
+      />
+    );
   }
 
   const nodes = data.nodes;
@@ -233,7 +250,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
   return (
     <div>
       <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
-        <Text strong>总体进度</Text>
+        <Text strong>{t('app.kuaizhizao.purchaseOrder.empower.overallProgress')}</Text>
         <Progress
           percent={data.overall_progress}
           size="small"
@@ -244,7 +261,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
           {renderProgressCard(
-            '订单与审核',
+            t('app.kuaizhizao.purchaseOrder.empower.groupOrderAudit'),
             trackingGroupPercent(orderAudit),
             <SolutionOutlined />,
             '#1890ff',
@@ -253,7 +270,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
         </Col>
         <Col xs={24} md={8}>
           {renderProgressCard(
-            '供应商与质检',
+            t('app.kuaizhizao.purchaseOrder.empower.groupSupplierQc'),
             trackingGroupPercent(supplierQc),
             <SafetyOutlined />,
             '#fa8c16',
@@ -262,7 +279,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
         </Col>
         <Col xs={24} md={8}>
           {renderProgressCard(
-            '仓库入库',
+            t('app.kuaizhizao.purchaseOrder.empower.groupWarehousing'),
             trackingGroupPercent(warehousing),
             <InboxOutlined />,
             '#52c41a',
@@ -276,6 +293,7 @@ export const FulfillmentTrackingTimeline: React.FC<{ orderId: number }> = ({ ord
 
 /** 物料历史价格洞察 */
 export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: number }> = ({ materialId, currentPrice }) => {
+  const { t } = useTranslation();
   const { data, isLoading } = useQuery({
     queryKey: ['materialPriceHistory', materialId],
     queryFn: () => getMaterialPriceHistory(materialId),
@@ -289,54 +307,67 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
   const minPrice = toNumber(data?.min_price);
   const maxPrice = toNumber(data?.max_price);
 
+  const historyColumns = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.purchaseOrder.empower.purchaseDate'),
+        dataIndex: 'order_date',
+        key: 'date',
+        render: (d: string) => dayjs(d).format('YYYY-MM-DD'),
+      },
+      { title: t('app.kuaizhizao.purchaseOrder.col.supplier'), dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
+      {
+        title: t('app.kuaizhizao.purchaseOrder.empower.unitPrice'),
+        dataIndex: 'unit_price',
+        key: 'price',
+        render: (p: number) => (
+          <Text strong style={{ color: currentPrice && toNumber(p) < currentPrice ? '#52c41a' : 'inherit' }}>
+            ¥{toNumber(p).toFixed(2)}
+          </Text>
+        ),
+      },
+    ],
+    [t, currentPrice],
+  );
+
   const content = (
     <div style={{ width: 450 }}>
       {isLoading ? (
         <Spin size="small" />
       ) : !data || data.history_items.length === 0 ? (
-        <Empty description="暂无历史采购记录" />
+        <Empty description={t('app.kuaizhizao.purchaseOrder.empower.noHistory')} />
       ) : (
         <>
           <Space split={<div style={{ width: 1, height: 14, background: 'var(--river-divider-color)' }} />} style={{ marginBottom: 12, width: '100%', justifyContent: 'space-around' }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>平均成交价</div>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.avgPrice')}</div>
               <Text strong style={{ color: '#1890ff' }}>¥{avgPrice.toFixed(2)}</Text>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>历史最低价</div>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.minPrice')}</div>
               <Text strong style={{ color: '#52c41a' }}>¥{minPrice.toFixed(2)}</Text>
             </div>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>历史最高价</div>
+              <div style={{ fontSize: 12, color: 'rgba(0,0,0,0.45)' }}>{t('app.kuaizhizao.purchaseOrder.empower.maxPrice')}</div>
               <Text strong style={{ color: '#ff4d4f' }}>¥{maxPrice.toFixed(2)}</Text>
             </div>
           </Space>
-          
+
           <Table
             size="small"
             dataSource={data.history_items}
             pagination={false}
-            columns={[
-              { title: '进货日期', dataIndex: 'order_date', key: 'date', render: (d) => dayjs(d).format('YYYY-MM-DD') },
-              { title: '供应商', dataIndex: 'supplier_name', key: 'supplier', ellipsis: true },
-              { 
-                title: '单价', 
-                dataIndex: 'unit_price', 
-                key: 'price', 
-                render: (p) => (
-                  <Text strong style={{ color: currentPrice && toNumber(p) < currentPrice ? '#52c41a' : 'inherit' }}>
-                    ¥{toNumber(p).toFixed(2)}
-                  </Text>
-                ) 
-              },
-            ]}
+            columns={historyColumns}
           />
           {currentPrice && avgPrice > 0 && (
             <div style={{ marginTop: 12, padding: '8px 12px', background: '#f0faff', borderRadius: 4 }}>
               <Text>
-                当前报价较历史均价: 
+                {t('app.kuaizhizao.purchaseOrder.empower.currentVsAvg')}
                 <Text strong style={{ color: currentPrice <= avgPrice ? '#52c41a' : '#ff4d4f', marginLeft: 4 }}>
-                  {currentPrice <= avgPrice ? '调低' : '调高'} {Math.abs(((currentPrice - avgPrice) / avgPrice) * 100).toFixed(1)}%
+                  {currentPrice <= avgPrice
+                    ? t('app.kuaizhizao.purchaseOrder.empower.priceLower')
+                    : t('app.kuaizhizao.purchaseOrder.empower.priceHigher')}{' '}
+                  {Math.abs(((currentPrice - avgPrice) / avgPrice) * 100).toFixed(1)}%
                 </Text>
               </Text>
             </div>
@@ -347,7 +378,7 @@ export const PriceHistoryInsight: React.FC<{ materialId: number; currentPrice?: 
   );
 
   return (
-    <Popover content={content} title="价格洞察 (最近10笔)" trigger="hover">
+    <Popover content={content} title={t('app.kuaizhizao.purchaseOrder.empower.priceInsightTitle')} trigger="hover">
       <InfoCircleOutlined style={{ color: '#1890ff', cursor: 'pointer', marginLeft: 4 }} />
     </Popover>
   );

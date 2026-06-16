@@ -4,7 +4,8 @@
  * 基于使用次数（maintenance_interval）展示即将到期/已过期的模具保养提醒。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { Tag, Typography } from 'antd';
 import { UniTable } from '../../../../../components/uni-table';
@@ -25,62 +26,66 @@ interface MoldMaintenanceReminder {
 }
 
 const MoldMaintenanceRemindersPage: React.FC = () => {
+  const { t } = useTranslation();
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  const columns: ProColumns<MoldMaintenanceReminder>[] = [
-    {
-      title: '模具编号',
-      dataIndex: 'mold_code',
-      width: 120,
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
-          {r.mold_code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '模具名称', dataIndex: 'mold_name', width: 180, ellipsis: true },
-    { title: '当前使用次数', dataIndex: 'total_usage_count', width: 120, align: 'right' },
-    { title: '保养间隔', dataIndex: 'maintenance_interval', width: 100, align: 'right' },
-    { title: '下次保养次数', dataIndex: 'next_maintenance_at_count', width: 120, align: 'right' },
-    {
-      title: '剩余次数',
-      dataIndex: 'usages_until_due',
-      width: 100,
-      align: 'right',
-      render: (_, r) => {
-        const v = r.usages_until_due ?? 0;
-        if (v < 0) return <Tag color="red">已过期 {Math.abs(v)} 次</Tag>;
-        return <span>{v}</span>;
+  const columns: ProColumns<MoldMaintenanceReminder>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.moldMaintenanceReminder.colMoldCode'),
+        dataIndex: 'mold_code',
+        width: 120,
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.mold_code ?? '') }} ellipsis>
+            {r.mold_code ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      { title: t('app.kuaizhizao.moldMaintenanceReminder.colMoldName'), dataIndex: 'mold_name', width: 180, ellipsis: true },
+      { title: t('app.kuaizhizao.moldMaintenanceReminder.colTotalUsageCount'), dataIndex: 'total_usage_count', width: 120, align: 'right' },
+      { title: t('app.kuaizhizao.moldMaintenanceReminder.colMaintenanceInterval'), dataIndex: 'maintenance_interval', width: 100, align: 'right' },
+      { title: t('app.kuaizhizao.moldMaintenanceReminder.colNextMaintenanceAtCount'), dataIndex: 'next_maintenance_at_count', width: 120, align: 'right' },
+      {
+        title: t('app.kuaizhizao.moldMaintenanceReminder.colUsagesUntilDue'),
+        dataIndex: 'usages_until_due',
+        width: 100,
+        align: 'right',
+        render: (_, r) => {
+          const v = r.usages_until_due ?? 0;
+          if (v < 0) return <Tag color="red">{t('app.kuaizhizao.moldMaintenanceReminder.overdueUsages', { count: Math.abs(v) })}</Tag>;
+          return <span>{v}</span>;
+        },
       },
-    },
-  ];
+      {
+        title: t('app.kuaizhizao.moldMaintenanceReminder.colLifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getDueReminderLifecycle(record as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+    ],
+    [t],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable<MoldMaintenanceReminder>
-        headerTitle="模具保养提醒"
+        headerTitle={t('app.kuaizhizao.moldMaintenanceReminder.title')}
         columnPersistenceId="apps.kuaizhizao.pages.equipment-management.mold-maintenance-reminders"
         actionRef={actionRef}
         enableRowSelection

@@ -1,22 +1,19 @@
 /**
  * 生产成本核算页面
- *
- * 提供基于物料来源类型的生产成本核算功能，支持自制件、虚拟件、配置件的成本核算。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, ProFormTextArea, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, Divider } from 'antd';
+import { App, Button, Card, Divider } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { productionCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { normalizeCostListRows } from '../costSelectData';
+import { formatCalculationType, formatSourceType, getSourceTypeTag } from '../../../utils/costUiLabels';
 
 interface ProductionCostResult {
   material_id: number;
@@ -35,11 +32,11 @@ interface ProductionCostResult {
 }
 
 export interface ProductionCostPageProps {
-  /** 嵌入成本核算「分项试算」时隐藏页头标题，避免与外层重复 */
   embedded?: boolean;
 }
 
 const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -48,24 +45,18 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
   const [loading, setLoading] = useState(false);
   const [materials, setMaterials] = useState<any[]>([]);
 
-  /**
-   * 加载物料列表
-   */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        setMaterials(normalizeCostListRows(result));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        setMaterials(normalizeCostListRows(list));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
   }, []);
 
-  /**
-   * 处理核算
-   */
   const handleCalculate = async (values: any) => {
     try {
       setLoading(true);
@@ -75,19 +66,16 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
         variant_attributes: values.variant_attributes ? JSON.parse(values.variant_attributes) : undefined,
       };
-      const result = await productionCostApi.calculate(data);
-      setResult(result);
-      messageApi.success('生产成本核算成功');
+      const res = await productionCostApi.calculate(data);
+      setResult(res);
+      messageApi.success(t('app.kuaicaiwu.productionCost.calculateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '生产成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.productionCost.calculateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 打开核算弹窗
-   */
   const handleOpenModal = () => {
     setModalVisible(true);
     setResult(null);
@@ -98,46 +86,42 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
     });
   };
 
-  /**
-   * 获取物料来源类型标签
-   */
-  const getSourceTypeTag = (sourceType: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      Make: { color: 'blue', text: '自制件' },
-      Buy: { color: 'green', text: '采购件' },
-      Outsource: { color: 'orange', text: '委外件' },
-      Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
-    };
-    const type = typeMap[sourceType] || { color: 'default', text: sourceType };
-    return <Tag color={type.color}>{type.text}</Tag>;
-  };
+  const resultColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
+      { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
+      { title: t('app.kuaicaiwu.productionCost.col.processingCost'), dataIndex: 'labor_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'), dataIndex: 'manufacturing_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.unitCost'), dataIndex: 'unit_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationType'), dataIndex: 'calculation_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationDate'), dataIndex: 'calculation_date' },
+    ],
+    [t],
+  );
 
   return (
     <PageContainer
       ghost={embedded}
-      title={embedded ? false : '生产成本核算'}
+      title={embedded ? false : t('app.kuaicaiwu.productionCost.title')}
       extra={[
-        <Button
-          key="calculate"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={handleOpenModal}
-        >
-          核算生产成本
+        <Button key="calculate" type="primary" icon={<CalculatorOutlined />} onClick={handleOpenModal}>
+          {t('app.kuaicaiwu.productionCost.calculate')}
         </Button>,
       ]}
     >
-      {/* 核算结果展示 */}
       {result && (
-        <Card title="核算结果" style={{ marginBottom: 16 }}>
+        <Card title={t('app.kuaicaiwu.costCommon.resultTitle')} style={{ marginBottom: 16 }}>
           <ProDescriptions
             bordered
             column={2}
             dataSource={{
               material_code: result.material_code,
               material_name: result.material_name,
-              source_type: getSourceTypeTag(result.source_type),
+              source_type: getSourceTypeTag(result.source_type, t),
               quantity: result.quantity,
               material_cost: `¥${result.material_cost?.toFixed(2)}`,
               labor_cost: `¥${result.labor_cost?.toFixed(2)}`,
@@ -148,27 +132,15 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
                 </span>
               ),
               unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
-              calculation_type: result.calculation_type,
+              calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
             }}
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code' },
-              { title: '物料名称', dataIndex: 'material_name' },
-              { title: '物料来源类型', dataIndex: 'source_type' },
-              { title: '数量', dataIndex: 'quantity' },
-              { title: '材料成本', dataIndex: 'material_cost' },
-              { title: '加工成本', dataIndex: 'labor_cost' },
-              { title: '制造费用', dataIndex: 'manufacturing_cost' },
-              { title: '总成本', dataIndex: 'total_cost' },
-              { title: '单位成本', dataIndex: 'unit_cost' },
-              { title: '核算类型', dataIndex: 'calculation_type' },
-              { title: '核算日期', dataIndex: 'calculation_date' },
-            ]}
+            columns={resultColumns}
           />
 
           {result.cost_details && (
             <>
-              <Divider>成本明细</Divider>
+              <Divider>{t('app.kuaicaiwu.costCommon.costDetails')}</Divider>
               <div style={{ maxHeight: 400, overflow: 'auto' }}>
                 <StructuredCostDataView data={result.cost_details} />
               </div>
@@ -177,9 +149,8 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
         </Card>
       )}
 
-      {/* 核算弹窗 */}
       <FormModalTemplate
-        title="核算生产成本"
+        title={t('app.kuaicaiwu.productionCost.modalTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -192,13 +163,13 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
       >
         <ProFormSelect
           name="material_id"
-          label="物料"
-          placeholder="请选择物料"
-          rules={[{ required: true, message: '请选择物料' }]}
+          label={t('app.kuaicaiwu.costCommon.field.material')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.materialPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
           options={materials
-            .filter(m => ['Make', 'Phantom', 'Configure'].includes(m.sourceType || m.source_type))
-            .map(m => ({
-              label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+            .filter((m) => ['Make', 'Phantom', 'Configure'].includes(m.sourceType || m.source_type))
+            .map((m) => ({
+              label: `${m.mainCode || m.code} - ${m.name} (${formatSourceType(m.sourceType || m.source_type || 'Make', t)})`,
               value: m.id,
             }))}
           fieldProps={{
@@ -209,29 +180,25 @@ const ProductionCostPage: React.FC<ProductionCostPageProps> = ({ embedded = fals
         />
         <ProFormDigit
           name="quantity"
-          label="数量"
-          placeholder="请输入数量"
-          rules={[{ required: true, message: '请输入数量' }, { type: 'number', min: 0.0001, message: '数量必须大于0' }]}
-          fieldProps={{
-            precision: 4,
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.quantity')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
+          rules={[
+            { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+            { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
+          ]}
+          fieldProps={{ precision: 4, style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormTextArea
           name="variant_attributes"
-          label="属性（配置件需要）"
-          placeholder='请输入属性JSON，例如：{"颜色":"红色","尺寸":"大"}'
-          fieldProps={{
-            rows: 3,
-          }}
+          label={t('app.kuaicaiwu.productionCost.field.variantAttributes')}
+          placeholder={t('app.kuaicaiwu.productionCost.field.variantAttributesPlaceholder')}
+          fieldProps={{ rows: 3 }}
         />
       </FormModalTemplate>
     </PageContainer>

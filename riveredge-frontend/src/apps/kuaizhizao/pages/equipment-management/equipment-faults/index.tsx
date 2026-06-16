@@ -35,11 +35,34 @@ import {
   DRAWER_CONFIG,
 } from '../../../../../components/layout-templates';
 import { UniLifecycle, UniLifecycleStepper } from '../../../../../components/uni-lifecycle';
+import { ListUniLifecycleCell } from '../../sales-management/shared/ListUniLifecycleCell';
 import { getEquipmentFaultLifecycle } from '../../../utils/equipmentLifecycle';
 import { equipmentFaultApi, equipmentApi } from '../../../services/equipment';
 import dayjs from 'dayjs';
 import { DocumentTrackingTimelineBody, useDocumentTracking } from '../../../../../components/document-tracking-panel';
 import { EquipmentTraceBriefPrimaryActions } from '../EquipmentTraceBriefFooter';
+
+const P = 'app.kuaizhizao.equipmentFault';
+
+const FAULT_STATUS_KEYS: Record<string, string> = {
+  '待处理': `${P}.status.pending`,
+  '处理中': `${P}.status.processing`,
+  '已修复': `${P}.status.repaired`,
+  '已关闭': `${P}.status.closed`,
+};
+
+const FAULT_LEVEL_KEYS: Record<string, { key: string; color: string }> = {
+  轻微: { key: `${P}.level.minor`, color: 'default' },
+  一般: { key: `${P}.level.normal`, color: 'warning' },
+  严重: { key: `${P}.level.severe`, color: 'error' },
+};
+
+const FAULT_STATUS_COLORS: Record<string, string> = {
+  '待处理': 'default',
+  '处理中': 'processing',
+  '已修复': 'success',
+  '已关闭': 'default',
+};
 
 function buildDescriptionItemsFromColumns<T extends Record<string, any>>(
   dataSource: T,
@@ -142,7 +165,7 @@ const EquipmentFaultsPage: React.FC = () => {
   const handleEdit = async (record: EquipmentFault) => {
     try {
       if (!record.uuid) {
-        messageApi.error('故障记录UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
       const detail = await equipmentFaultApi.get(record.uuid);
@@ -162,7 +185,7 @@ const EquipmentFaultsPage: React.FC = () => {
         });
       }, 100);
     } catch (error) {
-      messageApi.error('获取故障记录详情失败');
+      messageApi.error(t(`${P}.detailFailed`));
     }
   };
 
@@ -172,7 +195,7 @@ const EquipmentFaultsPage: React.FC = () => {
   const handleDetail = async (record: EquipmentFault) => {
     try {
       if (!record.uuid) {
-        messageApi.error('故障记录UUID不存在');
+        messageApi.error(t(`${P}.uuidNotFound`));
         return;
       }
       const detail = await equipmentFaultApi.get(record.uuid);
@@ -180,7 +203,7 @@ const EquipmentFaultsPage: React.FC = () => {
       setDrawerVisible(true);
       setFaultTrackingRefreshKey((k) => k + 1);
     } catch (error) {
-      messageApi.error('获取故障记录详情失败');
+      messageApi.error(t(`${P}.detailFailed`));
     }
   };
 
@@ -189,14 +212,14 @@ const EquipmentFaultsPage: React.FC = () => {
    */
   const handleDelete = async (keys: React.Key[]) => {
     Modal.confirm({
-      title: '确认批量删除',
-      content: `确定要删除选中的 ${keys.length} 条设备故障记录吗？`,
+      title: t(`${P}.batchDeleteTitle`),
+      content: t(`${P}.batchDeleteContent`, { count: keys.length }),
       onOk: async () => {
         try {
           for (const uuid of keys) {
             await equipmentFaultApi.delete(String(uuid));
           }
-          messageApi.success(`成功删除 ${keys.length} 条记录`);
+          messageApi.success(t('common.batchDeleteSuccess', { count: keys.length }));
           setSelectedRowKeys([]);
           if (faultDetail?.uuid && keys.map(String).includes(String(faultDetail.uuid))) {
             setDrawerVisible(false);
@@ -204,7 +227,7 @@ const EquipmentFaultsPage: React.FC = () => {
           }
           actionRef.current?.reload();
         } catch (error: any) {
-          messageApi.error(error.message || '删除失败');
+          messageApi.error(error.message || t('common.deleteFailed'));
         }
       },
     });
@@ -224,10 +247,10 @@ const EquipmentFaultsPage: React.FC = () => {
       const editedUuid = isEdit ? currentFault?.uuid : undefined;
       if (isEdit && editedUuid) {
         await equipmentFaultApi.update(editedUuid, submitData);
-        messageApi.success('故障记录更新成功');
+        messageApi.success(t(`${P}.updateSuccess`));
       } else {
         await equipmentFaultApi.create(submitData);
-        messageApi.success('故障记录创建成功');
+        messageApi.success(t(`${P}.createSuccess`));
       }
       setModalVisible(false);
       setCurrentFault(null);
@@ -243,7 +266,7 @@ const EquipmentFaultsPage: React.FC = () => {
         }
       }
     } catch (error: any) {
-      messageApi.error(error.message || '操作失败');
+      messageApi.error(error.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -253,7 +276,7 @@ const EquipmentFaultsPage: React.FC = () => {
    */
   const handleCreateRepair = (record: EquipmentFault) => {
     if (!record.uuid || !record.equipment_uuid) {
-      messageApi.error('故障记录或设备信息不完整');
+      messageApi.error(t(`${P}.incompleteInfo`));
       return;
     }
     setRepairFault(record);
@@ -262,7 +285,10 @@ const EquipmentFaultsPage: React.FC = () => {
       repairFormRef.current?.setFieldsValue({
         repair_date: dayjs(),
         repair_type: '现场维修',
-        repair_description: `维修故障：${record.fault_no} - ${record.fault_description || ''}`,
+        repair_description: t(`${P}.repairDescriptionTemplate`, {
+          faultNo: record.fault_no,
+          description: record.fault_description || '',
+        }),
         status: '进行中',
       });
     }, 100);
@@ -283,13 +309,13 @@ const EquipmentFaultsPage: React.FC = () => {
         status: values.status ?? '进行中',
         attachments: normalizeDocumentAttachments(values.attachments),
       });
-      messageApi.success('维修记录已创建');
+      messageApi.success(t(`${P}.repairCreated`));
       setRepairModalVisible(false);
       setRepairFault(null);
       repairFormRef.current?.resetFields();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || '创建失败');
+      messageApi.error(error?.message || t('common.operationFailed'));
       throw error;
     }
   };
@@ -297,86 +323,78 @@ const EquipmentFaultsPage: React.FC = () => {
   const detailBaseColumns: ProDescriptionsItemProps<EquipmentFault>[] = useMemo(
     () => [
     {
-      title: '故障编号',
+      title: t(`${P}.col.faultNo`),
       dataIndex: 'fault_no',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.fault_no ?? '') }}>{r.fault_no ?? '-'}</Typography.Text>
       ),
     },
     {
-      title: '设备编号',
+      title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       render: (_, r) => (
         <Typography.Text copyable={{ text: String(r.equipment_code ?? '') }}>{r.equipment_code ?? '-'}</Typography.Text>
       ),
     },
     {
-      title: '设备名称',
+      title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
     },
     {
-      title: '故障日期',
+      title: t(`${P}.col.faultDate`),
       dataIndex: 'fault_date',
       valueType: 'date',
     },
     {
-      title: '故障类型',
+      title: t(`${P}.col.faultType`),
       dataIndex: 'fault_type',
     },
     {
-      title: '故障级别',
+      title: t(`${P}.col.faultLevel`),
       dataIndex: 'fault_level',
       render: (_, record) => {
         const level = record.fault_level;
-        const levelMap: Record<string, { text: string; color: string }> = {
-          轻微: { text: '轻微', color: 'default' },
-          一般: { text: '一般', color: 'warning' },
-          严重: { text: '严重', color: 'error' },
-        };
-        const config = levelMap[level || ''] || { text: level || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = level ? FAULT_LEVEL_KEYS[level] : undefined;
+        if (!config) return <Tag>{level || '-'}</Tag>;
+        return <Tag color={config.color}>{t(config.key)}</Tag>;
       },
     },
     {
-      title: '故障描述',
+      title: t(`${P}.col.faultDescription`),
       dataIndex: 'fault_description',
     },
     {
-      title: '状态',
+      title: t(`${P}.col.status`),
       dataIndex: 'status',
       render: (_, record) => {
         const status = record.status;
-        const statusMap: Record<string, { text: string; color: string }> = {
-          待处理: { text: '待处理', color: 'default' },
-          处理中: { text: '处理中', color: 'processing' },
-          已修复: { text: '已修复', color: 'success' },
-          已关闭: { text: '已关闭', color: 'default' },
-        };
-        const config = statusMap[status || ''] || { text: status || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const key = status ? FAULT_STATUS_KEYS[status] : undefined;
+        const text = key ? t(key) : (status || '-');
+        const color = status ? (FAULT_STATUS_COLORS[status] || 'default') : 'default';
+        return <Tag color={color}>{text}</Tag>;
       },
     },
     {
-      title: '需要维修',
+      title: t(`${P}.col.repairRequired`),
       dataIndex: 'repair_required',
       render: (_, record) => (
         <Tag color={record.repair_required ? 'warning' : 'success'}>
-          {record.repair_required ? '是' : '否'}
+          {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
         </Tag>
       ),
     },
     {
-      title: '创建时间',
+      title: t(`${P}.col.createdAt`),
       dataIndex: 'created_at',
       valueType: 'dateTime',
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       valueType: 'dateTime',
     },
     ],
-    []
+    [t]
   );
 
   const renderFaultRowNodes = (record: EquipmentFault): React.ReactNode[] => {
@@ -391,7 +409,7 @@ const EquipmentFaultsPage: React.FC = () => {
           void handleDetail(record);
         }}
       >
-        详情
+        {t('common.detail')}
       </Button>,
       <Button {...rowActionKind('update')}
         key="edit"
@@ -403,7 +421,7 @@ const EquipmentFaultsPage: React.FC = () => {
           void handleEdit(record);
         }}
       >
-        编辑
+        {t('common.edit')}
       </Button>,
       <Button {...rowActionKind('delete')}
         key="del"
@@ -414,13 +432,13 @@ const EquipmentFaultsPage: React.FC = () => {
         onClick={(e) => {
           e.stopPropagation();
           Modal.confirm({
-            title: '确认删除',
-            content: `确定要删除故障记录"${record.fault_no}"吗？`,
+            title: t(`${P}.deleteTitle`),
+            content: t(`${P}.deleteContent`, { code: record.fault_no }),
             onOk: () => record.uuid && handleDelete([record.uuid]),
           });
         }}
       >
-        删除
+        {t('common.delete')}
       </Button>,
     ];
     if (record.repair_required && record.status !== '已修复') {
@@ -430,7 +448,7 @@ const EquipmentFaultsPage: React.FC = () => {
           handleCreateRepair(record);
         }}
         >
-          创建维修
+          {t(`${P}.action.createRepair`)}
         </Button>
       );
     }
@@ -440,9 +458,9 @@ const EquipmentFaultsPage: React.FC = () => {
   /**
    * 表格列定义
    */
-  const columns: ProColumns<EquipmentFault>[] = [
+  const columns: ProColumns<EquipmentFault>[] = useMemo(() => [
     {
-      title: '故障编号',
+      title: t(`${P}.col.faultNo`),
       dataIndex: 'fault_no',
       width: 140,
       ellipsis: true,
@@ -454,7 +472,7 @@ const EquipmentFaultsPage: React.FC = () => {
       ),
     },
     {
-      title: '设备编号',
+      title: t(`${P}.col.equipmentCode`),
       dataIndex: 'equipment_code',
       width: 140,
       render: (_, r) => (
@@ -464,49 +482,45 @@ const EquipmentFaultsPage: React.FC = () => {
       ),
     },
     {
-      title: '设备名称',
+      title: t(`${P}.col.equipmentName`),
       dataIndex: 'equipment_name',
       width: 200,
       ellipsis: true,
     },
     {
-      title: '故障日期',
+      title: t(`${P}.col.faultDate`),
       dataIndex: 'fault_date',
       valueType: 'date',
       width: 120,
     },
     {
-      title: '故障类型',
+      title: t(`${P}.col.faultType`),
       dataIndex: 'fault_type',
       width: 120,
     },
     {
-      title: '故障级别',
+      title: t(`${P}.col.faultLevel`),
       dataIndex: 'fault_level',
       width: 100,
       render: (_, record) => {
         const level = record.fault_level;
-        const levelMap: Record<string, { text: string; color: string }> = {
-          轻微: { text: '轻微', color: 'default' },
-          一般: { text: '一般', color: 'warning' },
-          严重: { text: '严重', color: 'error' },
-        };
-        const config = levelMap[level || ''] || { text: level || '-', color: 'default' };
-        return <Tag color={config.color}>{config.text}</Tag>;
+        const config = level ? FAULT_LEVEL_KEYS[level] : undefined;
+        if (!config) return <Tag>{level || '-'}</Tag>;
+        return <Tag color={config.color}>{t(config.key)}</Tag>;
       },
     },
     {
-      title: '需要维修',
+      title: t(`${P}.col.repairRequired`),
       dataIndex: 'repair_required',
       width: 100,
       render: (_, record) => (
         <Tag color={record.repair_required ? 'warning' : 'success'}>
-          {record.repair_required ? '是' : '否'}
+          {record.repair_required ? t(`${P}.yes`) : t(`${P}.no`)}
         </Tag>
       ),
     },
     {
-      title: '更新时间',
+      title: t('common.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -514,28 +528,17 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t(`${P}.col.lifecycle`),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
       hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getEquipmentFaultLifecycle(record as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
-      },
+      render: (_, record) => (
+        <ListUniLifecycleCell lifecycle={getEquipmentFaultLifecycle(record as Record<string, unknown>, t)} />
+      ),
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       key: 'action',
       width: 200,
       fixed: 'right',
@@ -543,13 +546,13 @@ const EquipmentFaultsPage: React.FC = () => {
       render: (_, record) =>
         renderFaultRowActions(renderFaultRowNodes(record), `flt-${record.uuid ?? 'row'}`),
     },
-  ];
+  ], [t]);
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<EquipmentFault>
-          headerTitle="设备故障维修管理"
+          headerTitle={t(`${P}.title`)}
           columnPersistenceId="apps.kuaizhizao.pages.equipment-management.equipment-faults"
           actionRef={actionRef}
           rowKey="uuid"
@@ -569,7 +572,7 @@ const EquipmentFaultsPage: React.FC = () => {
                 total: response.total || 0,
               };
             } catch (error) {
-              messageApi.error('获取故障记录列表失败');
+              messageApi.error(t(`${P}.listFailed`));
               return {
                 data: [],
                 success: false,
@@ -586,7 +589,7 @@ const EquipmentFaultsPage: React.FC = () => {
           showDeleteButton={true}
           onDelete={handleDelete}
           showCreateButton={true}
-          createButtonText="新建设备故障"
+          createButtonText={t(`${P}.create`)}
           onCreate={handleCreate}
           scroll={{ x: 1900 }}
         />
@@ -594,7 +597,7 @@ const EquipmentFaultsPage: React.FC = () => {
 
       {/* 创建/编辑故障记录 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑故障记录' : '新建故障记录'}
+        title={isEdit ? t(`${P}.editModal`) : t(`${P}.createModal`)}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -611,8 +614,8 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="equipment_uuid"
-              label="关联设备"
-              placeholder="请选择设备"
+              label={t(`${P}.form.equipment`)}
+              placeholder={t(`${P}.form.selectEquipment`)}
               request={async () => {
                 try {
                   const response = await equipmentApi.list({ limit: 1000 });
@@ -624,15 +627,15 @@ const EquipmentFaultsPage: React.FC = () => {
                   return [];
                 }
               }}
-              rules={[{ required: true, message: '请选择设备' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectEquipment`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormDatePicker
               name="fault_date"
-              label="故障日期"
-              placeholder="请选择故障日期"
-              rules={[{ required: true, message: '请选择故障日期' }]}
+              label={t(`${P}.col.faultDate`)}
+              placeholder={t(`${P}.form.selectFaultDate`)}
+              rules={[{ required: true, message: t(`${P}.form.selectFaultDate`) }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
@@ -641,28 +644,28 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="fault_type"
-              label="故障类型"
-              placeholder="请选择故障类型"
+              label={t(`${P}.col.faultType`)}
+              placeholder={t(`${P}.form.selectFaultType`)}
               options={[
-                { label: '机械故障', value: '机械故障' },
-                { label: '电气故障', value: '电气故障' },
-                { label: '软件故障', value: '软件故障' },
-                { label: '其他', value: '其他' },
+                { label: t(`${P}.faultType.mechanical`), value: '机械故障' },
+                { label: t(`${P}.faultType.electrical`), value: '电气故障' },
+                { label: t(`${P}.faultType.software`), value: '软件故障' },
+                { label: t(`${P}.faultType.other`), value: '其他' },
               ]}
-              rules={[{ required: true, message: '请选择故障类型' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectFaultType`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="fault_level"
-              label="故障级别"
-              placeholder="请选择故障级别"
+              label={t(`${P}.col.faultLevel`)}
+              placeholder={t(`${P}.form.selectFaultLevel`)}
               options={[
-                { label: '轻微', value: '轻微' },
-                { label: '一般', value: '一般' },
-                { label: '严重', value: '严重' },
+                { label: t(`${P}.level.minor`), value: '轻微' },
+                { label: t(`${P}.level.normal`), value: '一般' },
+                { label: t(`${P}.level.severe`), value: '严重' },
               ]}
-              rules={[{ required: true, message: '请选择故障级别' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectFaultLevel`) }]}
             />
           </Col>
         </Row>
@@ -675,9 +678,9 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="fault_description"
-              label="故障描述"
-              placeholder="请输入故障描述"
-              rules={[{ required: true, message: '请输入故障描述' }]}
+              label={t(`${P}.form.faultDescription`)}
+              placeholder={t(`${P}.form.faultDescriptionPlaceholder`)}
+              rules={[{ required: true, message: t(`${P}.form.faultDescriptionPlaceholder`) }]}
               fieldProps={{ rows: 4 }}
             />
           </Col>
@@ -686,27 +689,27 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="status"
-              label="状态"
-              placeholder="请选择状态"
+              label={t(`${P}.col.status`)}
+              placeholder={t(`${P}.form.selectStatus`)}
               options={[
-                { label: '待处理', value: '待处理' },
-                { label: '处理中', value: '处理中' },
-                { label: '已修复', value: '已修复' },
-                { label: '已关闭', value: '已关闭' },
+                { label: t(`${P}.status.pending`), value: '待处理' },
+                { label: t(`${P}.status.processing`), value: '处理中' },
+                { label: t(`${P}.status.repaired`), value: '已修复' },
+                { label: t(`${P}.status.closed`), value: '已关闭' },
               ]}
-              rules={[{ required: true, message: '请选择状态' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectStatus`) }]}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="repair_required"
-              label="需要维修"
-              placeholder="请选择是否需要维修"
+              label={t(`${P}.col.repairRequired`)}
+              placeholder={t(`${P}.form.selectRepairRequired`)}
               options={[
-                { label: '是', value: true },
-                { label: '否', value: false },
+                { label: t(`${P}.yes`), value: true },
+                { label: t(`${P}.no`), value: false },
               ]}
-              rules={[{ required: true, message: '请选择是否需要维修' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectRepairRequired`) }]}
             />
           </Col>
         </Row>
@@ -714,7 +717,7 @@ const EquipmentFaultsPage: React.FC = () => {
 
       {/* 创建维修记录 Modal */}
       <FormModalTemplate
-        title="创建维修记录"
+        title={t(`${P}.repairModal`)}
         open={repairModalVisible}
         onClose={() => {
           setRepairModalVisible(false);
@@ -731,23 +734,23 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormDatePicker
               name="repair_date"
-              label="维修日期"
-              placeholder="请选择维修日期"
-              rules={[{ required: true, message: '请选择维修日期' }]}
+              label={t(`${P}.form.repairDate`)}
+              placeholder={t(`${P}.form.selectRepairDate`)}
+              rules={[{ required: true, message: t(`${P}.form.selectRepairDate`) }]}
               fieldProps={{ showTime: true, style: { width: '100%' } }}
             />
           </Col>
           <Col span={12}>
             <ProFormSelect
               name="repair_type"
-              label="维修类型"
-              placeholder="请选择维修类型"
+              label={t(`${P}.form.repairType`)}
+              placeholder={t(`${P}.form.selectRepairType`)}
               options={[
-                { label: '现场维修', value: '现场维修' },
-                { label: '返厂维修', value: '返厂维修' },
-                { label: '委外维修', value: '委外维修' },
+                { label: t(`${P}.repairType.onSite`), value: '现场维修' },
+                { label: t(`${P}.repairType.returnFactory`), value: '返厂维修' },
+                { label: t(`${P}.repairType.outsource`), value: '委外维修' },
               ]}
-              rules={[{ required: true, message: '请选择维修类型' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectRepairType`) }]}
             />
           </Col>
         </Row>
@@ -760,9 +763,9 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={24}>
             <ProFormTextArea
               name="repair_description"
-              label="维修描述"
-              placeholder="请输入维修描述"
-              rules={[{ required: true, message: '请输入维修描述' }]}
+              label={t(`${P}.form.repairDescription`)}
+              placeholder={t(`${P}.form.repairDescriptionPlaceholder`)}
+              rules={[{ required: true, message: t(`${P}.form.repairDescriptionPlaceholder`) }]}
               fieldProps={{ rows: 4 }}
             />
           </Col>
@@ -771,14 +774,14 @@ const EquipmentFaultsPage: React.FC = () => {
           <Col span={12}>
             <ProFormSelect
               name="status"
-              label="维修状态"
-              placeholder="请选择维修状态"
+              label={t(`${P}.form.repairStatus`)}
+              placeholder={t(`${P}.form.selectRepairStatus`)}
               options={[
-                { label: '进行中', value: '进行中' },
-                { label: '已完成', value: '已完成' },
-                { label: '已取消', value: '已取消' },
+                { label: t(`${P}.repairStatus.inProgress`), value: '进行中' },
+                { label: t(`${P}.repairStatus.completed`), value: '已完成' },
+                { label: t(`${P}.repairStatus.cancelled`), value: '已取消' },
               ]}
-              rules={[{ required: true, message: '请选择维修状态' }]}
+              rules={[{ required: true, message: t(`${P}.form.selectRepairStatus`) }]}
             />
           </Col>
         </Row>
@@ -786,7 +789,7 @@ const EquipmentFaultsPage: React.FC = () => {
 
       {/* 故障记录详情 Drawer */}
       <DetailDrawerTemplate
-        title="故障记录详情"
+        title={t(`${P}.detailTitle`)}
         open={drawerVisible}
         zIndex={faultDetailDrawerZIndex}
         onClose={() => {
@@ -800,17 +803,17 @@ const EquipmentFaultsPage: React.FC = () => {
         customContent={
           faultDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t(`${P}.section.basicInfo`)}>
                 <Descriptions
                   column={3}
                   size="small"
                   items={buildDescriptionItemsFromColumns(faultDetail, detailBaseColumns)}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t(`${P}.section.lifecycle`)}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
-                    const lc = getEquipmentFaultLifecycle(faultDetail as Record<string, unknown>);
+                    const lc = getEquipmentFaultLifecycle(faultDetail as Record<string, unknown>, t);
                     const mainStages = lc.mainStages ?? [];
                     if (mainStages.length === 0) return null;
                     return (
@@ -844,10 +847,10 @@ const EquipmentFaultsPage: React.FC = () => {
                   ) : null}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="故障单无明细行表" />
+              <DetailDrawerSection title={t(`${P}.section.detailInfo`)}>
+                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noDetailLines`)} />
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t(`${P}.section.operationHistory`)}>
                 {faultTracking.loading && (
                   <div style={{ textAlign: 'center', padding: 24 }}>
                     <Spin />
@@ -860,7 +863,7 @@ const EquipmentFaultsPage: React.FC = () => {
                   <DocumentTrackingTimelineBody data={faultTracking.data} />
                 )}
                 {!faultTracking.loading && !faultTracking.data && !faultTracking.error && (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.empty.noOperationRecords`)} />
                 )}
               </DetailDrawerSection>
             </>

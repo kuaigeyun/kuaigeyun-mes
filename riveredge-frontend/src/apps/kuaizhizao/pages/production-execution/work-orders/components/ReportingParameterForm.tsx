@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next'
 import { Form, Input, InputNumber, Switch, Space, Typography, Card } from 'antd';
 
 const { Text } = Typography;
@@ -38,6 +39,7 @@ const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
   onValuesChange,
   embedded = false,
 }) => {
+  const { t } = useTranslation()
   if (!parameters || parameters.length === 0) {
     return null;
   }
@@ -84,7 +86,7 @@ const ReportingParameterForm: React.FC<ReportingParameterFormProps> = ({
 
   return (
     <Card 
-      title={<Text style={{ color: '#fff', fontSize: 18 }}>报工参数采集</Text>}
+      title={<Text style={{ color: '#fff', fontSize: 18 }}>{t('app.kuaizhizao.workOrder.reportParamTitle')}</Text>}
       style={{ 
         background: 'rgba(255, 255, 255, 0.05)', 
         border: '1px solid rgba(255, 255, 255, 0.1)',

@@ -18,6 +18,7 @@ import {
   getDictionaryItemList,
   createDictionaryItem,
 } from '../../services/dataDictionary';
+import { mapSystemDictionaryItemOptions } from '../../utils/systemDictionaryI18n';
 
 type DictionaryOption = { label: string; value: string };
 
@@ -144,7 +145,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
   quickCreatePopoverZIndex,
   hostResource,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const isReadonlyMode = useProFormReadonlyMode(readonly);
   const [options, setOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -165,12 +166,12 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
       const dictionary = await getDataDictionaryByCode(dictionaryCode, loadOpts);
       setDictionaryUuid(dictionary.uuid);
       const items = await getDictionaryItemList(dictionary.uuid, true, loadOpts);
-      const optionsList = items
-        .sort((a, b) => a.sort_order - b.sort_order)
-        .map(item => ({
-          label: item.label,
-          value: item.value,
-        }));
+      const optionsList = mapSystemDictionaryItemOptions(dictionaryCode, items, t)
+        .sort((a, b) => {
+          const orderA = items.find((i) => i.value === a.value)?.sort_order ?? 0;
+          const orderB = items.find((i) => i.value === b.value)?.sort_order ?? 0;
+          return orderA - orderB;
+        });
       setOptions(optionsList);
     } catch (error: any) {
       console.error(`加载字典项失败 (${dictionaryCode}):`, error);
@@ -182,7 +183,7 @@ export const DictionarySelect: React.FC<DictionarySelectProps> = ({
 
   useEffect(() => {
     loadDictionaryItems();
-  }, [dictionaryCode, hostResource]);
+  }, [dictionaryCode, hostResource, i18n.language]);
 
   /**
    * 处理创建新项

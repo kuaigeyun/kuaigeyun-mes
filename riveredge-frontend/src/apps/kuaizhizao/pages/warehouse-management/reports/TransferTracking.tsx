@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
@@ -6,14 +6,42 @@ import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const TransferTracking: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    copyableCodeColumn('调拨单号', 'order_code', 150),
-    { title: '调出仓库', dataIndex: 'from_warehouse', width: 150 },
-    { title: '调入仓库', dataIndex: 'to_warehouse', width: 150 },
-    { title: '物料名称', dataIndex: 'material_name', width: 200 },
-    { title: '调拨数量', dataIndex: 'quantity', valueType: 'digit', width: 100 },
-    { title: '状态', dataIndex: 'status', width: 100 },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      copyableCodeColumn(
+        t('app.kuaizhizao.warehouseReports.colTransferCode'),
+        'order_code',
+        150,
+      ),
+      {
+        title: t('app.kuaizhizao.warehouseReports.colFromWarehouse'),
+        dataIndex: 'from_warehouse',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colToWarehouse'),
+        dataIndex: 'to_warehouse',
+        width: 150,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+        dataIndex: 'material_name',
+        width: 200,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colTransferQty'),
+        dataIndex: 'quantity',
+        valueType: 'digit',
+        width: 100,
+      },
+      {
+        title: t('common.status'),
+        dataIndex: 'status',
+        width: 100,
+      },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

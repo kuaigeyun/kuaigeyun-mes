@@ -35,6 +35,7 @@ import {
 } from '@ant-design/icons';
 
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import dayjs from 'dayjs';
 
@@ -57,11 +58,15 @@ import {
 import type { ModuleKpiDef, ModuleShortcutDef } from '../../../kuaizhizao/components/module-center';
 
 import { getDashboardSummary, type MyTaskItem } from '../../services/dashboard';
-import { TASK_STATUS_LABELS } from '../../services/rd-project';
 
 import { listUnifiedChanges } from '../../services/change-desk';
 
 import RdProjectGanttChart from '../../components/RdProjectGanttChart';
+import {
+  getKuaiplmChangeCategoryText,
+  getKuaiplmProjectStatusText,
+  getKuaiplmTaskStatusText,
+} from '../../components/kuaiplmMeta';
 
 
 
@@ -81,18 +86,9 @@ const PROJECT_STATUS_COLOR: Record<string, string> = {
 
 
 
-const CHANGE_CATEGORY_LABEL: Record<string, string> = {
-
-  bom: 'BOM',
-
-  route: '工艺路线',
-
-};
-
-
-
 const KuaiplmDashboard: React.FC = () => {
 
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const { token } = theme.useToken();
@@ -154,11 +150,15 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'projects',
 
-        title: '在研项目',
+        title: t('app.kuaiplm.dashboard.kpi.activeProjects'),
 
         value: data?.project_in_progress ?? 0,
 
-        subtitle: `全部 ${data?.project_total ?? 0} · 研发 ${data?.project_rd_total ?? 0} · 交付 ${data?.project_delivery_total ?? 0}`,
+        subtitle: t('app.kuaiplm.dashboard.kpi.activeProjectsSubtitle', {
+          total: data?.project_total ?? 0,
+          rd: data?.project_rd_total ?? 0,
+          delivery: data?.project_delivery_total ?? 0,
+        }),
 
         icon: <ProjectOutlined style={{ fontSize: 24, color: '#fff' }} />,
 
@@ -170,9 +170,9 @@ const KuaiplmDashboard: React.FC = () => {
 
         sideMetrics: [
 
-          { label: '暂停', value: data?.project_on_hold ?? 0 },
+          { label: t('app.kuaiplm.dashboard.kpi.onHold'), value: data?.project_on_hold ?? 0 },
 
-          { label: '待审门', value: data?.pending_gate_reviews ?? 0 },
+          { label: t('app.kuaiplm.dashboard.kpi.pendingGates'), value: data?.pending_gate_reviews ?? 0 },
 
         ],
 
@@ -182,11 +182,11 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'changes',
 
-        title: '设计变更待办',
+        title: t('app.kuaiplm.dashboard.kpi.pendingChanges'),
 
         value: (data?.pending_bom_changes ?? 0) + (data?.pending_route_changes ?? 0),
 
-        subtitle: 'BOM 与工艺路线变更待审批/执行',
+        subtitle: t('app.kuaiplm.dashboard.kpi.pendingChangesSubtitle'),
 
         icon: <SwapOutlined style={{ fontSize: 24, color: '#fff' }} />,
 
@@ -198,9 +198,9 @@ const KuaiplmDashboard: React.FC = () => {
 
         sideMetrics: [
 
-          { label: 'BOM', value: data?.pending_bom_changes ?? 0 },
+          { label: t('app.kuaiplm.common.changeCategory.bom'), value: data?.pending_bom_changes ?? 0 },
 
-          { label: '工艺', value: data?.pending_route_changes ?? 0 },
+          { label: t('app.kuaiplm.dashboard.kpi.route'), value: data?.pending_route_changes ?? 0 },
 
         ],
 
@@ -210,11 +210,14 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'tasks',
 
-        title: '协同待办',
+        title: t('app.kuaiplm.dashboard.kpi.collaborationTodos'),
 
         value: data?.open_tasks ?? 0,
 
-        subtitle: `知识文章 ${data?.kb_article_total ?? 0} · 设计评审 ${data?.design_review_pending ?? 0}`,
+        subtitle: t('app.kuaiplm.dashboard.kpi.collaborationSubtitle', {
+          articles: data?.kb_article_total ?? 0,
+          reviews: data?.design_review_pending ?? 0,
+        }),
 
         icon: <ClockCircleOutlined style={{ fontSize: 24, color: '#fff' }} />,
 
@@ -226,9 +229,9 @@ const KuaiplmDashboard: React.FC = () => {
 
         sideMetrics: [
 
-          { label: '需求', value: data?.requirement_total ?? 0 },
+          { label: t('app.kuaiplm.dashboard.kpi.requirements'), value: data?.requirement_total ?? 0 },
 
-          { label: 'FMEA', value: data?.fmea_total ?? 0 },
+          { label: t('app.kuaiplm.menu.phase2.fmea'), value: data?.fmea_total ?? 0 },
 
         ],
 
@@ -236,7 +239,7 @@ const KuaiplmDashboard: React.FC = () => {
 
     ],
 
-    [data, navigate],
+    [data, navigate, t],
 
   );
 
@@ -250,7 +253,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'rd-projects',
 
-        title: '项目管理',
+        title: t('app.kuaiplm.menu.rd-projects'),
 
         icon: <ProjectOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -262,7 +265,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'change-management',
 
-        title: '设计变更',
+        title: t('app.kuaiplm.menu.change-management'),
 
         icon: <SwapOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -274,7 +277,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'knowledge-base',
 
-        title: '知识中心',
+        title: t('app.kuaiplm.menu.knowledge-center'),
 
         icon: <BookOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -286,7 +289,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'engineering-bom',
 
-        title: '工程 BOM',
+        title: t('app.kuaiplm.dashboard.shortcut.engineeringBom'),
 
         icon: <ApartmentOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -298,7 +301,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'requirements',
 
-        title: '研发需求',
+        title: t('app.kuaiplm.menu.phase2.requirements'),
 
         icon: <FileSearchOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -310,7 +313,7 @@ const KuaiplmDashboard: React.FC = () => {
 
         key: 'design-reviews',
 
-        title: '设计评审',
+        title: t('app.kuaiplm.menu.phase2.design-reviews'),
 
         icon: <AuditOutlined style={{ fontSize: 20, color: token.colorPrimary }} />,
 
@@ -320,7 +323,7 @@ const KuaiplmDashboard: React.FC = () => {
 
     ],
 
-    [token.colorPrimary],
+    [token.colorPrimary, t],
 
   );
 
@@ -346,13 +349,17 @@ const KuaiplmDashboard: React.FC = () => {
 
           <ModuleActionPanel
 
-            title="在研项目"
+            title={t('app.kuaiplm.dashboard.panel.activeProjects')}
 
             lg={8}
 
             loading={isLoading}
 
-            extra={<a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>全部</a>}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.viewAll')}
+              </a>
+            }
 
           >
 
@@ -366,13 +373,13 @@ const KuaiplmDashboard: React.FC = () => {
 
               rowKey="id"
 
-              locale={{ emptyText: '暂无在研项目，可前往研发项目创建 NPI 项目' }}
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.activeProjects') }}
 
               columns={[
 
                 {
 
-                  title: '项目',
+                  title: t('app.kuaiplm.common.columns.project'),
 
                   dataIndex: 'project_code',
 
@@ -392,7 +399,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: '阶段门',
+                  title: t('app.kuaiplm.common.columns.currentGate'),
 
                   dataIndex: 'current_gate_name',
 
@@ -406,7 +413,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: '进度',
+                  title: t('app.kuaiplm.common.columns.progress'),
 
                   width: 56,
 
@@ -422,7 +429,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: '状态',
+                  title: t('app.kuaiplm.common.columns.status'),
 
                   dataIndex: 'status',
 
@@ -432,7 +439,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                     <Tag color={PROJECT_STATUS_COLOR[String(status ?? '').toUpperCase()] ?? 'default'}>
 
-                      {record.status_label ?? status ?? '—'}
+                      {getKuaiplmProjectStatusText(t, status)}
 
                     </Tag>
 
@@ -448,13 +455,17 @@ const KuaiplmDashboard: React.FC = () => {
 
           <ModuleActionPanel
 
-            title="设计变更待办"
+            title={t('app.kuaiplm.dashboard.panel.pendingChanges')}
 
             lg={8}
 
             loading={changesLoading}
 
-            extra={<a onClick={() => navigate('/apps/kuaiplm/change-management')}>全部</a>}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/change-management')}>
+                {t('app.kuaiplm.common.actions.viewAll')}
+              </a>
+            }
 
           >
 
@@ -468,13 +479,13 @@ const KuaiplmDashboard: React.FC = () => {
 
               rowKey={(row) => `${row.change_category}-${row.uuid ?? row.id}`}
 
-              locale={{ emptyText: '暂无待处理的设计变更' }}
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.pendingChanges') }}
 
               columns={[
 
                 {
 
-                  title: '变更对象',
+                  title: t('app.kuaiplm.dashboard.panel.changeTarget'),
 
                   dataIndex: 'target_name',
 
@@ -494,7 +505,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: '类型',
+                  title: t('app.kuaiplm.common.columns.type'),
 
                   dataIndex: 'change_category',
 
@@ -504,7 +515,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                     <Tag color={category === 'bom' ? 'blue' : 'purple'}>
 
-                      {CHANGE_CATEGORY_LABEL[String(category)] ?? category}
+                      {getKuaiplmChangeCategoryText(t, category)}
 
                     </Tag>
 
@@ -514,7 +525,7 @@ const KuaiplmDashboard: React.FC = () => {
 
                 {
 
-                  title: '提交时间',
+                  title: t('app.kuaiplm.common.columns.createdAt'),
 
                   dataIndex: 'created_at',
 
@@ -531,20 +542,24 @@ const KuaiplmDashboard: React.FC = () => {
           </ModuleActionPanel>
 
           <ModuleActionPanel
-            title="我的待办任务"
+            title={t('app.kuaiplm.dashboard.panel.myTasks')}
             lg={8}
             loading={isLoading}
-            extra={<a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>全部项目</a>}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.allProjects')}
+              </a>
+            }
           >
             <Table
               size="small"
               dataSource={myTasks}
               pagination={false}
               rowKey="id"
-              locale={{ emptyText: '暂无指派给您的待办任务' }}
+              locale={{ emptyText: t('app.kuaiplm.dashboard.empty.myTasks') }}
               columns={[
                 {
-                  title: '任务',
+                  title: t('app.kuaiplm.common.columns.task'),
                   dataIndex: 'task_name',
                   ellipsis: true,
                   render: (name, record: MyTaskItem) => (
@@ -558,27 +573,27 @@ const KuaiplmDashboard: React.FC = () => {
                   ),
                 },
                 {
-                  title: '项目',
+                  title: t('app.kuaiplm.common.columns.project'),
                   dataIndex: 'project_code',
                   width: 96,
                   ellipsis: true,
                   render: (code, record: MyTaskItem) => code || record.project_name || '—',
                 },
                 {
-                  title: '阶段门',
+                  title: t('app.kuaiplm.common.columns.gate'),
                   dataIndex: 'gate_name',
                   width: 80,
                   ellipsis: true,
                   render: (name) => name || '—',
                 },
                 {
-                  title: '状态',
+                  title: t('app.kuaiplm.common.columns.status'),
                   dataIndex: 'status',
                   width: 72,
-                  render: (status) => TASK_STATUS_LABELS[String(status)] ?? status ?? '—',
+                  render: (status) => getKuaiplmTaskStatusText(t, status),
                 },
                 {
-                  title: '截止',
+                  title: t('app.kuaiplm.common.columns.dueDate'),
                   dataIndex: 'due_date',
                   width: 72,
                   render: (val) => (val ? dayjs(val).format('MM-DD') : '—'),
@@ -602,13 +617,17 @@ const KuaiplmDashboard: React.FC = () => {
 
                 <ExperimentOutlined style={{ marginRight: 8 }} />
 
-                项目进度甘特图
+                {t('app.kuaiplm.dashboard.chart.ganttTitle')}
 
               </span>
 
             }
 
-            extra={<a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>管理项目</a>}
+            extra={
+              <a onClick={() => navigate('/apps/kuaiplm/rd-projects')}>
+                {t('app.kuaiplm.common.actions.manageProjects')}
+              </a>
+            }
 
             loading={isLoading}
 

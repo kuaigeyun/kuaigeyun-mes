@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { DictionaryItem } from '../../services/dataDictionary';
 import {
   getDictionaryItemsCached,
   getDictionaryItemsSync,
 } from '../../services/dataDictionaryCache';
+import { resolveSystemDictionaryItemLabel } from '../../utils/systemDictionaryI18n';
 
 interface DictionaryLabelProps {
   /** 字典代码 */
@@ -38,12 +40,14 @@ function resolveLabelSync(
   code: string,
   value: string | number | undefined,
   notFoundPlaceholder: string | undefined,
+  t: (key: string) => string,
 ): string | null {
   if (value === undefined || value === null || value === '') return null;
   const items = getDictionaryItemsSync(code);
   if (!items) return null;
   const item = findDictionaryItem(items, value);
-  return item ? item.label : (notFoundPlaceholder ?? '');
+  if (!item) return notFoundPlaceholder ?? '';
+  return resolveSystemDictionaryItemLabel(code, item, t);
 }
 
 /**
@@ -61,13 +65,14 @@ export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
   style,
   className,
 }) => {
+  const { t } = useTranslation();
   const [label, setLabel] = useState<string | null>(() =>
-    resolveLabelSync(dictionaryCode, value, notFoundPlaceholder),
+    resolveLabelSync(dictionaryCode, value, notFoundPlaceholder, t),
   );
 
   useEffect(() => {
     let cancelled = false;
-    const sync = resolveLabelSync(dictionaryCode, value, notFoundPlaceholder);
+    const sync = resolveLabelSync(dictionaryCode, value, notFoundPlaceholder, t);
     setLabel(sync);
     if (sync !== null) return;
     if (value === undefined || value === null || value === '') return;
@@ -76,7 +81,11 @@ export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
       .then((items) => {
         if (cancelled) return;
         const item = findDictionaryItem(items, value);
-        setLabel(item ? item.label : (notFoundPlaceholder ?? ''));
+        setLabel(
+          item
+            ? resolveSystemDictionaryItemLabel(dictionaryCode, item, t)
+            : (notFoundPlaceholder ?? ''),
+        );
       })
       .catch((error) => {
         console.error(`加载字典标签失败 (${dictionaryCode}):`, error);
@@ -86,7 +95,7 @@ export const DictionaryLabel: React.FC<DictionaryLabelProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [dictionaryCode, value, notFoundPlaceholder]);
+  }, [dictionaryCode, value, notFoundPlaceholder, t]);
 
   return (
     <span style={style} className={className}>

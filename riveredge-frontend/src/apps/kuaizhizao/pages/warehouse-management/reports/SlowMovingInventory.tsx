@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { ProColumns } from '@ant-design/pro-components';
 import { useTranslation } from 'react-i18next';
 import { copyableCodeColumn } from '../../../utils/reportCopyableColumn';
@@ -6,14 +6,45 @@ import KuaizhizaoReport from '../../../components/KuaizhizaoReport';
 
 const SlowMovingInventory: React.FC = () => {
   const { t } = useTranslation();
-  const columns: ProColumns[] = [
-    copyableCodeColumn('物料编码', 'material_code', 120),
-    { title: '物料名称', dataIndex: 'material_name', width: 200 },
-    { title: '批次号', dataIndex: 'batch_no', width: 140 },
-    { title: '库存数量', dataIndex: 'quantity', valueType: 'digit', width: 100 },
-    { title: '最后变动日', dataIndex: 'last_move_date', valueType: 'date', width: 120 },
-    { title: '库龄(天)', dataIndex: 'age_days', valueType: 'digit', width: 100, sorter: true },
-  ];
+  const columns: ProColumns[] = useMemo(
+    () => [
+      copyableCodeColumn(
+        t('app.kuaizhizao.warehouseReports.colMaterialCode'),
+        'material_code',
+        120,
+      ),
+      {
+        title: t('app.kuaizhizao.warehouseReports.colMaterialName'),
+        dataIndex: 'material_name',
+        width: 200,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colBatchNo'),
+        dataIndex: 'batch_no',
+        width: 140,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colStockQty'),
+        dataIndex: 'quantity',
+        valueType: 'digit',
+        width: 100,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colLastMoveDate'),
+        dataIndex: 'last_move_date',
+        valueType: 'date',
+        width: 120,
+      },
+      {
+        title: t('app.kuaizhizao.warehouseReports.colAgeDays'),
+        dataIndex: 'age_days',
+        valueType: 'digit',
+        width: 100,
+        sorter: true,
+      },
+    ],
+    [t],
+  );
 
   return (
     <KuaizhizaoReport

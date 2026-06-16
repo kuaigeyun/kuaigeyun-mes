@@ -1,11 +1,12 @@
 /**
  * 采购发票列表页
  */
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Typography, Space, Dropdown, Modal, Input, Table, Tag } from 'antd';
 import { EyeOutlined, PlusOutlined, DownOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
 import { purchaseInvoiceService } from '../../../services/finance/purchase-invoice';
 import { PurchaseInvoice } from '../../../types/finance/purchase-invoice';
@@ -25,7 +26,9 @@ import { buildKuaicaiwuPullCreateMenuItems, getKuaicaiwuDocumentAction } from '.
 import DocumentAttachmentsField from '../../../../kuaizhizao/components/DocumentAttachmentsField';
 import { normalizeDocumentAttachments } from '../../../../kuaizhizao/utils/documentAttachments';
 import { getStatusDisplay } from '../../../../kuaizhizao/constants/documentStatus';
-import { INVOICE_TYPE_OPTIONS } from '../../../utils/purchaseInvoiceUi';
+import { buildReviewStatusEnum, getChineseInvoiceTypeOptions } from '../../../utils/financeSharedOptions';
+
+const P = 'app.kuaicaiwu.purchaseInvoice';
 
 const TAX_RATE_OPTIONS = [
     { label: '13%', value: 13 },
@@ -64,7 +67,12 @@ const PurchaseInvoiceList: React.FC = () => {
     const [pullSelectedSource, setPullSelectedSource] = useState<PullPurchaseInvoiceCandidate | null>(null);
     const [supplierOptions, setSupplierOptions] = useState<{ label: string; value: number }[]>([]);
     const { message: messageApi } = App.useApp();
+    const { t } = useTranslation();
     const navigate = useNavigate();
+    const invoiceTypeOptions = useMemo(
+        () => getChineseInvoiceTypeOptions(t, { includeOther: true, includeReceipt: false }),
+        [t],
+    );
     const pullFromPurchaseOrderAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_order');
     const pullFromPurchaseReceiptAction = getKuaicaiwuDocumentAction('purchase_invoice.pull_from_purchase_receipt');
 
@@ -108,12 +116,12 @@ const PurchaseInvoiceList: React.FC = () => {
             };
 
             await purchaseInvoiceService.create(data);
-            messageApi.success('采购发票登记成功');
+            messageApi.success(t(`${P}.createSuccess`));
             setCreateModalVisible(false);
             actionRef.current?.reload();
             return true;
         } catch (error: any) {
-            messageApi.error(error?.message || '登记失败');
+            messageApi.error(error?.message || t(`${P}.registerFailed`));
             return false;
         }
     };
@@ -207,7 +215,7 @@ const PurchaseInvoiceList: React.FC = () => {
             }
         } catch (e: any) {
             setPullCandidates([]);
-            messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || '加载来源单失败');
+            messageApi.error(e?.response?.data?.detail?.message || e?.response?.data?.detail || e?.message || t(`${P}.loadSourceFailed`));
         } finally {
             setPullLoading(false);
         }
@@ -223,18 +231,27 @@ const PurchaseInvoiceList: React.FC = () => {
 
     const handlePullNext = () => {
         if (!selectedPullSourceId) {
-            messageApi.warning(`请选择${pullSourceType === 'purchase_order' ? pullFromPurchaseOrderAction.sourceLabel : pullFromPurchaseReceiptAction.sourceLabel}`);
+            messageApi.warning(t('app.kuaicaiwu.common.selectSource', {
+                source: pullSourceType === 'purchase_order'
+                    ? pullFromPurchaseOrderAction.sourceLabel
+                    : pullFromPurchaseReceiptAction.sourceLabel,
+            }));
             return;
         }
         const selected = pullCandidates.find((x) => x.source_id === selectedPullSourceId);
         if (!selected) return;
         if (selected.converted) {
-            messageApi.warning(`该${pullSourceType === 'purchase_order' ? pullFromPurchaseOrderAction.sourceLabel : pullFromPurchaseReceiptAction.sourceLabel}已创建${pullFromPurchaseOrderAction.targetLabel}，请勿重复创建`);
+            messageApi.warning(t(`${P}.sourceConverted`, {
+                source: pullSourceType === 'purchase_order'
+                    ? pullFromPurchaseOrderAction.sourceLabel
+                    : pullFromPurchaseReceiptAction.sourceLabel,
+                target: pullFromPurchaseOrderAction.targetLabel,
+            }));
             return;
         }
         const invoiceAmount = Number(selected.amount || 0);
         if (invoiceAmount <= 0) {
-            messageApi.warning(`源单据金额为 0，无法创建${pullFromPurchaseOrderAction.targetLabel}`);
+            messageApi.warning(t(`${P}.zeroAmount`, { target: pullFromPurchaseOrderAction.targetLabel }));
             return;
         }
         setPullSelectedSource(selected);
@@ -246,7 +263,7 @@ const PurchaseInvoiceList: React.FC = () => {
         if (!pullSelectedSource) return false;
         const invoiceAmount = Number(values.invoice_amount) || 0;
         if (invoiceAmount <= 0) {
-            messageApi.warning('不含税金额必须大于 0');
+            messageApi.warning(t(`${P}.amountRequired`));
             return false;
         }
         const taxRate = Number(values.tax_rate) || 13;
@@ -271,19 +288,22 @@ const PurchaseInvoiceList: React.FC = () => {
                 invoice_amount: invoiceAmount,
                 tax_amount: taxAmount,
                 total_amount: totalAmount,
-                notes: String(values.notes ?? '').trim() || `从${sourceLabel} ${pullSelectedSource.source_code} 创建`,
+                notes: String(values.notes ?? '').trim() || t('app.kuaicaiwu.common.createdFromSourceNote', {
+                    source: sourceLabel,
+                    code: pullSelectedSource.source_code,
+                }),
                 status: '未审核',
                 review_status: '待审核',
                 attachments: normalizeDocumentAttachments(values.attachments),
             });
-            messageApi.success(`已创建${pullFromPurchaseOrderAction.targetLabel}`);
+            messageApi.success(t(`${P}.pullCreateSuccess`, { target: pullFromPurchaseOrderAction.targetLabel }));
             setPullFormVisible(false);
             setPullSelectedSource(null);
             setSelectedPullSourceId(null);
             actionRef.current?.reload();
             return true;
         } catch (e: any) {
-            messageApi.error(e?.response?.data?.detail || e?.message || '创建失败');
+            messageApi.error(e?.response?.data?.detail || e?.message || t('common.createFailed'));
             return false;
         } finally {
             setPullSubmitting(false);
@@ -295,17 +315,17 @@ const PurchaseInvoiceList: React.FC = () => {
             for (const id of keys) {
                 await purchaseInvoiceService.approve(Number(id));
             }
-            messageApi.success(`已审核 ${keys.length} 张采购发票`);
+            messageApi.success(t(`${P}.batchApproveSuccess`, { count: keys.length }));
             setSelectedRowKeys([]);
             actionRef.current?.reload();
         } catch (error: any) {
-            messageApi.error(error?.message || '批量审核失败');
+            messageApi.error(error?.message || t('app.kuaicaiwu.common.batchApproveFailed'));
         }
     };
 
-    const columns: ProColumns<PurchaseInvoice>[] = [
+    const columns: ProColumns<PurchaseInvoice>[] = useMemo(() => [
         {
-            title: '发票编号',
+            title: t(`${P}.col.code`),
             dataIndex: 'invoice_code',
             width: 168,
             fixed: 'left',
@@ -316,59 +336,53 @@ const PurchaseInvoiceList: React.FC = () => {
             ),
         },
         {
-            title: '采购订单',
+            title: t(`${P}.col.purchaseOrder`),
             dataIndex: 'purchase_order_code',
             width: 150,
         },
         {
-            title: '供应商',
+            title: t('app.kuaicaiwu.common.supplier'),
             dataIndex: 'supplier_name',
             width: 200,
         },
         {
-            title: '发票号码',
+            title: t(`${P}.col.invoiceNumber`),
             dataIndex: 'invoice_number',
             width: 120,
         },
         {
-            title: '价税合计',
+            title: t(`${P}.col.totalAmount`),
             dataIndex: 'total_amount',
             valueType: 'money',
             align: 'right',
             width: 120,
         },
         {
-            title: '开票日期',
+            title: t('app.kuaicaiwu.common.invoiceDate'),
             dataIndex: 'invoice_date',
             valueType: 'date',
             width: 120,
         },
         {
-            title: '状态',
+            title: t('common.status'),
             dataIndex: 'status',
             hideInTable: true,
         },
         {
-            title: '审核状态',
+            title: t('app.kuaicaiwu.common.reviewStatus'),
             dataIndex: 'review_status',
             hideInTable: true,
-            valueEnum: {
-                '待审核': { text: '待审核' },
-                '已审核': { text: '已审核' },
-                '已驳回': { text: '已驳回' },
-                '通过': { text: '已审核' },
-                '驳回': { text: '已驳回' },
-            },
+            valueEnum: buildReviewStatusEnum(t),
         },
         {
-            title: '生命周期',
+            title: t('app.kuaicaiwu.common.lifecycle'),
             dataIndex: 'lifecycle_stage',
             fixed: 'right',
             align: 'left',
             width: 130,
             hideInSearch: true,
             render: (_, record) => {
-                const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>);
+                const lc = getChineseInvoiceLifecycle(record as unknown as Record<string, unknown>, t);
                 return (
                     <UniLifecycle
                         percent={lc.percent}
@@ -383,7 +397,7 @@ const PurchaseInvoiceList: React.FC = () => {
             },
         },
         {
-            title: '操作',
+            title: t('common.actions'),
             valueType: 'option',
             fixed: 'right',
             width: 200,
@@ -395,13 +409,13 @@ const PurchaseInvoiceList: React.FC = () => {
                             icon={<EyeOutlined />}
                             onClick={() => navigate(`/apps/kuaicaiwu/finance-management/purchase-invoices/${record.id}`)}
                         >
-                            详情
+                            {t('common.detail')}
                         </Button>,
                         record.review_status === '待审核' ? (
                             <UniWorkflowActions {...rowActionKind('skip')}
                                 key="wf"
                                 record={record}
-                                entityName="采购发票"
+                                entityName={t(`${P}.entityName`)}
                                 statusField="status"
                                 reviewStatusField="review_status"
                                 draftStatuses={[]}
@@ -415,12 +429,51 @@ const PurchaseInvoiceList: React.FC = () => {
                         ) : null,
                     ].filter(Boolean) as React.ReactNode[],
         },
-    ];
+    ], [t, navigate]);
+
+    const pullTableColumns = useMemo(() => [
+        { title: t(`${P}.pull.col.sourceCode`), dataIndex: 'source_code', width: 220, ellipsis: true },
+        { title: t('app.kuaicaiwu.common.supplier'), dataIndex: 'supplier_name', width: 220, ellipsis: true },
+        {
+            title: t(`${P}.pull.col.docStatus`),
+            dataIndex: 'source_status',
+            width: 130,
+            align: 'center' as const,
+            render: (v: unknown) => {
+                const { text, color } = getStatusDisplay(v);
+                return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
+            },
+        },
+        {
+            title: t('app.kuaicaiwu.common.businessDate'),
+            dataIndex: 'source_date',
+            width: 130,
+            render: (v: unknown) => (v ? dayjs(String(v)).format('YYYY-MM-DD') : '-'),
+        },
+        {
+            title: t(`${P}.col.amount`),
+            dataIndex: 'amount',
+            width: 140,
+            align: 'right' as const,
+            render: (v: unknown) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
+        },
+        {
+            title: t(`${P}.pull.col.convertStatus`),
+            key: 'convert_status',
+            width: 140,
+            align: 'center' as const,
+            render: (_: unknown, r: PullPurchaseInvoiceCandidate) => (
+                r.converted
+                    ? <Tag color="gold">{t(`${P}.pull.converted`)}</Tag>
+                    : <Tag color="success">{t(`${P}.pull.convertible`)}</Tag>
+            ),
+        },
+    ], [t]);
 
     return (
         <ListPageTemplate>
             <UniTable<PurchaseInvoice>
-                headerTitle="采购发票"
+                headerTitle={t(`${P}.pageTitle`)}
                 actionRef={actionRef}
                 enableRowSelection
                 selectedRowKeys={selectedRowKeys}
@@ -443,26 +496,26 @@ const PurchaseInvoiceList: React.FC = () => {
                             success: true,
                         };
                     } catch (error: any) {
-                        messageApi.error(error?.message || '获取列表失败');
+                        messageApi.error(error?.message || t('app.kuaicaiwu.common.loadListFailed'));
                         return { data: [], total: 0, success: false };
                     }
                 }}
                 rowKey="id"
                 showCreateButton={false}
-                createButtonText="登记采购发票"
+                createButtonText={t(`${P}.createButton`)}
                 onCreate={() => setCreateModalVisible(true)}
                 toolBarActionsAfterBatch={[
                     <UniBatchMenuButton
                         key="purchase-invoice-batch-actions"
                         selectedRowKeys={selectedRowKeys}
-                        buttonText="批量操作"
+                        buttonText={t('components.uniBatch.batchActions')}
                         menuItems={[
                             {
                                 key: 'batch-approve',
-                                label: '批量审核',
+                                label: t('app.kuaicaiwu.common.batchApprove'),
                                 requireConfirm: true,
-                                confirmTitle: (count) => `确认审核 ${count} 张采购发票`,
-                                confirmDescription: '仅待审核发票会审核通过，不满足条件的记录会由后端拒绝。',
+                                confirmTitle: (count) => t(`${P}.batchApproveTitle`, { count }),
+                                confirmDescription: t('app.kuaicaiwu.common.batchOnlyPendingApprove'),
                                 onClick: handleBatchApprove,
                             },
                         ]}
@@ -472,7 +525,7 @@ const PurchaseInvoiceList: React.FC = () => {
                     <UniPullCreateToolbar
                         compactKey="create-purchase-invoice-with-pull"
                         createIcon={<PlusOutlined />}
-                        createLabel="登记采购发票"
+                        createLabel={t(`${P}.createButton`)}
                         onCreate={() => setCreateModalVisible(true)}
                         menuItems={buildKuaicaiwuPullCreateMenuItems([
                             {
@@ -506,21 +559,21 @@ const PurchaseInvoiceList: React.FC = () => {
                 onOk={() => {
                     void handlePullNext();
                 }}
-                okText="下一步"
+                okText={t('common.next')}
                 confirmLoading={false}
                 destroyOnHidden
             >
                 <Space orientation="vertical" size={12} style={{ width: '100%' }}>
                     <Input.Search
                         allowClear
-                        placeholder="按单号/供应商搜索"
+                        placeholder={t(`${P}.pull.searchPlaceholder`)}
                         value={pullKeyword}
                         onChange={(e) => setPullKeyword(e.target.value)}
                         onSearch={(value) => {
                             setPullKeyword(value);
                             void loadPullCandidates(pullSourceType, value);
                         }}
-                        enterButton="搜索"
+                        enterButton={t('common.search')}
                     />
                     <Table<PullPurchaseInvoiceCandidate>
                         rowKey={(r) => `${r.source_type}-${r.source_id}`}
@@ -545,41 +598,13 @@ const PurchaseInvoiceList: React.FC = () => {
                                 setSelectedPullSourceId(record.source_id);
                             },
                         })}
-                        columns={[
-                            { title: '源单号', dataIndex: 'source_code', width: 220, ellipsis: true },
-                            { title: '供应商', dataIndex: 'supplier_name', width: 220, ellipsis: true },
-                            {
-                                title: '单据状态',
-                                dataIndex: 'source_status',
-                                width: 130,
-                                align: 'center',
-                                render: (v) => {
-                                    const { text, color } = getStatusDisplay(v);
-                                    return text === '-' ? '-' : <Tag color={color}>{text}</Tag>;
-                                },
-                            },
-                            { title: '业务日期', dataIndex: 'source_date', width: 130, render: (v) => (v ? dayjs(v).format('YYYY-MM-DD') : '-') },
-                            {
-                                title: '金额',
-                                dataIndex: 'amount',
-                                width: 140,
-                                align: 'right',
-                                render: (v) => `¥${Number(v || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`,
-                            },
-                            {
-                                title: '转单状态',
-                                key: 'convert_status',
-                                width: 140,
-                                align: 'center',
-                                render: (_, r) => (r.converted ? <Tag color="gold">已创建</Tag> : <Tag color="success">可创建</Tag>),
-                            },
-                        ]}
+                        columns={pullTableColumns}
                     />
                 </Space>
             </Modal>
 
             <ModalForm
-                title="填写采购发票信息"
+                title={t(`${P}.pullFormTitle`)}
                 open={pullFormVisible}
                 onOpenChange={(open) => {
                     if (pullSubmitting) return;
@@ -602,91 +627,88 @@ const PurchaseInvoiceList: React.FC = () => {
                             invoice_type: '增值税专用发票',
                             tax_rate: 13,
                             invoice_amount: pullSelectedSource.amount,
-                            notes: `从${
-                                pullSelectedSource.source_type === 'purchase_order'
+                            notes: t('app.kuaicaiwu.common.createdFromSourceNote', {
+                                source: pullSelectedSource.source_type === 'purchase_order'
                                     ? pullFromPurchaseOrderAction.sourceLabel
-                                    : pullFromPurchaseReceiptAction.sourceLabel
-                            } ${pullSelectedSource.source_code} 创建`,
+                                    : pullFromPurchaseReceiptAction.sourceLabel,
+                                code: pullSelectedSource.source_code,
+                            }),
                         }
                         : undefined
                 }
             >
-                <ProFormText name="source_code" label="来源单号" readonly />
-                <ProFormText name="supplier_name" label="供应商" readonly />
+                <ProFormText name="source_code" label={t('app.kuaicaiwu.common.sourceDoc')} readonly />
+                <ProFormText name="supplier_name" label={t('app.kuaicaiwu.common.supplier')} readonly />
                 <ProFormText
                     name="invoice_number"
-                    label="发票号码"
-                    rules={[{ required: true, message: '请输入发票号码' }]}
-                    placeholder="请输入票面号码"
+                    label={t(`${P}.col.invoiceNumber`)}
+                    rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
+                    placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
                 />
                 <ProFormSelect
                     name="invoice_type"
-                    label="发票类型"
-                    options={INVOICE_TYPE_OPTIONS}
-                    rules={[{ required: true, message: '请选择发票类型' }]}
+                    label={t(`${P}.col.invoiceType`)}
+                    options={invoiceTypeOptions}
+                    rules={[{ required: true, message: t(`${P}.form.invoiceTypeRequired`) }]}
                 />
                 <ProFormDatePicker
                     name="invoice_date"
-                    label="开票日期"
-                    rules={[{ required: true, message: '请选择开票日期' }]}
+                    label={t('app.kuaicaiwu.common.invoiceDate')}
+                    rules={[{ required: true, message: t(`${P}.form.invoiceDateRequired`) }]}
                     fieldProps={{ style: { width: '100%' } }}
                 />
                 <ProFormSelect
                     name="tax_rate"
-                    label="税率"
+                    label={t(`${P}.col.taxRate`)}
                     options={TAX_RATE_OPTIONS}
-                    rules={[{ required: true, message: '请选择税率' }]}
+                    rules={[{ required: true, message: t(`${P}.form.taxRateRequired`) }]}
                 />
                 <ProFormDigit
                     name="invoice_amount"
-                    label="不含税金额"
+                    label={t(`${P}.col.exclTax`)}
                     min={0}
-                    rules={[{ required: true, message: '请输入不含税金额' }]}
+                    rules={[{ required: true, message: t(`${P}.form.exTaxAmountRequired`) }]}
                     fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
-                <ProFormTextArea name="notes" label="备注" fieldProps={{ rows: 3 }} />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} fieldProps={{ rows: 3 }} />
                 <DocumentAttachmentsField category="purchase_invoice_attachments" />
             </ModalForm>
 
             <ModalForm
-                title="手动登记采购发票"
+                title={t(`${P}.createTitle`)}
                 open={createModalVisible}
                 onOpenChange={setCreateModalVisible}
                 onFinish={handleRegister}
                 width={520}
             >
                 <div style={{ marginBottom: 16 }}>
-                    <p style={{ color: '#8c8c8c', fontSize: '13px' }}>提示：如果是从采购订单转发票，请在采购订单页面点击“下推发票”。此操作用于直接登记收到的进项发票。</p>
+                    <p style={{ color: '#8c8c8c', fontSize: '13px' }}>{t(`${P}.createHint`)}</p>
                 </div>
                 <ProFormSelect
                     name="supplier_id"
-                    label="供应商"
+                    label={t('app.kuaicaiwu.common.supplier')}
                     options={supplierOptions}
-                    rules={[{ required: true, message: '请选择供应商' }]}
-                    placeholder="请选择供应商"
+                    rules={[{ required: true, message: t('app.kuaicaiwu.common.selectSupplier') }]}
+                    placeholder={t('app.kuaicaiwu.common.selectSupplier')}
                     showSearch
                 />
                 <ProFormText
                     name="invoice_number"
-                    label="发票号码"
-                    rules={[{ required: true, message: '请输入发票号码' }]}
-                    placeholder="请输入票面号码"
+                    label={t(`${P}.col.invoiceNumber`)}
+                    rules={[{ required: true, message: t(`${P}.form.invoiceNumberRequired`) }]}
+                    placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
                 />
                 <ProFormSelect
                     name="invoice_type"
-                    label="发票类型"
-                    options={[
-                        { label: '增值税专用发票', value: '增值税专用发票' },
-                        { label: '增值税普通发票', value: '增值税普通发票' },
-                        { label: '其他', value: '其他' },
-                    ]}
+                    label={t(`${P}.col.invoiceType`)}
+                    options={invoiceTypeOptions}
                     initialValue="增值税专用发票"
                     rules={[{ required: true }]}
                 />
-                <ProFormDatePicker name="invoice_date" label="开票日期" rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
+                <ProFormDatePicker name="invoice_date" label={t('app.kuaicaiwu.common.invoiceDate')} rules={[{ required: true }]} initialValue={dayjs()} fieldProps={{ style: { width: '100%' } }} />
                 <ProFormDigit
                     name="tax_rate"
-                    label="税率(%)"
+                    label={t(`${P}.col.taxRate`)}
                     initialValue={13}
                     min={0}
                     max={100}
@@ -695,12 +717,12 @@ const PurchaseInvoiceList: React.FC = () => {
                 />
                 <ProFormDigit
                     name="invoice_amount"
-                    label="不含税金额"
+                    label={t(`${P}.col.exclTax`)}
                     min={0}
-                    rules={[{ required: true, message: '请输入不含税金额' }]}
+                    rules={[{ required: true, message: t(`${P}.form.exTaxAmountRequired`) }]}
                     fieldProps={{ precision: 2, style: { width: '100%' } }}
                 />
-                <ProFormTextArea name="notes" label="备注" />
+                <ProFormTextArea name="notes" label={t('app.kuaicaiwu.common.notes')} />
                 <DocumentAttachmentsField category="purchase_invoice_attachments" />
             </ModalForm>
         </ListPageTemplate>

@@ -4,7 +4,7 @@
  * 提供入库单的管理功能，支持多种入库类型：采购入库、成品入库（产品入库）、生产退料等。
  */
 
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
@@ -72,7 +72,8 @@ import { batchConfirmInboundDocuments } from './inboundBatchConfirm';
 import {
   type InboundHubOrder,
   type InboundReceiptType,
-  INBOUND_RECEIPT_TYPE_LABELS,
+  inboundReceiptTypeLabel,
+  inboundReceiptTypeValueEnum,
   isInboundConfirmable,
   inboundSourceDocNo,
 } from './inboundHubTypes';
@@ -272,9 +273,9 @@ async function fetchStorageLocationsForWarehouse(
 
 const INBOUND_DETAIL_ITEMS_MIN_WIDTH = 1280;
 
-function renderInboundDetailSerialCell(val: unknown): string {
+function renderInboundDetailSerialCell(t: (key: string, options?: { count?: number }) => string, val: unknown): string {
   if (!Array.isArray(val) || val.length === 0) return '—';
-  return `${val.length} 个`;
+  return t('app.kuaizhizao.warehouseInbound.detail.serialCount', { count: val.length });
 }
 
 const PURCHASE_RECEIPT_CUSTOM_FIELD_TABLE = 'apps_kuaizhizao_purchase_receipts';
@@ -444,12 +445,12 @@ const InboundPage: React.FC = () => {
       const keySet = new Set(keys.map(String));
       const records = listDataRef.current.filter((r) => keySet.has(`${r.receipt_type}::${r.id}`));
       if (!records.length) {
-        messageApi.warning('未找到所选单据，请刷新列表后重试');
+        messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.recordsNotFound'));
         return;
       }
-      const result = await batchConfirmInboundDocuments(records);
+      const result = await batchConfirmInboundDocuments(records, t);
       if (result.success > 0) {
-        messageApi.success(`已成功确认 ${result.success} 张单据`);
+        messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.batchConfirmSuccess', { count: result.success }));
         invalidateMenuBadgeCounts();
         actionRef.current?.reload();
         setSelectedRowKeys([]);
@@ -458,12 +459,12 @@ const InboundPage: React.FC = () => {
         const detail = result.failed.slice(0, 5).map((f) => f.message).join('；');
         messageApi.error(
           result.failed.length > 5
-            ? `${result.failed.length} 张单据确认失败：${detail}…`
-            : `确认失败：${detail}`,
+            ? t('app.kuaizhizao.warehouseInbound.msg.batchConfirmFailedMany', { count: result.failed.length, detail })
+            : t('app.kuaizhizao.warehouseInbound.msg.batchConfirmFailed', { detail }),
         );
       }
     },
-    [invalidateMenuBadgeCounts, messageApi],
+    [invalidateMenuBadgeCounts, messageApi, t],
   );
 
   const handleDetail = async (record: InboundOrder) => {
@@ -521,8 +522,8 @@ const InboundPage: React.FC = () => {
         error?.response?.data?.detail ??
         error?.response?.data?.message ??
         error?.message ??
-        '获取入库单详情失败';
-      messageApi.error(typeof msg === 'string' ? msg : '获取入库单详情失败');
+        t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed');
+      messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.loadDetailFailed'));
     }
   };
 
@@ -533,7 +534,7 @@ const InboundPage: React.FC = () => {
     if (!currentOrder?.id || currentOrder?.receipt_type !== 'purchase') return;
     const items = (currentOrder.items || []) as InboundOrderItem[];
     if (!items.length) {
-      messageApi.warning('暂无可编辑明细');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noEditableLines'));
       return;
     }
     const mappedItems = items
@@ -542,7 +543,11 @@ const InboundPage: React.FC = () => {
         const rowId = Number(it.id);
         const qty = Number(editableReceiptQuantities[rowId] ?? it.receipt_quantity ?? 0);
         if (!(qty > 0)) {
-          throw new Error(`物料 ${it.material_code || it.material_name || '-'} 的实际数量必须大于 0`);
+          throw new Error(
+            t('app.kuaizhizao.warehouseInbound.msg.actualQtyMustBePositive', {
+              material: it.material_code || it.material_name || '-',
+            }),
+          );
         }
         const unitPrice = Number(it.unit_price ?? 0);
         const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
@@ -589,13 +594,13 @@ const InboundPage: React.FC = () => {
         if (it?.id != null) quantities[it.id] = Number(it.receipt_quantity ?? 0);
       });
       setEditableReceiptQuantities(quantities);
-      messageApi.success('实际数量已保存');
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.actualQtySaved'));
       invalidateMenuBadgeCounts();
       setInboundTrackingRefreshKey((k) => k + 1);
 
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error?.message || error?.response?.data?.detail || '保存失败');
+      messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.saveFailed'));
     } finally {
       setSavingPurchaseReceipt(false);
     }
@@ -623,7 +628,7 @@ const InboundPage: React.FC = () => {
     if (!meta?.serialManaged || !meta.materialUuid) return;
     const count = Math.max(1, Math.floor(Number(qty) || 1));
     if (count > 100) {
-      messageApi.warning('单次最多生成100个序列号');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.serialMax100'));
       return;
     }
     setPurchaseConfirmGeneratingSerialId(rowId);
@@ -632,10 +637,10 @@ const InboundPage: React.FC = () => {
         ruleId: meta.defaultSerialRuleId ?? undefined,
       });
       setPurchaseConfirmPreviewSerial((prev) => ({ ...prev, [rowId]: res.serial_nos }));
-      messageApi.success(`已生成 ${res.count} 个序列号`);
+      messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.serialGenerated', { count: res.count }));
       return res.serial_nos;
     } catch (e: any) {
-      messageApi.error(e?.message || '序列号生成失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.warehouseInbound.msg.serialGenerateFailed'));
     } finally {
       setPurchaseConfirmGeneratingSerialId(null);
     }
@@ -762,7 +767,7 @@ const InboundPage: React.FC = () => {
         productionReturnConfirmFormRef.current?.setFieldsValue(fieldFormValues);
       }
     } catch {
-      messageApi.error('加载入库单详情失败');
+      messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadConfirmPreviewFailed'));
       resetPurchaseConfirmPreview();
     } finally {
       setPurchaseConfirmPreviewLoading(false);
@@ -787,7 +792,7 @@ const InboundPage: React.FC = () => {
     if (!order?.id) return;
     const items = (order.items || []) as InboundOrderItem[];
     if (!items.length) {
-      messageApi.warning('暂无可入库明细');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.noInboundLines'));
       return;
     }
 
@@ -809,11 +814,11 @@ const InboundPage: React.FC = () => {
           const rowId = Number(it.id);
           const qty = Number(purchaseConfirmPreviewQty[rowId] ?? it.receipt_quantity ?? it.return_quantity ?? 0);
           if (!(qty > 0)) {
-            throw new Error(`物料 ${it.material_code || it.material_name || '-'} 的实际数量必须大于 0`);
+            throw new Error(t('app.kuaizhizao.warehouseInbound.msg.actualQtyMustBePositive', { material: it.material_code || it.material_name || '-' }));
           }
           const lineWh = purchaseConfirmLineWh[rowId];
           if (lineWh == null || !(lineWh > 0)) {
-            throw new Error(`请为物料 ${it.material_code || it.material_name || '-'} 选择入库仓库`);
+            throw new Error(t('app.kuaizhizao.warehouseInbound.msg.selectWarehouseForMaterial', { material: it.material_code || it.material_name || '-' }));
           }
           const unitPrice = Number(it.unit_price ?? 0);
           const qualified = Number(it.qualified_quantity ?? it.receipt_quantity ?? qty);
@@ -850,7 +855,7 @@ const InboundPage: React.FC = () => {
           return mapped;
         });
     } catch (e: any) {
-      messageApi.error(e?.message || '请检查明细');
+      messageApi.error(e?.message || t('app.kuaizhizao.warehouseInbound.msg.checkLines'));
       return;
     }
 
@@ -894,7 +899,7 @@ const InboundPage: React.FC = () => {
             }),
           }).catch(() => {});
           // #endregion
-          messageApi.error('保存后明细行数不一致，请关闭预览后重试');
+          messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineCountMismatch'));
           return;
         }
         if (refItems.some((it: any) => it?.id == null || !(Number(it.id) > 0))) {
@@ -913,7 +918,7 @@ const InboundPage: React.FC = () => {
             }),
           }).catch(() => {});
           // #endregion
-          messageApi.error('保存后明细 id 异常，请关闭预览后重试');
+          messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.lineIdAbnormal'));
           return;
         }
         const confirmItems = orderedSource.map((src, idx) => {
@@ -983,7 +988,7 @@ const InboundPage: React.FC = () => {
         }
       }
       messageApi.success(
-        order.receipt_type === 'production_return' ? '退料确认成功，库存已更新' : '入库确认成功，库存已更新',
+        order.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.msg.returnConfirmSuccess') : t('app.kuaizhizao.warehouseInbound.msg.inboundConfirmSuccess'),
       );
       resetPurchaseConfirmPreview();
       invalidateMenuBadgeCounts();
@@ -1040,7 +1045,7 @@ const InboundPage: React.FC = () => {
         }),
       }).catch(() => {});
       // #endregion
-      messageApi.error(error?.message || error?.response?.data?.detail || '确认失败');
+      messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.confirmFailed'));
       throw error;
     } finally {
       setPurchaseConfirmPreviewSubmitting(false);
@@ -1054,11 +1059,11 @@ const InboundPage: React.FC = () => {
     const code = record.receipt_code || record.return_code || '';
     if (record.receipt_type === 'customer_material') {
       Modal.confirm({
-        title: '确认代工来料入库',
-        content: `确定确认入库单据「${code}」吗？`,
+        title: t('app.kuaizhizao.warehouseInbound.confirm.customerMaterial.title'),
+        content: t('app.kuaizhizao.warehouseInbound.confirm.customerMaterial.content', { code }),
         onOk: async () => {
           await customerMaterialRegistrationApi.process(String(record.id));
-          messageApi.success('代工来料已确认入库');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.customerMaterialConfirmed'));
           invalidateMenuBadgeCounts();
           await actionRef.current?.reload?.();
         },
@@ -1067,11 +1072,11 @@ const InboundPage: React.FC = () => {
     }
     if (record.receipt_type === 'sales_return') {
       Modal.confirm({
-        title: '确认销售退货入库',
-        content: `确定确认入库单据「${code}」吗？`,
+        title: t('app.kuaizhizao.warehouseInbound.confirm.salesReturn.title'),
+        content: t('app.kuaizhizao.warehouseInbound.confirm.salesReturn.content', { code }),
         onOk: async () => {
           await warehouseApi.salesReturn.confirm(String(record.id));
-          messageApi.success('销售退货已确认入库');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.salesReturnConfirmed'));
           invalidateMenuBadgeCounts();
           await actionRef.current?.reload?.();
         },
@@ -1080,11 +1085,11 @@ const InboundPage: React.FC = () => {
     }
     if (record.receipt_type === 'other_inbound') {
       Modal.confirm({
-        title: '确认其他入库',
-        content: `确定确认入库单据「${code}」吗？`,
+        title: t('app.kuaizhizao.warehouseInbound.confirm.otherInbound.title'),
+        content: t('app.kuaizhizao.warehouseInbound.confirm.otherInbound.content', { code }),
         onOk: async () => {
           await warehouseApi.otherInbound.confirm(String(record.id));
-          messageApi.success('其他入库已确认');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.otherInboundConfirmed'));
           invalidateMenuBadgeCounts();
           await actionRef.current?.reload?.();
         },
@@ -1093,11 +1098,11 @@ const InboundPage: React.FC = () => {
     }
     if (record.receipt_type === 'material_return') {
       Modal.confirm({
-        title: '确认还料入库',
-        content: `确定确认还料单据「${code}」吗？`,
+        title: t('app.kuaizhizao.warehouseInbound.confirm.materialReturn.title'),
+        content: t('app.kuaizhizao.warehouseInbound.confirm.materialReturn.content', { code }),
         onOk: async () => {
           await warehouseApi.materialReturn.confirm(String(record.id));
-          messageApi.success('还料单已确认入库');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.materialReturnConfirmed'));
           invalidateMenuBadgeCounts();
           await actionRef.current?.reload?.();
         },
@@ -1106,11 +1111,11 @@ const InboundPage: React.FC = () => {
     }
     if (record.receipt_type === 'outsource_receipt') {
       Modal.confirm({
-        title: '确认委外收货入库',
-        content: `确定确认委外收货单据「${code}」吗？`,
+        title: t('app.kuaizhizao.warehouseInbound.confirm.outsourceReceipt.title'),
+        content: t('app.kuaizhizao.warehouseInbound.confirm.outsourceReceipt.content', { code }),
         onOk: async () => {
           await outsourceMaterialReceiptApi.complete(String(record.id));
-          messageApi.success('委外收货已确认入库');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.outsourceReceiptConfirmed'));
           invalidateMenuBadgeCounts();
           await actionRef.current?.reload?.();
         },
@@ -1121,7 +1126,7 @@ const InboundPage: React.FC = () => {
       record.receipt_type === 'outsource_material_return' ||
       record.receipt_type === 'outsource_product_return'
     ) {
-      messageApi.warning('委外退料/退货请使用确认入库预览');
+      messageApi.warning(t('app.kuaizhizao.warehouseInbound.msg.useConfirmPreviewForOutsource'));
       return;
     }
     await openConfirmPreview(record);
@@ -1134,9 +1139,9 @@ const InboundPage: React.FC = () => {
     const code = record.receipt_code || record.return_code || '';
     const isReturn = record.receipt_type === 'production_return';
     Modal.confirm({
-      title: isReturn ? '撤回退料' : '撤回入库',
-      content: `确定撤回单据「${code}」吗？将按明细冲减即时库存；若某批次库存不足将无法撤回。`,
-      okText: '撤回',
+      title: isReturn ? t('app.kuaizhizao.warehouseInbound.confirm.withdrawReturn.title') : t('app.kuaizhizao.warehouseInbound.confirm.withdrawInbound.title'),
+      content: t('app.kuaizhizao.warehouseInbound.confirm.withdraw.content', { code }),
+      okText: t('app.kuaizhizao.warehouseInbound.action.withdraw'),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -1151,7 +1156,7 @@ const InboundPage: React.FC = () => {
           } else {
             await warehouseApi.productionReturn.withdraw(String(record.id));
           }
-          messageApi.success(isReturn ? '已撤回退料，库存已冲减' : '已撤回入库，库存已冲减');
+          messageApi.success(isReturn ? t('app.kuaizhizao.warehouseInbound.msg.withdrawReturnSuccess') : t('app.kuaizhizao.warehouseInbound.msg.withdrawInboundSuccess'));
           invalidateMenuBadgeCounts();
 
           await actionRef.current?.reload?.();
@@ -1183,7 +1188,7 @@ const InboundPage: React.FC = () => {
           }
           setInboundTrackingRefreshKey((k) => k + 1);
         } catch (error: any) {
-          messageApi.error(error?.message || error?.response?.data?.detail || '撤回失败');
+          messageApi.error(error?.message || error?.response?.data?.detail || t('app.kuaizhizao.warehouseInbound.msg.withdrawFailed'));
         }
       },
     });
@@ -1195,10 +1200,12 @@ const InboundPage: React.FC = () => {
   const handleDelete = async (record: InboundOrder) => {
     const code = String(record.receipt_code || record.return_code || '');
     const typeLabel =
-      INBOUND_RECEIPT_TYPE_LABELS[record.receipt_type as InboundReceiptType] || '入库单';
+      (record.receipt_type
+        ? inboundReceiptTypeLabel(t, record.receipt_type as InboundReceiptType)
+        : t('app.kuaizhizao.warehouseInbound.fallbackDoc'));
     Modal.confirm({
-      title: `删除${typeLabel}`,
-      content: `确定要删除「${code || '-'}」吗？删除后不可恢复（未确认入库的单据不涉及库存冲减）。`,
+      title: t('app.kuaizhizao.warehouseInbound.confirm.delete.title', { type: typeLabel }),
+      content: t('app.kuaizhizao.warehouseInbound.confirm.delete.content', { code: code || '-' }),
       okType: 'danger',
       onOk: async () => {
         try {
@@ -1219,7 +1226,7 @@ const InboundPage: React.FC = () => {
           } else {
             return;
           }
-          messageApi.success('删除成功');
+          messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.deleteSuccess'));
           invalidateMenuBadgeCounts();
 
           await actionRef.current?.reload?.();
@@ -1228,8 +1235,8 @@ const InboundPage: React.FC = () => {
             error?.response?.data?.detail ??
             error?.response?.data?.message ??
             error?.message ??
-            '删除失败';
-          messageApi.error(typeof msg === 'string' ? msg : '删除失败');
+            t('app.kuaizhizao.warehouseInbound.msg.deleteFailed');
+          messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.deleteFailed'));
         }
       },
     });
@@ -1248,15 +1255,16 @@ const InboundPage: React.FC = () => {
     if (record.work_order_code) return String(record.work_order_code);
     if (record.picking_code) return String(record.picking_code);
     if (record.warehouse_name) return String(record.warehouse_name);
-    return '入库单';
+    return t('app.kuaizhizao.warehouseInbound.fallbackDoc');
   };
 
   const purchaseReceiptCustomFieldColumns = generatePurchaseReceiptCustomFieldColumns();
   const productionReturnCustomFieldColumns = generateProductionReturnCustomFieldColumns();
   const finishedGoodsReceiptCustomFieldColumns = generateFinishedGoodsReceiptCustomFieldColumns();
-  const columns: ProColumns<InboundOrder>[] = [
+  const columns: ProColumns<InboundOrder>[] = useMemo(
+    () => [
     {
-      title: '主体 / 单号',
+      title: t('app.kuaizhizao.warehouseInbound.col.subjectDocNo'),
       key: 'receipt_code',
       dataIndex: ['receipt_code', 'return_code'],
       ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
@@ -1269,35 +1277,30 @@ const InboundPage: React.FC = () => {
       ),
     },
     {
-      title: '单号',
+      title: t('app.kuaizhizao.warehouseInbound.col.docNo'),
       dataIndex: ['receipt_code', 'return_code'],
       hideInTable: true,
     },
     {
-      title: '入库类型',
+      title: t('app.kuaizhizao.warehouseInbound.col.receiptType'),
       dataIndex: 'receipt_type',
       width: 100,
-      valueEnum: Object.fromEntries(
-        Object.entries(INBOUND_RECEIPT_TYPE_LABELS).map(([key, label]) => [
-          key,
-          { text: label, status: 'default' as const },
-        ]),
-      ),
+      valueEnum: inboundReceiptTypeValueEnum(t),
     },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseInbound.col.status'),
       dataIndex: 'status',
       hideInTable: true,
       valueType: 'select',
       valueEnum: {
-        pending: { text: '待入库' },
-        posted: { text: '已入库' },
-        all: { text: '全部' },
+        pending: { text: t('app.kuaizhizao.warehouseInbound.filter.status.pending') },
+        posted: { text: t('app.kuaizhizao.warehouseInbound.filter.status.posted') },
+        all: { text: t('app.kuaizhizao.warehouseInbound.filter.status.all') },
       },
       initialValue: 'pending',
     },
     {
-      title: '来源单号',
+      title: t('app.kuaizhizao.warehouseInbound.col.sourceDocNo'),
       dataIndex: 'source_doc_no',
       width: 140,
       ellipsis: true,
@@ -1305,51 +1308,51 @@ const InboundPage: React.FC = () => {
       render: (_, record) => inboundSourceDocNo(record) || '-',
     },
     {
-      title: '供应商',
+      title: t('app.kuaizhizao.warehouseInbound.col.supplier'),
       dataIndex: 'supplier_name',
       hideInTable: true,
       ellipsis: true,
     },
     {
-      title: '工单/领料单',
+      title: t('app.kuaizhizao.warehouseInbound.col.workOrderPicking'),
       dataIndex: ['work_order_code', 'picking_code'],
       width: 140,
       ellipsis: true,
       render: (_, record) => [record.work_order_code, record.picking_code].filter(Boolean).join(' / ') || '-',
     },
     {
-      title: '入库数量',
+      title: t('app.kuaizhizao.warehouseInbound.col.totalQuantity'),
       dataIndex: 'total_quantity',
       width: 100,
       align: 'right',
     },
     {
-      title: '入库品种',
+      title: t('app.kuaizhizao.warehouseInbound.col.totalItems'),
       dataIndex: 'total_items',
       width: 100,
       align: 'right',
     },
     {
-      title: '入库仓库',
+      title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
       dataIndex: 'warehouse_name',
       width: 120,
       ellipsis: true,
     },
     {
-      title: '操作员',
+      title: t('app.kuaizhizao.warehouseInbound.col.operator'),
       dataIndex: ['received_by', 'returner_name'],
       width: 100,
       ellipsis: true,
       render: (_, record) => record.received_by || record.returner_name || '-',
     },
     {
-      title: '日期',
+      title: t('app.kuaizhizao.warehouseInbound.col.date'),
       dataIndex: ['receipt_date', 'return_time'],
       width: 160,
       render: (_, record) => formatInboundDateDisplay(record),
     },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseInbound.col.updatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -1357,7 +1360,7 @@ const InboundPage: React.FC = () => {
       render: (_, r) => formatDateTimeBySiteSetting(r.updated_at),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseInbound.col.lifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -1381,7 +1384,7 @@ const InboundPage: React.FC = () => {
     ...productionReturnCustomFieldColumns,
     ...finishedGoodsReceiptCustomFieldColumns,
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseInbound.col.actions'),
       width: 200,
       fixed: 'right',
       render: (_, record) => {
@@ -1398,7 +1401,7 @@ const InboundPage: React.FC = () => {
               key="confirm"
               onClick={() => handleConfirm(record)}
             >
-              {record.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
             </Button>
           );
           if (
@@ -1423,7 +1426,7 @@ const InboundPage: React.FC = () => {
               key="withdraw"
               onClick={() => handleWithdrawInbound(record)}
             >
-              {record.receipt_type === 'production_return' ? '撤回退料' : '撤回入库'}
+              {record.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn') : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
             </Button>
           );
         }
@@ -1441,12 +1444,14 @@ const InboundPage: React.FC = () => {
         return nodes;
       },
     },
-  ];
+  ],
+  [t, purchaseReceiptCustomFieldColumns, productionReturnCustomFieldColumns, finishedGoodsReceiptCustomFieldColumns],
+  );
 
   return (
     <ListPageTemplate>
       <UniTable
-        headerTitle="入库管理"
+        headerTitle={t('app.kuaizhizao.warehouseInbound.title')}
         columnPersistenceId="apps.kuaizhizao.pages.warehouse-management.inbound"
         actionRef={actionRef}
         rowKey={(record) => `${record.receipt_type}::${record.id}`}
@@ -1462,7 +1467,7 @@ const InboundPage: React.FC = () => {
             listDataRef.current = result.data;
             return result;
           } catch {
-            messageApi.error('获取入库单列表失败');
+            messageApi.error(t('app.kuaizhizao.warehouseInbound.msg.loadListFailed'));
             return { data: [], success: false, total: 0 };
           }
         }}
@@ -1488,7 +1493,7 @@ const InboundPage: React.FC = () => {
                 await warehouseApi.materialReturn.delete(id);
               }
             }
-            messageApi.success(`成功删除 ${keys.length} 条记录`);
+            messageApi.success(t('app.kuaizhizao.warehouseInbound.msg.batchDeleteSuccess', { count: keys.length }));
             invalidateMenuBadgeCounts();
             actionRef.current?.reload();
           } catch (error: any) {
@@ -1496,11 +1501,11 @@ const InboundPage: React.FC = () => {
               error?.response?.data?.detail ??
               error?.response?.data?.message ??
               error?.message ??
-              '删除失败';
-            messageApi.error(typeof msg === 'string' ? msg : '删除失败');
+              t('app.kuaizhizao.warehouseInbound.msg.deleteFailed');
+            messageApi.error(typeof msg === 'string' ? msg : t('app.kuaizhizao.warehouseInbound.msg.deleteFailed'));
           }
         }}
-        deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条入库单吗？`}
+        deleteConfirmTitle={(count) => t('app.kuaizhizao.warehouseInbound.confirm.batchDelete', { count })}
         selectedRowKeys={selectedRowKeys}
         onRowSelectionChange={setSelectedRowKeys}
         rowSelectionGetCheckboxProps={(record) => ({ disabled: !isInboundConfirmable(record) })}
@@ -1508,14 +1513,14 @@ const InboundPage: React.FC = () => {
           <UniBatchMenuButton
             key="inbound-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaizhizao.warehouseInbound.action.batchActions')}
             menuItems={[
               {
                 key: 'batch-confirm',
-                label: '批量确认入库',
+                label: t('app.kuaizhizao.warehouseInbound.action.batchConfirm'),
                 requireConfirm: true,
-                confirmTitle: (count) => `确认批量入库 ${count} 张单据`,
-                confirmDescription: '将按单据类型调用对应确认接口；不可确认的单据会跳过并汇总失败原因。',
+                confirmTitle: (count) => t('app.kuaizhizao.warehouseInbound.confirm.batch.title', { count }),
+                confirmDescription: t('app.kuaizhizao.warehouseInbound.confirm.batch.description'),
                 onClick: handleBatchConfirm,
               },
             ]}
@@ -1572,8 +1577,8 @@ const InboundPage: React.FC = () => {
       <Modal
         title={
           purchaseConfirmPreviewDetail?.receipt_type === 'production_return'
-            ? '确认退料预览'
-            : '确认入库预览'
+            ? t('app.kuaizhizao.warehouseInbound.confirmPreview.titleReturn')
+            : t('app.kuaizhizao.warehouseInbound.confirmPreview.titleInbound')
         }
         open={purchaseConfirmPreviewOpen}
         onCancel={() => {
@@ -1583,13 +1588,13 @@ const InboundPage: React.FC = () => {
         confirmLoading={purchaseConfirmPreviewSubmitting}
         width={MODAL_CONFIG.EXTRA_LARGE_WIDTH}
         okText={
-          purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? '确认退料' : '确认入库'
+          purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn') : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')
         }
         destroyOnHidden
       >
         <Spin spinning={purchaseConfirmPreviewLoading}>
           <p style={{ marginBottom: 12, color: '#666' }}>
-            请逐行核对入库仓库、库位（可选）、批号与序列号（如物料启用管理）及明细数量后再确认；确认后将按行更新库存。
+            {t('app.kuaizhizao.warehouseInbound.confirmPreview.description')}
           </p>
           <Table
             size="small"
@@ -1598,10 +1603,10 @@ const InboundPage: React.FC = () => {
             rowKey={(r) => (r.id != null ? String(r.id) : `m-${r.material_id}`)}
             dataSource={(purchaseConfirmPreviewDetail?.items || []) as InboundOrderItem[]}
             columns={[
-              { title: '物料编号', dataIndex: 'material_code', width: 100, ellipsis: true },
-              { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+              { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 100, ellipsis: true },
+              { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
               {
-                title: '入库仓库',
+                title: t('app.kuaizhizao.warehouseInbound.col.warehouse'),
                 dataIndex: 'warehouse_id',
                 width: 150,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -1611,7 +1616,7 @@ const InboundPage: React.FC = () => {
                   return (
                     <Select
                       style={{ width: '100%', minWidth: 118 }}
-                      placeholder="请选择"
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.select')}
                       showSearch
                       optionFilterProp="label"
                       value={v}
@@ -1637,7 +1642,7 @@ const InboundPage: React.FC = () => {
                 },
               },
               {
-                title: '库位',
+                title: t('app.kuaizhizao.warehouseInbound.col.location'),
                 dataIndex: 'location_id',
                 width: 150,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -1649,7 +1654,7 @@ const InboundPage: React.FC = () => {
                   return (
                     <Select
                       style={{ width: '100%', minWidth: 118 }}
-                      placeholder={wh != null ? '可选' : '先选仓库'}
+                      placeholder={wh != null ? t('app.kuaizhizao.warehouseInbound.field.optional') : t('app.kuaizhizao.warehouseInbound.field.selectWarehouseFirst')}
                       showSearch
                       allowClear
                       optionFilterProp="label"
@@ -1678,7 +1683,7 @@ const InboundPage: React.FC = () => {
                 },
               },
               {
-                title: '实际数量',
+                title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
                 dataIndex: 'receipt_quantity',
                 width: 100,
                 align: 'right' as const,
@@ -1700,7 +1705,7 @@ const InboundPage: React.FC = () => {
                 },
               },
               {
-                title: '单位',
+                title: t('app.kuaizhizao.warehouseInbound.col.unit'),
                 dataIndex: 'material_unit',
                 width: 72,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -1717,7 +1722,7 @@ const InboundPage: React.FC = () => {
                 },
               },
               {
-                title: '批号',
+                title: t('app.kuaizhizao.warehouseInbound.col.batchNo'),
                 dataIndex: 'batch_number',
                 width: 138,
                 render: (_: unknown, row: InboundOrderItem) => {
@@ -1725,7 +1730,7 @@ const InboundPage: React.FC = () => {
                   const rid = Number(row.id);
                   return (
                     <Input
-                      placeholder="可选"
+                      placeholder={t('app.kuaizhizao.warehouseInbound.field.optional')}
                       value={purchaseConfirmPreviewBatch[rid] ?? ''}
                       onChange={(e) =>
                         setPurchaseConfirmPreviewBatch((prev) => ({ ...prev, [rid]: e.target.value }))
@@ -1738,7 +1743,7 @@ const InboundPage: React.FC = () => {
               ...(purchaseConfirmPreviewDetail?.receipt_type === 'purchase'
                 ? [
                     {
-                      title: '序列号',
+                      title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
                       dataIndex: 'serial_numbers',
                       width: 150,
                       render: (_: unknown, row: InboundOrderItem) => {
@@ -1790,7 +1795,7 @@ const InboundPage: React.FC = () => {
       </Modal>
 
       <DetailDrawerTemplate
-        title={`${currentOrder?.receipt_type === 'production_return' ? '生产退料单' : '入库单'}详情 - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
+        title={`${currentOrder?.receipt_type === 'production_return' ? t('app.kuaizhizao.warehouseInbound.detail.productionReturnTitle') : t('app.kuaizhizao.warehouseInbound.detail.title')} - ${currentOrder?.receipt_code || currentOrder?.return_code || ''}`}
         open={detailDrawerVisible}
         zIndex={inboundDetailDrawerZIndex}
         onClose={() => {
@@ -1811,7 +1816,7 @@ const InboundPage: React.FC = () => {
                 <>
                   {isEditablePurchaseReceipt(currentOrder) && (
                     <Button onClick={handleSavePurchaseReceiptQuantities} loading={savingPurchaseReceipt}>
-                      保存实际数量
+                      {t('app.kuaizhizao.warehouseInbound.action.saveActualQty')}
                     </Button>
                   )}
                   <Button
@@ -1819,7 +1824,9 @@ const InboundPage: React.FC = () => {
                     icon={<CheckCircleOutlined />}
                     onClick={() => handleConfirm(currentOrder)}
                   >
-                    {currentOrder.receipt_type === 'production_return' ? '确认退料' : '确认入库'}
+                    {currentOrder.receipt_type === 'production_return'
+                      ? t('app.kuaizhizao.warehouseInbound.action.confirmReturn')
+                      : t('app.kuaizhizao.warehouseInbound.action.confirmInbound')}
                   </Button>
                 </>
               )}
@@ -1829,7 +1836,9 @@ const InboundPage: React.FC = () => {
                   icon={<RollbackOutlined />}
                   onClick={() => handleWithdrawInbound(currentOrder)}
                 >
-                  {currentOrder.receipt_type === 'production_return' ? '撤回退料' : '撤回入库'}
+                  {currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.action.withdrawReturn')
+                    : t('app.kuaizhizao.warehouseInbound.action.withdrawInbound')}
                 </Button>
               )}
             </Space>
@@ -1838,14 +1847,14 @@ const InboundPage: React.FC = () => {
         customContent={
           currentOrder ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
                   items={[
                     {
                       key: 'code',
-                      label: '单号',
+                      label: t('app.kuaizhizao.warehouseInbound.col.docNo'),
                       children: (
                         <Typography.Text copyable={{ text: String(currentOrder.receipt_code || currentOrder.return_code || '') }}>
                           {currentOrder.receipt_code || currentOrder.return_code || '-'}
@@ -1854,7 +1863,7 @@ const InboundPage: React.FC = () => {
                     },
                     {
                       key: 'type',
-                      label: '类型',
+                      label: t('app.kuaizhizao.warehouseInbound.field.type'),
                       children: (
                         <Tag
                           color={
@@ -1867,13 +1876,15 @@ const InboundPage: React.FC = () => {
                                   : 'warning'
                           }
                         >
-                          {INBOUND_RECEIPT_TYPE_LABELS[currentOrder.receipt_type as InboundReceiptType] || '入库单'}
+                          {currentOrder.receipt_type
+                            ? inboundReceiptTypeLabel(t, currentOrder.receipt_type as InboundReceiptType)
+                            : t('app.kuaizhizao.warehouseInbound.fallbackDoc')}
                         </Tag>
                       ),
                     },
                     {
                       key: 'status',
-                      label: '状态',
+                      label: t('app.kuaizhizao.warehouseInbound.field.status'),
                       children: (
                         <Tag
                           color={
@@ -1893,33 +1904,33 @@ const InboundPage: React.FC = () => {
                       ),
                     },
                     ...(currentOrder.supplier_name
-                      ? [{ key: 'supplier', label: '供应商', children: currentOrder.supplier_name }]
+                      ? [{ key: 'supplier', label: t('app.kuaizhizao.warehouseInbound.field.supplier'), children: currentOrder.supplier_name }]
                       : []),
                     ...(currentOrder.purchase_order_code
-                      ? [{ key: 'po', label: '采购单号', children: currentOrder.purchase_order_code }]
+                      ? [{ key: 'po', label: t('app.kuaizhizao.warehouseInbound.field.purchaseOrderCode'), children: currentOrder.purchase_order_code }]
                       : []),
                     ...(currentOrder.work_order_code
-                      ? [{ key: 'wo', label: '工单号', children: currentOrder.work_order_code }]
+                      ? [{ key: 'wo', label: t('app.kuaizhizao.warehouseInbound.field.workOrderCode'), children: currentOrder.work_order_code }]
                       : []),
                     ...(currentOrder.picking_code
-                      ? [{ key: 'pick', label: '领料单号', children: currentOrder.picking_code }]
+                      ? [{ key: 'pick', label: t('app.kuaizhizao.warehouseInbound.field.pickingCode'), children: currentOrder.picking_code }]
                       : []),
                     ...(currentOrder.workshop_name
-                      ? [{ key: 'ws', label: '车间', children: currentOrder.workshop_name }]
+                      ? [{ key: 'ws', label: t('app.kuaizhizao.warehouseInbound.field.workshop'), children: currentOrder.workshop_name }]
                       : []),
                     {
                       key: 'wh',
-                      label: '仓库',
+                      label: t('app.kuaizhizao.warehouseInbound.field.warehouse'),
                       children: currentOrder.warehouse_name ?? '-',
                     },
                     {
                       key: 'date',
-                      label: '日期',
+                      label: t('app.kuaizhizao.warehouseInbound.field.date'),
                       children: formatInboundDateDisplay(currentOrder),
                     },
                     {
                       key: 'op',
-                      label: '操作员',
+                      label: t('app.kuaizhizao.warehouseInbound.field.operator'),
                       children: currentOrder.received_by || currentOrder.returner_name || '-',
                     },
                   ]}
@@ -1962,12 +1973,12 @@ const InboundPage: React.FC = () => {
                     column={3}
                     size="small"
                     style={{ marginTop: 16 }}
-                    items={[{ key: 'notes', label: '备注', span: 3, children: currentOrder.notes }]}
+                    items={[{ key: 'notes', label: t('app.kuaizhizao.warehouseInbound.field.notes'), span: 3, children: currentOrder.notes }]}
                   />
                 ) : null}
                 {currentOrder.receipt_type === 'purchase' ? (
                   <div style={{ marginTop: 16 }}>
-                    <Typography.Text strong>附件</Typography.Text>
+                    <Typography.Text strong>{t('app.kuaizhizao.warehouseInbound.section.attachments')}</Typography.Text>
                     {isEditablePurchaseReceipt(currentOrder) ? (
                       <Upload
                         fileList={purchaseReceiptAttachments}
@@ -1985,28 +1996,28 @@ const InboundPage: React.FC = () => {
                         multiple
                         style={{ marginTop: 8, display: 'block' }}
                       >
-                        <Button>上传附件</Button>
+                        <Button>{t('app.kuaizhizao.warehouseInbound.action.uploadAttachments')}</Button>
                       </Upload>
                     ) : (currentOrder.attachments?.length ?? 0) > 0 ? (
                       <ul style={{ marginTop: 8, paddingLeft: 20 }}>
                         {(currentOrder.attachments ?? []).map((file) => (
                           <li key={file.uid ?? file.name}>
                             <a href={file.url} target="_blank" rel="noreferrer">
-                              {file.name ?? '附件'}
+                              {file.name ?? t('app.kuaizhizao.warehouseInbound.detail.attachmentFallback')}
                             </a>
                           </li>
                         ))}
                       </ul>
                     ) : (
                       <Typography.Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                        暂无附件
+                        {t('app.kuaizhizao.warehouseInbound.detail.noAttachments')}
                       </Typography.Text>
                     )}
                   </div>
                 ) : null}
               </DetailDrawerSection>
 
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.lifecycle')}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {(() => {
                     const lifecycle = getInboundLifecycle(currentOrder);
@@ -2050,7 +2061,7 @@ const InboundPage: React.FC = () => {
               </DetailDrawerSection>
 
               {currentOrder.receipt_type === 'purchase' && currentOrder.id ? (
-                <DetailDrawerSection title="来料检验 (IQC)">
+                <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.iqc')}>
                   <LinkedIqcPanel
                     purchaseReceiptId={currentOrder.id}
                     active={detailDrawerVisible}
@@ -2063,7 +2074,11 @@ const InboundPage: React.FC = () => {
               ) : null}
 
               <DetailDrawerSection
-                title={currentOrder.receipt_type === 'production_return' ? '退料明细' : '明细信息'}
+                title={
+                  currentOrder.receipt_type === 'production_return'
+                    ? t('app.kuaizhizao.warehouseInbound.section.returnDetails')
+                    : t('app.kuaizhizao.warehouseInbound.section.detailInfo')
+                }
               >
                 <style>{`
                   .inbound-detail-drawer-items .ant-table-wrapper .ant-table-body,
@@ -2088,30 +2103,30 @@ const InboundPage: React.FC = () => {
                       columns={
                         currentOrder.receipt_type === 'production_return'
                           ? [
-                              { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                              { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                              { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                              { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
                               {
-                                title: '单位',
+                                title: t('app.kuaizhizao.warehouseInbound.col.unit'),
                                 dataIndex: 'material_unit',
                                 width: 72,
                                 render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
                               },
                               {
-                                title: '退料数量',
+                                title: t('app.kuaizhizao.warehouseInbound.col.returnQty'),
                                 dataIndex: 'return_quantity',
                                 width: 100,
                                 align: 'right' as const,
                               },
-                              { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
-                              { title: '库位', dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                              { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                              { title: t('app.kuaizhizao.warehouseInbound.col.warehouseName'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+                              { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                              { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
                             ]
                           : currentOrder.receipt_type === 'purchase'
                             ? [
-                                { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                                { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
                                 {
-                                  title: '实际数量',
+                                  title: t('app.kuaizhizao.warehouseInbound.col.actualQty'),
                                   dataIndex: 'receipt_quantity',
                                   width: 140,
                                   align: 'right' as const,
@@ -2134,51 +2149,51 @@ const InboundPage: React.FC = () => {
                                   },
                                 },
                                 {
-                                  title: '单位',
+                                  title: t('app.kuaizhizao.warehouseInbound.col.unit'),
                                   dataIndex: 'material_unit',
                                   width: 72,
                                   render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
                                 },
-                                { title: '单价', dataIndex: 'unit_price', width: 90, align: 'right' as const },
-                                { title: '金额', dataIndex: 'total_amount', width: 100, align: 'right' as const },
-                                { title: '库位', dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                                { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.unitPrice'), dataIndex: 'unit_price', width: 90, align: 'right' as const },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.amount'), dataIndex: 'total_amount', width: 100, align: 'right' as const },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
                                 {
-                                  title: '序列号',
+                                  title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
                                   dataIndex: 'serial_numbers',
                                   width: 88,
-                                  render: (v: unknown) => renderInboundDetailSerialCell(v),
+                                  render: (v: unknown) => renderInboundDetailSerialCell(t, v),
                                 },
                               ]
                             : [
-                                { title: '物料编号', dataIndex: 'material_code', width: 120, ellipsis: true },
-                                { title: '物料名称', dataIndex: 'material_name', width: 150, ellipsis: true },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.materialCode'), dataIndex: 'material_code', width: 120, ellipsis: true },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.materialName'), dataIndex: 'material_name', width: 150, ellipsis: true },
                                 {
-                                  title: '数量',
+                                  title: t('app.kuaizhizao.warehouseInbound.col.quantity'),
                                   dataIndex: 'receipt_quantity',
                                   width: 100,
                                   align: 'right' as const,
                                 },
                                 {
-                                  title: '单位',
+                                  title: t('app.kuaizhizao.warehouseInbound.col.unit'),
                                   dataIndex: 'material_unit',
                                   width: 72,
                                   render: (_: unknown, row: InboundOrderItem) => renderInboundDetailUnitCell(row),
                                 },
-                                { title: '库位', dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
-                                { title: '批次号', dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.locationCode'), dataIndex: 'location_code', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
+                                { title: t('app.kuaizhizao.warehouseInbound.col.batchNumber'), dataIndex: 'batch_number', width: 100, ellipsis: true, render: (v: unknown) => (v ? String(v) : '—') },
                               ]
                       }
                       dataSource={currentOrder.items}
                     />
                   </div>
                 ) : (
-                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无明细" />
+                  <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noDetails')} />
                 )}
               </DetailDrawerSection>
 
               {currentOrder?.id != null && (
-                <DetailDrawerSection title="操作记录">
+                <DetailDrawerSection title={t('app.kuaizhizao.warehouseInbound.section.operationLog')}>
                   {inboundTracking.loading && (
                     <div style={{ textAlign: 'center', padding: 24 }}>
                       <Spin />
@@ -2191,7 +2206,7 @@ const InboundPage: React.FC = () => {
                     <DocumentTrackingTimelineBody data={inboundTracking.data} />
                   )}
                   {!inboundTracking.loading && !inboundTracking.data && !inboundTracking.error && (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="暂无操作记录" />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.kuaizhizao.warehouseInbound.detail.noOperationLog')} />
                   )}
                 </DetailDrawerSection>
               )}

@@ -1,22 +1,19 @@
 /**
  * 委外成本核算页面
- *
- * 提供基于物料来源类型的委外成本核算功能。
- *
- * @author Luigi Lu
- * @date 2026-01-16
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ProFormSelect, ProFormDigit, ProFormDatePicker, PageContainer, ProDescriptions } from '@ant-design/pro-components';
-import { App, Button, Card, Tag, Divider } from 'antd';
+import { App, Button, Card, Divider } from 'antd';
 import { CalculatorOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { FormModalTemplate, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
 import { outsourceCostApi } from '../../../services/cost';
 import { materialApi } from '../../../../master-data/services/material';
 import dayjs from 'dayjs';
 import { loadOutsourceWorkOrderSelectOptions, normalizeCostListRows, type CostSelectOption } from '../costSelectData';
+import { formatCalculationType, getSourceTypeTag } from '../../../utils/costUiLabels';
 
 interface OutsourceCostResult {
   material_id?: number;
@@ -33,8 +30,6 @@ interface OutsourceCostResult {
   cost_details: any;
   calculation_type: string;
   calculation_date: string;
-  supplier_id?: number;
-  supplier_code?: string;
   supplier_name?: string;
 }
 
@@ -43,6 +38,7 @@ export interface OutsourceCostPageProps {
 }
 
 const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<any>(null);
 
@@ -53,17 +49,14 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
   const [outsourceWorkOrderOptions, setOutsourceWorkOrderOptions] = useState<CostSelectOption[]>([]);
   const [calculationMode, setCalculationMode] = useState<'standard' | 'actual'>('standard');
 
-  /**
-   * 加载物料列表
-   */
   React.useEffect(() => {
     const loadMaterials = async () => {
       try {
-        const result = await materialApi.list({ limit: 1000, isActive: true });
-        const rows = normalizeCostListRows(result);
-        setMaterials(rows.filter(m => (m.sourceType || m.source_type) === 'Outsource'));
+        const list = await materialApi.list({ limit: 1000, isActive: true });
+        const rows = normalizeCostListRows(list);
+        setMaterials(rows.filter((m) => (m.sourceType || m.source_type) === 'Outsource'));
       } catch (error: any) {
-        console.error('加载物料列表失败:', error);
+        console.error('load materials failed:', error);
       }
     };
     loadMaterials();
@@ -76,7 +69,7 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
         const opts = await loadOutsourceWorkOrderSelectOptions(400);
         if (!cancelled) setOutsourceWorkOrderOptions(opts);
       } catch (e) {
-        console.error('加载委外工单下拉失败:', e);
+        console.error('load outsource work orders failed:', e);
       }
     })();
     return () => {
@@ -84,72 +77,78 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
     };
   }, []);
 
-  /**
-   * 处理核算
-   */
   const handleCalculate = async (values: any) => {
     try {
       setLoading(true);
       const data: any = {
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
       };
-
       if (calculationMode === 'standard') {
         data.material_id = values.material_id;
         data.quantity = values.quantity;
       } else {
         data.outsource_work_order_id = values.outsource_work_order_id;
       }
-
-      const result = await outsourceCostApi.calculate(data);
-      setResult(result);
-      messageApi.success('委外成本核算成功');
+      const res = await outsourceCostApi.calculate(data);
+      setResult(res);
+      messageApi.success(t('app.kuaicaiwu.outsourceCost.calculateSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '委外成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.outsourceCost.calculateFailed'));
     } finally {
       setLoading(false);
     }
   };
 
-  /**
-   * 打开核算弹窗
-   */
   const handleOpenModal = (mode: 'standard' | 'actual') => {
     setCalculationMode(mode);
     setModalVisible(true);
     setResult(null);
     formRef.current?.resetFields();
-    formRef.current?.setFieldsValue({
-      calculation_date: dayjs(),
-      quantity: 1,
-    });
+    formRef.current?.setFieldsValue({ calculation_date: dayjs(), quantity: 1 });
   };
+
+  const resultColumns = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code', hide: !result?.material_code },
+      { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name', hide: !result?.material_name },
+      {
+        title: t('app.kuaicaiwu.outsourceCost.col.outsourceWorkOrderCode'),
+        dataIndex: 'outsource_work_order_code',
+        hide: !result?.outsource_work_order_code,
+      },
+      { title: t('app.kuaicaiwu.costCommon.col.supplier'), dataIndex: 'supplier_name', hide: !result?.supplier_name },
+      { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
+      { title: t('app.kuaicaiwu.costCommon.col.materialCost'), dataIndex: 'material_cost' },
+      { title: t('app.kuaicaiwu.outsourceCost.col.processingCost'), dataIndex: 'processing_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.totalCost'), dataIndex: 'total_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.unitCost'), dataIndex: 'unit_cost' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationType'), dataIndex: 'calculation_type' },
+      { title: t('app.kuaicaiwu.costCommon.col.calculationDate'), dataIndex: 'calculation_date' },
+    ],
+    [t, result],
+  );
+
+  const modalTitle =
+    calculationMode === 'standard'
+      ? t('app.kuaicaiwu.outsourceCost.modalStandard')
+      : t('app.kuaicaiwu.outsourceCost.modalActual');
 
   return (
     <PageContainer
       ghost={embedded}
-      title={embedded ? false : '委外成本核算'}
+      title={embedded ? false : t('app.kuaicaiwu.outsourceCost.title')}
       extra={[
-        <Button
-          key="calculate-standard"
-          type="primary"
-          icon={<CalculatorOutlined />}
-          onClick={() => handleOpenModal('standard')}
-        >
-          核算标准委外成本
+        <Button key="standard" type="primary" icon={<CalculatorOutlined />} onClick={() => handleOpenModal('standard')}>
+          {t('app.kuaicaiwu.outsourceCost.calculateStandard')}
         </Button>,
-        <Button
-          key="calculate-actual"
-          icon={<CalculatorOutlined />}
-          onClick={() => handleOpenModal('actual')}
-        >
-          核算实际委外成本
+        <Button key="actual" icon={<CalculatorOutlined />} onClick={() => handleOpenModal('actual')}>
+          {t('app.kuaicaiwu.outsourceCost.calculateActual')}
         </Button>,
       ]}
     >
-      {/* 核算结果展示 */}
       {result && (
-        <Card title="核算结果" style={{ marginBottom: 16 }}>
+        <Card title={t('app.kuaicaiwu.costCommon.resultTitle')} style={{ marginBottom: 16 }}>
           <ProDescriptions
             bordered
             column={2}
@@ -158,7 +157,7 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
               material_name: result.material_name,
               outsource_work_order_code: result.outsource_work_order_code,
               supplier_name: result.supplier_name,
-              source_type: <Tag color="orange">委外件</Tag>,
+              source_type: getSourceTypeTag('Outsource', t),
               quantity: result.quantity,
               material_cost: `¥${result.material_cost?.toFixed(2)}`,
               processing_cost: `¥${result.processing_cost?.toFixed(2)}`,
@@ -168,28 +167,14 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
                 </span>
               ),
               unit_cost: `¥${result.unit_cost?.toFixed(2)}`,
-              calculation_type: result.calculation_type,
+              calculation_type: formatCalculationType(result.calculation_type, t),
               calculation_date: result.calculation_date ? dayjs(result.calculation_date).format('YYYY-MM-DD') : '-',
             }}
-            columns={[
-              { title: '物料编号', dataIndex: 'material_code', hide: !result.material_code },
-              { title: '物料名称', dataIndex: 'material_name', hide: !result.material_name },
-              { title: '委外工单编号', dataIndex: 'outsource_work_order_code', hide: !result.outsource_work_order_code },
-              { title: '供应商', dataIndex: 'supplier_name', hide: !result.supplier_name },
-              { title: '物料来源类型', dataIndex: 'source_type' },
-              { title: '数量', dataIndex: 'quantity' },
-              { title: '材料成本', dataIndex: 'material_cost' },
-              { title: '委外加工费用', dataIndex: 'processing_cost' },
-              { title: '总成本', dataIndex: 'total_cost' },
-              { title: '单位成本', dataIndex: 'unit_cost' },
-              { title: '核算类型', dataIndex: 'calculation_type' },
-              { title: '核算日期', dataIndex: 'calculation_date' },
-            ]}
+            columns={resultColumns}
           />
-
           {result.cost_details && (
             <>
-              <Divider>成本明细</Divider>
+              <Divider>{t('app.kuaicaiwu.costCommon.costDetails')}</Divider>
               <div style={{ maxHeight: 400, overflow: 'auto' }}>
                 <StructuredCostDataView data={result.cost_details} />
               </div>
@@ -198,9 +183,8 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
         </Card>
       )}
 
-      {/* 核算弹窗 */}
       <FormModalTemplate
-        title={calculationMode === 'standard' ? '核算标准委外成本' : '核算实际委外成本'}
+        title={modalTitle}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -215,10 +199,10 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
           <>
             <ProFormSelect
               name="material_id"
-              label="物料"
-              placeholder="请选择委外件物料"
-              rules={[{ required: true, message: '请选择物料' }]}
-              options={materials.map(m => ({
+              label={t('app.kuaicaiwu.costCommon.field.material')}
+              placeholder={t('app.kuaicaiwu.outsourceCost.field.materialPlaceholder')}
+              rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
+              options={materials.map((m) => ({
                 label: `${m.mainCode || m.code} - ${m.name}`,
                 value: m.id,
               }))}
@@ -230,21 +214,21 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
             />
             <ProFormDigit
               name="quantity"
-              label="数量"
-              placeholder="请输入数量"
-              rules={[{ required: true, message: '请输入数量' }, { type: 'number', min: 0.0001, message: '数量必须大于0' }]}
-              fieldProps={{
-                precision: 4,
-                style: { width: '100%' },
-              }}
+              label={t('app.kuaicaiwu.costCommon.col.quantity')}
+              placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
+              rules={[
+                { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+                { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
+              ]}
+              fieldProps={{ precision: 4, style: { width: '100%' } }}
             />
           </>
         ) : (
           <ProFormSelect
             name="outsource_work_order_id"
-            label="委外工单"
-            placeholder="请选择委外工单"
-            rules={[{ required: true, message: '请选择委外工单' }]}
+            label={t('app.kuaicaiwu.outsourceCost.field.outsourceWorkOrder')}
+            placeholder={t('app.kuaicaiwu.outsourceCost.field.outsourceWorkOrderPlaceholder')}
+            rules={[{ required: true, message: t('app.kuaicaiwu.outsourceCost.field.outsourceWorkOrderRequired') }]}
             options={outsourceWorkOrderOptions}
             showSearch
             fieldProps={{
@@ -256,11 +240,9 @@ const OutsourceCostPage: React.FC<OutsourceCostPageProps> = ({ embedded = false 
         )}
         <ProFormDatePicker
           name="calculation_date"
-          label="核算日期"
-          placeholder="请选择核算日期"
-          fieldProps={{
-            style: { width: '100%' },
-          }}
+          label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
+          fieldProps={{ style: { width: '100%' } }}
         />
       </FormModalTemplate>
     </PageContainer>

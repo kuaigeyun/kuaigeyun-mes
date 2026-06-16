@@ -9,6 +9,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import {
   ActionType,
@@ -81,6 +82,13 @@ import PurchaseCostPage from '../purchase-cost';
 import QualityCostPage from '../quality-cost';
 import CostOptimizationPanel from '../CostOptimizationPanel';
 import { StructuredCostDataView } from '../../../../../components/structured-cost-data-view';
+import {
+  formatCalculationType,
+  formatSourceType,
+  formatVarianceType,
+  getSourceTypeTag,
+  getVarianceTypeTag,
+} from '../../../utils/costUiLabels';
 
 type TopCat = 'ledger' | 'compare' | 'analyze' | 'optimization' | 'trial';
 
@@ -226,6 +234,7 @@ interface MaterialCostComparisonResult {
 }
 
 const CostCalculationPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const [searchParams, setSearchParams] = useSearchParams();
   const { cat: rawCat, sub: rawSub } = parseLocation(searchParams);
@@ -359,14 +368,14 @@ const CostCalculationPage: React.FC = () => {
   const handleDetail = async (record: CostCalculation) => {
     try {
       if (!record.uuid) {
-        messageApi.error('核算记录UUID不存在');
+        messageApi.error(t('app.kuaicaiwu.costCalculation.uuidMissing'));
         return;
       }
       const detail = await costCalculationApi.get(record.uuid);
       setCostCalculationDetail(detail);
       setDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error.message || '获取核算记录详情失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.loadDetailFailed'));
     }
   };
 
@@ -377,12 +386,12 @@ const CostCalculationPage: React.FC = () => {
         calculation_date: values.calculation_date ? values.calculation_date.format('YYYY-MM-DD') : undefined,
         remark: values.remark,
       });
-      messageApi.success('工单成本核算成功');
+      messageApi.success(t('app.kuaicaiwu.costCalculation.workOrderSuccess'));
       setExecModal(null);
       setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '工单成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.workOrderFailed'));
     }
   };
 
@@ -395,12 +404,12 @@ const CostCalculationPage: React.FC = () => {
         calculation_type: values.calculation_type,
         remark: values.remark,
       });
-      messageApi.success('产品成本核算成功');
+      messageApi.success(t('app.kuaicaiwu.costCalculation.productSuccess'));
       setExecModal(null);
       setLedger();
       actionRef.current?.reload();
     } catch (error: any) {
-      messageApi.error(error.message || '产品成本核算失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.productFailed'));
     }
   };
 
@@ -409,7 +418,7 @@ const CostCalculationPage: React.FC = () => {
       const data = await costCalculationApi.compareCosts(values.product_id);
       setCompareData(data);
     } catch (error: any) {
-      messageApi.error(error.message || '成本对比查询失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.compareQueryFailed'));
     }
   };
 
@@ -427,25 +436,15 @@ const CostCalculationPage: React.FC = () => {
       };
       const result = await costComparisonApi.compare(data);
       setMaterialCompareResult(result);
-      messageApi.success('成本对比成功');
+      messageApi.success(t('app.kuaicaiwu.costComparison.compareSuccess'));
     } catch (error: any) {
-      messageApi.error(error.message || '成本对比失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costComparison.compareFailed'));
     } finally {
       setMaterialCompareLoading(false);
     }
   };
 
-  const getMaterialCompareSourceTag = (sourceType: string) => {
-    const typeMap: Record<string, { color: string; text: string }> = {
-      Make: { color: 'blue', text: '自制件' },
-      Buy: { color: 'green', text: '采购件' },
-      Outsource: { color: 'orange', text: '委外件' },
-      Phantom: { color: 'purple', text: '虚拟件' },
-      Configure: { color: 'cyan', text: '配置件' },
-    };
-    const t = typeMap[sourceType] || { color: 'default', text: sourceType };
-    return <Tag color={t.color}>{t.text}</Tag>;
-  };
+  const getMaterialCompareSourceTag = (sourceType: string) => getSourceTypeTag(sourceType, t);
 
   const handleAnalyzeQuery = async (values: any) => {
     try {
@@ -453,217 +452,218 @@ const CostCalculationPage: React.FC = () => {
       setAnalyzeData(data);
       setAnalyzeInnerTab('composition');
     } catch (error: any) {
-      messageApi.error(error.message || '成本分析查询失败');
+      messageApi.error(error.message || t('app.kuaicaiwu.costCalculation.analyzeQueryFailed'));
     }
   };
 
-  const columns: ProColumns<CostCalculation>[] = [
-    {
-      title: '核算单号',
-      dataIndex: 'calculation_no',
-      key: 'calculation_no',
-      width: 150,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.calculation_no ?? '') }} ellipsis>
-          {r.calculation_no ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    {
-      title: '核算类型',
-      dataIndex: 'calculation_type',
-      key: 'calculation_type',
-      width: 120,
-      render: (_, r) => {
-        const text = r.calculation_type;
-        const typeMap: Record<string, { color: string; text: string }> = {
-          工单成本: { color: 'blue', text: '工单成本' },
-          产品成本: { color: 'green', text: '产品成本' },
-          标准成本: { color: 'orange', text: '标准成本' },
-          实际成本: { color: 'red', text: '实际成本' },
-        };
-        const type = typeMap[text || ''] || { color: 'default', text: text || '-' };
-        return <Tag color={type.color}>{type.text}</Tag>;
-      },
-    },
-    {
-      title: '工单编号',
-      dataIndex: 'work_order_code',
-      key: 'work_order_code',
-      width: 150,
-      render: (_, r) =>
-        r.work_order_code ? (
-          <Typography.Text copyable={{ text: String(r.work_order_code) }} ellipsis>
-            {r.work_order_code}
-          </Typography.Text>
-        ) : (
-          '-'
-        ),
-    },
-    {
-      title: '产品编号',
-      dataIndex: 'product_code',
-      key: 'product_code',
-      width: 150,
-      render: (_, r) =>
-        r.product_code ? (
-          <Typography.Text copyable={{ text: String(r.product_code) }} ellipsis>
-            {r.product_code}
-          </Typography.Text>
-        ) : (
-          '-'
-        ),
-    },
-    {
-      title: '产品名称',
-      dataIndex: 'product_name',
-      key: 'product_name',
-      width: 200,
-    },
-    {
-      title: '数量',
-      dataIndex: 'quantity',
-      key: 'quantity',
-      width: 100,
-      render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
-    },
-    {
-      title: '材料成本',
-      dataIndex: 'material_cost',
-      key: 'material_cost',
-      width: 120,
-      render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '人工成本',
-      dataIndex: 'labor_cost',
-      key: 'labor_cost',
-      width: 120,
-      render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '制造费用',
-      dataIndex: 'manufacturing_cost',
-      key: 'manufacturing_cost',
-      width: 120,
-      render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '总成本',
-      dataIndex: 'total_cost',
-      key: 'total_cost',
-      width: 120,
-      render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '单位成本',
-      dataIndex: 'unit_cost',
-      key: 'unit_cost',
-      width: 120,
-      render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '核算日期',
-      dataIndex: 'calculation_date',
-      key: 'calculation_date',
-      width: 120,
-      search: false,
-      render: (_, r) => (r.calculation_date ? dayjs(r.calculation_date as string).format('YYYY-MM-DD') : '-'),
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      key: 'updated_at',
-      width: 180,
-      search: false,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      key: 'lifecycle',
-      width: 200,
-      fixed: 'right',
-      align: 'left',
-      search: false,
-      render: (_, record) => (
-        <UniLifecycle {...getCostCalculationLifecycle(record as Record<string, unknown>)} showCircleTooltip={false} />
-      ),
-    },
-    {
-      title: '操作',
-      key: 'action',
-      width: 100,
-      fixed: 'right',
-      render: (_: any, record: CostCalculation) => (
-        <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
-          详情
-        </Button>
-      ),
-    },
-  ];
+  const calcTypeColor: Record<string, string> = {
+    工单成本: 'blue',
+    产品成本: 'green',
+    标准成本: 'orange',
+    实际成本: 'red',
+  };
 
-  const detailItems: ProDescriptionsItemProps<CostCalculation>[] = [
-    { title: '核算单号', dataIndex: 'calculation_no' },
-    { title: '核算类型', dataIndex: 'calculation_type' },
-    { title: '工单编号', dataIndex: 'work_order_code' },
-    { title: '产品编号', dataIndex: 'product_code' },
-    { title: '产品名称', dataIndex: 'product_name' },
-    {
-      title: '数量',
-      dataIndex: 'quantity',
-      render: (_, entity) => (entity.quantity != null ? Number(entity.quantity).toFixed(2) : '0.00'),
-    },
-    {
-      title: '材料成本',
-      dataIndex: 'material_cost',
-      render: (_, entity) => `¥${entity.material_cost != null ? Number(entity.material_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '人工成本',
-      dataIndex: 'labor_cost',
-      render: (_, entity) => `¥${entity.labor_cost != null ? Number(entity.labor_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '制造费用',
-      dataIndex: 'manufacturing_cost',
-      render: (_, entity) =>
-        `¥${entity.manufacturing_cost != null ? Number(entity.manufacturing_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '总成本',
-      dataIndex: 'total_cost',
-      render: (_, entity) => `¥${entity.total_cost != null ? Number(entity.total_cost).toFixed(2) : '0.00'}`,
-    },
-    {
-      title: '单位成本',
-      dataIndex: 'unit_cost',
-      render: (_, entity) => `¥${entity.unit_cost != null ? Number(entity.unit_cost).toFixed(2) : '0.00'}`,
-    },
-    { title: '核算状态', dataIndex: 'calculation_status' },
-    {
-      title: '核算日期',
-      dataIndex: 'calculation_date',
-      render: (_, entity) =>
-        entity.calculation_date ? dayjs(entity.calculation_date as string).format('YYYY-MM-DD') : '-',
-    },
-    { title: '备注', dataIndex: 'remark' },
-    { title: '创建人', dataIndex: 'created_by_name' },
-    {
-      title: '创建时间',
-      dataIndex: 'created_at',
-      render: (_, entity) =>
-        entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-    { title: '更新人', dataIndex: 'updated_by_name' },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      render: (_, entity) =>
-        entity.updated_at ? dayjs(entity.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
-    },
-  ];
+  const columns: ProColumns<CostCalculation>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationNo'),
+        dataIndex: 'calculation_no',
+        key: 'calculation_no',
+        width: 150,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.calculation_no ?? '') }} ellipsis>
+            {r.calculation_no ?? '-'}
+          </Typography.Text>
+        ),
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationType'),
+        dataIndex: 'calculation_type',
+        key: 'calculation_type',
+        width: 120,
+        render: (_, r) => {
+          const text = r.calculation_type || '';
+          return <Tag color={calcTypeColor[text] || 'default'}>{formatCalculationType(text, t)}</Tag>;
+        },
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'),
+        dataIndex: 'work_order_code',
+        key: 'work_order_code',
+        width: 150,
+        render: (_, r) =>
+          r.work_order_code ? (
+            <Typography.Text copyable={{ text: String(r.work_order_code) }} ellipsis>{r.work_order_code}</Typography.Text>
+          ) : (
+            '-'
+          ),
+      },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.productCode'),
+        dataIndex: 'product_code',
+        key: 'product_code',
+        width: 150,
+        render: (_, r) =>
+          r.product_code ? (
+            <Typography.Text copyable={{ text: String(r.product_code) }} ellipsis>{r.product_code}</Typography.Text>
+          ) : (
+            '-'
+          ),
+      },
+      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name', key: 'product_name', width: 200 },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.quantity'),
+        dataIndex: 'quantity',
+        key: 'quantity',
+        width: 100,
+        render: (_, r) => (r.quantity != null ? Number(r.quantity).toFixed(2) : '0.00'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.materialCost'),
+        dataIndex: 'material_cost',
+        key: 'material_cost',
+        width: 120,
+        render: (_, r) => `¥${r.material_cost != null ? Number(r.material_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.laborCost'),
+        dataIndex: 'labor_cost',
+        key: 'labor_cost',
+        width: 120,
+        render: (_, r) => `¥${r.labor_cost != null ? Number(r.labor_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'),
+        dataIndex: 'manufacturing_cost',
+        key: 'manufacturing_cost',
+        width: 120,
+        render: (_, r) => `¥${r.manufacturing_cost != null ? Number(r.manufacturing_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.totalCost'),
+        dataIndex: 'total_cost',
+        key: 'total_cost',
+        width: 120,
+        render: (_, r) => `¥${r.total_cost != null ? Number(r.total_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.unitCost'),
+        dataIndex: 'unit_cost',
+        key: 'unit_cost',
+        width: 120,
+        render: (_, r) => `¥${r.unit_cost != null ? Number(r.unit_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
+        dataIndex: 'calculation_date',
+        key: 'calculation_date',
+        width: 120,
+        search: false,
+        render: (_, r) => (r.calculation_date ? dayjs(r.calculation_date as string).format('YYYY-MM-DD') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
+        dataIndex: 'updated_at',
+        key: 'updated_at',
+        width: 180,
+        search: false,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.section.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        key: 'lifecycle',
+        width: 200,
+        fixed: 'right',
+        align: 'left',
+        search: false,
+        render: (_, record) => (
+          <UniLifecycle {...getCostCalculationLifecycle(record as Record<string, unknown>, t)} showCircleTooltip={false} />
+        ),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.action'),
+        key: 'action',
+        width: 100,
+        fixed: 'right',
+        render: (_: any, record: CostCalculation) => (
+          <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => handleDetail(record)}>
+            {t('app.kuaicaiwu.costCommon.detail')}
+          </Button>
+        ),
+      },
+    ],
+    [t],
+  );
+
+  const detailItems: ProDescriptionsItemProps<CostCalculation>[] = useMemo(
+    () => [
+      { title: t('app.kuaicaiwu.costCalculation.col.calculationNo'), dataIndex: 'calculation_no' },
+      {
+        title: t('app.kuaicaiwu.costCalculation.col.calculationType'),
+        dataIndex: 'calculation_type',
+        render: (_, entity) => formatCalculationType(entity.calculation_type, t),
+      },
+      { title: t('app.kuaicaiwu.costCalculation.col.workOrderCode'), dataIndex: 'work_order_code' },
+      { title: t('app.kuaicaiwu.costCalculation.col.productCode'), dataIndex: 'product_code' },
+      { title: t('app.kuaicaiwu.costCalculation.col.productName'), dataIndex: 'product_name' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.quantity'),
+        dataIndex: 'quantity',
+        render: (_, entity) => (entity.quantity != null ? Number(entity.quantity).toFixed(2) : '0.00'),
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.materialCost'),
+        dataIndex: 'material_cost',
+        render: (_, entity) => `¥${entity.material_cost != null ? Number(entity.material_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.laborCost'),
+        dataIndex: 'labor_cost',
+        render: (_, entity) => `¥${entity.labor_cost != null ? Number(entity.labor_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.manufacturingCost'),
+        dataIndex: 'manufacturing_cost',
+        render: (_, entity) =>
+          `¥${entity.manufacturing_cost != null ? Number(entity.manufacturing_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.totalCost'),
+        dataIndex: 'total_cost',
+        render: (_, entity) => `¥${entity.total_cost != null ? Number(entity.total_cost).toFixed(2) : '0.00'}`,
+      },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.unitCost'),
+        dataIndex: 'unit_cost',
+        render: (_, entity) => `¥${entity.unit_cost != null ? Number(entity.unit_cost).toFixed(2) : '0.00'}`,
+      },
+      { title: t('app.kuaicaiwu.costCalculation.col.calculationStatus'), dataIndex: 'calculation_status' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.calculationDate'),
+        dataIndex: 'calculation_date',
+        render: (_, entity) =>
+          entity.calculation_date ? dayjs(entity.calculation_date as string).format('YYYY-MM-DD') : '-',
+      },
+      { title: t('app.kuaicaiwu.costCommon.remark'), dataIndex: 'remark' },
+      { title: t('app.kuaicaiwu.costCommon.col.createdBy'), dataIndex: 'created_by_name' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.createdAt'),
+        dataIndex: 'created_at',
+        render: (_, entity) =>
+          entity.created_at ? dayjs(entity.created_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+      },
+      { title: t('app.kuaicaiwu.costCommon.col.updatedBy'), dataIndex: 'updated_by_name' },
+      {
+        title: t('app.kuaicaiwu.costCommon.col.updatedAt'),
+        dataIndex: 'updated_at',
+        render: (_, entity) =>
+          entity.updated_at ? dayjs(entity.updated_at as string).format('YYYY-MM-DD HH:mm:ss') : '-',
+      },
+    ],
+    [t],
+  );
 
   const calculationDetailBaseItems = detailItems;
 
@@ -683,15 +683,15 @@ const CostCalculationPage: React.FC = () => {
         formRef={workOrderFormRef}
         onFinish={handleSaveWorkOrderCalculation}
         submitter={{
-          searchConfig: { submitText: '核算' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costCalculation.calculate') },
           resetButtonProps: { style: { display: 'none' } },
         }}
       >
         <ProFormSelect
           name="work_order_id"
-          label="工单"
-          placeholder="请选择工单"
-          rules={[{ required: true, message: '请选择工单' }]}
+          label={t('app.kuaicaiwu.costCalculation.field.workOrder')}
+          placeholder={t('app.kuaicaiwu.costCalculation.field.workOrderPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.workOrderRequired') }]}
           options={costReferenceOptions.workOrders}
           showSearch
           fieldProps={{
@@ -700,8 +700,8 @@ const CostCalculationPage: React.FC = () => {
               String(option?.label ?? '').toLowerCase().includes(input.toLowerCase()),
           }}
         />
-        <ProFormDatePicker name="calculation_date" label="核算日期" placeholder="请选择核算日期" />
-        <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+        <ProFormDatePicker name="calculation_date" label={t('app.kuaicaiwu.costCommon.col.calculationDate')} placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')} />
+        <ProFormTextArea name="remark" label={t('app.kuaicaiwu.costCommon.remark')} placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')} fieldProps={{ rows: 3 }} />
       </ProForm>
     </Card>
   );
@@ -712,15 +712,15 @@ const CostCalculationPage: React.FC = () => {
         formRef={productFormRef}
         onFinish={handleSaveProductCalculation}
         submitter={{
-          searchConfig: { submitText: '核算' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costCalculation.calculate') },
           resetButtonProps: { style: { display: 'none' } },
         }}
       >
         <ProFormSelect
           name="product_id"
-          label="产品（物料）"
-          placeholder="请选择产品物料"
-          rules={[{ required: true, message: '请选择产品' }]}
+          label={t('app.kuaicaiwu.costCalculation.field.productMaterial')}
+          placeholder={t('app.kuaicaiwu.costCalculation.field.productMaterialPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.productRequired') }]}
           options={productMaterialSelectOptions}
           showSearch
           fieldProps={{
@@ -731,24 +731,24 @@ const CostCalculationPage: React.FC = () => {
         />
         <ProFormDigit
           name="quantity"
-          label="数量"
-          placeholder="请输入数量"
-          rules={[{ required: true, message: '请输入数量' }]}
+          label={t('app.kuaicaiwu.costCommon.col.quantity')}
+          placeholder={t('app.kuaicaiwu.costCommon.field.quantityPlaceholder')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') }]}
           min={0}
           fieldProps={{ precision: 2 }}
         />
         <ProFormSelect
           name="calculation_type"
-          label="核算类型"
-          placeholder="请选择核算类型"
+          label={t('app.kuaicaiwu.costCalculation.col.calculationType')}
+          placeholder={t('app.kuaicaiwu.costCalculation.field.calculationTypePlaceholder')}
           options={[
-            { label: '标准成本', value: '标准成本' },
-            { label: '实际成本', value: '实际成本' },
+            { label: t('app.kuaicaiwu.costCommon.calculationType.standard'), value: '标准成本' },
+            { label: t('app.kuaicaiwu.costCommon.calculationType.actual'), value: '实际成本' },
           ]}
-          rules={[{ required: true, message: '请选择核算类型' }]}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.calculationTypeRequired') }]}
         />
-        <ProFormDatePicker name="calculation_date" label="核算日期" placeholder="请选择核算日期" />
-        <ProFormTextArea name="remark" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+        <ProFormDatePicker name="calculation_date" label={t('app.kuaicaiwu.costCommon.col.calculationDate')} placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')} />
+        <ProFormTextArea name="remark" label={t('app.kuaicaiwu.costCommon.remark')} placeholder={t('app.kuaicaiwu.costCommon.remarkPlaceholder')} fieldProps={{ rows: 3 }} />
       </ProForm>
     </Card>
   );
@@ -778,15 +778,15 @@ const CostCalculationPage: React.FC = () => {
             icon={<CalculatorOutlined />}
             onClick={() => setExecModal('work_order')}
           >
-            工单成本核算
+            {t('app.kuaicaiwu.costCalculation.workOrderCalculate')}
           </Button>,
           <Button key="product-cost" icon={<CalculatorOutlined />} onClick={() => setExecModal('product')}>
-            产品成本核算
+            {t('app.kuaicaiwu.costCalculation.productCalculate')}
           </Button>,
         ]}
       />
       <Modal
-        title="工单成本核算"
+        title={t('app.kuaicaiwu.costCalculation.workOrderModalTitle')}
         open={execModal === 'work_order'}
         onCancel={closeWorkOrderModal}
         footer={null}
@@ -797,7 +797,7 @@ const CostCalculationPage: React.FC = () => {
         {workOrderPanel}
       </Modal>
       <Modal
-        title="产品成本核算"
+        title={t('app.kuaicaiwu.costCalculation.productModalTitle')}
         open={execModal === 'product'}
         onCancel={closeProductModal}
         footer={null}
@@ -808,7 +808,7 @@ const CostCalculationPage: React.FC = () => {
         {productPanel}
       </Modal>
       <DetailDrawerTemplate
-        title="成本核算记录详情"
+        title={t('app.kuaicaiwu.costCalculation.detailTitle')}
         open={drawerVisible}
         onClose={() => {
           setDrawerVisible(false);
@@ -819,7 +819,7 @@ const CostCalculationPage: React.FC = () => {
         customContent={
           costCalculationDetail ? (
             <>
-              <DetailDrawerSection title="基本信息">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.basicInfo')}>
                 <Descriptions
                   column={3}
                   size="small"
@@ -829,16 +829,16 @@ const CostCalculationPage: React.FC = () => {
                   )}
                 />
               </DetailDrawerSection>
-              <DetailDrawerSection title="生命周期">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.lifecycle')}>
                 <UniLifecycle
-                  {...getCostCalculationLifecycle(costCalculationDetail as Record<string, unknown>)}
+                  {...getCostCalculationLifecycle(costCalculationDetail as Record<string, unknown>, t)}
                   showCircleTooltip={false}
                 />
                 <Typography.Paragraph type="secondary" style={{ marginTop: 8, marginBottom: 0 }}>
-                  核算状态以列表与基本信息为准；完整上下游跟踪接入后可在此展示关联单据。
+                  {t('app.kuaicaiwu.costCalculation.lifecycleHint')}
                 </Typography.Paragraph>
               </DetailDrawerSection>
-              <DetailDrawerSection title="明细信息">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.details')}>
                 <div style={{ maxHeight: 420, overflow: 'auto', minWidth: 320 }}>
                   {costCalculationDetail.cost_details ? (
                     <StructuredCostDataView data={costCalculationDetail.cost_details} />
@@ -847,14 +847,14 @@ const CostCalculationPage: React.FC = () => {
                   )}
                 </div>
               </DetailDrawerSection>
-              <DetailDrawerSection title="操作记录">
+              <DetailDrawerSection title={t('app.kuaicaiwu.costCommon.section.operationLog')}>
                 <Timeline
                   items={[
                     {
                       color: 'green',
                       children: (
                         <>
-                          创建 ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.created')} ·{' '}
                           {costCalculationDetail.created_at
                             ? dayjs(costCalculationDetail.created_at).format('YYYY-MM-DD HH:mm:ss')
                             : '-'}
@@ -866,7 +866,7 @@ const CostCalculationPage: React.FC = () => {
                       color: 'blue',
                       children: (
                         <>
-                          更新 ·{' '}
+                          {t('app.kuaicaiwu.costCommon.log.updated')} ·{' '}
                           {costCalculationDetail.updated_at
                             ? dayjs(costCalculationDetail.updated_at).format('YYYY-MM-DD HH:mm:ss')
                             : '-'}
@@ -892,25 +892,25 @@ const CostCalculationPage: React.FC = () => {
         items={[
           {
             key: 'by_product',
-            label: '按产品',
+            label: t('app.kuaicaiwu.costCalculation.compareTab.byProduct'),
             children: (
               <div>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-                  选择产品（物料）拉取该产品标准与实际成本汇总。
+                  {t('app.kuaicaiwu.costCalculation.compareByProductHint')}
                 </Typography.Paragraph>
                 <ProForm
                   formRef={compareFormRef}
                   onFinish={handleCompareQuery}
                   submitter={{
-                    searchConfig: { submitText: '查询' },
+                    searchConfig: { submitText: t('app.kuaicaiwu.costCommon.query') },
                     resetButtonProps: { style: { display: 'none' } },
                   }}
                 >
                   <ProFormSelect
                     name="product_id"
-                    label="产品（物料）"
-                    placeholder="请选择产品"
-                    rules={[{ required: true, message: '请选择产品' }]}
+                    label={t('app.kuaicaiwu.costCalculation.field.productMaterial')}
+                    placeholder={t('app.kuaicaiwu.costCalculation.field.productRequired')}
+                    rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.productRequired') }]}
                     options={productMaterialSelectOptions}
                     showSearch
                     fieldProps={{
@@ -921,19 +921,19 @@ const CostCalculationPage: React.FC = () => {
                   />
                 </ProForm>
                 {compareData ? (
-                  <Card title="产品成本对比结果" style={{ marginTop: 16 }}>
+                  <Card title={t('app.kuaicaiwu.costCalculation.productCompareResult')} style={{ marginTop: 16 }}>
                     <Row gutter={16}>
                       <Col span={12}>
-                        <Statistic title="标准成本" value={compareData.standard_cost} prefix="¥" precision={2} />
+                        <Statistic title={t('app.kuaicaiwu.costCommon.standardCost')} value={compareData.standard_cost} prefix="¥" precision={2} />
                       </Col>
                       <Col span={12}>
-                        <Statistic title="实际成本" value={compareData.actual_cost} prefix="¥" precision={2} />
+                        <Statistic title={t('app.kuaicaiwu.costCommon.actualCost')} value={compareData.actual_cost} prefix="¥" precision={2} />
                       </Col>
                     </Row>
                     <Row gutter={16} style={{ marginTop: 16 }}>
                       <Col span={12}>
                         <Statistic
-                          title="成本差异"
+                          title={t('app.kuaicaiwu.costCalculation.costDifference')}
                           value={compareData.cost_difference}
                           prefix="¥"
                           precision={2}
@@ -942,7 +942,7 @@ const CostCalculationPage: React.FC = () => {
                       </Col>
                       <Col span={12}>
                         <Statistic
-                          title="成本差异率"
+                          title={t('app.kuaicaiwu.costCalculation.costDifferenceRate')}
                           value={compareData.cost_difference_rate}
                           suffix="%"
                           precision={2}
@@ -951,7 +951,7 @@ const CostCalculationPage: React.FC = () => {
                       </Col>
                     </Row>
                     <ProDescriptions
-                      title="成本明细差异"
+                      title={t('app.kuaicaiwu.costCalculation.costDetailDifference')}
                       bordered
                       style={{ marginTop: 16 }}
                       dataSource={{
@@ -960,14 +960,14 @@ const CostCalculationPage: React.FC = () => {
                         manufacturing_cost_difference: `¥${compareData.manufacturing_cost_difference?.toFixed(2) || '0.00'}`,
                       }}
                       columns={[
-                        { title: '材料成本差异', dataIndex: 'material_cost_difference' },
-                        { title: '人工成本差异', dataIndex: 'labor_cost_difference' },
-                        { title: '制造费用差异', dataIndex: 'manufacturing_cost_difference' },
+                        { title: t('app.kuaicaiwu.costCalculation.materialCostDifference'), dataIndex: 'material_cost_difference' },
+                        { title: t('app.kuaicaiwu.costCalculation.laborCostDifference'), dataIndex: 'labor_cost_difference' },
+                        { title: t('app.kuaicaiwu.costCalculation.manufacturingCostDifference'), dataIndex: 'manufacturing_cost_difference' },
                       ]}
                     />
                     {compareData.difference_analysis && (
                       <div style={{ marginTop: 16 }}>
-                        <strong>差异原因分析：</strong>
+                        <strong>{t('app.kuaicaiwu.costCalculation.differenceAnalysis')}：</strong>
                         <p>{compareData.difference_analysis}</p>
                       </div>
                     )}
@@ -975,7 +975,7 @@ const CostCalculationPage: React.FC = () => {
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="选择产品并查询后，将在此展示标准/实际成本与差异"
+                    description={t('app.kuaicaiwu.costCalculation.compareByProductEmpty')}
                     style={{ margin: '32px 0' }}
                   />
                 )}
@@ -984,32 +984,29 @@ const CostCalculationPage: React.FC = () => {
           },
           {
             key: 'by_material',
-            label: '按物料 / 工单',
+            label: t('app.kuaicaiwu.costCalculation.compareTab.byMaterial'),
             children: (
               <div>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-                  选择物料并填写数量；可按来源补充工单、采购订单或委外工单等条件，与独立「成本对比」页同一接口。
+                  {t('app.kuaicaiwu.costCalculation.compareByMaterialHint')}
                 </Typography.Paragraph>
                 <ProForm
                   formRef={materialCompareFormRef}
                   onFinish={handleMaterialLevelCompare}
                   submitter={{
-                    searchConfig: { submitText: '对比' },
+                    searchConfig: { submitText: t('app.kuaicaiwu.costCommon.compare') },
                     resetButtonProps: { style: { display: 'none' } },
                     submitButtonProps: { loading: materialCompareLoading },
                   }}
-                  initialValues={{
-                    calculation_date: dayjs(),
-                    quantity: 1,
-                  }}
+                  initialValues={{ calculation_date: dayjs(), quantity: 1 }}
                 >
                   <ProFormSelect
                     name="material_id"
-                    label="物料"
-                    placeholder="请选择物料"
-                    rules={[{ required: true, message: '请选择物料' }]}
+                    label={t('app.kuaicaiwu.costCommon.field.material')}
+                    placeholder={t('app.kuaicaiwu.costCommon.field.materialPlaceholder')}
+                    rules={[{ required: true, message: t('app.kuaicaiwu.costCommon.field.materialRequired') }]}
                     options={materialCompareList.map((m) => ({
-                      label: `${m.mainCode || m.code} - ${m.name} (${m.sourceType || m.source_type || 'Make'})`,
+                      label: `${m.mainCode || m.code} - ${m.name} (${formatSourceType(m.sourceType || m.source_type || 'Make', t)})`,
                       value: m.id,
                     }))}
                     fieldProps={{
@@ -1020,21 +1017,18 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormDigit
                     name="quantity"
-                    label="数量"
-                    placeholder="请输入数量（用于计算标准成本）"
+                    label={t('app.kuaicaiwu.costCommon.col.quantity')}
+                    placeholder={t('app.kuaicaiwu.costComparison.field.quantityPlaceholder')}
                     rules={[
-                      { required: true, message: '请输入数量' },
-                      { type: 'number', min: 0.0001, message: '数量必须大于0' },
+                      { required: true, message: t('app.kuaicaiwu.costCommon.field.quantityRequired') },
+                      { type: 'number', min: 0.0001, message: t('app.kuaicaiwu.costCommon.field.quantityMin') },
                     ]}
-                    fieldProps={{
-                      precision: 4,
-                      style: { width: '100%' },
-                    }}
+                    fieldProps={{ precision: 4, style: { width: '100%' } }}
                   />
                   <ProFormSelect
                     name="work_order_id"
-                    label="工单（自制件/配置件实际成本）"
-                    placeholder="可选"
+                    label={t('app.kuaicaiwu.costComparison.field.workOrder')}
+                    placeholder={t('app.kuaicaiwu.costCommon.optional')}
                     allowClear
                     options={costReferenceOptions.workOrders}
                     showSearch
@@ -1046,8 +1040,8 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormSelect
                     name="purchase_order_id"
-                    label="采购订单（采购件实际成本-整单）"
-                    placeholder="可选"
+                    label={t('app.kuaicaiwu.costComparison.field.purchaseOrder')}
+                    placeholder={t('app.kuaicaiwu.costCommon.optional')}
                     allowClear
                     options={costReferenceOptions.purchaseOrders}
                     showSearch
@@ -1059,8 +1053,8 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormSelect
                     name="purchase_order_item_id"
-                    label="采购订单明细（采购件实际成本-明细）"
-                    placeholder="可选"
+                    label={t('app.kuaicaiwu.costComparison.field.purchaseOrderItem')}
+                    placeholder={t('app.kuaicaiwu.costCommon.optional')}
                     allowClear
                     options={costReferenceOptions.purchaseOrderItems}
                     showSearch
@@ -1072,8 +1066,8 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormSelect
                     name="outsource_work_order_id"
-                    label="委外工单（委外件实际成本）"
-                    placeholder="可选"
+                    label={t('app.kuaicaiwu.costComparison.field.outsourceWorkOrder')}
+                    placeholder={t('app.kuaicaiwu.costCommon.optional')}
                     allowClear
                     options={costReferenceOptions.outsourceWorkOrders}
                     showSearch
@@ -1085,13 +1079,13 @@ const CostCalculationPage: React.FC = () => {
                   />
                   <ProFormDatePicker
                     name="calculation_date"
-                    label="核算日期"
-                    placeholder="请选择核算日期"
+                    label={t('app.kuaicaiwu.costCommon.col.calculationDate')}
+                    placeholder={t('app.kuaicaiwu.costCommon.field.calculationDatePlaceholder')}
                     fieldProps={{ style: { width: '100%' } }}
                   />
                 </ProForm>
                 {materialCompareResult ? (
-                  <Card title="物料标准与实际对比结果" style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
+                  <Card title={t('app.kuaicaiwu.costCalculation.materialCompareResult')} style={{ marginTop: 16 }} styles={{ body: { padding: 16 } }}>
                     <ProDescriptions
                       bordered
                       column={2}
@@ -1103,65 +1097,49 @@ const CostCalculationPage: React.FC = () => {
                         quantity: materialCompareResult.quantity,
                       }}
                       columns={[
-                        { title: '物料编号', dataIndex: 'material_code' },
-                        { title: '物料名称', dataIndex: 'material_name' },
-                        { title: '物料来源类型', dataIndex: 'source_type' },
-                        { title: '数量', dataIndex: 'quantity' },
+                        { title: t('app.kuaicaiwu.costCommon.col.materialCode'), dataIndex: 'material_code' },
+                        { title: t('app.kuaicaiwu.costCommon.col.materialName'), dataIndex: 'material_name' },
+                        { title: t('app.kuaicaiwu.costCommon.col.sourceType'), dataIndex: 'source_type' },
+                        { title: t('app.kuaicaiwu.costCommon.col.quantity'), dataIndex: 'quantity' },
                       ]}
                     />
 
                     <Row gutter={16} style={{ marginBottom: 24 }}>
                       <Col span={12}>
-                        <Card title="标准成本" size="small">
-                          <Statistic
-                            title="总成本"
-                            value={materialCompareResult.standard_cost.total_cost}
-                            prefix="¥"
-                            precision={2}
-                          />
+                        <Card title={t('app.kuaicaiwu.costCommon.standardCost')} size="small">
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.standard_cost.total_cost} prefix="¥" precision={2} />
                           <Divider style={{ margin: '12px 0' }} />
-                          <Statistic
-                            title="单位成本"
-                            value={materialCompareResult.standard_cost.unit_cost}
-                            prefix="¥"
-                            precision={2}
-                          />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.standard_cost.unit_cost} prefix="¥" precision={2} />
                           <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
-                            核算类型：{materialCompareResult.standard_cost.calculation_type}
+                            {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
+                              type: formatCalculationType(materialCompareResult.standard_cost.calculation_type, t),
+                            })}
                           </div>
                         </Card>
                       </Col>
                       <Col span={12}>
-                        <Card title="实际成本" size="small">
-                          <Statistic
-                            title="总成本"
-                            value={materialCompareResult.actual_cost.total_cost}
-                            prefix="¥"
-                            precision={2}
-                          />
+                        <Card title={t('app.kuaicaiwu.costCommon.actualCost')} size="small">
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.totalCost')} value={materialCompareResult.actual_cost.total_cost} prefix="¥" precision={2} />
                           <Divider style={{ margin: '12px 0' }} />
-                          <Statistic
-                            title="单位成本"
-                            value={materialCompareResult.actual_cost.unit_cost}
-                            prefix="¥"
-                            precision={2}
-                          />
+                          <Statistic title={t('app.kuaicaiwu.costCommon.col.unitCost')} value={materialCompareResult.actual_cost.unit_cost} prefix="¥" precision={2} />
                           <div style={{ marginTop: 12, fontSize: '12px', color: '#666' }}>
-                            核算类型：{materialCompareResult.actual_cost.calculation_type}
+                            {t('app.kuaicaiwu.costCommon.calculationTypeLabel', {
+                              type: formatCalculationType(materialCompareResult.actual_cost.calculation_type, t),
+                            })}
                           </div>
                         </Card>
                       </Col>
                     </Row>
 
-                    <Card title="成本差异" style={{ marginBottom: 16 }}>
+                    <Card title={t('app.kuaicaiwu.costCalculation.costDifference')} style={{ marginBottom: 16 }}>
                       <Alert
-                        message={materialCompareResult.cost_variance.variance_type}
+                        message={formatVarianceType(materialCompareResult.cost_variance.variance_type, t)}
                         description={
                           <div>
-                            <p>总成本差异：¥{materialCompareResult.cost_variance.total_cost_variance.toFixed(2)}</p>
-                            <p>总成本差异率：{materialCompareResult.cost_variance.total_cost_variance_rate.toFixed(2)}%</p>
-                            <p>单位成本差异：¥{materialCompareResult.cost_variance.unit_cost_variance.toFixed(2)}</p>
-                            <p>单位成本差异率：{materialCompareResult.cost_variance.unit_cost_variance_rate.toFixed(2)}%</p>
+                            <p>{t('app.kuaicaiwu.costComparison.totalVariance', { amount: materialCompareResult.cost_variance.total_cost_variance.toFixed(2) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.totalVarianceRate', { rate: materialCompareResult.cost_variance.total_cost_variance_rate.toFixed(2) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.unitVariance', { amount: materialCompareResult.cost_variance.unit_cost_variance.toFixed(2) })}</p>
+                            <p>{t('app.kuaicaiwu.costComparison.unitVarianceRate', { rate: materialCompareResult.cost_variance.unit_cost_variance_rate.toFixed(2) })}</p>
                           </div>
                         }
                         type={
@@ -1175,17 +1153,17 @@ const CostCalculationPage: React.FC = () => {
                       />
                     </Card>
 
-                    <Divider>成本明细</Divider>
+                    <Divider>{t('app.kuaicaiwu.costCommon.costDetails')}</Divider>
                     <Row gutter={16}>
                       <Col span={12}>
-                        <Card title="标准成本明细" size="small">
+                        <Card title={t('app.kuaicaiwu.costComparison.standardDetails')} size="small">
                           <div style={{ maxHeight: 300, overflow: 'auto' }}>
                             <StructuredCostDataView data={materialCompareResult.standard_cost.cost_details} />
                           </div>
                         </Card>
                       </Col>
                       <Col span={12}>
-                        <Card title="实际成本明细" size="small">
+                        <Card title={t('app.kuaicaiwu.costComparison.actualDetails')} size="small">
                           <div style={{ maxHeight: 300, overflow: 'auto' }}>
                             <StructuredCostDataView data={materialCompareResult.actual_cost.cost_details} />
                           </div>
@@ -1196,7 +1174,7 @@ const CostCalculationPage: React.FC = () => {
                 ) : (
                   <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    description="填写表单并点击对比后，将在此展示标准/实际成本与明细"
+                    description={t('app.kuaicaiwu.costCalculation.compareByMaterialEmpty')}
                     style={{ margin: '32px 0' }}
                   />
                 )}
@@ -1213,21 +1191,21 @@ const CostCalculationPage: React.FC = () => {
   const analyzePanel = (
     <div>
       <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
-        选择产品（物料）查询该产品成本构成、趋势与明细。物料来源维度的优化建议请使用「优化建议」页签。
+        {t('app.kuaicaiwu.costCalculation.analyzeHint')}
       </Typography.Paragraph>
       <ProForm
         formRef={analyzeFormRef}
         onFinish={handleAnalyzeQuery}
         submitter={{
-          searchConfig: { submitText: '查询' },
+          searchConfig: { submitText: t('app.kuaicaiwu.costCommon.query') },
           resetButtonProps: { style: { display: 'none' } },
         }}
       >
         <ProFormSelect
           name="product_id"
-          label="产品（物料）"
-          placeholder="请选择产品"
-          rules={[{ required: true, message: '请选择产品' }]}
+          label={t('app.kuaicaiwu.costCalculation.field.productMaterial')}
+          placeholder={t('app.kuaicaiwu.costCalculation.field.productRequired')}
+          rules={[{ required: true, message: t('app.kuaicaiwu.costCalculation.field.productRequired') }]}
           options={productMaterialSelectOptions}
           showSearch
           fieldProps={{
@@ -1246,37 +1224,22 @@ const CostCalculationPage: React.FC = () => {
           items={[
             {
               key: 'composition',
-              label: '成本构成',
+              label: t('app.kuaicaiwu.costCalculation.analyzeTab.composition'),
               children: (
                 <Row gutter={16}>
                   <Col span={8}>
                     <Card>
-                      <Statistic
-                        title="材料成本"
-                        value={analyzeData!.cost_composition?.材料成本 || 0}
-                        prefix="¥"
-                        precision={2}
-                      />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.materialCost')} value={analyzeData!.cost_composition?.材料成本 || 0} prefix="¥" precision={2} />
                     </Card>
                   </Col>
                   <Col span={8}>
                     <Card>
-                      <Statistic
-                        title="人工成本"
-                        value={analyzeData!.cost_composition?.人工成本 || 0}
-                        prefix="¥"
-                        precision={2}
-                      />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.laborCost')} value={analyzeData!.cost_composition?.人工成本 || 0} prefix="¥" precision={2} />
                     </Card>
                   </Col>
                   <Col span={8}>
                     <Card>
-                      <Statistic
-                        title="制造费用"
-                        value={analyzeData!.cost_composition?.制造费用 || 0}
-                        prefix="¥"
-                        precision={2}
-                      />
+                      <Statistic title={t('app.kuaicaiwu.costCommon.col.manufacturingCost')} value={analyzeData!.cost_composition?.制造费用 || 0} prefix="¥" precision={2} />
                     </Card>
                   </Col>
                 </Row>
@@ -1284,23 +1247,23 @@ const CostCalculationPage: React.FC = () => {
             },
             {
               key: 'trend',
-              label: '成本趋势',
+              label: t('app.kuaicaiwu.costCalculation.analyzeTab.trend'),
               children: (
                 <Card>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
-                    最近若干次「已审核」核算记录的成本构成与单位成本（按核算日期升序）。
+                    {t('app.kuaicaiwu.costCalculation.analyzeTrendHint')}
                   </Typography.Paragraph>
-                  <StructuredCostDataView data={analyzeData!.cost_trend} emptyDescription="暂无趋势数据" />
+                  <StructuredCostDataView data={analyzeData!.cost_trend} emptyDescription={t('app.kuaicaiwu.costCalculation.noTrendData')} />
                 </Card>
               ),
             },
             {
               key: 'breakdown',
-              label: '成本明细',
+              label: t('app.kuaicaiwu.costCommon.costDetails'),
               children: (
                 <Card>
                   <div style={{ maxHeight: 480, overflow: 'auto' }}>
-                    <StructuredCostDataView data={analyzeData!.cost_breakdown} emptyDescription="暂无明细" />
+                    <StructuredCostDataView data={analyzeData!.cost_breakdown} emptyDescription={t('app.kuaicaiwu.costCalculation.noBreakdownData')} />
                   </div>
                 </Card>
               ),
@@ -1322,7 +1285,7 @@ const CostCalculationPage: React.FC = () => {
           label: (
             <Space>
               <ToolOutlined />
-              生产成本
+              {t('app.kuaicaiwu.productionCost.title')}
             </Space>
           ),
           children: <ProductionCostPage embedded />,
@@ -1332,7 +1295,7 @@ const CostCalculationPage: React.FC = () => {
           label: (
             <Space>
               <TeamOutlined />
-              委外成本
+              {t('app.kuaicaiwu.outsourceCost.title')}
             </Space>
           ),
           children: <OutsourceCostPage embedded />,
@@ -1342,7 +1305,7 @@ const CostCalculationPage: React.FC = () => {
           label: (
             <Space>
               <ShoppingOutlined />
-              采购成本
+              {t('app.kuaicaiwu.purchaseCost.title')}
             </Space>
           ),
           children: <PurchaseCostPage embedded />,
@@ -1352,7 +1315,7 @@ const CostCalculationPage: React.FC = () => {
           label: (
             <Space>
               <SafetyCertificateOutlined />
-              质量成本
+              {t('app.kuaicaiwu.qualityCost.title')}
             </Space>
           ),
           children: <QualityCostPage embedded />,
@@ -1367,7 +1330,7 @@ const CostCalculationPage: React.FC = () => {
       label: (
         <Space>
           <TableOutlined />
-          核算台账
+          {t('app.kuaicaiwu.costCalculation.tab.ledger')}
         </Space>
       ),
       children: ledgerPanel,
@@ -1377,7 +1340,7 @@ const CostCalculationPage: React.FC = () => {
       label: (
         <Space>
           <BarChartOutlined />
-          成本对比
+          {t('app.kuaicaiwu.costCalculation.tab.compare')}
         </Space>
       ),
       children: comparePanel,
@@ -1387,7 +1350,7 @@ const CostCalculationPage: React.FC = () => {
       label: (
         <Space>
           <LineChartOutlined />
-          成本分析
+          {t('app.kuaicaiwu.costCalculation.tab.analyze')}
         </Space>
       ),
       children: analyzePanel,
@@ -1397,7 +1360,7 @@ const CostCalculationPage: React.FC = () => {
       label: (
         <Space>
           <BulbOutlined />
-          优化建议
+          {t('app.kuaicaiwu.costCalculation.tab.optimization')}
         </Space>
       ),
       children: <CostOptimizationPanel />,
@@ -1407,7 +1370,7 @@ const CostCalculationPage: React.FC = () => {
       label: (
         <Space>
           <ExperimentOutlined />
-          分项试算
+          {t('app.kuaicaiwu.costCalculation.tab.trial')}
         </Space>
       ),
       children: trialPanel,

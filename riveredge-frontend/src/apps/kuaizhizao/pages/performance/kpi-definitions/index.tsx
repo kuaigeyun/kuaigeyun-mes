@@ -2,7 +2,8 @@
  * KPI 指标定义页面
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProFormInstance } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -14,21 +15,21 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { employeePerformanceApi } from '../../../services/performance';
 import type { KPIDefinition } from '../../../types/performance';
 import { getPerformanceConfigActiveLifecycle } from '../../../utils/performanceLifecycle';
-
-const CALC_TYPE_OPTIONS = [
-  { label: '质量', value: 'quality' },
-  { label: '效率', value: 'efficiency' },
-  { label: '出勤', value: 'attendance' },
-  { label: '产量', value: 'output' },
-  { label: '自定义公式', value: 'formula' },
-];
+import {
+  getKpiCalcTypeOptions,
+  getKpiCalcTypeText,
+  getPerformanceYesNoValueEnum,
+} from '../components/performanceMeta';
 
 const KpiDefinitionsPage: React.FC = () => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<ProFormInstance>();
   const [modalVisible, setModalVisible] = useState(false);
   const [editId, setEditId] = useState<number | null>(null);
+
+  const calcTypeOptions = useMemo(() => getKpiCalcTypeOptions(t), [t]);
 
   useEffect(() => {
     if (!modalVisible) return;
@@ -46,8 +47,8 @@ const KpiDefinitionsPage: React.FC = () => {
         is_active: r.is_active !== false,
         formula_json: r.formula_json ? JSON.stringify(r.formula_json, null, 2) : '',
       });
-    }).catch((e: any) => messageApi.error(e?.message || '加载失败'));
-  }, [modalVisible, editId]);
+    }).catch((e: any) => messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed')));
+  }, [modalVisible, editId, messageApi, t]);
 
   const handleCreate = () => {
     setEditId(null);
@@ -60,94 +61,94 @@ const KpiDefinitionsPage: React.FC = () => {
   const handleDelete = async (r: KPIDefinition) => {
     try {
       await employeePerformanceApi.deleteKpiDefinition(r.id);
-      messageApi.success('删除成功');
+      messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteSuccess'));
       actionRef.current?.reload();
     } catch (e: any) {
-      messageApi.error(e?.message || '删除失败');
+      messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
     }
   };
 
-  const columns: ProColumns<KPIDefinition>[] = [
-    {
-      title: '编号',
-      dataIndex: 'code',
-      width: 120,
-      fixed: 'left',
-      render: (_, r) => (
-        <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
-          {r.code ?? '-'}
-        </Typography.Text>
-      ),
-    },
-    { title: '名称', dataIndex: 'name', width: 150, ellipsis: true },
-    { title: '权重', dataIndex: 'weight', width: 80, align: 'right' },
-    {
-      title: '计算类型',
-      dataIndex: 'calc_type',
-      width: 100,
-      render: (_, r) => CALC_TYPE_OPTIONS.find((o) => o.value === r.calc_type)?.label || r.calc_type,
-    },
-    {
-      title: '启用',
-      dataIndex: 'is_active',
-      hideInTable: true,
-      valueEnum: {
-        true: { text: '是' },
-        false: { text: '否' },
+  const columns: ProColumns<KPIDefinition>[] = useMemo(
+    () => [
+      {
+        title: t('app.kuaizhizao.performance.common.columns.code'),
+        dataIndex: 'code',
+        width: 120,
+        fixed: 'left',
+        render: (_, r) => (
+          <Typography.Text copyable={{ text: String(r.code ?? '') }} ellipsis>
+            {r.code ?? '-'}
+          </Typography.Text>
+        ),
       },
-    },
-    {
-      title: '更新时间',
-      dataIndex: 'updated_at',
-      width: 168,
-      hideInSearch: true,
-      render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
-    },
-    {
-      title: '生命周期',
-      dataIndex: 'lifecycle_stage',
-      fixed: 'right',
-      align: 'left',
-      hideInSearch: true,
-      render: (_, record) => {
-        const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
-        return (
-          <UniLifecycle
-            percent={lifecycle.percent}
-            stageName={lifecycle.stageName}
-            status={lifecycle.status}
-            subStages={lifecycle.subStages}
-            showLabel
-            size="small"
-            showCircleTooltip={false}
-          />
-        );
+      { title: t('app.kuaizhizao.performance.common.columns.name'), dataIndex: 'name', width: 150, ellipsis: true },
+      { title: t('app.kuaizhizao.performance.common.columns.weight'), dataIndex: 'weight', width: 80, align: 'right' },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.calcType'),
+        dataIndex: 'calc_type',
+        width: 100,
+        render: (_, r) => getKpiCalcTypeText(t, r.calc_type),
       },
-    },
-    {
-      title: '操作',
-      width: 150,
-      fixed: 'right',
-      render: (_, record) => (
-        <Space>
-          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
-            编辑
-          </Button>
-          <Popconfirm title="确定删除？" onConfirm={() => handleDelete(record)}>
-            <Button type="link" size="small" danger icon={<DeleteOutlined />}>
-              删除
+      {
+        title: t('app.kuaizhizao.performance.common.form.active'),
+        dataIndex: 'is_active',
+        hideInTable: true,
+        valueEnum: getPerformanceYesNoValueEnum(t),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.updatedAt'),
+        dataIndex: 'updated_at',
+        width: 168,
+        hideInSearch: true,
+        render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.lifecycle'),
+        dataIndex: 'lifecycle_stage',
+        fixed: 'right',
+        align: 'left',
+        hideInSearch: true,
+        render: (_, record) => {
+          const lifecycle = getPerformanceConfigActiveLifecycle(record as unknown as Record<string, unknown>);
+          return (
+            <UniLifecycle
+              percent={lifecycle.percent}
+              stageName={lifecycle.stageName}
+              status={lifecycle.status}
+              subStages={lifecycle.subStages}
+              showLabel
+              size="small"
+              showCircleTooltip={false}
+            />
+          );
+        },
+      },
+      {
+        title: t('app.kuaizhizao.performance.common.columns.actions'),
+        width: 150,
+        fixed: 'right',
+        render: (_, record) => (
+          <Space>
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => handleEdit(record)}>
+              {t('app.kuaizhizao.performance.common.actions.edit')}
             </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
+            <Popconfirm title={t('app.kuaizhizao.performance.kpi.messages.deleteConfirm')} onConfirm={() => handleDelete(record)}>
+              <Button type="link" size="small" danger icon={<DeleteOutlined />}>
+                {t('app.kuaizhizao.performance.common.actions.delete')}
+              </Button>
+            </Popconfirm>
+          </Space>
+        ),
+      },
+    ],
+    [t],
+  );
 
   return (
     <>
       <ListPageTemplate>
         <UniTable<KPIDefinition>
-          headerTitle="KPI 指标定义"
+          headerTitle={t('app.kuaizhizao.performance.kpi.pageTitle')}
           actionRef={actionRef}
           rowKey="id"
           columns={columns}
@@ -165,7 +166,7 @@ const KpiDefinitionsPage: React.FC = () => {
               const total = rows.length < pageSize ? skip + rows.length : skip + rows.length + 1;
               return { data: rows, success: true, total };
             } catch (e: any) {
-              messageApi.error(e?.message || '加载失败');
+              messageApi.error(e?.message || t('app.kuaizhizao.performance.common.messages.loadFailed'));
               return { data: [], success: false, total: 0 };
             }
           }}
@@ -177,21 +178,21 @@ const KpiDefinitionsPage: React.FC = () => {
               for (const id of keys) {
                 await employeePerformanceApi.deleteKpiDefinition(Number(id));
               }
-              messageApi.success(`成功删除 ${keys.length} 条记录`);
+              messageApi.success(t('app.kuaizhizao.performance.common.messages.deleteBatchSuccess', { count: keys.length }));
               actionRef.current?.reload();
             } catch (error: any) {
-              messageApi.error(error?.message || '删除失败');
+              messageApi.error(error?.message || t('app.kuaizhizao.performance.common.messages.deleteFailed'));
             }
           }}
-          deleteConfirmTitle={(count) => `确定要删除选中的 ${count} 条KPI定义吗？`}
+          deleteConfirmTitle={(count) => t('app.kuaizhizao.performance.kpi.messages.deleteBatchConfirm', { count })}
           showCreateButton
-          createButtonText="新建KPI指标定义"
+          createButtonText={t('app.kuaizhizao.performance.kpi.createButton')}
           onCreate={handleCreate}
         />
       </ListPageTemplate>
 
       <FormModalTemplate
-        title={editId ? '编辑KPI指标' : '新建KPI指标'}
+        title={editId ? t('app.kuaizhizao.performance.kpi.modal.editTitle') : t('app.kuaizhizao.performance.kpi.modal.createTitle')}
         open={modalVisible}
         onClose={() => {
           setModalVisible(false);
@@ -204,7 +205,7 @@ const KpiDefinitionsPage: React.FC = () => {
             try {
               formula_json = JSON.parse(values.formula_json);
             } catch {
-              messageApi.error('formula_json 必须是合法 JSON');
+              messageApi.error(t('app.kuaizhizao.performance.common.messages.invalidJson'));
               return;
             }
           }
@@ -218,10 +219,10 @@ const KpiDefinitionsPage: React.FC = () => {
           };
           if (editId) {
             await employeePerformanceApi.updateKpiDefinition(editId, payload);
-            messageApi.success('更新成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.updateSuccess'));
           } else {
             await employeePerformanceApi.createKpiDefinition(payload);
-            messageApi.success('创建成功');
+            messageApi.success(t('app.kuaizhizao.performance.common.messages.createSuccess'));
           }
           setModalVisible(false);
           setEditId(null);
@@ -230,18 +231,18 @@ const KpiDefinitionsPage: React.FC = () => {
         isEdit={!!editId}
         width={MODAL_CONFIG.STANDARD_WIDTH}
       >
-        <ProFormText name="code" label="编号" rules={[{ required: true }]} colProps={{ span: 12 }} disabled={!!editId} />
-        <ProFormText name="name" label="名称" rules={[{ required: true }]} colProps={{ span: 12 }} />
-        <ProFormDigit name="weight" label="权重" min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
-        <ProFormSelect name="calc_type" label="计算类型" rules={[{ required: true }]} options={CALC_TYPE_OPTIONS} colProps={{ span: 12 }} />
+        <ProFormText name="code" label={t('app.kuaizhizao.performance.common.columns.code')} rules={[{ required: true }]} colProps={{ span: 12 }} disabled={!!editId} />
+        <ProFormText name="name" label={t('app.kuaizhizao.performance.common.columns.name')} rules={[{ required: true }]} colProps={{ span: 12 }} />
+        <ProFormDigit name="weight" label={t('app.kuaizhizao.performance.common.columns.weight')} min={0} fieldProps={{ precision: 2 }} colProps={{ span: 12 }} />
+        <ProFormSelect name="calc_type" label={t('app.kuaizhizao.performance.common.columns.calcType')} rules={[{ required: true }]} options={calcTypeOptions} colProps={{ span: 12 }} />
         <ProFormTextArea
           name="formula_json"
-          label="公式配置 (JSON)"
+          label={t('app.kuaizhizao.performance.kpi.form.formulaJson')}
           colProps={{ span: 24 }}
           fieldProps={{ rows: 4 }}
-          placeholder={'质量/效率/出勤/产量示例: {"targets":{"min_rate":0.95}}\n自定义公式: {"expression":"quality_rate * 100"}'}
+          placeholder={t('app.kuaizhizao.performance.kpi.form.formulaPlaceholder')}
         />
-        <ProFormSwitch name="is_active" label="启用" colProps={{ span: 12 }} />
+        <ProFormSwitch name="is_active" label={t('app.kuaizhizao.performance.common.form.active')} colProps={{ span: 12 }} />
       </FormModalTemplate>
     </>
   );

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   PageContainer,
   ProForm,
@@ -10,22 +10,37 @@ import {
 import { EditableProTable, ProColumns } from '@ant-design/pro-components';
 import { message, Form, Space, Statistic, Empty, Typography } from 'antd';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { invoiceService } from '../../../services/finance/invoice';
 import { Invoice, InvoiceItem, InvoiceCreateData, InvoiceUpdateData } from '../../../types/finance/invoice';
 import dayjs from 'dayjs';
 import { DetailDrawerSection } from '../../../../../components/layout-templates';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { getUnifiedInvoiceLifecycle } from '../../../utils/financeLifecycle';
+import { getUnifiedInvoiceTypeOptions } from '../../../utils/financeSharedOptions';
+
+const P = 'app.kuaicaiwu.invoice';
 
 const InvoiceDetail: React.FC = () => {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const isCreate = !code || code === 'new';
   const [form] = Form.useForm();
   const [editableKeys, setEditableRowKeys] = useState<React.Key[]>([]);
   const [dataSource, setDataSource] = useState<InvoiceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadedInvoice, setLoadedInvoice] = useState<Invoice | null>(null);
+
+  const invoiceTypeOptions = useMemo(() => getUnifiedInvoiceTypeOptions(t), [t]);
+
+  const categoryOptions = useMemo(
+    () => [
+      { label: t(`${P}.form.categoryIn`), value: 'IN' },
+      { label: t(`${P}.form.categoryOut`), value: 'OUT' },
+    ],
+    [t],
+  );
 
   useEffect(() => {
     if (!isCreate && code) {
@@ -61,10 +76,10 @@ const InvoiceDetail: React.FC = () => {
     try {
       if (isCreate) {
         await invoiceService.createInvoice(formData as InvoiceCreateData);
-        message.success('创建成功');
+        message.success(t('common.createSuccess'));
       } else {
         await invoiceService.updateInvoice(code!, formData as InvoiceUpdateData);
-        message.success('更新成功');
+        message.success(t('common.updateSuccess'));
       }
       navigate('/apps/kuaicaiwu/finance-management/invoices');
     } catch (error) {
@@ -72,51 +87,54 @@ const InvoiceDetail: React.FC = () => {
     }
   };
 
-  const columns: ProColumns<InvoiceItem>[] = [
-    {
-      title: '货物或应税劳务名称',
-      dataIndex: 'item_name',
-      width: '20%',
-      formItemProps: { rules: [{ required: true, message: '此项为必填项' }] },
-    },
-    { title: '规格型号', dataIndex: 'spec_model', width: '15%' },
-    { title: '单位', dataIndex: 'unit', width: '10%' },
-    { title: '数量', dataIndex: 'quantity', valueType: 'digit', width: '10%' },
-    { title: '单价', dataIndex: 'unit_price', valueType: 'money', width: '10%' },
-    {
-      title: '金额',
-      dataIndex: 'amount',
-      valueType: 'money',
-      width: '10%',
-      formItemProps: { rules: [{ required: true, message: '必填' }] },
-    },
-    { title: '税率', dataIndex: 'tax_rate', valueType: 'percent', width: '10%', initialValue: 0.13 },
-    {
-      title: '税额',
-      dataIndex: 'tax_amount',
-      valueType: 'money',
-      width: '10%',
-      editable: false,
-      render: (_, row: InvoiceItem) =>
-        row.amount && row.tax_rate ? (Number(row.amount) * Number(row.tax_rate)).toFixed(2) : row.tax_amount,
-    },
-    {
-      title: '操作',
-      valueType: 'option',
-      width: 100,
-      render: (_, record) => [
-        <a key="delete" onClick={() => setDataSource(dataSource.filter((item) => item.id !== record.id))}>
-          删除
-        </a>,
-      ],
-    },
-  ];
+  const columns: ProColumns<InvoiceItem>[] = useMemo(
+    () => [
+      {
+        title: t(`${P}.line.itemName`),
+        dataIndex: 'item_name',
+        width: '20%',
+        formItemProps: { rules: [{ required: true, message: t('common.required') }] },
+      },
+      { title: t(`${P}.line.specModel`), dataIndex: 'spec_model', width: '15%' },
+      { title: t(`${P}.line.unit`), dataIndex: 'unit', width: '10%' },
+      { title: t(`${P}.line.quantity`), dataIndex: 'quantity', valueType: 'digit', width: '10%' },
+      { title: t(`${P}.line.unitPrice`), dataIndex: 'unit_price', valueType: 'money', width: '10%' },
+      {
+        title: t(`${P}.line.amount`),
+        dataIndex: 'amount',
+        valueType: 'money',
+        width: '10%',
+        formItemProps: { rules: [{ required: true, message: t('common.required') }] },
+      },
+      { title: t(`${P}.line.taxRate`), dataIndex: 'tax_rate', valueType: 'percent', width: '10%', initialValue: 0.13 },
+      {
+        title: t(`${P}.line.taxAmount`),
+        dataIndex: 'tax_amount',
+        valueType: 'money',
+        width: '10%',
+        editable: false,
+        render: (_, row: InvoiceItem) =>
+          row.amount && row.tax_rate ? (Number(row.amount) * Number(row.tax_rate)).toFixed(2) : row.tax_amount,
+      },
+      {
+        title: t('common.actions'),
+        valueType: 'option',
+        width: 100,
+        render: (_, record) => [
+          <a key="delete" onClick={() => setDataSource(dataSource.filter((item) => item.id !== record.id))}>
+            {t('common.delete')}
+          </a>,
+        ],
+      },
+    ],
+    [t, dataSource],
+  );
 
   const lifecycleBlock =
     !isCreate && loadedInvoice ? (
-      <DetailDrawerSection title="生命周期">
+      <DetailDrawerSection title={t('app.kuaicaiwu.common.lifecycle')}>
         {(() => {
-          const lc = getUnifiedInvoiceLifecycle(loadedInvoice as unknown as Record<string, unknown>);
+          const lc = getUnifiedInvoiceLifecycle(loadedInvoice as unknown as Record<string, unknown>, t);
           return (
             <>
               <UniLifecycle
@@ -128,7 +146,7 @@ const InvoiceDetail: React.FC = () => {
                 showCircleTooltip={false}
               />
               <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-                发票未接入单据跟踪中心；阶段名与列表生命周期列一致。
+                {t(`${P}.lifecycleHint`)}
               </Typography.Paragraph>
             </>
           );
@@ -137,67 +155,77 @@ const InvoiceDetail: React.FC = () => {
     ) : null;
 
   return (
-    <PageContainer title={isCreate ? '新建发票' : '编辑发票'} loading={loading}>
+    <PageContainer title={isCreate ? t(`${P}.createTitle`) : t(`${P}.editTitle`)} loading={loading}>
       <ProForm
         form={form}
         onFinish={handleFinish}
         initialValues={{ invoice_date: dayjs(), category: 'IN', invoice_type: 'VAT_SPECIAL', tax_rate: 0.13 }}
         submitter={{
           searchConfig: {
-            submitText: isCreate ? '创建' : '保存',
+            submitText: isCreate ? t('common.create') : t('common.save'),
           },
         }}
       >
-        <DetailDrawerSection title="基本信息">
+        <DetailDrawerSection title={t('app.uniDetail.sectionBasic')}>
           <ProForm.Group>
-            <ProFormText name="invoice_code" label="系统编号" disabled placeholder="自动生成" width="md" />
+            <ProFormText
+              name="invoice_code"
+              label={t('app.kuaicaiwu.common.systemCode')}
+              disabled
+              placeholder={t(`${P}.form.autoGenerate`)}
+              width="md"
+            />
             <ProFormSelect
               name="category"
-              label="业务类型"
-              options={[
-                { label: '进项(采购)', value: 'IN' },
-                { label: '销项(销售)', value: 'OUT' },
-              ]}
+              label={t(`${P}.col.category`)}
+              options={categoryOptions}
               width="md"
               rules={[{ required: true }]}
             />
             <ProFormText
               name="invoice_number"
-              label="发票号码"
+              label={t(`${P}.col.invoiceNumber`)}
               width="md"
-              placeholder="手工录入票面号码，草稿可留空"
+              placeholder={t(`${P}.form.invoiceNumberPlaceholder`)}
             />
-            <ProFormText name="invoice_details_code" label="发票代码" width="md" />
+            <ProFormText name="invoice_details_code" label={t(`${P}.form.invoiceCode`)} width="md" />
             <ProFormSelect
               name="invoice_type"
-              label="发票类型"
-              options={[
-                { label: '增值税专用发票', value: 'VAT_SPECIAL' },
-                { label: '增值税普通发票', value: 'VAT_NORMAL' },
-                { label: '电子发票', value: 'ELECTRONIC' },
-              ]}
+              label={t(`${P}.form.invoiceType`)}
+              options={invoiceTypeOptions}
               width="md"
             />
-            <ProFormDatePicker name="invoice_date" label="开票日期" width="md" rules={[{ required: true }]} />
+            <ProFormDatePicker
+              name="invoice_date"
+              label={t('app.kuaicaiwu.common.invoiceDate')}
+              width="md"
+              rules={[{ required: true }]}
+            />
           </ProForm.Group>
           <ProForm.Group>
-            <ProFormText name="partner_name" label="往来单位" width="lg" rules={[{ required: true }]} placeholder="请输入供应商或客户名称" />
-            <ProFormText name="partner_id" label="往来单位ID" hidden />
+            <ProFormText
+              name="partner_name"
+              label={t(`${P}.col.partner`)}
+              width="lg"
+              rules={[{ required: true }]}
+              placeholder={t(`${P}.form.partnerPlaceholder`)}
+            />
+            <ProFormText name="partner_id" label="partner_id" hidden />
           </ProForm.Group>
           <ProForm.Group>
-            <ProFormText name="partner_tax_no" label="纳税人识别号" width="md" />
-            <ProFormText name="partner_bank_info" label="开户行及账号" width="lg" />
-            <ProFormText name="partner_address_phone" label="地址及电话" width="lg" />
+            <ProFormText name="partner_tax_no" label={t(`${P}.form.partnerTaxNo`)} width="md" />
+            <ProFormText name="partner_bank_info" label={t(`${P}.form.partnerBankInfo`)} width="lg" />
+            <ProFormText name="partner_address_phone" label={t(`${P}.form.partnerAddressPhone`)} width="lg" />
           </ProForm.Group>
         </DetailDrawerSection>
 
         {lifecycleBlock}
 
-        <DetailDrawerSection title="明细信息">
+        <DetailDrawerSection title={t('app.uniDetail.sectionLines')}>
           <div style={{ overflowX: 'auto', overflowY: 'hidden' }}>
             <EditableProTable<InvoiceItem>
               rowKey="id"
-              headerTitle="明细列表"
+              headerTitle={t(`${P}.line.listTitle`)}
               maxLength={50}
               name="items"
               value={dataSource}
@@ -225,7 +253,7 @@ const InvoiceDetail: React.FC = () => {
           </div>
         </DetailDrawerSection>
 
-        <DetailDrawerSection title="合计信息">
+        <DetailDrawerSection title={t(`${P}.section.totals`)}>
           <ProFormDependency name={['items']}>
             {() => {
               let total = 0;
@@ -236,25 +264,30 @@ const InvoiceDetail: React.FC = () => {
               });
               return (
                 <Space size="large">
-                  <Statistic title="不含税金额" value={(total - tax).toFixed(2)} prefix="¥" />
-                  <Statistic title="税额" value={tax.toFixed(2)} prefix="¥" />
-                  <Statistic title="价税合计" value={total.toFixed(2)} prefix="¥" style={{ fontWeight: 'bold' }} />
+                  <Statistic title={t(`${P}.total.exclTax`)} value={(total - tax).toFixed(2)} prefix="¥" />
+                  <Statistic title={t(`${P}.total.tax`)} value={tax.toFixed(2)} prefix="¥" />
+                  <Statistic
+                    title={t(`${P}.col.totalAmount`)}
+                    value={total.toFixed(2)}
+                    prefix="¥"
+                    style={{ fontWeight: 'bold' }}
+                  />
                 </Space>
               );
             }}
           </ProFormDependency>
         </DetailDrawerSection>
 
-        <DetailDrawerSection title="操作记录">
+        <DetailDrawerSection title={t('app.uniDetail.sectionTimeline')}>
           {!isCreate && loadedInvoice ? (
             <Typography.Text type="secondary">
-              创建于 {loadedInvoice.created_at}
+              {t(`${P}.activityCreated`, { time: loadedInvoice.created_at })}
               {loadedInvoice.updated_at && loadedInvoice.updated_at !== loadedInvoice.created_at
-                ? ` · 更新于 ${loadedInvoice.updated_at}`
+                ? ` · ${t(`${P}.activityUpdated`, { time: loadedInvoice.updated_at })}`
                 : ''}
             </Typography.Text>
           ) : (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="保存发票后可查看创建与更新时间" />
+            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t(`${P}.activityPlaceholder`)} />
           )}
         </DetailDrawerSection>
       </ProForm>

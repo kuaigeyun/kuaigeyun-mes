@@ -10,6 +10,7 @@
  */
 
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next'
 import { 
   Modal, Form, Radio, Input, Button, 
   message 
@@ -37,12 +38,13 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
   workOrderCode,
   operationName,
 }) => {
+  const { t } = useTranslation()
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (values: any) => {
     if (!workOrderId || !operationId) {
-      message.error('由于缺少工单或工序信息，无法提交检验');
+      message.error(t('app.kuaizhizao.workOrder.kioskInspectionMissingInfo'));
       return;
     }
 
@@ -54,7 +56,7 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
       );
       const inspectionId = (created as { id?: number })?.id;
       if (!inspectionId) {
-        message.error('创建过程检验单失败');
+        message.error(t('app.kuaizhizao.workOrder.kioskInspectionCreateFailed'));
         return;
       }
       const isPass = values.conclusion === 'pass';
@@ -64,12 +66,12 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
         inspection_quantity: 1,
         notes: [values.inspection_type, values.remarks].filter(Boolean).join(' · '),
       });
-      message.success('检验记录已提交');
+      message.success(t('app.kuaizhizao.workOrder.kioskInspectionSubmitted'));
       form.resetFields();
       onCancel();
     } catch (error) {
       console.error('Failed to submit inspection', error);
-      message.error('提交失败');
+      message.error(t('app.kuaizhizao.workOrder.kioskInspectionSubmitFailed'));
     } finally {
       setLoading(false);
     }
@@ -111,16 +113,16 @@ const ProcessInspectionModal: React.FC<ProcessInspectionModalProps> = ({
       >
         <Form.Item name="inspection_type" label="检验类型">
           <Radio.Group buttonStyle="solid" className="kiosk-radio-group">
-            <Radio.Button value="first" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>首检</Radio.Button>
-            <Radio.Button value="patrol" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>巡检</Radio.Button>
-            <Radio.Button value="last" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>末检</Radio.Button>
+            <Radio.Button value="first" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>{t('app.kuaizhizao.workOrder.kioskInspectionFirst')}</Radio.Button>
+            <Radio.Button value="patrol" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>{t('app.kuaizhizao.workOrder.kioskInspectionPatrol')}</Radio.Button>
+            <Radio.Button value="last" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>{t('app.kuaizhizao.workOrder.kioskInspectionFinal')}</Radio.Button>
           </Radio.Group>
         </Form.Item>
 
         <Form.Item name="conclusion" label="检验结论">
           <Radio.Group buttonStyle="solid" className="kiosk-radio-group">
-            <Radio.Button value="pass" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>合格</Radio.Button>
-            <Radio.Button value="fail" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>不合格</Radio.Button>
+            <Radio.Button value="pass" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>{t('app.kuaizhizao.workOrder.kioskQualified')}</Radio.Button>
+            <Radio.Button value="fail" style={{ height: 50, lineHeight: '48px', fontSize: 18, flex: 1, textAlign: 'center' }}>{t('app.kuaizhizao.workOrder.kioskUnqualified')}</Radio.Button>
           </Radio.Group>
         </Form.Item>
 

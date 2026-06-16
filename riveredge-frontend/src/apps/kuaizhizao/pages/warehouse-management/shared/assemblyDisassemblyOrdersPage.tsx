@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActionType,
   ProColumns,
@@ -29,6 +29,7 @@ import { assemblyTemplateApi } from '../../../services/assembly-template';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
+import { useTranslation } from 'react-i18next';
 
 type OrderLike = {
   id?: number;
@@ -93,6 +94,7 @@ type PageConfig = {
   deleteSuccessNoun: string;
   quantityLabel: string;
   listEmptyText: string;
+  orderCodeLabel: string;
   itemDoneStatus: string;
   attachmentCategory: string;
   getLifecycle: (record: Record<string, unknown>) => {
@@ -104,27 +106,24 @@ type PageConfig = {
   enableTemplateApply?: boolean;
 };
 
-const orderStatusMap: Record<string, { text: string; color: string }> = {
-  draft: { text: '草稿', color: 'default' },
-  in_progress: { text: '进行中', color: 'processing' },
-  completed: { text: '已完成', color: 'success' },
-  cancelled: { text: '已取消', color: 'error' },
-  草稿: { text: '草稿', color: 'default' },
-  进行中: { text: '进行中', color: 'processing' },
-  已完成: { text: '已完成', color: 'success' },
-  已取消: { text: '已取消', color: 'error' },
+const orderStatusKeys: Record<string, { key: string; color: string }> = {
+  draft: { key: 'app.kuaizhizao.warehouseCommon.statusDraft', color: 'default' },
+  in_progress: { key: 'app.kuaizhizao.warehouseCommon.statusInProgress', color: 'processing' },
+  completed: { key: 'app.kuaizhizao.warehouseCommon.statusCompleted', color: 'success' },
+  cancelled: { key: 'app.kuaizhizao.warehouseCommon.statusCancelled', color: 'error' },
 };
 
-const itemStatusMap: Record<string, { text: string; color: string }> = {
-  pending: { text: '待处理', color: 'default' },
-  consumed: { text: '已消耗', color: 'success' },
-  produced: { text: '已产出', color: 'success' },
+const itemStatusKeys: Record<string, { key: string; color: string }> = {
+  pending: { key: 'app.kuaizhizao.warehouseCommon.statusPending', color: 'default' },
+  consumed: { key: 'app.kuaizhizao.warehouseCommon.itemStatusConsumed', color: 'success' },
+  produced: { key: 'app.kuaizhizao.warehouseCommon.itemStatusProduced', color: 'success' },
 };
 
 export const AssemblyDisassemblyOrdersPage: React.FC<{
   api: OrderApi;
   config: PageConfig;
 }> = ({ api, config }) => {
+  const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const createFormRef = useRef<any>(null);
@@ -243,7 +242,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       };
       if (editingOrder?.id) {
         await api.update(String(editingOrder.id), payload);
-        messageApi.success(config.updateSuccessText || `${config.actionNoun}更新成功`);
+        messageApi.success(config.updateSuccessText || t('app.kuaizhizao.warehouseCommon.updateSuccess', { noun: config.actionNoun }));
       } else {
         await api.create(payload);
         messageApi.success(config.createSuccessText);
@@ -257,7 +256,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         await refreshCurrentOrder(currentOrder.id);
       }
     } catch (error: any) {
-      messageApi.error(error?.message || `${config.actionNoun}${editingOrder ? '更新' : '新增'}失败`);
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.createFailed', { noun: config.actionNoun }));
       throw error;
     }
   };
@@ -272,7 +271,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       }
       setDetailDrawerVisible(true);
     } catch (error: any) {
-      messageApi.error(error?.message || `${config.actionNoun}详情加载失败`);
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.detailLoadFailed', { noun: config.actionNoun }));
     }
   };
 
@@ -283,23 +282,23 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         template_id: templateId,
         replace_existing: replaceExisting,
       });
-      messageApi.success('套用模板成功');
+      messageApi.success(t('app.kuaizhizao.assemblyOrder.applyTemplateSuccess'));
       setCurrentOrder(updated as OrderLike);
       setSelectedTemplateId(templateId);
       invalidateMenuBadgeCounts();
       reloadList();
     } catch (error: any) {
-      messageApi.error(error?.message || '套用模板失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.assemblyOrder.applyTemplateFailed'));
     }
   };
 
   const confirmApplyTemplate = (order: OrderLike) => {
     if (!selectedTemplateId) {
-      messageApi.warning('请先选择组装模板');
+      messageApi.warning(t('app.kuaizhizao.assemblyOrder.selectTemplateFirst'));
       return;
     }
     if (!order.total_quantity || Number(order.total_quantity) <= 0) {
-      messageApi.warning(`请先填写${config.quantityLabel}后再套用模板`);
+      messageApi.warning(t('app.kuaizhizao.assemblyOrder.enterQuantityBeforeTemplate', { label: config.quantityLabel }));
       return;
     }
     const pendingCount = Array.isArray(order.items)
@@ -310,8 +309,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
     };
     if (pendingCount > 0) {
       Modal.confirm({
-        title: '套用模板',
-        content: '当前组装单已有明细，套用模板将覆盖现有 pending 明细，是否继续？',
+        title: t('app.kuaizhizao.assemblyOrder.applyTemplateTitle'),
+        content: t('app.kuaizhizao.assemblyOrder.applyTemplateConfirm'),
         onOk: () => runApply(true),
       });
       return;
@@ -321,12 +320,12 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
 
   const confirmDeleteOrder = async (record: OrderLike) => {
     Modal.confirm({
-      title: `删除${config.actionNoun}`,
-      content: `确定删除 ${config.actionNoun} "${record.code}" 吗？`,
+      title: t('app.kuaizhizao.warehouseCommon.deleteOrderTitle', { noun: config.actionNoun }),
+      content: t('app.kuaizhizao.warehouseCommon.deleteOrderConfirm', { noun: config.actionNoun, code: record.code }),
       onOk: async () => {
         try {
           await api.delete(String(record.id));
-          messageApi.success(`删除${config.deleteSuccessNoun}成功`);
+          messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteOrderSuccess', { noun: config.deleteSuccessNoun }));
           invalidateMenuBadgeCounts();
           if (currentOrder?.id === record.id) {
             setDetailDrawerVisible(false);
@@ -334,7 +333,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           }
           reloadList();
         } catch (error: any) {
-          messageApi.error(error?.message || `删除${config.actionNoun}失败`);
+          messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
         }
       },
     });
@@ -362,7 +361,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const submitCreateItem = async (values: any) => {
     try {
       if (!currentOrderId) {
-        messageApi.error(`${config.actionNoun}ID不存在`);
+        messageApi.error(t('app.kuaizhizao.warehouseCommon.orderIdMissing', { noun: config.actionNoun }));
         return;
       }
       if (editingItem?.id) {
@@ -371,7 +370,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           unit_price: Number(values.unit_price || 0),
           remarks: values.remarks,
         });
-        messageApi.success(config.updateItemSuccessText || `${config.actionNoun}明细更新成功`);
+        messageApi.success(config.updateItemSuccessText || t('app.kuaizhizao.warehouseCommon.updateItemSuccess', { noun: config.actionNoun }));
       } else {
         await api.createItem(String(currentOrderId), {
           material_id: values.material_id,
@@ -391,25 +390,27 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       reloadList();
       await refreshCurrentOrder(currentOrderId);
     } catch (error: any) {
-      messageApi.error(error?.message || '添加明细失败');
+      messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.addItemFailed'));
       throw error;
     }
   };
 
   const confirmDeleteItem = (order: OrderLike, item: ItemLike) => {
     Modal.confirm({
-      title: '删除明细',
-      content: `确定删除明细 "${item.material_code || item.material_name || item.id}" 吗？`,
+      title: t('app.kuaizhizao.warehouseCommon.deleteItemTitle'),
+      content: t('app.kuaizhizao.warehouseCommon.deleteItemConfirm', {
+        name: item.material_code || item.material_name || item.id,
+      }),
       onOk: async () => {
         try {
           if (!order.id || !item.id) return;
           await api.deleteItem(String(order.id), String(item.id));
-          messageApi.success('明细删除成功');
+          messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteItemSuccess'));
           invalidateMenuBadgeCounts();
           reloadList();
           await refreshCurrentOrder(order.id);
         } catch (error: any) {
-          messageApi.error(error?.message || '明细删除失败');
+          messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteItemFailed'));
         }
       },
     });
@@ -418,12 +419,15 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
   const confirmExecuteOrder = (record: OrderLike) => {
     const itemCount = Array.isArray(record.items) ? record.items.length : Number(record.total_items || 0);
     if (itemCount <= 0) {
-      messageApi.warning(`请先为${config.actionNoun}添加至少一条明细，再执行。`);
+      messageApi.warning(t('app.kuaizhizao.warehouseCommon.addItemBeforeExecute', { noun: config.actionNoun }));
       return;
     }
     Modal.confirm({
       title: config.executeActionLabel,
-      content: `确定${config.executeActionLabel} "${record.code}" 吗？系统将更新库存。`,
+      content: t('app.kuaizhizao.warehouseCommon.executeConfirmContent', {
+        action: config.executeActionLabel,
+        code: record.code,
+      }),
       onOk: async () => {
         try {
           await api.execute(String(record.id));
@@ -432,15 +436,16 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           reloadList();
           await refreshCurrentOrder(record.id);
         } catch (error: any) {
-          messageApi.error(error?.message || `${config.executeActionLabel}失败`);
+          messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.executeFailed', { action: config.executeActionLabel }));
         }
       },
     });
   };
 
-  const columns: ProColumns<OrderLike>[] = [
+  const columns: ProColumns<OrderLike>[] = useMemo(
+    () => [
     {
-      title: `${config.actionNoun}单号`,
+      title: config.orderCodeLabel,
       dataIndex: 'code',
       width: 150,
       ellipsis: true,
@@ -451,13 +456,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         </Typography.Text>
       ),
     },
-    { title: '仓库', dataIndex: 'warehouse_name', width: 120, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name', width: 120, ellipsis: true },
     { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date', width: 120 },
-    { title: '成品物料', dataIndex: 'product_material_name', width: 160, ellipsis: true },
+    { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name', width: 160, ellipsis: true },
     { title: config.quantityLabel, dataIndex: 'total_quantity', width: 110, align: 'right' },
-    { title: '组件数', dataIndex: 'total_items', width: 90, align: 'right' },
+    { title: t('app.kuaizhizao.warehouseCommon.colComponentCount'), dataIndex: 'total_items', width: 90, align: 'right' },
     {
-      title: '更新时间',
+      title: t('app.kuaizhizao.warehouseCommon.colUpdatedAt'),
       dataIndex: 'updated_at',
       width: 168,
       hideInSearch: true,
@@ -465,7 +470,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       render: (_, r) => (r.updated_at ? dayjs(r.updated_at).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
     {
-      title: '生命周期',
+      title: t('app.kuaizhizao.warehouseCommon.colLifecycle'),
       dataIndex: 'lifecycle_stage',
       fixed: 'right',
       align: 'left',
@@ -486,7 +491,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       },
     },
     {
-      title: '操作',
+      title: t('app.kuaizhizao.warehouseCommon.colActions'),
       width: 260,
       fixed: 'right',
       render: (_, record) => (
@@ -496,7 +501,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             <>
               <Button {...rowActionKind('update')} onClick={() => openEditOrderModal(record)} />
               <Button {...rowActionKind('create')} {...rowActionLabelKeep()} onClick={() => openItemModal(record)}>
-                添加明细
+                {t('app.kuaizhizao.warehouseCommon.addItem')}
               </Button>
               <Button
                 {...rowActionKind('execute')}
@@ -511,30 +516,38 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         </Space>
       ),
     },
-  ];
+  ],
+    [config, t],
+  );
 
-  const detailColumns: ProDescriptionsItemProps<OrderLike>[] = [
-    { title: `${config.actionNoun}单号`, dataIndex: 'code' },
-    { title: '仓库', dataIndex: 'warehouse_name' },
+  const detailColumns: ProDescriptionsItemProps<OrderLike>[] = useMemo(
+    () => [
+    { title: config.orderCodeLabel, dataIndex: 'code' },
+    { title: t('app.kuaizhizao.warehouseCommon.colWarehouse'), dataIndex: 'warehouse_name' },
     { title: config.dateLabel, dataIndex: config.dateField, valueType: 'date' },
-    { title: '成品物料', dataIndex: 'product_material_name' },
+    { title: t('app.kuaizhizao.warehouseCommon.colProductMaterial'), dataIndex: 'product_material_name' },
     {
-      title: '状态',
+      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
       dataIndex: 'status',
       render: (status) => {
-        const mapped = orderStatusMap[String(status ?? '')] || { text: String(status ?? '-'), color: 'default' };
-        return <Tag color={mapped.color}>{mapped.text}</Tag>;
+        const mapped = orderStatusKeys[String(status ?? '')];
+        if (mapped) {
+          return <Tag color={mapped.color}>{t(mapped.key)}</Tag>;
+        }
+        return <Tag>{String(status ?? '-')}</Tag>;
       },
     },
     { title: config.quantityLabel, dataIndex: 'total_quantity' },
-    { title: '组件数', dataIndex: 'total_items' },
+    { title: t('app.kuaizhizao.warehouseCommon.colComponentCount'), dataIndex: 'total_items' },
     ...(config.enableTemplateApply
-      ? [{ title: '组装模板', dataIndex: 'assembly_template_code' as const }]
+      ? [{ title: t('app.kuaizhizao.assemblyOrder.assemblyTemplate'), dataIndex: 'assembly_template_code' as const }]
       : []),
-    { title: '执行人', dataIndex: 'executed_by_name' },
-    { title: '执行时间', dataIndex: 'executed_at', valueType: 'dateTime' },
-    { title: '备注', dataIndex: 'remarks', span: 2 },
-  ];
+    { title: t('app.kuaizhizao.warehouseCommon.colExecutor'), dataIndex: 'executed_by_name' },
+    { title: t('app.kuaizhizao.warehouseCommon.colExecutedAt'), dataIndex: 'executed_at', valueType: 'dateTime' },
+    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks', span: 2 },
+  ],
+    [config, t],
+  );
 
   return (
     <ListPageTemplate>
@@ -552,18 +565,18 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         showDeleteButton
         onDelete={async (keys) => {
           Modal.confirm({
-            title: `确认批量删除${config.actionNoun}`,
-            content: `确定要删除选中的 ${keys.length} 条${config.actionNoun}吗？`,
+            title: t('app.kuaizhizao.warehouseCommon.batchDeleteTitle', { noun: config.actionNoun }),
+            content: t('app.kuaizhizao.warehouseCommon.batchDeleteConfirm', { count: keys.length, noun: config.actionNoun }),
             onOk: async () => {
               try {
                 for (const key of keys) {
                   await api.delete(String(key));
                 }
-                messageApi.success(`成功删除 ${keys.length} 条记录`);
+                messageApi.success(t('app.kuaizhizao.warehouseCommon.deleteSuccess', { count: keys.length }));
                 invalidateMenuBadgeCounts();
                 reloadList();
               } catch (error: any) {
-                messageApi.error(error?.message || '删除失败');
+                messageApi.error(error?.message || t('app.kuaizhizao.warehouseCommon.deleteFailed'));
               }
             },
           });
@@ -589,7 +602,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       />
 
       <FormModalTemplate
-        title={editingOrder ? `编辑${config.actionNoun}` : config.createModalTitle}
+        title={editingOrder ? t('app.kuaizhizao.warehouseCommon.editOrderTitle', { noun: config.actionNoun }) : config.createModalTitle}
         open={createModalVisible}
         onClose={() => {
           setCreateModalVisible(false);
@@ -605,8 +618,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           <Col span={12}>
             <UniWarehouseSelect
               name="warehouse_id"
-              label="仓库"
-              placeholder="请选择仓库"
+              label={t('app.kuaizhizao.warehouseCommon.colWarehouse')}
+              placeholder={t('app.kuaizhizao.warehouseCommon.selectWarehouse')}
               required
               onChange={(_, option) => {
                 createFormRef.current?.setFieldsValue({
@@ -620,15 +633,15 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
             <ProFormDatePicker
               name={config.dateField}
               label={config.dateLabel}
-              rules={[{ required: true, message: `请选择${config.dateLabel}` }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.selectDate', { label: config.dateLabel }) }]}
               fieldProps={{ style: { width: '100%' } }}
             />
           </Col>
         </Row>
         <UniMaterialSelect
           name="product_material_id"
-          label="成品物料"
-          placeholder="请选择成品物料"
+          label={t('app.kuaizhizao.warehouseCommon.colProductMaterial')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.selectMaterial')}
           required
           showQuickCreate
           showAdvancedSearch
@@ -646,10 +659,10 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
           }}
         />
         {config.enableTemplateApply && (
-          <AntForm.Item name="assembly_template_id" label="组装模板">
+          <AntForm.Item name="assembly_template_id" label={t('app.kuaizhizao.assemblyOrder.assemblyTemplate')}>
             <Select
               allowClear
-              placeholder="可选，创建后在详情中套用"
+              placeholder={t('app.kuaizhizao.assemblyOrder.selectTemplateOptional')}
               options={templateOptions}
             />
           </AntForm.Item>
@@ -657,12 +670,12 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         <ProFormDigit
           name="total_quantity"
           label={config.quantityLabel}
-          rules={[{ required: true, message: `请输入${config.quantityLabel}` }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.enterField', { label: config.quantityLabel }) }]}
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
         <DocumentAttachmentsField category={config.attachmentCategory} />
-        <ProFormTextArea name="remarks" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
         <AntForm.Item name="_warehouse_name" hidden />
         <AntForm.Item name="warehouse_name" hidden />
         <AntForm.Item name="product_material_code" hidden />
@@ -670,7 +683,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={editingItem ? `编辑${config.actionNoun}明细` : `添加${config.actionNoun}明细`}
+        title={editingItem ? t('app.kuaizhizao.warehouseCommon.editItemTitle', { noun: config.actionNoun }) : t('app.kuaizhizao.warehouseCommon.addItemTitle', { noun: config.actionNoun })}
         open={itemModalVisible}
         onClose={() => {
           setItemModalVisible(false);
@@ -684,8 +697,8 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
       >
         <UniMaterialSelect
           name="material_id"
-          label="组件物料"
-          placeholder="请选择组件物料"
+          label={t('app.kuaizhizao.warehouseCommon.componentMaterial')}
+          placeholder={t('app.kuaizhizao.warehouseCommon.selectComponentMaterial')}
           required
           disabled={!!editingItem}
           showQuickCreate
@@ -697,13 +710,13 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         />
         <ProFormDigit
           name="quantity"
-          label="数量"
-          rules={[{ required: true, message: '请输入数量' }]}
+          label={t('app.kuaizhizao.warehouseCommon.colQuantity')}
+          rules={[{ required: true, message: t('app.kuaizhizao.warehouseCommon.enterQuantity') }]}
           min={0.01}
           fieldProps={{ precision: 2 }}
         />
-        <ProFormDigit name="unit_price" label="单价" min={0} fieldProps={{ precision: 2 }} />
-        <ProFormTextArea name="remarks" label="备注" placeholder="请输入备注" fieldProps={{ rows: 3 }} />
+        <ProFormDigit name="unit_price" label={t('app.kuaizhizao.warehouseCommon.colUnitPrice')} min={0} fieldProps={{ precision: 2 }} />
+        <ProFormTextArea name="remarks" label={t('app.kuaizhizao.warehouseCommon.colRemarks')} placeholder={t('app.kuaizhizao.warehouseCommon.placeholderRemarks')} fieldProps={{ rows: 3 }} />
         <AntForm.Item name="material_code" hidden />
         <AntForm.Item name="material_name" hidden />
       </FormModalTemplate>
@@ -721,11 +734,11 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
         customContent={
           <>
             {config.enableTemplateApply && currentOrder?.status === 'draft' && canApplyTemplate && api.applyTemplate && (
-              <Card title="套用模板" style={{ marginBottom: 16 }}>
+              <Card title={t('app.kuaizhizao.assemblyOrder.applyTemplate')} style={{ marginBottom: 16 }}>
                 <Space wrap>
                   <Select
                     style={{ minWidth: 280 }}
-                    placeholder="选择组装模板"
+                    placeholder={t('app.kuaizhizao.assemblyOrder.selectTemplatePlaceholder')}
                     value={selectedTemplateId}
                     onChange={setSelectedTemplateId}
                     options={templateOptions.filter(
@@ -737,21 +750,21 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                     allowClear
                   />
                   <Button icon={<SnippetsOutlined />} onClick={() => confirmApplyTemplate(currentOrder)}>
-                    套用模板
+                    {t('app.kuaizhizao.assemblyOrder.applyTemplate')}
                   </Button>
                 </Space>
               </Card>
             )}
             <Card
-              title="明细"
+              title={t('app.kuaizhizao.warehouseCommon.colDetail')}
               extra={
                 currentOrder?.status === 'draft' ? (
                   <Space>
                     <Button size="small" onClick={() => openEditOrderModal(currentOrder)}>
-                      编辑主单
+                      {t('app.kuaizhizao.warehouseCommon.editMainOrder')}
                     </Button>
                     <Button size="small" onClick={() => openItemModal(currentOrder)}>
-                      添加明细
+                      {t('app.kuaizhizao.warehouseCommon.addItem')}
                     </Button>
                     <Button size="small" type="primary" onClick={() => confirmExecuteOrder(currentOrder)}>
                       {config.executeActionLabel}
@@ -768,48 +781,56 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                   rowKey="id"
                   pagination={false}
                   columns={[
-                    { title: '组件编码', dataIndex: 'material_code', width: 120 },
-                    { title: '组件名称', dataIndex: 'material_name', width: 150 },
-                    { title: '数量', dataIndex: 'quantity', width: 90, align: 'right' },
+                    { title: t('app.kuaizhizao.warehouseCommon.colComponentCode'), dataIndex: 'material_code', width: 120 },
+                    { title: t('app.kuaizhizao.warehouseCommon.colComponentName'), dataIndex: 'material_name', width: 150 },
+                    { title: t('app.kuaizhizao.warehouseCommon.colQuantity'), dataIndex: 'quantity', width: 90, align: 'right' },
                     {
-                      title: '单价',
+                      title: t('app.kuaizhizao.warehouseCommon.colUnitPrice'),
                       dataIndex: 'unit_price',
                       width: 90,
                       align: 'right',
                       render: (value) => Number(value || 0).toFixed(2),
                     },
                     {
-                      title: '金额',
+                      title: t('app.kuaizhizao.warehouseCommon.colAmount'),
                       dataIndex: 'amount',
                       width: 90,
                       align: 'right',
                       render: (value) => Number(value || 0).toFixed(2),
                     },
                     {
-                      title: '状态',
+                      title: t('app.kuaizhizao.warehouseCommon.colStatus'),
                       dataIndex: 'status',
                       width: 90,
                       render: (status) => {
-                        const mapped =
-                          itemStatusMap[String(status ?? '')] ||
-                          (String(status ?? '') === config.itemDoneStatus
-                            ? { text: config.itemDoneStatus, color: 'success' }
-                            : { text: String(status ?? '-'), color: 'default' });
-                        return <Tag color={mapped.color}>{mapped.text}</Tag>;
+                        const mapped = itemStatusKeys[String(status ?? '')];
+                        if (mapped) {
+                          return <Tag color={mapped.color}>{t(mapped.key)}</Tag>;
+                        }
+                        if (String(status ?? '') === config.itemDoneStatus) {
+                          return (
+                            <Tag color="success">
+                              {config.itemDoneStatus === 'consumed'
+                                ? t('app.kuaizhizao.warehouseCommon.itemStatusConsumed')
+                                : t('app.kuaizhizao.warehouseCommon.itemStatusProduced')}
+                            </Tag>
+                          );
+                        }
+                        return <Tag>{String(status ?? '-')}</Tag>;
                       },
                     },
-                    { title: '备注', dataIndex: 'remarks' },
+                    { title: t('app.kuaizhizao.warehouseCommon.colRemarks'), dataIndex: 'remarks' },
                     {
-                      title: '操作',
+                      title: t('app.kuaizhizao.warehouseCommon.colActions'),
                       width: 150,
                       render: (_, item) =>
                         currentOrder.status === 'draft' ? (
                           <Space size={0}>
                             <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openItemModal(currentOrder, item)}>
-                              编辑
+                              {t('app.kuaizhizao.warehouseCommon.edit')}
                             </Button>
                             <Button type="link" size="small" danger icon={<DeleteOutlined />} onClick={() => confirmDeleteItem(currentOrder, item)}>
-                              删除
+                              {t('app.kuaizhizao.warehouseCommon.delete')}
                             </Button>
                           </Space>
                         ) : null,
@@ -818,7 +839,7 @@ export const AssemblyDisassemblyOrdersPage: React.FC<{
                   dataSource={currentOrder.items}
                 />
               ) : (
-                <Typography.Text type="secondary">暂无明细，可套用模板或手工添加。</Typography.Text>
+                <Typography.Text type="secondary">{t('app.kuaizhizao.warehouseCommon.noDetailHint')}</Typography.Text>
               )}
             </Card>
           </>

@@ -1053,6 +1053,11 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   allowCustomScrollY?: boolean
   /**
+   * 表体始终占满视口剩余高度（忽略「当前页未装满」时的 natural-height）。
+   * UniReport 等固定布局报表页使用；须配合 ListPageTemplate `tableScrollLayout="report"`。
+   */
+  fillViewportBody?: boolean
+  /**
    * 是否允许页面层自定义 `scroll.x`（默认 false）。
    * 为 false 时，UniTable 会忽略调用方传入的 `scroll.x`，统一使用内容自适应横向策略。
    */
@@ -1197,6 +1202,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
   virtualized = false,
   virtualTableBodyMaxHeight = 520,
   allowCustomScrollY = false,
+  fillViewportBody = false,
   allowCustomScrollX = false,
   actionRef: externalActionRef,
   formRef: externalFormRef,
@@ -2470,6 +2476,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     () => ({
       allowCustomScrollY,
       restTableScrollY,
+      fillViewportBody,
       virtualized,
       restTableVirtual,
       tableDataLength: tableData.length,
@@ -2478,6 +2485,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
     [
       allowCustomScrollY,
       restTableScrollY,
+      fillViewportBody,
       virtualized,
       restTableVirtual,
       tableData.length,
@@ -2930,6 +2938,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           display: 'flex',
           flexDirection: 'column',
           boxSizing: 'border-box',
+          ...(fillViewportBody ? { flex: 1, minHeight: 0 } : {}),
         }}
       >
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -2988,7 +2997,6 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
               debounceTime={tableRequestDebounce}
               rowKey={rowKey}
               search={false}
-              className={`uni-table-pro-table${proTableBodyScrollYEnabled ? ' uni-table-scroll-y' : ''}`}
               style={{ margin: 0, padding: 0 }}
               bordered={false}
               cardBordered={!embedded}
@@ -3032,8 +3040,16 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
                   options: _omitTableOptions,
                   onSizeChange: _omitOnSizeChange,
                   sticky: userSticky,
+                  className: userTableClassName,
                   ...otherProps
                 } = restProps
+                const mergedProTableClassName = [
+                  'uni-table-pro-table',
+                  proTableBodyScrollYEnabled ? 'uni-table-scroll-y' : '',
+                  userTableClassName,
+                ]
+                  .filter(Boolean)
+                  .join(' ')
                 const mergedComponents =
                   resizableColumns.length > 0
                     ? {
@@ -3135,6 +3151,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
 
                 return {
                   ...otherProps,
+                  className: mergedProTableClassName,
                   showSorterTooltip:
                     (otherProps as { showSorterTooltip?: boolean | Record<string, unknown> }).showSorterTooltip ?? {
                       target: 'sorter-icon',
