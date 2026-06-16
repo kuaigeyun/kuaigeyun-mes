@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useMemo, useCallback } from 'react';
 import { App, Table } from 'antd';
-import { useRequest } from 'ahooks';
 import {
   InboxOutlined,
   AlertOutlined,
@@ -17,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getWarehouseDashboardSummary, type WarehouseDashboardSummary } from '../../../services/warehouse-dashboard';
 import { mesDashboardService } from '../../../services/dashboard';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_WAREHOUSE_INVENTORY_FIELD_RESOURCE as INV } from '../../../constants/fieldPermissionResources';
 import {
@@ -41,20 +40,21 @@ const WarehouseDashboard: React.FC = () => {
   const navigate = useNavigate();
   const { message } = App.useApp();
 
-  const { data, loading } = useRequest(
+  const { data, loading } = useDashboardRequest(
     () => getWarehouseDashboardSummary({ recent_limit: 8 }),
-    dashboardRequestOptions('kz:warehouse-dashboard:summary', {
+    'kz:warehouse-dashboard:summary',
+    {
       onError: (e: { message?: string }) =>
         message.error(e?.message || t('app.kuaizhizao.warehouseDashboard.loadFailed')),
-    }),
+    },
   );
-  const { data: todosData, loading: todosLoading } = useRequest(() =>
-    mesDashboardService.getTodosByModule('warehouse', 8),
-    dashboardRequestOptions('kz:warehouse-dashboard:todos'),
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('warehouse', 8),
+    'kz:warehouse-dashboard:todos',
   );
-  const { data: trendData, loading: trendLoading } = useRequest(
+  const { data: trendData, loading: trendLoading } = useDashboardRequest(
     mesDashboardService.getWarehouseTrend,
-    dashboardRequestOptions('kz:warehouse-dashboard:trend'),
+    'kz:warehouse-dashboard:trend',
   );
 
   const s = data as WarehouseDashboardSummary | undefined;

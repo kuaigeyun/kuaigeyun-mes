@@ -151,18 +151,30 @@ export const OperationFormModal: React.FC<OperationFormModalProps> = ({
 
       const pOpts: { label: string; value: string }[] = [];
       (usersRes?.items ?? []).forEach((u) => {
-        pOpts.push({ label: `[人员] ${u.full_name || u.username}`, value: `U_${u.uuid}` });
+        pOpts.push({
+          label: `${t('field.operation.optionPersonnel')} ${u.full_name || u.username}`,
+          value: `U_${u.uuid}`,
+        });
       });
-      factoryListItems(teamsRes as any).forEach((t: any) => {
-        pOpts.push({ label: `[小组] ${t.name}`, value: `T_${t.id}` });
+      factoryListItems(teamsRes as any).forEach((team: any) => {
+        pOpts.push({
+          label: `${t('field.operation.optionTeam')} ${team.name}`,
+          value: `T_${team.id}`,
+        });
       });
 
       const rOpts: { label: string; value: string }[] = [];
       factoryListItems(workCentersRes as any).forEach((wc: any) => {
-        rOpts.push({ label: `[工作中心] ${wc.code || ''} ${wc.name || ''}`.trim(), value: `WC_${wc.id}` });
+        rOpts.push({
+          label: `${t('field.operation.optionWorkCenter')} ${wc.code || ''} ${wc.name || ''}`.trim(),
+          value: `WC_${wc.id}`,
+        });
       });
       factoryListItems(stationsRes as any).forEach((s: any) => {
-        rOpts.push({ label: `[工位] ${s.code || ''} ${s.name || ''}`.trim(), value: `S_${s.id}` });
+        rOpts.push({
+          label: `${t('field.operation.optionWorkstation')} ${s.code || ''} ${s.name || ''}`.trim(),
+          value: `S_${s.id}`,
+        });
       });
       const eqItems = equipmentRes?.items ?? (Array.isArray(equipmentRes) ? equipmentRes : []);
       const equipOpts = (Array.isArray(eqItems) ? eqItems : []).map((e: any) => ({

@@ -139,7 +139,12 @@ const SerialRulesPage: React.FC = () => {
     for (const key of keys) {
       await serialRuleApi.update(String(key), { isActive });
     }
-    messageApi.success(`已将 ${keys.length} 条序列号规则设为${isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}`);
+    messageApi.success(
+      t('app.master-data.seqRules.serialRuleSetActiveSuccess', {
+        count: keys.length,
+        status: isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled'),
+      }),
+    );
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -238,7 +243,7 @@ const SerialRulesPage: React.FC = () => {
           <UniBatchMenuButton
             key="serial-rule-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('components.uniBatch.batchActions')}
             menuItems={[
               {
                 key: 'batch-enable',
@@ -281,7 +286,7 @@ const SerialRulesPage: React.FC = () => {
         <ProForm.Item label={null} colon={false} colProps={{ span: 24 }} style={{ width: '100%', marginBottom: 24 }}>
           <div style={{ width: '100%', paddingLeft: 8, paddingRight: 8 }}>
             <CodeRuleComponentBuilder
-              title="序列号规则"
+              title={t('app.master-data.serialRules.builderTitle')}
               value={ruleComponents}
               onChange={setRuleComponents}
               availableFields={[...SERIAL_RULE_AVAILABLE_FIELDS]}

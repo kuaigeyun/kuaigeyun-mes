@@ -347,19 +347,18 @@ async def build_slow_moving_inventory(
     total = await q.count()
     lim = max(1, min(int(limit or 100), 500))
     sk = max(0, int(skip or 0))
-    rows = await q.order_by("updated_at").offset(sk).limit(lim).values(
-        "batch_no", "material_code", "material_name", "quantity", "updated_at"
-    )
+    batches = await q.order_by("updated_at").offset(sk).limit(lim).prefetch_related("material").all()
     today = date.today()
     items = []
-    for r in rows:
-        ut = r.get("updated_at")
+    for b in batches:
+        ut = b.updated_at
         age_days = (today - ut.date()).days if ut else stale_days
+        material = getattr(b, "material", None)
         items.append({
-            "batch_no": r.get("batch_no"),
-            "material_code": r.get("material_code"),
-            "material_name": r.get("material_name"),
-            "quantity": float(r.get("quantity") or 0),
+            "batch_no": b.batch_no,
+            "material_code": material.main_code if material else "N/A",
+            "material_name": material.name if material else "未知",
+            "quantity": float(b.quantity or 0),
             "last_move_date": ut.date().isoformat() if ut else None,
             "age_days": age_days,
             "warehouse_name": "",

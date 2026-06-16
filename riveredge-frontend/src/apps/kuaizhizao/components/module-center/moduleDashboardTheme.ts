@@ -16,18 +16,49 @@ export type ModuleKpiVisualTokens = {
   sideLabelColor: string;
   sideValueColor: string;
   iconWrapBg: string;
+  iconColor: string;
   progressStroke: string;
   progressRail: string;
   plain: boolean;
 };
 
-/** 模块看板 KPI 卡：多彩渐变 / 简约主色+副色 */
+function extractGradientAccentColor(vividGradient: string): string {
+  const match = vividGradient.match(/#[0-9a-fA-F]{3,8}/);
+  return match?.[0] ?? '#1677ff';
+}
+
+/** 模块看板 KPI 卡：多彩渐变 / 简约主色+副色；暗黑模式下降低饱和度避免刺眼 */
 export function resolveModuleKpiVisual(
   vividGradient: string,
   vividBoxShadow: string | undefined,
   plain: boolean,
   token: GlobalToken,
+  isDark = false,
 ): ModuleKpiVisualTokens {
+  if (!plain && isDark) {
+    const accent = extractGradientAccentColor(vividGradient);
+    const tintedBg = `color-mix(in srgb, ${accent} 16%, ${token.colorBgContainer})`;
+    const accentBorder = `color-mix(in srgb, ${accent} 32%, transparent)`;
+    return {
+      plain: false,
+      card: {
+        background: `linear-gradient(135deg, ${tintedBg} 0%, ${token.colorBgContainer} 78%)`,
+        boxShadow: 'none',
+        border: `1px solid ${accentBorder}`,
+      },
+      titleColor: token.colorTextSecondary,
+      valueColor: accent,
+      subtitleColor: token.colorTextTertiary,
+      sideBorder: token.colorSplit,
+      sideLabelColor: token.colorTextTertiary,
+      sideValueColor: token.colorText,
+      iconWrapBg: `color-mix(in srgb, ${accent} 22%, transparent)`,
+      iconColor: accent,
+      progressStroke: accent,
+      progressRail: accentBorder,
+    };
+  }
+
   if (!plain) {
     return {
       plain: false,
@@ -43,6 +74,7 @@ export function resolveModuleKpiVisual(
       sideLabelColor: 'rgba(255, 255, 255, 0.72)',
       sideValueColor: '#fff',
       iconWrapBg: 'rgba(255, 255, 255, 0.2)',
+      iconColor: '#fff',
       progressStroke: '#fff',
       progressRail: 'rgba(255, 255, 255, 0.2)',
     };
@@ -62,6 +94,7 @@ export function resolveModuleKpiVisual(
     sideLabelColor: token.colorTextSecondary,
     sideValueColor: token.colorText,
     iconWrapBg: token.colorBgContainer,
+    iconColor: token.colorPrimary,
     progressStroke: token.colorPrimary,
     progressRail: token.colorPrimaryBorder,
   };
@@ -71,6 +104,7 @@ export function resolveModuleRankBadgeStyle(
   rank: number,
   plain: boolean,
   token: GlobalToken,
+  isDark = false,
 ): { background: string; color: string; boxShadow: string } {
   if (plain) {
     const highlighted = rank <= 3;
@@ -81,6 +115,17 @@ export function resolveModuleRankBadgeStyle(
     };
   }
   const colors = ['#f5222d', '#fa8c16', '#fadb14'];
+  if (isDark) {
+    const accent = colors[rank - 1] ?? token.colorTextQuaternary;
+    const highlighted = rank <= 3;
+    return {
+      background: highlighted
+        ? `color-mix(in srgb, ${accent} 22%, ${token.colorBgContainer})`
+        : token.colorFillSecondary,
+      color: highlighted ? accent : token.colorTextSecondary,
+      boxShadow: 'none',
+    };
+  }
   const bg = rank <= 3 ? `linear-gradient(135deg, ${colors[rank - 1]} 0%, #fff 180%)` : '#e8e8e8';
   return {
     background: bg,

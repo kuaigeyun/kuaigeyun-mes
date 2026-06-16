@@ -36,6 +36,7 @@ import {
   resolvePresetOperationIndustryName,
   resolvePresetOperationNameByKey,
   resolvePresetOperationNameByName,
+  resolvePresetOperationDefectName,
 } from '../../../../../utils/presetEntityI18n';
 import {
   CustomFieldsDetailSection,
@@ -385,7 +386,7 @@ const OperationsPage: React.FC = () => {
     const result = await batchImport({
       items,
       importFn: async (item) => operationApi.create(item),
-      title: '导入工序',
+      title: t('app.master-data.operations.importTitle'),
       concurrency: 5,
     });
     if (result.successCount > 0) {
@@ -393,7 +394,7 @@ const OperationsPage: React.FC = () => {
       actionRef.current?.reload();
     }
     if (result.failureCount > 0) {
-      messageApi.warning(`部分失败 ${result.failureCount} 条`);
+      messageApi.warning(t('app.kuaizhizao.productionPlan.importPartialFailed', { count: result.failureCount }));
     }
   };
 
@@ -412,22 +413,30 @@ const OperationsPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
+      const enabledLabel = t('app.master-data.plants.enabled');
+      const disabledLabel = t('app.master-data.plants.disabled');
       const csv = [
-        ['工序编号', '工序名称', '描述', '启用状态', '不良品项'].join(','),
+        [
+          t('field.operation.code'),
+          t('field.operation.name'),
+          t('field.operation.description'),
+          t('app.master-data.operations.isActive'),
+          t('app.master-data.operations.defectTypes'),
+        ].join(','),
         ...list.map((r) => {
           const dts = r.defectTypes ?? r.defect_types ?? [];
           const defectStr = Array.isArray(dts) ? dts.map((d: DefectTypeMinimal) => d.name ?? d.code).filter(Boolean).join(',') : '';
-          return [r.code, r.name, r.description ?? '', r.isActive ? '启用' : '禁用', defectStr].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+          return [r.code, r.name, r.description ?? '', r.isActive ? enabledLabel : disabledLabel, defectStr].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
         }),
       ].join('\n');
       const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `operations-${new Date().toISOString().slice(0, 10)}.csv`;
+      a.download = `${t('app.master-data.operations.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`;
       a.click();
       URL.revokeObjectURL(url);
-      messageApi.success(`已导出 ${list.length} 条工序`);
+      messageApi.success(t('common.exportSuccess', { count: list.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('app.master-data.exportFailed'));
     }
@@ -496,43 +505,43 @@ const OperationsPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
     {
-      title: '工序编号',
+      title: t('field.operation.code'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '工序名称',
+      title: t('field.operation.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
       render: (_: unknown, record: Operation) => resolvePresetOperationNameByName(record.name, t),
     },
     {
-      title: '描述',
+      title: t('field.operation.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '报工类型',
+      title: t('field.operation.reportingType'),
       dataIndex: 'reportingType',
       width: 120,
       valueType: 'select',
       valueEnum: {
-        quantity: { text: '按数量报工', status: 'Processing' },
-        status: { text: '按状态报工', status: 'Success' },
+        quantity: { text: t('field.operation.reportingTypeQuantity'), status: 'Processing' },
+        status: { text: t('field.operation.reportingTypeStatus'), status: 'Success' },
       },
       render: (_: any, record: Operation) => (
         <Tag color={record.reportingType === 'quantity' ? 'blue' : 'green'}>
-          {record.reportingType === 'quantity' ? '按数量报工' : '按状态报工'}
+          {record.reportingType === 'quantity' ? t('field.operation.reportingTypeQuantity') : t('field.operation.reportingTypeStatus')}
         </Tag>
       ),
       sorter: true,
     },
     {
-      title: '超报',
+      title: t('field.operation.overReportMode'),
       dataIndex: 'overReportMode',
       width: 120,
       hideInSearch: true,
@@ -545,7 +554,7 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: '绑定不良品项',
+      title: t('field.operation.defectTypeUuids'),
       dataIndex: ['defect_types', 'defectTypes'],
       width: 180,
       hideInSearch: true,
@@ -565,7 +574,7 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: '默认生产人员',
+      title: t('field.operation.defaultOperatorUuids'),
       dataIndex: ['default_operator_names', 'defaultOperatorNames'],
       width: 180,
       hideInSearch: true,
@@ -585,24 +594,24 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.operations.isActive'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_: any, record: Operation) => (
         <Tag color={record.isActive ? 'success' : 'default'}>
-          {record.isActive ? '启用' : '禁用'}
+          {record.isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
       sorter: true,
     },
     ...customFieldColumns,
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -615,7 +624,7 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -625,14 +634,14 @@ const OperationsPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             description={t('app.master-data.operations.deleteConfirmDesc')}
@@ -644,7 +653,7 @@ const OperationsPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -696,7 +705,7 @@ const OperationsPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取工序列表失败:', error);
-            messageApi.error(error?.message || '获取工序列表失败');
+            messageApi.error(error?.message || t('app.master-data.operations.listFailed'));
             return {
               data: [],
               success: false,
@@ -711,7 +720,7 @@ const OperationsPage: React.FC = () => {
           showSizeChanger: true,
         }}
         showCreateButton
-        createButtonText={'新建工序' + NEW_SHORTCUT_HINT}
+        createButtonText={t('field.operation.createTitle') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         toolBarActionsAfterCreate={[
           trialRunMode ? (
@@ -749,11 +758,11 @@ const OperationsPage: React.FC = () => {
           <UniBatchMenuButton
             key="operation-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('app.kuaiplm.phase2.common.batchActions')}
             menuItems={[
               {
                 key: 'batch-generate-qrcode',
-                label: '批量生成二维码',
+                label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
                 onClick: handleBatchGenerateQRCode,
               },
             ]}
@@ -772,7 +781,7 @@ const OperationsPage: React.FC = () => {
       />
 
       <UniDetail
-        title={t('app.master-data.operations.detailTitle', { defaultValue: '工序详情' })}
+        title={t('app.master-data.operations.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
@@ -916,8 +925,11 @@ const OperationsPage: React.FC = () => {
               key: 'defects',
               ellipsis: true,
               render: (_: unknown, row) => {
-                const parts = (row.defectPresets ?? []).map((d) => d.name).filter(Boolean);
-                const text = parts.length ? parts.join('、') : '—';
+                const parts = (row.defectPresets ?? [])
+                  .map((d) => resolvePresetOperationDefectName(d.code, d.name, t))
+                  .filter(Boolean);
+                const separator = i18n.language?.startsWith('zh') ? '、' : ', ';
+                const text = parts.length ? parts.join(separator) : '—';
                 return (
                   <Typography.Text type="secondary" ellipsis={{ tooltip: text }}>
                     {text}

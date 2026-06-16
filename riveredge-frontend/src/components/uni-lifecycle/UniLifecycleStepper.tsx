@@ -4,9 +4,11 @@
  * 用于详情抽屉等需要「全节点+连线」展示的场景；与业务解耦，可复用。
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Tooltip } from 'antd';
 import type { LucideIcon } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { translateLifecycleResult } from '../../utils/globalLifecycleI18n';
 import {
   ArrowLeftRight,
   Bell,
@@ -35,7 +37,6 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
 import './UniLifecycleStepper.less';
 import type { SubStage } from './types';
 
@@ -330,11 +331,15 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
   stepLabelMaxWidth = STEP_LABEL_MAX_WIDTH_DEFAULT,
   onStepClick,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const translatedSteps = useMemo(
+    () => translateLifecycleResult(t, { percent: 0, stageName: '', mainStages: steps }).mainStages ?? steps,
+    [steps, t, i18n.language],
+  );
   const isException = status === 'exception';
-  if (!steps.length) return null;
+  if (!translatedSteps.length) return null;
 
-  const n = steps.length;
+  const n = translatedSteps.length;
   /** 节点外圈（box-shadow）与 hover 放大需额外留白，避免被固定高度裁切 */
   const nodeOuterPadding = 4;
   /** 步骤多时缩短连线，与 flex 均分列宽配合，尽量一屏排开（抽屉等窄容器） */
@@ -386,12 +391,12 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
             overflow: 'visible',
           }}
         >
-          {steps.map((step, idx) => {
+          {translatedSteps.map((step, idx) => {
             const stepIsException = Boolean(isException && step.status === 'active');
             return (
               <React.Fragment key={step.key}>
                 {idx > 0 && (
-                  <ConnectorTrack completed={steps[idx - 1]?.status === 'done'} widthPx={connectorPx} />
+                  <ConnectorTrack completed={translatedSteps[idx - 1]?.status === 'done'} widthPx={connectorPx} />
                 )}
                 <Tooltip title={step.label}>
                   <div
@@ -430,7 +435,7 @@ export const UniLifecycleStepper: React.FC<UniLifecycleStepperProps> = ({
               minWidth: 0,
             }}
           >
-            {steps.map((step, idx) => {
+            {translatedSteps.map((step, idx) => {
               const stepIsException = Boolean(isException && step.status === 'active');
               return (
                 <React.Fragment key={`${step.key}-lbl`}>

@@ -14,6 +14,7 @@ FRONTEND = ROOT / "riveredge-frontend"
 OUT_LOCALE = FRONTEND / "src" / "locales" / "generated" / "presetEntity"
 OUT_REGISTRY = FRONTEND / "src" / "utils" / "generated" / "presetEntityRegistry.ts"
 EN_JSON = Path(__file__).resolve().parent / "preset_entity_i18n_en.json"
+DEFECT_NAME_EN_JSON = Path(__file__).resolve().parent / "operation_defect_name_en.json"
 
 sys.path.insert(0, str(BACKEND_SRC))
 
@@ -88,6 +89,7 @@ def collect_manifest() -> dict[str, Any]:
 
     operation_industries: dict[str, dict[str, str]] = {}
     operations: dict[str, dict[str, str]] = {}
+    operation_defects: dict[str, dict[str, str]] = {}
     for ind in INDUSTRY_PRESETS:
         iid = str(ind["id"])
         operation_industries[iid] = {
@@ -97,6 +99,9 @@ def collect_manifest() -> dict[str, Any]:
         for op in ind.get("operations") or []:
             pk = str(op["preset_key"])
             operations[pk] = {"name": op["name"]}
+            for idx, d in enumerate(op.get("defect_presets") or []):
+                code = f"{pk}__d{idx:02d}"
+                operation_defects[code] = {"name": d["name"]}
 
     return {
         "department": departments,
@@ -107,6 +112,7 @@ def collect_manifest() -> dict[str, Any]:
         "printTemplate": print_templates,
         "operationIndustry": operation_industries,
         "operation": operations,
+        "operationDefect": operation_defects,
     }
 
 
@@ -153,7 +159,8 @@ def write_registry(manifest: dict[str, Any]) -> None:
         "  | 'messageTemplate'",
         "  | 'printTemplate'",
         "  | 'operationIndustry'",
-        "  | 'operation';",
+        "  | 'operation'",
+        "  | 'operationDefect';",
         "",
     ]
     for entity, items in manifest.items():
@@ -192,9 +199,24 @@ def write_registry(manifest: dict[str, Any]) -> None:
     OUT_REGISTRY.write_text("\n".join(lines), encoding="utf-8")
 
 
+def merge_operation_defect_en(manifest: dict[str, Any], en_data: dict[str, Any]) -> dict[str, Any]:
+    """Map flat zh->en defect names onto operationDefect codes from manifest."""
+    if not DEFECT_NAME_EN_JSON.exists():
+        return en_data
+    name_en = json.loads(DEFECT_NAME_EN_JSON.read_text(encoding="utf-8"))
+    merged = {**en_data}
+    op_defect_en: dict[str, dict[str, str]] = {}
+    for code, fields in manifest.get("operationDefect", {}).items():
+        zh_name = fields.get("name", "")
+        op_defect_en[code] = {"name": name_en.get(zh_name, zh_name)}
+    merged["operationDefect"] = op_defect_en
+    return merged
+
+
 def main() -> None:
     manifest = collect_manifest()
     en_data = json.loads(EN_JSON.read_text(encoding="utf-8")) if EN_JSON.exists() else {}
+    en_data = merge_operation_defect_en(manifest, en_data)
     write_ts_locale(OUT_LOCALE / "zh-CN.ts", "presetEntityZhCN", build_entries(manifest, "zh-CN", en_data))
     write_ts_locale(OUT_LOCALE / "en-US.ts", "presetEntityEnUS", build_entries(manifest, "en-US", en_data))
     write_registry(manifest)

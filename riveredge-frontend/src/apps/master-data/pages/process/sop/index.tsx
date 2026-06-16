@@ -410,18 +410,14 @@ const SOPPage: React.FC = () => {
       if (!code) {
         errors.push({
           row: i + 3,
-          message: t('app.master-data.operations.codeRequired', {
-            defaultValue: `${t('app.master-data.sop.codeLabel')}不能为空`,
-          }),
+          message: t('app.master-data.sop.codeRequired'),
         });
         return;
       }
       if (!name) {
         errors.push({
           row: i + 3,
-          message: t('app.master-data.routes.nameRequired', {
-            defaultValue: `${t('app.master-data.sop.nameLabel')}不能为空`,
-          }),
+          message: t('app.master-data.sop.nameRequired'),
         });
         return;
       }
@@ -446,7 +442,7 @@ const SOPPage: React.FC = () => {
       const result = await batchImport({
         items,
         importFn: async (item) => sopApi.create(item),
-        title: '正在导入SOP',
+        title: t('app.master-data.sop.importTitle'),
         concurrency: 5,
       });
       if (result.failureCount > 0) {
@@ -491,7 +487,15 @@ const SOPPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const headers = ['SOP编号', 'SOP名称', '版本', '启用状态', '创建时间'];
+      const enabledLabel = t('app.master-data.plants.enabled');
+      const disabledLabel = t('app.master-data.plants.disabled');
+      const headers = [
+        t('app.master-data.sop.codeLabel'),
+        t('app.master-data.sop.nameLabel'),
+        t('app.master-data.sop.versionLabel'),
+        t('app.master-data.sop.status'),
+        t('common.createdAt'),
+      ];
       const csvRows = [headers.join(',')];
       toExport.forEach((r) => {
         const isActive = r?.isActive ?? (r as any)?.is_active;
@@ -499,7 +503,7 @@ const SOPPage: React.FC = () => {
           r.code || '',
           r.name || '',
           r.version || '',
-          isActive ? '启用' : '禁用',
+          isActive ? enabledLabel : disabledLabel,
           r.createdAt ? new Date(r.createdAt).toLocaleString() : (r as any).created_at ? new Date((r as any).created_at).toLocaleString() : '',
         ].map((c) => {
           const s = String(c ?? '');
@@ -507,7 +511,7 @@ const SOPPage: React.FC = () => {
         }).join(','));
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `sop_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `${t('app.master-data.sop.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`);
       messageApi.success(t('common.exportSuccess', { count: toExport.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'));
@@ -545,28 +549,28 @@ const SOPPage: React.FC = () => {
   const getOperationName = (operationId?: number): string => {
     if (!operationId) return '-';
     const operation = operations.find(o => o.id === operationId);
-    return operation ? `${operation.code} - ${operation.name}` : `工序ID: ${operationId}`;
+    return operation ? `${operation.code} - ${operation.name}` : t('app.master-data.sop.operationIdFallback', { id: operationId });
   };
 
   const bomLoadModeLabel = (mode?: string | null) => {
     const m = mode || 'by_material';
-    if (m === 'by_material_group') return '按关联物料组载入 BOM';
-    if (m === 'specific_bom') return '指定 BOM';
-    return '按关联物料载入 BOM';
+    if (m === 'by_material_group') return t('app.master-data.sop.bomLoadByMaterialGroup');
+    if (m === 'specific_bom') return t('app.master-data.sop.bomLoadSpecific');
+    return t('app.master-data.sop.bomLoadByMaterial');
   };
 
   const sopDetailBasicColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
     () => [
-      { title: t('app.master-data.sop.codeLabel', { defaultValue: 'SOP编号' }), dataIndex: 'code' },
-      { title: t('app.master-data.sop.nameLabel', { defaultValue: 'SOP名称' }), dataIndex: 'name' },
+      { title: t('app.master-data.sop.codeLabel'), dataIndex: 'code' },
+      { title: t('app.master-data.sop.nameLabel'), dataIndex: 'name' },
       {
-        title: t('app.master-data.sop.operationLabel', { defaultValue: '关联工序' }),
+        title: t('app.master-data.sop.operationLabel'),
         dataIndex: 'operationId',
         render: (_: unknown, record: SOP) =>
           getOperationName(record?.operationId ?? (record as any)?.operation_id),
       },
       {
-        title: t('app.master-data.sop.versionLabel', { defaultValue: '版本号' }),
+        title: t('app.master-data.sop.versionLabel'),
         dataIndex: 'version',
         render: (_: unknown, record: SOP) => {
           const v = (record as any)?.version;
@@ -574,7 +578,7 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: t('app.master-data.sop.contentLabel', { defaultValue: '备注 / SOP内容' }),
+        title: t('app.master-data.sop.contentLabel'),
         dataIndex: 'content',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -622,7 +626,7 @@ const SOPPage: React.FC = () => {
   const sopDetailBindingColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
     () => [
       {
-        title: '绑定物料组',
+        title: t('app.master-data.sop.bindMaterialGroups'),
         dataIndex: 'materialGroupUuids',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -640,7 +644,7 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: '绑定物料',
+        title: t('app.master-data.sop.bindMaterials'),
         dataIndex: 'materialUuids',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -657,7 +661,7 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: '载入工艺路线',
+        title: t('app.master-data.sop.loadRoutes'),
         dataIndex: 'routeUuids',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -674,13 +678,13 @@ const SOPPage: React.FC = () => {
         },
       },
       {
-        title: 'BOM 载入方式',
+        title: t('app.master-data.sop.bomLoadMode'),
         dataIndex: 'bomLoadMode',
         render: (_: unknown, record: SOP) =>
           bomLoadModeLabel((record as any)?.bomLoadMode ?? (record as any)?.bom_load_mode),
       },
       {
-        title: '指定 BOM UUID',
+        title: t('app.master-data.sop.specificBomUuid'),
         dataIndex: 'specificBomUuid',
         render: (_: unknown, record: SOP) => {
           const u = (record as any)?.specificBomUuid ?? (record as any)?.specific_bom_uuid;
@@ -694,13 +698,13 @@ const SOPPage: React.FC = () => {
         },
       },
     ],
-    [materialGroups, materials, routes]
+    [materialGroups, materials, routes, t]
   );
 
   const sopDetailDigitalColumns: ProDescriptionsItemProps<SOP>[] = useMemo(
     () => [
       {
-        title: '作业指导流程（ProFlow）',
+        title: t('app.master-data.sop.flowConfigLabel'),
         dataIndex: 'flowConfig',
         span: 2,
         render: (_: unknown, record: SOP) => {
@@ -708,36 +712,36 @@ const SOPPage: React.FC = () => {
           if (fc == null || (typeof fc === 'object' && Object.keys(fc).length === 0)) return '-';
           const nodes = (fc as any)?.nodes;
           const n = Array.isArray(nodes) ? nodes.length : 0;
-          return n > 0 ? `已配置（${n} 个节点）` : '已配置';
+          return n > 0 ? t('app.master-data.sop.configuredWithNodes', { count: n }) : t('app.master-data.sop.configured');
         },
       },
       {
-        title: '报工数据采集项（Formily）',
+        title: t('app.master-data.sop.formConfigLabel'),
         dataIndex: 'formConfig',
         span: 2,
         render: (_: unknown, record: SOP) => {
           const fc = (record as any)?.formConfig ?? (record as any)?.form_config;
           if (fc == null || (typeof fc === 'object' && Object.keys(fc).length === 0)) return '-';
-          return '已配置';
+          return t('app.master-data.sop.configured');
         },
       },
       {
-        title: '附件',
+        title: t('app.master-data.sop.attachmentsLabel'),
         dataIndex: 'attachments',
         span: 2,
         render: (_: unknown, record: SOP) => {
           const att = (record as any)?.attachments;
           if (att == null) return '-';
-          if (Array.isArray(att)) return att.length === 0 ? '-' : `${att.length} 个附件`;
+          if (Array.isArray(att)) return att.length === 0 ? '-' : t('app.master-data.sop.attachmentCount', { count: att.length });
           if (typeof att === 'object') {
             const k = Object.keys(att).length;
-            return k === 0 ? '-' : `${k} 项（JSON）`;
+            return k === 0 ? '-' : t('app.master-data.sop.attachmentJsonCount', { count: k });
           }
           return String(att);
         },
       },
     ],
-    []
+    [t]
   );
 
   /**
@@ -747,32 +751,32 @@ const SOPPage: React.FC = () => {
     const customFieldColumns = generateSopCustomFieldColumns();
     return [
     {
-      title: 'SOP编号',
+      title: t('app.master-data.sop.codeLabel'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: 'SOP名称',
+      title: t('app.master-data.sop.nameLabel'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
     },
     {
       key: 'sop-operation-filter',
-      title: '关联工序',
+      title: t('app.master-data.sop.operationLabel'),
       dataIndex: 'operationId',
       hideInTable: true,
       valueType: 'select',
       fieldProps: {
-        placeholder: '筛选工序',
+        placeholder: t('app.master-data.sop.filterOperationPlaceholder'),
         options: operations.map((o) => ({ label: `${o.code} - ${o.name}`, value: o.id })),
         showSearch: true,
       },
     },
     {
-      title: '关联工序',
+      title: t('app.master-data.sop.operationLabel'),
       dataIndex: 'operationId',
       width: 200,
       hideInSearch: true,
@@ -780,7 +784,7 @@ const SOPPage: React.FC = () => {
       render: (_, record) => getOperationName(record.operationId),
     },
     {
-      title: '绑定/载入',
+      title: t('app.master-data.sop.bindingLoad'),
       dataIndex: '_binding',
       width: 140,
       hideInSearch: true,
@@ -789,73 +793,73 @@ const SOPPage: React.FC = () => {
         const mg = record.material_group_uuids ?? record.materialGroupUuids ?? [];
         const rt = record.route_uuids ?? record.routeUuids ?? [];
         const parts: string[] = [];
-        if (ma?.length) parts.push(`物料×${ma.length}`);
-        if (mg?.length) parts.push(`物料组×${mg.length}`);
-        if (rt?.length) parts.push(`路线×${rt.length}`);
+        if (ma?.length) parts.push(t('app.master-data.sop.bindingMaterialCount', { count: ma.length }));
+        if (mg?.length) parts.push(t('app.master-data.sop.bindingMaterialGroupCount', { count: mg.length }));
+        if (rt?.length) parts.push(t('app.master-data.sop.bindingRouteCount', { count: rt.length }));
         return parts.length ? parts.join(' ') : '-';
       },
     },
     {
-      title: '按物料',
+      title: t('app.master-data.sop.filterByMaterial'),
       dataIndex: 'material_uuid',
       hideInTable: true,
       valueType: 'select',
       fieldProps: {
-        placeholder: '筛选绑定该物料的SOP',
+        placeholder: t('app.master-data.sop.filterMaterialPlaceholder'),
         options: materials.map((m: any) => ({ label: `${m.mainCode ?? m.code ?? ''} - ${m.name ?? ''}`, value: m.uuid })),
         showSearch: true,
       },
     },
     {
-      title: '按物料组',
+      title: t('app.master-data.sop.filterByMaterialGroup'),
       dataIndex: 'material_group_uuid',
       hideInTable: true,
       valueType: 'select',
       fieldProps: {
-        placeholder: '筛选绑定该物料组的SOP',
+        placeholder: t('app.master-data.sop.filterMaterialGroupPlaceholder'),
         options: materialGroups.map((g: any) => ({ label: `${g.code ?? ''} - ${g.name ?? ''}`, value: g.uuid })),
         showSearch: true,
       },
     },
     {
-      title: '按工艺路线',
+      title: t('app.master-data.sop.filterByRoute'),
       dataIndex: 'route_uuid',
       hideInTable: true,
       valueType: 'select',
       fieldProps: {
-        placeholder: '筛选载入该工艺路线的SOP',
+        placeholder: t('app.master-data.sop.filterRoutePlaceholder'),
         options: routes.map((r: any) => ({ label: `${r.code ?? ''} - ${r.name ?? ''}`, value: r.uuid })),
         showSearch: true,
       },
     },
     {
-      title: '版本号',
+      title: t('app.master-data.sop.versionLabel'),
       dataIndex: 'version',
       width: 120,
       hideInSearch: true,
       sorter: true,
     },
     {
-      title: '内容',
+      title: t('app.master-data.sop.contentLabel'),
       dataIndex: 'content',
       ellipsis: true,
       hideInSearch: true,
       render: (_, record) => record.content ? `${record.content.substring(0, 50)}...` : '-',
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.sop.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_, record) => {
         const isActive = record?.isActive ?? (record as any)?.is_active;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
       },
@@ -863,7 +867,7 @@ const SOPPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -871,7 +875,7 @@ const SOPPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 280,
       fixed: 'right',
@@ -882,7 +886,7 @@ const SOPPage: React.FC = () => {
         return (
           <Space size={ROW_ACTIONS_INLINE_GAP} wrap={false} style={{ whiteSpace: 'nowrap' }}>
             <Button key="view" {...rowActionKind('read')} onClick={() => handleOpenDetail(record)}>
-              详情
+              {t('field.customField.view')}
             </Button>
             <Button
               key="design"
@@ -891,9 +895,9 @@ const SOPPage: React.FC = () => {
               icon={<HighlightOutlined />}
               {...rowActionKind('update')}
               onClick={goDesigner}
-              title="打开图形化流程设计"
+              title={t('app.master-data.sop.designFlowTitle')}
             >
-              设计
+              {t('app.master-data.sop.designBtn')}
             </Button>
             <Button
               key="edit"
@@ -903,12 +907,12 @@ const SOPPage: React.FC = () => {
               {...rowActionKind('update')}
               onClick={() => handleEdit(record)}
             >
-              编辑
+              {t('field.customField.edit')}
             </Button>
             <Popconfirm
               key="delete"
               {...rowActionKind('delete')}
-              title="确定要删除这个SOP吗？"
+              title={t('app.master-data.sop.deleteConfirm')}
               onConfirm={() => handleDelete(record)}
             >
               <Button
@@ -917,7 +921,7 @@ const SOPPage: React.FC = () => {
                 size="small"
                 icon={<DeleteOutlined />}
               >
-                删除
+                {t('field.customField.delete')}
               </Button>
             </Popconfirm>
           </Space>
@@ -979,7 +983,7 @@ const SOPPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取SOP列表失败:', error);
-            messageApi.error(error?.message || '获取SOP列表失败');
+            messageApi.error(error?.message || t('app.master-data.sop.listFailed'));
             return {
               data: [],
               success: false,
@@ -994,7 +998,7 @@ const SOPPage: React.FC = () => {
           showSizeChanger: true,
         }}
         showCreateButton
-        createButtonText={'新建SOP' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.master-data.sop.createTitle') + NEW_SHORTCUT_HINT}
         onCreate={handleSelectSingleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
@@ -1002,7 +1006,7 @@ const SOPPage: React.FC = () => {
         deleteConfirmDescription={(count) => t('common.confirmBatchDeleteContent', { count })}
         toolBarActionsAfterBatch={[
           <Button {...rowActionKind('create')} key="batch-create" type="default" onClick={() => setCreateModalVisible(true)}>
-            按工艺路线批量创建
+            {t('app.master-data.sop.batchCreateByRoute')}
           </Button>,
         ]}
         enableRowSelection
@@ -1019,7 +1023,7 @@ const SOPPage: React.FC = () => {
       />
 
       <UniDetail
-        title={t('app.master-data.sop.detailTitle', { defaultValue: 'SOP详情' })}
+        title={t('app.master-data.sop.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}
@@ -1042,8 +1046,8 @@ const SOPPage: React.FC = () => {
             />
           ) : null
         }
-        collaborationTitle={t('app.master-data.sop.detailSectionBinding', { defaultValue: '绑定与 BOM 载入' })}
-        linesTitle={t('app.master-data.sop.detailSectionDigital', { defaultValue: '数字化作业指导' })}
+        collaborationTitle={t('app.master-data.sop.detailSectionBinding')}
+        linesTitle={t('app.master-data.sop.detailSectionDigital')}
         lines={
           sopDetail ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1068,7 +1072,7 @@ const SOPPage: React.FC = () => {
       {/* 新建 SOP Modal：按工艺路线批量创建 */}
       <Modal
         className="modal-no-limit-height"
-        title="按工艺路线批量创建 SOP"
+        title={t('app.master-data.sop.batchCreateModalTitle')}
         open={createModalVisible}
         onCancel={handleCloseCreateModal}
         footer={null}
@@ -1083,7 +1087,7 @@ const SOPPage: React.FC = () => {
       </Modal>
 
       <FormModalTemplate
-        title={isEdit ? '编辑SOP' : '新建SOP'}
+        title={isEdit ? t('app.master-data.sop.editTitle') : t('app.master-data.sop.createTitle')}
         open={modalVisible}
         onClose={handleCloseModal}
         onFinish={handleSubmit}
@@ -1099,11 +1103,11 @@ const SOPPage: React.FC = () => {
             <Col span={12} style={{ minWidth: 0 }}>
               <ProFormText
                 name="code"
-                label="SOP编号"
-                placeholder="请输入SOP编号"
+                label={t('app.master-data.sop.codeLabel')}
+                placeholder={t('app.master-data.sop.codeRequired')}
                 rules={[
-                  { required: true, message: '请输入SOP编号' },
-                  { max: 100, message: 'SOP编号不能超过100个字符' },
+                  { required: true, message: t('app.master-data.sop.codeRequired') },
+                  { max: 100, message: t('app.master-data.sop.codeMaxLength') },
                 ]}
                 fieldProps={{ style: { textTransform: 'uppercase' } }}
               />
@@ -1111,19 +1115,19 @@ const SOPPage: React.FC = () => {
             <Col span={12} style={{ minWidth: 0 }}>
               <ProFormText
                 name="name"
-                label="SOP名称"
-                placeholder="请输入SOP名称"
+                label={t('app.master-data.sop.nameLabel')}
+                placeholder={t('app.master-data.sop.nameRequired')}
                 rules={[
-                  { required: true, message: '请输入SOP名称' },
-                  { max: 200, message: 'SOP名称不能超过200个字符' },
+                  { required: true, message: t('app.master-data.sop.nameRequired') },
+                  { max: 200, message: t('app.master-data.sop.nameMaxLength') },
                 ]}
               />
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
               <SafeProFormSelect
                 name="operationId"
-                label="关联工序"
-                placeholder="请选择关联工序（可选）"
+                label={t('app.master-data.sop.operationLabel')}
+                placeholder={t('app.master-data.sop.operationPlaceholder')}
                 options={operations.map(o => ({ label: `${o.code} - ${o.name}`, value: o.id }))}
                 fieldProps={{
                   loading: operationsLoading,
@@ -1137,16 +1141,16 @@ const SOPPage: React.FC = () => {
             <Col span={12} style={{ minWidth: 0 }}>
               <ProFormText
                 name="version"
-                label="版本号"
-                placeholder="请输入版本号（如：v1.0）"
-                rules={[{ max: 20, message: '版本号不能超过20个字符' }]}
+                label={t('app.master-data.sop.versionLabel')}
+                placeholder={t('app.master-data.sop.versionPlaceholder')}
+                rules={[{ max: 20, message: t('app.master-data.sop.versionMaxLength') }]}
               />
             </Col>
             <Col span={12} style={{ minWidth: 0 }}>
               <SafeProFormSelect
                 name="material_group_uuids"
-                label="绑定物料组"
-                placeholder="请选择物料组（可选，可多选）"
+                label={t('app.master-data.sop.bindMaterialGroups')}
+                placeholder={t('app.master-data.sop.bindMaterialGroupPlaceholder')}
                 mode="multiple"
                 options={materialGroups.map(g => ({ label: `${g.code} - ${g.name}`, value: g.uuid }))}
                 fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
@@ -1155,8 +1159,8 @@ const SOPPage: React.FC = () => {
             <Col span={12} style={{ minWidth: 0 }}>
               <SafeProFormSelect
                 name="material_uuids"
-                label="绑定物料"
-                placeholder="请选择物料（可选，可多选；优先于物料组）"
+                label={t('app.master-data.sop.bindMaterials')}
+                placeholder={t('app.master-data.sop.bindMaterialPlaceholder')}
                 mode="multiple"
                 options={materials.map(m => ({ label: `${(m as any).mainCode ?? (m as any).code ?? ''} - ${(m as any).name}`, value: m.uuid }))}
                 fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
@@ -1170,14 +1174,14 @@ const SOPPage: React.FC = () => {
           />
           <ProFormTextArea
             name="content"
-            label="备注"
-            placeholder="补充说明、注意事项等（流程步骤请在列表操作列点击「设计」在图形化设计页配置）"
+            label={t('app.master-data.sop.remarkLabel')}
+            placeholder={t('app.master-data.sop.remarkPlaceholder')}
             colProps={{ span: 24 }}
             fieldProps={{ rows: 3, maxLength: 5000 }}
             style={{ marginTop: 16 }}
           />
           <div style={{ marginTop: 16 }}>
-            <ProFormSwitch name="isActive" label="是否启用" />
+            <ProFormSwitch name="isActive" label={t('app.master-data.sop.isActiveLabel')} />
           </div>
         </div>
       </FormModalTemplate>

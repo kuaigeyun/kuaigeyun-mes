@@ -4,7 +4,7 @@ import {
   Button, Drawer, Form, Select, InputNumber, DatePicker, message, 
   theme, List, Divider, Alert
 } from 'antd';
-import { useRequest } from 'ahooks';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   RocketOutlined,
   AlertOutlined,
@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next';
 import { apiRequest } from '../../../../../services/api';
 import dayjs from 'dayjs';
 import { Column } from '@ant-design/charts';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
 import CoordinationPipelinePanel from './CoordinationPipelinePanel';
 import { ModuleKpiRow, ModuleShortcutGrid } from '../../../components/module-center';
 import { UniDashboard } from '../../../../../components/uni-dashboard';
@@ -57,11 +56,11 @@ const ProductionControlTower: React.FC = () => {
   const [materials, setMaterials] = useState<any[]>([]);
   const [materialsLoading, setMaterialsLoading] = useState(false);
 
-  const { data: summary, loading, refresh: refreshSummary } = useRequest(async () => {
+  const { data: summary, loading, refresh: refreshSummary } = useDashboardRequest(async () => {
     return apiRequest('/apps/kuaizhizao/production-control/summary');
-  }, dashboardRequestOptions('kz:plan-dashboard:control-tower-summary', {
+  }, 'kz:plan-dashboard:control-tower-summary', {
     pollingInterval: 30000,
-  }));
+  });
 
   const s = summary as SummaryShape | undefined;
 

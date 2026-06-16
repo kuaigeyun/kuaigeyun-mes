@@ -1,7 +1,9 @@
+@scheduling-radius: var(--ant-border-radius, var(--ant-borderRadius, 6px));
+
 .scheduling-prep-station-grid {
   margin-bottom: 16px;
-  border: 1px solid #f0f0f0;
-  border-radius: 6px;
+  border: 1px solid var(--ant-color-border-secondary, var(--river-divider-color, #f0f0f0));
+  border-radius: @scheduling-radius;
   overflow: hidden;
 
   &__head,
@@ -14,14 +16,14 @@
   }
 
   &__head {
-    background: #fafafa;
-    border-bottom: 1px solid #f0f0f0;
+    background: var(--ant-color-fill-alter, #fafafa);
+    border-bottom: 1px solid var(--ant-color-split, #f0f0f0);
     font-weight: 500;
-    color: rgba(0, 0, 0, 0.88);
+    color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
   }
 
   &__row {
-    border-bottom: 1px solid #f0f0f0;
+    border-bottom: 1px solid var(--ant-color-split, #f0f0f0);
 
     &:last-child {
       border-bottom: none;

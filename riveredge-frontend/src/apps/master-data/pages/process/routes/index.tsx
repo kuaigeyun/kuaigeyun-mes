@@ -104,13 +104,13 @@ const ProcessRoutesPage: React.FC = () => {
       { title: t('common.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
       { title: t('common.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
       {
-        title: t('app.master-data.routes.operationSequence', { defaultValue: '工序序列' }),
+        title: t('app.master-data.routes.operationSequence'),
         dataIndex: 'operation_sequence',
         span: 2,
         render: (_: unknown, record: ProcessRoute) => {
           const seq = record?.operation_sequence ?? (record as any)?.operationSequence;
           if (!seq) {
-            return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations', { defaultValue: '暂无工序' })}</span>;
+            return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations')}</span>;
           }
 
           try {
@@ -126,7 +126,7 @@ const ProcessRoutesPage: React.FC = () => {
                 operations = (seqObj.sequence as string[]).map((uuid: string) => ({
                   uuid,
                   code: uuid.substring(0, 8),
-                  name: '工序',
+                  name: t('app.master-data.routes.operation'),
                 }));
               } else {
                 const entries = Object.entries(seqObj);
@@ -149,21 +149,20 @@ const ProcessRoutesPage: React.FC = () => {
             }
 
             if (!operations || operations.length === 0) {
-              return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations', { defaultValue: '暂无工序' })}</span>;
+              return <span style={{ color: '#999' }}>{t('app.master-data.routes.noOperations')}</span>;
             }
 
             const getOpLabel = (op: any, index: number) => {
-              if (op?.code != null) return `${op.code} - ${op?.name ?? '未知工序'}`;
+              if (op?.code != null) return `${op.code} - ${op?.name ?? t('app.master-data.routes.unknownOperation')}`;
               if (op?.name != null) return op.name;
-              if (op?.operation_uuid) return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1} (${String(op.operation_uuid).slice(0, 8)}...)`;
-              if (op?.operation_id) return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1} (ID: ${op.operation_id})`;
-              return `${t('app.master-data.routes.operation', { defaultValue: '工序' })} ${index + 1}`;
+              if (op?.operation_uuid) return `${t('app.master-data.routes.operation')} ${index + 1} (${String(op.operation_uuid).slice(0, 8)}...)`;
+              if (op?.operation_id) return `${t('app.master-data.routes.operation')} ${index + 1} (ID: ${op.operation_id})`;
+              return `${t('app.master-data.routes.operation')} ${index + 1}`;
             };
             return (
               <div>
                 <div style={{ marginBottom: 8, fontWeight: 500 }}>
                   {t('app.master-data.routes.operationSequenceCount', {
-                    defaultValue: '共 {{count}} 个工序：',
                     count: operations.length,
                   })}
                 </div>
@@ -181,7 +180,6 @@ const ProcessRoutesPage: React.FC = () => {
             return (
               <span style={{ color: '#ff4d4f' }}>
                 {t('app.master-data.routes.operationSequenceParseFailed', {
-                  defaultValue: '工序数据解析失败: {{message}}',
                   message: error.message,
                 })}
               </span>
@@ -330,7 +328,7 @@ const ProcessRoutesPage: React.FC = () => {
       const result = await batchImport({
         items,
         importFn: async (item) => processRouteApi.create(item),
-        title: '正在导入工艺路线',
+        title: t('app.master-data.routes.importTitle'),
         concurrency: 5,
       });
       if (result.failureCount > 0) {
@@ -375,7 +373,15 @@ const ProcessRoutesPage: React.FC = () => {
         messageApi.warning(t('app.master-data.noExportData'));
         return;
       }
-      const headers = ['工艺路线编号', '工艺路线名称', '描述', '启用状态', '创建时间'];
+      const enabledLabel = t('app.master-data.plants.enabled');
+      const disabledLabel = t('app.master-data.plants.disabled');
+      const headers = [
+        t('field.route.code'),
+        t('field.route.name'),
+        t('field.route.description'),
+        t('app.master-data.routes.status'),
+        t('common.createdAt'),
+      ];
       const csvRows = [headers.join(',')];
       toExport.forEach((r) => {
         const isActive = r?.is_active ?? (r as any)?.isActive;
@@ -383,7 +389,7 @@ const ProcessRoutesPage: React.FC = () => {
           r.code || '',
           r.name || '',
           (r as any).description || '',
-          isActive ? '启用' : '禁用',
+          isActive ? enabledLabel : disabledLabel,
           r.created_at ? new Date(r.created_at).toLocaleString() : '',
         ].map((c) => {
           const s = String(c ?? '');
@@ -391,7 +397,7 @@ const ProcessRoutesPage: React.FC = () => {
         }).join(','));
       });
       const blob = new Blob(['\ufeff' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' });
-      downloadFile(blob, `process-routes_${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadFile(blob, `${t('app.master-data.routes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.csv`);
       messageApi.success(t('common.exportSuccess', { count: toExport.length }));
     } catch (error: any) {
       messageApi.error(error?.message || t('common.exportFailed'));
@@ -442,38 +448,38 @@ const ProcessRoutesPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
     {
-      title: '工艺路线编号',
+      title: t('field.route.code'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '工艺路线名称',
+      title: t('field.route.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
     },
     {
-      title: '描述',
+      title: t('field.route.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.routes.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_: any, record: ProcessRoute) => {
         const isActive = record?.is_active ?? (record as any)?.isActive;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
       },
@@ -481,7 +487,7 @@ const ProcessRoutesPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'created_at',
       width: 180,
       valueType: 'dateTime',
@@ -489,7 +495,7 @@ const ProcessRoutesPage: React.FC = () => {
       sorter: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 200,
       fixed: 'right',
@@ -499,16 +505,17 @@ const ProcessRoutesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个工艺路线吗？"
+          <Popconfirm key="delete" {...rowActionKind('delete')} title={t('app.master-data.routes.deleteConfirm')}
+            description={t('app.master-data.routes.deleteDescription')}
             onConfirm={() => handleDelete(record)}
           >
             <Button
@@ -517,7 +524,7 @@ const ProcessRoutesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
@@ -569,7 +576,7 @@ const ProcessRoutesPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取工艺路线列表失败:', error);
-            messageApi.error(error?.message || '获取工艺路线列表失败');
+            messageApi.error(error?.message || t('app.master-data.routes.listFailed'));
             return {
               data: [],
               success: false,
@@ -584,7 +591,7 @@ const ProcessRoutesPage: React.FC = () => {
           showSizeChanger: true,
         }}
         showCreateButton
-        createButtonText={'新建工艺路线' + NEW_SHORTCUT_HINT}
+        createButtonText={t('field.route.createTitle') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
@@ -604,7 +611,7 @@ const ProcessRoutesPage: React.FC = () => {
       />
 
       <UniDetail
-        title={t('app.master-data.routes.detailTitle', { defaultValue: '工艺路线详情' })}
+        title={t('app.master-data.routes.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}

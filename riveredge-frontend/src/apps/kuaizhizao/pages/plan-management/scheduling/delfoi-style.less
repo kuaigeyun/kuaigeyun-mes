@@ -1,6 +1,15 @@
+@scheduling-radius: var(--ant-border-radius, var(--ant-borderRadius, 6px));
+@scheduling-radius-lg: var(--ant-border-radius-lg, var(--ant-borderRadiusLG, 8px));
+@scheduling-radius-sm: var(--ant-border-radius-sm, var(--ant-borderRadiusSM, 4px));
+
 .aps-delfoi-workspace {
-  border: 1px solid #d9e1f2;
-  background: linear-gradient(180deg, #f7faff 0%, #ffffff 100%);
+  border: 1px solid var(--ant-color-border-secondary, var(--river-border-color, #d9d9d9));
+  background: linear-gradient(
+    180deg,
+    var(--ant-color-fill-quaternary, #f7faff) 0%,
+    var(--ant-color-bg-container, #ffffff) 100%
+  );
+  border-radius: @scheduling-radius;
 
   .ant-card-body {
     padding: 12px 14px;
@@ -73,7 +82,7 @@
 }
 
 .aps-section-divider {
-  border-top: 1px solid #f0f0f0;
+  border-top: 1px solid var(--ant-color-split, var(--river-divider-color, #f0f0f0));
   margin: 6px 0 8px;
 }
 
@@ -173,7 +182,7 @@
 
   .gantt-station-resource-label {
     font-weight: 600;
-    color: #262626;
+    color: var(--ant-color-text, rgba(0, 0, 0, 0.88));
   }
 
   .gantt-station-op-label {
@@ -183,7 +192,7 @@
 
   .gantt-station-op-label .gantt-task-label-primary {
     font-weight: 500;
-    color: #434343;
+    color: var(--ant-color-text-secondary, rgba(0, 0, 0, 0.65));
   }
 
   .gantt-station-op-label .gantt-task-label-code {
@@ -226,7 +235,7 @@
     pointer-events: auto;
     cursor: grab;
     box-sizing: border-box;
-    border-radius: 2px;
+    border-radius: @scheduling-radius-sm;
     border: 1px solid #91caff;
     background: #e6f4ff !important;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -375,9 +384,9 @@
 }
 
 .gantt-chart-wrapper {
-  border: 1px solid #d9d9d9;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--ant-color-border, var(--river-border-color, #d9d9d9));
+  border-radius: @scheduling-radius;
+  background: var(--ant-color-bg-container, #fff);
 }
 
 .scheduling-board-drop-zone {
@@ -385,9 +394,9 @@
 }
 
 .scheduling-board-drop-zone--active {
-  outline: 1px dashed #1677ff;
+  outline: 1px dashed var(--ant-color-primary, #1677ff);
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: @scheduling-radius;
 }
 
 .scheduling-pool-toolbar {
@@ -419,9 +428,9 @@
 .scheduling-pending-pool {
   margin-top: 8px;
   padding: 8px;
-  border: 1px solid #f0f0f0;
-  border-radius: 6px;
-  background: #fff;
+  border: 1px solid var(--ant-color-border-secondary, var(--river-divider-color, #f0f0f0));
+  border-radius: @scheduling-radius;
+  background: var(--ant-color-bg-container, #fff);
 }
 
 .scheduling-pending-pool__main {
@@ -472,10 +481,69 @@
 
 .scheduling-pending-pool__sep {
   flex-shrink: 0;
-  color: rgba(0, 0, 0, 0.25);
+  color: var(--ant-color-text-quaternary, rgba(0, 0, 0, 0.25));
   user-select: none;
 }
 
 .scheduling-pool-row--draggable {
   cursor: grab;
+}
+
+/* —— 暗黑模式：背景/边框/标签跟随 Ant Design token —— */
+[data-theme='dark'] {
+  .aps-delfoi-workspace {
+    background: var(--ant-color-bg-container, #141414);
+    border-color: var(--ant-color-border, #424242);
+  }
+
+  .gantt-chart-wrapper--visual {
+    .gantt-delfoi-segment.gantt-task-yellow,
+    .wx-bar.wx-split .wx-segment.gantt-task-yellow {
+      background: rgba(250, 173, 20, 0.28) !important;
+      border-color: rgba(250, 173, 20, 0.72) !important;
+    }
+
+    .gantt-delfoi-segment.gantt-task-yellow .gantt-task-label-primary,
+    .gantt-delfoi-segment.gantt-task-yellow .gantt-task-label-code {
+      color: #ffd666;
+    }
+
+    .gantt-delfoi-segment.gantt-task-gray,
+    .wx-bar.wx-split .wx-segment.gantt-task-gray {
+      background: rgba(255, 255, 255, 0.08) !important;
+      border-color: rgba(255, 255, 255, 0.22) !important;
+    }
+
+    .gantt-delfoi-segment.gantt-task-gray .gantt-task-label-primary {
+      color: var(--ant-color-text-secondary, rgba(255, 255, 255, 0.65));
+    }
+
+    .gantt-delfoi-segment,
+    .wx-bar.wx-split .wx-segment {
+      border-color: rgba(145, 202, 255, 0.55);
+      background: rgba(22, 119, 255, 0.18) !important;
+    }
+
+    .gantt-delfoi-segment .gantt-task-label-primary,
+    .wx-bar.wx-split .wx-segment .gantt-task-label-primary {
+      color: #91caff;
+    }
+
+    .gantt-delfoi-segment .gantt-task-label-code,
+    .wx-bar.wx-split .wx-segment .gantt-task-label-code {
+      color: #69b1ff;
+    }
+  }
+
+  .scheduling-row-bottleneck {
+    background: rgba(250, 140, 22, 0.12) !important;
+  }
+
+  .scheduling-row-material-risk {
+    background: rgba(250, 173, 20, 0.1) !important;
+  }
+
+  .scheduling-pool-row--has-issues > td {
+    background: rgba(250, 173, 20, 0.08);
+  }
 }

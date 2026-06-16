@@ -16,14 +16,13 @@ import {
 } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useRequest } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import 'dayjs/locale/zh-cn';
 import 'dayjs/locale/en';
 import { qualityApi, type QualityAnomalyItem } from '../../../services/quality-execution';
 import { mesDashboardService } from '../../../services/dashboard';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -77,29 +76,31 @@ const InspectionCenter: React.FC = () => {
     i18n.language === 'en-US' || i18n.language?.startsWith('en') ? 'en' : 'zh-cn';
   dayjs.locale(dayjsLocale);
 
-  const { data: summary, loading: summaryLoading } = useRequest(
+  const { data: summary, loading: summaryLoading } = useDashboardRequest(
     () => qualityApi.qualityStatistics.getInspectionCenterSummary(),
-    dashboardRequestOptions('kz:quality-dashboard:summary', {
+    'kz:quality-dashboard:summary',
+    {
       onError: (e: any) =>
         message.error(
           e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadSummaryFailed'),
         ),
-    }),
+    },
   );
 
-  const { data: anomaliesResp } = useRequest(
+  const { data: anomaliesResp } = useDashboardRequest(
     () => qualityApi.qualityStatistics.getAnomalies({ limit: 12 }),
-    dashboardRequestOptions('kz:quality-dashboard:anomalies', {
+    'kz:quality-dashboard:anomalies',
+    {
       onError: (e: any) =>
         message.error(
           e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadAnomaliesFailed'),
         ),
-    }),
+    },
   );
 
-  const { data: todosData, loading: todosLoading } = useRequest(() =>
-    mesDashboardService.getTodosByModule('quality', 8),
-    dashboardRequestOptions('kz:quality-dashboard:todos'),
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('quality', 8),
+    'kz:quality-dashboard:todos',
   );
 
   const anomalies = anomaliesResp?.anomalies ?? [];
@@ -111,14 +112,15 @@ const InspectionCenter: React.FC = () => {
     (summary?.pending_finished || 0) +
     (summary?.pending_oqc || 0);
 
-  const { data: stageToggles } = useRequest(
+  const { data: stageToggles } = useDashboardRequest(
     () => qualityApi.stageToggles.get(),
-    dashboardRequestOptions('kz:quality-dashboard:stage-toggles', {
+    'kz:quality-dashboard:stage-toggles',
+    {
       onError: (e: any) =>
         message.error(
           e?.message || t('app.kuaizhizao.quality.inspectionCenter.messages.loadStageTogglesFailed'),
         ),
-    }),
+    },
   );
 
   const stageOn = (enabled?: boolean) =>

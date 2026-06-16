@@ -4,7 +4,7 @@
  * 提供属性定义的 CRUD、预设加载等。
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { rowActionKind } from '../../../../../components/uni-action';
 import { useTranslation } from 'react-i18next';
 import { App, Tag, Space, Button, Popconfirm, Modal, Table } from 'antd';
@@ -36,93 +36,100 @@ const VariantAttributesPage: React.FC = () => {
   const [selectedPresetNames, setSelectedPresetNames] = useState<string[]>([]);
   const [presetConfirmLoading, setPresetConfirmLoading] = useState(false);
 
-  /**
-   * 获取属性类型选项
-   */
-  const attributeTypeOptions = [
-    { label: '枚举', value: 'enum' },
-    { label: '文本', value: 'text' },
-    { label: '数值', value: 'number' },
-    { label: '日期', value: 'date' },
-    { label: '布尔', value: 'boolean' },
-  ];
+  const attributeTypeOptions = useMemo(
+    () => [
+      { label: t('app.master-data.variantAttributes.typeEnum'), value: 'enum' },
+      { label: t('app.master-data.variantAttributes.typeText'), value: 'text' },
+      { label: t('app.master-data.variantAttributes.typeNumber'), value: 'number' },
+      { label: t('app.master-data.variantAttributes.typeDate'), value: 'date' },
+      { label: t('app.master-data.variantAttributes.typeBoolean'), value: 'boolean' },
+    ],
+    [t],
+  );
+
+  const attributeTypeLabels = useMemo(
+    () => ({
+      enum: { text: t('app.master-data.variantAttributes.typeEnum'), color: 'blue' },
+      text: { text: t('app.master-data.variantAttributes.typeText'), color: 'green' },
+      number: { text: t('app.master-data.variantAttributes.typeNumber'), color: 'orange' },
+      date: { text: t('app.master-data.variantAttributes.typeDate'), color: 'purple' },
+      boolean: { text: t('app.master-data.variantAttributes.typeBoolean'), color: 'red' },
+    }),
+    [t],
+  );
 
   /**
    * 表格列定义
    */
-  const columns: ProColumns<VariantAttributeDefinition>[] = [
+  const columns: ProColumns<VariantAttributeDefinition>[] = useMemo(() => [
     {
-      title: '属性名称',
+      title: t('app.master-data.variantAttributes.attributeName'),
       dataIndex: 'attribute_name',
       width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '显示名称',
+      title: t('app.master-data.variantAttributes.displayName'),
       dataIndex: 'display_name',
       width: 150,
       sorter: true,
     },
     {
-      title: '属性类型',
+      title: t('app.master-data.variantAttributes.attributeType'),
       dataIndex: 'attribute_type',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        enum: { text: '枚举', status: 'Default' },
-        text: { text: '文本', status: 'Default' },
-        number: { text: '数值', status: 'Default' },
-        date: { text: '日期', status: 'Default' },
-        boolean: { text: '布尔', status: 'Default' },
+        enum: { text: t('app.master-data.variantAttributes.typeEnum'), status: 'Default' },
+        text: { text: t('app.master-data.variantAttributes.typeText'), status: 'Default' },
+        number: { text: t('app.master-data.variantAttributes.typeNumber'), status: 'Default' },
+        date: { text: t('app.master-data.variantAttributes.typeDate'), status: 'Default' },
+        boolean: { text: t('app.master-data.variantAttributes.typeBoolean'), status: 'Default' },
       },
       render: (_, record) => {
-        const typeMap: Record<string, { text: string; color: string }> = {
-          enum: { text: '枚举', color: 'blue' },
-          text: { text: '文本', color: 'green' },
-          number: { text: '数值', color: 'orange' },
-          date: { text: '日期', color: 'purple' },
-          boolean: { text: '布尔', color: 'red' },
+        const type = attributeTypeLabels[record.attribute_type] || {
+          text: record.attribute_type,
+          color: 'default',
         };
-        const type = typeMap[record.attribute_type] || { text: record.attribute_type, color: 'default' };
         return <Tag color={type.color}>{type.text}</Tag>;
       },
     },
     {
-      title: '允许多选',
+      title: t('app.master-data.variantAttributes.allowMultiple'),
       dataIndex: 'allow_multiple',
       width: 90,
       hideInSearch: true,
       render: (_, record) =>
         record.attribute_type === 'enum' ? (
           <Tag color={record.allow_multiple ? 'blue' : 'default'}>
-            {record.allow_multiple ? '是' : '否'}
+            {record.allow_multiple ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
           </Tag>
         ) : '-',
     },
     {
-      title: '是否必填',
+      title: t('app.master-data.variantAttributes.isRequired'),
       dataIndex: 'is_required',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '是', status: 'Error' },
-        false: { text: '否', status: 'Success' },
+        true: { text: t('app.master-data.bom.yes'), status: 'Error' },
+        false: { text: t('app.master-data.bom.no'), status: 'Success' },
       },
       render: (_, record) => (
         <Tag color={record.is_required ? 'red' : 'green'}>
-          {record.is_required ? '是' : '否'}
+          {record.is_required ? t('app.master-data.bom.yes') : t('app.master-data.bom.no')}
         </Tag>
       ),
     },
     {
-      title: '显示顺序',
+      title: t('app.master-data.variantAttributes.displayOrder'),
       dataIndex: 'display_order',
       width: 100,
       sorter: true,
     },
     {
-      title: '枚举值',
+      title: t('app.master-data.variantAttributes.enumValues'),
       dataIndex: 'enum_values',
       width: 200,
       hideInTable: false,
@@ -140,33 +147,33 @@ const VariantAttributesPage: React.FC = () => {
       },
     },
     {
-      title: '状态',
+      title: t('app.master-data.variantAttributes.status'),
       dataIndex: 'is_active',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_, record) => (
         <Tag color={record.is_active ? 'success' : 'default'}>
-          {record.is_active ? '启用' : '禁用'}
+          {record.is_active ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
         </Tag>
       ),
     },
     {
-      title: '版本',
+      title: t('app.master-data.variantAttributes.version'),
       dataIndex: 'version',
       width: 80,
     },
     {
-      title: '备注',
+      title: t('app.master-data.variantAttributes.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 160,
       fixed: 'right',
@@ -177,7 +184,7 @@ const VariantAttributesPage: React.FC = () => {
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
           <Popconfirm key="delete" {...rowActionKind('delete')} title={t('common.confirmDelete')}
             onConfirm={() => handleDelete(record.uuid)}
@@ -190,13 +197,13 @@ const VariantAttributesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
       ),
     },
-  ];
+  ], [t, attributeTypeLabels]);
 
   /**
    * 处理新建
@@ -338,7 +345,7 @@ const VariantAttributesPage: React.FC = () => {
       <ListPageTemplate>
         <UniTable<VariantAttributeDefinition>
           columnPersistenceId="apps.master-data.pages.materials.variant-attributes"
-          headerTitle="属性定义"
+          headerTitle={t('app.master-data.menu.materials.variant-attributes')}
           actionRef={actionRef}
           columns={columns}
           showAdvancedSearch={true}
@@ -370,7 +377,7 @@ const VariantAttributesPage: React.FC = () => {
                 total,
               };
             } catch (error: any) {
-              messageApi.error(error.message || '加载失败');
+              messageApi.error(error.message || t('app.master-data.variantAttributes.listFailed'));
               return {
                 data: [],
                 success: false,
@@ -380,7 +387,7 @@ const VariantAttributesPage: React.FC = () => {
           }}
           rowKey="uuid"
           showCreateButton
-          createButtonText={'新建属性定义' + NEW_SHORTCUT_HINT}
+          createButtonText={t('app.master-data.variantAttributes.createTitle') + NEW_SHORTCUT_HINT}
           onCreate={handleCreate}
           toolBarActionsAfterCreate={[
             trialRunMode ? (
@@ -421,7 +428,7 @@ const VariantAttributesPage: React.FC = () => {
 
       {/* 创建/编辑 Modal */}
       <FormModalTemplate
-        title={isEdit ? '编辑属性定义' : '新建属性定义'}
+        title={isEdit ? t('app.master-data.variantAttributes.editTitle') : t('app.master-data.variantAttributes.createTitle')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         width={MODAL_CONFIG.STANDARD_WIDTH}
@@ -432,20 +439,20 @@ const VariantAttributesPage: React.FC = () => {
       >
         <ProFormText
           name="attribute_name"
-          label="属性名称"
-          placeholder="请输入属性名称（如：颜色、尺寸）"
+          label={t('app.master-data.variantAttributes.attributeName')}
+          placeholder={t('app.master-data.variantAttributes.attributeNamePlaceholder')}
           rules={[
-            { required: true, message: '请输入属性名称' },
-            { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: '属性名称只能包含字母、数字、下划线和中文' },
+            { required: true, message: t('app.master-data.variantAttributes.attributeNameRequired') },
+            { pattern: /^[a-zA-Z0-9_\u4e00-\u9fa5]+$/, message: t('app.master-data.variantAttributes.attributeNamePattern') },
           ]}
           colProps={{ span: 12 }}
         />
         <ProFormSelect
           name="attribute_type"
-          label="属性类型"
-          placeholder="请选择属性类型"
+          label={t('app.master-data.variantAttributes.attributeType')}
+          placeholder={t('app.master-data.variantAttributes.attributeTypePlaceholder')}
           options={attributeTypeOptions}
-          rules={[{ required: true, message: '请选择属性类型' }]}
+          rules={[{ required: true, message: t('app.master-data.variantAttributes.attributeTypeRequired') }]}
           fieldProps={{
             onChange: (value) => {
               if (value !== 'enum') {
@@ -457,14 +464,14 @@ const VariantAttributesPage: React.FC = () => {
         />
         <ProFormText
           name="display_name"
-          label="显示名称"
-          placeholder="请输入显示名称（如：产品颜色）"
-          rules={[{ required: true, message: '请输入显示名称' }]}
+          label={t('app.master-data.variantAttributes.displayName')}
+          placeholder={t('app.master-data.variantAttributes.displayNamePlaceholder')}
+          rules={[{ required: true, message: t('app.master-data.variantAttributes.displayNameRequired') }]}
           colProps={{ span: 12 }}
         />
         <ProFormDigit
           name="display_order"
-          label="显示顺序"
+          label={t('app.master-data.variantAttributes.displayOrder')}
           initialValue={0}
           min={0}
           colProps={{ span: 12 }}
@@ -480,17 +487,17 @@ const VariantAttributesPage: React.FC = () => {
                 <>
                   <ProFormText
                     name="enum_values"
-                    label="枚举值"
-                    placeholder="请输入枚举值，多个值用逗号分隔（如：红色,蓝色,绿色）"
-                    rules={[{ required: true, message: '请输入枚举值' }]}
-                    extra="多个值用逗号分隔，中英文逗号均可"
+                    label={t('app.master-data.variantAttributes.enumValues')}
+                    placeholder={t('app.master-data.variantAttributes.enumValuesPlaceholder')}
+                    rules={[{ required: true, message: t('app.master-data.variantAttributes.enumValuesInputRequired') }]}
+                    extra={t('app.master-data.variantAttributes.enumValuesExtra')}
                     colProps={{ span: 24 }}
                   />
                   <ProFormSwitch
                     name="allow_multiple"
-                    label="允许多选"
+                    label={t('app.master-data.variantAttributes.allowMultiple')}
                     initialValue={false}
-                    extra="物料启用属性管理时，该属性是否支持选择多个枚举值"
+                    extra={t('app.master-data.variantAttributes.allowMultipleExtra')}
                     colProps={{ span: 12 }}
                   />
                 </>
@@ -501,19 +508,19 @@ const VariantAttributesPage: React.FC = () => {
         </ProForm.Item>
         <ProFormTextArea
           name="description"
-          label="备注"
-          placeholder="请输入备注"
+          label={t('app.master-data.variantAttributes.description')}
+          placeholder={t('app.master-data.variantAttributes.descriptionPlaceholder')}
           colProps={{ span: 24 }}
         />
         <ProFormSwitch
           name="is_required"
-          label="是否必填"
+          label={t('app.master-data.variantAttributes.isRequired')}
           initialValue={false}
           colProps={{ span: 12 }}
         />
         <ProFormSwitch
           name="is_active"
-          label="是否启用"
+          label={t('app.master-data.variantAttributes.isActiveLabel')}
           initialValue={true}
           colProps={{ span: 12 }}
         />

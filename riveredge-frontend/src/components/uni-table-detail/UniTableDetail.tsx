@@ -244,14 +244,15 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
             (Boolean(onBatchSelect) && addPlacement === 'footer');
 
           // 计算列总宽度（用于横向滚动）
-          const totalWidth = columns.reduce((s, c) => s + (Number(c.width) || 0), 0) + (hideOperation ? 0 : 70);
+          const totalWidth = columns.reduce((s, c) => s + (Number(c.width) || 0), 0) + (hideOperation ? 0 : 48);
 
           const finalColumns: ColumnsType<any> = [...columns];
           if (!hideOperation && !disabledRemove) {
             finalColumns.push({
               title: t('common.actions'),
               key: 'operation',
-              width: 70,
+              width: 48,
+              align: 'center',
               fixed: 'right',
               onHeaderCell: () => ({ className: 'uni-detail-fixed-op-header' }),
               render: (_, __, index) => {
@@ -263,10 +264,9 @@ export const UniTableDetail: React.FC<UniTableDetailProps> = ({
                     size="small"
                     icon={<DeleteOutlined />}
                     disabled={deleteDisabled}
+                    aria-label={t('common.delete')}
                     onClick={() => remove(index)}
-                  >
-                    {t('common.delete')}
-                  </Button>
+                  />
                 );
               },
             });

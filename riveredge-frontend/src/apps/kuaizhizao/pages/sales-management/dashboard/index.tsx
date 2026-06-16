@@ -3,7 +3,6 @@ import {
   Row, Col, Progress, Typography, Tag, Spin,
   Segmented, Button, Empty, Tooltip, Badge, theme
 } from 'antd';
-import { useRequest } from 'ahooks';
 import { ProCard } from '@ant-design/pro-components';
 import { 
   FileTextOutlined, 
@@ -37,7 +36,7 @@ import { customerFollowUpApi } from '../../../services/customer-follow-up';
 import { getSalesTop10 } from '../../../../../services/dashboard';
 import { getSalesReport } from '../../../services/reports';
 import salesContractApi from '../../../services/sales-contract';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_ORDER_FIELD_RESOURCE as SO } from '../../../constants/fieldPermissionResources';
 import { useGlobalStore } from '../../../../../stores/globalStore';
@@ -76,6 +75,7 @@ const SalesDashboard: React.FC = () => {
   const { t } = useTranslation();
   const { token } = theme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isDark = useThemeStore((s) => s.resolved.isDark);
   const isPlain = isModuleDashboardPlain(themeStyle);
   const currentUser = useGlobalStore((s) => s.currentUser);
   const fieldMasks = useUserFieldMasks();
@@ -110,65 +110,65 @@ const SalesDashboard: React.FC = () => {
   );
   
   // 1. 获取汇总数据
-  const { data: summary, loading: summaryLoading } = useRequest(
+  const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getSalesSummary,
-    dashboardRequestOptions('kz:sales-dashboard:summary'),
+    'kz:sales-dashboard:summary',
   );
   
   // 2. 获取待交付订单（多取一些，前端筛选后滚动展示）
-  const { data: recentOrdersData, loading: ordersLoading } = useRequest(async () => {
+  const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(async () => {
     return listSalesOrders({ limit: 30, order_by: 'delivery_date' });
-  }, dashboardRequestOptions('kz:sales-dashboard:recent-orders'));
+  }, 'kz:sales-dashboard:recent-orders');
   
   // 3. 获取最近跟进记录
-  const { data: followUpsData, loading: followUpsLoading } = useRequest(async () => {
+  const { data: followUpsData, loading: followUpsLoading } = useDashboardRequest(async () => {
     return customerFollowUpApi.list({ limit: 8 });
-  }, dashboardRequestOptions('kz:sales-dashboard:follow-ups'));
+  }, 'kz:sales-dashboard:follow-ups');
 
   // 4. 获取热销产品排行
-  const { data: topProductsData, loading: topProductsLoading } = useRequest(async () => {
+  const { data: topProductsData, loading: topProductsLoading } = useDashboardRequest(async () => {
     try {
       return await getSalesTop10();
     } catch {
       return [];
     }
-  }, dashboardRequestOptions('kz:sales-dashboard:top-products'));
+  }, 'kz:sales-dashboard:top-products');
 
   // 5. 获取月度趋势
-  const { data: salesTrendRaw, loading: trendLoading } = useRequest(async () => {
+  const { data: salesTrendRaw, loading: trendLoading } = useDashboardRequest(async () => {
     try {
       const res = await getSalesReport({ report_type: 'trend' });
       return res.data || [];
     } catch {
       return [];
     }
-  }, dashboardRequestOptions('kz:sales-dashboard:trend'));
+  }, 'kz:sales-dashboard:trend');
 
   // 6. 获取待跟进提醒
-  const { data: pendingTasksData, loading: pendingTasksLoading } = useRequest(async () => {
+  const { data: pendingTasksData, loading: pendingTasksLoading } = useDashboardRequest(async () => {
     try {
       const res = await customerFollowUpApi.list({ pending_only: true, limit: 5 });
       return res?.items || [];
     } catch {
       return [];
     }
-  }, dashboardRequestOptions('kz:sales-dashboard:pending-tasks'));
+  }, 'kz:sales-dashboard:pending-tasks');
 
-  const { data: contractAlerts = [], loading: contractAlertsLoading } = useRequest(async () => {
+  const { data: contractAlerts = [], loading: contractAlertsLoading } = useDashboardRequest(async () => {
     try {
       return await salesContractApi.listAlerts();
     } catch {
       return [];
     }
-  }, dashboardRequestOptions('kz:sales-dashboard:contract-alerts'));
+  }, 'kz:sales-dashboard:contract-alerts');
 
-  const { data: frameworkContracts = [], loading: frameworkLoading } = useRequest(async () => {
+  const { data: frameworkContracts = [], loading: frameworkLoading } = useDashboardRequest(async () => {
     try {
       return await salesContractApi.executionSummary();
     } catch {
       return [];
     }
-  }, dashboardRequestOptions('kz:sales-dashboard:framework-contracts'));
+  }, 'kz:sales-dashboard:framework-contracts');
 
   const recentOrders = recentOrdersData?.data || [];
   const pendingDeliveryOrders = useMemo(
@@ -333,7 +333,7 @@ const SalesDashboard: React.FC = () => {
 
   // 渲染排行徽章
   const renderRankBadge = (rank: number) => {
-    const style = resolveModuleRankBadgeStyle(rank, isPlain, token);
+    const style = resolveModuleRankBadgeStyle(rank, isPlain, token, isDark);
     return (
       <span style={{
         width: 22,

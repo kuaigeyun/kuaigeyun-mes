@@ -170,3 +170,11 @@ export function resolvePresetOperationNameByName(
   if (!presetKey) return raw;
   return resolvePresetOperationNameByKey(presetKey, raw, t);
 }
+
+export function resolvePresetOperationDefectName(
+  code: string | undefined,
+  fallback: string,
+  t: TFunction,
+): string {
+  return resolvePresetField('operationDefect', code, 'name', fallback, t);
+}

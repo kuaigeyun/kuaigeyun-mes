@@ -1,6 +1,5 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useRequest } from 'ahooks';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -14,7 +13,7 @@ import {
 import { managementReportService } from '../../../services/management-report';
 import { agingService } from '../../../services/statistics/aging';
 import { apiRequest } from '../../../../../services/api';
-import { dashboardRequestOptions } from '../../../../kuaizhizao/utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../../kuaizhizao/utils/dashboardRequestOptions';
 import FinanceAgingPanel from '../../../components/FinanceAgingPanel';
 import {
   ModuleCenterLayout,
@@ -30,13 +29,13 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../../kuaizhizao/com
 const FinanceCenterDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: financeSummary, loading: summaryLoading } = useRequest(
+  const { data: financeSummary, loading: summaryLoading } = useDashboardRequest(
     () => apiRequest<Record<string, number>>('/apps/kuaicaiwu/management-report/finance-summary', { method: 'GET' }),
-    dashboardRequestOptions('kz:finance-dashboard:summary'),
+    'kz:finance-dashboard:summary',
   );
-  const { data: kpis, loading: kpiLoading } = useRequest(
+  const { data: kpis, loading: kpiLoading } = useDashboardRequest(
     () => managementReportService.getKPIs(30),
-    dashboardRequestOptions('kz:finance-dashboard:kpis'),
+    'kz:finance-dashboard:kpis',
   );
 
   const { data: receivableAging, isLoading: loadingArAging } = useQuery({

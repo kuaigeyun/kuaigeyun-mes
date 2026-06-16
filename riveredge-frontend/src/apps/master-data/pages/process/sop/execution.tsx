@@ -230,7 +230,7 @@ const SOPExecutionPage: React.FC = () => {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
         <Spin size="large" />
-        <div style={{ marginTop: 16 }}>加载中...</div>
+        <div style={{ marginTop: 16 }}>{t('app.master-data.sop.executionLoading')}</div>
       </div>
     );
   }
@@ -238,7 +238,7 @@ const SOPExecutionPage: React.FC = () => {
   if (!execution || !sop) {
     return (
       <div style={{ padding: 24, textAlign: 'center' }}>
-        <Text type="danger">执行实例或SOP数据不存在</Text>
+        <Text type="danger">{t('app.master-data.sop.executionNotFound')}</Text>
       </div>
     );
   }
@@ -271,19 +271,19 @@ const SOPExecutionPage: React.FC = () => {
                 style={{ marginLeft: 8 }}
               >
                 {execution.status === 'completed'
-                  ? '已完成'
+                  ? t('app.master-data.sop.executionStatusCompleted')
                   : execution.status === 'running'
-                  ? '执行中'
+                  ? t('app.master-data.sop.executionStatusRunning')
                   : execution.status === 'cancelled'
-                  ? '已取消'
+                  ? t('app.master-data.sop.executionStatusCancelled')
                   : execution.status === 'paused'
-                  ? '已暂停'
-                  : '待开始'}
+                  ? t('app.master-data.sop.executionStatusPaused')
+                  : t('app.master-data.sop.executionStatusPending')}
               </Tag>
             </div>
           </div>
           <Button icon={<CloseOutlined />} onClick={handleBack}>
-            返回
+            {t('app.master-data.bom.back')}
           </Button>
         </Space>
       </Card>
@@ -291,7 +291,7 @@ const SOPExecutionPage: React.FC = () => {
       <div style={{ display: 'flex', gap: 16 }}>
         {/* 左侧：流程步骤 */}
         <Card
-          title="流程步骤"
+          title={t('app.master-data.sop.executionFlowSteps')}
           style={{ width: 300, flexShrink: 0 }}
         >
           <Steps
@@ -311,8 +311,10 @@ const SOPExecutionPage: React.FC = () => {
         <Card
           title={
             currentNode
-              ? `${currentNode.data?.label || currentNode.id} - 表单填写`
-              : '等待开始'
+              ? t('app.master-data.sop.executionFormFill', {
+                  label: currentNode.data?.label || currentNode.id,
+                })
+              : t('app.master-data.sop.executionWaitingStart')
           }
           style={{ flex: 1 }}
           extra={
@@ -323,7 +325,7 @@ const SOPExecutionPage: React.FC = () => {
                 loading={submitting}
                 onClick={handleCompleteNode}
               >
-                完成当前节点
+                {t('app.master-data.sop.executionCompleteNode')}
               </Button>
             ) : null
           }
@@ -332,14 +334,18 @@ const SOPExecutionPage: React.FC = () => {
             <div style={{ textAlign: 'center', padding: 48 }}>
               <CheckOutlined style={{ fontSize: 48, color: '#52c41a' }} />
               <div style={{ marginTop: 16, fontSize: 16, fontWeight: 'bold' }}>
-                流程执行完成
+                {t('app.master-data.sop.executionFlowCompleted')}
               </div>
               <div style={{ marginTop: 8, color: '#666' }}>
-                开始时间: {new Date(execution.startedAt).toLocaleString()}
+                {t('app.master-data.sop.executionStartedAt', {
+                  time: new Date(execution.startedAt).toLocaleString(),
+                })}
               </div>
               {execution.completedAt && (
                 <div style={{ marginTop: 4, color: '#666' }}>
-                  完成时间: {new Date(execution.completedAt).toLocaleString()}
+                  {t('app.master-data.sop.executionCompletedAt', {
+                    time: new Date(execution.completedAt).toLocaleString(),
+                  })}
                 </div>
               )}
             </div>
@@ -351,17 +357,19 @@ const SOPExecutionPage: React.FC = () => {
             </FormProvider>
           ) : execution.status === 'running' && currentNode ? (
             <div style={{ textAlign: 'center', padding: 48, color: '#666' }}>
-              当前节点: {currentNode.data?.label || currentNode.id}
+              {t('app.master-data.sop.executionCurrentNode', {
+                label: currentNode.data?.label || currentNode.id,
+              })}
               {currentNode.data?.description && (
                 <div style={{ marginTop: 8 }}>{currentNode.data.description}</div>
               )}
               <div style={{ marginTop: 16, color: '#999' }}>
-                该节点没有配置表单，可以直接完成
+                {t('app.master-data.sop.executionNoFormHint')}
               </div>
             </div>
           ) : (
             <div style={{ textAlign: 'center', padding: 48, color: '#666' }}>
-              等待流程开始...
+              {t('app.master-data.sop.executionWaitingFlow')}
             </div>
           )}
         </Card>

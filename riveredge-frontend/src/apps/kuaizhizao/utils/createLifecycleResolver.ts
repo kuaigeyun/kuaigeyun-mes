@@ -7,6 +7,7 @@ import type { LifecycleResult } from '../../../components/uni-lifecycle/types';
 import type { BackendLifecycle } from './backendLifecycle';
 import { parseBackendLifecycle } from './backendLifecycle';
 import { applyLifecycleI18n, type LifecycleTranslateFn } from './lifecycleI18n';
+import { getGlobalLifecycleStageLabelKeys } from '../../../utils/globalLifecycleI18n';
 
 export interface LifecycleStageDef {
   key: string;
@@ -108,8 +109,13 @@ export function createLifecycleResolver(config: LifecycleResolverConfig) {
     } else {
       result = parseBackendLifecycle(buildFallbackFromConfig(record as Record<string, unknown>, config));
     }
-    if (t && Object.keys(stageLabelKeys).length > 0) {
-      result = applyLifecycleI18n(result, t, stageLabelKeys, config.nextStepSuggestionKeys);
+    if (t) {
+      result = applyLifecycleI18n(
+        result,
+        t,
+        { ...getGlobalLifecycleStageLabelKeys(), ...stageLabelKeys },
+        config.nextStepSuggestionKeys,
+      );
     }
     return result;
   };

@@ -681,11 +681,12 @@ def preset_catalog_for_api() -> Dict[str, Any]:
                         "sortOrder": op["sort_order"],
                         "defectPresets": [
                             {
+                                "code": f"{op['preset_key']}__d{idx:02d}",
                                 "name": d["name"],
                                 **({"category": d["category"]} if d.get("category") else {}),
                                 **({"description": d["description"]} if d.get("description") else {}),
                             }
-                            for d in op["defect_presets"]
+                            for idx, d in enumerate(op["defect_presets"])
                         ],
                     }
                     for op in ind["operations"]

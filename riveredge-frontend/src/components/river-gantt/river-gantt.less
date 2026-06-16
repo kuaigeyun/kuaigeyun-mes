@@ -4,6 +4,9 @@
  * 此处仅补充自建 DOM 的布局/定位/手柄/刻度/网格等结构样式。
  */
 
+@river-gantt-radius: var(--ant-border-radius, var(--ant-borderRadius, 6px));
+@river-gantt-radius-sm: var(--ant-border-radius-sm, var(--ant-borderRadiusSM, 4px));
+
 .river-gantt,
 .river-gantt * {
   box-sizing: border-box;
@@ -14,10 +17,10 @@
   flex-direction: column;
   width: 100%;
   font-size: 12px;
-  color: #1f1f1f;
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 4px;
+  color: var(--ant-color-text, #1f1f1f);
+  background: var(--ant-color-bg-container, #fff);
+  border: 1px solid var(--ant-color-border-secondary, #f0f0f0);
+  border-radius: @river-gantt-radius;
   overflow: hidden;
   user-select: none;
 }
@@ -25,15 +28,15 @@
 .river-gantt__header-row {
   display: flex;
   flex: 0 0 auto;
-  border-bottom: 1px solid #f0f0f0;
+  border-bottom: 1px solid var(--ant-color-split, #f0f0f0);
 }
 
 .river-gantt__corner {
   flex: 0 0 auto;
   display: flex;
   align-items: stretch;
-  border-right: 1px solid #f0f0f0;
-  background: #fafafa;
+  border-right: 1px solid var(--ant-color-split, #f0f0f0);
+  background: var(--ant-color-fill-alter, #fafafa);
 }
 
 .river-gantt__corner-cell {
@@ -41,7 +44,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  color: #595959;
+  color: var(--ant-color-text-secondary, #595959);
   box-sizing: border-box;
   padding: 0 4px;
 }
@@ -49,7 +52,7 @@
 .river-gantt__scale-scroll {
   flex: 1 1 auto;
   overflow: hidden;
-  background: #fafafa;
+  background: var(--ant-color-fill-alter, #fafafa);
 }
 
 .river-gantt-scale {
@@ -58,7 +61,7 @@
 
 .river-gantt-scale__row {
   position: relative;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--ant-color-split, #f5f5f5);
 }
 
 .river-gantt-scale__row:last-child {
@@ -73,9 +76,9 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border-right: 1px solid #f5f5f5;
+  border-right: 1px solid var(--ant-color-split, #f5f5f5);
   font-size: 11px;
-  color: #8c8c8c;
+  color: var(--ant-color-text-tertiary, #8c8c8c);
   white-space: nowrap;
   overflow: hidden;
 }
@@ -89,7 +92,7 @@
 .river-gantt__grid-scroll {
   flex: 0 0 auto;
   overflow: hidden;
-  border-right: 1px solid #f0f0f0;
+  border-right: 1px solid var(--ant-color-split, #f0f0f0);
 }
 
 .river-gantt-grid__body {
@@ -100,7 +103,7 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--ant-color-split, #f5f5f5);
 }
 
 .river-gantt-grid__cell {
@@ -132,7 +135,7 @@
   justify-content: center;
   width: 14px;
   margin-right: 2px;
-  color: #8c8c8c;
+  color: var(--ant-color-text-tertiary, #8c8c8c);
   cursor: pointer;
 }
 
@@ -157,7 +160,7 @@
   position: absolute;
   left: 0;
   right: 0;
-  border-bottom: 1px solid #f5f5f5;
+  border-bottom: 1px solid var(--ant-color-split, #f5f5f5);
 }
 
 .river-gantt__row--drop-target {
@@ -174,9 +177,9 @@
   display: flex;
   align-items: center;
   box-sizing: border-box;
-  border-radius: 3px;
-  background: #bfbfbf;
-  color: #1f1f1f;
+  border-radius: @river-gantt-radius-sm;
+  background: var(--ant-color-fill-secondary, #bfbfbf);
+  color: var(--ant-color-text, #1f1f1f);
   overflow: hidden;
   cursor: grab;
 }
@@ -242,7 +245,7 @@
 }
 
 .river-gantt-link-line {
-  stroke: #595959;
+  stroke: var(--ant-color-text-tertiary, #595959);
   stroke-width: 1px;
   fill: none;
   opacity: 0.9;

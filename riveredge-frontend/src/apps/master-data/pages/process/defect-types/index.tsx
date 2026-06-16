@@ -398,7 +398,7 @@ const DefectTypesPage: React.FC = () => {
         return;
       }
       const blob = new Blob(['\ufeff' + JSON.stringify(exportData, null, 2)], { type: 'application/json;charset=utf-8' });
-      const filename = `不良品项_${new Date().toISOString().slice(0, 10)}.json`;
+      const filename = `${t('app.master-data.defectTypes.exportFilename', { date: new Date().toISOString().slice(0, 10) })}.json`;
       downloadFile(blob, filename);
       messageApi.success(t('common.exportSuccess', { count: exportData.length }));
     } catch (error: any) {
@@ -413,38 +413,38 @@ const DefectTypesPage: React.FC = () => {
     const customFieldColumns = generateCustomFieldColumns();
     return [
     {
-      title: '不良品编号',
+      title: t('app.master-data.defectTypes.code'),
       dataIndex: 'code',
       copyable: true,width: 150,
       fixed: 'left',
       sorter: true,
     },
     {
-      title: '不良品名称',
+      title: t('app.master-data.defectTypes.name'),
       dataIndex: 'name',
       width: 200,
       sorter: true,
     },
     {
-      title: '描述',
+      title: t('field.defectType.description'),
       dataIndex: 'description',
       ellipsis: true,
       hideInSearch: true,
     },
     {
-      title: '启用状态',
+      title: t('app.master-data.defectTypes.status'),
       dataIndex: 'isActive',
       width: 100,
       valueType: 'select',
       valueEnum: {
-        true: { text: '启用', status: 'Success' },
-        false: { text: '禁用', status: 'Default' },
+        true: { text: t('app.master-data.plants.enabled'), status: 'Success' },
+        false: { text: t('app.master-data.plants.disabled'), status: 'Default' },
       },
       render: (_: any, record: DefectType) => {
         const isActive = record?.isActive ?? false;
         return (
           <Tag color={isActive ? 'success' : 'default'}>
-            {isActive ? '启用' : '禁用'}
+            {isActive ? t('app.master-data.plants.enabled') : t('app.master-data.plants.disabled')}
           </Tag>
         );
       },
@@ -452,7 +452,7 @@ const DefectTypesPage: React.FC = () => {
     },
     ...customFieldColumns,
     {
-      title: '创建时间',
+      title: t('common.createdAt'),
       dataIndex: 'createdAt',
       width: 180,
       valueType: 'dateTime',
@@ -464,7 +464,7 @@ const DefectTypesPage: React.FC = () => {
       },
     },
     {
-      title: '操作',
+      title: t('common.actions'),
       valueType: 'option',
       width: 150,
       fixed: 'right',
@@ -474,17 +474,23 @@ const DefectTypesPage: React.FC = () => {
             size="small"
             onClick={() => handleOpenDetail(record)}
           >
-            详情
+            {t('field.customField.view')}
           </Button>
           <Button key="edit" {...rowActionKind('update')}
             size="small"
             icon={<EditOutlined />}
             onClick={() => handleEdit(record)}
           >
-            编辑
+            {t('field.customField.edit')}
           </Button>
-          <Popconfirm key="delete" {...rowActionKind('delete')} title="确定要删除这个不良品信息吗？"
+          <Popconfirm
+            key="delete"
+            {...rowActionKind('delete')}
+            title={t('app.master-data.defectTypes.deleteConfirm')}
+            description={t('app.master-data.defectTypes.deleteDescription')}
             onConfirm={() => handleDelete(record)}
+            okText={t('common.confirm')}
+            cancelText={t('common.cancel')}
           >
             <Button
               type="link"
@@ -492,14 +498,14 @@ const DefectTypesPage: React.FC = () => {
               size="small"
               icon={<DeleteOutlined />}
             >
-              删除
+              {t('field.customField.delete')}
             </Button>
           </Popconfirm>
         </Space>
       ),
     },
     ];
-  }, [customFields, t]);
+  }, [customFields, generateCustomFieldColumns, t]);
 
   return (
     <ListPageTemplate>
@@ -546,7 +552,7 @@ const DefectTypesPage: React.FC = () => {
             };
           } catch (error: any) {
             console.error('获取不良品列表失败:', error);
-            messageApi.error(error?.message || '获取不良品列表失败');
+            messageApi.error(error?.message || t('app.master-data.defectTypes.listFailed'));
             return {
               data: [],
               success: false,
@@ -580,7 +586,7 @@ const DefectTypesPage: React.FC = () => {
       />
 
       <UniDetail
-        title={t('app.master-data.defectTypes.detailTitle', { defaultValue: '不良品详情' })}
+        title={t('app.master-data.defectTypes.detailTitle')}
         open={drawerVisible}
         onClose={handleCloseDetail}
         loading={detailLoading}

@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useMemo } from 'react';
 import { Table, Tag, Typography } from 'antd';
-import { useRequest } from 'ahooks';
 import {
   ToolOutlined,
   CalendarOutlined,
@@ -14,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { mesDashboardService } from '../../../services/dashboard';
 import { equipmentFaultApi, maintenancePlanApi } from '../../../services/equipment';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -42,25 +41,25 @@ const EquipmentDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
-  const { data: summary, loading: summaryLoading } = useRequest(
+  const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getEquipmentSummary,
-    dashboardRequestOptions('kz:equipment-dashboard:summary'),
+    'kz:equipment-dashboard:summary',
   );
-  const { data: todosData, loading: todosLoading } = useRequest(() =>
-    mesDashboardService.getTodosByModule('equipment', 8),
-    dashboardRequestOptions('kz:equipment-dashboard:todos'),
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('equipment', 8),
+    'kz:equipment-dashboard:todos',
   );
-  const { data: recentFaultsResult, loading: faultsLoading } = useRequest(async () => {
+  const { data: recentFaultsResult, loading: faultsLoading } = useDashboardRequest(async () => {
     const res = await equipmentFaultApi.list({ limit: 6 });
     return Array.isArray(res) ? res : res?.items || [];
-  }, dashboardRequestOptions('kz:equipment-dashboard:faults'));
-  const { data: recentMaintenanceResult, loading: maintenanceLoading } = useRequest(async () => {
+  }, 'kz:equipment-dashboard:faults');
+  const { data: recentMaintenanceResult, loading: maintenanceLoading } = useDashboardRequest(async () => {
     const res = await maintenancePlanApi.list({ limit: 6 });
     return Array.isArray(res) ? res : res?.items || [];
-  }, dashboardRequestOptions('kz:equipment-dashboard:maintenance'));
-  const { data: trendData, loading: trendLoading } = useRequest(
+  }, 'kz:equipment-dashboard:maintenance');
+  const { data: trendData, loading: trendLoading } = useDashboardRequest(
     mesDashboardService.getEquipmentTrend,
-    dashboardRequestOptions('kz:equipment-dashboard:trend'),
+    'kz:equipment-dashboard:trend',
   );
 
   const s = summary as Record<string, number> | undefined;

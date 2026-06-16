@@ -26,15 +26,7 @@ import { bomApi, materialApi } from '../../../services/material';
 import type { BOM, BOMCreate, BOMUpdate, Material, BOMBatchCreate, BOMItemCreate, BOMBatchImport, BOMBatchImportItem, BOMVersionCreate, BOMVersionCompare, BOMVersionCompareResult, BOMHierarchy, BOMHierarchyItem, BOMQuantityResult, BOMQuantityComponent } from '../../../types/material';
 import { testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 
-const BOM_ISSUE_METHOD_OPTIONS = [
-  { label: '领料配料', value: 'pick' },
-  { label: '倒冲', value: 'backflush' },
-  { label: '不发料', value: 'none' },
-] as const;
-
-const BOM_ISSUE_METHOD_LABEL: Record<string, string> = Object.fromEntries(
-  BOM_ISSUE_METHOD_OPTIONS.map((o) => [o.value, o.label]),
-);
+const BOM_ISSUE_METHOD_VALUES = ['pick', 'backflush', 'none'] as const;
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
 import { downloadFile } from '../../../../../utils';
@@ -245,6 +237,23 @@ function orderBomDetailBasicColumns(cols: ProDescriptionsItemProps<BOM>[]): ProD
  */
 const BOMPage: React.FC = () => {
   const { t, i18n } = useTranslation();
+  const bomIssueMethodOptions = useMemo(
+    () =>
+      BOM_ISSUE_METHOD_VALUES.map((value) => ({
+        value,
+        label:
+          value === 'pick'
+            ? t('app.master-data.bom.issueMethodPick')
+            : value === 'backflush'
+              ? t('app.master-data.bom.issueMethodBackflush')
+              : t('app.master-data.bom.issueMethodNone'),
+      })),
+    [t],
+  );
+  const bomIssueMethodLabel = useMemo(
+    () => Object.fromEntries(bomIssueMethodOptions.map((o) => [o.value, o.label])),
+    [bomIssueMethodOptions],
+  );
   const { message: messageApi } = App.useApp();
   const navigate = useNavigate();
   const actionRef = useRef<ActionType>(null);
@@ -1171,7 +1180,7 @@ const BOMPage: React.FC = () => {
   const getMaterialName = (materialId: number | undefined | null): string => {
     if (materialId == null) return '-';
     const material = materials.find(m => m.id === materialId);
-    if (!material) return `物料ID: ${materialId}`;
+    if (!material) return `${t('app.master-data.bom.materialIdPrefix')}: ${materialId}`;
     const code = material.code || material.mainCode || '';
     const spec = material.specification ? ` (${material.specification})` : '';
     return `${code} - ${material.name}${spec}`;
@@ -1829,7 +1838,7 @@ const BOMPage: React.FC = () => {
       }
     },
     { 
-      title: 'BOM编号', 
+      title: t('app.master-data.bom.bomCode'), 
       dataIndex: 'bomCode', 
       width: 150, 
       hideInSearch: true,
@@ -2132,12 +2141,12 @@ const BOMPage: React.FC = () => {
       ),
     },
     {
-      title: '发料方式',
+      title: t('app.master-data.bom.issueMethod'),
       dataIndex: 'issueMethod',
       render: (_, record) => {
         const v =
           record.issueMethod ?? (record as { issue_method?: string }).issue_method ?? 'pick';
-        return BOM_ISSUE_METHOD_LABEL[v] ?? v;
+        return bomIssueMethodLabel[v] ?? v;
       },
     },
     {
@@ -2293,14 +2302,14 @@ const BOMPage: React.FC = () => {
         ),
       },
       {
-        title: '发料方式',
+        title: t('app.master-data.bom.issueMethod'),
         dataIndex: 'issueMethod',
         width: 90,
         align: 'center',
         render: (_, record) => {
           const v =
             record.issueMethod ?? (record as { issue_method?: string }).issue_method ?? 'pick';
-          return BOM_ISSUE_METHOD_LABEL[v] ?? v;
+          return bomIssueMethodLabel[v] ?? v;
         },
       },
       {
@@ -2599,7 +2608,7 @@ const BOMPage: React.FC = () => {
           showSizeChanger: true,
         }}
         showCreateButton
-        createButtonText={'新建BOM' + NEW_SHORTCUT_HINT}
+        createButtonText={t('app.master-data.bom.createTitle') + NEW_SHORTCUT_HINT}
         onCreate={handleCreate}
         showDeleteButton
         onDelete={handleBatchDelete}
@@ -2611,11 +2620,11 @@ const BOMPage: React.FC = () => {
           <UniBatchMenuButton
             key="bom-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('components.uniBatch.batchActions')}
             menuItems={[
               {
                 key: 'batch-approve',
-                label: '批量审核',
+                label: t('app.master-data.bom.batchApproveBtn'),
                 onClick: handleBatchApprove,
                 icon: <CheckCircleOutlined />,
               },
@@ -2732,7 +2741,7 @@ const BOMPage: React.FC = () => {
                     }}
                   >
                     <Space>
-                      <span style={{ fontWeight: 500 }}>主物料：</span>
+                      <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.mainMaterial')}</span>
                       <span>
                         {hierarchyData.materialCode && hierarchyData.materialName
                           ? `${hierarchyData.materialCode} - ${hierarchyData.materialName}`
@@ -2741,7 +2750,10 @@ const BOMPage: React.FC = () => {
                             getMaterialName(hierarchyData.materialId) ||
                             '-'}
                       </span>
-                      <span style={{ color: '#999' }}>版本：{hierarchyData.version || ''}</span>
+                      <span style={{ color: '#999' }}>
+                        {t('app.master-data.bom.version')}
+                        {hierarchyData.version || ''}
+                      </span>
                     </Space>
                   </div>
                 )}
@@ -2789,6 +2801,11 @@ const BOMPage: React.FC = () => {
           .bom-form-modal .bom-items-list-form-item .ant-form-item-label {
             padding-left: 8px;
             padding-right: 8px;
+          }
+          .bom-form-modal .bom-items-table-container .ant-table-thead > tr > th,
+          .bom-form-modal .bom-items-table-container .ant-table-thead > tr > th .ant-table-cell,
+          .bom-form-modal .bom-items-table-container .ant-table-thead > tr > th .ant-table-column-title {
+            white-space: nowrap !important;
           }
         `}</style>
         <ProForm.Item noStyle shouldUpdate={(prevValues, currentValues) => prevValues.materialId !== currentValues.materialId || prevValues.version !== currentValues.version}>
@@ -2955,7 +2972,7 @@ const BOMPage: React.FC = () => {
                     {
                       title: t('app.master-data.bom.wasteRateLabel'),
                       dataIndex: 'wasteRate',
-                      width: 100,
+                      width: 116,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'wasteRate']}
@@ -2976,23 +2993,23 @@ const BOMPage: React.FC = () => {
                       ),
                     },
                     {
-                      title: '发料方式',
+                      title: t('app.master-data.bom.issueMethod'),
                       dataIndex: 'issueMethod',
-                      width: 110,
+                      width: 120,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'issueMethod']}
                           initialValue="pick"
                           style={{ margin: 0 }}
                         >
-                          <Select size="small" options={[...BOM_ISSUE_METHOD_OPTIONS]} />
+                          <Select size="small" options={bomIssueMethodOptions} />
                         </AntForm.Item>
                       ),
                     },
                     {
                       title: t('app.master-data.bom.isRequiredTitle'),
                       dataIndex: 'isRequired',
-                      width: 80,
+                      width: 88,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'isRequired']}
@@ -3006,7 +3023,7 @@ const BOMPage: React.FC = () => {
                     {
                       title: t('app.master-data.bom.alternativeLabel'),
                       dataIndex: 'isAlternative',
-                      width: 80,
+                      width: 100,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'isAlternative']}
@@ -3020,7 +3037,7 @@ const BOMPage: React.FC = () => {
                     {
                       title: t('app.master-data.bom.alternativeGroupIdLabel'),
                       dataIndex: 'alternativeGroupId',
-                      width: 100,
+                      width: 118,
                       render: (_, record, index) => (
                         <AntForm.Item
                           name={[index, 'alternativeGroupId']}
@@ -3312,7 +3329,7 @@ const BOMPage: React.FC = () => {
             setVersionHistoryModalVisible(false);
             setVersionList([]);
           }}>
-            关闭
+            {t('common.close')}
           </Button>,
         ]}
         width={1000}
@@ -3320,7 +3337,7 @@ const BOMPage: React.FC = () => {
         <div style={{ marginTop: 16 }}>
           {versionList.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              暂无版本历史
+              {t('app.master-data.bom.noVersionHistory')}
             </div>
           ) : (
             <Space orientation="vertical" style={{ width: '100%' }} size="middle">
@@ -3353,7 +3370,7 @@ const BOMPage: React.FC = () => {
                           icon={<DiffOutlined />}
                           onClick={() => handleCompareVersions(versionList[index + 1].version, bom.version)}
                         >
-                          对比
+                          {t('app.master-data.bom.versionCompareDo')}
                         </Button>
                       )}
                       <span style={{ color: '#999', fontSize: '12px' }}>
@@ -3400,7 +3417,10 @@ const BOMPage: React.FC = () => {
 
       {/* 版本对比Modal */}
       <Modal
-        title={`BOM版本对比：${selectedVersions?.version1} vs ${selectedVersions?.version2}`}
+        title={t('app.master-data.bom.versionCompareModalTitle', {
+          version1: selectedVersions?.version1 ?? '',
+          version2: selectedVersions?.version2 ?? '',
+        })}
         open={versionCompareModalVisible}
         onCancel={() => {
           setVersionCompareModalVisible(false);
@@ -3413,7 +3433,7 @@ const BOMPage: React.FC = () => {
             setVersionCompareResult(null);
             setSelectedVersions(null);
           }}>
-            关闭
+            {t('common.close')}
           </Button>,
         ]}
         width={1200}
@@ -3423,7 +3443,11 @@ const BOMPage: React.FC = () => {
             {/* 新增的子件 */}
             {versionCompareResult.added_items && versionCompareResult.added_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
-                <h4 style={{ color: '#52c41a', marginBottom: 12 }}>新增子件（{versionCompareResult.added_items.length}项）</h4>
+                <h4 style={{ color: '#52c41a', marginBottom: 12 }}>
+                  {t('app.master-data.bom.versionCompareAddedSection', {
+                    count: versionCompareResult.added_items.length,
+                  })}
+                </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.added_items.map((item: any, index: number) => (
                     <div
@@ -3439,7 +3463,9 @@ const BOMPage: React.FC = () => {
                         <span>{getMaterialName(item.componentId)}</span>
                         <span style={{ color: '#999' }}>
                           {item.quantity} {item.unit || ''}
-                          {item.wasteRate ? ` (损耗率: ${item.wasteRate}%)` : ''}
+                          {item.wasteRate
+                            ? ` ${t('app.master-data.bom.wasteRateInCompare', { rate: item.wasteRate })}`
+                            : ''}
                         </span>
                       </Space>
                     </div>
@@ -3451,7 +3477,11 @@ const BOMPage: React.FC = () => {
             {/* 删除的子件 */}
             {versionCompareResult.removed_items && versionCompareResult.removed_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
-                <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>删除子件（{versionCompareResult.removed_items.length}项）</h4>
+                <h4 style={{ color: '#ff4d4f', marginBottom: 12 }}>
+                  {t('app.master-data.bom.versionCompareRemovedSection', {
+                    count: versionCompareResult.removed_items.length,
+                  })}
+                </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.removed_items.map((item: any, index: number) => (
                     <div
@@ -3467,7 +3497,9 @@ const BOMPage: React.FC = () => {
                         <span>{getMaterialName(item.componentId)}</span>
                         <span style={{ color: '#999' }}>
                           {item.quantity} {item.unit || ''}
-                          {item.wasteRate ? ` (损耗率: ${item.wasteRate}%)` : ''}
+                          {item.wasteRate
+                            ? ` ${t('app.master-data.bom.wasteRateInCompare', { rate: item.wasteRate })}`
+                            : ''}
                         </span>
                       </Space>
                     </div>
@@ -3479,7 +3511,11 @@ const BOMPage: React.FC = () => {
             {/* 修改的子件 */}
             {versionCompareResult.modified_items && versionCompareResult.modified_items.length > 0 && (
               <div style={{ marginBottom: 24 }}>
-                <h4 style={{ color: '#1890ff', marginBottom: 12 }}>修改子件（{versionCompareResult.modified_items.length}项）</h4>
+                <h4 style={{ color: '#1890ff', marginBottom: 12 }}>
+                  {t('app.master-data.bom.versionCompareModifiedSection', {
+                    count: versionCompareResult.modified_items.length,
+                  })}
+                </h4>
                 <Space orientation="vertical" style={{ width: '100%' }} size="small">
                   {versionCompareResult.modified_items.map((item: any, index: number) => (
                     <div
@@ -3592,7 +3628,9 @@ const BOMPage: React.FC = () => {
               <Space>
                 <span style={{ fontWeight: 500 }}>{t('app.master-data.bom.parentQuantityResultLabel')}：</span>
                 <span>{quantityResult.parentQuantity}</span>
-                <span style={{ color: '#999' }}>个</span>
+                {t('app.master-data.bom.parentQuantityUnit') ? (
+                  <span style={{ color: '#999' }}>{t('app.master-data.bom.parentQuantityUnit')}</span>
+                ) : null}
               </Space>
             </div>
             
@@ -3624,29 +3662,35 @@ const BOMPage: React.FC = () => {
                               <div style={{ marginBottom: 8 }}>
                                 <Space>
                                   <span style={{ fontWeight: 500 }}>{materialName}</span>
-                                  <Tag color={component.level === 0 ? 'blue' : 'default'}>层级 {component.level}</Tag>
+                                  <Tag color={component.level === 0 ? 'blue' : 'default'}>
+                                    {t('app.master-data.bom.hierarchyLevelLabel')} {component.level}
+                                  </Tag>
                                 </Space>
                               </div>
                               <Space orientation="vertical" size="small" style={{ width: '100%' }}>
                                 <div>
-                                  <span style={{ color: '#999' }}>基础用量：</span>
+                                  <span style={{ color: '#999' }}>{t('app.master-data.bom.baseQuantityLabel')}</span>
                                   <span style={{ marginLeft: 8 }}>{component.baseQuantity} {component.unit || ''}</span>
                                 </div>
                                 {component.wasteRate > 0 && (
                                   <div>
-                                    <span style={{ color: '#999' }}>损耗率：</span>
+                                    <span style={{ color: '#999' }}>{t('app.master-data.bom.hierarchyWasteRateLabel')}：</span>
                                     <Tag color="orange" style={{ marginLeft: 8 }}>{component.wasteRate}%</Tag>
                                   </div>
                                 )}
                                 <div>
-                                  <span style={{ color: '#999' }}>实际用量：</span>
+                                  <span style={{ color: '#999' }}>{t('app.master-data.bom.actualQuantityLabel')}</span>
                                   <span style={{ marginLeft: 8, fontWeight: 500, color: '#52c41a', fontSize: '16px' }}>
                                     {component.actualQuantity.toFixed(4)} {component.unit || ''}
                                   </span>
                                 </div>
                                 {component.wasteRate > 0 && (
                                   <div style={{ fontSize: '12px', color: '#999', marginTop: 4 }}>
-                                    计算公式：{component.baseQuantity} × (1 + {component.wasteRate}%) = {component.actualQuantity.toFixed(4)}
+                                    {t('app.master-data.bom.quantityCalcFormula', {
+                                      base: component.baseQuantity,
+                                      rate: component.wasteRate,
+                                      actual: component.actualQuantity.toFixed(4),
+                                    })}
                                   </div>
                                 )}
                               </Space>
@@ -3659,7 +3703,7 @@ const BOMPage: React.FC = () => {
               </div>
             ) : (
               <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
-                暂无子物料数据
+                {t('app.master-data.bom.noChildMaterialQuantityData')}
               </div>
             )}
           </div>

@@ -10,8 +10,8 @@ const MaterialShortageAlert: React.FC = () => {
       { title: t('app.kuaizhizao.salesOrder.materialName'), dataIndex: 'material_name', width: 200 },
       { title: t('app.kuaizhizao.planReports.colWarehouseName'), dataIndex: 'warehouse_name', width: 150 },
       { title: t('app.kuaizhizao.planReports.colCurrentStock'), dataIndex: 'current_quantity', valueType: 'digit', width: 100 },
-      { title: t('app.kuaizhizao.planReports.colMinStock'), dataIndex: 'min_quantity', valueType: 'digit', width: 100 },
-      { title: t('app.kuaizhizao.planReports.colAlertTime'), dataIndex: 'alert_time', valueType: 'dateTime', width: 180 },
+      { title: t('app.kuaizhizao.planReports.colMinStock'), dataIndex: 'threshold_value', valueType: 'digit', width: 100 },
+      { title: t('app.kuaizhizao.planReports.colAlertTime'), dataIndex: 'triggered_at', valueType: 'dateTime', width: 180 },
     ],
     [t],
   );

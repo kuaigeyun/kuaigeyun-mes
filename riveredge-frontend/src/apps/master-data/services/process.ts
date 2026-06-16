@@ -504,6 +504,7 @@ export const sopExecutionApi = {
 
 /** 工序预设目录中单条不良预览 */
 export interface OperationPresetDefectPreview {
+  code?: string;
   name: string;
   category?: string;
   description?: string;

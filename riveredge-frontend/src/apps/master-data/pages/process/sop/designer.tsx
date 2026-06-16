@@ -147,8 +147,8 @@ const SOPDesignerPage: React.FC = () => {
 
       if (nodesData.length === 0) {
         nodesData = [
-          { id: 'start', type: 'start', position: { x: 100, y: 100 }, data: { label: '开始' } },
-          { id: 'end', type: 'end', position: { x: 400, y: 100 }, data: { label: '结束' } },
+          { id: 'start', type: 'start', position: { x: 100, y: 100 }, data: { label: t('app.master-data.sop.flowStart') } },
+          { id: 'end', type: 'end', position: { x: 400, y: 100 }, data: { label: t('app.master-data.sop.flowEnd') } },
         ];
         edgesData = [{ id: 'e-start-end', source: 'start', target: 'end', type: 'default' }];
       }
@@ -248,7 +248,7 @@ const SOPDesignerPage: React.FC = () => {
       options.onSuccess?.(first);
     } catch (e: any) {
       options.onError?.(e);
-      message.error(e?.message || t('app.master-data.sop.attachmentUploadFailed', { defaultValue: '附件上传失败' }));
+      message.error(e?.message || t('app.master-data.sop.attachmentUploadFailed'));
     }
   };
 
@@ -259,7 +259,7 @@ const SOPDesignerPage: React.FC = () => {
       id: newNodeId,
       type,
       position: { x: selectedNode.position.x, y: selectedNode.position.y + LAYOUT_GAP },
-      data: { label: type === 'step' ? '新工步' : '新检验工步', description: '', keyPoints: '' },
+      data: { label: type === 'step' ? t('app.master-data.sop.newWorkStep') : t('app.master-data.sop.newInspectionStep'), description: '', keyPoints: '' },
     } as any;
 
     const newEdge = {
@@ -351,7 +351,7 @@ const SOPDesignerPage: React.FC = () => {
           icon={<ReloadOutlined />}
           onClick={handleAutoLayout}
         >
-          {t('app.master-data.sop.autoLayout', { defaultValue: '整理节点' })}
+          {t('app.master-data.sop.autoLayout')}
         </Button>
       </Space>
       <Space>
@@ -421,10 +421,10 @@ const SOPDesignerPage: React.FC = () => {
           <Form.Item name="description" label={<AntdTypography.Text type="secondary">{t('app.master-data.sop.nodeDescLabel')}</AntdTypography.Text>}>
             <Input.TextArea rows={3} placeholder={t('app.master-data.sop.nodeDescPlaceholder')} />
           </Form.Item>
-          <Form.Item name="keyPoints" label={<AntdTypography.Text type="secondary">{t('app.master-data.sop.nodeKeyPointsLabel', { defaultValue: '工步要点' })}</AntdTypography.Text>}>
-            <Input.TextArea rows={3} placeholder={t('app.master-data.sop.nodeKeyPointsPlaceholder', { defaultValue: '请输入工步要点（如关键参数、注意事项、检验要点）' })} />
+          <Form.Item name="keyPoints" label={<AntdTypography.Text type="secondary">{t('app.master-data.sop.nodeKeyPointsLabel')}</AntdTypography.Text>}>
+            <Input.TextArea rows={3} placeholder={t('app.master-data.sop.nodeKeyPointsPlaceholder')} />
           </Form.Item>
-          <Form.Item label={<AntdTypography.Text type="secondary">{t('app.master-data.sop.nodeAttachmentLabel', { defaultValue: '节点附件' })}</AntdTypography.Text>}>
+          <Form.Item label={<AntdTypography.Text type="secondary">{t('app.master-data.sop.nodeAttachmentLabel')}</AntdTypography.Text>}>
             <Dragger
               fileList={attachmentFileList}
               customRequest={handleUploadAttachment}
@@ -435,11 +435,7 @@ const SOPDesignerPage: React.FC = () => {
               beforeUpload={(file) => {
                 const ext = (file.name.split('.').pop() || '').toLowerCase();
                 if (!SOP_NODE_ATTACHMENT_EXT.has(ext)) {
-                  message.error(
-                    t('app.master-data.sop.nodeAttachmentTypeInvalid', {
-                      defaultValue: '仅支持图片/PDF/DWG 文件',
-                    })
-                  );
+                  message.error(t('app.master-data.sop.nodeAttachmentTypeInvalid'));
                   return Upload.LIST_IGNORE;
                 }
                 return true;
@@ -466,17 +462,15 @@ const SOPDesignerPage: React.FC = () => {
                   <InboxOutlined style={{ color: token.colorPrimary }} />
                 </p>
                 <p className="ant-upload-text" style={{ marginBottom: 6 }}>
-                  {t('app.master-data.sop.addNodeAttachment', { defaultValue: '添加附件' })}
+                  {t('app.master-data.sop.addNodeAttachment')}
                 </p>
                 <p className="ant-upload-hint" style={{ marginBottom: 0 }}>
-                  {t('app.master-data.sop.nodeAttachmentDropHint', {
-                    defaultValue: '可拖拽文件到此区域上传，或点击添加附件',
-                  })}
+                  {t('app.master-data.sop.nodeAttachmentDropHint')}
                 </p>
               </div>
             </Dragger>
             <div style={{ marginTop: 6, color: token.colorTextSecondary, fontSize: 12 }}>
-              {t('app.master-data.sop.nodeAttachmentHint', { defaultValue: '支持：图片、PDF、DWG、DXF、STEP/STP、XLS/XLSX' })}
+              {t('app.master-data.sop.nodeAttachmentHint')}
             </div>
           </Form.Item>
         </Form>

@@ -27,6 +27,7 @@ import {
   UI_LANGUAGE_FALLBACK,
   type SupportedUiLanguage,
 } from '../utils/localeBootstrap';
+import { syncEnglishUiFont } from '../constants/fonts';
 
 import zhCN from '../locales/zh-CN';
 
@@ -176,11 +177,14 @@ i18n.use(initReactI18next).init({
 });
 
 preloadLanguageBundleIfNeeded(initialLang);
+syncEnglishUiFont(initialLang);
 
 const originalChangeLanguage = i18n.changeLanguage.bind(i18n);
 i18n.changeLanguage = async (language: string) => {
   await ensureLanguageLoaded(language);
-  return originalChangeLanguage(language);
+  const result = await originalChangeLanguage(language);
+  syncEnglishUiFont(language);
+  return result;
 };
 
 async function applyLanguage(

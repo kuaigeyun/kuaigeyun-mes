@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useMemo, useState } from 'react';
 import { Table, Tag, Typography, Timeline } from 'antd';
-import { useRequest } from 'ahooks';
 import {
   FormOutlined,
   InteractionOutlined,
@@ -15,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { mesDashboardService } from '../../../services/dashboard';
 import { workOrderApi } from '../../../services/work-order';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -44,25 +43,25 @@ const ManufacturingDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [trendType, setTrendType] = useState<'output' | 'qualified'>('output');
 
-  const { data: summary, loading: summaryLoading } = useRequest(
+  const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getManufacturingSummary,
-    dashboardRequestOptions('kz:manufacturing-dashboard:summary'),
+    'kz:manufacturing-dashboard:summary',
   );
-  const { data: todosData, loading: todosLoading } = useRequest(() =>
-    mesDashboardService.getTodosByModule('manufacturing', 8),
-    dashboardRequestOptions('kz:manufacturing-dashboard:todos'),
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('manufacturing', 8),
+    'kz:manufacturing-dashboard:todos',
   );
-  const { data: recentOrdersResult, loading: ordersLoading } = useRequest(async () => {
+  const { data: recentOrdersResult, loading: ordersLoading } = useDashboardRequest(async () => {
     const res = await workOrderApi.list({ limit: 8 });
     return Array.isArray(res) ? res : res?.items || [];
-  }, dashboardRequestOptions('kz:manufacturing-dashboard:orders'));
-  const { data: broadcast, loading: broadcastLoading } = useRequest(() =>
-    mesDashboardService.getProductionBroadcast(8),
-    dashboardRequestOptions('kz:manufacturing-dashboard:broadcast'),
+  }, 'kz:manufacturing-dashboard:orders');
+  const { data: broadcast, loading: broadcastLoading } = useDashboardRequest(
+    () => mesDashboardService.getProductionBroadcast(8),
+    'kz:manufacturing-dashboard:broadcast',
   );
-  const { data: trendData, loading: trendLoading } = useRequest(
+  const { data: trendData, loading: trendLoading } = useDashboardRequest(
     mesDashboardService.getManufacturingTrend,
-    dashboardRequestOptions('kz:manufacturing-dashboard:trend'),
+    'kz:manufacturing-dashboard:trend',
   );
 
   const s = summary as Record<string, number> | undefined;

@@ -11,7 +11,7 @@
 import React, { useRef, useState, useEffect, useCallback, useMemo, lazy, Suspense } from 'react';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { LIST_PAGE_REFRESH_KEYS, useListPageRefreshStore } from '../../../../../stores/listPageRefreshStore';
-import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import { App, Button, Space, Modal, Table, Input, InputNumber, Row, Col, Form as AntForm, DatePicker, Spin, Switch, Progress, Tooltip, Dropdown, Select, Segmented, Tag, Alert, Card, Typography, theme as AntdTheme } from 'antd';
 import { EyeOutlined, EditOutlined, ArrowDownOutlined, ArrowLeftOutlined, PlusOutlined, DeleteOutlined, RollbackOutlined, FileTextOutlined, SendOutlined, CopyOutlined, BellOutlined, AppstoreAddOutlined, CommentOutlined, StopOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { UniTable } from '../../../../../components/uni-table';
@@ -144,7 +144,8 @@ import { normalizeFormListItems } from '../../../../../utils/formListItems';
 import { coerceFormDate, toApiDateString } from '../../../../../utils/formDate';
 import { generateCode, testGenerateCode, getCodeRulePageConfig } from '../../../../../services/codeRule';
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
-import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
+import { getFileDownloadUrl } from '../../../../../services/file';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 /** 用户列表：对接系统管理-用户管理-帐户管理（/core/users） */
 import { searchUserDisplay, type User } from '../../../../../services/user';
 import { useGlobalStore } from '../../../../../stores';
@@ -3449,25 +3450,9 @@ const SalesOrdersPage: React.FC = () => {
           )}
         </AntForm.Item>
 
-          <ProFormUploadButton
-            name="attachments"
+          <DocumentAttachmentsField
+            category="sales_order_attachments"
             label={t('app.kuaizhizao.salesOrder.attachments')}
-            max={10}
-            fieldProps={{
-              multiple: true,
-              customRequest: async (options) => {
-                try {
-                  const res = await uploadMultipleFiles([options.file as File], { category: 'sales_order_attachments' });
-                  if (options.onSuccess) {
-                    options.onSuccess(res[0], options.file as any);
-                  }
-                } catch (err) {
-                  if (options.onError) {
-                    options.onError(err as any);
-                  }
-                }
-              }
-            }}
           />
 
           <ProFormTextArea

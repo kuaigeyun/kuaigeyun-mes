@@ -5,6 +5,14 @@ import type { ModuleKpiDef } from './types';
 import { MODULE_KPI_CARD_BODY_STYLE } from './constants';
 import { isModuleDashboardPlain, resolveModuleKpiVisual } from './moduleDashboardTheme';
 
+function withIconColor(icon: React.ReactNode, color: string): React.ReactNode {
+  if (!React.isValidElement(icon)) return icon;
+  const prevStyle = (icon.props as { style?: React.CSSProperties }).style ?? {};
+  return React.cloneElement(icon, {
+    style: { ...prevStyle, color },
+  } as Partial<{ style: React.CSSProperties }>);
+}
+
 function KpiSideBlock({
   lines,
   sideBorder,
@@ -58,12 +66,13 @@ export function ModuleKpiRow({
 }) {
   const { token } = theme.useToken();
   const themeStyle = useThemeStore((s) => s.resolved.themeStyle);
+  const isDark = useThemeStore((s) => s.resolved.isDark);
   const plain = isModuleDashboardPlain(themeStyle);
 
   return (
     <Row gutter={[18, 18]} align="stretch" className={plain ? 'module-kpi-row--plain' : undefined}>
       {items.map((kpi) => {
-        const visual = resolveModuleKpiVisual(kpi.gradient, kpi.boxShadow, plain, token);
+        const visual = resolveModuleKpiVisual(kpi.gradient, kpi.boxShadow, plain, token, isDark);
         return (
           <Col {...colProps} key={kpi.key} style={{ display: 'flex' }}>
             <Card
@@ -79,7 +88,7 @@ export function ModuleKpiRow({
               styles={{
                 body: {
                   ...MODULE_KPI_CARD_BODY_STYLE,
-                  color: visual.plain ? token.colorText : '#fff',
+                  color: !visual.plain && !isDark ? '#fff' : token.colorText,
                 },
               }}
             >
@@ -100,7 +109,7 @@ export function ModuleKpiRow({
                       : {}),
                   }}
                 >
-                  {kpi.icon}
+                  {withIconColor(kpi.icon, visual.iconColor)}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div

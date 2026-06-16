@@ -20,6 +20,7 @@ import {
   Input,
   Checkbox,
   Radio,
+  theme,
 } from 'antd';
 import { useSubmitShortcut } from '../../../hooks/useSubmitShortcut';
 import { SUBMIT_SHORTCUT_HINT } from '../../../utils/globalSubmitShortcut';
@@ -64,6 +65,7 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
   searchPlaceholder,
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [keyword, setKeyword] = useState('');
   const filtered = useMemo(() => filterOperationList(operations, keyword), [operations, keyword]);
 
@@ -116,10 +118,11 @@ export const OperationPickPanel: React.FC<OperationPickPanelProps> = ({
           border: listBorder,
           borderRadius: 6,
           padding: '8px 12px',
+          background: token.colorFillAlter,
         }}
       >
         {loading ? (
-          <div style={{ textAlign: 'center', padding: 24, color: '#999' }}>
+          <div style={{ textAlign: 'center', padding: 24, color: token.colorTextSecondary }}>
             {t('app.master-data.operationSequence.loading')}
           </div>
         ) : filtered.length === 0 ? (
@@ -208,6 +211,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   showTimeColumns = false,
 }) => {
   const { t } = useTranslation();
+  const { token } = theme.useToken();
   const [operations, setOperations] = useState<OperationItem[]>(value);
   const [allOperations, setAllOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(false);
@@ -387,7 +391,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
             <HolderOutlined style={{ fontSize: 16 }} />
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: 6, color: '#1890ff', fontWeight: 600, fontSize: 13 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: token.colorPrimaryBg, border: `1px solid ${token.colorPrimaryBorder}`, borderRadius: 6, color: token.colorPrimary, fontWeight: 600, fontSize: 13 }}>
             {index + 1}
           </span>
         </Space>
@@ -399,7 +403,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       render: (_: any, record: OperationItem) => (
         <div>
           <div style={{ fontWeight: 500 }}>{record.code} - {record.name}</div>
-          {record.description && <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>{record.description}</div>}
+          {record.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{record.description}</div>}
         </div>
       ),
     },
@@ -524,8 +528,8 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
       transform: CSS.Transform.toString(transform),
       transition: isDragging ? 'none' : transition,
       opacity: isDragging ? 0.4 : 1,
-      backgroundColor: isDragging ? '#f0f9ff' : isOver && !isDragging ? '#e6f7ff' : 'transparent',
-      boxShadow: isDragging ? '0 4px 12px rgba(0,0,0,0.15)' : 'none',
+      backgroundColor: isDragging ? token.colorPrimaryBg : isOver && !isDragging ? token.colorFillSecondary : 'transparent',
+      boxShadow: isDragging ? token.boxShadowSecondary : 'none',
       position: 'relative' as const,
     };
     return (
@@ -572,7 +576,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
   return (
     <div style={{ width: '100%' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <span style={{ color: '#666', fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
+        <span style={{ color: token.colorTextSecondary, fontSize: 12 }}>{t('app.master-data.operationSequence.hint')}</span>
         {operations.length > 0 && (
           <Button type="dashed" icon={<PlusOutlined />} onClick={() => setAddModalVisible(true)} size="small">
             {t('app.master-data.operationSequence.addOperation')}
@@ -618,7 +622,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                       <span className="drag-handle" style={{ color: '#1890ff', cursor: 'move', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, padding: 4, minWidth: 24, minHeight: 24 }} title={t('app.master-data.operationSequence.dragSort')}>
                                         <HolderOutlined style={{ fontSize: 16 }} />
                                       </span>
-                                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: '#f0f9ff', border: '1px solid #91d5ff', borderRadius: 6, color: '#1890ff', fontWeight: 600, fontSize: 13 }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 28, height: 28, padding: '0 8px', backgroundColor: token.colorPrimaryBg, border: `1px solid ${token.colorPrimaryBorder}`, borderRadius: 6, color: token.colorPrimary, fontWeight: 600, fontSize: 13 }}>
                                         {idx + 1}
                                       </span>
                                     </Space>
@@ -626,7 +630,7 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
                                   <td>
                                     <div>
                                       <div style={{ fontWeight: 500 }}>{op.code} - {op.name}</div>
-                                      {op.description && <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>{op.description}</div>}
+                                      {op.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{op.description}</div>}
                                     </div>
                                   </td>
                                   <td>
@@ -703,13 +707,13 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           </SortableContext>
         ) : (
           <div
+            className="operation-sequence-editor-empty"
             style={{
               padding: 24,
-              background: '#fafafa',
-              borderRadius: 4,
+              background: token.colorFillAlter,
+              borderRadius: token.borderRadius,
               border: '1px dashed var(--river-border-color)',
               textAlign: 'center',
-              color: '#999',
             }}
           >
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('app.master-data.operationSequence.noDataAddHint')} />
@@ -720,12 +724,12 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
         )}
         <DragOverlay>
           {activeOperation ? (
-            <div style={{ padding: '12px 16px', background: '#fff', border: '1px solid #1890ff', borderRadius: 4, boxShadow: '0 4px 12px rgba(24, 144, 255, 0.3)', width: '100%', minWidth: 300 }}>
+            <div style={{ padding: '12px 16px', background: token.colorBgElevated, border: `1px solid ${token.colorPrimary}`, borderRadius: token.borderRadius, boxShadow: token.boxShadowSecondary, width: '100%', minWidth: 300 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <HolderOutlined style={{ color: '#1890ff', fontSize: 16 }} />
+                <HolderOutlined style={{ color: token.colorPrimary, fontSize: 16 }} />
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 500, color: '#262626' }}>{activeOperation.code} - {activeOperation.name}</div>
-                  {activeOperation.description && <div style={{ fontSize: 12, color: '#8c8c8c', marginTop: 4 }}>{activeOperation.description}</div>}
+                  <div style={{ fontWeight: 500, color: token.colorText }}>{activeOperation.code} - {activeOperation.name}</div>
+                  {activeOperation.description && <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>{activeOperation.description}</div>}
                 </div>
               </div>
             </div>

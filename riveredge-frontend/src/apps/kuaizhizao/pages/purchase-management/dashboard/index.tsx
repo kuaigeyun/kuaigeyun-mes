@@ -1,6 +1,5 @@
 import React, { Suspense, lazy, useMemo, useState } from 'react';
 import { Table, Tag, Typography } from 'antd';
-import { useRequest } from 'ahooks';
 import {
   ShoppingCartOutlined,
   InboxOutlined,
@@ -19,7 +18,7 @@ import { listPurchaseRequisitions } from '../../../services/purchase-requisition
 import { getPurchaseTop10 } from '../../../../../services/dashboard';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_PURCHASE_ORDER_FIELD_RESOURCE as PO } from '../../../constants/fieldPermissionResources';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -48,29 +47,29 @@ const PurchaseDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [trendType, setTrendType] = useState<'amount' | 'quantity'>('amount');
 
-  const { data: summary, loading: summaryLoading } = useRequest(
+  const { data: summary, loading: summaryLoading } = useDashboardRequest(
     mesDashboardService.getPurchaseSummary,
-    dashboardRequestOptions('kz:purchase-dashboard:summary'),
+    'kz:purchase-dashboard:summary',
   );
-  const { data: todosData, loading: todosLoading } = useRequest(() =>
-    mesDashboardService.getTodosByModule('purchase', 8),
-    dashboardRequestOptions('kz:purchase-dashboard:todos'),
+  const { data: todosData, loading: todosLoading } = useDashboardRequest(
+    () => mesDashboardService.getTodosByModule('purchase', 8),
+    'kz:purchase-dashboard:todos',
   );
-  const { data: recentOrdersData, loading: ordersLoading } = useRequest(() =>
-    listPurchaseOrders({ limit: 8 }),
-    dashboardRequestOptions('kz:purchase-dashboard:recent-orders'),
+  const { data: recentOrdersData, loading: ordersLoading } = useDashboardRequest(
+    () => listPurchaseOrders({ limit: 8 }),
+    'kz:purchase-dashboard:recent-orders',
   );
-  const { data: recentRequisitionsData, loading: requisitionsLoading } = useRequest(() =>
-    listPurchaseRequisitions({ limit: 8 }),
-    dashboardRequestOptions('kz:purchase-dashboard:recent-requisitions'),
+  const { data: recentRequisitionsData, loading: requisitionsLoading } = useDashboardRequest(
+    () => listPurchaseRequisitions({ limit: 8 }),
+    'kz:purchase-dashboard:recent-requisitions',
   );
-  const { data: trendData, loading: trendLoading } = useRequest(
+  const { data: trendData, loading: trendLoading } = useDashboardRequest(
     mesDashboardService.getPurchaseTrend,
-    dashboardRequestOptions('kz:purchase-dashboard:trend'),
+    'kz:purchase-dashboard:trend',
   );
-  const { data: top10Data, loading: topLoading } = useRequest(
+  const { data: top10Data, loading: topLoading } = useDashboardRequest(
     () => getPurchaseTop10(undefined, undefined, 8),
-    dashboardRequestOptions('kz:purchase-dashboard:top10'),
+    'kz:purchase-dashboard:top10',
   );
 
   const s = summary as Record<string, number> | undefined;

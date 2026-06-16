@@ -10,6 +10,11 @@ export const WAREHOUSE_DETAIL_TABLE_STYLES = `
   .warehouse-detail-table .ant-table-thead > tr > th {
     background-color: var(--ant-color-fill-alter) !important;
     font-weight: 600;
+    white-space: nowrap !important;
+  }
+  .warehouse-detail-table .ant-table-thead > tr > th .ant-table-cell,
+  .warehouse-detail-table .ant-table-thead > tr > th .ant-table-column-title {
+    white-space: nowrap !important;
   }
   .warehouse-detail-table .ant-table-thead > tr > th.warehouse-detail-fixed-op-header {
     background: #fafafa !important;

@@ -30,7 +30,6 @@ import {
   ProFormSwitch,
   ProForm,
   ProFormGroup,
-  ProFormUploadButton,
   ProFormDependency,
   ProFormItem,
 } from '@ant-design/pro-components'
@@ -199,7 +198,7 @@ const LazyUniLifecycleStepper = lazy(() =>
   import('../../../../../components/uni-lifecycle').then(m => ({ default: m.UniLifecycleStepper }))
 )
 const LazyUniMaterialSelect = lazy(() => import('../../../../../components/uni-material-select'))
-import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, LIST_LIFECYCLE_STAGE_FIELD } from '../../../utils/workOrderLifecycle'
+import { getWorkOrderLifecycle, buildWorkOrderLifecycleValueEnum, translateWorkOrderLifecycleStatus, LIST_LIFECYCLE_STAGE_FIELD } from '../../../utils/workOrderLifecycle'
 import { commitListPageSearchParams } from '../../../../../utils/listLifecycleStage'
 import { UniLifecycle } from '../../../../../components/uni-lifecycle'
 import { getRemainingReportableQuantity } from '../../../utils/workOrderReporting'
@@ -215,7 +214,8 @@ import { UniUserSelect } from '../../../../../components/uni-user-select'
 /** 列表行展开工序：TanStack 缓存键前缀（与派工/开工后 invalidate 一致） */
 const WORK_ORDER_ROW_EXPAND_QK = 'workOrderRowExpand' as const
 const WORK_ORDER_ROW_EXPAND_STALE_MS = 0
-import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file'
+import { getFileDownloadUrl } from '../../../../../services/file'
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField'
 import { batchImport } from '../../../../../utils/batchOperations'
 import {
   buildFactoryImportTemplate,
@@ -1171,8 +1171,6 @@ function WorkOrderPlannedRangeCell({ record }: { record: WorkOrder }) {
   )
 }
 
-const WORK_ORDER_LIFECYCLE_VALUE_ENUM = buildWorkOrderLifecycleValueEnum()
-
 const WorkOrdersPage: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { message: messageApi } = App.useApp()
@@ -1227,6 +1225,11 @@ const WorkOrdersPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null)
   const tableSearchFormRef = useRef<any>(null)
   const tableSearchParamsRef = useRef<Record<string, any> | undefined>(undefined)
+
+  const workOrderLifecycleValueEnum = useMemo(
+    () => buildWorkOrderLifecycleValueEnum(t),
+    [t, i18n.language],
+  )
 
   const applyWorkOrderListLifecycleFilter = useCallback((stage: string) => {
     const params = { [LIST_LIFECYCLE_STAGE_FIELD]: stage }
@@ -4743,7 +4746,7 @@ const WorkOrdersPage: React.FC = () => {
                 setMergeModalVisible(true)
               }}
             >
-              合并为组工单
+              {t('app.kuaizhizao.workOrder.actionMergeIntoGroup')}
             </UniBatchButton>,
           ]
         : []),
@@ -4764,7 +4767,7 @@ const WorkOrdersPage: React.FC = () => {
                 )
               }
             >
-              解除编组
+              {t('app.kuaizhizao.workOrder.actionDissolveGroup')}
             </UniBatchButton>,
           ]
         : []),
@@ -4773,7 +4776,7 @@ const WorkOrdersPage: React.FC = () => {
         selectedRowKeys={selectedRowKeys}
         menuItems={workOrderBatchMenuItems}
         toolBarButtonSize="middle"
-        buttonText="批量操作"
+        buttonText={t('components.uniBatch.batchActions')}
       />,
       <UniBatchButton
         key="batch-release"
@@ -4783,7 +4786,7 @@ const WorkOrdersPage: React.FC = () => {
         icon={<SendOutlined />}
         onAction={() => void handleBatchRelease()}
       >
-        批量下达
+        {t('app.kuaizhizao.workOrder.actionBatchRelease')}
       </UniBatchButton>,
     ],
     [
@@ -4795,6 +4798,7 @@ const WorkOrdersPage: React.FC = () => {
       handleDissolveGroups,
       messageApi,
       handleBatchRelease,
+      t,
     ]
   )
 
@@ -5597,19 +5601,11 @@ const WorkOrdersPage: React.FC = () => {
       fixed: 'right' as const,
       hideInSearch: false,
       valueType: 'select',
-      valueEnum: WORK_ORDER_LIFECYCLE_VALUE_ENUM,
+      valueEnum: workOrderLifecycleValueEnum,
       render: (_, record) => {
         const kind = record.row_kind || 'work_order'
         if (kind === 'rework' || kind === 'outsource') {
-          const statusMap: Record<string, string> = {
-            draft: '草稿',
-            released: '已下达',
-            in_progress: '执行中',
-            completed: '已完成',
-            cancelled: '已取消',
-            split: '已拆分',
-          }
-          return <Tag>{statusMap[record.status || ''] || record.status || '-'}</Tag>
+          return <Tag>{translateWorkOrderLifecycleStatus(t, record.status)}</Tag>
         }
         return renderWorkOrderListLifecycle(record)
       },
@@ -5638,7 +5634,7 @@ const WorkOrdersPage: React.FC = () => {
                 loading={dissolveGroupLoading}
                 onClick={() => handleDissolveGroups([groupId])}
               >
-                解除编组
+                {t('app.kuaizhizao.workOrder.actionDissolveGroup')}
               </Button>,
             ];
         }
@@ -5840,7 +5836,7 @@ const WorkOrdersPage: React.FC = () => {
         )
       },
     },
-  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, operationExpandedRowKeys, workOrderTreeExpandedRowKeys])
+  ], [t, dissolveGroupLoading, workOrderCustomFieldColumns, operationExpandedRowKeys, workOrderTreeExpandedRowKeys, workOrderLifecycleValueEnum])
 
   const workOrderTableBodyColSpan = useMemo(() => {
     const visibleDataCols = columns.filter((col) => !col.hideInTable).length
@@ -5981,7 +5977,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.overdue_count ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('执行中')
+                  applyWorkOrderListLifecycleFilter('in_progress')
                 }
               : undefined,
         },
@@ -6001,7 +5997,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.completed_today_count ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('已完成')
+                  applyWorkOrderListLifecycleFilter('completed')
                 }
               : undefined,
         },
@@ -6020,7 +6016,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.total_wip ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('执行中')
+                  applyWorkOrderListLifecycleFilter('in_progress')
                 }
               : undefined,
         },
@@ -6054,7 +6050,7 @@ const WorkOrdersPage: React.FC = () => {
           onClick:
             (statistics.draft_count ?? 0) > 0
               ? () => {
-                  applyWorkOrderListLifecycleFilter('草稿')
+                  applyWorkOrderListLifecycleFilter('draft')
                 }
               : undefined,
         },
@@ -6201,7 +6197,7 @@ const WorkOrdersPage: React.FC = () => {
               icon={<PlayCircleOutlined />}
               onClick={handleSmartReleaseKitted}
             >
-              齐套自动下达
+              {t('app.kuaizhizao.workOrder.actionSmartRelease')}
             </Button>,
           ]}
           onDelete={handleDelete}
@@ -6838,11 +6834,13 @@ const WorkOrdersPage: React.FC = () => {
               <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
                 <Button
                   block
+                  size="small"
                   type="dashed"
                   style={{
                     borderStyle: 'dashed',
                     borderColor: 'var(--ant-color-primary)',
                     color: 'var(--ant-color-primary)',
+                    fontSize: 12,
                   }}
                   onClick={() => {
                     setProductSourceModalType('sales_order')
@@ -6857,11 +6855,13 @@ const WorkOrdersPage: React.FC = () => {
               <Form.Item label=" " colon={false} style={{ marginBottom: 24 }}>
                 <Button
                   block
+                  size="small"
                   type="dashed"
                   style={{
                     borderStyle: 'dashed',
                     borderColor: 'var(--ant-color-primary)',
                     color: 'var(--ant-color-primary)',
+                    fontSize: 12,
                   }}
                   onClick={() => {
                     setProductSourceModalType('sales_forecast')
@@ -6877,11 +6877,13 @@ const WorkOrdersPage: React.FC = () => {
                 <Space.Compact block>
                   <Button
                     block
+                    size="small"
                     type="dashed"
                     style={{
                       borderStyle: 'dashed',
                       borderColor: 'var(--ant-color-primary)',
                       color: 'var(--ant-color-primary)',
+                      fontSize: 12,
                     }}
                     onClick={() => {
                       setProductSourceModalType('demand')
@@ -7178,26 +7180,9 @@ const WorkOrdersPage: React.FC = () => {
           customFieldValues={workOrderFormCustomFieldValues}
           gridColumns={4}
         />
-        <ProFormUploadButton
-          name="attachments"
+        <DocumentAttachmentsField
+          category="work_order_attachments"
           label={t('app.kuaizhizao.workOrder.colAttachments')}
-          max={10}
-          colProps={{ span: 24 }}
-          fieldProps={{
-            multiple: true,
-            customRequest: async (options) => {
-              try {
-                const res = await uploadMultipleFiles([options.file as File], { category: 'work_order_attachments' });
-                if (options.onSuccess) {
-                  options.onSuccess(res[0], options.file as any);
-                }
-              } catch (err) {
-                if (options.onError) {
-                  options.onError(err as any);
-                }
-              }
-            }
-          }}
         />
         <ProFormTextArea
           name="remarks"

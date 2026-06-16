@@ -527,18 +527,34 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
     'Operations Dashboard': ManufacturingIcons.analytics,
     'Operations Center': ManufacturingIcons.operationsCenter,
     'User Management': ManufacturingIcons.users, // 用户管理 - 使用用户组图标
+    'Users': ManufacturingIcons.users,
     'System Configuration': ManufacturingIcons.systemConfig,
+    'Settings': ManufacturingIcons.systemConfig,
     'Personal Center': ManufacturingIcons.userCircle, // 个人中心 - 使用用户圆圈图标
+    'Personal': ManufacturingIcons.userCircle,
     // 应用菜单名称映射
     'Plan Management': ManufacturingIcons.calendar,
+    'Planning': ManufacturingIcons.calendar,
     'Production Execution': ManufacturingIcons.activity, // 生产执行 - 使用活动/执行图标
+    'Production': ManufacturingIcons.activity,
     'Purchase Management': ManufacturingIcons.shoppingBag,
+    'Purchasing': ManufacturingIcons.shoppingBag,
     'Sales Management': ManufacturingIcons.chartLine, // 销售管理 - 使用趋势上升图标（销售增长）
+    'Sales': ManufacturingIcons.chartLine,
     'Warehouse Management': ManufacturingIcons.warehouse,
+    'Warehouse': ManufacturingIcons.warehouse,
     'Quality Management': ManufacturingIcons.quality,
+    'Quality': ManufacturingIcons.quality,
     'Cost Management': ManufacturingIcons.calculator,
+    'Cost': ManufacturingIcons.calculator,
     'Equipment Management': ManufacturingIcons.wrench,
+    'Equipment': ManufacturingIcons.wrench,
     'Finance Management': ManufacturingIcons.wallet, // 财务管理 - 使用钱包图标
+    'Finance': ManufacturingIcons.wallet,
+    'Tooling Management': ManufacturingIcons.wrench,
+    'Tooling': ManufacturingIcons.wrench,
+    'Analysis Center': ManufacturingIcons.analytics,
+    'Analytics': ManufacturingIcons.analytics,
     // 基础数据管理相关
     '仓库数据': ManufacturingIcons.archive, // 基础数据管理-仓库数据 - 使用归档图标
     'Warehouse Data': ManufacturingIcons.archive, // 基础数据管理-仓库数据（英文）
@@ -1496,6 +1512,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
 
   // 当前语言代码
   const currentLanguage = i18nInstance.language || 'zh-CN';
+  const isEnglishLocale = currentLanguage.startsWith('en');
 
   /**
    * 计算颜色的亮度值
@@ -3435,12 +3452,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           display: flex;
           flex-direction: column;
           align-items: center;
-          justify-content: center;
+          justify-content: flex-start;
           gap: 10px;
           color: ${startMenuTheme.panelItemColor};
           padding: 10px 8px;
           border-radius: ${Number(token.borderRadius ?? 6)}px;
           min-height: 76px;
+          height: auto;
           cursor: pointer;
           transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
         }
@@ -3480,13 +3498,17 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .riveredge-system-settings-item-label {
           font-size: 13px;
-          line-height: 1.2;
+          line-height: 1.25;
           font-weight: 500;
           text-align: center;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
           width: 100%;
+          min-height: calc(1.25em * 2);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          white-space: normal;
+          overflow-wrap: break-word;
+          word-break: normal;
         }
         @media (max-width: 900px) {
           .riveredge-system-settings-panel {
@@ -4379,6 +4401,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         .ant-pro-global-header-logo h1,
         .ant-pro-global-header-logo a h1 {
           color: ${isDarkMode ? 'var(--ant-colorText)' : (isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)')} !important;
+          ${isEnglishLocale ? 'letter-spacing: -0.02em !important;' : ''}
         }
         .ant-pro-global-header-logo h1{
         line-height: 31px !important;

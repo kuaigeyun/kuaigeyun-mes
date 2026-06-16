@@ -5,9 +5,11 @@
  * 展示主生命周期进度 + 可选的子生命周期（subPercent/subLabel 或 subStages 全链路）。
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Progress, Tooltip } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { CheckCircle, CircleMinus, PlayCircle } from 'lucide-react';
+import { translateLifecycleResult } from '../../utils/globalLifecycleI18n';
 import './UniLifecycleStepper.less';
 import type { LifecycleResult, SubStage } from './types';
 
@@ -80,14 +82,32 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
   showCircleTooltip = true,
   showPercent = false,
 }) => {
+  const { t, i18n } = useTranslation();
+  const translated = useMemo(
+    () =>
+      translateLifecycleResult(t, {
+        percent,
+        stageName,
+        status: progressStatus,
+        subPercent,
+        subLabel,
+        subStages,
+        mainStages: undefined,
+      }),
+    [t, i18n.language, percent, stageName, progressStatus, subPercent, subLabel, subStages],
+  );
+  const displayStageName = translated.stageName;
+  const displaySubLabel = translated.subLabel;
+  const displaySubStages = translated.subStages;
+
   const sizeNum = size === 'small' ? CIRCLE_SIZE : typeof size === 'number' ? size : CIRCLE_SIZE;
 
   const tip = (
     <TooltipContent
-      stageName={stageName}
-      subLabel={subLabel}
+      stageName={displayStageName}
+      subLabel={displaySubLabel}
       subPercent={subPercent}
-      subStages={subStages}
+      subStages={displaySubStages}
     />
   );
 
@@ -130,11 +150,11 @@ export const UniLifecycle: React.FC<UniLifecycleProps> = ({
       }}
     >
       {circleEl}
-      {showLabel && <span style={{ whiteSpace: 'nowrap' }}>{stageName}</span>}
-      {expandSubStages && subStages && subStages.length > 0 && (
+      {showLabel && <span style={{ whiteSpace: 'nowrap' }}>{displayStageName}</span>}
+      {expandSubStages && displaySubStages && displaySubStages.length > 0 && (
         <div style={{ marginTop: 8, marginLeft: 0 }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 16px', alignItems: 'center' }}>
-            {subStages.map((s) => (
+            {displaySubStages.map((s) => (
               <span key={s.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <SubStageIcon status={s.status} />
                 <span style={{ opacity: s.status === 'pending' ? 0.65 : 1 }}>{s.label}</span>

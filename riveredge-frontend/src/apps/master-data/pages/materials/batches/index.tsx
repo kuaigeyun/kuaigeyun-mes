@@ -2,7 +2,7 @@
  * 批号记录（按物料维护批次号、数量、效期等；与质量管理「追溯查询」互补）
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space } from 'antd';
@@ -14,16 +14,29 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { materialBatchApi, materialApi } from '../../../services/material';
 import type { MaterialBatch, MaterialBatchCreate, MaterialBatchUpdate } from '../../../types/material';
 
-const BATCH_STATUS_OPTIONS = [
-  { label: '在库', value: 'in_stock' },
-  { label: '已出库', value: 'out_stock' },
-  { label: '已过期', value: 'expired' },
-  { label: '已报废', value: 'scrapped' },
-];
-
 const BatchesPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+
+  const batchStatusOptions = useMemo(
+    () => [
+      { label: t('app.master-data.inventoryStatus.inStock'), value: 'in_stock' },
+      { label: t('app.master-data.inventoryStatus.outStock'), value: 'out_stock' },
+      { label: t('app.master-data.inventoryStatus.expired'), value: 'expired' },
+      { label: t('app.master-data.inventoryStatus.scrapped'), value: 'scrapped' },
+    ],
+    [t],
+  );
+
+  const batchStatusValueEnum = useMemo(
+    () => ({
+      in_stock: { text: t('app.master-data.inventoryStatus.inStock'), status: 'Success' as const },
+      out_stock: { text: t('app.master-data.inventoryStatus.outStock'), status: 'Default' as const },
+      expired: { text: t('app.master-data.inventoryStatus.expired'), status: 'Error' as const },
+      scrapped: { text: t('app.master-data.inventoryStatus.scrapped'), status: 'Warning' as const },
+    }),
+    [t],
+  );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -161,12 +174,7 @@ const BatchesPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       sorter: true,
-      valueEnum: {
-        in_stock: { text: '在库', status: 'Success' },
-        out_stock: { text: '已出库', status: 'Default' },
-        expired: { text: '已过期', status: 'Error' },
-        scrapped: { text: '已报废', status: 'Warning' },
-      },
+      valueEnum: batchStatusValueEnum,
       render: (_, r) => r.status ?? (r as any).status ?? '-',
     },
     {
@@ -252,7 +260,7 @@ const BatchesPage: React.FC = () => {
       />
 
       <FormModalTemplate
-        title={isEdit ? t('field.customField.edit') + '批号' : t('pages.system.create') + '批号'}
+        title={isEdit ? t('app.master-data.batches.editTitle') : t('app.master-data.batches.createTitle')}
         open={modalVisible}
         onClose={() => setModalVisible(false)}
         onFinish={handleSubmit}
@@ -278,7 +286,7 @@ const BatchesPage: React.FC = () => {
         <ProFormText
           name="batchNo"
           label={t('app.master-data.batches.batchNo') || '批号'}
-          rules={[{ required: true, message: '请输入批号' }]}
+          rules={[{ required: true, message: t('app.master-data.batches.enterBatchNo') }]}
           disabled={isEdit}
           colProps={{ span: 12 }}
         />
@@ -307,7 +315,7 @@ const BatchesPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.master-data.batches.status') || '状态'}
-          options={BATCH_STATUS_OPTIONS}
+          options={batchStatusOptions}
           initialValue="in_stock"
           colProps={{ span: 12 }}
         />

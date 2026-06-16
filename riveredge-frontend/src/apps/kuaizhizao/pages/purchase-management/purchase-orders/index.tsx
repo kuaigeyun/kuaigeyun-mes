@@ -12,7 +12,7 @@ import { rowActionKind } from '../../../../../components/uni-action';
 import { useInvalidateMenuBadgeCounts } from '../../../../../hooks/useInvalidateMenuBadgeCounts';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea, ProFormUploadButton } from '@ant-design/pro-components';
+import { ActionType, ProColumns, ProDescriptionsItemProps, ProForm, ProFormText, ProFormDatePicker, ProFormTextArea } from '@ant-design/pro-components';
 import type { DescriptionsProps } from 'antd';
 import { App, Button, Tag, Space, Modal, Row, Col, Table, Empty, Timeline, Divider, Form as AntForm, Input, InputNumber, DatePicker, Switch, List, Typography, theme, Dropdown, Descriptions, Spin, Card } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +23,8 @@ import {
 import { PlusOutlined, EyeOutlined, EditOutlined, CheckCircleOutlined, DeleteOutlined, ClockCircleOutlined, CheckCircleTwoTone, CloseCircleTwoTone, SendOutlined, DownOutlined, FileTextOutlined, InboxOutlined, DollarOutlined, RollbackOutlined, AppstoreAddOutlined, ArrowLeftOutlined, ImportOutlined, PrinterOutlined } from '@ant-design/icons';
 import { apiRequest } from '../../../../../services/api';
 import { getDataDictionaryByCode, getDictionaryItemList } from '../../../../../services/dataDictionary';
-import { getFileDownloadUrl, uploadMultipleFiles } from '../../../../../services/file';
+import { getFileDownloadUrl } from '../../../../../services/file';
+import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { UniTable } from '../../../../../components/uni-table';
 import {
   UniTableStackedPrimaryCell,
@@ -2606,25 +2607,9 @@ const PurchaseOrdersPage: React.FC = () => {
         </AntForm.Item>
 
         <ProFormText name="supplier_name" hidden />
-        <ProFormUploadButton
-          name="attachments"
+        <DocumentAttachmentsField
+          category="purchase_order_attachments"
           label={t('app.kuaizhizao.purchaseOrder.form.attachments')}
-          max={10}
-          fieldProps={{
-            multiple: true,
-            customRequest: async (options) => {
-              try {
-                const res = await uploadMultipleFiles([options.file as File], { category: 'purchase_order_attachments' });
-                if (options.onSuccess) {
-                  options.onSuccess(res[0], options.file as any);
-                }
-              } catch (err) {
-                if (options.onError) {
-                  options.onError(err as any);
-                }
-              }
-            }
-          }}
         />
         <ProFormTextArea
           name="notes"

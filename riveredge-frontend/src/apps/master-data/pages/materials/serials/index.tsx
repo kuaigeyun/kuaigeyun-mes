@@ -2,7 +2,7 @@
  * 物料序列号台账（唯一序列号、状态与日期；与「序列号规则」配置、质量管理追溯互补）
  */
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Popconfirm, Button, Space } from 'antd';
@@ -14,17 +14,31 @@ import { ListPageTemplate, FormModalTemplate, MODAL_CONFIG } from '../../../../.
 import { materialSerialApi, materialApi } from '../../../services/material';
 import type { MaterialSerial, MaterialSerialCreate, MaterialSerialUpdate } from '../../../types/material';
 
-const SERIAL_STATUS_OPTIONS = [
-  { label: '在库', value: 'in_stock' },
-  { label: '已出库', value: 'out_stock' },
-  { label: '已销售', value: 'sold' },
-  { label: '已报废', value: 'scrapped' },
-  { label: '已退货', value: 'returned' },
-];
-
 const SerialsPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi } = App.useApp();
+
+  const serialStatusOptions = useMemo(
+    () => [
+      { label: t('app.master-data.inventoryStatus.inStock'), value: 'in_stock' },
+      { label: t('app.master-data.inventoryStatus.outStock'), value: 'out_stock' },
+      { label: t('app.master-data.inventoryStatus.sold'), value: 'sold' },
+      { label: t('app.master-data.inventoryStatus.scrapped'), value: 'scrapped' },
+      { label: t('app.master-data.inventoryStatus.returned'), value: 'returned' },
+    ],
+    [t],
+  );
+
+  const serialStatusValueEnum = useMemo(
+    () => ({
+      in_stock: { text: t('app.master-data.inventoryStatus.inStock'), status: 'Success' as const },
+      out_stock: { text: t('app.master-data.inventoryStatus.outStock'), status: 'Default' as const },
+      sold: { text: t('app.master-data.inventoryStatus.sold'), status: 'Processing' as const },
+      scrapped: { text: t('app.master-data.inventoryStatus.scrapped'), status: 'Warning' as const },
+      returned: { text: t('app.master-data.inventoryStatus.returned'), status: 'Error' as const },
+    }),
+    [t],
+  );
   const actionRef = useRef<ActionType>(null);
   const formRef = useRef<any>();
   const [modalVisible, setModalVisible] = useState(false);
@@ -152,13 +166,7 @@ const SerialsPage: React.FC = () => {
       width: 100,
       valueType: 'select',
       sorter: true,
-      valueEnum: {
-        in_stock: { text: '在库', status: 'Success' },
-        out_stock: { text: '已出库', status: 'Default' },
-        sold: { text: '已销售', status: 'Processing' },
-        scrapped: { text: '已报废', status: 'Warning' },
-        returned: { text: '已退货', status: 'Error' },
-      },
+      valueEnum: serialStatusValueEnum,
       render: (_, r) => r.status ?? (r as any).status ?? '-',
     },
     {
@@ -287,7 +295,7 @@ const SerialsPage: React.FC = () => {
         <ProFormSelect
           name="status"
           label={t('app.master-data.serials.status')}
-          options={SERIAL_STATUS_OPTIONS}
+          options={serialStatusOptions}
           initialValue="in_stock"
           colProps={{ span: 12 }}
         />

@@ -826,7 +826,7 @@ const DrawingsPage: React.FC = () => {
             </Tooltip>
           }
           showCreateButton
-          createButtonText="新建图纸"
+          createButtonText={t('app.master-data.drawings.createTitle')}
           onCreate={handleCreate}
           request={async (params) => {
             try {

@@ -165,8 +165,9 @@
 
   /* ===== 表头文字不换行 ===== */
   .ant-table-thead > tr > th,
-  .ant-table-thead > tr > td {
-    white-space: nowrap;
+  .ant-table-thead > tr > th .ant-table-cell,
+  .ant-table-thead > tr > th .ant-table-column-title {
+    white-space: nowrap !important;
   }
 
   /* ===== 单元格允许内容（下拉/弹层）溢出 ===== */

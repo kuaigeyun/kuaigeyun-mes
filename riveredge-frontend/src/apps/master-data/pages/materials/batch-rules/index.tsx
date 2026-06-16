@@ -140,7 +140,12 @@ const BatchRulesPage: React.FC = () => {
     for (const key of keys) {
       await batchRuleApi.update(String(key), { isActive });
     }
-    messageApi.success(`已将 ${keys.length} 条批号规则设为${isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled')}`);
+    messageApi.success(
+      t('app.master-data.seqRules.batchRuleSetActiveSuccess', {
+        count: keys.length,
+        status: isActive ? t('app.master-data.seqRules.enabled') : t('app.master-data.seqRules.disabled'),
+      }),
+    );
     setSelectedRowKeys([]);
     actionRef.current?.reload();
   };
@@ -239,7 +244,7 @@ const BatchRulesPage: React.FC = () => {
           <UniBatchMenuButton
             key="batch-rule-batch-actions"
             selectedRowKeys={selectedRowKeys}
-            buttonText="批量操作"
+            buttonText={t('components.uniBatch.batchActions')}
             menuItems={[
               {
                 key: 'batch-enable',
@@ -282,7 +287,7 @@ const BatchRulesPage: React.FC = () => {
         <ProForm.Item label={null} colon={false} colProps={{ span: 24 }} style={{ width: '100%', marginBottom: 24 }}>
           <div style={{ width: '100%', paddingLeft: 8, paddingRight: 8 }}>
             <CodeRuleComponentBuilder
-              title="批号规则"
+              title={t('app.master-data.batchRules.builderTitle')}
               value={ruleComponents}
               onChange={setRuleComponents}
               availableFields={[...BATCH_RULE_AVAILABLE_FIELDS]}

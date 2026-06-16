@@ -383,10 +383,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
         size="small"
         current={currentStep}
         items={[
-          { title: '第一步：选择物料/物料组' },
-          { title: '第二步：工艺路线与工序' },
-          { title: '第三步：确认工序' },
-          { title: '第四步：SOP 已创建' },
+          { title: t('app.master-data.sop.batchStep1Title') },
+          { title: t('app.master-data.sop.batchStep2Title') },
+          { title: t('app.master-data.sop.batchStep3Title') },
+          { title: t('app.master-data.sop.batchStep4Title') },
         ]}
         style={{ marginBottom: 20 }}
         styles={{
@@ -395,25 +395,25 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       />
 
       {currentStep === 0 && (
-        <Card title="第一步：选择物料或物料组" size="small">
+        <Card title={t('app.master-data.sop.batchStep1Card')} size="small">
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
-              <div style={{ marginBottom: 8, fontWeight: 500 }}>选择类型</div>
+              <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.selectType')}</div>
               <Segmented<'material_group' | 'material'>
                 value={type}
                 onChange={(v) => setType(v)}
                 options={[
-                  { label: '物料组', value: 'material_group' },
-                  { label: '物料', value: 'material' },
+                  { label: t('app.master-data.sop.typeMaterialGroup'), value: 'material_group' },
+                  { label: t('app.master-data.sop.typeMaterial'), value: 'material' },
                 ]}
               />
             </div>
             {type === 'material_group' && (
               <div>
-                <div style={{ marginBottom: 8, fontWeight: 500 }}>选择物料组</div>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.selectMaterialGroup')}</div>
                 <Select
                   mode="multiple"
-                  placeholder="请选择物料组"
+                  placeholder={t('app.master-data.sop.bindMaterialGroupPlaceholder')}
                   style={{ width: '100%', maxWidth: 480 }}
                   value={selectedMaterialGroupUuids}
                   onChange={setSelectedMaterialGroupUuids}
@@ -431,10 +431,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
             )}
             {type === 'material' && (
               <div>
-                <div style={{ marginBottom: 8, fontWeight: 500 }}>选择物料</div>
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>{t('app.master-data.sop.typeMaterial')}</div>
                 <Select
                   mode="multiple"
-                  placeholder="请选择物料"
+                  placeholder={t('app.master-data.sop.selectMaterialPlaceholder')}
                   style={{ width: '100%', maxWidth: 480 }}
                   value={selectedMaterialUuids}
                   onChange={setSelectedMaterialUuids}
@@ -451,23 +451,23 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               </div>
             )}
             <Button type="primary" loading={routeLoading} onClick={handleLoadRoute}>
-              下一步：加载工艺路线
+              {t('app.master-data.sop.nextLoadRoute')}
             </Button>
           </Space>
         </Card>
       )}
 
       {currentStep === 1 && (
-        <Card title="第二步：工艺路线与工序" size="small">
+        <Card title={t('app.master-data.sop.batchStep2Card')} size="small">
           {route ? (
             <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
               <div>
-                <strong>工艺路线：</strong>{route.code} - {route.name}
+                <strong>{t('app.master-data.sop.routeLabel')}</strong>{route.code} - {route.name}
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <strong>工序列表</strong>
+                <strong>{t('app.master-data.sop.operationList')}</strong>
                 <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setAddOpModalVisible(true)}>
-                  添加工序
+                  {t('app.master-data.sop.addOperation')}
                 </Button>
               </div>
               <Table
@@ -476,20 +476,20 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                 rowKey="uuid"
                 pagination={false}
                 columns={[
-                  { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+                  { title: t('app.master-data.sop.seqNo'), width: 60, render: (_: any, __: any, i: number) => i + 1 },
                   {
-                    title: '工序编号',
+                    title: t('field.operation.code'),
                     dataIndex: 'code',
                     width: 120,
                     render: (value: string) => <Text copyable>{value || '-'}</Text>,
                   },
-                  { title: '工序名称', dataIndex: 'name' },
+                  { title: t('field.operation.name'), dataIndex: 'name' },
                   {
-                    title: '操作',
+                    title: t('common.actions'),
                     width: 120,
                   render: (_: any, record: OperationItem, index: number) => [
                         <Button {...rowActionKind('skip')} key="move-up" onClick={() => moveUp(index)} disabled={index === 0}>
-                          上移
+                          {t('app.master-data.sop.moveUp')}
                         </Button>,
                         <Button {...rowActionKind('skip')}
                           key="move-down"
@@ -497,7 +497,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           onClick={() => moveDown(index)}
                           disabled={index === operations.length - 1}
                         >
-                          下移
+                          {t('app.master-data.sop.moveDown')}
                         </Button>,
                         <Button {...rowActionKind('delete')}
                           key="delete"
@@ -506,7 +506,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           icon={<DeleteOutlined />}
                           onClick={() => handleRemoveOperation(record.uuid)}
                         >
-                          删除
+                          {t('field.customField.delete')}
                         </Button>,
                       ],
                   },
@@ -514,13 +514,13 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               />
               <div style={{ display: 'flex', justifyContent: 'flex-start', gap: 8 }}>
                 <Button onClick={() => setCurrentStep(0)}>
-                  上一步
+                  {t('components.layoutTemplates.wizard.prev')}
                 </Button>
                 <Button type="primary" loading={loading} onClick={handleUpdateRoute}>
-                  保存工艺路线
+                  {t('app.master-data.sop.saveRoute')}
                 </Button>
                 <Button type="primary" onClick={() => setCurrentStep(2)}>
-                  下一步：确认工序
+                  {t('app.master-data.sop.nextConfirmOps')}
                 </Button>
               </div>
             </Space>
@@ -572,20 +572,26 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       )}
 
       {currentStep === 2 && (
-        <Card title="第三步：确认工序" size="small">
+        <Card title={t('app.master-data.sop.batchStep3Card')} size="small">
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <Alert
               type="info"
               showIcon
-              message="批量规则与编号"
+              message={t('app.master-data.sop.batchRulesTitle')}
               description={
                 type === 'material'
-                  ? `已选 ${selectedMaterialUuids.length} 个物料：将生成约 ${batchSopCountPreview} 条 SOP（每个物料 × 每道工序各一条），编号格式为「路线编码-工序编码-M-主编码」，名称中带物料名与主编码。`
-                  : `已选 ${selectedMaterialGroupUuids.length} 个物料组：将生成约 ${batchSopCountPreview} 条 SOP（每组 × 每道工序各一条），编号含「G-物料组编码」，名称中带组名与编码。`
+                  ? t('app.master-data.sop.batchRulesMaterialDesc', {
+                      count: selectedMaterialUuids.length,
+                      preview: batchSopCountPreview,
+                    })
+                  : t('app.master-data.sop.batchRulesGroupDesc', {
+                      count: selectedMaterialGroupUuids.length,
+                      preview: batchSopCountPreview,
+                    })
               }
             />
             <div>
-              将按以下 {operations.length} 个工序批量创建 SOP 草稿，再逐条进入设计器完善流程。
+              {t('app.master-data.sop.batchConfirmHint', { count: operations.length })}
             </div>
             <Table
               size="small"
@@ -593,22 +599,22 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               rowKey="uuid"
               pagination={false}
               columns={[
-                { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+                { title: t('app.master-data.sop.seqNo'), width: 60, render: (_: any, __: any, i: number) => i + 1 },
                 {
-                  title: '工序编号',
+                  title: t('field.operation.code'),
                   dataIndex: 'code',
                   width: 120,
                   render: (value: string) => <Text copyable>{value || '-'}</Text>,
                 },
-                { title: '工序名称', dataIndex: 'name' },
+                { title: t('field.operation.name'), dataIndex: 'name' },
               ]}
             />
             <Space>
               <Button onClick={() => setCurrentStep(1)}>
-                上一步
+                {t('components.layoutTemplates.wizard.prev')}
               </Button>
               <Button type="primary" loading={createLoading} onClick={handleBatchCreateSops}>
-                为工序创建 SOP
+                {t('app.master-data.sop.createSopsForOps')}
               </Button>
             </Space>
           </Space>
@@ -616,10 +622,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       )}
 
       {currentStep === 3 && (
-        <Card title="第四步：SOP 已创建" size="small">
+        <Card title={t('app.master-data.sop.batchStep4Card')} size="small">
           <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
             <div>
-              已创建 {createdSops.length} 个 SOP 草稿。建议逐条进入「编辑」完善基本信息、作业指导与报工采集。
+              {t('app.master-data.sop.batchCreatedHint', { count: createdSops.length })}
             </div>
             <Table
               size="small"
@@ -628,14 +634,14 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               pagination={false}
               columns={[
                 {
-                  title: 'SOP编号',
+                  title: t('app.master-data.sop.codeLabel'),
                   dataIndex: 'code',
                   width: 280,
                   render: (value: string) => <Text copyable>{value || '-'}</Text>,
                 },
-                { title: 'SOP名称', dataIndex: 'name' },
+                { title: t('app.master-data.sop.nameLabel'), dataIndex: 'name' },
                 {
-                  title: '操作',
+                  title: t('common.actions'),
                   width: 220,
                   render: (_: any, record: SOP) => [
                         <Button
@@ -646,7 +652,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           icon={<HighlightOutlined />}
                           onClick={() => navigate(`/apps/master-data/process/sop/designer?uuid=${record.uuid}`)}
                         >
-                          设计流程
+                          {t('app.master-data.sop.designFlow')}
                         </Button>,
                         <Button
                           key="edit"
@@ -656,7 +662,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
                           icon={<FormOutlined />}
                           onClick={() => handleOpenEdit(record.uuid, 'formConfig')}
                         >
-                          编辑
+                          {t('field.customField.edit')}
                         </Button>,
                       ],
                 },
@@ -664,10 +670,10 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
             />
             <Space>
               <Button onClick={() => setCurrentStep(2)}>
-                上一步
+                {t('components.layoutTemplates.wizard.prev')}
               </Button>
               <Button type="primary" onClick={handleClose}>
-                关闭
+                {t('common.close')}
               </Button>
             </Space>
           </Space>
@@ -675,29 +681,29 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       )}
 
       <Modal
-        title="创建工艺路线"
+        title={t('app.master-data.sop.createRouteTitle')}
         open={createRouteModalVisible}
         onCancel={closeCreateRouteModal}
         footer={[
           <Button {...rowActionKind('revoke')} key="cancel" onClick={closeCreateRouteModal}>
-            取消
+            {t('common.cancel')}
           </Button>,
           <Button {...rowActionKind('submit')} key="submit" type="primary" loading={newRouteSaving} onClick={handleSaveNewRoute}>
-            保存为新工艺路线并绑定
+            {t('app.master-data.sop.saveNewRouteBind')}
           </Button>,
         ]}
       >
         <Form layout="vertical">
-          <Form.Item label="工艺路线编号" required>
-            <Input value={newRouteCode} onChange={(e) => setNewRouteCode(e.target.value)} placeholder="请输入编号" />
+          <Form.Item label={t('field.route.code')} required>
+            <Input value={newRouteCode} onChange={(e) => setNewRouteCode(e.target.value)} placeholder={t('field.route.codePlaceholder')} />
           </Form.Item>
-          <Form.Item label="工艺路线名称" required>
-            <Input value={newRouteName} onChange={(e) => setNewRouteName(e.target.value)} placeholder="请输入名称" />
+          <Form.Item label={t('field.route.name')} required>
+            <Input value={newRouteName} onChange={(e) => setNewRouteName(e.target.value)} placeholder={t('field.route.namePlaceholder')} />
           </Form.Item>
-          <Form.Item label="工序列表">
+          <Form.Item label={t('app.master-data.sop.operationList')}>
             <div style={{ marginBottom: 8 }}>
               <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setAddOpModalVisible(true)}>
-                添加工序
+                {t('app.master-data.sop.addOperation')}
               </Button>
             </div>
             <Table
@@ -706,20 +712,20 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
               rowKey="uuid"
               pagination={false}
               columns={[
-                { title: '序号', width: 60, render: (_: any, __: any, i: number) => i + 1 },
+                { title: t('app.master-data.sop.seqNo'), width: 60, render: (_: any, __: any, i: number) => i + 1 },
                 {
-                  title: '工序编号',
+                  title: t('field.operation.code'),
                   dataIndex: 'code',
                   width: 120,
                   render: (value: string) => <Text copyable>{value || '-'}</Text>,
                 },
-                { title: '工序名称', dataIndex: 'name' },
+                { title: t('field.operation.name'), dataIndex: 'name' },
                 {
-                  title: '操作',
+                  title: t('common.actions'),
                   width: 80,
                   render: (_: any, record: OperationItem) => (
                     <Button size="small" danger icon={<DeleteOutlined />} onClick={() => handleRemoveOperation(record.uuid)}>
-                      删除
+                      {t('field.customField.delete')}
                     </Button>
                   ),
                 },
@@ -730,7 +736,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       </Modal>
 
       <Modal
-        title="添加工序"
+        title={t('app.master-data.sop.addOperationTitle')}
         open={addOpModalVisible}
         onCancel={() => { setAddOpModalVisible(false); setSelectedOpUuids([]); }}
         onOk={handleAddOperations}
@@ -738,7 +744,7 @@ const SOPBatchCreateSteps: React.FC<SOPBatchCreateStepsProps> = ({ onSuccess, on
       >
         <Select
           mode="multiple"
-          placeholder="请选择工序"
+          placeholder={t('app.master-data.sop.selectOperationPlaceholder')}
           style={{ width: '100%' }}
           value={selectedOpUuids}
           onChange={setSelectedOpUuids}

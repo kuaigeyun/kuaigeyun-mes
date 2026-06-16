@@ -75,8 +75,6 @@ const SCHEDULING_POOL_ROW_HEIGHT = 32;
 const SCHEDULING_POOL_TABLE_THEME: ThemeConfig = {
   components: {
     Table: {
-      borderRadius: 0,
-      headerBorderRadius: 0,
       cellFontSizeSM: SCHEDULING_POOL_FONT_SIZE,
       cellPaddingBlockSM: Math.floor((SCHEDULING_POOL_ROW_HEIGHT - 20) / 2),
       cellPaddingInlineSM: 8,

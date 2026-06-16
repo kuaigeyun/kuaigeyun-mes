@@ -2107,8 +2107,19 @@ class ReportService:
                 it["planned_end_date"] = it["planned_end_date"].strftime("%Y-%m-%d") if it["planned_end_date"] else None
             return {"data": items, "success": True}
         elif report_type in ["material-shortage-alert", "shortage"]:
-            # 物料短缺预警
-            items = await InventoryAlert.filter(tenant_id=tenant_id, alert_type="low_stock", status="pending").limit(100).values("material_name", "current_quantity", "min_quantity")
+            # 物料短缺预警（InventoryAlert：threshold_value=最低库存阈值，triggered_at=预警时间）
+            items = await InventoryAlert.filter(
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+                alert_type="low_stock",
+                status="pending",
+            ).limit(100).values(
+                "material_name",
+                "warehouse_name",
+                "current_quantity",
+                "threshold_value",
+                "triggered_at",
+            )
             return {"data": items, "success": True}
         elif report_type in ["production-delay-analysis", "delay"]:
             # 生产延期分析

@@ -14,10 +14,37 @@ import {
 
 export { LIST_LIFECYCLE_STAGE_FIELD };
 
-/** 工单列表生命周期 Tab / 筛选展示名（与 stageName 一致） */
+/** 工单生命周期阶段键（筛选 valueEnum / API 映射唯一键） */
+export const WORK_ORDER_LIFECYCLE_STAGE_KEYS = [
+  'draft',
+  'released',
+  'in_progress',
+  'completed',
+  'cancelled',
+  'split',
+] as const;
+
+export type WorkOrderLifecycleStageKey = (typeof WORK_ORDER_LIFECYCLE_STAGE_KEYS)[number];
+
+const WORK_ORDER_LIFECYCLE_I18N_KEYS: Record<WorkOrderLifecycleStageKey, string> = {
+  draft: 'app.kuaizhizao.workOrder.lifecycleDraft',
+  released: 'app.kuaizhizao.workOrder.lifecycleReleased',
+  in_progress: 'app.kuaizhizao.workOrder.lifecycleInProgress',
+  completed: 'app.kuaizhizao.workOrder.lifecycleCompleted',
+  cancelled: 'app.kuaizhizao.workOrder.lifecycleCancelled',
+  split: 'app.kuaizhizao.workOrder.lifecycleSplit',
+};
+
+/** @deprecated 仅兼容旧 saved search / 钉住条件中的中文阶段名 */
 export const WORK_ORDER_STAGE_LABELS = ['草稿', '已下达', '执行中', '已完成', '已取消', '已拆分'] as const;
 
 const WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS: Record<string, string> = {
+  draft: 'draft',
+  released: 'released',
+  in_progress: 'in_progress',
+  completed: 'completed',
+  cancelled: 'cancelled',
+  split: 'split',
   草稿: 'draft',
   已下达: 'released',
   执行中: 'in_progress',
@@ -137,20 +164,34 @@ export function getWorkOrderLifecycle(
   return parseBackendLifecycle(buildFallbackLifecycle(record));
 }
 
-export function buildWorkOrderLifecycleValueEnum(): Record<
-  string,
-  { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }
-> {
-  const statusByStage: Record<string, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
-    草稿: 'Default',
-    已下达: 'Processing',
-    执行中: 'Processing',
-    已完成: 'Success',
-    已取消: 'Error',
-    已拆分: 'Warning',
+export function translateWorkOrderLifecycleStatus(
+  t: (key: string) => string,
+  status?: string | null,
+): string {
+  if (!status) return '-';
+  const key = STATUS_TO_KEY[status];
+  if (key && key in WORK_ORDER_LIFECYCLE_I18N_KEYS) {
+    return t(WORK_ORDER_LIFECYCLE_I18N_KEYS[key as WorkOrderLifecycleStageKey]);
+  }
+  return status;
+}
+
+export function buildWorkOrderLifecycleValueEnum(
+  t: (key: string) => string,
+): Record<string, { text: string; status?: 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning' }> {
+  const statusByStage: Record<WorkOrderLifecycleStageKey, 'Default' | 'Processing' | 'Error' | 'Success' | 'Warning'> = {
+    draft: 'Default',
+    released: 'Processing',
+    in_progress: 'Processing',
+    completed: 'Success',
+    cancelled: 'Error',
+    split: 'Warning',
   };
   return Object.fromEntries(
-    WORK_ORDER_STAGE_LABELS.map((stage) => [stage, { text: stage, status: statusByStage[stage] ?? 'Default' }]),
+    WORK_ORDER_LIFECYCLE_STAGE_KEYS.map((stage) => [
+      stage,
+      { text: t(WORK_ORDER_LIFECYCLE_I18N_KEYS[stage]), status: statusByStage[stage] },
+    ]),
   );
 }
 
@@ -160,7 +201,7 @@ export function resolveWorkOrderListLifecycleParams(
   params?: Record<string, unknown> | null,
 ): { status?: string } {
   const stage = resolveListLifecycleStageFromSearch(searchFormValues, params, {
-    allowedStages: [...WORK_ORDER_STAGE_LABELS],
+    allowedStages: [...WORK_ORDER_LIFECYCLE_STAGE_KEYS, ...WORK_ORDER_STAGE_LABELS],
   });
   if (stage && WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS[stage]) {
     return { status: WORK_ORDER_LIFECYCLE_STAGE_TO_STATUS[stage] };

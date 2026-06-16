@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useRequest } from 'ahooks';
 import {
   TeamOutlined,
   CalendarOutlined,
@@ -11,7 +10,7 @@ import {
   FileTextOutlined,
 } from '@ant-design/icons';
 import { mesDashboardService } from '../../../services/dashboard';
-import { dashboardRequestOptions } from '../../../utils/dashboardRequestOptions';
+import { useDashboardRequest } from '../../../utils/dashboardRequestOptions';
 import {
   ModuleCenterLayout,
   ModuleKpiRow,
@@ -24,9 +23,9 @@ import type { ModuleKpiDef, ModuleShortcutDef } from '../../../components/module
 const PerformanceCenterDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { data: summary, loading } = useRequest(
+  const { data: summary, loading } = useDashboardRequest(
     mesDashboardService.getPerformanceSummary,
-    dashboardRequestOptions('kz:performance-dashboard:summary'),
+    'kz:performance-dashboard:summary',
   );
   const s = summary as Record<string, number> | undefined;
 

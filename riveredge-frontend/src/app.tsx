@@ -24,6 +24,7 @@ import { buildRestoredUserFromStorage } from './utils/restoredUser';
 import { refreshAccessTokenSilently } from './utils/tokenRefresh';
 import { prefetchAvatarUrl } from './utils/avatar';
 import { FORM_LAYOUT } from './components/layout-templates/constants';
+import { ENGLISH_UI_FONT_FAMILY } from './constants/fonts';
 import { useGlobalStore } from './stores';
 import {
   initLanguageFromApi,
@@ -702,6 +703,7 @@ export default function App() {
   const responsiveThemeConfig = React.useMemo(() => {
     const { algorithm, token } = finalThemeConfig;
     const isSmall = screenSize.isMobile || screenSize.isTablet;
+    const isEnglishLocale = i18n.language?.startsWith('en');
     /** 与 @ant-design/pro-layout 侧栏 collapsedWidth=64 一致。默认 Menu 令牌的 collapsedWidth 常为 2*controlHeightLG(≈80)，
      * 与 64px 侧栏不同宽时，inline-collapsed 用「百分比 padding」的居中在错误宽度上计算，整列会表现成贴左。 */
     const proLayoutSiderCollapsedWidth = 64;
@@ -716,6 +718,7 @@ export default function App() {
       algorithm,
       token: {
         ...token,
+        ...(isEnglishLocale ? { fontFamily: ENGLISH_UI_FONT_FAMILY } : {}),
         // 全局去掉控件聚焦外圈光晕（保留边框色变化）
         controlOutlineWidth: 0,
         controlOutline: 'transparent',
@@ -747,7 +750,7 @@ export default function App() {
         },
       },
     };
-  }, [finalThemeConfig, screenSize]);
+  }, [finalThemeConfig, screenSize, i18n.language]);
 
   const antLocale = React.useMemo(
     () => ANT_LOCALE_MAP[i18n.language] || ANT_LOCALE_MAP[i18n.language?.split('-')[0]] || zhCN,

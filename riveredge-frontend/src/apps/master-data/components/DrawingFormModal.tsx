@@ -8,10 +8,11 @@ import {
   ProFormSelect,
   ProFormText,
   ProFormTextArea,
-  ProFormUploadButton,
+  ProFormUploadDragger,
   ProFormInstance,
 } from '@ant-design/pro-components';
 import { App } from 'antd';
+import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile } from 'antd/es/upload/interface';
 import { FormModalTemplate } from '../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../components/layout-templates/constants';
@@ -191,7 +192,7 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
   const makeUploadFieldProps = (multiple: boolean) => ({
     accept: DRAWING_ACCEPT,
     multiple,
-    listType: 'text' as const,
+    style: { width: '100%' },
     customRequest: async (options: any) => {
       try {
         const res = await uploadMultipleFiles([options.file as File], { category: DRAWING_CATEGORY });
@@ -322,17 +323,23 @@ export const DrawingFormModal: React.FC<DrawingFormModalProps> = ({
         colProps={{ span: 12 }}
       />
       <CustomFieldsFormSection customFields={customFields} customFieldValues={customFieldValues} gridColumns={2} />
-      <ProFormUploadButton
+      <ProFormUploadDragger
         name="mainFile"
         label={t('app.master-data.drawings.uploadMain')}
         max={1}
+        icon={<InboxOutlined />}
+        title={t('app.master-data.drawings.uploadDragHint')}
+        description={t('app.master-data.drawings.uploadDragSubHint')}
         fieldProps={makeUploadFieldProps(false)}
         rules={[{ required: true, message: t('app.master-data.drawings.fileRequired') }]}
         colProps={{ span: 12 }}
       />
-      <ProFormUploadButton
+      <ProFormUploadDragger
         name="supplementaryFiles"
         label={t('app.master-data.drawings.uploadSupplementary')}
+        icon={<InboxOutlined />}
+        title={t('app.master-data.drawings.uploadDragHint')}
+        description={t('app.master-data.drawings.uploadSupplementaryDragSubHint')}
         fieldProps={makeUploadFieldProps(true)}
         colProps={{ span: 12 }}
       />
