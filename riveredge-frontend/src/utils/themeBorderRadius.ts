@@ -15,3 +15,11 @@ export function clampBorderRadius(value: unknown, fallback = 8): number {
 export function readBorderRadius(value: unknown, fallback = 8): number {
   return clampBorderRadius(value, fallback);
 }
+
+/** UniTabs 标签圆角下限：系统圆角低于此值时仍保留最小圆角 */
+export const UNI_TABS_BORDER_RADIUS_MIN = 4;
+
+/** 标签顶角 / 底内凹：max(4px, 系统 borderRadius) */
+export function readUniTabsBorderRadius(value: unknown, fallback = 8): number {
+  return Math.max(UNI_TABS_BORDER_RADIUS_MIN, readBorderRadius(value, fallback));
+}

@@ -59,6 +59,40 @@ export function resolvePresetRoleDescription(
   return resolvePresetField('role', record.code, 'desc', record.description ?? '', t);
 }
 
+/** 编辑表单展示：预设实体用 i18n 解析名称（及角色描述） */
+export function localizedPresetFormFields(
+  entity: PresetEntityKind,
+  record: { code?: string; name?: string | null; description?: string | null },
+  t: TFunction,
+): { name: string; description?: string } {
+  const name =
+    entity === 'department'
+      ? resolvePresetDepartmentName(record, t)
+      : entity === 'position'
+        ? resolvePresetPositionName(record, t)
+        : resolvePresetRoleName(record, t);
+  const fields: { name: string; description?: string } = { name };
+  if (entity === 'role') {
+    fields.description = resolvePresetRoleDescription(record, t);
+  }
+  return fields;
+}
+
+/** 保存预设实体时勿将界面译文写回库（名称/描述仍以 code + 翻译模块为准） */
+export function omitPresetLocalizedPayloadFields(
+  entity: PresetEntityKind,
+  code: string | undefined | null,
+  values: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!isPresetEntityCode(entity, code)) return values;
+  const next = { ...values };
+  delete next.name;
+  if (entity === 'role') {
+    delete next.description;
+  }
+  return next;
+}
+
 export function resolvePresetApprovalProcessName(
   record: { code?: string; name?: string | null },
   t: TFunction,

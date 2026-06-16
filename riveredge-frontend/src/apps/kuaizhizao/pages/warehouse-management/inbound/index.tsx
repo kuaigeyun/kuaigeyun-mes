@@ -1527,7 +1527,7 @@ const InboundPage: React.FC = () => {
           />,
         ]}
         toolBarRender={() => {
-          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems([
+          const pullMenuItems = buildKuaizhizaoPullCreateMenuItems(t, [
             {
               actionKey: 'inbound.pull_from_purchase_order',
               onClick: () => quickPullRef.current?.open('purchase_order'),

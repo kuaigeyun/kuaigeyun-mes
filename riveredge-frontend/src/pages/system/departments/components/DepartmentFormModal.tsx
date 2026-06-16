@@ -2,8 +2,9 @@
  * 部门新建/编辑弹窗（Schema 驱动）
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
 import { FormModalTemplate } from '../../../../components/layout-templates';
@@ -19,13 +20,22 @@ import {
   CreateDepartmentData,
   UpdateDepartmentData,
 } from '../../../../services/department';
+import {
+  isPresetEntityCode,
+  localizedPresetFormFields,
+  omitPresetLocalizedPayloadFields,
+  resolvePresetDepartmentName,
+} from '../../../../utils/presetEntityI18n';
 
-function toTreeData(items: DepartmentTreeItem[]): Array<{ title: string; value: string; key: string; children?: any[] }> {
+function toTreeData(
+  items: DepartmentTreeItem[],
+  t: TFunction,
+): Array<{ title: string; value: string; key: string; children?: any[] }> {
   return items.map((item) => ({
-    title: item.name,
+    title: resolvePresetDepartmentName(item, t),
     value: item.uuid,
     key: item.uuid,
-    children: item.children?.length ? toTreeData(item.children) : undefined,
+    children: item.children?.length ? toTreeData(item.children, t) : undefined,
   }));
 }
 
@@ -48,27 +58,40 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
   onSuccess,
   deptTreeItems,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
+  const [editPresetCode, setEditPresetCode] = useState<string | null>(null);
 
   const isEdit = Boolean(editUuid);
-  const deptTreeData = toTreeData(deptTreeItems);
+  const deptTreeData = useMemo(() => toTreeData(deptTreeItems, t), [deptTreeItems, t]);
+  const presetDisabledFields = useMemo(
+    () => (isEdit && editPresetCode && isPresetEntityCode('department', editPresetCode) ? ['name'] : []),
+    [isEdit, editPresetCode],
+  );
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setEditPresetCode(null);
+      return;
+    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       is_active: true,
       sort_order: 0,
       parent_uuid: initialParentUuid || undefined,
     });
-    if (!editUuid) return;
+    if (!editUuid) {
+      setEditPresetCode(null);
+      return;
+    }
     getDepartmentByUuid(editUuid)
       .then((detail: Department) => {
+        const localized = localizedPresetFormFields('department', detail, t);
+        setEditPresetCode(detail.code ?? null);
         formRef.current?.setFieldsValue({
-          name: detail.name,
+          name: localized.name,
           code: detail.code,
           description: detail.description,
           parent_uuid: detail.parent_uuid || undefined,
@@ -79,16 +102,17 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
       .catch((err: any) => {
         messageApi.error(err?.message || t('common.loadFailed'));
       });
-  }, [open, editUuid, initialParentUuid, messageApi, t]);
+  }, [open, editUuid, initialParentUuid, messageApi, t, i18n.language]);
 
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      const payload = { ...values };
+      let payload = { ...values };
       if (payload.parent_uuid === undefined || payload.parent_uuid === null || payload.parent_uuid === '') {
         payload.parent_uuid = undefined;
       }
       if (isEdit && editUuid) {
+        payload = omitPresetLocalizedPayloadFields('department', editPresetCode, payload);
         await updateDepartment(editUuid, payload as UpdateDepartmentData);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
@@ -127,6 +151,7 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
         schema={departmentFormSchema}
         isEdit={isEdit}
         treeDataMap={{ parent_uuid: deptTreeData }}
+        disabledFields={presetDisabledFields}
       />
     </FormModalTemplate>
   );

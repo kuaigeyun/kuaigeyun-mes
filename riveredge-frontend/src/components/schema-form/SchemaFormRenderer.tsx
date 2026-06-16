@@ -44,6 +44,8 @@ export interface SchemaFormRendererProps {
   treeDataMap?: Record<string, Array<{ title: string; value: string; key?: string; children?: any[] }>>;
   /** 编辑时是否允许修改编号字段（默认 false，编辑时编号禁用） */
   allowEditCodeWhenEdit?: boolean;
+  /** 按字段名禁用（如预设实体的名称不可直接改库内中文源） */
+  disabledFields?: string[];
 }
 
 function buildRules(field: FieldConfig, t: (key: string) => string): any[] {
@@ -76,6 +78,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
   dropdownEnhanceMap = {},
   treeDataMap = {},
   allowEditCodeWhenEdit = false,
+  disabledFields = [],
 }) => {
   const { t } = useTranslation();
 
@@ -218,6 +221,10 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         }
 
         if (field.type === 'textarea') {
+          const textareaProps = { ...field.fieldProps };
+          if (disabledFields.includes(field.name)) {
+            textareaProps.disabled = true;
+          }
           return (
             <ProFormTextArea
               key={field.name}
@@ -226,7 +233,7 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
               placeholder={placeholder}
               colProps={{ span: colSpan }}
               rules={rules}
-              fieldProps={field.fieldProps}
+              fieldProps={textareaProps}
             />
           );
         }
@@ -290,6 +297,9 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         // default: text
         const textFieldProps = { ...field.fieldProps };
         if (isCodeField && isEdit && !allowEditCodeWhenEdit) {
+          textFieldProps.disabled = true;
+        }
+        if (disabledFields.includes(field.name)) {
           textFieldProps.disabled = true;
         }
         return (

@@ -35,6 +35,31 @@ export type BuildSummaryFooterOptions = {
   showIndexColumn?: boolean;
 };
 
+type SummarySlot =
+  | { kind: 'empty' }
+  | { kind: 'summary'; dataIndex: string; col: ProColumns };
+
+function buildSummarySlots(
+  columns: ProColumns[],
+  summaryFields: string[],
+  showIndexColumn?: boolean,
+): SummarySlot[] {
+  const fieldSet = new Set(summaryFields);
+  const slots: SummarySlot[] = [];
+  if (showIndexColumn) {
+    slots.push({ kind: 'empty' });
+  }
+  for (const col of columns) {
+    const dataIndex = String(col.dataIndex ?? '');
+    if (fieldSet.has(dataIndex)) {
+      slots.push({ kind: 'summary', dataIndex, col });
+    } else {
+      slots.push({ kind: 'empty' });
+    }
+  }
+  return slots;
+}
+
 /**
  * 表尾合计：ProTable summary 行（本页合计 + 全量合计提示）
  */
@@ -86,36 +111,28 @@ const SummaryRowInner: React.FC<SummaryRowInnerProps> = ({
   showIndexColumn,
 }) => {
   const { t } = useTranslation();
-  const fieldSet = new Set(summaryFields);
-  let colIndex = 0;
+  const slots = buildSummarySlots(columns, summaryFields, showIndexColumn);
+  const firstSummaryIdx = slots.findIndex((slot) => slot.kind === 'summary');
+  if (firstSummaryIdx < 0) return null;
+
+  let cellIndex = 0;
 
   return (
     <Table.Summary fixed>
       <Table.Summary.Row>
-        {showIndexColumn && (
-          <Table.Summary.Cell index={colIndex++} colSpan={1}>
-            <strong>{t('components.uniReport.pageSubtotal')}</strong>
-          </Table.Summary.Cell>
-        )}
-        {columns.map((col, i) => {
-          const dataIndex = String(col.dataIndex ?? '');
-          const isFirst = i === 0 && !showIndexColumn;
-          const idx = colIndex++;
-          if (isFirst) {
-            return (
-              <Table.Summary.Cell index={idx} key={dataIndex || i}>
-                <strong>{t('components.uniReport.pageSubtotal')}</strong>
-              </Table.Summary.Cell>
-            );
-          }
-          if (fieldSet.has(dataIndex)) {
+        <Table.Summary.Cell index={cellIndex++} colSpan={firstSummaryIdx}>
+          <strong style={{ whiteSpace: 'nowrap' }}>{t('components.uniReport.pageSubtotal')}</strong>
+        </Table.Summary.Cell>
+        {slots.slice(firstSummaryIdx).map((slot, i) => {
+          if (slot.kind === 'summary') {
+            const { dataIndex, col } = slot;
             const meta = metaMap.get(dataIndex);
             const pageSum = sumPageField(rows, dataIndex);
             const globalVal = globalSummary?.[dataIndex];
             const showGlobal =
               globalVal !== undefined && globalVal !== null && globalVal !== pageSum;
             return (
-              <Table.Summary.Cell index={idx} key={dataIndex || i}>
+              <Table.Summary.Cell index={cellIndex++} key={dataIndex || i}>
                 <div>
                   <strong>{formatSummaryValue(pageSum, meta?.format ?? (col.valueType as string))}</strong>
                   {showGlobal && (
@@ -128,7 +145,7 @@ const SummaryRowInner: React.FC<SummaryRowInnerProps> = ({
               </Table.Summary.Cell>
             );
           }
-          return <Table.Summary.Cell index={idx} key={dataIndex || i} />;
+          return <Table.Summary.Cell index={cellIndex++} key={`empty-${i}`} />;
         })}
       </Table.Summary.Row>
     </Table.Summary>

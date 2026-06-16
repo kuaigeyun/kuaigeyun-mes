@@ -1,7 +1,15 @@
+import type { TFunction } from 'i18next';
+
+import i18n from '../../../config/i18n';
 import { getDepartmentTree, type DepartmentTreeItem } from '../../../services/department';
 import { getPositionList } from '../../../services/position';
 import { getRoleList } from '../../../services/role';
 import { searchReferenceDisplay } from '../../../utils/referenceDisplay';
+import {
+  resolvePresetDepartmentName,
+  resolvePresetPositionName,
+  resolvePresetRoleName,
+} from '../../../utils/presetEntityI18n';
 
 export type UserFormSelectOption = { label: string; value: string };
 
@@ -17,24 +25,28 @@ export type UserFormCoreReferenceOptions = {
   roleMetaByUuid: Record<string, UserFormRoleMeta>;
 };
 
-function buildDeptOptions(items: DepartmentTreeItem[], level = 0): UserFormSelectOption[] {
+function buildDeptOptions(
+  items: DepartmentTreeItem[],
+  t: TFunction,
+  level = 0,
+): UserFormSelectOption[] {
   const options: UserFormSelectOption[] = [];
   items.forEach((item) => {
     const prefix = '  '.repeat(level);
     options.push({
-      label: `${prefix}${item.name}`,
+      label: `${prefix}${resolvePresetDepartmentName(item, t)}`,
       value: item.uuid,
     });
     if (item.children && item.children.length > 0) {
-      options.push(...buildDeptOptions(item.children, level + 1));
+      options.push(...buildDeptOptions(item.children, t, level + 1));
     }
   });
   return options;
 }
 
-let coreInflight: Promise<UserFormCoreReferenceOptions> | null = null;
+let coreInflight: { lang: string; promise: Promise<UserFormCoreReferenceOptions> } | null = null;
 
-async function fetchCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions> {
+async function fetchCoreReferenceOptions(t: TFunction): Promise<UserFormCoreReferenceOptions> {
   const [deptResponse, posResponse, roleResponse] = await Promise.all([
     getDepartmentTree(),
     getPositionList({ page_size: 100 }),
@@ -42,13 +54,13 @@ async function fetchCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions
   ]);
 
   return {
-    departmentOptions: buildDeptOptions(deptResponse.items),
+    departmentOptions: buildDeptOptions(deptResponse.items, t),
     positionOptions: posResponse.items.map((pos) => ({
-      label: pos.name,
+      label: resolvePresetPositionName(pos, t),
       value: pos.uuid,
     })),
     roleOptions: roleResponse.items.map((role) => ({
-      label: role.name,
+      label: resolvePresetRoleName(role, t),
       value: role.uuid,
     })),
     roleMetaByUuid: roleResponse.items.reduce((acc, role) => {
@@ -61,17 +73,23 @@ async function fetchCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions
   };
 }
 
-/** 每次调用均请求最新部门树、职位、角色（仅合并同一时刻的并发请求） */
-export async function getUserFormCoreReferenceOptions(): Promise<UserFormCoreReferenceOptions> {
-  if (coreInflight) {
-    return coreInflight;
+/** 每次调用均请求最新部门树、职位、角色（仅合并同一时刻、同一语言的并发请求） */
+export async function getUserFormCoreReferenceOptions(
+  t: TFunction,
+): Promise<UserFormCoreReferenceOptions> {
+  const lang = i18n.language;
+  if (coreInflight?.lang === lang) {
+    return coreInflight.promise;
   }
 
-  coreInflight = fetchCoreReferenceOptions().finally(() => {
-    coreInflight = null;
+  const promise = fetchCoreReferenceOptions(t).finally(() => {
+    if (coreInflight?.lang === lang) {
+      coreInflight = null;
+    }
   });
+  coreInflight = { lang, promise };
 
-  return coreInflight;
+  return promise;
 }
 
 const partnerInflight: Partial<Record<'supplier' | 'customer', Promise<UserFormSelectOption[]>>> = {};

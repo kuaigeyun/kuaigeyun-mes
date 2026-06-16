@@ -806,7 +806,7 @@ export interface UniTableProps<T extends Record<string, any> = Record<string, an
    */
   onPrint?: (selectedRowKeys: React.Key[], currentPageData?: T[]) => void
   /**
-   * 打印按钮文案（默认：'打印'）
+   * 打印按钮文案（不传则用 i18n `components.uniTable.print`）
    */
   printButtonText?: string
   /**
@@ -2288,7 +2288,7 @@ export function UniTable<T extends Record<string, any> = Record<string, any>>({
           disabled={selectedRowKeys.length !== 1}
           onClick={() => onPrint(selectedRowKeys, tableData)}
         >
-          {printButtonText ?? t('common.print', { defaultValue: '打印' })}
+          {printButtonText ?? t('components.uniTable.print')}
         </Button>
       )
     }

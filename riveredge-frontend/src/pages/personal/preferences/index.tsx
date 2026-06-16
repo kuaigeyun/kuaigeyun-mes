@@ -9,10 +9,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormSelect, ProFormSwitch, ProFormInstance } from '@ant-design/pro-components';
 import SafeProFormSelect from '../../../components/safe-pro-form-select';
-import { App, Card, ColorPicker, Slider, Form, Row, Col, Typography, Space } from 'antd';
+import { App, Card, ColorPicker, Form, Row, Col, Typography, Space } from 'antd';
 import { useUserPreferenceStore, readCachedPreferencesForCurrentUser } from '../../../stores/userPreferenceStore';
 import { getLanguageList, Language } from '../../../services/language';
 import type { Color } from 'antd/es/color-picker';
+import { clampBorderRadius, readBorderRadius } from '../../../utils/themeBorderRadius';
+import { clampFontSize, readFontSize } from '../../../utils/themeFontSize';
+import { ThemeStyleSliders } from '../../../components/theme-editor/ThemeStyleSliders';
 
 
 /** 将 ColorPicker 的值规范为 hex 字符串 */
@@ -29,6 +32,18 @@ function normalizeColor(value: string | Color | null | undefined, defaultVal: st
 function normalizeProTableDensity(v: unknown): 'large' | 'middle' | 'small' {
   if (v === 'large' || v === 'middle' || v === 'small') return v;
   return 'small';
+}
+
+function normalizeThemeConfigFields(
+  tc: Record<string, unknown> | null | undefined,
+  fallback: Record<string, unknown>,
+): Record<string, unknown> {
+  const merged = { ...fallback, ...(tc || {}) };
+  return {
+    ...merged,
+    borderRadius: readBorderRadius(merged.borderRadius, 6),
+    fontSize: readFontSize(merged.fontSize, 14),
+  };
 }
 
 /**
@@ -75,7 +90,10 @@ const UserPreferencesPage: React.FC = () => {
     return {
       ...defaultPreferenceValues,
       ...cached,
-      theme_config: { ...defaultPreferenceValues.theme_config, ...(cached.theme_config || {}) },
+      theme_config: normalizeThemeConfigFields(
+        cached.theme_config as Record<string, unknown> | undefined,
+        defaultPreferenceValues.theme_config,
+      ),
       ui: {
         ...defaultPreferenceValues.ui,
         ...(cached.ui || {}),
@@ -128,8 +146,10 @@ const UserPreferencesPage: React.FC = () => {
         ...defaultPreferenceValues,
         ...preferences,
         theme_config: {
-          ...defaultPreferenceValues.theme_config,
-          ...(preferences.theme_config || {}),
+          ...normalizeThemeConfigFields(
+            preferences.theme_config as Record<string, unknown> | undefined,
+            defaultPreferenceValues.theme_config,
+          ),
           compact: false,
         },
         ui: {
@@ -148,14 +168,17 @@ const UserPreferencesPage: React.FC = () => {
     // 无用户偏好时，用 getPreference 填充默认值（含 ui.* 的系统配置回退）
     const defaultValues = {
       theme: getPreference<string>('theme', 'light'),
-      theme_config: {
-        colorPrimary: getPreference<string>('theme_config.colorPrimary', '#1890ff'),
-        borderRadius: getPreference<number>('theme_config.borderRadius', 6),
-        fontSize: getPreference<number>('theme_config.fontSize', 14),
-        siderBgColor: getPreference<string>('theme_config.siderBgColor', '') ?? '',
-        headerBgColor: getPreference<string>('theme_config.headerBgColor', '') ?? '',
-        tabsBgColor: getPreference<string>('theme_config.tabsBgColor', '') ?? '',
-      },
+      theme_config: normalizeThemeConfigFields(
+        {
+          colorPrimary: getPreference<string>('theme_config.colorPrimary', '#1890ff'),
+          borderRadius: getPreference<number>('theme_config.borderRadius', 6),
+          fontSize: getPreference<number>('theme_config.fontSize', 14),
+          siderBgColor: getPreference<string>('theme_config.siderBgColor', '') ?? '',
+          headerBgColor: getPreference<string>('theme_config.headerBgColor', '') ?? '',
+          tabsBgColor: getPreference<string>('theme_config.tabsBgColor', '') ?? '',
+        },
+        defaultPreferenceValues.theme_config,
+      ),
       tabs_persistence: getPreference<boolean>('tabs_persistence', false),
       language: getPreference<string>('language', 'zh-CN'),
       notifications: {
@@ -192,8 +215,8 @@ const UserPreferencesPage: React.FC = () => {
           theme_config: {
             ...tc,
             colorPrimary: normalizeColor(tc.colorPrimary, '#1890ff'),
-            borderRadius: tc.borderRadius ?? 6,
-            fontSize: tc.fontSize ?? 14,
+            borderRadius: clampBorderRadius(tc.borderRadius, 6),
+            fontSize: clampFontSize(tc.fontSize, 14),
             compact: false,
             siderBgColor: normalizeColor(tc.siderBgColor, '') || '',
             headerBgColor: normalizeColor(tc.headerBgColor, '') || '',
@@ -260,21 +283,10 @@ const UserPreferencesPage: React.FC = () => {
                 {/* 样式微调 */}
                 <Typography.Title level={5} style={{ marginBottom: 16 }}>{t('pages.personal.preferences.styleCustomization')}</Typography.Title>
                 <div style={sectionMargin}>
-                  <Form.Item name={['theme_config', 'fontSize']} label={t('pages.personal.preferences.fontSize')}>
-                    <Slider 
-                      min={12} 
-                      max={20} 
-                      step={1}
-                      marks={{ 12: t('pages.personal.preferences.fontSmall'), 14: t('pages.personal.preferences.fontStandard'), 16: t('pages.personal.preferences.fontLarge'), 18: t('pages.personal.preferences.fontXl'), 20: t('pages.personal.preferences.fontXxl') }} 
-                    />
-                  </Form.Item>
-                  <Form.Item name={['theme_config', 'borderRadius']} label={t('pages.personal.preferences.borderRadius')} style={{ marginTop: 24 }}>
-                    <Slider 
-                      min={0} 
-                      max={16} 
-                      marks={{ 0: t('pages.personal.preferences.square'), 6: t('pages.personal.preferences.medium'), 12: t('pages.personal.preferences.round'), 16: t('pages.personal.preferences.rounder') }} 
-                    />
-                  </Form.Item>
+                  <ThemeStyleSliders
+                    fontSizeName={['theme_config', 'fontSize']}
+                    borderRadiusName={['theme_config', 'borderRadius']}
+                  />
                 </div>
 
                 {/* 颜色方案 */}

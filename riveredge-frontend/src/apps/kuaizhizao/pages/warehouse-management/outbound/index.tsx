@@ -871,7 +871,7 @@ const OutboundPage: React.FC = () => {
             compactKey="outbound-pull-load"
             type="primary"
             variant="solid"
-            menuItems={buildKuaizhizaoPullCreateMenuItems([
+            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {
                 actionKey: 'sales_delivery.pull_from_shipment_notice',
                 onClick: () => quickPullRef.current?.open('shipment_notice'),

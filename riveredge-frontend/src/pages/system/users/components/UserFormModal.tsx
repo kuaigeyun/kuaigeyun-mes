@@ -140,7 +140,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         formRef.current?.resetFields();
 
         if (!editUuid) {
-          const core = await getUserFormCoreReferenceOptions();
+          const core = await getUserFormCoreReferenceOptions(tRef.current);
           if (cancelled) return;
           applyCoreReferenceOptions(core);
           const defaults = {
@@ -158,7 +158,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
         setDetailLoading(true);
         const [detail, core] = await Promise.all([
           getUserByUuid(editUuid),
-          getUserFormCoreReferenceOptions(),
+          getUserFormCoreReferenceOptions(tRef.current),
         ]);
         if (cancelled) return;
 
@@ -221,7 +221,7 @@ export const UserFormModal: React.FC<UserFormModalProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [open, editUuid]);
+  }, [open, editUuid, t]);
 
   useEffect(() => {
     if (!open) return;

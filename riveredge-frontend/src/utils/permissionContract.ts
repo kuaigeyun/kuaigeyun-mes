@@ -54,3 +54,29 @@ export function hasModulePermission(
 export function hasReviewPermission(user: CurrentUser | undefined, resourcePrefix: string): boolean {
   return hasAnyPermission(user, reviewPermissionCodes(resourcePrefix));
 }
+
+const REVIEW_ACTION_LABEL_KEY = 'audit';
+
+/** 角色矩阵 / 功能权限树操作展示：按 action 走 permission.action.*，与 permission_action_spec 对齐 */
+export function resolvePermissionActionLabel(
+  action: string | undefined,
+  backendLabel: string | undefined,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  const raw = (action || '').trim().toLowerCase();
+  if (!raw) {
+    const label = (backendLabel || '').trim();
+    return label || '—';
+  }
+
+  let actionKey = raw;
+  if (raw === 'edit') actionKey = 'update';
+  if ((REVIEW_ACTIONS as readonly string[]).includes(raw)) actionKey = REVIEW_ACTION_LABEL_KEY;
+
+  const i18nKey = `permission.action.${actionKey}`;
+  const translated = t(i18nKey, { defaultValue: '' });
+  if (translated && translated !== i18nKey) return translated;
+
+  const label = (backendLabel || '').trim();
+  return label || raw;
+}

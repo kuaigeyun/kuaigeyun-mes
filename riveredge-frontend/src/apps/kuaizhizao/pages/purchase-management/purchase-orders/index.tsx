@@ -122,7 +122,7 @@ import { useKuaizhizaoPrintModal } from '../../../hooks/useKuaizhizaoPrintModal'
 import { SupplierSelectDropdown } from '../../../../master-data/components/SupplierSelectDropdown';
 import { batchImport } from '../../../../../utils/batchOperations';
 import { ROUTES } from '../../../constants/routes';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
 
 /** 与后端 DocumentStatus / ReviewStatus 及中文存量值对齐，供 UniWorkflowActions 识别 */
@@ -444,7 +444,7 @@ const PurchaseOrdersPage: React.FC = () => {
   const formPageInitializedRef = useRef(false);
   const purchaseOrderCreateDraftRestoredRef = useRef(false);
   const { message: messageApi } = App.useApp();
-  const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_order.pull_from_requisition');
+  const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_order.pull_from_requisition');
   const queryClient = useQueryClient();
   const actionRef = useRef<ActionType>(null);
   const lastOrdersCacheRef = useRef<PurchaseOrder[]>([]);
@@ -2760,7 +2760,7 @@ const PurchaseOrdersPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.menu.purchase-management.purchase-orders.new')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-requisition',
                   actionKey: 'purchase_order.pull_from_requisition',

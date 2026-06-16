@@ -29,6 +29,7 @@ import {
   TENANT_BACKEND_HOME_QUERY_KEY,
 } from '../../services/menu';
 import { RouteTransition } from '../route-transition';
+import { readUniTabsBorderRadius } from '../../utils/themeBorderRadius';
 
 function isTenantDefaultHomePath(p: string): boolean {
   return (LEGACY_TENANT_DEFAULT_HOME_PATHS as readonly string[]).includes(p);
@@ -1054,6 +1055,10 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
     return key.includes('production-execution/terminal') || key.includes('/kiosk');
   }, [activeKey]);
 
+  /** 标签顶角 / 底内凹圆角：保底 4px，高于 4px 时跟随系统 borderRadius */
+  const tabRadius = useMemo(() => readUniTabsBorderRadius(token.borderRadius, 8), [token.borderRadius]);
+  const tabCornerDiameter = tabRadius * 2;
+
   /** 工作台/模块看板：外层 UniTabs 不滚动，由内部 DashboardTemplate / UniDashboard 承担 */
   const isDashboardScrollPage = isDashboardLikePage(location.pathname);
 
@@ -1156,8 +1161,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           border: none !important;
           border-bottom: none !important;
           background: ${tabsBgColor} !important;
-          border-top-left-radius: 8px !important;
-          border-top-right-radius: 8px !important;
+          border-top-left-radius: ${tabRadius}px !important;
+          border-top-right-radius: ${tabRadius}px !important;
           border-bottom-left-radius: 0 !important;
           border-bottom-right-radius: 0 !important;
           position: relative;
@@ -1212,8 +1217,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         .uni-tabs-container .ant-tabs-tab-active {
           background: var(--ant-colorBgLayout) !important;
           border-bottom: none !important;
-          border-top-left-radius: 8px !important;
-          border-top-right-radius: 8px !important;
+          border-top-left-radius: ${tabRadius}px !important;
+          border-top-right-radius: ${tabRadius}px !important;
           border-bottom-left-radius: 0 !important;
           border-bottom-right-radius: 0 !important;
           position: relative;
@@ -1222,7 +1227,7 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           margin-top: 0 !important;
           overflow: visible !important;
           /* Chrome 式外圆角效果 - 强制显示圆角，防止被父容器裁剪 */
-          border-radius: 8px 8px 0 0 !important;
+          border-radius: ${tabRadius}px ${tabRadius}px 0 0 !important;
           padding: 6px 16px 8px !important;
           height: 36px !important;
           box-sizing: border-box !important;
@@ -1236,8 +1241,8 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
           position: absolute;
           bottom: 0;
           content: '';
-          width: 16px;
-          height: 16px;
+          width: ${tabCornerDiameter}px;
+          height: ${tabCornerDiameter}px;
           border-radius: 100%;
           box-shadow: 0 0 0 40px var(--ant-colorBgLayout);
           pointer-events: none;
@@ -1249,13 +1254,13 @@ export default function UniTabs({ menuConfig, children, isFullscreen = false, on
         }
         /* 左侧反向圆角 */
         .uni-tabs-container .ant-tabs-tab-active::before {
-          left: -16px;
-          clip-path: inset(50% -8px 0 50%);
+          left: -${tabCornerDiameter}px;
+          clip-path: inset(50% -${tabRadius}px 0 50%);
         }
         /* 右侧反向圆角 - 调整 clip-path 确保右侧圆角正确显示 */
         .uni-tabs-container .ant-tabs-tab-active::after {
-          right: -16px;
-          clip-path: inset(50% 50% 0 -8px);
+          right: -${tabCornerDiameter}px;
+          clip-path: inset(50% 50% 0 -${tabRadius}px);
         }
         /* 第一个标签不需要左侧反向圆角 */
         .uni-tabs-container .ant-tabs-tab-active:first-child::before {

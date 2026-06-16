@@ -127,6 +127,8 @@ import {
   isGenericPolicyResourceCode,
   normalizeResourceKey,
 } from './components/roleGrantedResourceScope';
+import { resolveFieldPermissionLabel } from '../../../utils/fieldPermissionI18n';
+import { resolvePermissionActionLabel } from '../../../utils/permissionContract';
 
 /** 权限树叶子节点展示名：数据范围走 permission.scope，其余走 permission.action */
 function permissionLeafDisplayLabel(
@@ -165,17 +167,39 @@ function permissionLeafDisplayLabel(
     return scopeSeg;
   }
 
-  const syncedName = (permission.name || '').trim();
-  if (syncedName) return syncedName;
-
   const actionSeg = parts[n - 1] || permission.action || '';
-  return actionSeg;
+  return resolvePermissionActionLabel(actionSeg, permission.name, t);
 }
 
-function fieldNameDisplayLabel(item: FieldPermissionPolicy): string {
-  return (item.field_label || '').trim() || (item.field_name || '').trim();
-}
+const FieldNameInput: React.FC<{
+  item: FieldPermissionPolicy;
+  displayLabel: string;
+  onChange: (val: string) => void;
+  t: (key: string, opts?: { defaultValue?: string }) => string;
+}> = ({ item, displayLabel, onChange, t }) => {
+  const [focused, setFocused] = useState(false);
+  const showLabel = !focused && displayLabel;
 
+  return (
+    <Tooltip
+      title={t('pages.system.roles.enFieldName', {
+        name: item.field_name || '-',
+        defaultValue: `英文字段: ${item.field_name || '-'}`,
+      })}
+    >
+      <Input
+        style={{ width: 240 }}
+        placeholder={t('pages.system.roles.enFieldNamePlaceholder', { defaultValue: '英文字段名' })}
+        value={showLabel ? displayLabel : item.field_name}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        onChange={(e) => {
+          onChange(e.target.value);
+        }}
+      />
+    </Tooltip>
+  );
+};
 const normCache = new Map<string, string>();
 /** 功能权限 code 比较用规范化（与后端 manifest / 同步一致） */
 function normalizeFunctionPermissionCode(code: string): string {
@@ -420,7 +444,7 @@ function buildMenuPermissionTreeData(
         const mergedKey = `merged-review:${m.uuid}:${resource}`;
         mergedReviewItems.push({
           key: mergedKey,
-          label: '审核',
+          label: t('permission.action.audit', { defaultValue: '审核' }),
           permissionCode: codes[0],
           mergedCodes: codes,
         });
@@ -452,31 +476,6 @@ function buildMenuPermissionTreeData(
   }
   return nodes;
 }
-
-const FieldNameInput: React.FC<{
-  item: FieldPermissionPolicy;
-  onChange: (val: string) => void;
-}> = ({ item, onChange }) => {
-  const [focused, setFocused] = useState(false);
-  const showLabel = !focused && item.field_label;
-  
-  return (
-    <Tooltip title={`英文字段: ${item.field_name || '-'}`}>
-      <Input
-        style={{ width: 240 }}
-        placeholder="英文字段名"
-        value={showLabel ? item.field_label : item.field_name}
-        onFocus={() => setFocused(true)}
-        onBlur={() => setFocused(false)}
-        onChange={(e) => {
-          // If the user changes it while focused, e.target.value is the english field name.
-          // If the user changes it somehow while not focused (unlikely), handle smoothly.
-          onChange(e.target.value);
-        }}
-      />
-    </Tooltip>
-  );
-};
 
 /**
  * 角色权限管理合并页面组件
@@ -918,6 +917,12 @@ const RolesPermissionsPage: React.FC = () => {
     return map;
   }, [functionScopedResourceOptions]);
 
+  const fieldNameDisplayLabel = useCallback(
+    (item: FieldPermissionPolicy) =>
+      resolveFieldPermissionLabel(item.field_name, item.field_label, t),
+    [t],
+  );
+
   const fieldFilterPickOptions = useMemo(() => {
     if (fieldFilterMode === 'app') {
       return collectDataAppPickOptions(menuTree, t);
@@ -948,6 +953,7 @@ const RolesPermissionsPage: React.FC = () => {
       fieldFilterMode,
       fieldFilterTarget,
       fieldSearchKeyword,
+      fieldNameDisplayLabel,
     ]
   );
 
@@ -1829,7 +1835,7 @@ const RolesPermissionsPage: React.FC = () => {
                       />
                     )
                   ) : (
-                    <Empty description="暂无功能权限树，请检查菜单与权限同步" />
+                    <Empty description={t('pages.system.roles.noFunctionTree')} />
                   )}
                 </Space>
               )}
@@ -2099,6 +2105,8 @@ const RolesPermissionsPage: React.FC = () => {
                             />
                             <FieldNameInput
                               item={item}
+                              displayLabel={fieldNameDisplayLabel(item)}
+                              t={t}
                               onChange={(val) =>
                                 setFieldPolicies((prev) =>
                                   upsertFieldPolicyMask(prev, { ...item, field_name: val }, item.mask_level)
@@ -2187,21 +2195,27 @@ const RolesPermissionsPage: React.FC = () => {
           >
             <Space separator={<Divider orientation="vertical" />}>
               <span>
-                系统功能权限：
-                {functionGrants?.stats?.total_function_codes ?? functionGrantPermissionCodes.length} 项
+                {t('pages.system.roles.systemFunctionPermissions')}
+                {functionGrants?.stats?.total_function_codes ?? functionGrantPermissionCodes.length}
+                {t('pages.system.roles.statsItemUnit')}
               </span>
               <span>
-                当前已授权：
-                <span style={{ color: token.colorPrimary, fontWeight: 500 }}>{assignedFunctionPermissionCount}</span> 项
+                {t('pages.system.roles.currentAssigned')}
+                <span style={{ color: token.colorPrimary, fontWeight: 500 }}>{assignedFunctionPermissionCount}</span>
+                {t('pages.system.roles.statsItemUnit')}
                 {permissionLayer === 'function' && grantedNotOnTree > 0 && (
                   <span style={{ color: token.colorTextSecondary, marginLeft: 4 }}>
-                    （树上可见 {treeVisibleAssignedCount} 项，未挂载 {grantedNotOnTree} 项）
+                    {t('pages.system.roles.assignedDetail', {
+                      visible: treeVisibleAssignedCount,
+                      unmounted: grantedNotOnTree,
+                    })}
                   </span>
                 )}
               </span>
               <span>
-                角色关联用户：
-                <span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span> 人
+                {t('pages.system.roles.roleUsers')}
+                <span style={{ color: token.colorSuccess, fontWeight: 500 }}>{selectedRole.user_count || 0}</span>
+                {t('pages.system.roles.statsUserUnit')}
               </span>
             </Space>
           </div>

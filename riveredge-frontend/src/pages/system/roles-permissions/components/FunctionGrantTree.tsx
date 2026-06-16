@@ -3,14 +3,14 @@ import { Checkbox, Tree, theme } from 'antd';
 import { AppstoreOutlined } from '@ant-design/icons';
 import type { DataNode } from 'antd/es/tree';
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
+import { resolvePermissionActionLabel } from '../../../../utils/permissionContract';
 import { translateGrantMenuTitle } from './functionGrantTreeFilters';
 
-/** 角色矩阵操作文案：仅用后端 grant API 的 label（真源 permission_action_spec + 权限同步） */
-function grantActionLabel(action: FunctionGrantAction): string {
-  const label = (action.label || '').trim();
-  if (label) return label;
-  const act = (action.action || '').trim();
-  return act || '—';
+function grantActionLabel(
+  action: FunctionGrantAction,
+  t: (key: string, opts?: { defaultValue?: string }) => string,
+): string {
+  return resolvePermissionActionLabel(action.action, action.label, t);
 }
 
 export function codesFromAction(action: FunctionGrantAction): string[] {
@@ -43,7 +43,7 @@ function actionMatchesSearch(
   if ((action.code || '').toLowerCase().includes(kw)) return true;
   if ((action.label || '').toLowerCase().includes(kw)) return true;
   if ((action.action || '').toLowerCase().includes(kw)) return true;
-  if (grantActionLabel(action).toLowerCase().includes(kw)) return true;
+  if (grantActionLabel(action, t).toLowerCase().includes(kw)) return true;
   return (action.merged_codes || []).some((c) => c.toLowerCase().includes(kw));
 }
 
@@ -183,7 +183,7 @@ export const FunctionGrantTree: React.FC<Props> = ({
                       checked={checked}
                       onChange={(e) => onToggle(codesFromAction(item), e.target.checked)}
                     />
-                    <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item)}</span>
+                    <span style={{ whiteSpace: 'nowrap' }}>{grantActionLabel(item, t)}</span>
                   </label>
                 );
               })}

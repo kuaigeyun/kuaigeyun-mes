@@ -6,6 +6,9 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Empty, Spin, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import { RiverGantt } from '../../../../components/river-gantt';
 import type {
   RiverGanttApi,
@@ -68,9 +71,13 @@ function expandStationTimelineTasks(task: GanttTask): GanttTask[] {
   return [];
 }
 
-function resolveStationConflictGroupKey(task: GanttTask, taskLevel: GanttTaskLevel): string {
+function resolveStationConflictGroupKey(
+  task: GanttTask,
+  taskLevel: GanttTaskLevel,
+  unassignedStationLabel: string,
+): string {
   if (taskLevel === 'operation') {
-    return (task.assigned_station_name || '未分配工位').trim();
+    return (task.assigned_station_name || unassignedStationLabel).trim();
   }
   if (taskLevel === 'station') {
     if (isStationResourceTaskId(task.id)) return String(task.id);
@@ -192,22 +199,53 @@ function renderGanttTimelineLabel(
   );
 }
 
-const SCALES_DAY: RiverGanttScale[] = [
-  { unit: 'month', step: 1, format: '%Y年%m月' },
-  { unit: 'day', step: 1, format: '%d' },
-];
+const GANTT_I18N = 'app.kuaizhizao.scheduling.gantt';
 
-const SCALES_WEEK: RiverGanttScale[] = [
-  { unit: 'month', step: 1, format: '%Y年%m月' },
-  { unit: 'week', step: 1, format: '第%W周' },
-  { unit: 'day', step: 1, format: '%d' },
-];
+function buildSchedulingGanttScales(t: TFunction, viewMode: ViewMode): RiverGanttScale[] {
+  const monthYear = t(`${GANTT_I18N}.scale.monthYear`);
+  const week = t(`${GANTT_I18N}.scale.week`);
+  const year = t(`${GANTT_I18N}.scale.year`);
+  const monthShort = t(`${GANTT_I18N}.scale.monthShort`);
+  if (viewMode === 'day') {
+    return [
+      { unit: 'month', step: 1, format: monthYear },
+      { unit: 'day', step: 1, format: '%d' },
+    ];
+  }
+  if (viewMode === 'month') {
+    return [
+      { unit: 'year', step: 1, format: year },
+      { unit: 'month', step: 1, format: monthShort },
+      { unit: 'week', step: 1, format: '%W' },
+    ];
+  }
+  return [
+    { unit: 'month', step: 1, format: monthYear },
+    { unit: 'week', step: 1, format: week },
+    { unit: 'day', step: 1, format: '%d' },
+  ];
+}
 
-const SCALES_MONTH: RiverGanttScale[] = [
-  { unit: 'year', step: 1, format: '%Y年' },
-  { unit: 'month', step: 1, format: '%m月' },
-  { unit: 'week', step: 1, format: '%W' },
-];
+function resolveGanttColumnHeader(t: TFunction, taskLevel: GanttTaskLevel): string {
+  if (taskLevel === 'station') return t(`${GANTT_I18N}.col.station`);
+  if (taskLevel === 'operation') return t(`${GANTT_I18N}.col.operation`);
+  if (taskLevel === 'equipment') return t(`${GANTT_I18N}.col.equipment`);
+  return t(`${GANTT_I18N}.col.workOrder`);
+}
+
+function resolveGanttEmptyCopy(
+  t: TFunction,
+  taskLevel: GanttTaskLevel,
+): { title: string; description: string } {
+  const title = t(`${GANTT_I18N}.empty.title.${taskLevel}`);
+  const description =
+    taskLevel === 'operation'
+      ? t(`${GANTT_I18N}.empty.hint.operation`)
+      : taskLevel === 'work_order'
+        ? t(`${GANTT_I18N}.empty.hint.work_order`)
+        : t(`${GANTT_I18N}.empty.hint.resource`);
+  return { title, description };
+}
 
 function parseTaskId(rawId: number | string): { kind: 'operation' | 'work_order'; id: number } | null {
   if (typeof rawId === 'number') {
@@ -285,6 +323,9 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   onBlockedDragAttempt,
   canUpdate = true,
 }) => {
+  const { t } = useTranslation();
+  const unassignedStationLabel = t(`${GANTT_I18N}.unassignedStation`);
+
   useEffect(() => {
     ensureGanttIconsCssLoaded();
   }, []);
@@ -332,7 +373,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       for (const t of tasks) {
         const expanded = expandStationTimelineTasks(t);
         for (const slice of expanded) {
-          const key = resolveStationConflictGroupKey(t, taskLevel);
+          const key = resolveStationConflictGroupKey(t, taskLevel, unassignedStationLabel);
           if (!key) continue;
           if (!byGroup.has(key)) byGroup.set(key, []);
           const patch = pending.get(slice.id) ?? pending.get(t.id);
@@ -345,7 +386,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       }
       setDragConflictIds(conflictIds);
     },
-    [taskLevel, tasks]
+    [taskLevel, tasks, unassignedStationLabel],
   );
 
   const displayTasks = useMemo(() => {
@@ -472,21 +513,10 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
     scrollGanttToToday(ganttApiRef.current, wrapperRef.current);
   }, [scrollToTodayToken, taskLevel]);
 
-  const scales = useMemo(() => {
-    if (viewMode === 'day') return SCALES_DAY;
-    if (viewMode === 'month') return SCALES_MONTH;
-    return SCALES_WEEK;
-  }, [viewMode]);
+  const scales = useMemo(() => buildSchedulingGanttScales(t, viewMode), [t, viewMode]);
 
   const ganttColumns = useMemo(() => {
-    const taskHeader =
-      taskLevel === 'station'
-        ? '工位'
-        : taskLevel === 'operation'
-          ? '工序'
-          : taskLevel === 'equipment'
-            ? '设备'
-            : '工单';
+    const taskHeader = resolveGanttColumnHeader(t, taskLevel);
     const cols: RiverGanttColumn[] = [
       {
         id: 'text',
@@ -498,7 +528,7 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
       },
     ];
     return cols;
-  }, [taskLevel]);
+  }, [t, taskLevel]);
 
   const schedulingTaskTemplate = useMemo(
     () =>
@@ -682,30 +712,27 @@ const GanttSchedulingChart: React.FC<GanttSchedulingChartProps> = ({
   );
 
   if (loading) {
-    return <div>加载中...</div>;
+    return (
+      <div className="gantt-chart-wrapper gantt-chart-wrapper--visual" style={{ padding: '48px 0', textAlign: 'center' }}>
+        <Spin tip={t('app.kuaizhizao.scheduling.pool.loadingGantt')} />
+      </div>
+    );
   }
 
   const readonly = !canUpdate || (!onBatchUpdate && !onBatchUpdateOperations);
 
   if (tasks.length === 0) {
+    const emptyCopy = resolveGanttEmptyCopy(t, taskLevel);
     return (
-      <div>
-        <div>
-          {taskLevel === 'operation'
-            ? '暂无工序计划'
-            : taskLevel === 'station'
-              ? '暂无工位或工序计划'
-              : taskLevel === 'equipment'
-                ? '暂无设备或工序计划'
-                : '暂无待排产工单'}
-        </div>
-        <div>
-          {taskLevel === 'operation'
-            ? '请先在工单中维护工序并排定计划时间'
-            : taskLevel === 'work_order'
-              ? '请先在需求计算或生产计划中生成工单'
-              : '当前无已排工序，可在下方工单列表中设置计划时间'}
-        </div>
+      <div className="gantt-chart-wrapper gantt-chart-wrapper--visual" style={{ padding: '32px 16px' }}>
+        <Empty
+          description={
+            <span>
+              <div style={{ fontWeight: 500, marginBottom: 8 }}>{emptyCopy.title}</div>
+              <Typography.Text type="secondary">{emptyCopy.description}</Typography.Text>
+            </span>
+          }
+        />
       </div>
     );
   }

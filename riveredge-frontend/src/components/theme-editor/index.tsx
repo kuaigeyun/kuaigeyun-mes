@@ -5,7 +5,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Drawer, Form, Input, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Slider, Tooltip, Popover, Segmented, Spin } from 'antd';
+import { Drawer, Form, Input, ColorPicker, Switch, Button, Space, Divider, message, ConfigProvider, Card, Typography, Tooltip, Popover, Segmented, Spin } from 'antd';
 import { SaveOutlined, ReloadOutlined, SunOutlined, MoonOutlined, DesktopOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { theme } from 'antd';
 import { useTranslation } from 'react-i18next';
@@ -15,8 +15,9 @@ import { getToken } from '../../utils/auth';
 import { useThemeStore, resolveThemeFromCloud, type ThemeStyle } from '../../stores/themeStore';
 import { clearTabsData } from '../../stores/tabsStorage';
 import { getDrawerFloatingWrapperStyle } from '../layout-templates/drawerFloatingChrome';
-import { clampBorderRadius, readBorderRadius, THEME_BORDER_RADIUS_MARKS } from '../../utils/themeBorderRadius';
-import { clampFontSize, readFontSize, THEME_FONT_SIZE_MARKS } from '../../utils/themeFontSize';
+import { clampBorderRadius, readBorderRadius } from '../../utils/themeBorderRadius';
+import { clampFontSize, readFontSize } from '../../utils/themeFontSize';
+import { ThemeBorderRadiusSlider, ThemeFontSizeSlider } from './ThemeStyleSliders';
 import '../layout-templates/drawerSlideMotion.css';
 
 const { Text } = Typography;
@@ -48,28 +49,6 @@ function normalizeBgColorField(raw: unknown, fallback = ''): string {
     }
   }
   return fallback;
-}
-
-type SliderMarkConfig = string | { label: React.ReactNode; style?: React.CSSProperties };
-
-/** 滑块刻度：首项左对齐、末项右对齐，中间仍居中于刻度点 */
-function buildEdgeAlignedSliderMarks(
-  points: number[],
-  labelFor: (value: number) => string,
-): Record<number, SliderMarkConfig> {
-  const lastIndex = points.length - 1;
-  return Object.fromEntries(
-    points.map((value, index) => {
-      const label = labelFor(value);
-      if (index === 0) {
-        return [value, { label, style: { transform: 'translateX(0)', whiteSpace: 'nowrap' } }];
-      }
-      if (index === lastIndex) {
-        return [value, { label, style: { transform: 'translateX(-100%)', whiteSpace: 'nowrap' } }];
-      }
-      return [value, { label, style: { whiteSpace: 'nowrap' } }];
-    }),
-  );
 }
 
 /** 与保存逻辑一致：供实时 applyTheme 与持久化共用 */
@@ -1427,29 +1406,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              <Form.Item
-                name="borderRadius"
-                label={
-                  <div>
-                    <div>{t('components.themeEditor.borderRadius.label')}</div>
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      {t('components.themeEditor.borderRadius.desc', {
-                        value: readBorderRadius(form.getFieldValue('borderRadius')),
-                      })}
-                    </Text>
-                  </div>
-                }
-              >
-                <Slider
-                  min={0}
-                  max={16}
-                  step={1}
-                  marks={buildEdgeAlignedSliderMarks(
-                    [...THEME_BORDER_RADIUS_MARKS],
-                    (value) => t(`components.themeEditor.borderRadius.mark.${value}`),
-                  )}
-                />
-              </Form.Item>
+              <ThemeBorderRadiusSlider />
             </Card>
 
             {/* 文字设置 */}
@@ -1464,29 +1421,7 @@ const ThemeEditor: React.FC<ThemeEditorProps> = ({ open, onClose, onThemeUpdate 
               style={{ marginBottom: 16 }}
               styles={{ body: { padding: '16px' } }}
             >
-              <Form.Item
-                name="fontSize"
-                label={
-                  <div>
-                    <div>{t('components.themeEditor.fontSize.label')}</div>
-                    <Text type="secondary" style={{ fontSize: 12, fontWeight: 'normal' }}>
-                      {t('components.themeEditor.fontSize.desc', {
-                        value: readFontSize(form.getFieldValue('fontSize')),
-                      })}
-                    </Text>
-                  </div>
-                }
-              >
-                <Slider
-                  min={12}
-                  max={18}
-                  step={1}
-                  marks={buildEdgeAlignedSliderMarks(
-                    [...THEME_FONT_SIZE_MARKS],
-                    (value) => t(`components.themeEditor.fontSize.mark.${value}`),
-                  )}
-                />
-              </Form.Item>
+              <ThemeFontSizeSlider />
             </Card>
 
             {/* 主题配置 */}

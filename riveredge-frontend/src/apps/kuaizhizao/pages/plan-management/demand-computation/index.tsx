@@ -117,7 +117,7 @@ import { MaterialUnitSelect, prefetchMaterialsForUnitSelect } from '../../../../
 import { ThemedSegmented } from '../../../../../components/themed-segmented'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 
 function getMrpSuggestionSegmentedOptions(t: TFunction) {
   return [
@@ -632,7 +632,7 @@ const DemandComputationPage: React.FC = () => {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { message: messageApi, modal: modalApi } = App.useApp()
-  const pullFromDemandAction = getKuaizhizaoDocumentAction('demand_computation.pull_from_demand')
+  const pullFromDemandAction = resolveKuaizhizaoDocumentAction(t, 'demand_computation.pull_from_demand')
   const queryClient = useQueryClient()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -1747,7 +1747,7 @@ const DemandComputationPage: React.FC = () => {
               onCreate={() => {
                 void handleCreate()
               }}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-demand',
                   actionKey: 'demand_computation.pull_from_demand',

@@ -2,7 +2,7 @@
  * 角色新建/编辑弹窗（Schema 驱动）
  */
 
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ProFormInstance } from '@ant-design/pro-components';
 import { App } from 'antd';
@@ -21,6 +21,11 @@ import {
 import { getMenuTree, EFFECTIVE_HOME_QUERY_KEY, type MenuTree } from '../../../../services/menu';
 import { RoleHomePathSelect } from './RoleHomePathSelect';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  isPresetEntityCode,
+  localizedPresetFormFields,
+  omitPresetLocalizedPayloadFields,
+} from '../../../../utils/presetEntityI18n';
 
 export interface RoleFormModalProps {
   open: boolean;
@@ -37,14 +42,22 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   editUuid,
   onSuccess,
 }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
   const formRef = useRef<ProFormInstance>();
   const [formLoading, setFormLoading] = useState(false);
   const [menuTree, setMenuTree] = useState<MenuTree[]>([]);
+  const [editPresetCode, setEditPresetCode] = useState<string | null>(null);
 
   const isEdit = Boolean(editUuid);
+  const presetDisabledFields = useMemo(
+    () =>
+      isEdit && editPresetCode && isPresetEntityCode('role', editPresetCode)
+        ? ['name', 'description']
+        : [],
+    [isEdit, editPresetCode],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -54,20 +67,28 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
   }, [open]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setEditPresetCode(null);
+      return;
+    }
     formRef.current?.resetFields();
     formRef.current?.setFieldsValue({
       is_active: true,
       role_type: 'internal',
       create_position: false,
     });
-    if (!editUuid) return;
+    if (!editUuid) {
+      setEditPresetCode(null);
+      return;
+    }
     getRoleByUuid(editUuid)
       .then((detail: Role) => {
+        const localized = localizedPresetFormFields('role', detail, t);
+        setEditPresetCode(detail.code ?? null);
         formRef.current?.setFieldsValue({
-          name: detail.name,
+          name: localized.name,
           code: detail.code,
-          description: detail.description,
+          description: localized.description ?? detail.description,
           role_type: detail.role_type || 'internal',
           external_partner_type: detail.external_partner_type,
           is_active: detail.is_active ?? true,
@@ -77,12 +98,12 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       .catch((err: any) => {
         messageApi.error(err?.message || t('common.loadFailed'));
       });
-  }, [open, editUuid, messageApi, t]);
+  }, [open, editUuid, messageApi, t, i18n.language]);
 
   const handleSubmit = async (values: any) => {
     try {
       setFormLoading(true);
-      const payload = { ...values };
+      let payload = { ...values };
       if (payload.role_type === 'external' && !payload.external_partner_type) {
         messageApi.warning(t('pages.system.roles.externalRoleTypeRequired', { defaultValue: '外部角色必须选择绑定类型（客户或供应商）' }));
         return;
@@ -96,6 +117,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
       const createPosition = Boolean(payload.create_position);
       delete payload.create_position;
       if (isEdit && editUuid) {
+        payload = omitPresetLocalizedPayloadFields('role', editPresetCode, payload);
         await updateRole(editUuid, payload as UpdateRoleData);
         messageApi.success(t('pages.system.updateSuccess'));
       } else {
@@ -145,6 +167,7 @@ export const RoleFormModal: React.FC<RoleFormModalProps> = ({
         schema={roleFormSchema}
         isEdit={isEdit}
         slots={{ homePath: <RoleHomePathSelect menuTree={menuTree} /> }}
+        disabledFields={presetDisabledFields}
       />
     </FormModalTemplate>
   );

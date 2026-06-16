@@ -14,7 +14,7 @@ import { DatePicker } from 'antd'
 const { RangePicker } = DatePicker
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry'
 import {
   ActionType,
   ProColumns,
@@ -584,12 +584,53 @@ function formLabelWithHint(title: string, hint: string): React.ReactNode {
           type="text"
           size="small"
           icon={<QuestionCircleOutlined />}
-          aria-label={`${title}说明`}
+          aria-label={title}
           style={{ padding: 0, width: 16, height: 16, color: 'var(--ant-color-text-quaternary)' }}
         />
       </Tooltip>
     </span>
   )
+}
+
+const MATERIAL_SOURCE_LABEL_KEYS: Record<string, string> = {
+  Make: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeMake',
+  Buy: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeBuy',
+  Phantom: 'app.kuaizhizao.outsourceWorkOrder.sourceTypePhantom',
+  Outsource: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeOutsource',
+  Configure: 'app.kuaizhizao.outsourceWorkOrder.sourceTypeConfigure',
+}
+
+function resolveMaterialSourceValidation(
+  sourceType: string | undefined,
+  t: (key: string) => string
+): {
+  sourceType?: string
+  sourceTypeName?: string
+  validationErrors?: string[]
+  canCreateWorkOrder: boolean
+} {
+  const validationErrors: string[] = []
+  let canCreateWorkOrder = true
+  if (sourceType === 'Buy') {
+    canCreateWorkOrder = false
+    validationErrors.push(t('app.kuaizhizao.workOrder.validationMaterialBuy'))
+  } else if (sourceType === 'Phantom') {
+    canCreateWorkOrder = false
+    validationErrors.push(t('app.kuaizhizao.workOrder.validationMaterialPhantom'))
+  } else if (sourceType === 'Make') {
+    validationErrors.push(t('app.kuaizhizao.workOrder.validationMaterialMake'))
+  } else if (sourceType === 'Outsource') {
+    validationErrors.push(t('app.kuaizhizao.workOrder.validationMaterialOutsource'))
+  } else if (sourceType === 'Configure') {
+    validationErrors.push(t('app.kuaizhizao.workOrder.validationMaterialConfigure'))
+  }
+  const labelKey = sourceType ? MATERIAL_SOURCE_LABEL_KEYS[sourceType] : undefined
+  return {
+    sourceType,
+    sourceTypeName: labelKey ? t(labelKey) : sourceType,
+    validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
+    canCreateWorkOrder,
+  }
 }
 
 function resolveWorkOrderManufacturingMode(record: {
@@ -1170,8 +1211,8 @@ const WorkOrdersPage: React.FC = () => {
       ),
     [t, i18n.language],
   )
-  const pullFromDemandComputationAction = getKuaizhizaoDocumentAction('work_order.pull_from_demand_computation')
-  const pullFromProductionPlanAction = getKuaizhizaoDocumentAction('work_order.pull_from_production_plan')
+  const pullFromDemandComputationAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_demand_computation')
+  const pullFromProductionPlanAction = resolveKuaizhizaoDocumentAction(t, 'work_order.pull_from_production_plan')
   const { token } = theme.useToken()
   const workOrderDetailDrawerZIndex = token.zIndexPopupBase
   const queryClient = useQueryClient()
@@ -1629,30 +1670,7 @@ const WorkOrdersPage: React.FC = () => {
         .get(selectedMaterial.uuid)
         .then((materialDetail: any) => {
           const sourceType = materialDetail.sourceType || materialDetail.source_type
-          const sourceTypeNames: Record<string, string> = {
-            Make: '自制件',
-            Buy: '采购件',
-            Phantom: '虚拟件',
-            Outsource: '委外件',
-            Configure: '配置件',
-          }
-          let canCreateWorkOrder = true
-          const validationErrors: string[] = []
-          if (sourceType === 'Buy') {
-            canCreateWorkOrder = false
-            validationErrors.push('采购件不应创建生产工单，请使用采购订单功能')
-          } else if (sourceType === 'Phantom') {
-            canCreateWorkOrder = false
-            validationErrors.push('虚拟件不应创建工单')
-          } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
-          else if (sourceType === 'Outsource') validationErrors.push('委外件需配置委外供应商和工序')
-          else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
-          setSelectedMaterialSourceInfo({
-            sourceType,
-            sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
-            validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
-            canCreateWorkOrder,
-          })
+          setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
         })
         .catch(() => setSelectedMaterialSourceInfo(null))
     } else {
@@ -1660,7 +1678,7 @@ const WorkOrdersPage: React.FC = () => {
     }
     // 自动加载物料绑定的工艺路线及工序
     if (selectedMaterial?.uuid) loadProcessRouteForMaterial(selectedMaterial.uuid)
-  }, [productSourceData, modalVisible, isEdit])
+  }, [productSourceData, modalVisible, isEdit, t])
 
   // 创建/编辑弹窗所需数据是否已加载
   const [modalDataLoaded, setModalDataLoaded] = useState(false)
@@ -3567,7 +3585,7 @@ const WorkOrdersPage: React.FC = () => {
       // 物料来源验证（核心功能，新增）
       if (values.product_id && selectedMaterialSourceInfo) {
         if (selectedMaterialSourceInfo.canCreateWorkOrder === false) {
-          messageApi.error('该物料来源类型不允许创建生产工单，请选择其他物料或使用相应的功能模块')
+          messageApi.error(t('app.kuaizhizao.workOrder.validationMaterialSourceNotAllowed'))
           throw new Error('物料来源类型不允许创建工单')
         }
       }
@@ -4670,24 +4688,24 @@ const WorkOrdersPage: React.FC = () => {
       {
         key: 'batch-qrcode',
         icon: <QrcodeOutlined />,
-        label: '批量生成二维码',
+        label: t('app.kuaizhizao.workOrder.batchGenerateQrcode'),
         onClick: () => handleBatchGenerateQRCode(),
       },
       {
         key: 'batchPriority',
-        label: '批量设置优先级',
+        label: t('app.kuaizhizao.workOrder.batchSetPriority'),
         icon: <FlagOutlined />,
         onClick: () => handleBatchSetPriority(),
       },
       {
         key: 'batchFreeze',
-        label: '批量冻结',
+        label: t('app.kuaizhizao.workOrder.batchFreeze'),
         icon: <LockOutlined />,
         onClick: () => handleBatchFreeze(),
       },
       {
         key: 'batchCancel',
-        label: '批量取消',
+        label: t('app.kuaizhizao.workOrder.batchCancel'),
         icon: <CloseCircleOutlined />,
         onClick: () => handleBatchCancel(),
       },
@@ -4699,6 +4717,7 @@ const WorkOrdersPage: React.FC = () => {
     handleBatchFreeze,
     handleBatchCancel,
     messageApi,
+    t,
   ])
 
   const workOrderToolBarActionsAfterDelete = useMemo(
@@ -6096,7 +6115,7 @@ const WorkOrdersPage: React.FC = () => {
           request={handleWorkOrderTableRequest}
           postData={syncWorkOrderListRowIndexFromTableData}
           showCreateButton={false}
-          createButtonText="新建工单"
+          createButtonText={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
           onCreate={handleCreate}
           toolBarButtonSize="middle"
           selectedRowKeys={selectedRowKeys}
@@ -6141,9 +6160,9 @@ const WorkOrdersPage: React.FC = () => {
               a.download = `work-orders-${new Date().toISOString().slice(0, 10)}.json`
               a.click()
               window.URL.revokeObjectURL(url)
-              messageApi.success(`已导出 ${items.length} 条记录`)
+              messageApi.success(t('app.kuaizhizao.workOrder.msgExportSuccess', { count: items.length }))
             } catch (error: any) {
-              messageApi.error(error?.message || '导出失败')
+              messageApi.error(error?.message || t('app.kuaizhizao.workOrder.msgExportFailed'))
             }
           }}
           showSyncButton
@@ -6155,7 +6174,7 @@ const WorkOrdersPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.workOrder.actionCreateWorkOrder')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-demand-computation',
                   actionKey: 'work_order.pull_from_demand_computation',
@@ -6631,7 +6650,7 @@ const WorkOrdersPage: React.FC = () => {
       </FormModalTemplate>
 
       <FormModalTemplate
-        title={isEdit ? '编辑工单' : '新建工单'}
+        title={isEdit ? t('app.kuaizhizao.workOrder.modalEdit') : t('app.kuaizhizao.workOrder.modalCreate')}
         open={modalVisible}
         loading={modalDataLoading}
         onClose={() => {
@@ -6656,7 +6675,7 @@ const WorkOrdersPage: React.FC = () => {
         {!isEdit ? (
           <>
             <Col span={6}>
-              <Form.Item label="创建方式" style={{ marginBottom: 24 }}>
+              <Form.Item label={t('app.kuaizhizao.workOrder.formCreateMode')} style={{ marginBottom: 24 }}>
                 <ThemedSegmented
                   block
                   className="form-field-segmented"
@@ -6687,8 +6706,8 @@ const WorkOrdersPage: React.FC = () => {
                     }
                   }}
                   options={[
-                    { label: '普通工单', value: 'normal' },
-                    { label: '平级组工单', value: 'peer_group' },
+                    { label: t('app.kuaizhizao.workOrder.formCreateModeNormal'), value: 'normal' },
+                    { label: t('app.kuaizhizao.workOrder.formCreateModePeerGroup'), value: 'peer_group' },
                   ]}
                 />
               </Form.Item>
@@ -6697,7 +6716,7 @@ const WorkOrdersPage: React.FC = () => {
               <CodeField
                 pageCode="kuaizhizao-production-work-order"
                 name="code"
-                label="工单编号"
+                label={t('app.kuaizhizao.workOrder.colCode')}
                 required={true}
                 autoGenerateOnCreate={!isEdit}
                 showGenerateButton={false}
@@ -6707,16 +6726,16 @@ const WorkOrdersPage: React.FC = () => {
             ) : (
               <ProFormText
                 name="group_name"
-                label="工单组名称"
-                placeholder="可选；未填则使用默认名称"
+                label={t('app.kuaizhizao.workOrder.formGroupName')}
+                placeholder={t('app.kuaizhizao.workOrder.formGroupNamePlaceholder')}
                 colProps={{ span: 6 }}
               />
             )}
             {createWorkOrderMode === 'normal' && (
               <ProFormText
                 name="name"
-                label="工单名称"
-                placeholder="可选"
+                label={t('app.kuaizhizao.workOrder.colName')}
+                placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
                 colProps={{ span: 12 }}
               />
             )}
@@ -6726,7 +6745,7 @@ const WorkOrdersPage: React.FC = () => {
             <CodeField
               pageCode="kuaizhizao-production-work-order"
               name="code"
-              label="工单编号"
+              label={t('app.kuaizhizao.workOrder.colCode')}
               required={true}
               autoGenerateOnCreate={false}
               showGenerateButton={false}
@@ -6736,8 +6755,8 @@ const WorkOrdersPage: React.FC = () => {
             {createWorkOrderMode === 'normal' && (
               <ProFormText
                 name="name"
-                label="工单名称"
-                placeholder="可选"
+                label={t('app.kuaizhizao.workOrder.colName')}
+                placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
                 disabled
                 colProps={{ span: 12 }}
               />
@@ -6759,7 +6778,7 @@ const WorkOrdersPage: React.FC = () => {
         {/* 第二行：产品类型 6 | 产品 6 | 加载按钮 4+4+4 */}
         {!isEdit && (
           <Col span={6}>
-            <Form.Item label="产品类型" style={{ marginBottom: 24 }}>
+            <Form.Item label={t('app.kuaizhizao.workOrder.formProductType')} style={{ marginBottom: 24 }}>
               <ThemedSegmented
                 block
                 className="form-field-segmented"
@@ -6777,8 +6796,8 @@ const WorkOrdersPage: React.FC = () => {
           <Suspense fallback={<Spin style={{ margin: '12px 0' }} />}>
             <LazyUniMaterialSelect
               name="product_id"
-              label="产品"
-              placeholder="请选择产品"
+              label={t('app.kuaizhizao.workOrder.colProduct')}
+              placeholder={t('app.kuaizhizao.workOrder.formSelectProduct')}
               required
               disabled={isEdit}
               sourceType={onlyShowMake ? 'Make' : undefined}
@@ -6799,31 +6818,7 @@ const WorkOrdersPage: React.FC = () => {
                     try {
                       const materialDetail = await materialApi.get(material.uuid)
                       const sourceType = materialDetail.sourceType || materialDetail.source_type
-                      const sourceTypeNames: Record<string, string> = {
-                        Make: '自制件',
-                        Buy: '采购件',
-                        Phantom: '虚拟件',
-                        Outsource: '委外件',
-                        Configure: '配置件',
-                      }
-                      let canCreateWorkOrder = true
-                      const validationErrors: string[] = []
-                      if (sourceType === 'Buy') {
-                        canCreateWorkOrder = false
-                        validationErrors.push('采购件不应创建生产工单，请使用采购订单功能')
-                      } else if (sourceType === 'Phantom') {
-                        canCreateWorkOrder = false
-                        validationErrors.push('虚拟件不应创建工单')
-                      } else if (sourceType === 'Make') validationErrors.push('自制件需配置BOM和工艺路线')
-                      else if (sourceType === 'Outsource')
-                        validationErrors.push('委外件需配置委外供应商和工序')
-                      else if (sourceType === 'Configure') validationErrors.push('配置件需填写属性')
-                      setSelectedMaterialSourceInfo({
-                        sourceType,
-                        sourceTypeName: sourceType ? sourceTypeNames[sourceType] || sourceType : undefined,
-                        validationErrors: validationErrors.length > 0 ? validationErrors : undefined,
-                        canCreateWorkOrder,
-                      })
+                      setSelectedMaterialSourceInfo(resolveMaterialSourceValidation(sourceType, t))
                       loadProcessRouteForMaterial(material.uuid)
                     } catch (error) {
                       console.error('获取物料详情失败:', error)
@@ -6854,7 +6849,7 @@ const WorkOrdersPage: React.FC = () => {
                     setProductSourceModalVisible(true)
                   }}
                 >
-                  从销售订单加载
+                  {t('app.kuaizhizao.workOrder.formLoadFromSalesOrder')}
                 </Button>
               </Form.Item>
             </Col>
@@ -6873,7 +6868,7 @@ const WorkOrdersPage: React.FC = () => {
                     setProductSourceModalVisible(true)
                   }}
                 >
-                  从销售预测加载
+                  {t('app.kuaizhizao.workOrder.formLoadFromSalesForecast')}
                 </Button>
               </Form.Item>
             </Col>
@@ -6893,7 +6888,7 @@ const WorkOrdersPage: React.FC = () => {
                       setProductSourceModalVisible(true)
                     }}
                   >
-                    从需求管理加载
+                    {t('app.kuaizhizao.workOrder.formLoadFromDemand')}
                   </Button>
                   {productSourceData && (
                     <Button
@@ -6912,7 +6907,7 @@ const WorkOrdersPage: React.FC = () => {
                       }}
                       style={{ padding: '0 4px', minWidth: 'auto' }}
                     >
-                      清除
+                      {t('common.clear')}
                     </Button>
                   )}
                 </Space.Compact>
@@ -6923,21 +6918,25 @@ const WorkOrdersPage: React.FC = () => {
         {selectedMaterialSourceInfo?.sourceType === 'Configure' && !isEdit && (
           <ProFormText
             name="variant_attributes"
-            label="属性"
-            placeholder='配置件必填，如 {"color":"red","size":"M"}'
+            label={t('app.kuaizhizao.workOrder.formAttributes')}
+            placeholder={t('app.kuaizhizao.workOrder.formAttributesPlaceholder')}
             rules={[
-              { required: true, message: '配置件必须填写属性' },
+              { required: true, message: t('app.kuaizhizao.workOrder.formAttributesRequired') },
               {
                 validator: (_, value) => {
                   if (!value) return Promise.resolve()
                   try {
                     const parsed = typeof value === 'string' ? JSON.parse(value) : value
                     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                      return Promise.reject(new Error('请输入有效的 JSON 对象，如 {"color":"red","size":"M"}'))
+                      return Promise.reject(
+                        new Error(t('app.kuaizhizao.workOrder.formAttributesJsonInvalid'))
+                      )
                     }
                     return Promise.resolve()
                   } catch {
-                    return Promise.reject(new Error('请输入有效的 JSON 格式'))
+                    return Promise.reject(
+                      new Error(t('app.kuaizhizao.workOrder.formAttributesJsonFormatInvalid'))
+                    )
                   }
                 },
               },
@@ -6948,16 +6947,16 @@ const WorkOrdersPage: React.FC = () => {
 
         <ProFormDigit
           name="quantity"
-          label="计划数量"
-          placeholder="请输入"
+          label={t('app.kuaizhizao.workOrder.colPlannedQty')}
+          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           min={0}
           precision={2}
-          rules={[{ required: true, message: '请输入计划数量' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedQtyRequired') }]}
           colProps={{ span: 6 }}
         />
         <ProFormSelect
           name="priority"
-          label="优先级"
+          label={t('app.kuaizhizao.workOrder.colPriority')}
           options={[
             { label: t('app.kuaizhizao.workOrder.priorityLow'), value: 'low' },
             { label: t('app.kuaizhizao.workOrder.priorityNormal'), value: 'normal' },
@@ -6969,27 +6968,27 @@ const WorkOrdersPage: React.FC = () => {
         />
         <ProFormDatePicker
           name="planned_start_date"
-          label="计划开始"
-          placeholder="请选择"
+          label={t('app.kuaizhizao.workOrder.colPlannedStart')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
           required
-          rules={[{ required: true, message: '请选择计划开始时间' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
           colProps={{ span: 6 }}
           fieldProps={{ style: { width: '100%' } }}
         />
         <ProFormDatePicker
           name="planned_end_date"
-          label="计划结束"
-          placeholder="请选择"
+          label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
+          placeholder={t('app.kuaizhizao.workOrder.formSelect')}
           required
-          rules={[{ required: true, message: '请选择计划结束时间' }]}
+          rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
           colProps={{ span: 6 }}
           fieldProps={{ style: { width: '100%' } }}
         />
 
         <Col span={24}>
-          <Form.Item name="process_route_id" label="工艺路线" style={{ marginBottom: 16 }}>
+          <Form.Item name="process_route_id" label={t('app.kuaizhizao.workOrder.colProcessRoute')} style={{ marginBottom: 16 }}>
             <UniDropdown
-              placeholder="可选；选择后自动加载工序"
+              placeholder={t('app.kuaizhizao.workOrder.formProcessRoutePlaceholder')}
               options={uniqueProcessRouteList.map(route => ({
                 label: `${route.code} - ${route.name}`,
                 value: route.id,
@@ -7022,7 +7021,7 @@ const WorkOrdersPage: React.FC = () => {
                     const route = uniqueProcessRouteList.find(r => r.id === value)
                     if (!route || !route.uuid) {
                       setCreateProcessRouteId(undefined)
-                      messageApi.warning('未找到工艺路线信息')
+                      messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNotFound'))
                       return
                     }
                     setCreateProcessRouteId(Number(value))
@@ -7041,19 +7040,21 @@ const WorkOrdersPage: React.FC = () => {
                       formRef.current?.setFieldsValue({
                         operations: operations.map((op: any) => op.operation_id),
                       })
-                      messageApi.success(`已加载 ${operations.length} 个工序`)
+                      messageApi.success(
+                        t('app.kuaizhizao.workOrder.msgOperationsLoaded', { count: operations.length })
+                      )
                     } else {
                       setSelectedOperations([])
                       formRef.current?.setFieldsValue({ operations: undefined })
                       if (routeDetail?.operation_sequence) {
-                        messageApi.warning('该工艺路线工序数据无法解析，请检查工序主数据是否完整')
+                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteParseFailed'))
                       } else {
-                        messageApi.warning('该工艺路线未配置工序序列')
+                        messageApi.warning(t('app.kuaizhizao.workOrder.msgProcessRouteNoSequence'))
                       }
                     }
                   } catch (error: any) {
                     console.error('获取工艺路线工序失败:', error)
-                    messageApi.error(error.message || '获取工艺路线工序失败')
+                    messageApi.error(error.message || t('app.kuaizhizao.workOrder.msgLoadProcessRouteOpsFailed'))
                     setCreateProcessRouteId(undefined)
                     setSelectedOperations([])
                     formRef.current?.setFieldsValue({ operations: undefined })
@@ -7070,7 +7071,7 @@ const WorkOrdersPage: React.FC = () => {
         </Col>
         <Form.Item name="operations" hidden />
         <Form.Item
-          label="工序清单"
+          label={t('app.kuaizhizao.workOrder.colOperations')}
           colon
           style={{
             gridColumn: '1 / -1',
@@ -7117,7 +7118,7 @@ const WorkOrdersPage: React.FC = () => {
                 color: 'var(--ant-color-primary)',
               }}
             >
-              添加工序
+              {t('app.kuaizhizao.workOrder.modalAddOperation')}
             </Button>
           )}
         </Form.Item>
@@ -7125,7 +7126,7 @@ const WorkOrdersPage: React.FC = () => {
         <Col span={12}>
           <Form.Item
             name="over_report_mode"
-            label="工单默认超报"
+            label={t('app.kuaizhizao.workOrder.formDefaultOverReport')}
             initialValue="none"
             style={{ marginBottom: 24 }}
           >
@@ -7143,9 +7144,10 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormDigit
           name="over_report_value"
           label={formLabelWithHint(
-            '超报数值',
-            '固定模式为额外件数；比例模式为百分数。工序行可单独覆盖。'
+            t('field.operation.overReportValue'),
+            t('field.operation.overReportValueExtra')
           )}
+          placeholder={t('app.kuaizhizao.workOrder.formEnter')}
           colProps={{ span: 12 }}
           min={0}
           fieldProps={{ precision: 4 }}
@@ -7153,8 +7155,8 @@ const WorkOrdersPage: React.FC = () => {
         <ProFormSwitch
           name="allow_operation_jump"
           label={formLabelWithHint(
-            '允许跳转工序',
-            '默认随所选工艺路线；可再修改。关闭时须按序报工且下道数量不超过上道；开启时路线中的节点工序仍不可跳过。'
+            t('app.kuaizhizao.workOrder.colAllowOpJump'),
+            t('app.kuaizhizao.workOrder.formAllowOpJumpExtra')
           )}
           initialValue={false}
           colProps={{ span: 12 }}
@@ -7178,7 +7180,7 @@ const WorkOrdersPage: React.FC = () => {
         />
         <ProFormUploadButton
           name="attachments"
-          label="附件"
+          label={t('app.kuaizhizao.workOrder.colAttachments')}
           max={10}
           colProps={{ span: 24 }}
           fieldProps={{
@@ -7199,8 +7201,8 @@ const WorkOrdersPage: React.FC = () => {
         />
         <ProFormTextArea
           name="remarks"
-          label="备注"
-          placeholder="可选"
+          label={t('app.kuaizhizao.workOrder.colRemarks')}
+          placeholder={t('app.kuaizhizao.workOrder.formOptionalPlaceholder')}
           fieldProps={{ rows: 3 }}
           colProps={{ span: 24 }}
         />
@@ -7211,19 +7213,19 @@ const WorkOrdersPage: React.FC = () => {
           <>
             <ProFormDatePicker
               name="planned_start_date"
-              label="计划开始"
-              placeholder="请选择"
+              label={t('app.kuaizhizao.workOrder.colPlannedStart')}
+              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
               required
-              rules={[{ required: true, message: '请选择计划开始时间' }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedStartRequired') }]}
               colProps={{ span: 12 }}
               fieldProps={{ style: { width: '100%' } }}
             />
             <ProFormDatePicker
               name="planned_end_date"
-              label="计划结束"
-              placeholder="请选择"
+              label={t('app.kuaizhizao.workOrder.colPlannedEnd')}
+              placeholder={t('app.kuaizhizao.workOrder.formSelect')}
               required
-              rules={[{ required: true, message: '请选择计划结束时间' }]}
+              rules={[{ required: true, message: t('app.kuaizhizao.workOrder.formPlannedEndRequired') }]}
               colProps={{ span: 12 }}
               fieldProps={{ style: { width: '100%' } }}
             />
@@ -7232,7 +7234,7 @@ const WorkOrdersPage: React.FC = () => {
       </FormModalTemplate>
 
       <Modal
-        title="添加工序"
+        title={t('app.kuaizhizao.workOrder.modalAddOperation')}
         open={createAddOperationsModalVisible}
         width={520}
         destroyOnHidden
@@ -7241,8 +7243,8 @@ const WorkOrdersPage: React.FC = () => {
           setCreateAddOperationsModalVisible(false)
           setCreateAddOperationUuids([])
         }}
-        okText="确认"
-        cancelText="取消"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ disabled: !createAddOperationUuids.length }}
       >
         <OperationPickPanel
@@ -7252,7 +7254,7 @@ const WorkOrdersPage: React.FC = () => {
           loading={false}
           multipleValue={createAddOperationUuids}
           onMultipleChange={setCreateAddOperationUuids}
-          searchPlaceholder="搜索工序编号/名称"
+          searchPlaceholder={t('app.kuaizhizao.workOrder.searchOperationPlaceholder')}
         />
       </Modal>
 
@@ -7260,12 +7262,12 @@ const WorkOrdersPage: React.FC = () => {
       <Modal
         title={
           productSourceModalType === 'sales_order'
-            ? '选择销售订单 - 产品明细'
+            ? t('app.kuaizhizao.workOrder.modalSelectProductSourceSalesOrder')
             : productSourceModalType === 'sales_forecast'
-              ? '选择销售预测 - 产品明细'
+              ? t('app.kuaizhizao.workOrder.modalSelectProductSourceSalesForecast')
               : productSourceModalType === 'demand'
-                ? '选择需求 - 产品明细'
-                : '选择 - 产品明细'
+                ? t('app.kuaizhizao.workOrder.modalSelectProductSourceDemand')
+                : t('app.kuaizhizao.workOrder.modalSelectProductSourceGeneric')
         }
         open={productSourceModalVisible}
         onCancel={() => {
@@ -7278,19 +7280,19 @@ const WorkOrdersPage: React.FC = () => {
       >
         <Input.Search
           allowClear
-          enterButton="搜索"
+          enterButton={t('app.kuaizhizao.workOrder.actionSearch')}
           style={{ marginBottom: 12 }}
           value={productSourceKeyword}
           onChange={(e) => setProductSourceKeyword(e.target.value)}
           onSearch={(value) => setProductSourceKeyword(value)}
           placeholder={
             productSourceModalType === 'sales_order'
-              ? '搜索订单号/客户/产品/型号'
+              ? t('app.kuaizhizao.workOrder.searchProductSourceSalesOrder')
               : productSourceModalType === 'sales_forecast'
-                ? '搜索预测编号/预测名称/产品/型号'
+                ? t('app.kuaizhizao.workOrder.searchProductSourceForecast')
                 : productSourceModalType === 'demand'
-                  ? '搜索需求编号/需求名称/产品/型号'
-                  : '请输入关键词搜索'
+                  ? t('app.kuaizhizao.workOrder.searchProductSourceDemand')
+                  : t('app.kuaizhizao.workOrder.searchProductSourceGeneric')
           }
         />
         <Table
@@ -7460,7 +7462,7 @@ const WorkOrdersPage: React.FC = () => {
                     operationFormRef.current?.resetFields()
                   }}
                 >
-                  添加工序
+                  {t('app.kuaizhizao.workOrder.modalAddOperation')}
                 </Button>
               )}
               <Select
@@ -8296,7 +8298,11 @@ const WorkOrdersPage: React.FC = () => {
 
       {/* 工单工序编辑Modal */}
       <FormModalTemplate
-        title={currentOperation ? '编辑工序' : '添加工序'}
+        title={
+          currentOperation
+            ? t('app.kuaizhizao.workOrder.modalEditOperation')
+            : t('app.kuaizhizao.workOrder.modalAddOperation')
+        }
         open={operationsModalVisible}
         onClose={() => {
           setOperationsModalVisible(false)

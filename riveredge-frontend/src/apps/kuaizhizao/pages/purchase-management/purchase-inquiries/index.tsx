@@ -19,7 +19,7 @@ import {
 import { ListPageTemplate, DetailDrawerTemplate, FormModalTemplate, DRAWER_CONFIG, FORM_LAYOUT, MODAL_CONFIG } from '../../../../../components/layout-templates';
 import { UniPullCreateToolbar } from '../../../../../components/uni-pull';
 import { buildUniPushMenuItems, UniPushToolbarButton } from '../../../../../components/uni-push';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import { UniWorkflowActions } from '../../../../../components/uni-workflow-actions';
 import { UniLifecycle } from '../../../../../components/uni-lifecycle';
 import { LIST_LIFECYCLE_STAGE_FIELD } from '../../../../../utils/listLifecycleStage';
@@ -104,7 +104,7 @@ const PurchaseInquiriesPage: React.FC = () => {
   const actionRef = useRef<ActionType>();
   const lastInquiriesCacheRef = useRef<PurchaseInquiry[]>([]);
   const auditEnabled = useAuditRequired('kuaizhizao', 'purchase-inquiry');
-  const pullFromRequisitionAction = getKuaizhizaoDocumentAction('purchase_inquiry.pull_from_requisition');
+  const pullFromRequisitionAction = resolveKuaizhizaoDocumentAction(t, 'purchase_inquiry.pull_from_requisition');
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detail, setDetail] = useState<PurchaseInquiry | null>(null);
@@ -1010,7 +1010,7 @@ const PurchaseInquiriesPage: React.FC = () => {
             createIcon={<PlusOutlined />}
             createLabel={t('app.kuaizhizao.purchaseInquiry.createInquiry')}
             onCreate={() => { createForm.resetFields(); setCreateOpen(true); }}
-            menuItems={buildKuaizhizaoPullCreateMenuItems([
+            menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
               {
                 key: 'pull-from-requisition',
                 actionKey: 'purchase_inquiry.pull_from_requisition',

@@ -31,6 +31,11 @@ import { qrcodeApi } from '../../../../services/qrcode';
 import { getUserFormCoreReferenceOptions } from '../userFormReferenceOptions';
 import { rowActionKind, rowActionResetPassword, rowActionToneDestructive } from '../../../../components/uni-action';
 import { UserFormModal } from '../components/UserFormModal';
+import {
+  resolvePresetDepartmentName,
+  resolvePresetPositionName,
+  resolvePresetRoleName,
+} from '../../../../utils/presetEntityI18n';
 
 /**
  * 账户管理列表页面组件
@@ -129,7 +134,7 @@ const UserListPage: React.FC = () => {
 
   const loadReferenceOptions = useCallback(async () => {
     try {
-      const core = await getUserFormCoreReferenceOptions();
+      const core = await getUserFormCoreReferenceOptions(t);
       setDepartmentOptions(core.departmentOptions);
       setPositionOptions(core.positionOptions);
       setRoleOptions(core.roleOptions);
@@ -138,7 +143,7 @@ const UserListPage: React.FC = () => {
         window.console.error('加载选项数据失败:', error);
       }
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadReferenceOptions();
@@ -410,7 +415,8 @@ const UserListPage: React.FC = () => {
         options: departmentOptions,
         showSearch: true,
       },
-      render: (_, record) => record.department?.name || '-',
+      render: (_, record) =>
+        record.department ? resolvePresetDepartmentName(record.department, t) : '-',
     },
     {
       title: t('field.user.position'),
@@ -421,7 +427,8 @@ const UserListPage: React.FC = () => {
       fieldProps: {
         options: positionOptions,
       },
-      render: (_, record) => record.position?.name || '-',
+      render: (_, record) =>
+        record.position ? resolvePresetPositionName(record.position, t) : '-',
     },
     {
       title: t('field.user.roles'),
@@ -432,7 +439,7 @@ const UserListPage: React.FC = () => {
       render: (_, record) => (
         <Space size={4} wrap>
           {record.roles?.map(role => (
-            <Tag key={role.uuid} color="blue">{role.name}</Tag>
+            <Tag key={role.uuid} color="blue">{resolvePresetRoleName(role, t)}</Tag>
           ))}
         </Space>
       ),
@@ -560,21 +567,23 @@ const UserListPage: React.FC = () => {
     {
       title: t('field.user.department'),
       dataIndex: ['department', 'name'],
-      render: (_: any, record: User) => record?.department?.name || '-'
+      render: (_: unknown, record: User) =>
+        record?.department ? resolvePresetDepartmentName(record.department, t) : '-',
     },
     {
       title: t('field.user.position'),
       dataIndex: ['position', 'name'],
-      render: (_: any, record: User) => record?.position?.name || '-'
+      render: (_: unknown, record: User) =>
+        record?.position ? resolvePresetPositionName(record.position, t) : '-',
     },
     {
       title: t('field.user.roles'),
       dataIndex: 'roles',
       span: 2,
-      render: (_: any, record: User) => (
+      render: (_: unknown, record: User) => (
         <Space>
           {record?.roles?.map(role => (
-            <Tag key={role.uuid}>{role.name}</Tag>
+            <Tag key={role.uuid}>{resolvePresetRoleName(role, t)}</Tag>
           ))}
         </Space>
       ),

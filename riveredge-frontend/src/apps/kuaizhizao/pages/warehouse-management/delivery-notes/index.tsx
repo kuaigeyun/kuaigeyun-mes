@@ -42,7 +42,7 @@ import { customerApi } from '../../../../master-data/services/supply-chain';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
 import { UniMaterialBatchPicker } from '../../../../../components/uni-material-batch-picker';
 import type { Material } from '../../../../master-data/types/material';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 import { rowActionKind, rowActionLabelKeep } from '../../../../../components/uni-action';
@@ -102,7 +102,7 @@ const STATUS_MAP: Record<string, { text: string; color: string }> = {
 const DeliveryNotesPage: React.FC = () => {
   const { t } = useTranslation();
   const { openPrint, PrintModal } = useKuaizhizaoPrintModal();
-  const pullFromSalesDeliveryAction = getKuaizhizaoDocumentAction('delivery_note.pull_from_sales_delivery');
+  const pullFromSalesDeliveryAction = resolveKuaizhizaoDocumentAction(t, 'delivery_note.pull_from_sales_delivery');
   const { message: messageApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
   const invalidateMenuBadgeCounts = useInvalidateMenuBadgeCounts();
@@ -981,7 +981,7 @@ const DeliveryNotesPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.deliveryNote.create')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-sales-delivery',
                   actionKey: 'delivery_note.pull_from_sales_delivery',

@@ -69,7 +69,7 @@ import { testGenerateCode, generateCode, getCodeRulePageConfig } from '../../../
 import { isAutoGenerateEnabled, getPageRuleCode } from '../../../../../utils/codeRulePage';
 import { useTranslation } from 'react-i18next';
 import { ROUTES } from '../../../constants/routes';
-import { buildKuaizhizaoPullCreateMenuItems, getKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
+import { buildKuaizhizaoPullCreateMenuItems, resolveKuaizhizaoDocumentAction } from '../../../constants/documentActionRegistry';
 import DocumentAttachmentsField from '../../../components/DocumentAttachmentsField';
 import { mapAttachmentsToUploadList, normalizeDocumentAttachments } from '../../../utils/documentAttachments';
 
@@ -159,7 +159,7 @@ const ReceiptNoticesPage: React.FC = () => {
   const { token } = theme.useToken();
   const receiptNoticeDetailDrawerZIndex = token.zIndexPopupBase;
   const { message: messageApi } = App.useApp();
-  const pullFromPurchaseOrderAction = getKuaizhizaoDocumentAction('receipt_notice.pull_from_purchase_order');
+  const pullFromPurchaseOrderAction = resolveKuaizhizaoDocumentAction(t, 'receipt_notice.pull_from_purchase_order');
   const defaultUnit = t('app.kuaizhizao.shipmentNotice.defaultUnit');
   const defaultReceiptItem = useMemo(
     () => ({
@@ -1256,7 +1256,7 @@ const ReceiptNoticesPage: React.FC = () => {
               createIcon={<PlusOutlined />}
               createLabel={t('app.kuaizhizao.receiptNotice.create')}
               onCreate={handleCreate}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-purchase-order',
                   actionKey: 'receipt_notice.pull_from_purchase_order',

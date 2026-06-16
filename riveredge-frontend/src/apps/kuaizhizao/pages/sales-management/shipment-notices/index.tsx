@@ -1093,7 +1093,7 @@ const ShipmentNoticesPage: React.FC = () => {
               onCreate={() => {
                 void handleCreate();
               }}
-              menuItems={buildKuaizhizaoPullCreateMenuItems([
+              menuItems={buildKuaizhizaoPullCreateMenuItems(t, [
                 {
                   key: 'pull-from-sales-order',
                   actionKey: 'shipment_notice.pull_from_sales_order',

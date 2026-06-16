@@ -1,9 +1,11 @@
 import type { FunctionGrantAction, FunctionGrantMenuNode } from '../../../../services/role';
 import {
   extractAppCodeFromPath,
+  getAppDisplayName,
   translateAppMenuItemName,
   translateMenuName,
 } from '../../../../utils/menuTranslation';
+import { resolvePermissionActionLabel } from '../../../../utils/permissionContract';
 
 export type FunctionGrantFilterMode = 'all' | 'app' | 'module' | 'search';
 
@@ -22,7 +24,7 @@ export function translateGrantMenuTitle(
     const isAppRoot = /^\/apps\/[^/]+$/.test(normalized);
     if (isAppRoot) {
       const appCode = extractAppCodeFromPath(path);
-      if (appCode) return node.title;
+      if (appCode) return getAppDisplayName(appCode, t, node.title);
     }
     return translateAppMenuItemName(node.title, path, t, undefined);
   }
@@ -73,22 +75,7 @@ function actionMatchesSearch(
   kw: string,
   t: (key: string, opts?: { defaultValue?: string }) => string
 ): boolean {
-  const raw = (action.action || '').toLowerCase().trim();
-  const actionLabels: Record<string, string> = {
-    create: t('permission.action.create', { defaultValue: '创建' }),
-    read: t('permission.action.read', { defaultValue: '查看' }),
-    view: t('permission.action.view', { defaultValue: '查看' }),
-    update: t('permission.action.update', { defaultValue: '编辑' }),
-    edit: t('permission.action.edit', { defaultValue: '编辑' }),
-    delete: t('permission.action.delete', { defaultValue: '删除' }),
-    import: t('permission.action.import', { defaultValue: '导入' }),
-    export: t('permission.action.export', { defaultValue: '导出' }),
-    assign: t('permission.action.assign', { defaultValue: '分配' }),
-    claim: t('permission.action.claim', { defaultValue: '认领' }),
-    release: t('permission.action.release', { defaultValue: '释放' }),
-    recycle: t('permission.action.recycle', { defaultValue: '回收' }),
-  };
-  const label = actionLabels[raw] || action.label || '';
+  const label = resolvePermissionActionLabel(action.action, action.label, t);
   if ((action.code || '').toLowerCase().includes(kw)) return true;
   if ((action.label || '').toLowerCase().includes(kw)) return true;
   if (label.toLowerCase().includes(kw)) return true;

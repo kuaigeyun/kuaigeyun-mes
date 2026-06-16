@@ -2,6 +2,7 @@ import React from 'react';
 import { Button, Dropdown, Space } from 'antd';
 import type { ButtonProps } from 'antd';
 import { DownOutlined, FileSearchOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { withSingleNewShortcutHint } from '../../utils/globalNewShortcut';
 
 export interface UniPullMenuItem {
@@ -71,14 +72,18 @@ export interface UniPullLoadButtonProps {
  * 独立的「从单据加载」入口，与「新建」主按钮并列，便于发现取单能力。
  */
 export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
-  label = '从单据加载',
+  label,
   menuItems,
   icon,
   type,
   color = 'primary',
   variant = 'outlined',
   compactKey = 'uni-pull-load-button',
-}) => (
+}) => {
+  const { t } = useTranslation();
+  const resolvedLabel = label ?? t('components.uniPull.loadFromDocument');
+
+  return (
   <Dropdown
     key={compactKey}
     trigger={['click']}
@@ -92,9 +97,10 @@ export const UniPullLoadButton: React.FC<UniPullLoadButtonProps> = ({
     }}
   >
     <Button type={type} color={color} variant={variant} icon={icon ?? <FileSearchOutlined />}>
-      {label}
+      {resolvedLabel}
       <DownOutlined style={{ fontSize: 10, marginLeft: 4 }} />
     </Button>
   </Dropdown>
-);
+  );
+};
 
