@@ -13,6 +13,11 @@ const markdownComponents: Components = {
       {children}
     </a>
   ),
+  table: ({ children }) => (
+    <div className="ai-qa-markdown-table-wrap">
+      <table>{children}</table>
+    </div>
+  ),
 }
 
 function AiAssistantMarkdown({ content }: AiAssistantMarkdownProps) {

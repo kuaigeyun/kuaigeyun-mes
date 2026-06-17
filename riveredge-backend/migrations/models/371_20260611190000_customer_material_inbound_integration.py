@@ -50,7 +50,9 @@ ALTER TABLE "apps_master_data_material_batches" ADD COLUMN IF NOT EXISTS "custom
 ALTER TABLE "apps_master_data_material_batches" ADD COLUMN IF NOT EXISTS "source_doc_id" INT;
 ALTER TABLE "apps_master_data_material_batches" ADD COLUMN IF NOT EXISTS "source_doc_code" VARCHAR(50);
 
+ALTER TABLE "apps_master_data_material_batches" DROP CONSTRAINT IF EXISTS "uid_apps_master_batch_tenant_material_batch";
 ALTER TABLE "apps_master_data_material_batches" DROP CONSTRAINT IF EXISTS "apps_master_data_material_batches_tenant_id_material_id_batch_no_key";
+DROP INDEX IF EXISTS "uid_apps_master_batch_tenant_material_batch";
 DROP INDEX IF EXISTS "apps_master_data_material_batches_tenant_id_material_id_batch_no_key";
 CREATE UNIQUE INDEX IF NOT EXISTS "uidx_material_batch_ownership"
     ON "apps_master_data_material_batches" ("tenant_id", "material_id", "batch_no", "ownership_type", "customer_id")

@@ -18,7 +18,7 @@ from decimal import Decimal
 from typing import Optional, Dict, Any
 from loguru import logger
 from tortoise.exceptions import IntegrityError
-from tortoise.transactions import atomic
+from tortoise.transactions import atomic, in_transaction
 
 from apps.kuaizhizao.utils.inventory_helper import get_material_inventory_info
 from infra.services.business_config_service import BusinessConfigService
@@ -90,18 +90,19 @@ class InventoryService:
             await batch.save()
             return
         try:
-            await MaterialBatch.create(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                batch_no=bn,
-                quantity=quantity,
-                status="in_stock",
-                ownership_type=own["ownership_type"],
-                customer_id=own["customer_id"],
-                customer_name=customer_name,
-                source_doc_id=source_doc_id,
-                source_doc_code=source_doc_code,
-            )
+            async with in_transaction():
+                await MaterialBatch.create(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    batch_no=bn,
+                    quantity=quantity,
+                    status="in_stock",
+                    ownership_type=own["ownership_type"],
+                    customer_id=own["customer_id"],
+                    customer_name=customer_name,
+                    source_doc_id=source_doc_id,
+                    source_doc_code=source_doc_code,
+                )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,
@@ -123,8 +124,12 @@ class InventoryService:
                     or int(legacy.customer_id or 0) != int(own["customer_id"])
                 ):
                     raise BusinessLogicError(
-                        f"批号 {bn} 已存在其他归属的库存记录，客供入库请填写不同批号；"
-                        f"若需客供/自购批次隔离，请执行数据库迁移 371"
+                        f"批号 {bn} 已存在其他归属的库存记录"
+                        f"（现有：{legacy.ownership_type or 'company_owned'}"
+                        f"{f'，客户 {legacy.customer_name}' if legacy.customer_name else ''}；"
+                        f"本次：{own['ownership_type']}）。"
+                        f"自购入库与客供库存请分别记账；若系统仍报唯一约束冲突，"
+                        f"请执行数据库迁移 396（修复批次归属唯一索引）。"
                     )
                 raise
             if batch.deleted_at is not None:
@@ -157,13 +162,14 @@ class InventoryService:
             await batch.save()
             return
         try:
-            await MaterialBatch.create(
-                tenant_id=tenant_id,
-                material_id=material_id,
-                batch_no=bn,
-                quantity=quantity,
-                status="in_stock" if quantity > 0 else "out_stock",
-            )
+            async with in_transaction():
+                await MaterialBatch.create(
+                    tenant_id=tenant_id,
+                    material_id=material_id,
+                    batch_no=bn,
+                    quantity=quantity,
+                    status="in_stock" if quantity > 0 else "out_stock",
+                )
         except IntegrityError:
             batch = await MaterialBatch.filter(
                 tenant_id=tenant_id,

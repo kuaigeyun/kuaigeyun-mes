@@ -181,6 +181,7 @@ class InventoryCostService:
                     item.material_id,
                     exc,
                 )
+                raise
 
     async def resolve_outbound_unit_cost(self, tenant_id: int, material_id: int) -> Decimal:
         """销售出库确认时取当前移动平均/标准成本作为出库单位成本。"""

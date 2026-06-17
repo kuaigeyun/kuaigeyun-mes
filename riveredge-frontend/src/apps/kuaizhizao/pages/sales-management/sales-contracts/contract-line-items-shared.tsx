@@ -1,7 +1,8 @@
 import React, { useCallback } from 'react';
-import { Form, Typography, theme as AntdTheme } from 'antd';
+import { Form, Input, Typography, theme as AntdTheme } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { UniMaterialSelect } from '../../../../../components/uni-material-select';
+import { getMaterialField } from '../../../../../components/uni-material-batch-picker/utils';
 import { AmountDisplay } from '../../../../../components/permission';
 import { KUAIZHIZAO_SALES_CONTRACT_FIELD_RESOURCE as SC } from '../../../constants/fieldPermissionResources';
 import type { Material } from '../../../../master-data/types/material';
@@ -81,6 +82,26 @@ export const convertUnitPriceByPriceType = (
   return fromCents(unitPriceCents);
 };
 
+export function resolveContractLineMaterialFields(
+  it: Record<string, unknown>,
+  materialList: Array<Record<string, unknown>>,
+): { material_code: string; material_name: string; material_unit: string } {
+  const mid = it?.material_id != null ? Number(it.material_id) : NaN;
+  const matched = Number.isFinite(mid)
+    ? materialList.find((m) => Number(m.id) === mid)
+    : undefined;
+  const material_code =
+    String(it?.material_code ?? '').trim() ||
+    String(getMaterialField(matched ?? {}, 'mainCode') ?? getMaterialField(matched ?? {}, 'code') ?? '').trim();
+  const material_name =
+    String(it?.material_name ?? '').trim() ||
+    String(getMaterialField(matched ?? {}, 'name') ?? '').trim();
+  const material_unit =
+    String(it?.material_unit ?? '').trim() ||
+    String(getMaterialField(matched ?? {}, 'baseUnit') ?? '').trim();
+  return { material_code, material_name, material_unit };
+}
+
 export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index }) => {
   const { t } = useTranslation();
   const form = Form.useFormInstance();
@@ -101,6 +122,19 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
   const onMaterialPicked = useCallback(
     (_val: number | undefined, material: Material | undefined) => {
       if (!material) return;
+      form.setFieldValue(
+        ['items', index, 'material_code'],
+        getMaterialField(material as Record<string, unknown>, 'mainCode') ??
+          getMaterialField(material as Record<string, unknown>, 'code'),
+      );
+      form.setFieldValue(
+        ['items', index, 'material_name'],
+        getMaterialField(material as Record<string, unknown>, 'name'),
+      );
+      form.setFieldValue(
+        ['items', index, 'material_unit'],
+        getMaterialField(material as Record<string, unknown>, 'baseUnit'),
+      );
       form.setFieldValue(
         ['items', index, '_sourceType'],
         (material as any)?.sourceType || (material as any)?.source_type,
@@ -146,6 +180,12 @@ export const ContractMaterialSelectCell: React.FC<{ index: number }> = ({ index 
           showAdvancedSearch
           onChange={onMaterialPicked}
         />
+        <Form.Item name={[index, 'material_code']} hidden>
+          <Input />
+        </Form.Item>
+        <Form.Item name={[index, 'material_name']} hidden>
+          <Input />
+        </Form.Item>
       </div>
     </div>
   );

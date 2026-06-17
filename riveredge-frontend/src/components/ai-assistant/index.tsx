@@ -8,6 +8,7 @@ import { Bubble, Prompts, Sender } from '@ant-design/x'
 import type { PromptsItemType } from '@ant-design/x'
 import { useXChat, XRequest } from '@ant-design/x-sdk'
 import Lottie from 'lottie-react'
+import { useTranslation } from 'react-i18next'
 import {
   buildKuaiChatAuthHeaders,
   KuaiDeepSeekChatProvider,
@@ -45,10 +46,6 @@ export interface AIAssistantProps {
    */
   designOnly?: boolean
 }
-
-const MSG_WELCOME_DESC = '我能帮你更高效地获取信息并提供支持，你可以随时向我提问。'
-const SENDER_PLACEHOLDER = '请输入你的问题，按 Enter 发送'
-const AI_DISCLAIMER = '内容由 AI 生成，仅供参考'
 
 const SCROLL_LOCK_CLASSES = ['ant-scrolling-effect', 'ant-modal-open'] as const
 
@@ -102,13 +99,34 @@ function scheduleScrollLockRelease() {
   }
 }
 
-/** 制造业用户最常问的问题（点击即发送） */
-const PROMPT_ITEMS: PromptsItemType[] = [
-  { key: 'work-order', label: '如何创建生产工单？', icon: <span className="ai-qa-prompt-hash">#</span> },
-  { key: 'inventory', label: '怎么查询物料库存？', icon: <span className="ai-qa-prompt-hash">#</span> },
-  { key: 'reporting', label: '报工在哪里操作？', icon: <span className="ai-qa-prompt-hash">#</span> },
-  { key: 'progress', label: '如何查看生产进度？', icon: <span className="ai-qa-prompt-hash">#</span> },
-]
+function usePromptItems(): PromptsItemType[] {
+  const { t } = useTranslation()
+  return useMemo(
+    () => [
+      {
+        key: 'work-order',
+        label: t('ui.aiAssistant.prompt.workOrder'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+      {
+        key: 'inventory',
+        label: t('ui.aiAssistant.prompt.inventory'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+      {
+        key: 'reporting',
+        label: t('ui.aiAssistant.prompt.reporting'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+      {
+        key: 'progress',
+        label: t('ui.aiAssistant.prompt.progress'),
+        icon: <span className="ai-qa-prompt-hash">#</span>,
+      },
+    ],
+    [t],
+  )
+}
 
 function blurPanelFocus(shell: HTMLElement | null) {
   const active = document.activeElement
@@ -191,6 +209,8 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   welcomeHint,
   modelName,
 }) => {
+  const { t } = useTranslation()
+  const promptItems = usePromptItems()
   const { token } = theme.useToken()
   const [senderValue, setSenderValue] = useState('')
   const borderBeamColor = useMemo(
@@ -205,8 +225,8 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
   const handleCopy = (text: string) => {
     if (!text) return
     navigator.clipboard.writeText(text).then(
-      () => message.success('已复制'),
-      () => message.error('复制失败'),
+      () => message.success(t('ui.aiAssistant.copySuccess')),
+      () => message.error(t('ui.aiAssistant.copyFailed')),
     )
   }
 
@@ -251,7 +271,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
 
   const senderProps = useMemo(
     () => ({
-      placeholder: SENDER_PLACEHOLDER,
+      placeholder: t('ui.aiAssistant.senderPlaceholder'),
       loading: isLoading,
       disabled: senderDisabled || !open,
       value: senderValue,
@@ -261,13 +281,13 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
       footer: senderFooter,
       autoSize: { minRows: 3, maxRows: 8 },
     }),
-    [isLoading, open, senderDisabled, senderValue, handleSenderSubmit, senderFooter],
+    [isLoading, open, senderDisabled, senderValue, handleSenderSubmit, senderFooter, t],
   )
 
   const qaContent = (
     <div className="ai-qa-layout">
       <header className="ai-qa-panel-header">
-        <span className="ai-qa-panel-header-title">KU-AI</span>
+        <span className="ai-qa-panel-header-title">{t('ui.aiAssistant.title')}</span>
         <div className="ai-qa-panel-header-actions">
           <span
             className="ai-qa-panel-header-beta"
@@ -277,23 +297,23 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
               borderColor: token.colorPrimaryBorder,
             }}
           >
-            测试版
+            {t('ui.aiAssistant.beta')}
           </span>
           <Button
             type="text"
             icon={<PlusOutlined />}
             onClick={handleNewChatClick}
             className="ai-qa-header-icon-btn"
-            aria-label="新对话"
-            title="新对话"
+            aria-label={t('ui.aiAssistant.newChat')}
+            title={t('ui.aiAssistant.newChat')}
           />
           <Button
             type="text"
             icon={<CloseOutlined />}
             onClick={onClose}
             className="ai-qa-header-icon-btn"
-            aria-label="关闭"
-            title="关闭"
+            aria-label={t('ui.aiAssistant.close')}
+            title={t('ui.aiAssistant.close')}
           />
         </div>
       </header>
@@ -307,15 +327,15 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                 animationData={welcomeAnimation}
                 loop
               />
-              <div className="ai-qa-welcome-hi">你好</div>
-              <div className="ai-qa-welcome-title">我是 KU-AI 助手</div>
-              <div className="ai-qa-welcome-desc">{MSG_WELCOME_DESC}</div>
+              <div className="ai-qa-welcome-hi">{t('ui.aiAssistant.welcomeHi')}</div>
+              <div className="ai-qa-welcome-title">{t('ui.aiAssistant.welcomeTitle')}</div>
+              <div className="ai-qa-welcome-desc">{t('ui.aiAssistant.welcomeDesc')}</div>
               {welcomeHint}
             </div>
             {open && !senderDisabled ? (
               <div className="ai-qa-prompts-wrap">
                 <Prompts
-                  items={PROMPT_ITEMS}
+                  items={promptItems}
                   vertical
                   onItemClick={({ data }) => {
                     const label = typeof data.label === 'string' ? data.label : ''
@@ -361,7 +381,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                           onKeyDown={e => e.key === 'Enter' && handleCopy(text)}
                           className="ai-qa-bubble-action"
                         >
-                          <CopyOutlined /> 复制
+                          <CopyOutlined /> {t('ui.aiAssistant.copy')}
                         </span>
                         {lastUser ? (
                           <span
@@ -371,7 +391,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
                             onKeyDown={e => e.key === 'Enter' && handleRegenerate(lastUser)}
                             className="ai-qa-bubble-action"
                           >
-                            <ReloadOutlined /> 重新生成
+                            <ReloadOutlined /> {t('ui.aiAssistant.regenerate')}
                           </span>
                         ) : null}
                       </div>
@@ -397,7 +417,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
         <div className="ai-qa-sender-wrap">
           <Sender {...senderProps} />
         </div>
-        <p className="ai-qa-disclaimer">{AI_DISCLAIMER}</p>
+        <p className="ai-qa-disclaimer">{t('ui.aiAssistant.disclaimer')}</p>
       </div>
     </div>
   )
@@ -406,7 +426,7 @@ const AIAssistantDialogUI: React.FC<AIAssistantDialogUIProps> = ({
     <div
       className="ai-qa-panel"
       role="dialog"
-      aria-label="AI 助手"
+      aria-label={t('ui.aiAssistant.ariaLabel')}
       aria-modal={false}
     >
       <div className="ai-qa-panel-glow">
@@ -429,6 +449,7 @@ type AIAssistantLivePanelProps = {
 }
 
 const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClose, model }) => {
+  const { t } = useTranslation()
   const provider = useMemo(() => getKuaiChatProvider(model), [model])
 
   const chat = useXChat<XChatMessage, XChatMessage, Record<string, unknown>, Record<string, unknown>>({
@@ -437,7 +458,7 @@ const AIAssistantLivePanel: React.FC<AIAssistantLivePanelProps> = ({ open, onClo
     defaultMessages: [],
     requestFallback: (_requestParams, { error }) => ({
       role: 'assistant',
-      content: error?.message || '对话请求失败，请稍后重试。',
+      content: error?.message || t('ui.aiAssistant.requestFailed'),
     }),
   })
 
@@ -534,29 +555,30 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
   chatStatus,
   statusError,
 }) => {
+  const { t } = useTranslation()
   const [messages, setMessages] = useState<BubbleItem[]>([])
   const [loading, setLoading] = useState(false)
 
   const configHint = useMemo(() => {
     if (reason === 'loading') return null
     if (reason === 'status_error' && statusError) {
-      return `无法检测 DeepSeek 集成状态：${statusError}`
+      return t('ui.aiAssistant.statusError', { message: statusError })
     }
     if (!chatStatus?.configured) {
-      return '未配置 DeepSeek：请在站点设置 → 集成设置中填写 API Key。'
+      return t('ui.aiAssistant.notConfigured')
     }
     if (!chatStatus?.enabled) {
-      return 'DeepSeek 集成未启用：请在站点设置 → 集成设置中开启。'
+      return t('ui.aiAssistant.notEnabled')
     }
     return null
-  }, [reason, chatStatus, statusError])
+  }, [reason, chatStatus, statusError, t])
 
   const welcomeHint = useMemo(() => {
     if (reason === 'loading') {
       return (
         <div style={{ marginTop: 4, color: 'var(--ant-colorTextSecondary)' }}>
           <Spin size="small" style={{ marginRight: 8 }} />
-          正在连接 DeepSeek…
+          {t('ui.aiAssistant.connecting')}
         </div>
       )
     }
@@ -564,7 +586,7 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
       return <div style={{ marginTop: 4, color: 'var(--ant-colorWarning)' }}>{configHint}</div>
     }
     return null
-  }, [reason, configHint])
+  }, [reason, configHint, t])
 
   const handleNewChat = () => setMessages([])
 
@@ -587,8 +609,8 @@ const AIAssistantFallbackPanel: React.FC<AIAssistantFallbackPanelProps> = ({
     window.setTimeout(() => {
       const reply =
         reason === 'preview'
-          ? '（当前为界面预览模式，未接入真实 API。）'
-          : configHint || '（DeepSeek 未就绪，请在站点设置 → 集成设置中完成配置。）'
+          ? t('ui.aiAssistant.previewReply')
+          : configHint || t('ui.aiAssistant.notReadyReply')
       setMessages(prev => [
         ...prev,
         {
@@ -638,6 +660,7 @@ type AIAssistantPanelProps = {
 }
 
 const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ open, onClose, designOnly }) => {
+  const { t } = useTranslation()
   const {
     data: chatStatus,
     isPending: statusPending,
@@ -653,7 +676,11 @@ const AIAssistantPanel: React.FC<AIAssistantPanelProps> = ({ open, onClose, desi
   }
 
   const statusError =
-    statusQueryError instanceof Error ? statusQueryError.message : statusQueryError ? '请求失败' : null
+    statusQueryError instanceof Error
+      ? statusQueryError.message
+      : statusQueryError
+        ? t('ui.aiAssistant.requestError')
+        : null
 
   if (statusError) {
     return (

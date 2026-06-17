@@ -514,6 +514,49 @@ def _validate_sales_return_batch_traceability(
         )
 
 
+_PURCHASE_RECEIPT_VOID_STATUSES = frozenset(
+    {"已作废", "作废", "void", "VOID", "cancelled", "CANCELLED"}
+)
+_PURCHASE_RECEIPT_CONFIRMED_STATUSES = frozenset(
+    {"已入库", "已完成", "completed", "COMPLETED"}
+)
+
+
+async def _sum_confirmed_purchase_receipt_qty_for_po_item(
+    tenant_id: int,
+    purchase_order_item_id: int,
+    *,
+    exclude_receipt_id: Optional[int] = None,
+    extra_pending_qty: Decimal = Decimal("0"),
+) -> Decimal:
+    """
+    统计采购订单行已确认入库数量。
+    仅计入已入库/已完成入库单；草稿/待入库不计入，避免重复占用订单余量。
+    extra_pending_qty：同一请求内已校验通过、尚未落库的同订单行数量（防一单多行重复累计）。
+    """
+    total = extra_pending_qty
+    historical_items = await PurchaseReceiptItem.filter(
+        tenant_id=tenant_id,
+        purchase_order_item_id=purchase_order_item_id,
+    ).all()
+    for historical in historical_items:
+        if exclude_receipt_id is not None and int(historical.receipt_id) == int(exclude_receipt_id):
+            continue
+        historical_receipt = await PurchaseReceipt.get_or_none(
+            tenant_id=tenant_id,
+            id=historical.receipt_id,
+            deleted_at__isnull=True,
+        )
+        if not historical_receipt:
+            continue
+        if historical_receipt.status in _PURCHASE_RECEIPT_VOID_STATUSES:
+            continue
+        if historical_receipt.status not in _PURCHASE_RECEIPT_CONFIRMED_STATUSES:
+            continue
+        total += Decimal(str(historical.receipt_quantity or 0))
+    return total
+
+
 def _validate_purchase_receipt_tolerance(
     ordered_quantity: Decimal,
     already_received_quantity: Decimal,
@@ -4040,6 +4083,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 if supplier:
                     supplier_code = supplier.code
 
+            pending_po_received: Dict[int, Decimal] = {}
             for item_data in receipt_data.items or []:
                 item_dict = item_data.model_dump(exclude_unset=True)
                 # 确保数量字段是Decimal类型
@@ -4058,27 +4102,20 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     if not po_item:
                         raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
 
-                    # PurchaseReceiptItem 无 deleted_at 字段
-                    historical_items = await PurchaseReceiptItem.filter(
-                        tenant_id=tenant_id,
-                        purchase_order_item_id=purchase_order_item_id,
-                    ).all()
-                    already_received_qty = Decimal("0")
-                    for historical in historical_items:
-                        historical_receipt = await PurchaseReceipt.get_or_none(
-                            tenant_id=tenant_id,
-                            id=historical.receipt_id,
-                            deleted_at__isnull=True,
-                        )
-                        if historical_receipt and historical_receipt.status not in ("已作废", "作废", "void", "VOID", "cancelled", "CANCELLED"):
-                            already_received_qty += Decimal(str(historical.receipt_quantity or 0))
-
+                    already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                        tenant_id,
+                        purchase_order_item_id,
+                        extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
+                    )
                     _validate_purchase_receipt_tolerance(
                         ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
                         already_received_quantity=already_received_qty,
                         incoming_quantity=receipt_quantity,
                         tolerance_percentage=tolerance_percentage,
                         material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                    )
+                    pending_po_received[purchase_order_item_id] = (
+                        pending_po_received.get(purchase_order_item_id, Decimal("0")) + receipt_quantity
                     )
                 
                 # 批号管理物料：未填写批号时自动生成
@@ -4261,6 +4298,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                     if supplier:
                         supplier_code = supplier.code
                 location_required, _ = await _get_warehouse_policy_flags(tenant_id)
+                pending_po_received: Dict[int, Decimal] = {}
                 for item_data in receipt_data.items:
                     qty = Decimal(str(item_data.receipt_quantity or 0))
                     if qty <= 0:
@@ -4279,33 +4317,21 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                         if not po_item:
                             raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
 
-                        historical_items = await PurchaseReceiptItem.filter(
-                            tenant_id=tenant_id,
-                            purchase_order_item_id=purchase_order_item_id,
-                        ).all()
-                        already_received_qty = Decimal("0")
-                        for historical in historical_items:
-                            historical_receipt = await PurchaseReceipt.get_or_none(
-                                tenant_id=tenant_id,
-                                id=historical.receipt_id,
-                                deleted_at__isnull=True,
-                            )
-                            if historical_receipt and int(historical_receipt.id) != int(receipt_id) and historical_receipt.status not in (
-                                "已作废",
-                                "作废",
-                                "void",
-                                "VOID",
-                                "cancelled",
-                                "CANCELLED",
-                            ):
-                                already_received_qty += Decimal(str(historical.receipt_quantity or 0))
-
+                        already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                            tenant_id,
+                            purchase_order_item_id,
+                            exclude_receipt_id=receipt_id,
+                            extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
+                        )
                         _validate_purchase_receipt_tolerance(
                             ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
                             already_received_quantity=already_received_qty,
                             incoming_quantity=qty,
                             tolerance_percentage=tolerance_percentage,
                             material_label=getattr(item_data, "material_name", None) or getattr(item_data, "material_code", "未知物料"),
+                        )
+                        pending_po_received[purchase_order_item_id] = (
+                            pending_po_received.get(purchase_order_item_id, Decimal("0")) + qty
                         )
 
                     _validate_location_if_required(
@@ -4515,39 +4541,47 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
 
             await assert_iqc_for_purchase_receipt_lines(tenant_id, receipt_id, items_for_iqc)
 
-            confirmer_name = await self.get_user_name(confirmed_by)
-
-            now = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
-            _hdr_upd_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
-                status='已入库',
-                receiver_id=confirmed_by,
-                receiver_name=confirmer_name,
-                receipt_time=now,
-                updated_by=confirmed_by
-            )
-            _it_upd_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
-                status='已入库',
-                receipt_time=now,
-            )
-            # #region agent log
-            _st_after = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).values("status")
-            _agent_debug_ndjson(
-                "warehouse_service.confirm_receipt:status_update",
-                "header_item_rowcount_and_db_status",
-                {
-                    "hdr_upd_rows": int(_hdr_upd_rows),
-                    "it_upd_rows": int(_it_upd_rows),
-                    "db_status_after_update": (_st_after[0]["status"] if _st_after else None),
-                },
-                "H9",
-                run_id="pre-fix",
-            )
-            # #endregion
-
             # 过账前重载表头，避免仅内存对象与库内表头仓库等不一致
             receipt = await PurchaseReceipt.get(tenant_id=tenant_id, id=receipt_id)
 
-            # 更新库存（增加）
+            tolerance_percentage = await self.business_config_service.get_purchase_tolerance_percentage(tenant_id)
+            items_for_tolerance = await PurchaseReceiptItem.filter(
+                tenant_id=tenant_id, receipt_id=receipt_id
+            ).all()
+            from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+            pending_po_received: Dict[int, Decimal] = {}
+            for item in items_for_tolerance:
+                purchase_order_item_id = int(getattr(item, "purchase_order_item_id", 0) or 0)
+                if purchase_order_item_id <= 0:
+                    continue
+                qty = item.receipt_quantity or Decimal(0)
+                if qty <= 0:
+                    continue
+                po_item = await PurchaseOrderItem.filter(
+                    tenant_id=tenant_id,
+                    id=purchase_order_item_id,
+                ).first()
+                if not po_item:
+                    raise ValidationError(f"采购订单明细不存在: {purchase_order_item_id}")
+                already_received_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+                    tenant_id,
+                    purchase_order_item_id,
+                    exclude_receipt_id=receipt_id,
+                    extra_pending_qty=pending_po_received.get(purchase_order_item_id, Decimal("0")),
+                )
+                _validate_purchase_receipt_tolerance(
+                    ordered_quantity=Decimal(str(po_item.ordered_quantity or 0)),
+                    already_received_quantity=already_received_qty,
+                    incoming_quantity=qty,
+                    tolerance_percentage=tolerance_percentage,
+                    material_label=getattr(item, "material_name", None) or getattr(item, "material_code", "未知物料"),
+                )
+                pending_po_received[purchase_order_item_id] = (
+                    pending_po_received.get(purchase_order_item_id, Decimal("0")) + qty
+                )
+
+            # 先过账库存，成功后再改单据状态，避免库存失败时单据已显示「已入库」
             try:
                 from apps.kuaizhizao.services.inventory_service import InventoryService
 
@@ -4612,12 +4646,47 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 _agent_debug_ndjson(
                     "warehouse_service.confirm_receipt:stock",
                     "stock_failed",
-                    {"exc_type": type(inv_e).__name__, "exc": str(inv_e)[:800]},
+                    {
+                        "exc_type": type(inv_e).__name__,
+                        "exc": str(inv_e)[:800],
+                        "cause_type": type(inv_e.__cause__).__name__ if inv_e.__cause__ else None,
+                        "cause": str(inv_e.__cause__)[:800] if inv_e.__cause__ else None,
+                    },
                     "H5",
                 )
                 # #endregion
                 logger.error("采购入库确认-更新库存失败: %s", inv_e)
+                if inv_e.__cause__ is not None:
+                    raise inv_e.__cause__ from inv_e
                 raise
+
+            confirmer_name = await self.get_user_name(confirmed_by)
+            now = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
+            _hdr_upd_rows = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).update(
+                status='已入库',
+                receiver_id=confirmed_by,
+                receiver_name=confirmer_name,
+                receipt_time=now,
+                updated_by=confirmed_by
+            )
+            _it_upd_rows = await PurchaseReceiptItem.filter(tenant_id=tenant_id, receipt_id=receipt_id).update(
+                status='已入库',
+                receipt_time=now,
+            )
+            # #region agent log
+            _st_after = await PurchaseReceipt.filter(tenant_id=tenant_id, id=receipt_id).values("status")
+            _agent_debug_ndjson(
+                "warehouse_service.confirm_receipt:status_update",
+                "header_item_rowcount_and_db_status",
+                {
+                    "hdr_upd_rows": int(_hdr_upd_rows),
+                    "it_upd_rows": int(_it_upd_rows),
+                    "db_status_after_update": (_st_after[0]["status"] if _st_after else None),
+                },
+                "H9",
+                run_id="pre-fix",
+            )
+            # #endregion
 
         # 详单/生命周期组装在事务提交之后：避免 model_validate 或里程碑查询失败导致整笔入库与库存回滚
 

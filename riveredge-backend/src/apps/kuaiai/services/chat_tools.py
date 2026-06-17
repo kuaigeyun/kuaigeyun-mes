@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 from apps.kuaiai.services.business_document_service import BusinessDocumentService
+from apps.kuaiai.services.markdown_table import rows_to_markdown_table
 from core.services.authorization.user_permission_service import UserPermissionService
 from infra.exceptions.exceptions import AuthorizationError, NotFoundError, ValidationError
 from infra.models.user import User
@@ -208,4 +209,19 @@ class ChatToolExecutor:
             current=int(args.get("page") or 1),
             page_size=min(int(args.get("page_size") or 20), 50),
         )
+        items = result.get("items") or []
+        if items:
+            headers = ["物料编码", "物料名称", "仓库", "在库数量", "单位", "状态"]
+            rows = [
+                [
+                    item.get("material_code"),
+                    item.get("material_name"),
+                    item.get("warehouse_name"),
+                    item.get("quantity"),
+                    item.get("material_unit"),
+                    item.get("status"),
+                ]
+                for item in items
+            ]
+            result = {**result, "markdown_table": rows_to_markdown_table(headers, rows)}
         return _truncate_tool_result(result)

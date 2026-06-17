@@ -540,6 +540,39 @@
   border-top: 1px solid var(--ant-colorBorderSecondary);
 }
 
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap {
+  margin: 8px 0;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap th,
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap td {
+  border: 1px solid var(--ant-colorBorderSecondary);
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap th {
+  background: color-mix(in srgb, var(--ant-colorText) 6%, transparent);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown-table-wrap tbody tr:nth-child(even) td {
+  background: color-mix(in srgb, var(--ant-colorText) 3%, transparent);
+}
+
 /* 输入区 */
 .ai-qa-modal-bottom-right .ai-qa-sender-wrap {
   flex-shrink: 0;

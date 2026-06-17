@@ -23,6 +23,8 @@ import {
   setDocumentFormDraft,
 } from '../../../../../utils/documentFormDraftCache';
 import { normalizeFormListItems } from '../../../../../utils/formListItems';
+import { toApiDateString } from '../../../../../utils/formDate';
+import { getApiErrorMessage } from '../../../../../utils/errorHandler';
 import { deferConvertLineItemsByPriceType, setFormPriceType } from '../../../../../utils/priceTypeSwitch';
 import type { PriceTypeValue } from '../../../../../components/price-type-switch/PriceTypeSwitch';
 
@@ -231,6 +233,8 @@ import {
 
   defaultContractItem,
 
+  resolveContractLineMaterialFields,
+
 } from './contract-line-items-shared';
 
 const SALES_CONTRACT_RESOURCE = SC;
@@ -270,20 +274,6 @@ function canPrintContract(c: SalesContract): boolean {
   const st = (c.status || '').trim();
   if (!['已生效', '执行中', '已关闭'].includes(st)) return false;
   return isApprovedReview(c.review_status);
-}
-
-
-
-function toApiDateString(v: unknown): string | undefined {
-
-  if (v == null || v === '') return undefined;
-
-  if (dayjs.isDayjs(v)) return v.format('YYYY-MM-DD');
-
-  if (typeof v === 'string') return v.slice(0, 10);
-
-  return undefined;
-
 }
 
 
@@ -887,15 +877,66 @@ const SalesContractsPage: React.FC = () => {
 
     }
 
-    const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === values.customer_id);
+    const missingMaterialMeta = validItems.find((it: any) => {
+      const resolved = resolveContractLineMaterialFields(it, materialList);
+      return !resolved.material_code || !resolved.material_name || !resolved.material_unit;
+    });
+    if (missingMaterialMeta) {
+      messageApi.error(t('app.kuaizhizao.salesContract.lineMaterialMissing'));
+      throw new Error('contract_line_material_missing');
+    }
 
-    const customerName = cust?.name ?? cust?.customer_name ?? values.customer_name ?? '';
+    const customerId = Number(values.customer_id);
+    if (!Number.isFinite(customerId) || customerId <= 0) {
+      messageApi.error(t('app.kuaizhizao.salesContract.selectCustomerRequired'));
+      throw new Error('contract_customer_required');
+    }
+
+    const contractDate = toApiDateString(values.contract_date);
+    if (!contractDate) {
+      messageApi.error(t('app.kuaizhizao.salesContract.contractDateRequired'));
+      throw new Error('contract_date_required');
+    }
+
+    const cust = customerList.find((c: any) => (c.id ?? c.customer_id) === customerId);
+
+    const customerName = (cust?.name ?? cust?.customer_name ?? values.customer_name ?? '').trim();
+    if (!customerName) {
+      messageApi.error(t('app.kuaizhizao.salesContract.selectCustomerRequired'));
+      throw new Error('contract_customer_name_required');
+    }
+
+    const milestoneRows = normalizeFormListItems<any>(values.milestones).filter(
+      (ms: any) =>
+        ms?.milestone_name?.trim() ||
+        ms?.planned_date ||
+        ms?.planned_amount != null ||
+        ms?.planned_ratio != null,
+    );
+    const invalidMilestone = milestoneRows.find(
+      (ms: any) => ms?.milestone_name?.trim() && !toApiDateString(ms.planned_date),
+    );
+    if (invalidMilestone) {
+      messageApi.error(t('app.kuaizhizao.salesContract.milestonePlannedDateRequired'));
+      throw new Error('contract_milestone_date_required');
+    }
+
+    const milestones = milestoneRows
+      .filter((ms: any) => ms?.milestone_name?.trim() && toApiDateString(ms.planned_date))
+      .map((ms: any) => ({
+        milestone_name: String(ms.milestone_name).trim(),
+        planned_date: toApiDateString(ms.planned_date)!,
+        planned_amount: ms.planned_amount != null ? Number(ms.planned_amount) : 0,
+        planned_ratio: ms.planned_ratio != null ? Number(ms.planned_ratio) : undefined,
+        billing_trigger: ms.billing_trigger || 'milestone',
+        notes: ms.notes,
+      }));
 
     return {
 
       contract_type: values.contract_type || 'single',
 
-      customer_id: values.customer_id,
+      customer_id: customerId,
 
       customer_name: customerName,
 
@@ -903,7 +944,7 @@ const SalesContractsPage: React.FC = () => {
 
       customer_phone: values.customer_phone,
 
-      contract_date: toApiDateString(values.contract_date)!,
+      contract_date: contractDate,
 
       valid_from: toApiDateString(values.valid_from),
 
@@ -929,63 +970,46 @@ const SalesContractsPage: React.FC = () => {
 
       attachments: normalizeDocumentAttachments(values.attachments),
 
-      items: validItems.map((it: any) => ({
+      items: validItems.map((it: any) => {
+        const resolved = resolveContractLineMaterialFields(it, materialList);
+        return {
+          material_id: Number(it.material_id),
 
-        material_id: it.material_id,
+          material_code: resolved.material_code,
 
-        material_code: it.material_code,
+          material_name: resolved.material_name,
 
-        material_name: it.material_name,
+          material_spec: it.material_spec,
 
-        material_spec: it.material_spec,
+          material_unit: resolved.material_unit,
 
-        material_unit: it.material_unit,
+          contract_quantity: Number(it.contract_quantity),
 
-        contract_quantity: Number(it.contract_quantity),
+          unit_price: Number(it.unit_price),
 
-        unit_price: Number(it.unit_price),
+          tax_rate: Number(it.tax_rate ?? 0),
 
-        tax_rate: Number(it.tax_rate ?? 0),
+          total_amount: calcContractLineAmounts(
 
-        total_amount: calcContractLineAmounts(
+            it.contract_quantity,
 
-          it.contract_quantity,
+            it.unit_price,
 
-          it.unit_price,
+            it.tax_rate,
 
-          it.tax_rate,
+            values.price_type,
 
-          values.price_type,
+          ).incl,
 
-        ).incl,
+          delivery_date: toApiDateString(it.delivery_date),
 
-        delivery_date: toApiDateString(it.delivery_date),
+          variant_attributes: it.variant_attributes,
 
-        variant_attributes: it.variant_attributes,
+          notes: it.notes,
+        };
+      }),
 
-        notes: it.notes,
-
-      })),
-
-      milestones: normalizeFormListItems<any>(values.milestones)
-
-        .filter((ms: any) => ms?.milestone_name && (ms.planned_date || ms.planned_amount || ms.planned_ratio))
-
-        .map((ms: any) => ({
-
-          milestone_name: ms.milestone_name,
-
-          planned_date: toApiDateString(ms.planned_date)!,
-
-          planned_amount: ms.planned_amount != null ? Number(ms.planned_amount) : undefined,
-
-          planned_ratio: ms.planned_ratio != null ? Number(ms.planned_ratio) : undefined,
-
-          billing_trigger: ms.billing_trigger || 'milestone',
-
-          notes: ms.notes,
-
-        })),
+      milestones,
 
     };
 
@@ -1154,13 +1178,24 @@ const SalesContractsPage: React.FC = () => {
       if (err?.message === CONTRACT_ITEMS_REQUIRED) {
         return;
       }
+      if (
+        err?.message === 'contract_line_material_missing' ||
+        err?.message === 'contract_customer_required' ||
+        err?.message === 'contract_date_required' ||
+        err?.message === 'contract_customer_name_required' ||
+        err?.message === 'contract_milestone_date_required'
+      ) {
+        return;
+      }
       if (err?.errorFields?.length) {
         messageApi.warning(err?.message ?? t('components.layoutTemplates.formModal.checkFormHint'));
         return;
       }
       messageApi.error(
-        err?.message ||
-          (asDraft ? t('app.kuaizhizao.salesContract.saveDraftFailed') : t('app.kuaizhizao.salesContract.createFailed')),
+        getApiErrorMessage(
+          err,
+          asDraft ? t('app.kuaizhizao.salesContract.saveDraftFailed') : t('app.kuaizhizao.salesContract.createFailed'),
+        ),
       );
     }
   };

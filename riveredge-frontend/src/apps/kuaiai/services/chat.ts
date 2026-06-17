@@ -7,6 +7,7 @@
 import { DeepSeekChatProvider } from '@ant-design/x-sdk';
 import { apiRequest, API_BASE_URL } from '../../../services/api';
 import { getToken } from '../../../utils/auth';
+import i18n from '../../../config/i18n';
 
 const DEEPSEEK_STATUS_URL = '/core/site-settings/integrations/deepseek/status';
 const DEEPSEEK_COMPLETIONS_PATH = '/core/site-settings/integrations/deepseek/completions';
@@ -104,7 +105,7 @@ export async function getChatIntegrationStatus(): Promise<ChatIntegrationStatus>
 }
 
 export async function parseKuaiChatErrorResponse(response: Response): Promise<string> {
-  let detail = `请求失败 (${response.status})`;
+  let detail = i18n.t('ui.aiAssistant.chatRequestFailed', { status: response.status });
   try {
     const data = await response.clone().json();
     if (typeof data?.detail === 'string') {
@@ -118,7 +119,7 @@ export async function parseKuaiChatErrorResponse(response: Response): Promise<st
     // ignore parse errors
   }
   if (response.status === 404 && (detail === 'Not Found' || detail.includes('Not Found'))) {
-    return '对话接口不可用，请确认后端已更新并重启服务';
+    return i18n.t('ui.aiAssistant.chatUnavailable');
   }
   return detail;
 }
