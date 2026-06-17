@@ -47,7 +47,10 @@
             "title": "app.kuaiplm.menu.change-management",
             "path": "/apps/kuaiplm/change-management",
             "permission": "kuaiplm:change:read",
-            "sort_order": 9
+            "sort_order": 9,
+            "meta": {
+              "node": "bom_change"
+            }
           },
           {
             "title": "app.master-data.menu.process.defect-types",
@@ -148,8 +151,10 @@
     "kuaiplm:project:export",
     "kuaiplm:change:read",
     "kuaiplm:change:update",
+    "kuaiplm:change:submit",
     "kuaiplm:change:approve",
     "kuaiplm:change:reject",
+    "kuaiplm:change:revoke",
     "kuaiplm:knowledge:read",
     "kuaiplm:knowledge:create",
     "kuaiplm:knowledge:delete",
@@ -170,5 +175,23 @@
   "dependencies": {
     "riveredge-backend": ">=1.0.0",
     "riveredge-frontend": ">=1.0.0"
-  }
+  },
+  "audit": [
+    {
+      "node_key": "bom_change",
+      "entity_type": "bom_change",
+      "resource": "kuaiplm:change",
+      "name": "BOM 工程变更审核",
+      "template": "simple",
+      "config_category": "common"
+    },
+    {
+      "node_key": "process_route_change",
+      "entity_type": "process_route_change",
+      "resource": "kuaiplm:change",
+      "name": "工艺路线变更审核",
+      "template": "simple",
+      "config_category": "common"
+    }
+  ]
 }

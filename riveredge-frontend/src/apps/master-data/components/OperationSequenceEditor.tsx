@@ -438,13 +438,15 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           {
             title: t('app.master-data.manufacturing.standardTime'),
             key: 'standardTime',
-            width: 120,
+            width: 148,
             render: (_: unknown, record: OperationItem) => (
               <InputNumber
                 size="small"
                 min={0}
-                precision={2}
+                precision={0}
+                step={1}
                 style={{ width: '100%' }}
+                addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
                 placeholder="0"
                 value={record.standardTime}
                 onChange={(v) => patchTime(record.uuid, { standardTime: v ?? undefined })}
@@ -454,13 +456,15 @@ export const OperationSequenceEditor: React.FC<OperationSequenceEditorProps> = (
           {
             title: t('app.master-data.manufacturing.setupTime'),
             key: 'setupTime',
-            width: 120,
+            width: 136,
             render: (_: unknown, record: OperationItem) => (
               <InputNumber
                 size="small"
                 min={0}
-                precision={2}
+                precision={0}
+                step={1}
                 style={{ width: '100%' }}
+                addonAfter={t('app.master-data.manufacturing.minuteUnit')}
                 placeholder="0"
                 value={record.setupTime}
                 onChange={(v) => patchTime(record.uuid, { setupTime: v ?? undefined })}

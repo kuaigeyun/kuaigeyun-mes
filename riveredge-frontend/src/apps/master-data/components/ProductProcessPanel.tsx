@@ -19,6 +19,7 @@ import {
   linesFromProcessRoute,
   snapshotProductProcessState,
 } from '../utils/productProcessLineUtils';
+import { productProcessLineFromApi, productProcessLineToApi } from '../utils/manufacturingTimeUnits';
 import { searchUserDisplay } from '../../../services/user';
 import { resolveEffectiveProcessRouteUuid } from '../utils/productProcessMaterialUtils';
 
@@ -57,6 +58,11 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
 
   const baselineRef = useRef('');
   const routeImportRef = useRef<string | undefined>();
+  const isDirtyRef = useRef(false);
+  const materialRef = useRef(material);
+  const processRoutesRef = useRef(processRoutes);
+  materialRef.current = material;
+  processRoutesRef.current = processRoutes;
 
   const isDirty =
     snapshotProductProcessState({
@@ -64,6 +70,7 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       allowOperationJump,
       lines,
     }) !== baselineRef.current;
+  isDirtyRef.current = isDirty;
 
   const canSave = isDirty && !loading && !saving;
 
@@ -77,6 +84,11 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
         allowOperationJump: jump,
         lines: nextLines,
       });
+      if (nextLines.length > 0 || !processRouteUuid) {
+        routeImportRef.current = processRouteUuid ?? '__cleared__';
+      } else {
+        routeImportRef.current = undefined;
+      }
     },
     [],
   );
@@ -88,34 +100,40 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
     return map;
   }, []);
 
-  const loadConfig = useCallback(async () => {
-    if (!material.uuid) return;
+  const loadConfig = useCallback(async (options?: { force?: boolean }) => {
+    const mat = materialRef.current;
+    if (!mat.uuid) return;
+    if (!options?.force && isDirtyRef.current) return;
     setLoading(true);
     try {
-      const data = await productProcessApi.get(material.uuid);
-      routeImportRef.current = data.processRouteUuid ?? '__cleared__';
+      const data = await productProcessApi.get(mat.uuid);
       const userIdToUuid = await buildUserIdToUuidMap();
       const allOps = unwrapProcessPagedList(await operationApi.list({ limit: 1000, is_active: true }));
       const byUuid: Record<string, (typeof allOps)[0]> = {};
       for (const o of allOps) byUuid[o.uuid] = o;
       const enriched = (data.lines ?? []).map((ln) =>
-        enrichLineFromOperation(ln, byUuid[ln.operationUuid], userIdToUuid),
+        productProcessLineFromApi(
+          enrichLineFromOperation(ln, byUuid[ln.operationUuid], userIdToUuid),
+        ),
       );
-      applyConfig(data.processRouteUuid, data.allowOperationJump, enriched);
+      const processRouteUuid = data.processRouteUuid;
+      applyConfig(processRouteUuid, data.allowOperationJump, enriched);
     } catch (e: unknown) {
       messageApi.error((e as Error).message || t('common.loadFailed'));
-      const fallbackRoute = resolveEffectiveProcessRouteUuid(material, processRoutes);
+      const fallbackRoute = resolveEffectiveProcessRouteUuid(mat, processRoutesRef.current);
       applyConfig(fallbackRoute, false, []);
     } finally {
       setLoading(false);
     }
-  }, [material, processRoutes, applyConfig, messageApi, t, buildUserIdToUuidMap]);
+  }, [applyConfig, messageApi, t, buildUserIdToUuidMap]);
 
   useEffect(() => {
-    if (processRoutesLoading) return;
+    if (processRoutesLoading || !material.uuid) return;
     routeImportRef.current = undefined;
-    void loadConfig();
-  }, [material.uuid, processRoutesLoading, loadConfig]);
+    void loadConfig({ force: true });
+    // 仅随物料切换 / 路线列表就绪重载，避免 loadConfig 引用变化时覆盖未保存编辑
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [material.uuid, processRoutesLoading]);
 
   const importLinesFromRoute = useCallback(
     async (uuid: string) => {
@@ -140,21 +158,23 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
 
   useEffect(() => {
     if (!routeUuid || loading) return;
+    // 已有产品工艺行时不再从路线模板覆盖（仅在没有行时才自动导入）
+    if (lines.length > 0) {
+      routeImportRef.current = routeUuid;
+      return;
+    }
     if (routeImportRef.current === routeUuid) return;
-    const importing = routeUuid;
-    routeImportRef.current = importing;
-    void importLinesFromRoute(importing).catch(() => {
+    routeImportRef.current = routeUuid;
+    void importLinesFromRoute(routeUuid).catch(() => {
       messageApi.warning(t('app.master-data.productProcess.routeImportFailed'));
     });
-  }, [routeUuid, loading, importLinesFromRoute, messageApi, t]);
+  }, [routeUuid, loading, lines.length, importLinesFromRoute, messageApi, t]);
 
   const handleRouteSelect = (uuid: string | undefined) => {
     routeImportRef.current = '';
     setRouteUuid(uuid);
-    if (!uuid) {
-      setLines([]);
-      setAllowOperationJump(false);
-    }
+    setLines([]);
+    setAllowOperationJump(false);
   };
 
   const handleSave = async () => {
@@ -168,9 +188,13 @@ export const ProductProcessPanel: React.FC<ProductProcessPanelProps> = ({
       const saved = await productProcessApi.save(material.uuid, {
         processRouteUuid: routeUuid,
         allowOperationJump,
-        lines,
+        lines: lines.map(productProcessLineToApi),
       });
-      applyConfig(saved.processRouteUuid, saved.allowOperationJump, saved.lines ?? []);
+      applyConfig(
+        saved.processRouteUuid,
+        saved.allowOperationJump,
+        (saved.lines ?? []).map((ln) => productProcessLineFromApi(ln)),
+      );
       messageApi.success(t('app.master-data.productProcess.saved'));
       const refreshed = await materialApi.get(material.uuid);
       onMaterialUpdated?.(refreshed);

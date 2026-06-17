@@ -97,7 +97,7 @@ async def _load_operations_by_uuid(tenant_id: int, uuids: List[str]) -> Dict[str
     return {o.uuid: o for o in ops}
 
 
-def _parse_sequence_to_line_dicts(seq: Any) -> List[Dict[str, Any]]:
+async def _parse_sequence_to_line_dicts(tenant_id: int, seq: Any) -> List[Dict[str, Any]]:
     """解析工艺路线 operation_sequence 为行字典列表（保持顺序）。"""
     if not seq:
         return []
@@ -144,7 +144,68 @@ def _parse_sequence_to_line_dicts(seq: Any) -> List[Dict[str, Any]]:
     if isinstance(order, list):
         for u in order:
             result.append({"uuid": str(u)})
+        if result:
+            return result
+
+    op_ids = seq.get("operation_ids") or seq.get("operationIds")
+    if isinstance(op_ids, list) and op_ids:
+        ids = [int(x) for x in op_ids if x is not None]
+        if ids:
+            ops_by_id = await Operation.filter(
+                tenant_id=tenant_id,
+                id__in=ids,
+                deleted_at__isnull=True,
+            ).all()
+            by_id = {int(o.id): o for o in ops_by_id}
+            for oid in ids:
+                op = by_id.get(int(oid))
+                if op:
+                    result.append({"uuid": op.uuid, "operation_id": op.id})
+            return result
+
     return result
+
+
+def _operation_uuid_from_row(row: Dict[str, Any]) -> str:
+    return str(row.get("uuid") or row.get("operation_uuid") or row.get("operationUuid") or "")
+
+
+def _stored_line_to_dict(ln: Any) -> Optional[Dict[str, Any]]:
+    if isinstance(ln, dict):
+        return dict(ln)
+    return None
+
+
+def _merge_stored_lines_with_route(
+    stored_lines: List[Any],
+    route_row_dicts: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    """
+    以当前路线工序为基准合并已存产品工艺行：
+    - 顺序与路线一致
+    - 已存字段覆盖路线默认值
+    - 路线中已删除的工序不再返回
+    """
+    stored_by_uuid: Dict[str, Dict[str, Any]] = {}
+    for ln in stored_lines:
+        d = _stored_line_to_dict(ln)
+        if not d:
+            continue
+        uid = _operation_uuid_from_row(d)
+        if uid:
+            stored_by_uuid[uid] = d
+
+    merged: List[Dict[str, Any]] = []
+    for d in route_row_dicts:
+        uid = _operation_uuid_from_row(d)
+        if not uid:
+            continue
+        if uid in stored_by_uuid:
+            stored = stored_by_uuid[uid]
+            merged.append({**d, **stored, "uuid": uid, "operation_uuid": uid})
+        else:
+            merged.append(dict(d))
+    return merged
 
 
 def _row_dict_to_line_schema(
@@ -152,7 +213,7 @@ def _row_dict_to_line_schema(
     op: Optional[Operation],
     piece_rate: Optional[Decimal],
 ) -> ProductProcessLineSchema:
-    uid = str(row.get("uuid") or row.get("operation_uuid") or "")
+    uid = _operation_uuid_from_row(row)
     return ProductProcessLineSchema(
         operation_uuid=uid,
         operation_id=(
@@ -256,23 +317,31 @@ async def _compose_lines(
         if r.operation_id is not None:
             piece_map[int(r.operation_id)] = r.rate
 
-    if stored_lines:
+    route_row_dicts: List[Dict[str, Any]] = []
+    if process_route and process_route.operation_sequence:
+        route_row_dicts = await _parse_sequence_to_line_dicts(
+            tenant_id, process_route.operation_sequence
+        )
+
+    if stored_lines and route_row_dicts:
+        row_dicts = _merge_stored_lines_with_route(stored_lines, route_row_dicts)
+    elif stored_lines:
         row_dicts = [ln if isinstance(ln, dict) else ln for ln in stored_lines]
-    elif process_route and process_route.operation_sequence:
-        row_dicts = _parse_sequence_to_line_dicts(process_route.operation_sequence)
+    elif route_row_dicts:
+        row_dicts = route_row_dicts
     else:
         return []
 
     uuids = [
-        str(d.get("uuid") or d.get("operation_uuid"))
+        _operation_uuid_from_row(d)
         for d in row_dicts
-        if d.get("uuid") or d.get("operation_uuid")
+        if _operation_uuid_from_row(d)
     ]
     op_map = await _load_operations_by_uuid(tenant_id, uuids)
 
     lines: List[ProductProcessLineSchema] = []
     for d in row_dicts:
-        uid = str(d.get("uuid") or d.get("operation_uuid") or "")
+        uid = _operation_uuid_from_row(d)
         if not uid:
             continue
         op = op_map.get(uid)
@@ -467,11 +536,19 @@ class MaterialProductProcessService:
         ).first()
 
         if record and record.lines:
-            schemas = _stored_lines_to_schemas(record.lines)
-            if schemas:
+            process_route = process_route or await MaterialProductProcessService.resolve_process_route_for_material(
+                tenant_id, material_id
+            )
+            composed = await _compose_lines(
+                tenant_id,
+                material_id,
+                process_route,
+                record.lines,
+            )
+            if composed:
                 return (
                     lines_to_operation_sequence(
-                        schemas,
+                        composed,
                         bool(record.allow_operation_jump),
                     ),
                     bool(record.allow_operation_jump),
@@ -491,6 +568,33 @@ class MaterialProductProcessService:
         if record:
             return (None, bool(record.allow_operation_jump))
         return (None, False)
+
+    @staticmethod
+    async def reconcile_stored_lines_after_route_update(
+        tenant_id: int,
+        process_route: ProcessRoute,
+    ) -> int:
+        """路线工序变更后，同步引用该路线的产品工艺已存行（移除路线已删工序）。"""
+        if not process_route.operation_sequence:
+            return 0
+        route_row_dicts = await _parse_sequence_to_line_dicts(
+            tenant_id, process_route.operation_sequence
+        )
+        records = await MaterialProductProcess.filter(
+            tenant_id=tenant_id,
+            process_route_id=process_route.id,
+            deleted_at__isnull=True,
+        ).all()
+        updated = 0
+        for record in records:
+            if not record.lines:
+                continue
+            merged = _merge_stored_lines_with_route(record.lines, route_row_dicts)
+            if merged != record.lines:
+                record.lines = merged
+                await record.save(update_fields=["lines", "updated_at"])
+                updated += 1
+        return updated
 
     @staticmethod
     async def save_for_material(
@@ -535,12 +639,11 @@ class MaterialProductProcessService:
             deleted_at__isnull=True,
         ).first()
         if record:
-            await record.update_from_dict(
-                {
-                    "process_route_id": pr_id,
-                    "allow_operation_jump": data.allow_operation_jump,
-                    "lines": lines_json,
-                }
+            record.process_route_id = pr_id
+            record.allow_operation_jump = data.allow_operation_jump
+            record.lines = lines_json
+            await record.save(
+                update_fields=["process_route_id", "allow_operation_jump", "lines", "updated_at"]
             )
         else:
             record = await MaterialProductProcess.create(

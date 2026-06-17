@@ -522,6 +522,64 @@ async def _dispatch_purchase_invoice(
     _unsupported("purchase_invoice", action)
 
 
+async def _dispatch_bom_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.bom_change_service import BOMChangeService
+
+    if action == "submit":
+        return await BOMChangeService.submit_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        change = await BOMChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await BOMChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await BOMChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await BOMChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await BOMChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await BOMChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("bom_change", action)
+
+
+async def _dispatch_process_route_change(
+    action: str,
+    *,
+    tenant_id: int,
+    entity_id: int,
+    user_id: int,
+    reason: Optional[str],
+) -> Any:
+    from apps.master_data.services.process_route_change_service import ProcessRouteChangeService
+
+    if action == "submit":
+        return await ProcessRouteChangeService.submit_change(tenant_id, entity_id, user_id)
+    if action == "approve":
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await ProcessRouteChangeService.approve_change(
+            tenant_id, change.uuid, user_id, True, reason
+        )
+    if action == "reject":
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, entity_id)
+        return await ProcessRouteChangeService.approve_change(
+            tenant_id, change.uuid, user_id, False, reason or "审批驳回"
+        )
+    if action == "withdraw":
+        return await ProcessRouteChangeService.withdraw_change(tenant_id, entity_id, user_id)
+    if action == "revoke":
+        return await ProcessRouteChangeService.revoke_change(tenant_id, entity_id, user_id)
+    _unsupported("process_route_change", action)
+
+
 HANDLERS: Dict[str, DispatchFn] = {
     "sales_order": _dispatch_sales_order,
     "sales_order_change": _dispatch_sales_order_change,
@@ -542,4 +600,6 @@ HANDLERS: Dict[str, DispatchFn] = {
     "receivable": _dispatch_receivable,
     "payable": _dispatch_payable,
     "purchase_invoice": _dispatch_purchase_invoice,
+    "bom_change": _dispatch_bom_change,
+    "process_route_change": _dispatch_process_route_change,
 }

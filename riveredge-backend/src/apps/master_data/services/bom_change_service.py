@@ -18,8 +18,40 @@ from apps.master_data.schemas.bom_change_schemas import (
     BOMChangeResponse,
     BOMChangeListResponse,
 )
+from apps.kuaiplm.services.engineering_change_audit import is_audit_required
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+
+
+def _to_bom_change_response(change: BOMChange) -> BOMChangeResponse:
+    """ORM 仅存 material_id；响应需 material_uuid，须从关联物料解析。"""
+    material = getattr(change, "material", None)
+    if not material:
+        raise ValidationError(f"BOM 工程变更 {change.uuid} 缺少关联物料，无法返回")
+    return BOMChangeResponse(
+        id=change.id,
+        uuid=change.uuid,
+        tenant_id=change.tenant_id,
+        material_id=change.material_id,
+        material_uuid=material.uuid,
+        material_code=material.main_code,
+        material_name=material.name,
+        change_type=change.change_type,
+        change_content=change.change_content,
+        change_reason=change.change_reason,
+        change_impact=change.change_impact,
+        status=change.status,
+        approval_comment=change.approval_comment,
+        bom_code=change.bom_code,
+        from_version=change.from_version,
+        to_version=change.to_version,
+        applicant_id=change.applicant_id,
+        approver_id=change.approver_id,
+        applied_at=change.applied_at,
+        created_at=change.created_at,
+        updated_at=change.updated_at,
+        deleted_at=change.deleted_at,
+    )
 
 
 class BOMChangeService:
@@ -48,7 +80,7 @@ class BOMChangeService:
             change_content=data.change_content,
             change_reason=data.change_reason,
             change_impact=data.change_impact,
-            status=data.status,
+            status="draft",
             approval_comment=data.approval_comment,
             bom_code=data.bom_code,
             from_version=data.from_version,
@@ -57,11 +89,70 @@ class BOMChangeService:
         )
 
         await change.fetch_related("material")
-        response = BOMChangeResponse.model_validate(change)
-        if change.material:
-            response.material_code = change.material.main_code
-            response.material_name = change.material.name
-        return response
+        if data.status in ("pending", "draft"):
+            return await BOMChangeService.submit_change(tenant_id, change.id, applicant_id)
+        return _to_bom_change_response(change)
+
+    @staticmethod
+    async def _get_change_or_raise(tenant_id: int, change_id: int) -> BOMChange:
+        change = await BOMChange.filter(
+            tenant_id=tenant_id,
+            id=change_id,
+            deleted_at__isnull=True,
+        ).prefetch_related("material").first()
+        if not change:
+            raise NotFoundError("BOM 工程变更记录", str(change_id))
+        return change
+
+    @staticmethod
+    async def submit_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> BOMChangeResponse:
+        """提交变更（草稿 → 待审批 / 已审批）。"""
+        change = await BOMChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "draft":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法提交")
+
+        audit_required = await is_audit_required(tenant_id, "bom")
+        change.status = "pending" if audit_required else "approved"
+        if not audit_required:
+            change.approver_id = operator_id
+        await change.save()
+        return _to_bom_change_response(change)
+
+    @staticmethod
+    async def withdraw_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> BOMChangeResponse:
+        """撤回待审批变更。"""
+        change = await BOMChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "pending":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法撤回")
+        change.status = "draft"
+        change.approver_id = None
+        change.approval_comment = None
+        await change.save()
+        return _to_bom_change_response(change)
+
+    @staticmethod
+    async def revoke_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> BOMChangeResponse:
+        """反审核已审批且未执行的变更。"""
+        change = await BOMChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "approved":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
+        change.status = "draft"
+        change.approver_id = None
+        change.approval_comment = None
+        await change.save()
+        return _to_bom_change_response(change)
 
     @staticmethod
     async def get_change_by_uuid(
@@ -78,11 +169,7 @@ class BOMChangeService:
         if not change:
             raise NotFoundError("BOM 工程变更记录", change_uuid)
 
-        response = BOMChangeResponse.model_validate(change)
-        if change.material:
-            response.material_code = change.material.main_code
-            response.material_name = change.material.name
-        return response
+        return _to_bom_change_response(change)
 
     @staticmethod
     async def list_changes(
@@ -120,11 +207,7 @@ class BOMChangeService:
 
         items = []
         for change in changes:
-            response = BOMChangeResponse.model_validate(change)
-            if change.material:
-                response.material_code = change.material.main_code
-                response.material_name = change.material.name
-            items.append(response)
+            items.append(_to_bom_change_response(change))
 
         return BOMChangeListResponse(items=items, total=total)
 
@@ -150,11 +233,7 @@ class BOMChangeService:
 
         await change.save()
 
-        response = BOMChangeResponse.model_validate(change)
-        if change.material:
-            response.material_code = change.material.main_code
-            response.material_name = change.material.name
-        return response
+        return _to_bom_change_response(change)
 
     @staticmethod
     async def approve_change(
@@ -174,7 +253,7 @@ class BOMChangeService:
         if not change:
             raise NotFoundError("BOM 工程变更记录", change_uuid)
 
-        if change.status != "pending":
+        if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
 
         change.status = "approved" if approved else "rejected"
@@ -184,11 +263,7 @@ class BOMChangeService:
 
         await change.save()
 
-        response = BOMChangeResponse.model_validate(change)
-        if change.material:
-            response.material_code = change.material.main_code
-            response.material_name = change.material.name
-        return response
+        return _to_bom_change_response(change)
 
     @staticmethod
     async def execute_change(
@@ -238,11 +313,7 @@ class BOMChangeService:
         except Exception as e:
             logger.warning("create demand change event for bom change failed: %s", e)
 
-        response = BOMChangeResponse.model_validate(change)
-        if change.material:
-            response.material_code = change.material.main_code
-            response.material_name = change.material.name
-        return response
+        return _to_bom_change_response(change)
 
     @staticmethod
     async def delete_change(

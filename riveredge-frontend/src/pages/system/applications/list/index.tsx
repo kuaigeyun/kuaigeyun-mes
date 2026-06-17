@@ -48,6 +48,7 @@ import {
 import { ManufacturingIcons } from '../../../../utils/manufacturingIcons';
 import { ManufacturingAppStack, MANUFACTURING_STACK_CODES } from './ManufacturingAppStack';
 import './manufacturing-app-stack.less';
+import './application-card.less';
 import { useGlobalStore } from '../../../../stores';
 import {
   getApplicationList,
@@ -212,6 +213,9 @@ const CARD_COVER_HEIGHT = 136;
 const CARD_COVER_PADDING_Y = 16;
 /** 角标（免费/专业版）占位，避免与「已安装」重叠，同时作为有角标时的上下内边距 */
 const CARD_TIER_BADGE_CLEARANCE = 22;
+/** 卡片第二、三行共用垂直内边距，保持行高一致 */
+const CARD_ROW_PADDING_Y = 12;
+const CARD_ROW_PADDING_X = 16;
 
 /**
  * 根据应用代码和图标配置获取图标组件
@@ -1460,8 +1464,12 @@ const ApplicationListPage: React.FC = () => {
       <Card
         key={application.uuid}
         hoverable
+        className="application-center-card"
         styles={{
-          body: { padding: '12px 16px', background: themeToken.colorBgContainer },
+          body: {
+            padding: `${CARD_ROW_PADDING_Y}px ${CARD_ROW_PADDING_X}px`,
+            background: themeToken.colorBgContainer,
+          },
           actions: {
             background: themeToken.colorBgContainer,
             borderTop: `1px solid ${themeToken.colorBorderSecondary}`,
@@ -1476,6 +1484,7 @@ const ApplicationListPage: React.FC = () => {
           border: inManufacturingStack ? 'none' : `1px solid ${themeToken.colorBorderSecondary}`,
           overflow: 'hidden',
           boxShadow: inManufacturingStack ? 'none' : isDark ? themeToken.boxShadowSecondary : undefined,
+          ['--app-center-card-row-padding-y' as string]: `${CARD_ROW_PADDING_Y}px`,
         }}
         cover={
           <div
@@ -1772,7 +1781,17 @@ const ApplicationListPage: React.FC = () => {
           </div>
         }
         actions={[
-          <div key="active" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+          <div
+            key="active"
+            style={{
+              padding: `0 ${CARD_ROW_PADDING_X}px`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              lineHeight: 1,
+            }}
+          >
             <span style={{ fontSize: 12, color: themeToken.colorTextSecondary }}>{t('pages.system.applications.activeStatus')}</span>
             <Tooltip title={!canManageAppLifecycle ? t('pages.system.applications.platformAdminOnlyLifecycle') : undefined}>
               <span style={{ display: 'inline-flex' }}>
@@ -1786,7 +1805,16 @@ const ApplicationListPage: React.FC = () => {
               </span>
             </Tooltip>
           </div>,
-          <div key="more" style={{ padding: '0 12px', height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div
+            key="more"
+            style={{
+              padding: `0 ${CARD_ROW_PADDING_X}px`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              lineHeight: 1,
+            }}
+          >
             <Dropdown {...rowActionKind('skip')} menu={{ items: menuItems }} trigger={['click']}>
               <Button type="text" icon={<DownOutlined />} style={{ width: '100%' }}>
                 {t('pages.system.applications.moreActions')}

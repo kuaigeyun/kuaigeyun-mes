@@ -2,6 +2,7 @@ import type { TFunction } from 'i18next';
 import type { Operation } from '../types/process';
 import type { ProductProcessLine } from '../types/productProcess';
 import type { OperationItem } from '../components/OperationSequenceEditor';
+import { hoursToDisplayMinutes } from './manufacturingTimeUnits';
 import { parseOperationSequenceFromRoute } from './processRouteSequenceUtils';
 
 function readIdList(...candidates: unknown[]): number[] {
@@ -149,6 +150,12 @@ function parseSequenceToRowDicts(seq: unknown): Record<string, unknown>[] {
         if (u) result.push({ ...(o as Record<string, unknown>) });
       }
     }
+    return result;
+  }
+
+  const opIds = seqObj.operation_ids ?? seqObj.operationIds;
+  if (Array.isArray(opIds) && opIds.length) {
+    return opIds.map((id) => ({ operation_id: id, operationId: id }));
   }
   return result;
 }
@@ -165,8 +172,8 @@ export function buildLineFromRowAndOperation(
     operationId: Number(row.operation_id ?? row.operationId ?? op?.id) || op?.id,
     code: String(row.code ?? op?.code ?? ''),
     name: String(row.name ?? op?.name ?? ''),
-    standardTime: _floatOrUndef(row.standard_time ?? row.standardTime),
-    setupTime: _floatOrUndef(row.setup_time ?? row.setupTime),
+    standardTime: hoursToDisplayMinutes(_floatOrUndef(row.standard_time ?? row.standardTime)),
+    setupTime: hoursToDisplayMinutes(_floatOrUndef(row.setup_time ?? row.setupTime)),
     ...resources,
     reportingType: String(row.reporting_type ?? row.reportingType ?? op?.reportingType ?? 'quantity'),
     isNodeOperation: Boolean(row.is_node_operation ?? row.isNodeOperation ?? false),
@@ -186,7 +193,30 @@ export function snapshotProductProcessState(input: {
   allowOperationJump: boolean;
   lines: ProductProcessLine[];
 }): string {
-  return JSON.stringify(input);
+  const normalizeLine = (line: ProductProcessLine): ProductProcessLine => ({
+    ...line,
+    standardTime:
+      line.standardTime != null && Number.isFinite(line.standardTime)
+        ? Math.round(line.standardTime)
+        : undefined,
+    setupTime:
+      line.setupTime != null && Number.isFinite(line.setupTime)
+        ? Math.round(line.setupTime)
+        : undefined,
+    pieceRate:
+      line.pieceRate != null && Number.isFinite(line.pieceRate)
+        ? Math.round(line.pieceRate * 100) / 100
+        : undefined,
+    workshopIds: [...(line.workshopIds ?? [])].sort((a, b) => a - b),
+    operatorIds: [...(line.operatorIds ?? [])].sort((a, b) => a - b),
+    teamIds: [...(line.teamIds ?? [])].sort((a, b) => a - b),
+    equipmentIds: [...(line.equipmentIds ?? [])].sort((a, b) => a - b),
+  });
+  return JSON.stringify({
+    processRouteUuid: input.processRouteUuid,
+    allowOperationJump: input.allowOperationJump,
+    lines: input.lines.map(normalizeLine),
+  });
 }
 
 export function operationItemsToLines(
@@ -229,7 +259,16 @@ export async function linesFromProcessRoute(
     lines = rowDicts
       .map((row) => {
         const uid = String(row.uuid ?? row.operation_uuid ?? '');
-        return buildLineFromRowAndOperation(row, byUuid[uid], userIdToUuid);
+        const opId = Number(row.operation_id ?? row.operationId);
+        const op =
+          (uid ? byUuid[uid] : undefined) ??
+          (Number.isFinite(opId) ? all.find((o) => o.id === opId) : undefined);
+        const resolvedUid = uid || op?.uuid || '';
+        return buildLineFromRowAndOperation(
+          resolvedUuid ? { ...row, uuid: resolvedUuid, operation_uuid: resolvedUuid } : row,
+          op,
+          userIdToUuid,
+        );
       })
       .filter((ln) => ln.operationUuid);
   } else {

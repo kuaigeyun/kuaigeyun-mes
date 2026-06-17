@@ -76,6 +76,7 @@ class BOMChange(BaseModel):
     to_version = fields.CharField(max_length=50, null=True, description="变更后版本（可选）")
 
     STATUS_CHOICES = [
+        ("draft", "草稿"),
         ("pending", "待审批"),
         ("approved", "已审批"),
         ("rejected", "已拒绝"),
@@ -84,8 +85,8 @@ class BOMChange(BaseModel):
     ]
     status = fields.CharField(
         max_length=20,
-        default="pending",
-        description="变更状态（pending:待审批, approved:已审批, rejected:已拒绝, executed:已执行, cancelled:已取消）",
+        default="draft",
+        description="变更状态（draft:草稿, pending:待审批, approved:已审批, rejected:已拒绝, executed:已执行, cancelled:已取消）",
     )
 
     applicant_id = fields.IntField(description="申请人ID")

@@ -71,6 +71,34 @@ export function scalarAttrDisplay(val: unknown): string {
   return String(val);
 }
 
+export function buildVariantAttributeLabelMap(
+  definitions: VariantAttributeDefinition[],
+): Map<string, string> {
+  return new Map(definitions.map((d) => [d.attribute_name, d.display_name]));
+}
+
+export function getVariantAttributeLabel(
+  attributeName: string,
+  labelMap: Map<string, string>,
+): string {
+  return labelMap.get(attributeName) ?? attributeName;
+}
+
+export function formatVariantAttributesLine(
+  attrs: Record<string, unknown>,
+  labelMap: Map<string, string>,
+  separator = ' · ',
+): string {
+  const line = Object.entries(attrs)
+    .filter(([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0))
+    .map(
+      ([key, val]) =>
+        `${getVariantAttributeLabel(key, labelMap)}: ${scalarAttrDisplay(val)}`,
+    )
+    .join(separator);
+  return line || '—';
+}
+
 export function cartesianProductFromScope(
   scope: Record<string, unknown>,
 ): Record<string, unknown>[] {

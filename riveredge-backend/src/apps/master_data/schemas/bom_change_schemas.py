@@ -24,7 +24,7 @@ class BOMChangeBase(BaseModel):
     change_content: Optional[Dict[str, Any]] = Field(None, description="变更内容（JSON格式）")
     change_reason: Optional[str] = Field(None, description="变更原因")
     change_impact: Optional[Dict[str, Any]] = Field(None, description="变更影响分析（JSON格式）")
-    status: str = Field("pending", max_length=20, description="变更状态")
+    status: str = Field("draft", max_length=20, description="变更状态")
     approval_comment: Optional[str] = Field(None, description="审批意见（可选）")
     bom_code: Optional[str] = Field(None, max_length=100, description="关联的 BOM 编码（可选）")
     from_version: Optional[str] = Field(None, max_length=50, description="变更前版本（可选）")
@@ -41,7 +41,7 @@ class BOMChangeBase(BaseModel):
     @field_validator("status")
     @classmethod
     def validate_status(cls, v: str) -> str:
-        allowed = ["pending", "approved", "rejected", "executed", "cancelled"]
+        allowed = ["draft", "pending", "approved", "rejected", "executed", "cancelled"]
         if v not in allowed:
             raise ValueError(f"变更状态必须是: {', '.join(allowed)}")
         return v
@@ -68,7 +68,7 @@ class BOMChangeUpdate(BaseModel):
     @classmethod
     def validate_status(cls, v: Optional[str]) -> Optional[str]:
         if v is not None:
-            allowed = ["pending", "approved", "rejected", "executed", "cancelled"]
+            allowed = ["draft", "pending", "approved", "rejected", "executed", "cancelled"]
             if v not in allowed:
                 raise ValueError(f"变更状态必须是: {', '.join(allowed)}")
         return v

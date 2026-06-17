@@ -1359,6 +1359,15 @@ class ProcessService:
             if "unique" in str(e).lower() or "duplicate" in str(e).lower():
                 raise ValidationError(f"工艺路线编码 {data.code or process_route.code} 已存在（可能已被软删除，请检查）")
             raise
+
+        if "operation_sequence" in update_data:
+            from apps.master_data.services.material_product_process_service import (
+                MaterialProductProcessService,
+            )
+
+            await MaterialProductProcessService.reconcile_stored_lines_after_route_update(
+                tenant_id, process_route
+            )
         
         return await ProcessService._to_process_route_response(process_route)
     

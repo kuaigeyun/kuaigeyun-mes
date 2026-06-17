@@ -103,7 +103,9 @@ import { UniDetail, detailDrawerDescriptionItems } from '../../../../components/
 import { MaterialForm } from '../../components/MaterialForm'
 import { normalizeStagesInput, stagesFromLegacy } from '../../components/InspectionStagesEditor'
 import { MaterialVariantSkusPanel } from '../../components/MaterialVariantSkusPanel'
-import { isVariantSkuMaterial, isVariantMasterMaterial, scalarAttrDisplay } from '../../components/MaterialVariantCombinationsTable'
+import { isVariantSkuMaterial, isVariantMasterMaterial, formatVariantAttributesLine } from '../../components/MaterialVariantCombinationsTable'
+import { variantAttributeApi } from '../../services/variant-attribute'
+import type { VariantAttributeDefinition } from '../../types/variant-attribute'
 import FabricationRawMaterialWizard from '../../components/FabricationRawMaterialWizard'
 import {
   fabricationMaterialNeedsRawMaterialSetup,
@@ -121,26 +123,6 @@ import {
 /** SKU 子行列表单元格：不重复展示主物料字段 */
 function renderMasterCell(record: Material, node: React.ReactNode): React.ReactNode {
   return isVariantSkuMaterial(record) ? null : node
-}
-
-function renderSkuVariantAttributes(record: Material): React.ReactNode {
-  const attrs = (record.variantAttributes ?? (record as any).variant_attributes ?? {}) as Record<
-    string,
-    unknown
-  >
-  const entries = Object.entries(attrs).filter(
-    ([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0),
-  )
-  if (!entries.length) return '—'
-  return (
-    <Space size={[4, 4]} wrap>
-      {entries.map(([key, val]) => (
-        <Tag key={key}>
-          {key}: {scalarAttrDisplay(val)}
-        </Tag>
-      ))}
-    </Space>
-  )
 }
 
 function getMaterialListMainCode(record: Material): string {
@@ -168,7 +150,13 @@ function getMaterialSourceTypeLabel(
 }
 
 /** 列表首列：名称 / 编号·规格；品牌、型号以徽章挂在下方（配置件 SKU 子行：属性摘要 / SKU 编号） */
-function MaterialListStackedCell({ record }: { record: Material }) {
+function MaterialListStackedCell({
+  record,
+  variantAttrLabelMap,
+}: {
+  record: Material
+  variantAttrLabelMap: Map<string, string>
+}) {
   const { t } = useTranslation()
 
   if (isVariantSkuMaterial(record)) {
@@ -176,11 +164,7 @@ function MaterialListStackedCell({ record }: { record: Material }) {
       string,
       unknown
     >
-    const entries = Object.entries(attrs).filter(
-      ([, v]) => v != null && v !== '' && !(Array.isArray(v) && v.length === 0),
-    )
-    const primary =
-      entries.map(([key, val]) => `${key}: ${scalarAttrDisplay(val)}`).join(' · ') || '—'
+    const primary = formatVariantAttributesLine(attrs, variantAttrLabelMap)
     const code = getMaterialListMainCode(record) || '-'
     return <UniTableStackedPrimaryCell primary={primary} secondary={code} />
   }
@@ -530,6 +514,9 @@ const MaterialsManagementPage: React.FC = () => {
     []
   )
   const [loadingBaseUnitOptions, setLoadingBaseUnitOptions] = useState(false)
+  const [variantAttrDefinitions, setVariantAttrDefinitions] = useState<
+    VariantAttributeDefinition[]
+  >([])
 
   const [standardPresetOpen, setStandardPresetOpen] = useState(false)
   const [standardPresetLoading, setStandardPresetLoading] = useState(false)
@@ -905,6 +892,14 @@ const MaterialsManagementPage: React.FC = () => {
     } finally {
       setLoadingBaseUnitOptions(false)
     }
+
+    try {
+      const defs = await variantAttributeApi.list({ is_active: true })
+      defs.sort((a, b) => a.display_order - b.display_order)
+      setVariantAttrDefinitions(defs)
+    } catch (error: unknown) {
+      console.error('加载属性定义失败:', error)
+    }
   }, [])
 
   // 恢复暂存的物料表单（从悬浮按钮返回时：URL 带 restore=1 + sessionStorage 有数据）
@@ -967,7 +962,13 @@ const MaterialsManagementPage: React.FC = () => {
     { label: t('app.master-data.materialForm.sourceOutsource'), value: 'Outsource' },
     { label: t('app.master-data.materialForm.sourcePhantom'), value: 'Phantom' },
     { label: t('app.master-data.materialForm.sourceService'), value: 'Service' },
+    { label: t('app.master-data.materialForm.sourceConfigure'), value: 'Configure' },
   ], [t])
+
+  const variantAttrLabelMap = useMemo(
+    () => new Map(variantAttrDefinitions.map((d) => [d.attribute_name, d.display_name])),
+    [variantAttrDefinitions],
+  )
 
 
 
@@ -2207,7 +2208,9 @@ const MaterialsManagementPage: React.FC = () => {
         ...UNI_TABLE_STACKED_PRIMARY_COLUMN_DEFAULTS,
         fixed: 'left',
         sorter: true,
-        render: (_, record) => <MaterialListStackedCell record={record} />,
+        render: (_, record) => (
+          <MaterialListStackedCell record={record} variantAttrLabelMap={variantAttrLabelMap} />
+        ),
       },
       {
         title: t('app.master-data.materials.materialCode'),
@@ -2438,6 +2441,7 @@ const MaterialsManagementPage: React.FC = () => {
       materialGroups,
       getMaterialGroupName,
       sourceTypeOptions,
+      variantAttrLabelMap,
       baseUnitOptions,
       loadingBaseUnitOptions,
       messageApi,

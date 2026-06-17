@@ -1,6 +1,7 @@
 import type { TFunction } from 'i18next';
 import type { OperationItem } from '../components/OperationSequenceEditor';
 import type { Operation } from '../types/process';
+import { displayMinutesToHours, hoursToDisplayMinutes } from './manufacturingTimeUnits';
 
 type SeqInput = unknown;
 
@@ -40,8 +41,10 @@ function toOpItemBase(
       'none') as OperationItem['overReportMode'],
     overReportValue:
       Number(merged.overReportValue ?? merged.over_report_value ?? 0) || 0,
-    standardTime: Number(merged.standardTime ?? merged.standard_time ?? 0) || undefined,
-    setupTime: Number(merged.setupTime ?? merged.setup_time ?? 0) || undefined,
+    standardTime: hoursToDisplayMinutes(
+      Number(merged.standardTime ?? merged.standard_time ?? 0) || undefined,
+    ),
+    setupTime: hoursToDisplayMinutes(Number(merged.setupTime ?? merged.setup_time ?? 0) || undefined),
   };
 }
 
@@ -138,11 +141,13 @@ export function buildOperationSequencePayload(
         row.overReportMode = om;
         row.overReportValue = ov;
       }
-      if (op.standardTime != null && Number.isFinite(Number(op.standardTime))) {
-        row.standard_time = Number(op.standardTime);
+      const standardHours = displayMinutesToHours(op.standardTime);
+      if (standardHours != null) {
+        row.standard_time = standardHours;
       }
-      if (op.setupTime != null && Number.isFinite(Number(op.setupTime))) {
-        row.setup_time = Number(op.setupTime);
+      const setupHours = displayMinutesToHours(op.setupTime);
+      if (setupHours != null) {
+        row.setup_time = setupHours;
       }
       return row;
     }),

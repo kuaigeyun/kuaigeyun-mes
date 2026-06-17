@@ -20,7 +20,7 @@ class ProcessRouteChangeBase(BaseModel):
     change_content: Optional[Dict[str, Any]] = Field(None, description="变更内容（JSON格式）")
     change_reason: Optional[str] = Field(None, description="变更原因")
     change_impact: Optional[Dict[str, Any]] = Field(None, description="变更影响分析（JSON格式）")
-    status: str = Field("pending", max_length=20, description="变更状态")
+    status: str = Field("draft", max_length=20, description="变更状态")
     approval_comment: Optional[str] = Field(None, description="审批意见（可选）")
     
     @validator("change_type")
@@ -34,7 +34,7 @@ class ProcessRouteChangeBase(BaseModel):
     @validator("status")
     def validate_status(cls, v):
         """验证变更状态"""
-        allowed_statuses = ["pending", "approved", "rejected", "executed", "cancelled"]
+        allowed_statuses = ["draft", "pending", "approved", "rejected", "executed", "cancelled"]
         if v not in allowed_statuses:
             raise ValueError(f"变更状态必须是: {', '.join(allowed_statuses)}")
         return v
@@ -58,7 +58,7 @@ class ProcessRouteChangeUpdate(BaseModel):
     def validate_status(cls, v):
         """验证变更状态"""
         if v is not None:
-            allowed_statuses = ["pending", "approved", "rejected", "executed", "cancelled"]
+            allowed_statuses = ["draft", "pending", "approved", "rejected", "executed", "cancelled"]
             if v not in allowed_statuses:
                 raise ValueError(f"变更状态必须是: {', '.join(allowed_statuses)}")
         return v

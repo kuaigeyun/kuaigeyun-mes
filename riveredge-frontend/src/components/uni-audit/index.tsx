@@ -112,7 +112,8 @@ function inferResourceByNodeKey(nodeKey?: string): string {
     oqc_inspection: 'kuaizhizao:oqc-inspection',
     receivable: 'kuaicaiwu:receivable',
     payable: 'kuaicaiwu:payable',
-    purchase_invoice: 'kuaicaiwu:purchase-invoice',
+    bom_change: 'kuaiplm:change',
+    process_route_change: 'kuaiplm:change',
   };
   return map[node] || '';
 }

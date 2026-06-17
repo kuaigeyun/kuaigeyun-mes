@@ -58,7 +58,12 @@ function mergeTranslationsWithMenuPriority(
       key.startsWith('app.kuaizhizao.quotation.') ||
       key.startsWith('pages.personal.messages.') ||
       key.startsWith('pages.system.files.') ||
-      key.startsWith('dashboard.businessBoard.');
+      key.startsWith('dashboard.businessBoard.') ||
+      key.startsWith('field.operation.') ||
+      key.startsWith('field.route.') ||
+      key.startsWith('app.master-data.manufacturing.') ||
+      key.startsWith('app.master-data.productProcess.') ||
+      key.startsWith('app.master-data.operationSequence.');
     if (useLocal) {
       merged[key] = local[key];
     }

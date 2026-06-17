@@ -6,17 +6,19 @@ import { rowActionKind } from '../../../../components/uni-action';
 import React, { useRef, useState, useCallback, useMemo } from 'react';
 import { ActionType, ProColumns } from '@ant-design/pro-components';
 import { App, Button, Space, Tag } from 'antd';
-import { CheckOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { PlayCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { UniTable } from '../../../../components/uni-table';
 import { UniBatchMenuButton } from '../../../../components/uni-batch';
+import { UniWorkflowActions } from '../../../../components/uni-workflow-actions';
 import { ListPageTemplate } from '../../../../components/layout-templates';
+import { useAuditRequired } from '../../../../hooks/useAuditRequired';
 import {
   listBomChanges,
   listRouteChanges,
   listUnifiedChanges,
-  approveChange,
+  auditNodeKeyForRow,
   batchApproveChanges,
   batchDeleteChanges,
   batchExecuteChanges,
@@ -27,21 +29,26 @@ import {
 import { buildBomChangeCreateUrl, buildRouteChangeCreateUrl } from '../../services/master-data-links';
 import { useNewShortcut } from '../../../../hooks/useNewShortcut';
 import { NEW_SHORTCUT_HINT } from '../../../../utils/globalNewShortcut';
-import { getKuaiplmChangeCategoryText } from '../../components/kuaiplmMeta';
+import { getKuaiplmChangeCategoryText, getKuaiplmChangeStatusText, getKuaiplmChangeTypeText } from '../../components/kuaiplmMeta';
 
 type TabKey = 'all' | 'bom' | 'route';
 
 const STATUS_COLOR: Record<string, string> = {
+  draft: 'default',
   pending: 'processing',
   approved: 'success',
   executed: 'default',
   rejected: 'error',
+  cancelled: 'default',
 };
 
 const ChangeManagementPage: React.FC = () => {
   const { t } = useTranslation();
   const { message: messageApi, modal: modalApi } = App.useApp();
   const actionRef = useRef<ActionType>(null);
+  const bomAuditEnabled = useAuditRequired('bom_change');
+  const routeAuditEnabled = useAuditRequired('process_route_change');
+  const auditEnabled = bomAuditEnabled || routeAuditEnabled;
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [rowsByUuid, setRowsByUuid] = useState<Record<string, UnifiedChangeRow>>({});
@@ -63,22 +70,6 @@ const ChangeManagementPage: React.FC = () => {
     if (category === 'route') return listRouteChanges(base);
     return listUnifiedChanges({ ...base, change_category: undefined });
   };
-
-  const handleApprove = useCallback(
-    (row: UnifiedChangeRow) => {
-      const uuid = row.uuid;
-      if (!uuid || !row.change_category) return;
-      modalApi.confirm({
-        title: t('app.kuaiplm.change.approveConfirm'),
-        onOk: async () => {
-          await approveChange(row.change_category as ChangeDeskCategory, uuid);
-          messageApi.success(t('app.kuaiplm.common.messages.approveSuccess'));
-          actionRef.current?.reload();
-        },
-      });
-    },
-    [modalApi, messageApi, t],
-  );
 
   const handleExecute = useCallback(
     (row: UnifiedChangeRow) => {
@@ -175,14 +166,22 @@ const ChangeManagementPage: React.FC = () => {
         ),
       },
       { title: t('app.kuaiplm.common.columns.changeCode'), dataIndex: 'change_code', width: 140 },
-      { title: t('app.kuaiplm.common.columns.changeType'), dataIndex: 'change_type', width: 120 },
+      {
+        title: t('app.kuaiplm.common.columns.changeType'),
+        dataIndex: 'change_type',
+        width: 120,
+        render: (_, row) =>
+          getKuaiplmChangeTypeText(t, row.change_type, row.change_category),
+      },
       { title: t('app.kuaiplm.common.columns.target'), dataIndex: 'target_name', ellipsis: true },
       {
         title: t('app.kuaiplm.common.columns.status'),
         dataIndex: 'status',
         width: 100,
         render: (_, row) => (
-          <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>{row.status}</Tag>
+          <Tag color={STATUS_COLOR[(row.status ?? '').toLowerCase()] ?? 'default'}>
+            {getKuaiplmChangeStatusText(t, row.status)}
+          </Tag>
         ),
       },
       {
@@ -204,22 +203,30 @@ const ChangeManagementPage: React.FC = () => {
         fixed: 'right',
         width: 200,
         render: (_, row) => {
-          const pending =
-            (row.status ?? '').toLowerCase().includes('pending') || row.status === '待审批';
+          const status = (row.status ?? '').toLowerCase();
+          const rowAuditEnabled =
+            row.change_category === 'route' ? routeAuditEnabled : bomAuditEnabled;
           return [
-            pending ? (
-              <Button
-                {...rowActionKind('audit')}
-                key="approve"
-                type="link"
+            row.id ? (
+              <UniWorkflowActions
+                key="audit"
+                record={row}
+                rowKey="id"
+                unifiedAudit
+                auditNodeKey={auditNodeKeyForRow(row)}
+                entityType={row.audit?.entity_type || auditNodeKeyForRow(row)}
+                resourcePrefix="kuaiplm:change"
+                workflowAuditEnabled={rowAuditEnabled}
+                pendingStatuses={['pending', 'pending_review', '待审批']}
+                approvedStatuses={['approved', '已审批']}
+                draftStatuses={['draft', '草稿']}
+                entityName={t('app.kuaiplm.change.entityName')}
+                onSuccess={() => actionRef.current?.reload()}
+                theme="link"
                 size="small"
-                icon={<CheckOutlined />}
-                onClick={() => handleApprove(row)}
-              >
-                {t('app.kuaiplm.common.actions.approve')}
-              </Button>
+              />
             ) : null,
-            row.status === 'approved' || row.status === '已审批' ? (
+            status === 'approved' || row.status === '已审批' ? (
               <Button
                 {...rowActionKind('execute')}
                 key="execute"
@@ -235,7 +242,7 @@ const ChangeManagementPage: React.FC = () => {
         },
       },
     ],
-    [handleApprove, handleExecute, t],
+    [handleExecute, routeAuditEnabled, bomAuditEnabled, t],
   );
 
   const toolbarMenuItems = useMemo(
@@ -271,15 +278,20 @@ const ChangeManagementPage: React.FC = () => {
             buttonText={t('app.kuaiplm.common.actions.batchActions')}
             selectedRowKeys={selectedRowKeys}
             menuItems={[
-              {
-                key: 'batch-approve',
-                label: t('app.kuaiplm.common.actions.approve'),
-                requireConfirm: true,
-                confirmTitle: (count) => t('app.kuaiplm.change.batchApproveConfirm', { count }),
-                onClick: () => {
-                  void handleBatchApprove();
-                },
-              },
+              ...(auditEnabled
+                ? [
+                    {
+                      key: 'batch-approve',
+                      label: t('app.kuaiplm.common.actions.approve'),
+                      requireConfirm: true,
+                      confirmTitle: (count: number) =>
+                        t('app.kuaiplm.change.batchApproveConfirm', { count }),
+                      onClick: () => {
+                        void handleBatchApprove();
+                      },
+                    },
+                  ]
+                : []),
               {
                 key: 'batch-execute',
                 label: t('app.kuaiplm.common.actions.execute'),

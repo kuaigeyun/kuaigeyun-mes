@@ -22,6 +22,16 @@ export interface UnifiedChangeRow {
   created_at?: string;
   updated_at?: string;
   source?: 'master_data' | 'kuaiplm';
+  audit?: {
+    entity_type?: string;
+    phase?: string;
+    enabled?: boolean;
+    allowed_actions?: string[];
+  };
+}
+
+function auditNodeKeyForRow(row: UnifiedChangeRow): string {
+  return row.change_category === 'route' ? 'process_route_change' : 'bom_change';
 }
 
 export interface ChangeListParams {
@@ -43,20 +53,27 @@ function unwrapList<T>(res: unknown): { items: T[]; total: number } {
 }
 
 function mapDeskItem(row: Record<string, unknown>): UnifiedChangeRow {
-  const changeType = String(row.change_type ?? '');
+  const categoryRaw = String(row.category ?? row.change_type ?? '');
   const changeCategory: ChangeDeskCategory =
-    changeType === 'process_route' ? 'route' : 'bom';
+    categoryRaw === 'process_route' || categoryRaw === 'route' ? 'route' : 'bom';
   const extra = (row.extra ?? {}) as Record<string, unknown>;
+  const detailChangeType = row.category
+    ? String(row.change_type ?? '')
+    : categoryRaw === 'bom' || categoryRaw === 'process_route'
+      ? ''
+      : String(row.change_type ?? '');
   return {
+    id: row.id as string | number | undefined,
     uuid: row.uuid as string | undefined,
     change_category: changeCategory,
     change_code: (row.entity_code ?? row.change_code ?? extra.bom_code) as string | undefined,
-    change_type: changeType,
+    change_type: detailChangeType || undefined,
     target_name: (row.entity_name ?? row.target_name) as string | undefined,
     status: row.status as string | undefined,
     change_reason: row.change_reason as string | undefined,
     created_at: row.created_at as string | undefined,
     source: 'kuaiplm',
+    audit: row.audit as UnifiedChangeRow['audit'],
   };
 }
 
@@ -81,6 +98,8 @@ async function listFromChangeDesk(params?: ChangeListParams, category?: ChangeDe
   const { items, total } = unwrapList<Record<string, unknown>>(res);
   return { items: items.map(mapDeskItem), total };
 }
+
+export { auditNodeKeyForRow };
 
 export async function listUnifiedChanges(params?: ChangeListParams) {
   return listFromChangeDesk(params);

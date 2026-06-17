@@ -65,6 +65,7 @@ class BatchRuleService:
         sort_order: Optional[str] = None,
     ) -> tuple[List[BatchRule], int]:
         """获取批号规则列表（支持关键词模糊、字段排序）"""
+        await BatchRuleService.get_or_create_system_default(tenant_id)
         qs = BatchRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)

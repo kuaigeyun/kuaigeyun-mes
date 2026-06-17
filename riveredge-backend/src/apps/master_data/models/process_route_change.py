@@ -78,6 +78,7 @@ class ProcessRouteChange(BaseModel):
     
     # 变更状态
     STATUS_CHOICES = [
+        ("draft", "草稿"),
         ("pending", "待审批"),
         ("approved", "已审批"),
         ("rejected", "已拒绝"),
@@ -86,8 +87,8 @@ class ProcessRouteChange(BaseModel):
     ]
     status = fields.CharField(
         max_length=20,
-        default="pending",
-        description="变更状态（pending:待审批, approved:已审批, rejected:已拒绝, executed:已执行, cancelled:已取消）"
+        default="draft",
+        description="变更状态（draft:草稿, pending:待审批, approved:已审批, rejected:已拒绝, executed:已执行, cancelled:已取消）"
     )
     
     # 申请人和审批人

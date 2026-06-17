@@ -64,6 +64,7 @@ class SerialRuleService:
         sort_order: Optional[str] = None,
     ) -> tuple[List[SerialRule], int]:
         """获取序列号规则列表（支持关键词模糊、字段排序）"""
+        await SerialRuleService.get_or_create_system_default(tenant_id)
         qs = SerialRule.filter(tenant_id=tenant_id, deleted_at__isnull=True)
         if is_active is not None:
             qs = qs.filter(is_active=is_active)

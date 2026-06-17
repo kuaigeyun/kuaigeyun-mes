@@ -574,7 +574,7 @@ const OperationsPage: React.FC = () => {
       },
     },
     {
-      title: t('field.operation.defaultOperatorUuids'),
+      title: t('field.operation.defaultPersonnelConfigs'),
       dataIndex: ['default_operator_names', 'defaultOperatorNames'],
       width: 180,
       hideInSearch: true,

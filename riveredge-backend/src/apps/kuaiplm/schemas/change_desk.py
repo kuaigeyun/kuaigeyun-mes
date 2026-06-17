@@ -12,16 +12,21 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ChangeDeskItem(BaseModel):
-    change_type: str = Field(..., description="bom | process_route")
+    id: int = Field(..., description="内部主键，供 uni-audit 使用")
+    category: str = Field(..., description="bom | process_route")
+    change_type: str = Field(..., description="业务变更类型，如 item_modify / operation_change")
     uuid: str
     status: str
-    change_content: Optional[str] = None
+    change_content: Optional[Dict[str, Any]] = None
     change_reason: Optional[str] = None
     applicant_id: Optional[int] = None
     created_at: datetime
     entity_code: Optional[str] = None
     entity_name: Optional[str] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
+    audit: Optional[Dict[str, Any]] = Field(None, description="统一审核相位（record.audit）")
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ChangeDeskListResponse(BaseModel):
@@ -36,6 +41,10 @@ class ChangeApproveRequest(BaseModel):
 
 
 class ChangeExecuteRequest(BaseModel):
+    change_type: str = Field(..., description="bom | process_route")
+
+
+class ChangeSubmitRequest(BaseModel):
     change_type: str = Field(..., description="bom | process_route")
 
 

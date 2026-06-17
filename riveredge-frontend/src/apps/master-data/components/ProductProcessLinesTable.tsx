@@ -34,7 +34,6 @@ import { searchUserDisplay } from '../../../services/user';
 import { operationApi, unwrapProcessPagedList } from '../services/process';
 import { UniTableStackedPrimaryCell } from '../../../components/uni-table/stackedPrimaryColumn';
 import {
-  enrichLineFromOperation,
   lineToPersonnelConfigs,
   parsePersonnelConfigs,
   resourcesFromOperation,
@@ -45,6 +44,18 @@ const OVER_REPORT_MODE_OPTIONS = [
   { value: 'fixed' as const },
   { value: 'percent' as const },
 ];
+
+const nowrapTableHeaderCell = () => ({ style: { whiteSpace: 'nowrap' as const } });
+
+type UserDisplayItem = {
+  id: number;
+  uuid: string;
+  label?: string;
+  full_name?: string;
+  username?: string;
+};
+
+type TeamItem = { id: number; name?: string };
 
 export type ProductProcessLinesTableProps = {
   lines: ProductProcessLine[];
@@ -161,7 +172,8 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
 }) => {
   const { t } = useTranslation();
   const [workshopOptions, setWorkshopOptions] = useState<{ label: string; value: number }[]>([]);
-  const [personnelOptions, setPersonnelOptions] = useState<{ label: string; value: string }[]>([]);
+  const [rawUsers, setRawUsers] = useState<UserDisplayItem[]>([]);
+  const [rawTeams, setRawTeams] = useState<TeamItem[]>([]);
   const [equipmentOptions, setEquipmentOptions] = useState<{ label: string; value: number }[]>([]);
   const [operationOptions, setOperationOptions] = useState<{ label: string; value: string }[]>([]);
   const [operationByUuid, setOperationByUuid] = useState<Record<string, Operation>>({});
@@ -169,7 +181,6 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
   const [userUuidToId, setUserUuidToId] = useState<Map<string, number>>(new Map());
   const [addOpUuid, setAddOpUuid] = useState<string | undefined>();
   const [activeId, setActiveId] = useState<string | null>(null);
-  const enrichedRef = useRef('');
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
@@ -196,21 +207,20 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         );
         const idToUuid = new Map<number, string>();
         const uuidToId = new Map<string, number>();
-        const pOpts: { label: string; value: string }[] = [];
+        const users: UserDisplayItem[] = [];
         (usersRes?.items ?? []).forEach((u) => {
           idToUuid.set(u.id, u.uuid);
           uuidToId.set(u.uuid, u.id);
-          pOpts.push({ label: `[人员] ${u.label || u.full_name || u.username}`, value: `U_${u.uuid}` });
+          users.push(u);
         });
-        factoryListItems(teamsRes as Parameters<typeof factoryListItems>[0]).forEach((team) => {
-          pOpts.push({
-            label: `[小组] ${team.name ?? ''}`.trim() || String(team.id),
-            value: `T_${team.id}`,
-          });
-        });
+        const teams = factoryListItems(teamsRes as Parameters<typeof factoryListItems>[0]).map((team) => ({
+          id: team.id as number,
+          name: team.name,
+        }));
         setUserIdToUuid(idToUuid);
         setUserUuidToId(uuidToId);
-        setPersonnelOptions(pOpts);
+        setRawUsers(users);
+        setRawTeams(teams);
         const eqItems = equipmentRes?.items ?? (Array.isArray(equipmentRes) ? equipmentRes : []);
         setEquipmentOptions(
           (Array.isArray(eqItems) ? eqItems : []).map((e: { id: number; code?: string; name?: string }) => ({
@@ -230,7 +240,8 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         );
       } catch {
         setWorkshopOptions([]);
-        setPersonnelOptions([]);
+        setRawUsers([]);
+        setRawTeams([]);
         setEquipmentOptions([]);
         setOperationOptions([]);
         setOperationByUuid({});
@@ -238,20 +249,22 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
     })();
   }, []);
 
-  useEffect(() => {
-    if (!Object.keys(operationByUuid).length || !userIdToUuid.size) return;
-    const key = JSON.stringify(lines.map((l) => l.operationUuid));
-    if (enrichedRef.current === key) return;
-    let changed = false;
-    const next = lines.map((ln) => {
-      const op = operationByUuid[ln.operationUuid];
-      const enriched = enrichLineFromOperation(ln, op, userIdToUuid);
-      if (JSON.stringify(enriched) !== JSON.stringify(ln)) changed = true;
-      return enriched;
+  const personnelOptions = useMemo(() => {
+    const pOpts: { label: string; value: string }[] = [];
+    rawUsers.forEach((u) => {
+      pOpts.push({
+        label: `${t('field.operation.optionPersonnel')} ${u.label || u.full_name || u.username}`,
+        value: `U_${u.uuid}`,
+      });
     });
-    enrichedRef.current = key;
-    if (changed) onChange(next);
-  }, [lines, operationByUuid, userIdToUuid, onChange]);
+    rawTeams.forEach((team) => {
+      pOpts.push({
+        label: `${t('field.operation.optionTeam')} ${team.name ?? ''}`.trim() || String(team.id),
+        value: `T_${team.id}`,
+      });
+    });
+    return pOpts;
+  }, [rawUsers, rawTeams, t]);
 
   const usedUuids = useMemo(() => new Set(lines.map((l) => l.operationUuid)), [lines]);
 
@@ -371,13 +384,15 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('app.master-data.manufacturing.standardTime'),
-        width: 110,
+        width: 168,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
           <InputNumber
             min={0}
-            step={0.1}
+            step={1}
+            precision={0}
             style={{ width: '100%' }}
             disabled={disabled}
+            addonAfter={t('app.master-data.manufacturing.minutePerPieceUnit')}
             value={row.standardTime}
             onChange={(v) => patchLine(index, { standardTime: v ?? undefined })}
           />
@@ -385,21 +400,37 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('app.master-data.manufacturing.setupTime'),
-        width: 110,
+        width: 148,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
           <InputNumber
             min={0}
-            step={0.1}
+            step={1}
+            precision={0}
             style={{ width: '100%' }}
             disabled={disabled}
+            addonAfter={t('app.master-data.manufacturing.minuteUnit')}
             value={row.setupTime}
             onChange={(v) => patchLine(index, { setupTime: v ?? undefined })}
           />
         ),
       },
       {
+        title: t('app.master-data.manufacturing.pieceRateUnit'),
+        width: 128,
+        render: (_: unknown, row: ProductProcessLine, index: number) => (
+          <InputNumber
+            min={0}
+            step={0.01}
+            style={{ width: '100%' }}
+            disabled={disabled}
+            value={row.pieceRate}
+            onChange={(v) => patchLine(index, { pieceRate: v ?? undefined })}
+          />
+        ),
+      },
+      {
         title: t('field.operation.defaultWorkshopIds'),
-        width: 160,
+        width: 168,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
           <Select
             mode="multiple"
@@ -415,7 +446,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('field.operation.defaultPersonnelConfigs'),
-        width: 200,
+        width: 240,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
           <Select
             mode="multiple"
@@ -436,7 +467,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       },
       {
         title: t('field.operation.defaultEquipmentIds'),
-        width: 160,
+        width: 168,
         render: (_: unknown, row: ProductProcessLine, index: number) => (
           <Select
             mode="multiple"
@@ -447,20 +478,6 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
             options={equipmentOptions}
             value={row.equipmentIds ?? []}
             onChange={(v) => patchLine(index, { equipmentIds: v })}
-          />
-        ),
-      },
-      {
-        title: t('app.master-data.manufacturing.pieceRateUnit'),
-        width: 110,
-        render: (_: unknown, row: ProductProcessLine, index: number) => (
-          <InputNumber
-            min={0}
-            step={0.01}
-            style={{ width: '100%' }}
-            disabled={disabled}
-            value={row.pieceRate}
-            onChange={(v) => patchLine(index, { pieceRate: v ?? undefined })}
           />
         ),
       },
@@ -542,7 +559,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
         ),
       },
     ];
-    return cols;
+    return cols.map((col) => ({ ...col, onHeaderCell: nowrapTableHeaderCell }));
   }, [
     t,
     disabled,
@@ -580,7 +597,7 @@ export const ProductProcessLinesTable: React.FC<ProductProcessLinesTableProps> =
       size="small"
       rowKey="operationUuid"
       pagination={false}
-      scroll={{ x: allowOperationJump ? 1420 : 1340 }}
+      scroll={{ x: allowOperationJump ? 1620 : 1548 }}
       locale={{ emptyText: t('app.master-data.productProcess.noLines') }}
       dataSource={lines}
       columns={columns}

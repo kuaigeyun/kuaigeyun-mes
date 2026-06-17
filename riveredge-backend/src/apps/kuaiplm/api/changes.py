@@ -19,11 +19,13 @@ from apps.kuaiplm.schemas.change_desk import (
     ChangeBatchExecuteRequest,
     ChangeDeskListResponse,
     ChangeExecuteRequest,
+    ChangeSubmitRequest,
 )
 from apps.kuaiplm.services.change_desk_service import ChangeDeskService
 from core.api.deps.access import require_access
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 
 router = APIRouter(prefix="/changes", tags=["App · Kuaiplm · Change Desk"])
@@ -48,6 +50,21 @@ async def list_changes(
     return await service.list_changes(
         tenant_id, status=status, change_type=change_type, page=page, page_size=page_size
     )
+
+
+@router.post("/{change_uuid}/submit", summary="Submit change for approval")
+async def submit_change(
+    data: ChangeSubmitRequest,
+    change_uuid: str = Path(...),
+    current_user: User = Depends(get_current_user),
+    _auth=Depends(require_access("kuaiplm.change", "submit", required_permissions=["kuaiplm:change:submit"])),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    try:
+        result = await service.submit_change(tenant_id, change_uuid, data, current_user.id)
+        return {"success": True, "data": result}
+    except (ValueError, ValidationError) as e:
+        raise _err(400, str(e), f"/changes/{change_uuid}/submit")
 
 
 @router.post("/{change_uuid}/approve", summary="Approve or reject change")

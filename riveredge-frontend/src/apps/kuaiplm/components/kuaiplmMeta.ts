@@ -38,6 +38,32 @@ export const KUAIPLM_GATE_STATUS_I18N: Record<string, string> = {
 export const KUAIPLM_CHANGE_CATEGORY_I18N: Record<string, string> = {
   bom: 'app.kuaiplm.common.changeCategory.bom',
   route: 'app.kuaiplm.common.changeCategory.route',
+  process_route: 'app.kuaiplm.common.changeCategory.route',
+};
+
+export const KUAIPLM_CHANGE_STATUS_I18N: Record<string, string> = {
+  pending: 'app.kuaiplm.common.changeStatus.pending',
+  draft: 'app.kuaiplm.common.changeStatus.draft',
+  approved: 'app.kuaiplm.common.changeStatus.approved',
+  rejected: 'app.kuaiplm.common.changeStatus.rejected',
+  executed: 'app.kuaiplm.common.changeStatus.executed',
+  cancelled: 'app.kuaiplm.common.changeStatus.cancelled',
+};
+
+export const KUAIPLM_BOM_CHANGE_TYPE_I18N: Record<string, string> = {
+  item_add: 'app.kuaiplm.common.bomChangeType.itemAdd',
+  item_remove: 'app.kuaiplm.common.bomChangeType.itemRemove',
+  item_modify: 'app.kuaiplm.common.bomChangeType.itemModify',
+  version_change: 'app.kuaiplm.common.bomChangeType.versionChange',
+  effective_change: 'app.kuaiplm.common.bomChangeType.effectiveChange',
+  other: 'app.kuaiplm.common.bomChangeType.other',
+};
+
+export const KUAIPLM_ROUTE_CHANGE_TYPE_I18N: Record<string, string> = {
+  operation_change: 'app.kuaiplm.common.routeChangeType.operationChange',
+  time_change: 'app.kuaiplm.common.routeChangeType.timeChange',
+  sop_change: 'app.kuaiplm.common.routeChangeType.sopChange',
+  other: 'app.kuaiplm.common.routeChangeType.other',
 };
 
 export const KUAIPLM_ENGINEERING_LINK_I18N: Record<string, string> = {
@@ -97,6 +123,29 @@ export function getKuaiplmChangeCategoryText(t: TFunction, category?: string | n
   if (!category) return '-';
   const key = KUAIPLM_CHANGE_CATEGORY_I18N[String(category).toLowerCase()];
   return key ? t(key) : category;
+}
+
+export function getKuaiplmChangeStatusText(t: TFunction, status?: string | null): string {
+  if (!status) return '-';
+  const key = KUAIPLM_CHANGE_STATUS_I18N[String(status).toLowerCase()];
+  return key ? t(key) : status;
+}
+
+export function getKuaiplmChangeTypeText(
+  t: TFunction,
+  changeType?: string | null,
+  category?: string | null,
+): string {
+  if (!changeType) return '-';
+  const normalized = String(changeType).toLowerCase();
+  const bomKey = KUAIPLM_BOM_CHANGE_TYPE_I18N[normalized];
+  if (bomKey) return t(bomKey);
+  const routeKey = KUAIPLM_ROUTE_CHANGE_TYPE_I18N[normalized];
+  if (routeKey) return t(routeKey);
+  if (normalized === 'bom' || normalized === 'process_route') {
+    return getKuaiplmChangeCategoryText(t, normalized);
+  }
+  return changeType;
 }
 
 export function getKuaiplmEngineeringLinkText(t: TFunction, linkType?: string | null): string {

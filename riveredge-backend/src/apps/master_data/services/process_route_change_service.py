@@ -19,8 +19,37 @@ from apps.master_data.schemas.process_route_change_schemas import (
     ProcessRouteChangeResponse,
     ProcessRouteChangeListResponse,
 )
+from apps.kuaiplm.services.engineering_change_audit import is_audit_required
 from infra.exceptions.exceptions import NotFoundError, ValidationError
 from loguru import logger
+
+
+def _to_process_route_change_response(change: ProcessRouteChange) -> ProcessRouteChangeResponse:
+    """ORM 仅存 process_route_id；响应需 process_route_uuid，须从关联路线解析。"""
+    process_route = getattr(change, "process_route", None)
+    if not process_route:
+        raise ValidationError(f"工艺路线变更 {change.uuid} 缺少关联路线，无法返回")
+    return ProcessRouteChangeResponse(
+        id=change.id,
+        uuid=change.uuid,
+        tenant_id=change.tenant_id,
+        process_route_id=change.process_route_id,
+        process_route_uuid=process_route.uuid,
+        process_route_code=process_route.code,
+        process_route_name=process_route.name,
+        change_type=change.change_type,
+        change_content=change.change_content,
+        change_reason=change.change_reason,
+        change_impact=change.change_impact,
+        status=change.status,
+        approval_comment=change.approval_comment,
+        applicant_id=change.applicant_id,
+        approver_id=change.approver_id,
+        applied_at=change.applied_at,
+        created_at=change.created_at,
+        updated_at=change.updated_at,
+        deleted_at=change.deleted_at,
+    )
 
 
 class ProcessRouteChangeService:
@@ -68,19 +97,73 @@ class ProcessRouteChangeService:
             change_content=data.change_content,
             change_reason=data.change_reason,
             change_impact=data.change_impact,
-            status=data.status,
+            status="draft",
             approval_comment=data.approval_comment,
             applicant_id=applicant_id,
         )
         
-        # 加载关联数据
         await change.fetch_related("process_route")
-        
-        response = ProcessRouteChangeResponse.model_validate(change)
-        if change.process_route:
-            response.process_route_code = change.process_route.code
-            response.process_route_name = change.process_route.name
-        return response
+        if data.status in ("pending", "draft"):
+            return await ProcessRouteChangeService.submit_change(tenant_id, change.id, applicant_id)
+        return _to_process_route_change_response(change)
+
+    @staticmethod
+    async def _get_change_or_raise(tenant_id: int, change_id: int) -> ProcessRouteChange:
+        change = await ProcessRouteChange.filter(
+            tenant_id=tenant_id,
+            id=change_id,
+            deleted_at__isnull=True,
+        ).prefetch_related("process_route").first()
+        if not change:
+            raise NotFoundError("工艺路线变更记录", str(change_id))
+        return change
+
+    @staticmethod
+    async def submit_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> ProcessRouteChangeResponse:
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "draft":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法提交")
+
+        audit_required = await is_audit_required(tenant_id, "process_route")
+        change.status = "pending" if audit_required else "approved"
+        if not audit_required:
+            change.approver_id = operator_id
+        await change.save()
+        return _to_process_route_change_response(change)
+
+    @staticmethod
+    async def withdraw_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> ProcessRouteChangeResponse:
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "pending":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法撤回")
+        change.status = "draft"
+        change.approver_id = None
+        change.approval_comment = None
+        await change.save()
+        return _to_process_route_change_response(change)
+
+    @staticmethod
+    async def revoke_change(
+        tenant_id: int,
+        change_id: int,
+        operator_id: int,
+    ) -> ProcessRouteChangeResponse:
+        change = await ProcessRouteChangeService._get_change_or_raise(tenant_id, change_id)
+        if change.status != "approved":
+            raise ValidationError(f"变更记录状态为 {change.status}，无法反审核")
+        change.status = "draft"
+        change.approver_id = None
+        change.approval_comment = None
+        await change.save()
+        return _to_process_route_change_response(change)
     
     @staticmethod
     async def get_change_by_uuid(
@@ -109,11 +192,7 @@ class ProcessRouteChangeService:
         if not change:
             raise NotFoundError("工艺路线变更记录", change_uuid)
         
-        response = ProcessRouteChangeResponse.model_validate(change)
-        if change.process_route:
-            response.process_route_code = change.process_route.code
-            response.process_route_name = change.process_route.name
-        return response
+        return _to_process_route_change_response(change)
     
     @staticmethod
     async def list_changes(
@@ -171,11 +250,7 @@ class ProcessRouteChangeService:
         
         items = []
         for change in changes:
-            response = ProcessRouteChangeResponse.model_validate(change)
-            if change.process_route:
-                response.process_route_code = change.process_route.code
-                response.process_route_name = change.process_route.name
-            items.append(response)
+            items.append(_to_process_route_change_response(change))
         
         return ProcessRouteChangeListResponse(items=items, total=total)
     
@@ -215,11 +290,7 @@ class ProcessRouteChangeService:
         
         await change.save()
         
-        response = ProcessRouteChangeResponse.model_validate(change)
-        if change.process_route:
-            response.process_route_code = change.process_route.code
-            response.process_route_name = change.process_route.name
-        return response
+        return _to_process_route_change_response(change)
     
     @staticmethod
     async def approve_change(
@@ -255,7 +326,7 @@ class ProcessRouteChangeService:
         if not change:
             raise NotFoundError("工艺路线变更记录", change_uuid)
         
-        if change.status != "pending":
+        if change.status not in ("pending",):
             raise ValidationError(f"变更记录状态为 {change.status}，无法审批")
         
         # 更新审批信息
@@ -266,11 +337,7 @@ class ProcessRouteChangeService:
         
         await change.save()
         
-        response = ProcessRouteChangeResponse.model_validate(change)
-        if change.process_route:
-            response.process_route_code = change.process_route.code
-            response.process_route_name = change.process_route.name
-        return response
+        return _to_process_route_change_response(change)
     
     @staticmethod
     async def execute_change(
@@ -340,11 +407,7 @@ class ProcessRouteChangeService:
         except Exception as e:
             logger.warning("create demand change event for process route failed: %s", e)
         
-        response = ProcessRouteChangeResponse.model_validate(change)
-        if change.process_route:
-            response.process_route_code = change.process_route.code
-            response.process_route_name = change.process_route.name
-        return response
+        return _to_process_route_change_response(change)
     
     @staticmethod
     async def delete_change(

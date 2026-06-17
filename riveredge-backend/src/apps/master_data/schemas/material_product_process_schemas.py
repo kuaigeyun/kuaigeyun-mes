@@ -15,8 +15,8 @@ class ProductProcessLineSchema(BaseModel):
     operation_id: Optional[int] = Field(None, alias="operationId")
     code: Optional[str] = None
     name: Optional[str] = None
-    standard_time: Optional[float] = Field(None, alias="standardTime")
-    setup_time: Optional[float] = Field(None, alias="setupTime")
+    standard_time: Optional[float] = Field(None, alias="standardTime", description="标准工时（小时/件，API 存小时）")
+    setup_time: Optional[float] = Field(None, alias="setupTime", description="准备时间（小时，API 存小时）")
     workshop_ids: Optional[List[int]] = Field(default=None, alias="workshopIds")
     operator_ids: Optional[List[int]] = Field(default=None, alias="operatorIds")
     team_ids: Optional[List[int]] = Field(default=None, alias="teamIds")
