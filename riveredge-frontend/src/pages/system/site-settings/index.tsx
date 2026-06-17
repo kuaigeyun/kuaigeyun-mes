@@ -53,6 +53,12 @@ import {
   LoginBackgroundSettingsBlock,
 } from '../../../components/login-page-editor';
 import { isLoginVisualLayerEnabled, validateLoginVisualLayers } from '../../../utils/loginVisualLayers';
+import {
+  DEEPSEEK_DEFAULT_BASE_URL,
+  DEEPSEEK_DEFAULT_MODEL,
+  DEEPSEEK_V4_MODEL_OPTIONS,
+  INTEGRATION_API_KEY_MASK,
+} from '../../../utils/integrationSettings';
 
 /**
  * 站点设置页面组件
@@ -115,6 +121,15 @@ function getInitialValuesFromConfigStore(
     'theme_config.colorPrimary': configs['theme_config.colorPrimary'] ?? themeConfig.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
     'network.timeout': configs['network.timeout'] ?? configs.network?.timeout ?? 10000,
     'system.max_retries': configs['system.max_retries'] ?? configs.system?.max_retries ?? 3,
+    'integrations.deepseek.enabled': configs.integrations?.deepseek?.enabled === true,
+    'integrations.deepseek.api_key': '',
+    'integrations.deepseek.model': configs.integrations?.deepseek?.model ?? DEEPSEEK_DEFAULT_MODEL,
+    'integrations.deepseek.base_url': configs.integrations?.deepseek?.base_url ?? DEEPSEEK_DEFAULT_BASE_URL,
+    'integrations.deepseek.tools_enabled': configs.integrations?.deepseek?.tools_enabled !== false,
+    'integrations.deepseek.rag_enabled': configs.integrations?.deepseek?.rag_enabled !== false,
+    'integrations.deepseek.rag_use_embedding': configs.integrations?.deepseek?.rag_use_embedding !== false,
+    'integrations.deepseek.rag_top_k': configs.integrations?.deepseek?.rag_top_k ?? 5,
+    'integrations.deepseek.custom_system_prompt': configs.integrations?.deepseek?.custom_system_prompt ?? '',
   };
 }
 
@@ -132,6 +147,68 @@ const DEFAULT_FORM_INITIAL = {
 /** 同步用：仅支持字符串颜色，用于首帧从 localStorage 读出的 configs */
 const syncNormalizeColor = (color: any, defaultVal: string): string =>
   typeof color === 'string' ? color : defaultVal;
+
+const SITE_SETTINGS_BASIC_TAB_FIELDS = [
+  'site_logo',
+  'site_name',
+  'organization_name',
+  'organization_address',
+  'contact_info',
+  'default_currency',
+  'date_format',
+  'default_language',
+  'timezone',
+  'description',
+] as const;
+
+const SITE_SETTINGS_LOGIN_PAGE_TAB_FIELDS = [
+  'tenant_domain',
+  'platform_name',
+  'platform_name_en',
+  'login_logo',
+  'login_title',
+  'login_title_en',
+  'login_content',
+  'login_content_en',
+  'login_decoration_image',
+  'login_background_image',
+  'login_decoration_enabled',
+  'login_background_enabled',
+  'icp_license',
+  'icp_license_en',
+  'login_theme_color',
+  'login_guest_enabled',
+  'login_client_win_enabled',
+  'login_client_android_enabled',
+] as const;
+
+const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
+  'enable_invitation',
+  'enable_register',
+  'enable_launch_wizard',
+  'enable_system_dashboard',
+  'security.token_check_interval',
+  'security.inactivity_timeout',
+  'security.user_cache_time',
+  'ui.max_tabs',
+  'ui.default_page_size',
+  'ui.table_loading_delay',
+  'theme_config.colorPrimary',
+  'network.timeout',
+  'system.max_retries',
+] as const;
+
+const SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS = [
+  'integrations.deepseek.enabled',
+  'integrations.deepseek.model',
+  'integrations.deepseek.base_url',
+  'integrations.deepseek.api_key',
+  'integrations.deepseek.tools_enabled',
+  'integrations.deepseek.rag_enabled',
+  'integrations.deepseek.rag_use_embedding',
+  'integrations.deepseek.rag_top_k',
+  'integrations.deepseek.custom_system_prompt',
+] as const;
 
 const SiteSettingsPage: React.FC = () => {
   const { t } = useTranslation();
@@ -189,6 +266,7 @@ const SiteSettingsPage: React.FC = () => {
   const [creatingBranchOrg, setCreatingBranchOrg] = useState(false);
   const [branchOrgForm] = Form.useForm();
   const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
+  const [deepseekApiKeyConfigured, setDeepseekApiKeyConfigured] = useState(false);
   const tenantDomainValue = Form.useWatch('tenant_domain', form);
   const loginLogoValue = Form.useWatch('login_logo', form);
   const loginDecorationValue = Form.useWatch('login_decoration_image', form);
@@ -675,7 +753,23 @@ const SiteSettingsPage: React.FC = () => {
         'theme_config.colorPrimary': setting.settings?.theme_config?.colorPrimary ?? normalizedThemeColor ?? '#1890ff',
         'network.timeout': setting.settings?.network?.timeout ?? 10000,
         'system.max_retries': setting.settings?.system?.max_retries ?? 3,
+        'integrations.deepseek.enabled': setting.settings?.integrations?.deepseek?.enabled === true,
+        'integrations.deepseek.api_key': '',
+        'integrations.deepseek.model':
+          setting.settings?.integrations?.deepseek?.model ?? DEEPSEEK_DEFAULT_MODEL,
+        'integrations.deepseek.base_url':
+          setting.settings?.integrations?.deepseek?.base_url ?? DEEPSEEK_DEFAULT_BASE_URL,
+        'integrations.deepseek.tools_enabled':
+          setting.settings?.integrations?.deepseek?.tools_enabled !== false,
+        'integrations.deepseek.rag_enabled':
+          setting.settings?.integrations?.deepseek?.rag_enabled !== false,
+        'integrations.deepseek.rag_use_embedding':
+          setting.settings?.integrations?.deepseek?.rag_use_embedding !== false,
+        'integrations.deepseek.rag_top_k': setting.settings?.integrations?.deepseek?.rag_top_k ?? 5,
+        'integrations.deepseek.custom_system_prompt':
+          setting.settings?.integrations?.deepseek?.custom_system_prompt ?? '',
       };
+      setDeepseekApiKeyConfigured(setting.settings?.integrations?.deepseek?.api_key_configured === true);
       setUseCustomLoginLogo(Boolean(String(newValues.login_logo || '').trim()));
 
       if (!hasCache) {
@@ -928,94 +1022,134 @@ const SiteSettingsPage: React.FC = () => {
   };
 
   /**
-   * 处理保存
+   * 处理保存（仅提交当前 Tab 对应字段）
    */
   const handleSave = async () => {
+    const saveTab = activeTabKey;
+    if (saveTab === 'branch-organizations' || saveTab === 'init-data') {
+      return;
+    }
+
     try {
       setSaving(true);
-      const values = await form.validateFields();
-      const mergedValues = { ...form.getFieldsValue(true), ...values };
-      try {
-        validateLoginVisualLayers(
-          isLoginVisualLayerEnabled(mergedValues.login_decoration_enabled),
-          isLoginVisualLayerEnabled(mergedValues.login_background_enabled),
-        );
-      } catch {
-        messageApi.error(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+      const settings: Record<string, any> = {};
+      let shouldRefreshConfigs = false;
+      let shouldRefreshTheme = false;
+
+      if (saveTab === 'basic') {
+        const values = await form.validateFields([...SITE_SETTINGS_BASIC_TAB_FIELDS]);
+        Object.assign(settings, {
+          site_logo: values.site_logo,
+          site_name: values.site_name,
+          organization_name: values.organization_name,
+          organization_address: values.organization_address,
+          contact_info: values.contact_info,
+          default_currency: values.default_currency,
+          date_format: values.date_format,
+          default_language: values.default_language,
+          timezone: values.timezone,
+          description: values.description,
+        });
+        if (values.default_language) {
+          cacheTenantDefaultLanguage(values.default_language);
+        }
+        shouldRefreshConfigs = true;
+      } else if (saveTab === 'login-page') {
+        const values = await form.validateFields([...SITE_SETTINGS_LOGIN_PAGE_TAB_FIELDS]);
+        try {
+          validateLoginVisualLayers(
+            isLoginVisualLayerEnabled(values.login_decoration_enabled),
+            isLoginVisualLayerEnabled(values.login_background_enabled),
+          );
+        } catch {
+          messageApi.error(t('pages.system.siteSettings.loginVisualLayerAtLeastOne'));
+          return;
+        }
+        Object.assign(settings, {
+          tenant_domain: values.tenant_domain,
+          platform_name: values.platform_name,
+          platform_name_en: values.platform_name_en,
+          login_logo: values.login_logo,
+          login_title: values.login_title,
+          login_title_en: values.login_title_en,
+          login_content: values.login_content,
+          login_content_en: values.login_content_en,
+          login_decoration_image: values.login_decoration_image,
+          login_background_image: values.login_background_image,
+          login_decoration_enabled: values.login_decoration_enabled,
+          login_background_enabled: values.login_background_enabled,
+          icp_license: values.icp_license,
+          icp_license_en: values.icp_license_en,
+          login_theme_color: values.login_theme_color,
+          login_guest_enabled: values.login_guest_enabled,
+          login_client_win_enabled: values.login_client_win_enabled,
+          login_client_android_enabled: values.login_client_android_enabled,
+        });
+        shouldRefreshConfigs = true;
+      } else if (saveTab === 'system') {
+        const values = await form.validateFields([...SITE_SETTINGS_SYSTEM_TAB_FIELDS]);
+        const sys = { ...systemSettingsRef.current, ...values };
+        Object.assign(settings, {
+          enable_invitation: values.enable_invitation,
+          enable_register: values.enable_register,
+          enable_launch_wizard: values.enable_launch_wizard,
+          enable_system_dashboard: values.enable_system_dashboard,
+        });
+        if (sys['security.token_check_interval'] !== undefined) {
+          settings.security = {
+            token_check_interval: sys['security.token_check_interval'],
+            inactivity_timeout: sys['security.inactivity_timeout'],
+            user_cache_time: sys['security.user_cache_time'],
+          };
+        }
+        if (sys['ui.max_tabs'] !== undefined) {
+          settings.ui = {
+            max_tabs: sys['ui.max_tabs'],
+            default_page_size: sys['ui.default_page_size'],
+            table_loading_delay: sys['ui.table_loading_delay'],
+          };
+        }
+        if (sys['theme_config.colorPrimary'] !== undefined) {
+          settings.theme_config = { colorPrimary: sys['theme_config.colorPrimary'] };
+        }
+        if (sys['network.timeout'] !== undefined) {
+          settings.network = { timeout: sys['network.timeout'] };
+        }
+        if (sys['system.max_retries'] !== undefined) {
+          settings.system = { max_retries: sys['system.max_retries'] };
+        }
+        shouldRefreshConfigs = true;
+        shouldRefreshTheme = true;
+      } else if (saveTab === 'integrations') {
+        const values = await form.validateFields([...SITE_SETTINGS_INTEGRATIONS_TAB_FIELDS]);
+        const deepseekApiKey = String(values['integrations.deepseek.api_key'] ?? '').trim();
+        const deepseekPayload: Record<string, any> = {
+          enabled: values['integrations.deepseek.enabled'] === true,
+          model:
+            String(values['integrations.deepseek.model'] ?? DEEPSEEK_DEFAULT_MODEL).trim() ||
+            DEEPSEEK_DEFAULT_MODEL,
+          base_url:
+            String(values['integrations.deepseek.base_url'] ?? DEEPSEEK_DEFAULT_BASE_URL).trim() ||
+            DEEPSEEK_DEFAULT_BASE_URL,
+          tools_enabled: values['integrations.deepseek.tools_enabled'] !== false,
+          rag_enabled: values['integrations.deepseek.rag_enabled'] !== false,
+          rag_use_embedding: values['integrations.deepseek.rag_use_embedding'] !== false,
+          rag_top_k: Number(values['integrations.deepseek.rag_top_k']) || 5,
+          custom_system_prompt: String(values['integrations.deepseek.custom_system_prompt'] ?? '').trim(),
+        };
+        if (deepseekApiKey && deepseekApiKey !== INTEGRATION_API_KEY_MASK) {
+          deepseekPayload.api_key = deepseekApiKey;
+        }
+        settings.integrations = { deepseek: deepseekPayload };
+        shouldRefreshConfigs = true;
+      } else {
         return;
-      }
-      const allValues = { ...systemSettingsRef.current, ...mergedValues };
-
-      const settings: Record<string, any> = {
-        site_name: mergedValues.site_name,
-        site_logo: mergedValues.site_logo,
-        organization_name: mergedValues.organization_name,
-        organization_address: mergedValues.organization_address,
-        contact_info: mergedValues.contact_info,
-        default_currency: mergedValues.default_currency,
-        date_format: mergedValues.date_format,
-        default_language: mergedValues.default_language,
-        timezone: mergedValues.timezone,
-        enable_invitation: mergedValues.enable_invitation,
-        enable_register: mergedValues.enable_register,
-        enable_launch_wizard: mergedValues.enable_launch_wizard,
-        enable_system_dashboard: mergedValues.enable_system_dashboard,
-        tenant_domain: mergedValues.tenant_domain,
-        platform_name: mergedValues.platform_name,
-        platform_name_en: mergedValues.platform_name_en,
-        login_logo: mergedValues.login_logo,
-        login_title: mergedValues.login_title,
-        login_title_en: mergedValues.login_title_en,
-        login_content: mergedValues.login_content,
-        login_content_en: mergedValues.login_content_en,
-        login_decoration_image: mergedValues.login_decoration_image,
-        login_background_image: mergedValues.login_background_image,
-        login_decoration_enabled: mergedValues.login_decoration_enabled,
-        login_background_enabled: mergedValues.login_background_enabled,
-        icp_license: mergedValues.icp_license,
-        icp_license_en: mergedValues.icp_license_en,
-        login_theme_color: mergedValues.login_theme_color,
-        login_guest_enabled: mergedValues.login_guest_enabled,
-        login_client_win_enabled: mergedValues.login_client_win_enabled,
-        login_client_android_enabled: mergedValues.login_client_android_enabled,
-        description: mergedValues.description,
-      };
-
-      // 系统设置
-      const sys = allValues;
-      if (sys['security.token_check_interval'] !== undefined) {
-        settings.security = {
-          ...(settings.security || {}),
-          token_check_interval: sys['security.token_check_interval'],
-          inactivity_timeout: sys['security.inactivity_timeout'],
-          user_cache_time: sys['security.user_cache_time'],
-        };
-      }
-      if (sys['ui.max_tabs'] !== undefined) {
-        settings.ui = {
-          ...(settings.ui || {}),
-          max_tabs: sys['ui.max_tabs'],
-          default_page_size: sys['ui.default_page_size'],
-          table_loading_delay: sys['ui.table_loading_delay'],
-        };
-      }
-      if (sys['theme_config.colorPrimary'] !== undefined) {
-        settings.theme_config = { ...(settings.theme_config || {}), colorPrimary: sys['theme_config.colorPrimary'] };
-      }
-      if (sys['network.timeout'] !== undefined) {
-        settings.network = { ...(settings.network || {}), timeout: sys['network.timeout'] };
-      }
-      if (sys['system.max_retries'] !== undefined) {
-        settings.system = { ...(settings.system || {}), max_retries: sys['system.max_retries'] };
       }
 
       await updateSiteSetting({ settings });
-      if (values.default_language) {
-        cacheTenantDefaultLanguage(values.default_language);
-      }
       messageApi.success(t('pages.system.siteSettings.saveSuccess'));
 
-      if (settings.security || settings.ui || settings.theme_config || settings.network || settings.system) {
+      if (shouldRefreshTheme) {
         useThemeStore.getState().initFromApi();
         systemSettingsRef.current = {
           ...systemSettingsRef.current,
@@ -1031,11 +1165,12 @@ const SiteSettingsPage: React.FC = () => {
         };
       }
 
-      // 刷新 configStore 使日期格式、站点名称、LOGO 等配置立即生效（BasicLayout 等从 configStore 读取）
-      await fetchConfigs(true);
-      // 重新加载设置
+      if (shouldRefreshConfigs) {
+        await fetchConfigs(true);
+      }
       await loadSiteSetting();
     } catch (error: any) {
+      if (error?.errorFields) return;
       messageApi.error(error?.message || t('pages.system.siteSettings.saveFailed'));
     } finally {
       setSaving(false);
@@ -1429,6 +1564,143 @@ const SiteSettingsPage: React.FC = () => {
     </>
   );
 
+  const integrationsSettingsContent = (
+    <Row gutter={[0, 16]}>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.integrationsDeepseekTitle')} size="small">
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            {t('pages.system.siteSettings.integrationsDeepseekHint')}
+          </Typography.Paragraph>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.enabled"
+                label={t('pages.system.siteSettings.integrationsDeepseekEnabled')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.model"
+                label={t('pages.system.siteSettings.integrationsDeepseekModel')}
+                tooltip={t('pages.system.siteSettings.integrationsDeepseekModelTooltip')}
+              >
+                <Select
+                  options={DEEPSEEK_V4_MODEL_OPTIONS.map(value => ({
+                    value,
+                    label: t(`pages.system.siteSettings.integrationsDeepseekModel_${value}`),
+                  }))}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.base_url"
+                label={t('pages.system.siteSettings.integrationsDeepseekBaseUrl')}
+              >
+                <Input placeholder={t('pages.system.siteSettings.integrationsDeepseekBaseUrlPlaceholder')} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.api_key"
+                label={t('pages.system.siteSettings.integrationsDeepseekApiKey')}
+                extra={
+                  deepseekApiKeyConfigured
+                    ? t('pages.system.siteSettings.integrationsDeepseekApiKeyConfigured')
+                    : undefined
+                }
+              >
+                <Input.Password
+                  placeholder={
+                    deepseekApiKeyConfigured
+                      ? t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholderConfigured')
+                      : t('pages.system.siteSettings.integrationsDeepseekApiKeyPlaceholder')
+                  }
+                  autoComplete="new-password"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+      </Col>
+      <Col span={24}>
+        <Card title={t('pages.system.siteSettings.integrationsDeepseekAiTitle')} size="small">
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+            {t('pages.system.siteSettings.integrationsDeepseekAiHint')}
+          </Typography.Paragraph>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.tools_enabled"
+                label={t('pages.system.siteSettings.integrationsDeepseekToolsEnabled')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.rag_enabled"
+                label={t('pages.system.siteSettings.integrationsDeepseekRagEnabled')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.rag_use_embedding"
+                label={t('pages.system.siteSettings.integrationsDeepseekRagEmbedding')}
+                valuePropName="checked"
+              >
+                <Switch />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} md={8}>
+              <Form.Item
+                name="integrations.deepseek.rag_top_k"
+                label={t('pages.system.siteSettings.integrationsDeepseekRagTopK')}
+              >
+                <InputNumber min={1} max={20} style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col span={24}>
+              <Form.Item
+                name="integrations.deepseek.custom_system_prompt"
+                label={t('pages.system.siteSettings.integrationsDeepseekCustomPrompt')}
+              >
+                <Input.TextArea
+                  rows={5}
+                  placeholder={t('pages.system.siteSettings.integrationsDeepseekCustomPromptPlaceholder')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Card>
+      </Col>
+    </Row>
+  );
+
+  const integrationsSettingsWithActions = (
+    <>
+      {integrationsSettingsContent}
+      {actionButtons}
+    </>
+  );
+
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
@@ -1759,6 +2031,7 @@ const SiteSettingsPage: React.FC = () => {
             ? [{ key: 'login-page', label: (<Space><GlobalOutlined /><span>{t('pages.system.siteSettings.tabLoginPage')}</span></Space>), children: loginPageSettingsWithActions }]
             : []),
           { key: 'system', label: (<Space><SettingOutlined /><span>{t('pages.system.siteSettings.tabSystem')}</span></Space>), children: systemSettingsWithActions },
+          { key: 'integrations', label: (<Space><LinkOutlined /><span>{t('pages.system.siteSettings.tabIntegrations')}</span></Space>), children: integrationsSettingsWithActions },
           ...(showBranchOrganizationsTab
             ? [{ key: 'branch-organizations', label: (<Space><ApartmentOutlined /><span>{t('pages.system.siteSettings.tabBranchOrganizations')}</span></Space>), children: branchOrganizationsTabContent }]
             : []),

@@ -11,6 +11,7 @@ from typing import Optional, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException as FastAPIHTTPException, status, Query
 
 from apps.kuaiai.services.suggestion_service import SuggestionService
+from core.api.deps.access import require_permission_codes
 from core.api.deps.deps import get_current_tenant
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
@@ -45,7 +46,10 @@ def HTTPException(*, status_code: int, detail: Any, **kwargs) -> FastAPIHTTPExce
     return _http_exception_with_trace(status_code, message)
 
 
-@router.get("/{scene}")
+@router.get(
+    "/{scene}",
+    dependencies=[Depends(require_permission_codes("kuaiai:suggestion:read"))],
+)
 async def get_suggestions(
     scene: str,
     context: Optional[str] = Query(None, description="上下文信息（JSON字符串，可选）"),
@@ -80,7 +84,10 @@ async def get_suggestions(
         )
 
 
-@router.get("/work-order/{work_order_id}")
+@router.get(
+    "/work-order/{work_order_id}",
+    dependencies=[Depends(require_permission_codes("kuaiai:suggestion:read"))],
+)
 async def get_work_order_suggestions(
     work_order_id: int,
     current_user: User = Depends(soil_get_current_user),
@@ -106,7 +113,10 @@ async def get_work_order_suggestions(
         )
 
 
-@router.get("/reporting/{reporting_id}")
+@router.get(
+    "/reporting/{reporting_id}",
+    dependencies=[Depends(require_permission_codes("kuaiai:suggestion:read"))],
+)
 async def get_reporting_suggestions(
     reporting_id: int,
     current_user: User = Depends(soil_get_current_user),
@@ -132,7 +142,10 @@ async def get_reporting_suggestions(
         )
 
 
-@router.get("/inventory/all")
+@router.get(
+    "/inventory/all",
+    dependencies=[Depends(require_permission_codes("kuaiai:suggestion:read"))],
+)
 async def get_inventory_suggestions(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),
@@ -154,7 +167,10 @@ async def get_inventory_suggestions(
         )
 
 
-@router.get("/production/all")
+@router.get(
+    "/production/all",
+    dependencies=[Depends(require_permission_codes("kuaiai:suggestion:read"))],
+)
 async def get_production_suggestions(
     current_user: User = Depends(soil_get_current_user),
     tenant_id: int = Depends(get_current_tenant),

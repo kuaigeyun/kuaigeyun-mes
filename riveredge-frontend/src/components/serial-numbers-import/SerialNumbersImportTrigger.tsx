@@ -47,9 +47,18 @@ const SerialNumbersImportTrigger: React.FC<SerialNumbersImportTriggerProps> = ({
     },
   ];
 
+  const openImport = () => {
+    if (!disabled) setImportOpen(true);
+  };
+
   return (
     <>
-      <Space size={2} direction="vertical" style={{ lineHeight: 1.2 }}>
+      <Space
+        size={4}
+        align="center"
+        wrap={false}
+        style={{ flexWrap: 'nowrap', whiteSpace: 'nowrap' }}
+      >
         <Dropdown menu={{ items: menuItems }} disabled={disabled} trigger={['click']}>
           <Button type="link" size={size} disabled={disabled} style={{ padding: 0, height: 'auto' }}>
             序列号 <DownOutlined style={{ fontSize: 10 }} />
@@ -58,9 +67,9 @@ const SerialNumbersImportTrigger: React.FC<SerialNumbersImportTriggerProps> = ({
         <Typography.Text
           type={count > 0 ? 'success' : 'secondary'}
           style={{ fontSize: 12, cursor: count > 0 ? 'pointer' : 'default' }}
-          onClick={() => !disabled && setImportOpen(true)}
+          onClick={openImport}
         >
-          {count > 0 ? `已 ${count} 个` : '未录入'}
+          {count > 0 ? `已${count}个` : '未录入'}
         </Typography.Text>
       </Space>
 

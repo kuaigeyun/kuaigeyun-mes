@@ -132,7 +132,8 @@ export const HeaderClientDownloadButton: React.FC = () => {
     [downloads],
   );
 
-  if (!tenantId || (!isLoading && !isFetching && visibleDownloads.length === 0)) {
+  // 默认不展示，避免首屏闪现；仅在拉取完成且存在可下载客户端时显示
+  if (!tenantId || isLoading || isFetching || visibleDownloads.length === 0) {
     return null;
   }
 

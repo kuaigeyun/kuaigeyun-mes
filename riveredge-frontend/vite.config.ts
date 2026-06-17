@@ -366,6 +366,7 @@ export default defineConfig({
       'react-dom',
       'react-router-dom',
       'antd',
+      'antd/es/border-beam',
       '@ant-design/icons',
       '@ant-design/pro-components',
       '@tanstack/react-query',

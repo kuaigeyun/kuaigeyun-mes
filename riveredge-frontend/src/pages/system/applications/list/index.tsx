@@ -99,7 +99,6 @@ const OTHER_PLACEHOLDER_CODES = [
   'kuaiip',
   'kuaiems',
   'kuaiiot',
-  'kuaiai',
 ];
 const INDUSTRY_VALUE_PACK_CODES = [
   'kuaimachinery',
@@ -133,7 +132,6 @@ const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
   kuaiip: 106,
   kuaiems: 107,
   kuaiiot: 108,
-  kuaiai: 109,
   // 行业增值包：从 200 开始
   kuaimachinery: 200,
   kuaimolding: 201,
@@ -157,7 +155,7 @@ const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
   kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
   kuaiiot: '工业物联网设备数采集成平台，敬请期待',
-  kuaiai: '嵌入业务场景的 AI 智能辅助引擎，敬请期待',
+  kuaiai: '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
 };
 
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';

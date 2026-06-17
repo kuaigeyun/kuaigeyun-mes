@@ -103,6 +103,10 @@ import { triggerNew, hasNewHandler } from '../utils/globalNewShortcut';
 import { triggerSubmit, hasSubmitHandler } from '../utils/globalSubmitShortcut';
 import { CODE_FONT_FAMILY } from '../constants/fonts';
 import { clearSessionScopedQueries } from '../utils/clearSessionQueries';
+import { getInstalledApplicationList } from '../services/application';
+import { getChatIntegrationStatus } from '../apps/kuaiai/services/chat';
+import { buildChatIntegrationStatusQueryKey } from '../hooks/useChatIntegrationStatus';
+import { hasPermission, resolveUserForMenuPermission } from '../utils/permission';
 import { getSiteLogoPreview, isSiteLogoUuidKnownMissing } from '../services/file';
 import Lottie from 'lottie-react';
 import assistAnimation from '../../static/lottie/assist.json';
@@ -496,7 +500,7 @@ const getMenuIcon = (menuName: string, menuPath?: string): React.ReactNode => {
       '/apps/kuaireport': ManufacturingIcons.fileBarChart, // 快报表 - 报表/图表图标（与仪表盘、大屏中心区分）
       '/apps/kuaireport/reports': ManufacturingIcons.fileBarChart, // 报表中心
       '/apps/kuaireport/dashboards': ManufacturingIcons.layoutDashboard, // 大屏中心
-      '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 智能建议
+      '/apps/kuaiai': ManufacturingIcons.sparkles, // KU-AI - 顶栏 AI 助手（无侧栏菜单）
       '/apps/haoligo/workspace': ManufacturingIcons.layoutDashboard, // 好力 GO 工作台（仪表板分组下）
       '/apps/haoligo/equipment': ManufacturingIcons.wrench, // 好力 GO 设备管理
       '/apps/haoligo/molds': ManufacturingIcons.package, // 好力 GO 模具管理
@@ -1436,20 +1440,35 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
     return <IconifyIcon icon="fluent-color:apps-24" />;
   }, []);
 
+  const { data: installedApps } = useQuery({
+    queryKey: ['installedApplications', { is_active: true }],
+    queryFn: () => getInstalledApplicationList({ is_active: true }),
+    staleTime: 60_000,
+  });
+
   const hasAiAssistantEntry = useMemo(() => {
-    const stack: MenuDataItem[] = [...filteredMenuData];
-    while (stack.length > 0) {
-      const current = stack.pop();
-      if (!current) continue;
-      if (typeof current.path === 'string' && current.path.startsWith('/apps/kuaiai')) {
-        return true;
-      }
-      if (Array.isArray(current.children) && current.children.length > 0) {
-        stack.push(...(current.children as MenuDataItem[]));
-      }
-    }
-    return false;
-  }, [filteredMenuData]);
+    const kuaiaiApp = (installedApps ?? []).find((app) => app.code === 'kuaiai');
+    if (!kuaiaiApp) return false;
+    if (kuaiaiApp.is_pro && kuaiaiApp.can_access === false) return false;
+    const user = resolveUserForMenuPermission(currentUser);
+    if (!user) return false;
+    if (user.is_tenant_admin || user.is_infra_admin) return true;
+    return hasPermission(user, 'kuaiai:entry:read');
+  }, [installedApps, currentUser]);
+
+  const aiAssistantMountedRef = useRef(false);
+  if (hasAiAssistantEntry) {
+    aiAssistantMountedRef.current = true;
+  }
+
+  useEffect(() => {
+    if (!hasAiAssistantEntry || currentUser?.tenant_id == null) return;
+    void queryClient.prefetchQuery({
+      queryKey: buildChatIntegrationStatusQueryKey(currentUser.tenant_id),
+      queryFn: getChatIntegrationStatus,
+      staleTime: 5 * 60 * 1000,
+    });
+  }, [hasAiAssistantEntry, currentUser?.tenant_id, queryClient]);
 
   useEffect(() => {
     unmountSystemSettingsPanel();
@@ -3926,6 +3945,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           }
         }
         /* 顶栏右侧操作按钮样式优化 - 遵循 Ant Design 规范 */
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-layout-header-actions,
+        .ant-pro-layout .ant-layout-header .ant-pro-layout-header-actions,
+        .ant-pro-layout .ant-pro-layout-header .ant-pro-global-header,
+        .ant-pro-layout .ant-layout-header .ant-pro-global-header {
+          flex-shrink: 0 !important;
+          min-width: max-content !important;
+        }
         .ant-pro-layout .ant-pro-layout-header .ant-space,
         .ant-pro-layout .ant-layout-header .ant-space {
           gap: 8px !important;
@@ -3973,13 +3999,16 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)'} !important;
           font-size: 16px !important;
         }
-        /* Badge 内按钮样式 - 根据显示模式统一 */
+        /* Badge 内按钮样式 - 与顶栏 .ant-btn 保持相同 flex 居中（antd 6.4+ 下缺此项会偏上） */
         .ant-pro-layout .ant-pro-layout-header .ant-badge .ant-btn,
         .ant-pro-layout .ant-layout-header .ant-badge .ant-btn {
           width: 32px !important;
           height: 32px !important;
           flex-shrink: 0 !important; // ⚠️ 防止挤压变形
           padding: 0 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
           border-radius: 50% !important;
           background-color: ${isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)'} !important;
           transition: none !important;
@@ -4272,6 +4301,33 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }
         .header-actions-dropdown .ant-dropdown-arrow {
           display: none !important;
+        }
+        /* 顶栏消息未读角标：挂在 Button 伪元素上，DOM 与语言/主题按钮一致（Tooltip → Button） */
+        .ant-pro-layout .ant-pro-layout-header .riveredge-header-notification-btn--has-count,
+        .ant-pro-layout .ant-layout-header .riveredge-header-notification-btn--has-count {
+          position: relative !important;
+          overflow: visible !important;
+        }
+        .ant-pro-layout .ant-pro-layout-header .riveredge-header-notification-btn--has-count::after,
+        .ant-pro-layout .ant-layout-header .riveredge-header-notification-btn--has-count::after {
+          content: attr(data-unread-count);
+          position: absolute;
+          top: 0;
+          inset-inline-end: 0;
+          transform: translate(50%, -50%);
+          min-width: 16px;
+          height: 16px;
+          padding: 0 4px;
+          border-radius: 8px;
+          background: var(--ant-color-error);
+          color: var(--ant-color-text-light-solid, #fff);
+          font-size: 12px;
+          line-height: 16px;
+          text-align: center;
+          font-weight: 500;
+          box-shadow: 0 0 0 1px var(--ant-color-bg-container);
+          pointer-events: none;
+          z-index: 1;
         }
         .ant-pro-global-header{
           margin-inline: 0 !important;
@@ -4990,7 +5046,8 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
           if (!isMobileOrTablet && hasAiAssistantEntry) {
           // AI 助手入口：仅 Lottie 图标 48x48，无文字、无背景、无动效
           actions.push(
-            <span key="aiAssistant" className="ai-assistant-lottie-btn-wrapper">
+            <Tooltip key="aiAssistant" title={t('ui.aiAssistant.tooltip')}>
+            <span className="ai-assistant-lottie-btn-wrapper">
               <span
                 role="button"
                 tabIndex={0}
@@ -5013,6 +5070,7 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 />
               </span>
             </span>
+            </Tooltip>
           );
           }
 
@@ -5186,18 +5244,26 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
                 );
               }}
             >
-              <Badge count={unreadCount} size="small" offset={[-8, 8]}>
-                <Tooltip title={t('ui.message.notification')} open={messageDropdownOpen ? false : undefined}>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<BellOutlined />}
-                    onClick={() => {
-                      setMessageDropdownOpen(!messageDropdownOpen);
-                    }}
-                  />
-                </Tooltip>
-              </Badge>
+              <Tooltip title={t('ui.message.notification')} open={messageDropdownOpen ? false : undefined}>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<BellOutlined />}
+                  className={
+                    unreadCount > 0
+                      ? 'riveredge-header-notification-bell riveredge-header-notification-btn--has-count'
+                      : 'riveredge-header-notification-bell'
+                  }
+                  {...(unreadCount > 0
+                    ? {
+                        'data-unread-count': unreadCount > 99 ? '99+' : String(unreadCount),
+                      }
+                    : {})}
+                  onClick={() => {
+                    setMessageDropdownOpen(!messageDropdownOpen);
+                  }}
+                />
+              </Tooltip>
             </Dropdown>
           );
           
@@ -5781,11 +5847,13 @@ export default function BasicLayout({ children }: { children: React.ReactNode })
         }}
       />
 
-      {/* AI 助手 */}
-      <AiAssistant
-        open={aiAssistantOpen}
-        onClose={() => setAiAssistantOpen(false)}
-      />
+      {/* AI 助手：挂载后保持实例，避免路由切换重复检测 DeepSeek 状态 */}
+      {aiAssistantMountedRef.current && (
+        <AiAssistant
+          open={aiAssistantOpen}
+          onClose={() => setAiAssistantOpen(false)}
+        />
+      )}
 
       {/* 新手引导 */}
       {/* <OnboardingGuide /> */}

@@ -814,6 +814,19 @@ class TenantService:
             import traceback
             logger.error(traceback.format_exc())
 
+        # 1.1 KU-AI 出厂默认 FAQ（幂等，新组织自动写入）
+        try:
+            from apps.kuaiai.services.faq_seed_service import FaqSeedService
+
+            faq_count = await FaqSeedService.seed_default_faqs(
+                tenant_id,
+                user_id=current_user_id,
+            )
+            if faq_count:
+                logger.info(f"组织 {tenant_id} KU-AI 默认 FAQ 已写入 {faq_count} 条")
+        except Exception as e:
+            logger.warning(f"组织 {tenant_id} KU-AI 默认 FAQ 写入跳过: {e}")
+
         # 2. 执行可选初始化或行业预设
         if industry_preset:
             try:

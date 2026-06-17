@@ -1,6 +1,15 @@
 /** 入库明细 — 库位/批号/序列号行字段与物料属性同步 */
 
 import { materialApi } from '../../../../master-data/services/material';
+import type { Material, MaterialListResponse } from '../../../../master-data/types/material';
+
+function firstMaterialFromListResponse(
+  res: MaterialListResponse | Material[] | null | undefined,
+): Material | null {
+  if (!res) return null;
+  if (Array.isArray(res)) return res[0] ?? null;
+  return res.items?.[0] ?? null;
+}
 
 export const INBOUND_ITEM_TRACKING_FIELDS = {
   material_uuid: undefined as string | undefined,
@@ -76,7 +85,7 @@ export async function enrichInboundFormItemsTracking(
     codes.map(async (code) => {
       try {
         const list = await materialApi.list({ code, limit: 1 });
-        const m = Array.isArray(list) && list[0] ? list[0] : null;
+        const m = firstMaterialFromListResponse(list);
         const fromPicker = readMaterialTrackingFromPicker(m as Record<string, unknown> | undefined);
         if (!fromPicker) return;
         if (m?.uuid) {
@@ -130,17 +139,26 @@ export type ConfirmPreviewMaterialMeta = {
 
 /** 确认预览：按明细行加载物料批号/序列号管理属性 */
 export async function loadConfirmPreviewMaterialMeta(
-  items: { id?: number; material_code?: string; serial_numbers?: string[] | null }[],
+  items: { id?: number; material_code?: string; material_id?: number; serial_numbers?: string[] | null }[],
+  materialById?: Map<string, Material>,
 ): Promise<Record<number, ConfirmPreviewMaterialMeta>> {
   const out: Record<number, ConfirmPreviewMaterialMeta> = {};
-  const rows = items.filter((it) => it?.id != null && String(it.material_code || '').trim());
+  const rows = items.filter((it) => it?.id != null);
   await Promise.all(
     rows.map(async (it) => {
       const id = Number(it.id);
-      const code = String(it.material_code || '').trim();
       try {
-        const list = await materialApi.list({ code, limit: 1 });
-        const m = Array.isArray(list) && list[0] ? list[0] : null;
+        let m: Material | null = null;
+        const materialId = it.material_id;
+        if (materialId != null && materialById?.has(String(materialId))) {
+          m = materialById.get(String(materialId)) ?? null;
+        }
+        if (!m) {
+          const code = String(it.material_code || '').trim();
+          if (!code) return;
+          const res = await materialApi.list({ code, limit: 1 });
+          m = firstMaterialFromListResponse(res);
+        }
         const uuid = String(m?.uuid ?? '').trim();
         if (!uuid) return;
         let batchManaged = !!(m?.batchManaged ?? (m as any)?.batch_managed);
@@ -153,7 +171,7 @@ export async function loadConfirmPreviewMaterialMeta(
           serialManaged = !!full.serialManaged;
           defaultSerialRuleId = full.defaultSerialRuleId ?? null;
         } catch {
-          /* 使用列表字段 */
+          /* 使用列表/预取字段 */
         }
         out[id] = {
           batchManaged,

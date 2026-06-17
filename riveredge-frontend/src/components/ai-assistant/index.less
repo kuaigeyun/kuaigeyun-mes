@@ -3,54 +3,116 @@
   position: fixed !important;
   top: auto !important;
   left: auto !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  width: 0 !important;
-  height: 0 !important;
-  overflow: visible !important;
-}
-
-/* 确保 Modal 本身紧贴右下方并保留 16px 边距 */
-.ai-qa-modal-bottom-right .ai-qa-panel {
-  position: absolute !important;
-  top: auto !important;
-  left: auto !important;
   right: 14px !important;
   bottom: 14px !important;
   margin: 0 !important;
   padding: 0 !important;
-  width: 480px;
+  width: auto !important;
+  height: auto !important;
+  overflow: visible !important;
+  z-index: 1100;
+  pointer-events: none;
+  contain: layout style;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-panel {
+  pointer-events: auto;
+}
+
+.ai-qa-modal-bottom-right.ai-qa-modal-hidden {
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.ai-qa-modal-bottom-right.ai-qa-modal-hidden .ai-qa-panel {
+  pointer-events: none !important;
+}
+
+.ai-qa-modal-bottom-right.ai-qa-modal-hidden,
+.ai-qa-modal-bottom-right.ai-qa-modal-hidden * {
+  animation: none !important;
+}
+
+/* 面板定位：由外层 shell 负责贴边，面板自身不再 absolute */
+.ai-qa-modal-bottom-right .ai-qa-panel {
+  position: relative !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 560px;
   max-width: calc(100vw - 28px);
+  overflow: visible !important;
+}
+
+/* 光晕层：独立于内容滚动区，避免 overflow:hidden 裁切 */
+.ai-qa-modal-bottom-right .ai-qa-panel-glow {
+  position: relative;
+  overflow: visible;
+  border-radius: 16px;
+}
+
+/* 外层轻微光晕，与页面背景拉开层次 */
+.ai-qa-modal-bottom-right .ai-qa-panel-glow::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 30px;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(
+    ellipse 88% 72% at 50% 58%,
+    color-mix(in srgb, var(--ant-colorPrimary) 22%, transparent) 0%,
+    color-mix(in srgb, var(--ant-colorPrimary) 8%, transparent) 42%,
+    transparent 74%
+  );
+  filter: blur(12px);
+  opacity: 0.9;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-panel-glow::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 18px;
+  pointer-events: none;
+  z-index: 0;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ant-colorPrimary) 14%, var(--river-divider-color, #e8e8e8)),
+    0 0 32px color-mix(in srgb, var(--ant-colorPrimary) 22%, transparent),
+    0 18px 44px rgba(15, 23, 42, 0.12);
 }
 
 /* 面板内容内边距 */
 .ai-qa-modal-bottom-right .ai-qa-panel-container,
 .ai-qa-modal-bottom-right .ai-qa-panel-content {
-  padding: 40px 8px 8px 8px !important;
+  padding: 0 !important;
 }
 
 .ai-qa-modal-bottom-right .ai-qa-panel-container {
-  transform-origin: bottom right !important; /* 强制缩放动画起点为右下角 */
+  transform-origin: bottom right !important;
+  position: relative;
+  z-index: 1;
   border-radius: 16px;
-  border: 1px solid var(--river-divider-color);
+  border: 1px solid color-mix(in srgb, var(--ant-colorPrimary) 10%, var(--river-divider-color, #e8e8e8));
   box-shadow:
-    0 12px 48px rgba(0, 0, 0, 0.12),
-    0 4px 16px rgba(0, 0, 0, 0.04);
+    0 10px 36px rgba(15, 23, 42, 0.12),
+    0 2px 10px rgba(15, 23, 42, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
   background-color: var(--ant-colorBgElevated);
   display: flex;
   flex-direction: column;
-  min-height: 480px;
-  max-height: calc(100vh - 120px);
+  min-height: 600px;
+  height: min(720px, calc(100vh - 80px));
+  max-height: calc(100vh - 80px);
   overflow: hidden;
-}
-
-.ai-qa-modal-bottom-right .ai-qa-panel-container {
-  padding: 16px !important;
 }
 /* 同样强制 Ant Design 动画外壳的变换中心 */
 .ai-qa-modal-bottom-right .ai-qa-panel,
+.ai-qa-modal-bottom-right .ai-qa-panel-glow,
 .ai-qa-modal-bottom-right .ai-qa-panel-content {
   transform-origin: bottom right !important;
 }
@@ -62,139 +124,499 @@
 
 /* 黑夜模式背光补偿与主体提亮，解决 lottie 过黑问题 */
 [data-theme='dark'] .ai-qa-modal-bottom-right .ai-qa-lottie-enhance {
-  filter: 
-    brightness(2) 
+  filter:
+    brightness(2)
     contrast(1.2)
-    drop-shadow(0 0 6px rgba(255, 255, 255, 0.5)) 
+    drop-shadow(0 0 6px rgba(255, 255, 255, 0.5))
     drop-shadow(0 0 16px rgba(255, 255, 255, 0.25));
+}
+
+[data-theme='dark'] .ai-qa-modal-bottom-right .ai-qa-panel-glow::before {
+  background: radial-gradient(
+    ellipse 88% 72% at 50% 58%,
+    color-mix(in srgb, var(--ant-colorPrimary) 30%, transparent) 0%,
+    color-mix(in srgb, var(--ant-colorPrimary) 12%, transparent) 42%,
+    transparent 74%
+  );
+  opacity: 0.75;
+}
+
+[data-theme='dark'] .ai-qa-modal-bottom-right .ai-qa-panel-glow::after {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--ant-colorPrimary) 22%, rgba(255, 255, 255, 0.12)),
+    0 0 36px color-mix(in srgb, var(--ant-colorPrimary) 28%, transparent),
+    0 18px 48px rgba(0, 0, 0, 0.42);
+}
+
+[data-theme='dark'] .ai-qa-modal-bottom-right .ai-qa-panel-container {
+  border-color: color-mix(in srgb, var(--ant-colorPrimary) 18%, rgba(255, 255, 255, 0.1));
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-panel,
+.ai-qa-modal-bottom-right .ai-qa-panel-glow {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: visible;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-panel-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-layout {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* 对话区滚动容器 */
+.ai-qa-modal-bottom-right .ai-qa-chat-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-chat-scroll .ant-bubble-list {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-chat-scroll .ant-bubble-list-scroll-box {
+  flex: 1;
+  min-height: 0;
+  max-height: none !important;
+  overflow-y: auto !important;
 }
 
 .ai-qa-modal-bottom-right .ai-qa-panel-body {
   padding: 0;
   flex: 1;
   min-height: 0;
-  max-height: min(600px, calc(100vh - 120px));
+  max-height: none;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* 完美复刻的贴边关闭按钮 */
-.ai-qa-modal-bottom-right .ai-qa-fancy-close {
-  position: absolute;
-  top: -1px; /* 向上偏移 1px 遮盖边框 */
-  right: -1px; /* 向右偏移 1px 遮盖右侧泄露内容 */
-  width: 40px;
-  height: 32px;
-  border-top-right-radius: 17px; /* 弥补外层 1px 边框的半径偏差 */
-  border-bottom-left-radius: 16px;
-  background-color: color-mix(in srgb, var(--ant-colorPrimary) 50%, transparent); /* 动态跟随主题色 50% 透明 */
-  backdrop-filter: blur(4px); /* 让 50% 变毛玻璃更有质感 */
+/* 顶栏：品牌 + 操作 */
+.ai-qa-modal-bottom-right .ai-qa-panel-header {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 100;
-  color: #fff;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--ant-colorBorderSecondary);
 }
 
-.ai-qa-modal-bottom-right .ai-qa-fancy-close:hover {
-  background-color: var(--ant-colorPrimary);
-  color: #fff;
+.ai-qa-modal-bottom-right .ai-qa-panel-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
-/* 欢迎区大图标和 CTA 文案 */
-.ai-qa-modal-bottom-right .ai-qa-welcome-cta {
-  margin-top: 16px;
-  font-size: 14px;
+.ai-qa-modal-bottom-right .ai-qa-panel-header-title {
+  display: block;
+  margin: 0;
+  padding: 0;
+  font-size: 18px;
+  font-weight: 600;
+  font-style: italic;
+  line-height: 1;
+  color: var(--ant-colorText);
+  white-space: nowrap;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-panel-header-beta {
+  display: block;
+  margin: 0;
+  padding: 3px 10px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--ant-colorPrimary);
-  padding: 6px 16px;
-  border-radius: 16px;
-  background-color: var(--ant-colorPrimaryBg);
-  display: inline-block;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
+  line-height: 18px;
+  border-radius: 6px;
+  border: 1px solid;
+  box-sizing: border-box;
 }
 
-/* 推荐问题区域：卡片化，悬浮动效 */
+.ai-qa-modal-bottom-right .ai-qa-header-icon-btn {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--ant-colorTextSecondary);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-header-icon-btn:hover {
+  color: var(--ant-colorText);
+  background: var(--ant-colorFillTertiary);
+}
+
+/* 主内容区 */
+.ai-qa-modal-bottom-right .ai-qa-panel-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* 欢迎屏 */
+.ai-qa-modal-bottom-right .ai-qa-welcome-screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 24px 24px 12px;
+  overflow-y: auto;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-welcome-copy {
+  text-align: center;
+  width: 100%;
+  max-width: 380px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-welcome-hero {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 12px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-welcome-hi {
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--ant-colorText);
+  margin-bottom: 8px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-welcome-title {
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ant-colorText);
+  margin-bottom: 10px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-welcome-desc {
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--ant-colorTextSecondary);
+}
+
+/* 推荐问题：纵向列表（Prompts 默认横向滚动且隐藏滚动条，须 vertical + 覆盖 overflow） */
 .ai-qa-modal-bottom-right .ai-qa-prompts-wrap {
   width: 100%;
-  padding: 0 20px;
-  margin-bottom: 20px;
+  max-width: 380px;
+  margin-top: 20px;
+  flex-shrink: 0;
 }
 
-/* 覆盖 Ant Design X Default Prompts Item */
-.ai-qa-modal-bottom-right .ant-prompts-item {
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap .ant-prompts {
+  width: 100%;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap .ant-prompts-list {
+  flex-direction: column;
+  align-items: stretch;
+  overflow: visible;
+  width: 100%;
+  gap: 8px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap .ant-prompts-item {
+  width: 100%;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-prompt-hash {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--ant-colorFillTertiary);
+  color: var(--ant-colorTextSecondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-bubble-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-bubble-action {
+  cursor: pointer;
+  color: var(--ant-colorTextSecondary);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-bubble-action:hover {
+  color: var(--ant-colorPrimary);
+}
+
+/* 底部输入区：铺满内容区宽度 */
+.ai-qa-modal-bottom-right .ai-qa-composer {
+  flex-shrink: 0;
+  padding: 0 16px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-composer .ai-qa-sender-wrap {
+  width: 100%;
+  max-width: none;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-disclaimer {
+  margin: 8px 0 0;
+  width: 100%;
+  max-width: none;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ant-colorTextQuaternary);
+}
+
+/* 覆盖 Ant Design X Prompts Item */
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap .ant-prompts-item {
   white-space: normal !important;
   word-break: break-word !important;
   text-align: left !important;
-  border-radius: 8px !important;
-  padding: 8px 12px !important;
-  border: 1px solid var(--ant-colorBorder, #d9d9d9) !important;
-  background-color: var(--ant-colorBgLayout, #fafafa) !important;
-  transition: all 0.2s ease !important;
+  border-radius: 10px !important;
+  padding: 10px 14px !important;
+  border: 1px solid var(--ant-colorBorderSecondary) !important;
+  background-color: var(--ant-colorFillAlter) !important;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease !important;
   cursor: pointer !important;
-  margin-top: 2px !important; /* 给 hover 向上浮留出空间，防止边框被截断 */
-  margin-bottom: 8px !important;
-  margin-right: 8px !important; /* 水平流式排列时的间距 */
+  margin: 0 !important;
+  width: 100%;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
 }
 
-.ai-qa-modal-bottom-right .ant-prompts-item:hover {
-  transform: translateY(-2px) !important;
-  border-color: var(--ant-colorPrimary, #1677ff) !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-  color: var(--ant-colorPrimary, #1677ff) !important;
+.ai-qa-modal-bottom-right .ai-qa-prompts-wrap .ant-prompts-item:hover {
+  border-color: var(--ant-colorPrimaryBorder) !important;
+  background-color: var(--ant-colorPrimaryBg) !important;
+  color: var(--ant-colorPrimary) !important;
 }
 
-/* 聊天气泡区域重写：定制用户与机器人的气泡颜色 */
+/* 聊天气泡：左 AI（start）/ 右用户（end） */
 .ai-qa-modal-bottom-right .ant-bubble-list {
-  padding: 20px;
+  padding: 16px;
 }
 
-/* AI 气泡颜色 */
-.ai-qa-modal-bottom-right .ant-bubble[data-role='ai'] .ant-bubble-content {
-  background-color: var(--ant-colorFillQuaternary);
+.ai-qa-modal-bottom-right .ant-bubble-start .ant-bubble-content {
+  background-color: var(--ant-colorFillTertiary);
+  color: var(--ant-colorText);
   border-radius: 14px;
   border-bottom-left-radius: 4px;
   padding: 10px 16px;
 }
 
-/* 用户气泡颜色 */
-.ai-qa-modal-bottom-right .ant-bubble[data-role='user'] .ant-bubble-content {
+.ai-qa-modal-bottom-right .ant-bubble-end .ant-bubble-content {
   background-color: var(--ant-colorPrimary);
   color: #fff;
   border-radius: 14px;
   border-bottom-right-radius: 4px;
   padding: 10px 16px;
 }
-.ai-qa-modal-bottom-right .ant-bubble[data-role='user'] .ant-bubble-content .ant-typography {
+
+.ai-qa-modal-bottom-right .ant-bubble-end .ant-bubble-content .ant-typography {
   color: #fff !important;
 }
 
-/* 输入区：加上一点顶部阴影隔离，输入框加高和圆角 */
+/* AI 回复 Markdown */
+.ai-qa-modal-bottom-right .ai-qa-markdown {
+  font-size: 14px;
+  line-height: 1.65;
+  word-break: break-word;
+  color: inherit;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown > :first-child {
+  margin-top: 0;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown p {
+  margin: 0 0 8px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown ul,
+.ai-qa-modal-bottom-right .ai-qa-markdown ol {
+  margin: 0 0 8px;
+  padding-left: 1.35em;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown li {
+  margin: 4px 0;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown li > p {
+  margin: 0;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown strong {
+  font-weight: 600;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown code {
+  font-family: var(--ant-font-family-code, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  font-size: 0.92em;
+  padding: 0.12em 0.38em;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--ant-colorText) 8%, transparent);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown pre {
+  margin: 8px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--ant-colorText) 6%, transparent);
+  overflow-x: auto;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown a {
+  color: var(--ant-colorPrimary);
+  text-decoration: none;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown a:hover {
+  text-decoration: underline;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown blockquote {
+  margin: 8px 0;
+  padding-left: 12px;
+  border-left: 3px solid var(--ant-colorBorder);
+  color: var(--ant-colorTextSecondary);
+}
+
+.ai-qa-modal-bottom-right .ai-qa-markdown hr {
+  margin: 12px 0;
+  border: none;
+  border-top: 1px solid var(--ant-colorBorderSecondary);
+}
+
+/* 输入区 */
 .ai-qa-modal-bottom-right .ai-qa-sender-wrap {
   flex-shrink: 0;
-  padding: 16px 20px 20px 20px;
-  background-color: var(--ant-colorBgElevated);
-  box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.02);
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
   z-index: 10;
 }
 
 .ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender {
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--ant-colorBorder);
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.02);
-  transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   background-color: var(--ant-colorBgContainer);
+  overflow: hidden;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender-content {
+  padding: 12px 14px 6px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender-input {
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 72px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender-footer {
+  display: block;
+  padding: 6px 10px 10px !important;
+  border-top: none;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-toolbar--end {
+  justify-content: flex-end;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 60%;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: var(--ant-colorFillAlter);
+  border: 1px solid var(--ant-colorBorderSecondary);
+  color: var(--ant-colorTextSecondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-model-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-qa-modal-bottom-right .ai-qa-sender-model-caret {
+  font-size: 10px;
+  opacity: 0.65;
+  flex-shrink: 0;
 }
 
 .ai-qa-modal-bottom-right .ai-qa-sender-wrap .ant-sender:focus-within {
   border-color: var(--ant-colorPrimary);
   box-shadow:
     0 0 0 2px var(--ant-colorPrimaryBg),
-    0 4px 12px rgba(0, 0, 0, 0.04);
+    0 4px 12px rgba(0, 0, 0, 0.06);
 }
 
 /* 滚动条美化 */

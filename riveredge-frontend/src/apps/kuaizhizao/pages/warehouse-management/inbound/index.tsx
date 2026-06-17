@@ -180,8 +180,8 @@ async function prefetchPurchasePreviewBatchNumbers(
   await Promise.all(
     codes.map(async (code) => {
       try {
-        const list = await materialApi.list({ code, limit: 1 });
-        const m = Array.isArray(list) && list[0] ? list[0] : null;
+        const res = await materialApi.list({ code, limit: 1 });
+        const m = res.items?.[0] ?? null;
         if (!m?.uuid) return;
         const batchManaged = !!(m.batchManaged ?? (m as any).batch_managed);
         const defaultBatchRuleId =
@@ -226,6 +226,45 @@ async function prefetchPurchasePreviewBatchNumbers(
         /* 生成失败则保留空，由用户手工填写 */
       }
     })
+  );
+
+  return out;
+}
+
+/** 对「已启用序列号管理且当前无序列号」的明细，按主数据默认序列号规则自动生成 */
+async function prefetchPurchasePreviewSerialNumbers(
+  items: any[] | undefined,
+  initialSerial: Record<number, string[]>,
+  materialMeta: Record<number, ConfirmPreviewMaterialMeta>,
+  qtyMap: Record<number, number>,
+): Promise<Record<number, string[]>> {
+  const out: Record<number, string[]> = { ...initialSerial };
+  const rowsNeed = (items || []).filter((it) => {
+    if (it?.id == null) return false;
+    const id = Number(it.id);
+    if ((out[id]?.length ?? 0) > 0) return false;
+    const meta = materialMeta[id];
+    if (!meta?.serialManaged || !meta.materialUuid) return false;
+    return Number(qtyMap[id] ?? 0) > 0;
+  });
+  if (rowsNeed.length === 0) return out;
+
+  await Promise.all(
+    rowsNeed.map(async (it) => {
+      const id = Number(it.id);
+      const meta = materialMeta[id];
+      if (!meta?.materialUuid) return;
+      const count = Math.max(1, Math.floor(Number(qtyMap[id] ?? 0)));
+      if (count > 100) return;
+      try {
+        const res = await materialSerialApi.generate(meta.materialUuid, count, {
+          ruleId: meta.defaultSerialRuleId ?? undefined,
+        });
+        if (res?.serial_nos?.length) out[id] = res.serial_nos;
+      } catch {
+        /* 生成失败则保留空，由用户手动录入 */
+      }
+    }),
   );
 
   return out;
@@ -750,10 +789,16 @@ const InboundPage: React.FC = () => {
       setPurchaseConfirmPreviewQty(qty);
       const [batchPrefilled, materialMeta] = await Promise.all([
         prefetchPurchasePreviewBatchNumbers(detailData.items, batch),
-        loadConfirmPreviewMaterialMeta(detailData.items || []),
+        loadConfirmPreviewMaterialMeta(detailData.items || [], materialById),
       ]);
+      const serialPrefilled = await prefetchPurchasePreviewSerialNumbers(
+        detailData.items,
+        serial,
+        materialMeta,
+        qty,
+      );
       setPurchaseConfirmPreviewBatch(batchPrefilled);
-      setPurchaseConfirmPreviewSerial(serial);
+      setPurchaseConfirmPreviewSerial(serialPrefilled);
       setPurchaseConfirmMaterialMeta(materialMeta);
       const uniqueWh = [...new Set(Object.values(lineWh))];
       await Promise.all(
@@ -825,6 +870,16 @@ const InboundPage: React.FC = () => {
           const unqualified = Number(it.unqualified_quantity ?? 0);
           const batchStr = (purchaseConfirmPreviewBatch[rowId] ?? it.batch_number ?? '').trim();
           const serialList = purchaseConfirmPreviewSerial[rowId];
+          const lineMeta = purchaseConfirmMaterialMeta[rowId];
+          if (lineMeta?.serialManaged) {
+            const expected = Math.floor(qty);
+            const actual = serialList?.length ?? 0;
+            if (actual !== expected) {
+              throw new Error(
+                `物料 ${it.material_code || it.material_name || '-'} 需要 ${expected} 个序列号（当前 ${actual} 个）`,
+              );
+            }
+          }
           const whOpt = purchaseConfirmWarehouseOptions.find((o) => o.value === lineWh);
           const locId = purchaseConfirmLineLoc[rowId];
           const locCode = purchaseConfirmLineLocCode[rowId];
@@ -1740,41 +1795,37 @@ const InboundPage: React.FC = () => {
                   );
                 },
               },
-              ...(purchaseConfirmPreviewDetail?.receipt_type === 'purchase'
-                ? [
-                    {
-                      title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
-                      dataIndex: 'serial_numbers',
-                      width: 150,
-                      render: (_: unknown, row: InboundOrderItem) => {
-                        if (row.id == null) return '-';
-                        const rid = Number(row.id);
-                        const meta = purchaseConfirmMaterialMeta[rid];
-                        if (!meta?.serialManaged) return '—';
-                        const qty = Number(
-                          purchaseConfirmPreviewQty[rid] ?? row.receipt_quantity ?? row.return_quantity ?? 0,
-                        );
-                        const serials = purchaseConfirmPreviewSerial[rid] ?? [];
-                        return (
-                          <SerialNumbersImportTrigger
-                            serials={serials}
-                            expectedCount={qty > 0 ? qty : undefined}
-                            materialLabel={row.material_code || row.material_name}
-                            generateLoading={purchaseConfirmGeneratingSerialId === rid}
-                            onSerialsChange={(next) =>
-                              setPurchaseConfirmPreviewSerial((prev) => ({ ...prev, [rid]: next }))
-                            }
-                            onGenerate={
-                              qty > 0 && !purchaseConfirmPreviewLoading
-                                ? () => handleConfirmPreviewGenerateSerial(rid, qty)
-                                : undefined
-                            }
-                          />
-                        );
-                      },
-                    },
-                  ]
-                : []),
+              {
+                title: t('app.kuaizhizao.warehouseInbound.col.serialNo'),
+                dataIndex: 'serial_numbers',
+                width: 150,
+                render: (_: unknown, row: InboundOrderItem) => {
+                  if (row.id == null) return '-';
+                  const rid = Number(row.id);
+                  const meta = purchaseConfirmMaterialMeta[rid];
+                  if (!meta?.serialManaged) return '—';
+                  const qty = Number(
+                    purchaseConfirmPreviewQty[rid] ?? row.receipt_quantity ?? row.return_quantity ?? 0,
+                  );
+                  const serials = purchaseConfirmPreviewSerial[rid] ?? [];
+                  return (
+                    <SerialNumbersImportTrigger
+                      serials={serials}
+                      expectedCount={qty > 0 ? qty : undefined}
+                      materialLabel={row.material_code || row.material_name}
+                      generateLoading={purchaseConfirmGeneratingSerialId === rid}
+                      onSerialsChange={(next) =>
+                        setPurchaseConfirmPreviewSerial((prev) => ({ ...prev, [rid]: next }))
+                      }
+                      onGenerate={
+                        qty > 0 && !purchaseConfirmPreviewLoading
+                          ? () => handleConfirmPreviewGenerateSerial(rid, qty)
+                          : undefined
+                      }
+                    />
+                  );
+                },
+              },
             ]}
           />
           {purchaseConfirmPreviewDetail?.receipt_type === 'production_return' ? (

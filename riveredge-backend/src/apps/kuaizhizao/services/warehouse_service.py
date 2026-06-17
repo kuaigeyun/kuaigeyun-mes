@@ -14,6 +14,7 @@ import json
 import time
 import uuid
 from pathlib import Path
+from types import SimpleNamespace
 from tortoise.transactions import in_transaction
 from tortoise.expressions import Q
 from loguru import logger
@@ -6610,6 +6611,9 @@ class OtherInboundService(AppBaseService[OtherInbound]):
             if inbound.status != "待入库":
                 raise BusinessLogicError("只有待入库状态的其他入库单才能确认入库")
 
+            # OtherInboundItem 无 serial_numbers 字段，确认流程内用 dict 暂存行级序列号
+            serial_nos_by_item_id: Dict[int, List[str]] = {}
+
             # 1. 更新确认数据
             if confirmation_data:
                 update_dict = {}
@@ -6638,7 +6642,11 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                             item_update["batch_number"] = item_data.batch_number
                         if item_data.expiry_date:
                             item_update["expiry_date"] = item_data.expiry_date
-                        
+                        if item_data.serial_numbers:
+                            parsed_serials = _parse_serial_numbers(item_data.serial_numbers)
+                            if parsed_serials:
+                                serial_nos_by_item_id[int(item_data.item_id)] = parsed_serials
+
                         if item_update:
                             await OtherInboundItem.filter(
                                 tenant_id=tenant_id, id=item_data.item_id, inbound_id=inbound_id
@@ -6663,10 +6671,17 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         await item.save()
                 if material.serial_managed:
                     count = int(item.inbound_quantity or 0)
-                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, item, count)
-                    if serial_nos and hasattr(item, "serial_numbers"):
-                        setattr(item, "serial_numbers", json.dumps(serial_nos))
-                        await item.save()
+                    if count <= 0:
+                        continue
+                    preset_serials = serial_nos_by_item_id.get(int(item.id))
+                    serial_source = (
+                        SimpleNamespace(serial_numbers=preset_serials)
+                        if preset_serials
+                        else item
+                    )
+                    serial_nos = await ensure_serial_nos_for_item(tenant_id, material, serial_source, count)
+                    if serial_nos:
+                        serial_nos_by_item_id[int(item.id)] = serial_nos
 
             receiver_name = await self.get_user_name(confirmed_by)
             receipt_time = (confirmation_data.receipt_time if confirmation_data and confirmation_data.receipt_time else None) or datetime.now()
@@ -6699,6 +6714,7 @@ class OtherInboundService(AppBaseService[OtherInbound]):
                         quantity=qty,
                         warehouse_id=wh_id,
                         batch_no=item.batch_number or None,
+                        serial_nos=serial_nos_by_item_id.get(int(item.id)) or None,
                         source_type="other_inbound",
                         source_doc_id=inbound_id,
                         source_doc_code=inbound.inbound_code,

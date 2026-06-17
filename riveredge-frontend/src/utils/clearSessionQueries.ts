@@ -11,6 +11,7 @@ const SESSION_MENU_QUERY_KEYS: readonly (readonly string[])[] = [
   ['dashboard-menu-tree'],
   ['businessConfig'],
   ['tenantBackendHome'],
+  ['chatIntegrationStatus'],
 ];
 
 export function clearSessionScopedQueries(queryClient: QueryClient): void {

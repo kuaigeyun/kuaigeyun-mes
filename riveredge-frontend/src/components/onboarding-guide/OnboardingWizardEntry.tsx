@@ -32,6 +32,9 @@ export function OnboardingWizardEntry({
   const isWelcome = variant === 'welcome';
   const showLabel = !compact;
 
+  const headerBtnBg = isLightModeLightBg ? 'rgba(0, 0, 0, 0.10)' : 'rgba(255, 255, 255, 0.1)';
+  const headerBtnBgHover = isLightModeLightBg ? 'rgba(0, 0, 0, 0.16)' : 'rgba(255, 255, 255, 0.15)';
+
   const handleClick = () => navigate('/system/onboarding-wizard');
 
   const content = (
@@ -50,7 +53,7 @@ export function OnboardingWizardEntry({
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: '16px',
-              background: isLightModeLightBg ? token.colorFillTertiary : 'rgba(255, 255, 255, 0.1)',
+              background: headerBtnBg,
               transition: 'all 0.2s ease',
             }
       }
@@ -58,9 +61,7 @@ export function OnboardingWizardEntry({
         isWelcome
           ? () => setHovered(true)
           : (e) => {
-              e.currentTarget.style.background = isLightModeLightBg
-                ? token.colorFillSecondary
-                : 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.background = headerBtnBgHover;
               setHovered(true);
             }
       }
@@ -68,9 +69,7 @@ export function OnboardingWizardEntry({
         isWelcome
           ? () => setHovered(false)
           : (e) => {
-              e.currentTarget.style.background = isLightModeLightBg
-                ? token.colorFillTertiary
-                : 'rgba(255, 255, 255, 0.1)';
+              e.currentTarget.style.background = headerBtnBg;
               setHovered(false);
             }
       }

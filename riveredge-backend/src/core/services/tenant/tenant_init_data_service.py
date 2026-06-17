@@ -58,6 +58,11 @@ class TenantInitDataService:
             "description": "已改为在「工序管理」中按行业加载；勾选此项不会自动写入数据，请到工序页选择行业与工序预设。",
         },
         {"key": "variant_attribute_preset", "name": "属性定义预设", "description": "颜色、规格、材质、等级、表面处理等"},
+        {
+            "key": "kuaiai_faq_preset",
+            "name": "KU-AI 默认 FAQ",
+            "description": "生产工单、报工、委外、库存等 15 条出厂操作问答",
+        },
     ]
 
     # 行业预设模板（一键建账）
@@ -71,6 +76,7 @@ class TenantInitDataService:
                 "role_preset",
                 "warehouse_preset",
                 "operation_preset",
+                "kuaiai_faq_preset",
             ]
         },
         "electronics_assembly": {
@@ -83,6 +89,7 @@ class TenantInitDataService:
                 "warehouse_preset",
                 "operation_preset",
                 "variant_attribute_preset",
+                "kuaiai_faq_preset",
             ]
         }
     }
@@ -340,6 +347,14 @@ class TenantInitDataService:
         if key == "menu_sync":
             from core.services.system.menu_service import MenuService
             return await MenuService.sync_all_menus_from_applications(tenant_id)
+
+        if key == "kuaiai_faq_preset":
+            from apps.kuaiai.services.faq_seed_service import FaqSeedService
+
+            return await FaqSeedService.seed_default_faqs(
+                tenant_id,
+                user_id=current_user_id,
+            )
 
         raise ValueError(f"未知的初始化项: {key}")
 

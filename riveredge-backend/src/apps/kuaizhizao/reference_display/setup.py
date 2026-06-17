@@ -9,6 +9,7 @@ from apps.kuaizhizao.models.incoming_inspection import IncomingInspection
 from apps.kuaizhizao.models.mold import Mold
 from apps.kuaizhizao.models.other_inbound import OtherInbound
 from apps.kuaizhizao.models.other_outbound import OtherOutbound
+from apps.kuaizhizao.models.oqc_inspection import OQCInspection
 from apps.kuaizhizao.models.outsource_order import OutsourceOrder
 from apps.kuaizhizao.models.outsource_work_order import OutsourceWorkOrder
 from apps.kuaizhizao.models.process_inspection import ProcessInspection
@@ -19,6 +20,7 @@ from apps.kuaizhizao.models.purchase_order import PurchaseOrder
 from apps.kuaizhizao.models.purchase_receipt import PurchaseReceipt
 from apps.kuaizhizao.models.purchase_return import PurchaseReturn
 from apps.kuaizhizao.models.rework_order import ReworkOrder
+from apps.kuaizhizao.models.rolling_schedule_plan import RollingSchedulePlan
 from apps.kuaizhizao.models.sales_delivery import SalesDelivery
 from apps.kuaizhizao.models.sales_order import SalesOrder
 from apps.kuaizhizao.models.sales_return import SalesReturn
@@ -174,6 +176,21 @@ _EXTRA_PROVIDERS = [
         code_field="inspection_code",
         name_field="work_order_code",
         order_by="inspection_code",
+    ),
+    make_tenant_model_display_provider(
+        resource_key="kuaizhizao:quality-management-oqc-inspection",
+        model=OQCInspection,
+        code_field="inspection_code",
+        name_field="material_name",
+        order_by="inspection_code",
+    ),
+    make_tenant_model_display_provider(
+        resource_key="kuaizhizao:plan-management-rolling-scheduling",
+        model=RollingSchedulePlan,
+        code_field="plan_code",
+        name_field="notes",
+        order_by="plan_date",
+        scope_resource="kuaizhizao:plan-management-rolling-scheduling",
     ),
     make_tenant_model_display_provider(
         resource_key="kuaizhizao:performance-holidays",

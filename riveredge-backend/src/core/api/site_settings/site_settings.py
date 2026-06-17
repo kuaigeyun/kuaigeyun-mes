@@ -6,11 +6,19 @@
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from typing import Optional, Any
+from typing import Any, Dict, List, Optional
 
 from core.schemas.site_setting import SiteSettingUpdate, SiteSettingResponse
 from core.services.system.site_setting_service import SiteSettingService
+from core.utils.integration_settings import (
+    build_deepseek_public_status,
+    mask_integrations_for_response,
+    merge_integrations_update,
+)
+from core.api.deps.access import AuthContext, get_auth_context, require_permission_codes
 from core.api.deps.deps import get_current_tenant, get_current_user
+from infra.api.deps.deps import get_current_user as soil_get_current_user
+from infra.exceptions.exceptions import ValidationError
 from infra.models.user import User
 from infra.models.tenant import Tenant
 from infra.schemas.tenant import (
@@ -23,6 +31,23 @@ from infra.services.tenant_service import TenantService, schedule_initialize_ten
 from infra.services.package_service import PackageService
 
 router = APIRouter(prefix="/site-settings", tags=["Core · Site Settings"])
+
+
+class DeepSeekIntegrationStatusResponse(BaseModel):
+    configured: bool
+    enabled: bool
+    model: str
+
+
+class DeepSeekChatCompletionRequest(BaseModel):
+    messages: List[Dict[str, Any]] = Field(..., min_length=1)
+    model: Optional[str] = None
+    stream: bool = False
+    temperature: Optional[float] = Field(default=0.7, ge=0, le=2)
+
+
+def _deepseek_validation_http_exception(exc: ValidationError) -> HTTPException:
+    return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
 
 class SubtenantCapabilityResponse(BaseModel):
@@ -115,6 +140,51 @@ async def _rollback_created_tenant(tenant_id: int) -> None:
     await TenantModel.filter(id=tenant_id).delete()
 
 
+@router.get(
+    "/integrations/deepseek/status",
+    response_model=DeepSeekIntegrationStatusResponse,
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def get_deepseek_integration_status(
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """查询当前租户 DeepSeek 集成是否可用于 KU-AI 对话（核心路由，不依赖 KU-AI 应用挂载）。"""
+    site_settings = await SiteSettingService.get_settings(tenant_id)
+    return build_deepseek_public_status(site_settings.settings or {})
+
+
+@router.post(
+    "/integrations/deepseek/completions",
+    dependencies=[Depends(require_permission_codes("kuaiai:entry:read"))],
+)
+async def create_deepseek_chat_completion(
+    body: DeepSeekChatCompletionRequest,
+    auth: AuthContext = Depends(get_auth_context),
+    current_user: User = Depends(soil_get_current_user),
+    tenant_id: int = Depends(get_current_tenant),
+):
+    """代理 DeepSeek Chat Completions（核心路由，不依赖 KU-AI 应用挂载）。"""
+    from apps.kuaiai.services.deepseek_service import DeepSeekService
+    from loguru import logger
+
+    try:
+        return await DeepSeekService.create_chat_completion(
+            tenant_id,
+            body.messages,
+            model=body.model,
+            temperature=body.temperature,
+            stream=body.stream,
+            user=current_user,
+            is_infra_admin=auth.is_infra_admin,
+            is_tenant_admin=auth.is_tenant_admin,
+        )
+    except ValidationError as exc:
+        raise _deepseek_validation_http_exception(exc) from exc
+    except Exception as exc:
+        logger.error("KU-AI 对话失败 tenant_id={} error={}", tenant_id, exc)
+        raise _deepseek_validation_http_exception(ValidationError("对话请求失败，请稍后重试")) from exc
+
+
 @router.get("", response_model=SiteSettingResponse)
 async def get_settings(
     tenant_id: int = Depends(get_current_tenant),
@@ -136,6 +206,7 @@ async def get_settings(
     tenant = await Tenant.get_or_none(id=tenant_id)
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
+    merged_settings = mask_integrations_for_response(merged_settings)
     return SiteSettingResponse(
         uuid=site_settings.uuid,
         tenant_id=site_settings.tenant_id,
@@ -196,6 +267,14 @@ async def update_settings(
             current_tenant.domain = normalized_domain
             await current_tenant.save(update_fields=["domain", "updated_at"])
 
+    if "integrations" in settings_payload:
+        current_site_settings = await SiteSettingService.get_settings(tenant_id)
+        current_settings = dict(current_site_settings.settings or {})
+        settings_payload["integrations"] = merge_integrations_update(
+            current_settings.get("integrations"),
+            settings_payload.get("integrations"),
+        )
+
     settings = await SiteSettingService.update_settings(
         tenant_id,
         SiteSettingUpdate(settings=settings_payload),
@@ -204,6 +283,7 @@ async def update_settings(
     tenant = await Tenant.get_or_none(id=tenant_id)
     if tenant:
         merged_settings["tenant_domain"] = tenant.domain
+    merged_settings = mask_integrations_for_response(merged_settings)
     return SiteSettingResponse(
         uuid=settings.uuid,
         tenant_id=settings.tenant_id,

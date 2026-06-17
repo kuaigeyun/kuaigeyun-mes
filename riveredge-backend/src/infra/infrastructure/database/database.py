@@ -381,6 +381,8 @@ TORTOISE_ORM = {
                 "apps.haoligo.models.mold_outsource_maintenance_complete_sheet",
                 "apps.haoligo.models.mold_outsource_maintenance_sheet",
                 "apps.haoligo.models.patrol",
+                # KU-AI
+                "apps.kuaiai.models.knowledge",
             ],
             "default_connection": "default",
         },
