@@ -16,7 +16,6 @@ import {
   getAuditBindings,
   updateAuditBinding,
   type AuditBindingItem,
-  type AuditProcessOption,
 } from '../../../services/auditBinding';
 
 const { useToken } = theme;
@@ -35,10 +34,10 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
   const { message: messageApi } = App.useApp();
   const queryClient = useQueryClient();
 
-  const { data, isLoading, isFetching } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: AUDIT_BINDINGS_QUERY_KEY,
     queryFn: getAuditBindings,
-    staleTime: 30_000,
+    staleTime: 60_000,
   });
 
   const updateMutation = useMutation({
@@ -49,17 +48,58 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
       nodeKey: string;
       payload: { is_enabled?: boolean; process_uuid?: string | null };
     }) => updateAuditBinding(nodeKey, payload),
+    onMutate: async ({ nodeKey, payload }) => {
+      await queryClient.cancelQueries({ queryKey: AUDIT_BINDINGS_QUERY_KEY });
+      const previous = queryClient.getQueryData(AUDIT_BINDINGS_QUERY_KEY);
+      if (payload.is_enabled !== undefined) {
+        queryClient.setQueryData(AUDIT_BINDINGS_QUERY_KEY, (current: typeof data) => {
+          if (!current) return current;
+          return {
+            ...current,
+            items: current.items.map((item) =>
+              item.node_key === nodeKey ? { ...item, is_enabled: payload.is_enabled! } : item,
+            ),
+          };
+        });
+      }
+      return { previous };
+    },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: AUDIT_BINDINGS_QUERY_KEY });
       await queryClient.invalidateQueries({ queryKey: ['businessConfigAuditRequiredMap'] });
       messageApi.success(t('pages.system.configCenter.auditSwitch.updateSuccess'));
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _variables, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(AUDIT_BINDINGS_QUERY_KEY, context.previous);
+      }
       messageApi.error(error?.message || t('pages.system.configCenter.auditSwitch.updateFailed'));
     },
   });
 
   const processOptions = data?.process_options ?? [];
+
+  const buildSelectOptionsForItem = (item: AuditBindingItem) => {
+    const byCode = processOptions.filter((p) => p.code === item.node_key);
+    const opts = byCode.map((p) => ({
+      value: p.uuid,
+      label: `${p.name} (${p.code})`,
+    }));
+    if (
+      item.process_uuid &&
+      item.process_name &&
+      item.process_code &&
+      !opts.some((o) => o.value === item.process_uuid)
+    ) {
+      opts.unshift({
+        value: item.process_uuid,
+        label: `${item.process_name} (${item.process_code})`,
+      });
+    }
+    return opts;
+  };
+
+  const pendingNodeKey = updateMutation.isPending ? updateMutation.variables?.nodeKey : null;
 
   const categoryItems = useMemo(() => {
     const all = data?.items ?? [];
@@ -92,11 +132,6 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
 
   const currentCat =
     AUDIT_CATEGORIES.find((c) => c.id === selectedCatId) || AUDIT_CATEGORIES[0];
-
-  const selectOptions = processOptions.map((p: AuditProcessOption) => ({
-    value: p.uuid,
-    label: `${p.name} (${p.code})`,
-  }));
 
   const sectionCardStyle = {
     background: token.colorBgContainer,
@@ -155,7 +190,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
             styles={{ body: { background: token.colorBgContainer } }}
           >
             <Text strong>{t('pages.system.configCenter.auditSwitch.sectionTitle')}</Text>
-            <Spin spinning={isLoading || isFetching}>
+            <Spin spinning={isLoading}>
               <div
                 style={{
                   display: 'grid',
@@ -187,7 +222,7 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                       </div>
                       <Switch
                         checked={item.is_enabled}
-                        loading={updateMutation.isPending}
+                        loading={pendingNodeKey === item.node_key}
                         onChange={(v) => handleToggle(item, v)}
                       />
                     </div>
@@ -202,9 +237,10 @@ const AuditSettingsPanel: React.FC<AuditSettingsPanelProps> = ({ selectedCatId, 
                         placeholder={t('pages.system.configCenter.auditBinding.processPlaceholder')}
                         style={{ width: '100%' }}
                         optionFilterProp="label"
-                        value={item.process_uuid ?? undefined}
-                        loading={updateMutation.isPending}
-                        options={selectOptions}
+                        value={item.is_enabled ? (item.process_uuid ?? undefined) : undefined}
+                        loading={pendingNodeKey === item.node_key}
+                        disabled={!item.is_enabled}
+                        options={buildSelectOptionsForItem(item)}
                         onChange={(v) => handleProcessChange(item, v ?? null)}
                       />
                     </div>

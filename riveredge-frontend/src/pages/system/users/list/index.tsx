@@ -6,7 +6,7 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ActionType, ProColumns, ProDescriptionsItemProps } from '@ant-design/pro-components';
 import { App, Button, Descriptions, List, Modal, Popconfirm, Space, Tag, Typography, theme } from 'antd';
@@ -48,6 +48,7 @@ const UserListPage: React.FC = () => {
   const actionRef = useRef<ActionType>(null);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [positionOptions, setPositionOptions] = useState<Array<{ label: string; value: string }>>([]);
   const [roleOptions, setRoleOptions] = useState<Array<{ label: string; value: string }>>([]);
@@ -60,6 +61,10 @@ const UserListPage: React.FC = () => {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [detailData, setDetailData] = useState<User | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+
+  const handleOpenRoleEdit = useCallback((roleUuid: string) => {
+    navigate(`/system/roles?uuid=${encodeURIComponent(roleUuid)}&action=edit`);
+  }, [navigate]);
 
   /**
    * 处理查看详情
@@ -193,7 +198,6 @@ const UserListPage: React.FC = () => {
       setSearchParams({}, { replace: true });
     }
   }, [searchParams, setSearchParams, handleView]);
-
 
   /**
    * 处理删除用户
@@ -493,7 +497,17 @@ const UserListPage: React.FC = () => {
       render: (_, record) => (
         <Space size={4} wrap>
           {record.roles?.map(role => (
-            <Tag key={role.uuid} color="blue">{resolvePresetRoleName(role, t)}</Tag>
+            <Tag
+              key={role.uuid}
+              color="blue"
+              style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenRoleEdit(role.uuid);
+              }}
+            >
+              {resolvePresetRoleName(role, t)}
+            </Tag>
           ))}
         </Space>
       ),
@@ -608,7 +622,7 @@ const UserListPage: React.FC = () => {
             </Button>,
           ],
     },
-  ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete]);
+  ], [t, departmentOptions, positionOptions, handleView, handleEdit, handleResetPassword, handleDelete, handleOpenRoleEdit]);
 
   /**
    * 详情列定义
@@ -637,7 +651,14 @@ const UserListPage: React.FC = () => {
       render: (_: unknown, record: User) => (
         <Space>
           {record?.roles?.map(role => (
-            <Tag key={role.uuid}>{resolvePresetRoleName(role, t)}</Tag>
+            <Tag
+              key={role.uuid}
+              color="blue"
+              style={{ cursor: 'pointer' }}
+              onClick={() => handleOpenRoleEdit(role.uuid)}
+            >
+              {resolvePresetRoleName(role, t)}
+            </Tag>
           ))}
         </Space>
       ),
@@ -663,7 +684,7 @@ const UserListPage: React.FC = () => {
     { title: t('field.user.lastLogin'), dataIndex: 'last_login', valueType: 'dateTime' },
     { title: t('field.user.createdAt'), dataIndex: 'created_at', valueType: 'dateTime' },
     { title: t('field.user.updatedAt'), dataIndex: 'updated_at', valueType: 'dateTime' },
-  ], [t]);
+  ], [t, handleOpenRoleEdit]);
 
   return (
     <>

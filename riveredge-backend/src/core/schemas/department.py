@@ -81,6 +81,7 @@ class DepartmentInfo(BaseModel):
     description: Optional[str] = Field(None, description="部门描述")
     parent_uuid: Optional[str] = Field(None, description="父部门UUID（用于树形结构）")
     manager_uuid: Optional[str] = Field(None, description="部门负责人UUID（用于显示）")
+    manager_name: Optional[str] = Field(None, description="部门负责人姓名（用于显示）")
     sort_order: int = Field(..., description="排序顺序")
     is_active: bool = Field(..., description="是否启用")
     children_count: int = Field(..., description="子部门数量")

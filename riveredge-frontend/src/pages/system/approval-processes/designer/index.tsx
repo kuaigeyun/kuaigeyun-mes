@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { ProForm, ProFormText } from '@ant-design/pro-components';
 import { App, Button, Form, Space, theme, Typography } from 'antd';
 import { 
-  SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, 
+  SaveOutlined, CloseOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined,
 } from '@ant-design/icons';
 import { useNodesState, useEdgesState } from '@ant-design/pro-flow';
 import type { Node, Edge } from '@ant-design/pro-flow';
@@ -324,6 +324,10 @@ const ApprovalProcessDesignerPage: React.FC = () => {
     }
   };
 
+  const handleOrganizeNodes = useCallback(() => {
+    setNodes((nds) => applyVerticalLayout(nds as Node[], edges) as any);
+  }, [edges, setNodes]);
+
   const nodeTypes = useMemo(() => ({
     start: (p: any) => <UniFlowNode {...p} type="start" selected={p.selected} />,
     end: (p: any) => <UniFlowNode {...p} type="end" selected={p.selected} />,
@@ -340,7 +344,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </span>
         <Button 
           type="primary" 
-          size="small" 
           icon={<PlusOutlined />} 
           disabled={!selectedNode || selectedNode.id === 'end'}
           onClick={() => selectedNode && addNextNodeFromNode(selectedNode.id, 'approval')}
@@ -349,7 +352,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </Button>
         <Button 
           type="primary" 
-          size="small" 
           icon={<PlusOutlined />} 
           disabled={!selectedNode || selectedNode.id === 'end'}
           onClick={() => selectedNode && addNextNodeFromNode(selectedNode.id, 'cc')}
@@ -358,7 +360,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </Button>
         <Button 
           type="primary" 
-          size="small" 
           icon={<PlusOutlined />} 
           disabled={!selectedNode || selectedNode.id === 'end'}
           onClick={() => selectedNode && addNextNodeFromNode(selectedNode.id, 'condition')}
@@ -367,7 +368,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </Button>
         <Button 
           type="primary" 
-          size="small" 
           ghost 
           disabled={!selectedNode || selectedNode.type !== 'condition'}
           onClick={() => addBranchFromConditionNode('approval')}
@@ -376,7 +376,6 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         </Button>
         <Button 
           danger 
-          size="small" 
           icon={<DeleteOutlined />} 
           disabled={!selectedNode || selectedNode.id === 'start' || selectedNode.id === 'end'}
           onClick={() => { 
@@ -391,12 +390,19 @@ const ApprovalProcessDesignerPage: React.FC = () => {
         >
           {t('common.delete')}
         </Button>
+        <Button
+          icon={<ReloadOutlined />}
+          disabled={nodes.length === 0}
+          onClick={handleOrganizeNodes}
+        >
+          {t('pages.approval.designer.organizeNodes')}
+        </Button>
         {selectedEdge && (
           <Space>
-            <Button size="small" onClick={() => addNodeOnEdge('approval')}>{t('pages.approval.designer.addApproval')}</Button>
-            <Button size="small" onClick={() => addNodeOnEdge('cc')}>{t('pages.approval.designer.addCC')}</Button>
-            <Button size="small" onClick={() => addNodeOnEdge('condition')}>{t('pages.approval.designer.addCondition')}</Button>
-            <Button danger size="small" icon={<DeleteOutlined />} onClick={() => { setEdges(edges.filter(e => e.id !== selectedEdge.id)); setSelectedEdge(null); }}>{t('pages.approval.designer.deleteEdge')}</Button>
+            <Button onClick={() => addNodeOnEdge('approval')}>{t('pages.approval.designer.addApproval')}</Button>
+            <Button onClick={() => addNodeOnEdge('cc')}>{t('pages.approval.designer.addCC')}</Button>
+            <Button onClick={() => addNodeOnEdge('condition')}>{t('pages.approval.designer.addCondition')}</Button>
+            <Button danger icon={<DeleteOutlined />} onClick={() => { setEdges(edges.filter(e => e.id !== selectedEdge.id)); setSelectedEdge(null); }}>{t('pages.approval.designer.deleteEdge')}</Button>
           </Space>
         )}
       </Space>

@@ -791,6 +791,8 @@ class ApplicationService:
 
         if app_code:
             from core.services.data.data_dictionary_service import DataDictionaryService
+            from core.config.audit_registry import node_keys_for_app
+            from core.services.approval.audit_binding_service import AuditBindingService
             from loguru import logger
 
             try:
@@ -804,6 +806,21 @@ class ApplicationService:
                     tenant_id,
                     e,
                 )
+
+            audit_keys = set(node_keys_for_app(app_code))
+            if audit_keys:
+                try:
+                    await AuditBindingService.ensure_binding_rows(
+                        tenant_id,
+                        only_node_keys=audit_keys,
+                    )
+                except Exception as e:
+                    logger.warning(
+                        "应用 {} 启用后初始化审核绑定行失败 tenant_id={}: {}",
+                        app_code,
+                        tenant_id,
+                        e,
+                    )
 
         return application
     

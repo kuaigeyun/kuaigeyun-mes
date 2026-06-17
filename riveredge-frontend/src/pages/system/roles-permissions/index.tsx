@@ -9,6 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Button,
   Badge,
@@ -485,6 +486,7 @@ const RolesPermissionsPage: React.FC = () => {
   const { token } = theme.useToken();
   const { t } = useTranslation();
   const trialRunMode = useTrialRunMode();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   // 角色列表相关状态
   const [roles, setRoles] = useState<Role[]>([]);
@@ -1394,6 +1396,28 @@ const RolesPermissionsPage: React.FC = () => {
   useEffect(() => {
     loadRoles();
   }, []);
+
+  /**
+   * 处理 URL 参数（从账户管理等页面跳转时自动选中角色并打开编辑）
+   */
+  useEffect(() => {
+    const roleUuid = searchParams.get('uuid');
+    const action = searchParams.get('action');
+    if (!roleUuid || roles.length === 0) return;
+
+    const role = roles.find((item) => item.uuid === roleUuid);
+    if (!role) return;
+
+    setSelectedRoleKeys([roleUuid]);
+    void handleSelectRole(role);
+
+    if (action === 'edit') {
+      setCurrentEditRole(role);
+      setRoleModalVisible(true);
+    }
+
+    setSearchParams({}, { replace: true });
+  }, [searchParams, roles, setSearchParams]);
 
   useEffect(() => {
     if (permissionLayer === 'data' || permissionLayer === 'field') {

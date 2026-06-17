@@ -7,8 +7,8 @@
 - 业务是否启用：由「菜单管理（is_active）」控制，不再落在本服务；
   历史 `check_node_enabled` 签名保留，内部恒返回 True，避免改动
   20+ 个业务 Service 的调用点；后续可逐步删除调用并移除此方法。
-- 是否需要审核：由「审核设置（core.models.audit_document_binding）」决定；
-  `check_audit_required` 查 AuditDocumentBinding（开关 + 流程绑定），
+- 是否需要审核：由「审核设置（AuditDocumentBinding.is_enabled）」决定；
+  `check_audit_required` 查 AuditDocumentBinding；流程在启用开关时按需创建。
   不再用 ApprovalProcess.code=node_key 的 is_active 充当开关。
 - 运行模式 / 节点 / 模块 / 模板等蓝图时代的概念全部移除，不再提供相关常量与方法。
 

@@ -29,6 +29,12 @@ export const departmentFormSchema: FieldConfig[] = [
     allowClear: true,
   },
   {
+    name: 'manager_uuid',
+    type: 'slot',
+    slotKey: 'manager_uuid',
+    labelKey: 'field.department.managerUuid',
+  },
+  {
     name: 'sort_order',
     type: 'number',
     labelKey: 'field.department.sortOrder',

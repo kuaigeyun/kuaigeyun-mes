@@ -17,6 +17,7 @@ export interface Department {
   description?: string;
   parent_uuid?: string;
   manager_uuid?: string;
+  manager_name?: string;
   sort_order: number;
   is_active: boolean;
   tenant_id: number;

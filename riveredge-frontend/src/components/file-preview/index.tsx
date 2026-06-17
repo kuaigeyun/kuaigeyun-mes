@@ -9,7 +9,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { getFileByUuid, getFilePreview, getFileDownloadUrlWithToken, FILE_IMAGE_SIZE_MEDIUM } from '../../services/file';
 import { PreviewOverlayToolButton, UniPdfPreview, UniPreviewOverlay } from '../uni-preview';
-import { getFileExt, isCad2dFile, isImageFile, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
+import { getFileExt, isCad2dFile, isImageFile, isInlineDocumentPreview, isPdfFile, isStepFile, type FilePreviewSource } from '../../utils/filePreviewKind';
 import type { DwgSvgViewerRef } from '../dwg-preview/DwgSvgViewer';
 import type { StepModelViewerRef } from '../step-preview/StepModelViewer';
 
@@ -19,18 +19,15 @@ const StepPreviewPane = lazy(() =>
 const DwgPreviewPane = lazy(() =>
   import('../dwg-preview/DwgPreviewPane').then((m) => ({ default: m.DwgPreviewPane })),
 );
-
-type FilePreviewSource = {
-  fileUuid?: string;
-  url?: string;
-  fileName?: string;
-  fileType?: string;
-  fileExtension?: string;
-};
+const DocumentPreviewPane = lazy(() =>
+  import('./DocumentPreviewPane').then((m) => ({ default: m.DocumentPreviewPane })),
+);
 
 export interface FilePreviewModalProps extends FilePreviewSource {
   open: boolean;
   onClose: () => void;
+  fileUuid?: string;
+  url?: string;
   title?: string;
   width?: string | number;
   height?: string | number;
@@ -96,6 +93,7 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
   const isPdf = isPdfFile(fileSource);
   const isStep = isStepFile(fileSource);
   const isCad2d = isCad2dFile(fileSource);
+  const isDocument = isInlineDocumentPreview(fileSource);
 
   useEffect(() => {
     if (!open || isStep || isCad2d) return;
@@ -402,6 +400,29 @@ const FilePreviewModal: React.FC<FilePreviewModalProps> = ({
             </div>
           ) : error ? (
             <Alert type="error" title={error} showIcon />
+          ) : previewUrl && isDocument ? (
+            <Suspense
+              fallback={
+                <div
+                  style={{
+                    minHeight: typeof height === 'number' ? `${height}px` : height,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Spin tip={t('pages.system.files.previewLoading')}>
+                    <div style={{ minHeight: 24 }} />
+                  </Spin>
+                </div>
+              }
+            >
+              <DocumentPreviewPane
+                fileUrl={previewUrl}
+                fileSource={fileSource}
+                height={height}
+              />
+            </Suspense>
           ) : previewUrl ? (
             <iframe
               src={previewUrl}

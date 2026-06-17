@@ -63,10 +63,7 @@ async def _is_quality_audit_required(tenant_id: int, stage_code: str) -> bool:
     from infra.services.business_config_service import BusinessConfigService
 
     config_service = BusinessConfigService()
-    stage_required = await config_service.check_audit_required(tenant_id, stage_code)
-    if stage_required:
-        return True
-    return await config_service.check_audit_required(tenant_id, "quality_inspection")
+    return await config_service.check_audit_required(tenant_id, stage_code)
 
 
 async def _require_iqc_stage_enabled(tenant_id: int) -> None:

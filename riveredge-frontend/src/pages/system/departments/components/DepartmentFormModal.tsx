@@ -10,6 +10,7 @@ import { App } from 'antd';
 import { FormModalTemplate } from '../../../../components/layout-templates';
 import { MODAL_CONFIG } from '../../../../components/layout-templates/constants';
 import { SchemaFormRenderer } from '../../../../components/schema-form';
+import { UniUserSelect } from '../../../../components/uni-user-select';
 import { departmentFormSchema } from '../schemas/department';
 import {
   getDepartmentByUuid,
@@ -95,6 +96,7 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
           code: detail.code,
           description: detail.description,
           parent_uuid: detail.parent_uuid || undefined,
+          manager_uuid: detail.manager_uuid || undefined,
           sort_order: detail.sort_order ?? 0,
           is_active: detail.is_active ?? true,
         });
@@ -110,6 +112,13 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
       let payload = { ...values };
       if (payload.parent_uuid === undefined || payload.parent_uuid === null || payload.parent_uuid === '') {
         payload.parent_uuid = undefined;
+      }
+      if (payload.manager_uuid === undefined || payload.manager_uuid === '') {
+        if (isEdit) {
+          payload.manager_uuid = null;
+        } else {
+          delete payload.manager_uuid;
+        }
       }
       if (isEdit && editUuid) {
         payload = omitPresetLocalizedPayloadFields('department', editPresetCode, payload);
@@ -152,6 +161,15 @@ export const DepartmentFormModal: React.FC<DepartmentFormModalProps> = ({
         isEdit={isEdit}
         treeDataMap={{ parent_uuid: deptTreeData }}
         disabledFields={presetDisabledFields}
+        slots={{
+          manager_uuid: (
+            <UniUserSelect
+              name="manager_uuid"
+              label={t('field.department.managerUuid')}
+              placeholder={t('field.department.managerPlaceholder')}
+            />
+          ),
+        }}
       />
     </FormModalTemplate>
   );

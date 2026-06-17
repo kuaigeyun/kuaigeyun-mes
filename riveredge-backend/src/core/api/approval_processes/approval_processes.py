@@ -13,12 +13,10 @@ from core.schemas.approval_process import (
     ApprovalProcessCreate,
     ApprovalProcessUpdate,
     ApprovalProcessResponse,
-    AuditSwitchToggleRequest,
 )
 from core.services.approval.approval_process_service import ApprovalProcessService
 from core.api.deps.deps import get_current_tenant
 from core.services.system.installed_feature_scope import get_installed_application_codes
-from core.services.system.installed_feature_scope import approval_process_codes_for_installed_apps
 from infra.api.deps.deps import get_current_user as soil_get_current_user
 from infra.models.user import User
 from infra.exceptions.exceptions import NotFoundError, ValidationError
@@ -62,7 +60,6 @@ def _to_response_model(approval_process: Any) -> ApprovalProcessResponse:
         "draft_nodes": _normalize_json_object(
             getattr(approval_process, "draft_nodes", None), "draft_nodes", approval_process.uuid
         ) if getattr(approval_process, "draft_nodes", None) else None,
-        "inngest_workflow_id": approval_process.inngest_workflow_id,
         "created_at": approval_process.created_at,
         "updated_at": approval_process.updated_at,
     }
@@ -78,7 +75,7 @@ async def create_approval_process(
     """
     创建审批流程
     
-    创建新的审批流程并自动注册到 Inngest（如果启用）。
+    创建新的审批流程。
     
     Args:
         data: 审批流程创建数据
@@ -162,35 +159,6 @@ async def list_approval_processes(
     return result
 
 
-@router.put("/audit-switch/{code}", response_model=ApprovalProcessResponse)
-async def toggle_audit_switch(
-    code: str,
-    data: AuditSwitchToggleRequest,
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    配置中心审核开关：按流程 code 启用/关闭审批流程。
-    """
-    try:
-        approval_process = await ApprovalProcessService.set_audit_switch_active(
-            tenant_id=tenant_id,
-            code=code,
-            is_active=data.is_active,
-        )
-        return _to_response_model(approval_process)
-    except NotFoundError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e),
-        )
-    except ValidationError as e:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail=str(e),
-        )
-
-
 @router.get("/auditable")
 async def list_auditable_documents(
     tenant_id: int = Depends(get_current_tenant),
@@ -204,6 +172,7 @@ async def list_auditable_documents(
     from core.services.approval.audit_binding_service import AuditBindingService
 
     installed = await get_installed_application_codes(tenant_id)
+    await AuditBindingService.ensure_binding_rows(tenant_id)
     grouped = entries_grouped_by_app()
     binding_map = await AuditBindingService.get_binding_map(tenant_id)
 
@@ -219,7 +188,6 @@ async def list_auditable_documents(
                 binding
                 and binding.is_enabled
                 and process
-                and process.is_active
                 and process.deleted_at is None
             )
             items.append(
@@ -308,7 +276,7 @@ async def update_approval_process(
     """
     更新审批流程
     
-    更新审批流程信息，如果节点配置发生变化，会自动重新注册到 Inngest。
+    更新审批流程信息。
     
     Args:
         uuid: 审批流程UUID
@@ -363,7 +331,7 @@ async def delete_approval_process(
     """
     删除审批流程
     
-    软删除审批流程，如果已注册到 Inngest，会自动注销。
+    软删除审批流程。
     
     Args:
         uuid: 审批流程UUID
@@ -382,29 +350,4 @@ async def delete_approval_process(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
         )
-
-
-@router.post("/load-preset")
-async def load_preset_approval_processes(
-    current_user: User = Depends(soil_get_current_user),
-    tenant_id: int = Depends(get_current_tenant),
-):
-    """
-    加载审批流程预设
-
-    为当前组织加载中国中小制造业极简审批流程预设（简单审批、采购单、销售单、工单等）。
-    """
-    installed_app_codes = await get_installed_application_codes(tenant_id)
-    visible_codes = approval_process_codes_for_installed_apps(installed_app_codes)
-    count = await ApprovalProcessService.load_preset_sme(
-        tenant_id,
-        only_codes=visible_codes,
-    )
-    from core.services.approval.audit_binding_service import AuditBindingService
-
-    await AuditBindingService.seed_bindings_for_tenant(
-        tenant_id,
-        only_node_keys=visible_codes,
-    )
-    return {"created": count, "message": f"成功加载 {count} 个审批流程预设"}
 

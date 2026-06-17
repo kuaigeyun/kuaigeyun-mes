@@ -12,7 +12,7 @@ from typing import Dict, FrozenSet, List, Optional, Set
 
 from tortoise.expressions import Q
 
-from core.config.audit_registry import node_keys_for_app
+from core.config.audit_registry import node_keys_for_app, entry_by_node_key
 from core.services.application.application_service import ApplicationService
 
 # 与后端 src/apps/*/manifest.json 的 code 对齐（用于表名前缀与路由 /apps/{code}/）
@@ -268,16 +268,19 @@ def approval_process_code_visible_for_installed_apps(code: str, installed: Set[s
     normalized = (code or "").strip()
     if not normalized:
         return True
-    if normalized in KUAIZHIZAO_APPROVAL_PROCESS_CODES:
-        return "kuaizhizao" in installed
+    if normalized == "personal_task":
+        return True
+    entry = entry_by_node_key(normalized)
+    if entry is not None:
+        return entry.app in installed
     return True
 
 
 def approval_process_codes_for_installed_apps(installed: Set[str]) -> Set[str]:
     """按已启用应用计算可初始化的审批流程 code 集合。"""
     visible: Set[str] = {"personal_task"}
-    if "kuaizhizao" in installed:
-        visible.update(KUAIZHIZAO_APPROVAL_PROCESS_CODES)
+    for app_code in installed:
+        visible.update(node_keys_for_app(app_code))
     return visible
 
 

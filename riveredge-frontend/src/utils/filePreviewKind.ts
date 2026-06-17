@@ -1,6 +1,14 @@
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'svg', 'ico']);
 const STEP_EXTENSIONS = new Set(['stp', 'step']);
 const CAD2D_EXTENSIONS = new Set(['dwg', 'dxf']);
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'log', 'md', 'markdown', 'xml', 'yaml', 'yml', 'ini', 'cfg', 'conf',
+  'sql', 'json', 'properties', 'bat', 'sh', 'py', 'js', 'ts', 'jsx', 'tsx',
+  'css', 'scss', 'less', 'html', 'htm',
+]);
+const SPREADSHEET_EXTENSIONS = new Set(['xls', 'xlsx', 'csv', 'ods']);
+const VIDEO_EXTENSIONS = new Set(['mp4', 'webm', 'ogg', 'mov', 'm4v', 'avi', 'mkv']);
+const AUDIO_EXTENSIONS = new Set(['mp3', 'wav', 'ogg', 'm4a', 'aac', 'flac', 'webm']);
 
 export type FilePreviewSource = {
   fileName?: string;
@@ -65,4 +73,43 @@ export function isCad2dFile(source: FilePreviewSource): boolean {
     isDwgFile(source) ||
     isDxfFile(source)
   );
+}
+
+function getMime(source: FilePreviewSource): string {
+  return (source.fileType ?? (source as { file_type?: string }).file_type ?? '').toLowerCase();
+}
+
+export function isTextFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = getMime(source);
+  return TEXT_EXTENSIONS.has(ext) || mime.startsWith('text/') || mime === 'application/json';
+}
+
+export function isSpreadsheetFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = getMime(source);
+  return (
+    SPREADSHEET_EXTENSIONS.has(ext)
+    || mime.includes('spreadsheet')
+    || mime.includes('ms-excel')
+    || mime === 'text/csv'
+    || mime === 'application/csv'
+  );
+}
+
+export function isVideoFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = getMime(source);
+  return VIDEO_EXTENSIONS.has(ext) || mime.startsWith('video/');
+}
+
+export function isAudioFile(source: FilePreviewSource): boolean {
+  const ext = getFileExt(source);
+  const mime = getMime(source);
+  return AUDIO_EXTENSIONS.has(ext) || mime.startsWith('audio/');
+}
+
+/** 由前端解析渲染的文档类预览（文本、表格、音视频），不走 iframe */
+export function isInlineDocumentPreview(source: FilePreviewSource): boolean {
+  return isTextFile(source) || isSpreadsheetFile(source) || isVideoFile(source) || isAudioFile(source);
 }

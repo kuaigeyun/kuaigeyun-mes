@@ -73,6 +73,11 @@ const DepartmentListPage: React.FC = () => {
         render: (_: unknown, record: Department) => (record as any)?.parent_name || '-',
       },
       {
+        title: t('field.department.managerName'),
+        dataIndex: 'manager_name',
+        render: (_: unknown, entity: Department) => entity.manager_name || '-',
+      },
+      {
         title: t('field.role.status'),
         dataIndex: 'is_active',
         render: (_: unknown, entity: Department) => (
@@ -537,6 +542,14 @@ const DepartmentListPage: React.FC = () => {
       dataIndex: 'code',
       width: 150,
       copyable: true,
+    },
+    {
+      title: t('field.department.managerName'),
+      dataIndex: 'manager_name',
+      width: 120,
+      ellipsis: true,
+      hideInSearch: true,
+      render: (_, record) => record.manager_name || '-',
     },
     {
       title: t('field.department.remark'),

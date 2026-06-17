@@ -58,7 +58,6 @@ class ApprovalProcessResponse(ApprovalProcessBase):
     """审批流程响应 Schema"""
     uuid: UUID = Field(..., description="审批流程UUID")
     tenant_id: int = Field(..., description="组织ID")
-    inngest_workflow_id: Optional[str] = Field(None, description="Inngest 工作流ID")
     version: int = Field(1, description="流程版本")
     published_version: int = Field(1, description="已发布版本")
     draft_nodes: Optional[Dict[str, Any]] = Field(None, description="草稿节点")

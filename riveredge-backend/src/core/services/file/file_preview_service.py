@@ -75,14 +75,38 @@ class FilePreviewService:
                 raise ValueError("预览token已过期")
             raise ValueError("预览token无效")
 
+    _PREVIEW_EXTENSIONS = frozenset({
+        "txt", "log", "md", "markdown", "csv", "json", "xml", "yaml", "yml",
+        "ini", "cfg", "conf", "html", "htm", "sql", "xls", "xlsx", "ods",
+    })
+
+    _SPREADSHEET_MIMES = frozenset({
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "text/csv",
+        "application/csv",
+    })
+
     @staticmethod
-    def _is_simple_preview_supported(file_type: Optional[str]) -> bool:
+    def _is_simple_preview_supported(
+        file_type: Optional[str],
+        file_extension: Optional[str] = None,
+    ) -> bool:
+        ext = (file_extension or "").strip().lower().lstrip(".")
+        if ext in FilePreviewService._PREVIEW_EXTENSIONS:
+            return True
+
         if not file_type:
             return False
 
         file_type_lower = file_type.lower()
 
         if file_type_lower == "application/pdf":
+            return True
+        if file_type_lower == "application/json":
+            return True
+        if file_type_lower in FilePreviewService._SPREADSHEET_MIMES:
             return True
         if file_type_lower.startswith("image/"):
             return True
@@ -132,7 +156,10 @@ class FilePreviewService:
             "preview_mode": "simple",
             "preview_url": preview_url,
             "file_type": file.file_type,
-            "supported": FilePreviewService._is_simple_preview_supported(file.file_type),
+            "supported": FilePreviewService._is_simple_preview_supported(
+                file.file_type,
+                file.file_extension,
+            ),
         }
 
     @staticmethod

@@ -8,8 +8,6 @@
 全部从此派生，消除并行硬编码表：
 
 - ``AUDIT_NODE_KEYS``（``infra.services.business_config_service``）
-- ``PRESET_APPROVAL_PROCESSES``（``core.services.approval.approval_process_service``）
-- ``KUAIZHIZAO_APPROVAL_PROCESS_CODES``（``core.services.system.installed_feature_scope``）
 - 配置中心审核开关项 / 统一执行入口 / ``record.audit`` 派生
 
 声明缺失或字段非法时**显式报错**（在首次访问注册表时抛出），不做兜底/兼容。

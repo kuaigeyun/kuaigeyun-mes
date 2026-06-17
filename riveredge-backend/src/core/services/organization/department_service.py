@@ -28,6 +28,87 @@ class DepartmentService:
     
     提供部门的 CRUD 操作和树形结构管理。
     """
+
+    @staticmethod
+    async def _manager_display_map(
+        tenant_id: int,
+        manager_ids: List[int],
+    ) -> Dict[int, Dict[str, Optional[str]]]:
+        unique_ids = [mid for mid in set(manager_ids) if mid]
+        if not unique_ids:
+            return {}
+        users = await User.filter(
+            tenant_id=tenant_id,
+            id__in=unique_ids,
+            deleted_at__isnull=True,
+        ).all()
+        return {
+            user.id: {
+                "manager_uuid": user.uuid,
+                "manager_name": (user.full_name or user.username or "").strip() or user.username,
+            }
+            for user in users
+        }
+
+    @staticmethod
+    def _apply_manager_fields(
+        item: Dict[str, Any],
+        manager_id: Optional[int],
+        manager_map: Dict[int, Dict[str, Optional[str]]],
+    ) -> None:
+        info = manager_map.get(manager_id) if manager_id else None
+        item["manager_uuid"] = info["manager_uuid"] if info else None
+        item["manager_name"] = info["manager_name"] if info else None
+
+    @staticmethod
+    async def build_department_response(
+        tenant_id: int,
+        department: Department,
+    ) -> Dict[str, Any]:
+        children_count = await Department.filter(
+            tenant_id=tenant_id,
+            parent_id=department.id,
+            deleted_at__isnull=True,
+        ).count()
+        user_count = await User.filter(
+            tenant_id=tenant_id,
+            department_id=department.id,
+            deleted_at__isnull=True,
+        ).count()
+        position_count = await Position.filter(
+            tenant_id=tenant_id,
+            department_id=department.id,
+            deleted_at__isnull=True,
+        ).count()
+        parent_uuid = None
+        if department.parent_id:
+            parent_dept = await Department.filter(
+                id=department.parent_id,
+                tenant_id=tenant_id,
+                deleted_at__isnull=True,
+            ).first()
+            parent_uuid = parent_dept.uuid if parent_dept else None
+        manager_map = await DepartmentService._manager_display_map(
+            tenant_id,
+            [department.manager_id] if department.manager_id else [],
+        )
+        item: Dict[str, Any] = {
+            "uuid": department.uuid,
+            "name": department.name,
+            "code": department.code,
+            "description": department.description,
+            "parent_uuid": parent_uuid,
+            "sort_order": department.sort_order,
+            "is_active": department.is_active,
+            "children_count": children_count,
+            "user_count": user_count,
+            "position_count": position_count,
+            "tenant_id": department.tenant_id,
+            "created_at": department.created_at,
+            "updated_at": department.updated_at,
+        }
+        DepartmentService._apply_manager_fields(item, department.manager_id, manager_map)
+        return item
     
     @staticmethod
     async def create_department(
@@ -161,6 +242,10 @@ class DepartmentService:
         # 4. 构建树形结构
         # 过滤出最终需要的部门列表
         filtered_depts = [dept for dept in all_departments if dept.id in result_ids]
+        manager_map = await DepartmentService._manager_display_map(
+            tenant_id,
+            [dept.manager_id for dept in filtered_depts if dept.manager_id],
+        )
         
         # 转换为带统计信息的字典，并按层级分组
         from infra.models.user import User
@@ -182,7 +267,7 @@ class DepartmentService:
                 parent_dept = id_to_dept.get(dept.parent_id)
                 parent_uuid = parent_dept.uuid if parent_dept else None
                 
-            return {
+            item = {
                 "id": dept.id,
                 "uuid": dept.uuid,
                 "name": dept.name,
@@ -190,15 +275,15 @@ class DepartmentService:
                 "description": dept.description,
                 "parent_id": dept.parent_id,
                 "parent_uuid": parent_uuid,
-                "manager_id": dept.manager_id,
-                "manager_uuid": None,
                 "sort_order": dept.sort_order,
                 "is_active": dept.is_active,
                 "children_count": children_count,
                 "user_count": user_count,
                 "position_count": position_count,
-                "children": []
+                "children": [],
             }
+            DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)
+            return item
 
         # 构建 ID 到处理后字典的映射
         enriched_items = {}
@@ -217,28 +302,41 @@ class DepartmentService:
 
     @staticmethod
     async def _get_recursive_tree(tenant_id: int, parent_id: Optional[int] = None) -> List[Dict[str, Any]]:
-        """原有递归加载树的辅助函数"""
+        """递归加载部门树（含负责人展示字段）。"""
+        manager_ids = await Department.filter(
+            tenant_id=tenant_id,
+            deleted_at__isnull=True,
+            manager_id__isnull=False,
+        ).values_list("manager_id", flat=True)
+        manager_map = await DepartmentService._manager_display_map(tenant_id, list(manager_ids))
+        return await DepartmentService._build_tree_nodes(tenant_id, parent_id, manager_map)
+
+    @staticmethod
+    async def _build_tree_nodes(
+        tenant_id: int,
+        parent_id: Optional[int],
+        manager_map: Dict[int, Dict[str, Optional[str]]],
+    ) -> List[Dict[str, Any]]:
         departments = await Department.filter(
             tenant_id=tenant_id,
             parent_id=parent_id,
             deleted_at__isnull=True,
         ).order_by("sort_order", "id").all()
-        
+
         result = []
         for dept in departments:
             children_count = await Department.filter(
                 tenant_id=tenant_id, parent_id=dept.id, deleted_at__isnull=True
             ).count()
-            from infra.models.user import User
             user_count = await User.filter(
                 tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
             ).count()
             position_count = await Position.filter(
                 tenant_id=tenant_id, department_id=dept.id, deleted_at__isnull=True
             ).count()
-            
-            children = await DepartmentService._get_recursive_tree(tenant_id, dept.id)
-            
+
+            children = await DepartmentService._build_tree_nodes(tenant_id, dept.id, manager_map)
+
             parent_uuid = None
             if dept.parent_id:
                 parent_dept = await Department.filter(
@@ -246,7 +344,7 @@ class DepartmentService:
                 ).first()
                 parent_uuid = parent_dept.uuid if parent_dept else None
 
-            result.append({
+            item = {
                 "id": dept.id,
                 "uuid": dept.uuid,
                 "name": dept.name,
@@ -254,15 +352,15 @@ class DepartmentService:
                 "description": dept.description,
                 "parent_id": dept.parent_id,
                 "parent_uuid": parent_uuid,
-                "manager_id": dept.manager_id,
-                "manager_uuid": None,
                 "sort_order": dept.sort_order,
                 "is_active": dept.is_active,
                 "children_count": children_count,
                 "user_count": user_count,
                 "position_count": position_count,
                 "children": children,
-            })
+            }
+            DepartmentService._apply_manager_fields(item, dept.manager_id, manager_map)
+            result.append(item)
         return result
     
     @staticmethod

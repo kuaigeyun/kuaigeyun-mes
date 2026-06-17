@@ -36,7 +36,7 @@ class TenantInitDataService:
             "description": "系统名称、时区、货币等参数（必选）",
         },
         {"key": "code_rule", "name": "编码规则", "description": "工单、物料、销售单等编码规则"},
-        {"key": "approval_process_preset", "name": "审批流程预设", "description": "采购单、销售单等审批流程"},
+        {"key": "approval_process_preset", "name": "审核设置绑定行", "description": "为可审核单据初始化配置行（流程在启用开关时按需创建）"},
         {"key": "message_template_preset", "name": "消息模板预设", "description": "审批通知、验证码等消息模板"},
         {"key": "print_template_preset", "name": "打印模板预设", "description": "通用标签、收据等打印模板"},
         {
@@ -281,24 +281,9 @@ class TenantInitDataService:
             )
 
         if key == "approval_process_preset":
-            from core.services.approval.approval_process_service import ApprovalProcessService
-            from core.services.system.installed_feature_scope import (
-                approval_process_codes_for_installed_apps,
-                get_installed_application_codes,
-            )
-            installed = await get_installed_application_codes(tenant_id)
-            only_codes = approval_process_codes_for_installed_apps(installed)
-            count = await ApprovalProcessService.load_preset_sme(
-                tenant_id,
-                only_codes=only_codes,
-            )
             from core.services.approval.audit_binding_service import AuditBindingService
 
-            await AuditBindingService.seed_bindings_for_tenant(
-                tenant_id,
-                only_node_keys=only_codes,
-            )
-            return count
+            return await AuditBindingService.ensure_binding_rows(tenant_id)
 
         if key == "message_template_preset":
             from core.services.messaging.message_template_service import MessageTemplateService

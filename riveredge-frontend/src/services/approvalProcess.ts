@@ -18,7 +18,6 @@ export interface ApprovalProcess {
   draft_nodes?: Record<string, any> | null;
   version?: number;
   published_version?: number;
-  inngest_workflow_id?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -92,25 +91,6 @@ export async function updateApprovalProcess(approvalProcessUuid: string, data: U
 export async function publishApprovalProcess(approvalProcessUuid: string): Promise<ApprovalProcess> {
   return apiRequest<ApprovalProcess>(`/core/approval-processes/${approvalProcessUuid}/publish`, {
     method: 'POST',
-  });
-}
-
-/**
- * 加载审批流程预设
- */
-export async function loadPresetApprovalProcesses(): Promise<{ created: number; message: string }> {
-  return apiRequest<{ created: number; message: string }>('/core/approval-processes/load-preset', {
-    method: 'POST',
-  });
-}
-
-/**
- * 配置中心审核开关：按 code 启用/关闭审批流程
- */
-export async function setAuditSwitchActive(code: string, is_active: boolean): Promise<ApprovalProcess> {
-  return apiRequest<ApprovalProcess>(`/core/approval-processes/audit-switch/${encodeURIComponent(code)}`, {
-    method: 'PUT',
-    data: { is_active },
   });
 }
 

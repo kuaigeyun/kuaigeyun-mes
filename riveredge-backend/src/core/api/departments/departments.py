@@ -8,7 +8,6 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Body
 from pydantic import BaseModel, Field
 
-from core.models.department import Department
 from core.models.department_dataset_binding import DepartmentDatasetBinding
 from core.schemas.department import (
     DepartmentCreate,
@@ -109,34 +108,8 @@ async def create_department(
             data=data,
             current_user_id=current_user.id
         )
-        
-        # 获取子部门数量和用户数量
-        children_count = await Department.filter(
-            tenant_id=tenant_id,
-            parent_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        from infra.models.user import User
-        user_count = await User.filter(
-            tenant_id=tenant_id,
-            department_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
-        department.children_count = children_count
-        department.user_count = user_count
-        department.manager_uuid = None
-        
-        # 获取父部门 UUID (用于响应码)
-        department.parent_uuid = None
-        if department.parent_id:
-            parent_dept = await Department.get_or_none(id=department.parent_id)
-            if parent_dept:
-                department.parent_uuid = parent_dept.uuid
-            
-        return DepartmentResponse.model_validate(department)
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
     except ValidationError as e:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -182,13 +155,13 @@ async def get_department_tree(
     def convert_to_tree_item(item: dict) -> DepartmentTreeItem:
         children = [convert_to_tree_item(child) for child in item.get("children", [])]
         return DepartmentTreeItem(
-            id=item.get("id"),  # ⚠️ 修复：使用 get 方法，避免 KeyError
             uuid=item["uuid"],
             name=item["name"],
             code=item["code"],
             description=item.get("description"),
-            parent_id=item.get("parent_id"),  # ⚠️ 修复：使用 get 方法
-            manager_id=item.get("manager_id"),  # ⚠️ 修复：使用 get 方法
+            parent_uuid=item.get("parent_uuid"),
+            manager_uuid=item.get("manager_uuid"),
+            manager_name=item.get("manager_name"),
             sort_order=item.get("sort_order", 0),
             is_active=item.get("is_active", True),
             children_count=item.get("children_count", 0),
@@ -302,34 +275,8 @@ async def get_department(
             tenant_id=tenant_id,
             department_uuid=department_uuid
         )
-        
-        # 获取子部门数量和用户数量
-        children_count = await Department.filter(
-            tenant_id=tenant_id,
-            parent_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        from infra.models.user import User
-        user_count = await User.filter(
-            tenant_id=tenant_id,
-            department_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
-        department.children_count = children_count
-        department.user_count = user_count
-        department.manager_uuid = None
-        
-        # 获取父部门 UUID (用于响应码)
-        department.parent_uuid = None
-        if department.parent_id:
-            parent_dept = await Department.get_or_none(id=department.parent_id)
-            if parent_dept:
-                department.parent_uuid = parent_dept.uuid
-            
-        return DepartmentResponse.model_validate(department)
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -369,34 +316,8 @@ async def update_department(
             data=data,
             current_user_id=current_user.id
         )
-        
-        # 获取子部门数量和用户数量
-        children_count = await Department.filter(
-            tenant_id=tenant_id,
-            parent_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        from infra.models.user import User
-        user_count = await User.filter(
-            tenant_id=tenant_id,
-            department_id=department.id,
-            deleted_at__isnull=True
-        ).count()
-        
-        # ⚠️ 修复：在验证前将统计数据和关联字段赋值给模型实例
-        department.children_count = children_count
-        department.user_count = user_count
-        department.manager_uuid = None
-        
-        # 获取父部门 UUID (用于响应码)
-        department.parent_uuid = None
-        if department.parent_id:
-            parent_dept = await Department.get_or_none(id=department.parent_id)
-            if parent_dept:
-                department.parent_uuid = parent_dept.uuid
-            
-        return DepartmentResponse.model_validate(department)
+        payload = await DepartmentService.build_department_response(tenant_id, department)
+        return DepartmentResponse.model_validate(payload)
     except NotFoundError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

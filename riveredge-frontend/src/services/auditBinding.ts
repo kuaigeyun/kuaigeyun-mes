@@ -16,6 +16,7 @@ export interface AuditBindingItem {
   process_uuid?: string | null;
   process_name?: string | null;
   process_code?: string | null;
+  process_matched?: boolean;
 }
 
 export interface AuditProcessOption {

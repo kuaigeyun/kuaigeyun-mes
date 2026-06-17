@@ -1932,8 +1932,7 @@ start_worker_dev() {
             > "$LOGS_DIR/worker.log" 2>&1 &
         echo $! > "$LOGS_DIR/worker.pid"
         nohup "$(resolve_uv)" run --extra pdf taskiq scheduler core.tasks.taskiq_app:scheduler --fs-discover \
-            core.tasks.taskiq_app core.inngest.functions \
-            apps.master_data.inngest.functions apps.kuaizhizao.inngest.functions \
+            core.tasks.taskiq_app \
             > "$LOGS_DIR/scheduler.log" 2>&1 &
         echo $! > "$LOGS_DIR/scheduler.pid"
     )
