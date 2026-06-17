@@ -16,10 +16,10 @@ import type { UploadFile, UploadProps } from 'antd';
 import {
   getSiteSetting,
   updateSiteSetting,
-  checkTenantDomainAvailability,
   getBranchOrganizationCapability,
   getBranchOrganizationList,
   createBranchOrganization,
+  updateBranchOrganization,
   BranchOrganizationCapability,
   BranchOrganizationItem,
 } from '../../../services/siteSetting';
@@ -49,6 +49,7 @@ import {
   LoginPageEditorSplitPanel,
   LoginLocaleSettingsFields,
   LoginLogoSettingsBlock,
+  LoginDomainSettingsBlock,
   LoginDecorationSettingsBlock,
   LoginBackgroundSettingsBlock,
 } from '../../../components/login-page-editor';
@@ -110,6 +111,7 @@ function getInitialValuesFromConfigStore(
     login_guest_enabled: configs.login_guest_enabled !== false,
     login_client_win_enabled: configs.login_client_win_enabled !== false,
     login_client_android_enabled: configs.login_client_android_enabled !== false,
+    login_quick_enabled: configs.login_quick_enabled !== false,
     copyright: configs.copyright ?? '',
     description: configs.description ?? '',
     'security.token_check_interval': configs['security.token_check_interval'] ?? configs.security?.token_check_interval ?? 60,
@@ -180,6 +182,7 @@ const SITE_SETTINGS_LOGIN_PAGE_TAB_FIELDS = [
   'login_guest_enabled',
   'login_client_win_enabled',
   'login_client_android_enabled',
+  'login_quick_enabled',
 ] as const;
 
 const SITE_SETTINGS_SYSTEM_TAB_FIELDS = [
@@ -263,7 +266,10 @@ const SiteSettingsPage: React.FC = () => {
   const [branchOrgPageSize, setBranchOrgPageSize] = useState(10);
   const [branchOrgLoading, setBranchOrgLoading] = useState(false);
   const [branchOrgModalOpen, setBranchOrgModalOpen] = useState(false);
+  const [branchOrgModalMode, setBranchOrgModalMode] = useState<'create' | 'edit'>('create');
+  const [editingBranchOrg, setEditingBranchOrg] = useState<BranchOrganizationItem | null>(null);
   const [creatingBranchOrg, setCreatingBranchOrg] = useState(false);
+  const [updatingBranchOrg, setUpdatingBranchOrg] = useState(false);
   const [branchOrgForm] = Form.useForm();
   const [useNewBranchAdmin, setUseNewBranchAdmin] = useState(false);
   const [deepseekApiKeyConfigured, setDeepseekApiKeyConfigured] = useState(false);
@@ -289,8 +295,6 @@ const SiteSettingsPage: React.FC = () => {
     const baseHost = labels.length >= 3 && labels[0].toLowerCase() === currentTenantDomain ? labels.slice(1).join('.') : hostname;
     return `${protocol}//${port ? `${baseHost}:${port}` : baseHost}/${currentTenantDomain}`;
   })();
-  const RESERVED_DOMAIN_KEYWORDS = ['admin', 'login', 'infra', 'system', 'apps', 'api', 'docs', 'debug', 'qrcode', 'init', 'personal', 'lock'];
-  const TENANT_DOMAIN_PATTERN = /^[a-z][a-z0-9_-]{2,11}$/;
 
   /**
    * 判断字符串是否是UUID格式
@@ -742,6 +746,7 @@ const SiteSettingsPage: React.FC = () => {
         login_guest_enabled: setting.settings?.login_guest_enabled !== false,
         login_client_win_enabled: setting.settings?.login_client_win_enabled !== false,
         login_client_android_enabled: setting.settings?.login_client_android_enabled !== false,
+        login_quick_enabled: setting.settings?.login_quick_enabled !== false,
         copyright: setting.settings?.copyright || '',
         description: setting.settings?.description || '',
         'security.token_check_interval': setting.settings?.security?.token_check_interval ?? 60,
@@ -1084,6 +1089,7 @@ const SiteSettingsPage: React.FC = () => {
           login_guest_enabled: values.login_guest_enabled,
           login_client_win_enabled: values.login_client_win_enabled,
           login_client_android_enabled: values.login_client_android_enabled,
+          login_quick_enabled: values.login_quick_enabled,
         });
         shouldRefreshConfigs = true;
       } else if (saveTab === 'system') {
@@ -1199,6 +1205,7 @@ const SiteSettingsPage: React.FC = () => {
           login_guest_enabled: null,
           login_client_win_enabled: null,
           login_client_android_enabled: null,
+          login_quick_enabled: null,
         },
       });
       await loadSiteSetting();
@@ -1239,6 +1246,63 @@ const SiteSettingsPage: React.FC = () => {
     } finally {
       setCreatingBranchOrg(false);
     }
+  };
+
+  const openCreateBranchOrgModal = () => {
+    setBranchOrgModalMode('create');
+    setEditingBranchOrg(null);
+    branchOrgForm.resetFields();
+    setUseNewBranchAdmin(false);
+    setBranchOrgModalOpen(true);
+  };
+
+  const openEditBranchOrgModal = (record: BranchOrganizationItem) => {
+    setBranchOrgModalMode('edit');
+    setEditingBranchOrg(record);
+    setUseNewBranchAdmin(false);
+    branchOrgForm.setFieldsValue({
+      name: record.name,
+      domain: record.domain,
+      status: record.status,
+    });
+    setBranchOrgModalOpen(true);
+  };
+
+  const handleUpdateBranchOrganization = async () => {
+    if (!editingBranchOrg) return;
+    try {
+      const values = await branchOrgForm.validateFields(['name', 'domain', 'status']);
+      setUpdatingBranchOrg(true);
+      await updateBranchOrganization(editingBranchOrg.id, {
+        name: values.name,
+        domain: values.domain,
+        status: values.status,
+      });
+      messageApi.success(t('pages.system.siteSettings.branchOrgUpdateSuccess'));
+      setBranchOrgModalOpen(false);
+      setEditingBranchOrg(null);
+      branchOrgForm.resetFields();
+      await loadBranchOrganizations(branchOrgPage, branchOrgPageSize);
+    } catch (error: any) {
+      if (error?.errorFields) return;
+      messageApi.error(error?.message || t('pages.system.siteSettings.branchOrgUpdateFailed'));
+    } finally {
+      setUpdatingBranchOrg(false);
+    }
+  };
+
+  const handleBranchOrgModalOk = () => {
+    if (branchOrgModalMode === 'edit') {
+      return handleUpdateBranchOrganization();
+    }
+    return handleCreateBranchOrganization();
+  };
+
+  const closeBranchOrgModal = () => {
+    setBranchOrgModalOpen(false);
+    setEditingBranchOrg(null);
+    setUseNewBranchAdmin(false);
+    branchOrgForm.resetFields();
   };
 
   const actionButtons = (
@@ -1597,8 +1661,6 @@ const SiteSettingsPage: React.FC = () => {
                 />
               </Form.Item>
             </Col>
-          </Row>
-          <Row gutter={[16, 16]}>
             <Col xs={24} md={8}>
               <Form.Item
                 name="integrations.deepseek.base_url"
@@ -1607,8 +1669,6 @@ const SiteSettingsPage: React.FC = () => {
                 <Input placeholder={t('pages.system.siteSettings.integrationsDeepseekBaseUrlPlaceholder')} />
               </Form.Item>
             </Col>
-          </Row>
-          <Row gutter={[16, 16]}>
             <Col xs={24} md={8}>
               <Form.Item
                 name="integrations.deepseek.api_key"
@@ -1704,70 +1764,6 @@ const SiteSettingsPage: React.FC = () => {
   const loginPageSettingsContent = (
     <Row gutter={[0, 16]}>
       <Col span={24}>
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 12, width: '100%' }}>
-          <div style={{ flex: '0 0 320px', minWidth: 280 }}>
-            <Form.Item
-              name="tenant_domain"
-              label={t('pages.system.siteSettings.currentTenantDomain')}
-              rules={[
-                { required: true, message: t('pages.system.siteSettings.tenantDomainRequired') },
-                { min: 3, message: t('pages.system.siteSettings.tenantDomainMinLength') },
-                { max: 12, message: t('pages.system.siteSettings.tenantDomainMaxLength') },
-                { pattern: TENANT_DOMAIN_PATTERN, message: t('pages.system.siteSettings.tenantDomainPattern') },
-                {
-                  validator: async (_, value) => {
-                    const domain = String(value || '').trim().toLowerCase();
-                    if (!domain) return;
-                    if (domain.length < 3 || domain.length > 12) return;
-                    if (!TENANT_DOMAIN_PATTERN.test(domain)) return;
-                    const hit = RESERVED_DOMAIN_KEYWORDS.find((kw) => domain.includes(kw));
-                    if (hit) {
-                      throw new Error(t('pages.system.siteSettings.tenantDomainReserved', { keyword: hit }));
-                    }
-                    const result = await checkTenantDomainAvailability(domain);
-                    if (!result.available) {
-                      throw new Error(result.message || t('pages.system.siteSettings.tenantDomainDuplicate'));
-                    }
-                  },
-                },
-              ]}
-              normalize={(v) => String(v || '').trim().toLowerCase()}
-              style={{ marginBottom: 0 }}
-            >
-              <Input placeholder={t('pages.system.siteSettings.tenantDomainPlaceholder')} />
-            </Form.Item>
-          </div>
-          <div
-            style={{
-              width: 1,
-              background: token.colorBorderSecondary,
-              alignSelf: 'stretch',
-              margin: '0 10px',
-            }}
-          />
-          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <Space size={6} style={{ marginBottom: 4 }}>
-              <LinkOutlined style={{ color: token.colorPrimary }} />
-              <Typography.Text type="secondary">
-                {t('pages.system.siteSettings.tenantPathAccessUrl')}
-              </Typography.Text>
-            </Space>
-            <Typography.Paragraph
-              style={{
-                marginBottom: 0,
-                fontSize: 20,
-                lineHeight: 1.45,
-                fontWeight: 600,
-                wordBreak: 'break-all',
-              }}
-              copyable={tenantPathAccessUrl ? { text: tenantPathAccessUrl } : false}
-            >
-              {tenantPathAccessUrl || '-'}
-            </Typography.Paragraph>
-          </div>
-        </div>
-      </Col>
-      <Col span={24}>
         <Card title={t('pages.infra.platform.loginConfig')} size="small">
           <Row gutter={[16, 16]}>
             <Col span={24}>
@@ -1814,6 +1810,7 @@ const SiteSettingsPage: React.FC = () => {
                 }
                 settings={
                   <div className="login-page-editor-split-settings-stack">
+                    <LoginDomainSettingsBlock tenantPathAccessUrl={tenantPathAccessUrl} />
                     <LoginLogoSettingsBlock
                       useCustomLoginLogo={useCustomLoginLogo}
                       onEnableCustomLoginLogo={() => setUseCustomLoginLogo(true)}
@@ -1853,32 +1850,35 @@ const SiteSettingsPage: React.FC = () => {
                         Boolean(backgroundImageUrl || String(loginBackgroundValue || '').trim())
                       }
                     />
+                    <Form.Item
+                      name="login_theme_color"
+                      label={t('pages.system.siteSettings.loginPageThemeColor')}
+                      getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
+                    >
+                      <ColorPicker showText />
+                    </Form.Item>
                   </div>
                 }
               />
             </Col>
-            <Col xs={24} sm={12}>
-              <Form.Item
-                name="login_theme_color"
-                label={t('pages.infra.platform.themeColor')}
-                getValueFromEvent={(c: any) => (typeof c?.toHexString === 'function' ? c.toHexString() : c)}
-              >
-                <ColorPicker showText />
-              </Form.Item>
-            </Col>
             <Col span={24}>
               <Row gutter={[16, 0]}>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={12} md={6}>
                   <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={12} md={6}>
+                  <Form.Item name="login_quick_enabled" label={t('pages.infra.platform.loginQuickEnabled')} valuePropName="checked">
+                    <Switch />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={12} md={6}>
                   <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
                     <Switch />
                   </Form.Item>
                 </Col>
-                <Col xs={24} sm={8}>
+                <Col xs={24} sm={12} md={6}>
                   <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
                     <Switch />
                   </Form.Item>
@@ -1974,6 +1974,16 @@ const SiteSettingsPage: React.FC = () => {
       key: 'created_at',
       render: (value: string) => (value ? dayjs(value).format('YYYY-MM-DD HH:mm:ss') : '-'),
     },
+    {
+      title: t('common.actions'),
+      key: 'actions',
+      width: 100,
+      render: (_: unknown, record: BranchOrganizationItem) => (
+        <Button type="link" size="small" onClick={() => openEditBranchOrgModal(record)}>
+          {t('common.edit')}
+        </Button>
+      ),
+    },
   ];
 
   const branchOrganizationsTabContent = (
@@ -1990,7 +2000,7 @@ const SiteSettingsPage: React.FC = () => {
             {t('pages.system.siteSettings.refresh')}
           </Button>
           {branchOrgCapability?.can_create_branch_organization && (
-            <Button type="primary" onClick={() => setBranchOrgModalOpen(true)}>
+            <Button type="primary" onClick={openCreateBranchOrgModal}>
               {t('pages.system.siteSettings.branchOrgCreateButton')}
             </Button>
           )}
@@ -2049,14 +2059,15 @@ const SiteSettingsPage: React.FC = () => {
         onConfirm={handleCropConfirm}
       />
       <Modal
-        title={t('pages.system.siteSettings.branchOrgCreateModalTitle')}
+        title={
+          branchOrgModalMode === 'edit'
+            ? t('pages.system.siteSettings.branchOrgEditModalTitle')
+            : t('pages.system.siteSettings.branchOrgCreateModalTitle')
+        }
         open={branchOrgModalOpen}
-        onCancel={() => {
-          setBranchOrgModalOpen(false);
-          setUseNewBranchAdmin(false);
-        }}
-        onOk={handleCreateBranchOrganization}
-        okButtonProps={{ loading: creatingBranchOrg }}
+        onCancel={closeBranchOrgModal}
+        onOk={handleBranchOrgModalOk}
+        okButtonProps={{ loading: creatingBranchOrg || updatingBranchOrg }}
         destroyOnClose
       >
         <Form form={branchOrgForm} layout="vertical">
@@ -2073,30 +2084,50 @@ const SiteSettingsPage: React.FC = () => {
           >
             <Input />
           </Form.Item>
-          <Form.Item label={t('pages.system.siteSettings.branchOrgAdminDefaultLabel')}>
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Typography.Text type="secondary">
-                {t('pages.system.siteSettings.branchOrgAdminDefaultHint')}
-              </Typography.Text>
-              {!useNewBranchAdmin && (
-                <Button onClick={() => setUseNewBranchAdmin(true)}>{t('pages.system.siteSettings.branchOrgAddAdminButton')}</Button>
-              )}
-            </Space>
-          </Form.Item>
-          {useNewBranchAdmin && (
+          {branchOrgModalMode === 'edit' && (
+            <Form.Item
+              name="status"
+              label={t('pages.system.siteSettings.branchOrgStatusLabel')}
+              rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgStatusRequired') }]}
+            >
+              <Select
+                options={[
+                  { label: t('pages.infra.tenant.statusActive'), value: TenantStatus.ACTIVE },
+                  { label: t('pages.infra.tenant.statusInactive'), value: TenantStatus.INACTIVE },
+                  { label: t('pages.infra.tenant.statusExpired'), value: TenantStatus.EXPIRED },
+                  { label: t('pages.infra.tenant.statusSuspended'), value: TenantStatus.SUSPENDED },
+                ]}
+              />
+            </Form.Item>
+          )}
+          {branchOrgModalMode === 'create' && (
             <>
-              <Form.Item name="admin_username" label={t('pages.system.siteSettings.branchOrgAdminUsernameLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminUsernameRequired') }]}>
-                <Input />
+              <Form.Item label={t('pages.system.siteSettings.branchOrgAdminDefaultLabel')}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  <Typography.Text type="secondary">
+                    {t('pages.system.siteSettings.branchOrgAdminDefaultHint')}
+                  </Typography.Text>
+                  {!useNewBranchAdmin && (
+                    <Button onClick={() => setUseNewBranchAdmin(true)}>{t('pages.system.siteSettings.branchOrgAddAdminButton')}</Button>
+                  )}
+                </Space>
               </Form.Item>
-              <Form.Item name="admin_password" label={t('pages.system.siteSettings.branchOrgAdminPasswordLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminPasswordRequired') }, { min: 8, message: t('pages.system.siteSettings.branchOrgAdminPasswordMin') }]}>
-                <Input.Password />
-              </Form.Item>
-              <Form.Item name="admin_full_name" label={t('pages.system.siteSettings.branchOrgAdminFullNameLabel')}>
-                <Input />
-              </Form.Item>
-              <Form.Item name="admin_phone" label={t('pages.system.siteSettings.branchOrgAdminPhoneLabel')} rules={[{ pattern: /^$|^1[3-9]\d{9}$/, message: t('pages.system.siteSettings.branchOrgAdminPhonePattern') }]}>
-                <Input />
-              </Form.Item>
+              {useNewBranchAdmin && (
+                <>
+                  <Form.Item name="admin_username" label={t('pages.system.siteSettings.branchOrgAdminUsernameLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminUsernameRequired') }]}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="admin_password" label={t('pages.system.siteSettings.branchOrgAdminPasswordLabel')} rules={[{ required: true, message: t('pages.system.siteSettings.branchOrgAdminPasswordRequired') }, { min: 8, message: t('pages.system.siteSettings.branchOrgAdminPasswordMin') }]}>
+                    <Input.Password />
+                  </Form.Item>
+                  <Form.Item name="admin_full_name" label={t('pages.system.siteSettings.branchOrgAdminFullNameLabel')}>
+                    <Input />
+                  </Form.Item>
+                  <Form.Item name="admin_phone" label={t('pages.system.siteSettings.branchOrgAdminPhoneLabel')} rules={[{ pattern: /^$|^1[3-9]\d{9}$/, message: t('pages.system.siteSettings.branchOrgAdminPhonePattern') }]}>
+                    <Input />
+                  </Form.Item>
+                </>
+              )}
             </>
           )}
         </Form>

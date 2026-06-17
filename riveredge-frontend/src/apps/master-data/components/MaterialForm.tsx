@@ -2020,6 +2020,7 @@ const BasicInfoTab: React.FC<BasicInfoTabProps> = ({
             customFields={customFields}
             customFieldValues={customFieldValues}
             gridColumns={4}
+            gridMode="col"
           />
         </Row>
       ) : null}

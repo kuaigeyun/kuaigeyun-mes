@@ -39,6 +39,7 @@ class PlatformSettingsBase(BaseSchema):
     login_guest_enabled: Optional[bool] = Field(True, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(True, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(True, description="登录页是否显示 Android PDA 安装包下载")
+    login_quick_enabled: Optional[bool] = Field(True, description="登录页是否显示快捷登录（社交账号登录）")
 
 
 class PlatformSettingsCreate(PlatformSettingsBase):
@@ -72,6 +73,7 @@ class PlatformSettingsUpdate(BaseSchema):
     login_guest_enabled: Optional[bool] = Field(None, description="登录页是否显示免注册体验登录")
     login_client_win_enabled: Optional[bool] = Field(None, description="登录页是否显示 Windows 工位机安装包下载")
     login_client_android_enabled: Optional[bool] = Field(None, description="登录页是否显示 Android PDA 安装包下载")
+    login_quick_enabled: Optional[bool] = Field(None, description="登录页是否显示快捷登录（社交账号登录）")
 
 
 class PlatformSettingsResponse(PlatformSettingsBase):

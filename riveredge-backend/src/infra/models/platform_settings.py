@@ -171,6 +171,10 @@ class PlatformSettings(Model):
         default=True,
         description="登录页是否显示 Android PDA 安装包下载"
     )
+    login_quick_enabled = fields.BooleanField(
+        default=True,
+        description="登录页是否显示快捷登录（社交账号登录）"
+    )
     
     # 时间字段
     created_at = fields.DatetimeField(

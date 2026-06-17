@@ -1025,6 +1025,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         if order.status not in LEGACY_AUDITED_VALUES:
             raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
 
+        from apps.kuaizhizao.services.warehouse_service import sync_purchase_order_receipt_quantities
+
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
+
         order_items = await PurchaseOrderItem.filter(
             tenant_id=tenant_id,
             order_id=order_id
@@ -1079,6 +1083,37 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
 
         return {"items": items}
 
+    async def _resolve_po_item_receipt_snapshot(
+        self,
+        tenant_id: int,
+        item: PurchaseOrderItem,
+    ) -> dict[str, str]:
+        """补全下推入库所需的物料编码/名称/单位，避免空值触发 schema 校验异常。"""
+        material = await Material.get_or_none(
+            tenant_id=tenant_id,
+            id=item.material_id,
+            deleted_at__isnull=True,
+        )
+        code = str(item.material_code or "").strip()
+        name = str(item.material_name or "").strip()
+        unit = str(item.unit or "").strip()
+        if material:
+            if not code:
+                code = str(material.main_code or material.code or "").strip()
+            if not name:
+                name = str(material.name or "").strip()
+            if not unit:
+                unit = str(getattr(material, "base_unit", None) or getattr(material, "unit", None) or "").strip()
+        if not unit:
+            unit = "件"
+        if not code or not name:
+            raise ValidationError(f"物料 {item.material_id} 缺少编码或名称，无法生成入库单")
+        return {
+            "material_code": code,
+            "material_name": name,
+            "material_unit": unit,
+        }
+
     async def push_to_receipt(
         self,
         tenant_id: int,
@@ -1106,7 +1141,10 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
             NotFoundError: 采购单不存在
             BusinessLogicError: 采购单未审核或已全部入库
         """
-        from apps.kuaizhizao.services.warehouse_service import PurchaseReceiptService
+        from apps.kuaizhizao.services.warehouse_service import (
+            PurchaseReceiptService,
+            sync_purchase_order_receipt_quantities,
+        )
         from apps.kuaizhizao.schemas.warehouse import PurchaseReceiptCreate, PurchaseReceiptItemCreate
         from decimal import Decimal
         
@@ -1114,6 +1152,8 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
         order = await self.get_purchase_order_by_id(tenant_id, order_id)
         if order.status not in LEGACY_AUDITED_VALUES:
             raise BusinessLogicError("只有已审核或已确认的采购单才能下推到采购入库")
+
+        await sync_purchase_order_receipt_quantities(tenant_id, order_id)
         
         # 获取订单明细
         order_items = await PurchaseOrderItem.filter(
@@ -1150,13 +1190,14 @@ class PurchaseService(AppBaseService[PurchaseOrder]):
                 raise ValidationError(f"物料 {item.material_code} 的入库数量 {receipt_quantity} 超过未入库数量 {item.outstanding_quantity}")
 
             batch_number = batch_numbers.get(item.id) if batch_numbers else None
+            snapshot = await self._resolve_po_item_receipt_snapshot(tenant_id, item)
 
             receipt_items.append(PurchaseReceiptItemCreate(
                 purchase_order_item_id=item.id,
                 material_id=item.material_id,
-                material_code=item.material_code,
-                material_name=item.material_name,
-                material_unit=item.unit,
+                material_code=snapshot["material_code"],
+                material_name=snapshot["material_name"],
+                material_unit=snapshot["material_unit"],
                 receipt_quantity=receipt_quantity,
                 unit_price=item.unit_price,
                 total_amount=receipt_quantity * item.unit_price,

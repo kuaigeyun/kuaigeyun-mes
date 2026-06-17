@@ -114,6 +114,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_guest_enabled: data.login_guest_enabled ?? true,
         login_client_win_enabled: data.login_client_win_enabled ?? true,
         login_client_android_enabled: data.login_client_android_enabled ?? true,
+        login_quick_enabled: data.login_quick_enabled ?? true,
       });
       queryClient.setQueryData(['platformSettings'], data);
       queryClient.invalidateQueries({ queryKey: ['platformSettings'] });
@@ -305,6 +306,7 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
         login_guest_enabled: settings.login_guest_enabled ?? true,
         login_client_win_enabled: settings.login_client_win_enabled ?? true,
         login_client_android_enabled: settings.login_client_android_enabled ?? true,
+        login_quick_enabled: settings.login_quick_enabled ?? true,
       });
       
       // 加载LOGO预览
@@ -831,17 +833,22 @@ export default function PlatformSettingsPage({ mode = 'basic' }: PlatformSetting
                 </Col>
                 <Col span={24}>
                   <Row gutter={[16, 16]}>
-                    <Col xs={24} sm={8}>
+                    <Col xs={24} sm={12} md={6}>
                       <Form.Item name="login_guest_enabled" label={t('pages.infra.platform.loginGuestEnabled')} valuePropName="checked">
                         <Switch />
                       </Form.Item>
                     </Col>
-                    <Col xs={24} sm={8}>
+                    <Col xs={24} sm={12} md={6}>
+                      <Form.Item name="login_quick_enabled" label={t('pages.infra.platform.loginQuickEnabled')} valuePropName="checked">
+                        <Switch />
+                      </Form.Item>
+                    </Col>
+                    <Col xs={24} sm={12} md={6}>
                       <Form.Item name="login_client_win_enabled" label={t('pages.infra.platform.loginClientWinEnabled')} valuePropName="checked">
                         <Switch />
                       </Form.Item>
                     </Col>
-                    <Col xs={24} sm={8}>
+                    <Col xs={24} sm={12} md={6}>
                       <Form.Item name="login_client_android_enabled" label={t('pages.infra.platform.loginClientAndroidEnabled')} valuePropName="checked">
                         <Switch />
                       </Form.Item>

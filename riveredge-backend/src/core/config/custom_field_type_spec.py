@@ -11,6 +11,7 @@ CUSTOM_FIELD_TYPES = (
     "time",
     "datetime",
     "select",
+    "multiselect",
     "textarea",
     "json",
     "image",

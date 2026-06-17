@@ -802,12 +802,13 @@ const OtherInboundPage: React.FC = () => {
               <Input placeholder={t('app.kuaizhizao.warehouseOtherInbound.field.optional')} />
             </ProFormItem>
           </Col>
+          <CustomFieldsFormSection
+            customFields={otherInboundFormCustomFields}
+            customFieldValues={otherInboundFormCustomFieldValues}
+            gridColumns={2}
+            gridMode="col"
+          />
         </Row>
-        <CustomFieldsFormSection
-          customFields={otherInboundFormCustomFields}
-          customFieldValues={otherInboundFormCustomFieldValues}
-          gridColumns={2}
-        />
         <div className="uni-table-detail" style={{ width: '100%' }}>
           <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOtherInbound.field.lines')} required />
           <AntForm.List name="items">

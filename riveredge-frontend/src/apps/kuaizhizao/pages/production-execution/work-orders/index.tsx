@@ -7179,6 +7179,8 @@ const WorkOrdersPage: React.FC = () => {
           customFields={workOrderFormCustomFields}
           customFieldValues={workOrderFormCustomFieldValues}
           gridColumns={4}
+          gridMode="proform"
+          wrapInRow={false}
         />
         <DocumentAttachmentsField
           category="work_order_attachments"

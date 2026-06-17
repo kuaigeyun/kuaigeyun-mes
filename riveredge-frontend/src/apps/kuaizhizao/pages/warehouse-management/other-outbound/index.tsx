@@ -660,12 +660,13 @@ const OtherOutboundPage: React.FC = () => {
               <Input.TextArea rows={2} placeholder={t('app.kuaizhizao.warehouseOutbound.field.optional')} />
             </ProFormItem>
           </Col>
+          <CustomFieldsFormSection
+            customFields={otherOutboundFormCustomFields}
+            customFieldValues={otherOutboundFormCustomFieldValues}
+            gridColumns={2}
+            gridMode="col"
+          />
         </Row>
-        <CustomFieldsFormSection
-          customFields={otherOutboundFormCustomFields}
-          customFieldValues={otherOutboundFormCustomFieldValues}
-          gridColumns={2}
-        />
         <div className="uni-table-detail" style={{ width: '100%' }}>
           <UniTableDetailHeader title={t('app.kuaizhizao.warehouseOutbound.section.lines')} required />
           <AntForm.List name="items">

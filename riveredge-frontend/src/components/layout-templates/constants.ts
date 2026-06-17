@@ -245,7 +245,8 @@ export const CANVAS_VISUAL_BASE = {
   DOT_SIZE_PX: 1, // 统一点大小
   DOT_GAP_PX: 24, // 统一点间距
   BORDER_COLOR: 'var(--ant-color-border-secondary, #d9d9d9)', // 系统默认边框色（主题自适应）
-  BORDER_RADIUS_PX: 8,
+  /** 跟随 BasicLayout 注入的 --ant-borderRadiusLG，与 Card / 按钮等容器圆角一致 */
+  BORDER_RADIUS: 'var(--ant-borderRadiusLG, var(--ant-border-radius-lg, 8px))',
 } as const;
 
 export const CANVAS_GRID_STYLE: CSSProperties = {
@@ -253,8 +254,9 @@ export const CANVAS_GRID_STYLE: CSSProperties = {
   backgroundImage: `radial-gradient(circle, ${CANVAS_VISUAL_BASE.DOT_COLOR} ${CANVAS_VISUAL_BASE.DOT_SIZE_PX}px, transparent ${CANVAS_VISUAL_BASE.DOT_SIZE_PX}px)`,
   backgroundSize: `${CANVAS_VISUAL_BASE.DOT_GAP_PX}px ${CANVAS_VISUAL_BASE.DOT_GAP_PX}px`,
   border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-  borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+  borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
   boxSizing: 'border-box',
+  overflow: 'hidden',
 };
 
 /**
@@ -268,8 +270,9 @@ export const CANVAS_GRID_REACTFLOW = {
   style: {
     backgroundColor: CANVAS_VISUAL_BASE.BACKGROUND_COLOR,
     border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-    borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+    borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
     boxSizing: 'border-box' as const,
+    overflow: 'hidden' as const,
   },
 } as const;
 

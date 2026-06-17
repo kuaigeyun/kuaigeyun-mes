@@ -2289,14 +2289,13 @@ const PurchaseOrdersPage: React.FC = () => {
               />
             </ProForm.Item>
           </Col>
-          <Col span={12} />
+          <CustomFieldsFormSection
+            customFields={purchaseOrderFormCustomFields}
+            customFieldValues={purchaseOrderFormCustomFieldValues}
+            gridColumns={4}
+            gridMode="col"
+          />
         </Row>
-
-        <CustomFieldsFormSection
-          customFields={purchaseOrderFormCustomFields}
-          customFieldValues={purchaseOrderFormCustomFieldValues}
-          gridColumns={4}
-        />
 
         <AntForm.Item noStyle shouldUpdate={(prev: any, curr: any) => prev?.price_type !== curr?.price_type}>
           {({ getFieldValue: getFormValue }: any) => {

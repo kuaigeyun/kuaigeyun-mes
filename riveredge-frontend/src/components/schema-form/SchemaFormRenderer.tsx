@@ -20,11 +20,13 @@ import {
   ProFormRadio,
   ProFormField,
   ProFormDependency,
+  ProFormItem,
 } from '@ant-design/pro-components';
 import { UniDropdown } from '../uni-dropdown';
 import type { QuickCreateConfig, AdvancedSearchConfig } from '../uni-dropdown';
 import { ThemedSegmented } from '../themed-segmented';
 import type { FieldConfig } from './form-schemas';
+import { inferFormGridColumns } from '../custom-fields';
 
 export interface SchemaFormRendererProps {
   schema: FieldConfig[];
@@ -100,7 +102,28 @@ export const SchemaFormRenderer: React.FC<SchemaFormRendererProps> = ({
         if (field.type === 'slot' && field.slotKey) {
           const slotContent = slots[field.slotKey];
           if (!slotContent) return null;
-          return <React.Fragment key={field.name}>{slotContent}</React.Fragment>;
+          if (field.slotKey === 'customFields') {
+            let content = slotContent;
+            if (React.isValidElement(content)) {
+              const patch: Record<string, unknown> = { gridMode: 'proform', wrapInRow: false };
+              if (content.props.gridColumns == null) {
+                patch.gridColumns = field.slotGridColumns ?? inferFormGridColumns(schema);
+              }
+              content = React.cloneElement(content, patch);
+            }
+            return <React.Fragment key={field.name}>{content}</React.Fragment>;
+          }
+          const colSpan = field.colSpan ?? 24;
+          return (
+            <ProFormField
+              key={field.name}
+              colProps={{ span: colSpan }}
+              formItemProps={{ style: { marginBottom: 0 } }}
+              renderFormItem={() => (
+                <div style={{ width: '100%' }}>{slotContent}</div>
+              )}
+            />
+          );
         }
         const labelText = t(field.labelKey!);
         const label = buildLabel(field, labelText);

@@ -14,6 +14,15 @@ import { normalizeCustomFieldFileUuids } from './customFieldFileUtils';
 import { formatJsonText, isEmptyJsonValue } from './customFieldJsonUtils';
 import { formatAssociatedDetailValue } from './customFieldAssociatedDisplayMode';
 
+function formatMultiselectDetailValue(value: unknown, options?: { label: string; value: string }[]): string {
+  const arr = Array.isArray(value) ? value : value != null && value !== '' ? [value] : [];
+  if (!arr.length) return '';
+  const opts = options || [];
+  return arr
+    .map((v) => opts.find((o) => o.value === v || String(o.value) === String(v))?.label ?? String(v))
+    .join('、');
+}
+
 export interface CustomFieldsDetailSectionProps {
   customFields: CustomField[];
   customFieldValues: Record<string, any>;
@@ -33,6 +42,10 @@ export function hasCustomFieldsDetailContent(
     if (f.field_type === 'json') {
       return !isEmptyJsonValue(customFieldValues[f.code]);
     }
+    if (f.field_type === 'multiselect') {
+      const v = customFieldValues[f.code];
+      return Array.isArray(v) ? v.length > 0 : v != null && v !== '';
+    }
     return true;
   });
 }
@@ -51,6 +64,10 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
       }
       if (f.field_type === 'json') {
         return !isEmptyJsonValue(customFieldValues[f.code]);
+      }
+      if (f.field_type === 'multiselect') {
+        const v = customFieldValues[f.code];
+        return Array.isArray(v) ? v.length > 0 : v != null && v !== '';
       }
       return true;
     })
@@ -83,6 +100,10 @@ export const CustomFieldsDetailSection: React.FC<CustomFieldsDetailSectionProps>
               {formatJsonText(value)}
             </Typography.Paragraph>
           );
+        }
+        if (field.field_type === 'multiselect') {
+          const text = formatMultiselectDetailValue(value, field.config?.options);
+          return text ? text : <Typography.Text type="secondary">-</Typography.Text>;
         }
         if (value === null || value === undefined || value === '') {
           return <Typography.Text type="secondary">-</Typography.Text>;

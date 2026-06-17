@@ -1,4 +1,4 @@
-export { CustomFieldsFormSection, type CustomFieldGridColumns } from './CustomFieldsFormSection';
+export { CustomFieldsFormSection, inferFormGridColumns, type CustomFieldGridColumns } from './CustomFieldsFormSection';
 export {
   CustomFieldsDetailSection,
   hasCustomFieldsDetailContent,

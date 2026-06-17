@@ -80,6 +80,16 @@ class CustomFieldValue(BaseModel):
             return self.value_json
         return None
     
+    def get_stored_value(self, field_type: str) -> Any:
+        """按字段类型解析存储值（multiselect/json 等不走 value_text 优先逻辑）。"""
+        if field_type == "multiselect":
+            if self.value_json is not None:
+                return self.value_json if isinstance(self.value_json, list) else [self.value_json]
+            return []
+        if field_type == "json":
+            return self.value_json
+        return self.get_value()
+    
     def set_value(self, value: Any, field_type: str, field_config: Optional[dict] = None) -> None:
         """
         根据字段类型设置值
@@ -111,8 +121,13 @@ class CustomFieldValue(BaseModel):
                 self.value_json = [value]
             return
         
-        if field_type in ("text", "textarea", "select", "multiselect"):
+        if field_type in ("text", "textarea", "select"):
             self.value_text = str(value)
+        elif field_type == "multiselect":
+            if isinstance(value, list):
+                self.value_json = [item for item in value if item is not None and str(item).strip() != ""]
+            else:
+                self.value_json = [value]
         elif field_type in ("number", "associated_object", "formula"):
             # associated_object 存储 VLOOKUP 结果（多为 id）；formula 存储计算结果
             self.value_number = Decimal(str(value))

@@ -112,6 +112,9 @@ async def get_platform_settings_public(
                         "login_client_android_enabled": site_settings.get("login_client_android_enabled")
                         if site_settings.get("login_client_android_enabled") is not None
                         else merged.get("login_client_android_enabled"),
+                        "login_quick_enabled": site_settings.get("login_quick_enabled")
+                        if site_settings.get("login_quick_enabled") is not None
+                        else merged.get("login_quick_enabled"),
                     }
                 )
                 return PlatformSettingsResponse(**merged)

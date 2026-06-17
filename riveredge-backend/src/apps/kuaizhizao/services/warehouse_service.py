@@ -557,6 +557,44 @@ async def _sum_confirmed_purchase_receipt_qty_for_po_item(
     return total
 
 
+async def sync_purchase_order_receipt_quantities(
+    tenant_id: int,
+    purchase_order_id: int,
+) -> None:
+    """
+    按已确认采购入库单回写采购订单行的已到货/未到货数量。
+
+    避免入库确认后 PO 行 outstanding 未更新，导致重复下推入库触发容差校验失败。
+    """
+    if not purchase_order_id:
+        return
+
+    from apps.kuaizhizao.models.purchase_order import PurchaseOrderItem
+
+    order_items = await PurchaseOrderItem.filter(
+        tenant_id=tenant_id,
+        order_id=purchase_order_id,
+    ).all()
+    for po_item in order_items:
+        confirmed_qty = await _sum_confirmed_purchase_receipt_qty_for_po_item(
+            tenant_id,
+            int(po_item.id),
+        )
+        ordered = Decimal(str(po_item.ordered_quantity or 0))
+        received = min(confirmed_qty, ordered) if ordered > 0 else confirmed_qty
+        outstanding = max(ordered - received, Decimal("0"))
+        current_received = Decimal(str(po_item.received_quantity or 0))
+        current_outstanding = Decimal(str(po_item.outstanding_quantity or 0))
+        if current_received != received or current_outstanding != outstanding:
+            await PurchaseOrderItem.filter(
+                tenant_id=tenant_id,
+                id=po_item.id,
+            ).update(
+                received_quantity=received,
+                outstanding_quantity=outstanding,
+            )
+
+
 def _validate_purchase_receipt_tolerance(
     ordered_quantity: Decimal,
     already_received_quantity: Decimal,
@@ -4199,7 +4237,7 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                                 source_type="purchase_order",
                                 source_id=purchase_order_id,
                                 source_code=po.order_code,
-                                source_name=po.order_name,
+                                source_name=getattr(po, "order_name", None) or po.order_code,
                                 target_type="purchase_receipt",
                                 target_id=receipt.id,
                                 target_code=receipt.receipt_code,
@@ -4770,6 +4808,9 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
             run_id="post-fix",
         )
         # #endregion
+        receipt_po_id = int(getattr(receipt_for_payable, "purchase_order_id", 0) or 0)
+        if receipt_po_id > 0:
+            await sync_purchase_order_receipt_quantities(tenant_id, receipt_po_id)
         updated_receipt = await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
         # #region agent log
         _agent_debug_ndjson(
@@ -4844,7 +4885,11 @@ class PurchaseReceiptService(AppBaseService[PurchaseReceipt]):
                 logger.error("撤回采购入库-库存冲减失败: %s", e)
                 raise BusinessLogicError(f"撤回失败: {str(e)}")
 
-            return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
+            po_id = int(getattr(receipt, "purchase_order_id", 0) or 0)
+
+        if po_id > 0:
+            await sync_purchase_order_receipt_quantities(tenant_id, po_id)
+        return await self.get_purchase_receipt_by_id(tenant_id, receipt_id)
 
     async def delete_purchase_receipt(self, tenant_id: int, receipt_id: int) -> bool:
         """

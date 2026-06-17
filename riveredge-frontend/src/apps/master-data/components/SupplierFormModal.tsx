@@ -282,13 +282,12 @@ export const SupplierFormModal: React.FC<SupplierFormModalProps> = ({
                         },
                       }}
                     />
-                    <Col span={24}>
-                      <CustomFieldsFormSection
-                        customFields={customFields}
-                        customFieldValues={customFieldValues}
-                        gridColumns={2}
-                      />
-                    </Col>
+                    <CustomFieldsFormSection
+                      customFields={customFields}
+                      customFieldValues={customFieldValues}
+                      gridColumns={2}
+                      gridMode="col"
+                    />
                     <Col span={24}>
                       <SupplierContactsFormTable
                         contactTitleOptions={optionsMap.contactTitle ?? []}

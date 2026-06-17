@@ -249,6 +249,7 @@ export default function LoginPage() {
     : (platformSettings?.platform_name || cachedPlatformName || 'RiverEdge SaaS');
 
   const loginGuestEnabled = platformSettings?.login_guest_enabled !== false;
+  const loginQuickEnabled = platformSettings?.login_quick_enabled !== false;
   const loginClientWinEnabled = platformSettings?.login_client_win_enabled !== false;
   const loginClientAndroidEnabled = platformSettings?.login_client_android_enabled !== false;
   const showClientDownloads = loginClientWinEnabled || loginClientAndroidEnabled;
@@ -1902,6 +1903,7 @@ export default function LoginPage() {
 
           <div className="login-form-footer">
             {/* 社交登录区域 */}
+            {loginQuickEnabled && (
             <div style={{ marginTop: 24, marginBottom: 24 }}>
               <div style={{ 
                 display: 'flex', 
@@ -2131,6 +2133,7 @@ export default function LoginPage() {
                 }}></div>
               </div>
             </div>
+            )}
 
             {loginGuestEnabled && (
             <div style={{ marginBottom: 16 }}>

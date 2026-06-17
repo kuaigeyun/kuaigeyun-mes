@@ -72,6 +72,12 @@ export interface CreateSubtenantData {
   };
 }
 
+export interface UpdateBranchOrganizationData {
+  name?: string;
+  domain?: string;
+  status?: string;
+}
+
 /**
  * 获取站点设置
  * 
@@ -122,6 +128,13 @@ export async function getBranchOrganizationList(params?: { page?: number; page_s
 export async function createBranchOrganization(data: CreateSubtenantData) {
   return apiRequest('/core/site-settings/branch-organizations', {
     method: 'POST',
+    data,
+  });
+}
+
+export async function updateBranchOrganization(branchOrgId: number, data: UpdateBranchOrganizationData) {
+  return apiRequest(`/core/site-settings/branch-organizations/${branchOrgId}`, {
+    method: 'PUT',
     data,
   });
 }

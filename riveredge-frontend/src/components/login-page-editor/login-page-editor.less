@@ -204,16 +204,17 @@
     z-index: 2;
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 16px;
 
     img,
     .login-left-column-preview-logo-fallback {
       width: 48px;
       height: 48px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.9);
       object-fit: contain;
-      padding: 8px;
+      padding: 5px;
+      flex-shrink: 0;
     }
 
     .login-left-column-preview-logo-fallback {
@@ -221,13 +222,13 @@
       align-items: center;
       justify-content: center;
       color: rgba(255, 255, 255, 0.92);
-      font-size: 22px;
+      font-size: 24px;
     }
 
     .login-left-column-preview-platform-name {
       margin: 0;
       color: #fff;
-      font-size: 20px;
+      font-size: 24px;
       font-weight: 600;
       line-height: 1.2;
     }
@@ -338,24 +339,25 @@
   box-shadow: none;
 
   .login-left-column-preview-logo {
+    /* 与 pages/login/index.less .logo-top-left 一致，编辑预览不按容器缩小 */
     position: absolute;
-    top: calc(100% * 40 / var(--login-left-ref-width));
-    left: calc(100% * 40 / var(--login-left-ref-width));
-    gap: calc(100% * 12 / var(--login-left-ref-width));
+    top: 40px;
+    left: 40px;
+    gap: 16px;
     max-width: none;
     width: auto;
 
     img,
     .login-left-column-preview-logo-fallback {
-      width: calc(100% * var(--login-logo-ref-size) / var(--login-left-ref-width));
-      height: calc(100% * var(--login-logo-ref-size) / var(--login-left-ref-width));
-      min-width: 28px;
-      min-height: 28px;
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      min-height: 48px;
       max-width: 48px;
       max-height: 48px;
-      padding: calc(100% * 6 / var(--login-left-ref-width));
+      padding: 5px;
       border-radius: 50%;
-      background: rgba(255, 255, 255, 0.5);
+      background: rgba(255, 255, 255, 0.9);
       object-fit: contain;
       flex-shrink: 0;
     }
@@ -364,11 +366,11 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: clamp(14px, 2.29cqw, 22px);
+      font-size: 24px;
     }
 
     .login-left-column-preview-platform-name {
-      font-size: clamp(12px, 2.08cqw, 20px);
+      font-size: 24px;
       flex-shrink: 0;
       overflow: visible;
       text-overflow: unset;

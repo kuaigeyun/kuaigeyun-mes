@@ -99,6 +99,7 @@ export const MultiTabListPageTemplate: React.FC<MultiTabListPageTemplateProps> =
                 activeTabKey={activeTabKey}
                 onTabChange={onTabChange}
                 tabBarExtraContent={tabBarExtraContent}
+                tabProps={{ size: 'middle' }}
                 styles={{ body: preserveMounted ? { padding: 0 } : { padding } }}
             >
                 {bodyInner}

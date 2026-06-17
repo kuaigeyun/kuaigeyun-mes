@@ -18,6 +18,13 @@
     "客户管理": "Customers",
     "供应商管理": "Suppliers",
     "技能管理": "Skills",
+    "节假日管理": "Holiday Settings",
+    "缺陷类型管理": "Defect Types",
+    "工艺路线管理": "Process Routes",
+    "图纸管理": "Drawings",
+    "设备台账": "Equipment Ledger",
+    "模具台账": "Mold Ledger",
+    "采购入库": "Purchase Receipts",
     "工单管理": "Work Orders",
     "返工单": "Rework Orders",
     "委外单": "Outsource Orders",
@@ -131,7 +138,7 @@
       "tableNameLabel": "Bill of materials"
     },
     "master-data-defect-type": {
-      "pageName": "缺陷类型管理",
+      "pageName": "Defect Types",
       "tableNameLabel": "Defect types"
     },
     "master-data-operation": {
@@ -139,11 +146,11 @@
       "tableNameLabel": "Operations"
     },
     "master-data-process-route": {
-      "pageName": "工艺路线管理",
+      "pageName": "Process Routes",
       "tableNameLabel": "Process routes"
     },
     "master-data-process-drawing": {
-      "pageName": "图纸管理",
+      "pageName": "Drawings",
       "tableNameLabel": "Engineering drawings"
     },
     "master-data-manufacturing-bom": {
@@ -159,7 +166,7 @@
       "tableNameLabel": "Suppliers"
     },
     "master-data-holiday": {
-      "pageName": "节假日管理",
+      "pageName": "Holiday Settings",
       "tableNameLabel": "Holidays"
     },
     "master-data-skill": {
@@ -187,7 +194,7 @@
       "tableNameLabel": "Purchase orders"
     },
     "kuaizhizao-purchase-receipt": {
-      "pageName": "采购入库",
+      "pageName": "Purchase Receipts",
       "tableNameLabel": "Purchase receipts"
     },
     "kuaizhizao-purchase-return": {
@@ -243,11 +250,11 @@
       "tableNameLabel": "Production plans"
     },
     "kuaizhizao-equipment": {
-      "pageName": "设备台账",
+      "pageName": "Equipment Ledger",
       "tableNameLabel": "Equipment"
     },
     "kuaizhizao-mold": {
-      "pageName": "模具台账",
+      "pageName": "Mold Ledger",
       "tableNameLabel": "Molds"
     }
   }

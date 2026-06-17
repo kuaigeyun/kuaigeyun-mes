@@ -4,7 +4,7 @@
 import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { Alert, App, Button, Card, Checkbox, Space, Spin, Table, Tag, Typography } from 'antd';
+import { Alert, App, Button, Card, Checkbox, Col, Row, Space, Spin, Table, Tag, Typography } from 'antd';
 import { CloudDownloadOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   getInitConfig,
@@ -26,6 +26,56 @@ function resultRows(results: RunInitResponse['results'], items: InitItem[]) {
     name: nameByKey.get(key)?.name ?? key,
     ...val,
   }));
+}
+
+const INIT_ITEM_COL_PROPS = { xs: 24, sm: 12, md: 8 } as const;
+
+function RequiredInitItemCard({ item, t }: { item: InitItem; t: (key: string) => string }) {
+  return (
+    <Card size="small" type="inner" style={{ width: '100%', height: '100%' }}>
+      <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
+        {tenantInitItemDescription(t, item)}
+      </Typography.Paragraph>
+    </Card>
+  );
+}
+
+function OptionalInitItemCard({
+  item,
+  t,
+  checked,
+  onCheckedChange,
+}: {
+  item: InitItem;
+  t: (key: string) => string;
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <Card size="small" type="inner" style={{ width: '100%', height: '100%' }}>
+      <Checkbox
+        checked={checked}
+        onChange={(e) => onCheckedChange(e.target.checked)}
+        style={{ width: '100%', alignItems: 'flex-start' }}
+      >
+        <div>
+          <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
+            {tenantInitItemDescription(t, item)}
+          </Typography.Paragraph>
+        </div>
+      </Checkbox>
+    </Card>
+  );
+}
+
+function InitItemGrid({ children }: { children: React.ReactNode }) {
+  return (
+    <Row gutter={[12, 12]}>
+      {children}
+    </Row>
+  );
 }
 
 export const TenantInitDataPanel: React.FC = () => {
@@ -79,6 +129,10 @@ export const TenantInitDataPanel: React.FC = () => {
     }
   };
 
+  const handleToggleOptional = (key: string, checked: boolean) => {
+    setOptionalKeys((prev) => (checked ? [...prev, key] : prev.filter((k) => k !== key)));
+  };
+
   const resultTableData = lastResults ? resultRows(lastResults, allItems) : [];
 
   return (
@@ -95,16 +149,13 @@ export const TenantInitDataPanel: React.FC = () => {
           <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
             {t('pages.system.configCenter.tenantInit.requiredDesc')}
           </Typography.Paragraph>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+          <InitItemGrid>
             {requiredItems.map((item) => (
-              <Card key={item.key} size="small" type="inner">
-                <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
-                <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-                  {tenantInitItemDescription(t, item)}
-                </Typography.Paragraph>
-              </Card>
+              <Col key={item.key} {...INIT_ITEM_COL_PROPS}>
+                <RequiredInitItemCard item={item} t={t} />
+              </Col>
             ))}
-          </div>
+          </InitItemGrid>
           <Button
             type="primary"
             icon={<CloudDownloadOutlined />}
@@ -120,24 +171,18 @@ export const TenantInitDataPanel: React.FC = () => {
           <Typography.Paragraph type="secondary" style={{ marginBottom: 12 }}>
             {t('pages.system.configCenter.tenantInit.optionalDesc')}
           </Typography.Paragraph>
-          <Checkbox.Group
-            value={optionalKeys}
-            onChange={(vals) => setOptionalKeys(vals as string[])}
-            style={{ width: '100%' }}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-              {optionalItems.map((item) => (
-                <Card key={item.key} size="small" type="inner">
-                  <Checkbox value={item.key}>
-                    <Typography.Text strong>{tenantInitItemLabel(t, item)}</Typography.Text>
-                  </Checkbox>
-                  <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0, marginLeft: 24 }}>
-                    {tenantInitItemDescription(t, item)}
-                  </Typography.Paragraph>
-                </Card>
-              ))}
-            </div>
-          </Checkbox.Group>
+          <InitItemGrid>
+            {optionalItems.map((item) => (
+              <Col key={item.key} {...INIT_ITEM_COL_PROPS}>
+                <OptionalInitItemCard
+                  item={item}
+                  t={t}
+                  checked={optionalKeys.includes(item.key)}
+                  onCheckedChange={(checked) => handleToggleOptional(item.key, checked)}
+                />
+              </Col>
+            ))}
+          </InitItemGrid>
           <Space style={{ marginTop: 16 }}>
             <Button
               icon={<CloudDownloadOutlined />}

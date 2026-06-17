@@ -183,7 +183,7 @@ export const CanvasPageTemplate: React.FC<CanvasPageTemplateProps> = ({
                 flex: 1,
                 position: 'relative',
                 border: `1px solid ${CANVAS_VISUAL_BASE.BORDER_COLOR}`,
-                borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS_PX,
+                borderRadius: CANVAS_VISUAL_BASE.BORDER_RADIUS,
                 overflow: 'hidden',
                 boxSizing: 'border-box',
               }}

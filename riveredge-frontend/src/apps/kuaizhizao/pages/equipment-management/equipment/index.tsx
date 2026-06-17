@@ -1117,13 +1117,12 @@ const EquipmentPage: React.FC = () => {
               formRef={formRef}
             />
           </Col>
-          <Col span={24}>
-            <CustomFieldsFormSection
-              customFields={equipmentFormCustomFields}
-              customFieldValues={equipmentFormCustomFieldValues}
-              gridColumns={2}
-            />
-          </Col>
+          <CustomFieldsFormSection
+            customFields={equipmentFormCustomFields}
+            customFieldValues={equipmentFormCustomFieldValues}
+            gridColumns={2}
+            gridMode="col"
+          />
           <Col span={24}>
             <DocumentAttachmentsField category="equipment_attachments" />
           </Col>

@@ -154,8 +154,6 @@ const APP_SORT_ORDER_OVERRIDES: Record<string, number> = {
 const APP_DESCRIPTION_OVERRIDES: Record<string, string> = {
   // 快财务当前聚焦管理会计，不包含总账
   kuaicaiwu: '聚焦管理会计与经营分析协同平台（不含总账）',
-  kuaiiot: '工业物联网设备数采集成平台，敬请期待',
-  kuaiai: '嵌入业务场景的 AI 智能辅助引擎，提供对话助手与业务智能建议',
 };
 
 type AppCategoryFilter = 'all' | 'general' | 'industry' | 'basic' | 'pro' | 'other' | 'dedicated';
@@ -208,6 +206,12 @@ const isDedicatedApplication = (app: Application | Record<string, unknown>): boo
 
 /** 卡片内图标尺寸（缩小以显得更紧凑） */
 const CARD_ICON_SIZE = 40;
+/** 卡片封面区高度（含标题、类型徽章与描述） */
+const CARD_COVER_HEIGHT = 136;
+/** 封面区上下内边距（无角标时） */
+const CARD_COVER_PADDING_Y = 16;
+/** 角标（免费/专业版）占位，避免与「已安装」重叠，同时作为有角标时的上下内边距 */
+const CARD_TIER_BADGE_CLEARANCE = 22;
 
 /**
  * 根据应用代码和图标配置获取图标组件
@@ -1309,6 +1313,23 @@ const ApplicationListPage: React.FC = () => {
     const cardRadius = inManufacturingStack
       ? `0 ${themeToken.borderRadiusLG}px ${themeToken.borderRadiusLG}px 0`
       : themeToken.borderRadiusLG;
+    const isPro =
+      application.is_pro ||
+      [
+        'bi',
+        'kuaiiot',
+        'kuaiai',
+        'kuaicrm',
+        'kuaisrm',
+        'kuaiasms',
+        ...OTHER_PLACEHOLDER_CODES,
+        ...INDUSTRY_VALUE_PACK_CODES,
+      ].includes(application.code);
+    const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaiplm', 'kuaicaiwu', 'kuaireport'].includes(
+      application.code,
+    );
+    const hasTierBadge = isPro || isFree;
+    const coverPaddingY = hasTierBadge ? CARD_TIER_BADGE_CLEARANCE : CARD_COVER_PADDING_Y;
     const menuItems = [
       {
         key: 'view',
@@ -1460,7 +1481,7 @@ const ApplicationListPage: React.FC = () => {
           <div
             style={{
               position: 'relative',
-              height: 120,
+              height: CARD_COVER_HEIGHT,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'flex-start',
@@ -1470,20 +1491,17 @@ const ApplicationListPage: React.FC = () => {
                 themeToken,
                 isDark,
               ),
-              padding: '16px 20px',
+              padding: `${coverPaddingY}px 20px`,
               borderBottom: `1px solid ${themeToken.colorBorderSecondary}`,
               borderTopLeftRadius: inManufacturingStack ? 0 : themeToken.borderRadiusLG,
               borderTopRightRadius: themeToken.borderRadiusLG,
             }}
           >
             {(() => {
-              const isPro = application.is_pro || ['bi', 'kuaiiot', 'kuaiai', 'kuaicrm', 'kuaisrm', 'kuaiasms', ...OTHER_PLACEHOLDER_CODES, ...INDUSTRY_VALUE_PACK_CODES].includes(application.code);
-              const isFree = ['master-data', 'kuaizhizao', 'kuaierp', 'kuaimes', 'kuaiplm', 'kuaicaiwu', 'kuaireport'].includes(application.code);
-
               return (
                 <>
                   {/* 角标 */}
-                  {(isPro || isFree) && (
+                  {hasTierBadge && (
                     <div
                       style={{
                         position: 'absolute',
@@ -1542,151 +1560,161 @@ const ApplicationListPage: React.FC = () => {
                     })()}
                   </div>
                   
-                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, overflow: 'hidden' }}>
-                      <span
-                        style={{
-                          fontWeight: 600,
-                          fontSize: 16,
-                          color: themeToken.colorTextHeading,
-                          whiteSpace: 'nowrap',
-                          marginRight: 4,
-                          flexShrink: 0,
-                        }}
-                      >
-                        {resolveApplicationDisplayName(application, t)}
-                      </span>
-                      
-                      {(() => {
-                        const badgeBaseStyle: React.CSSProperties = {
-                          height: 18,
-                          padding: '0 5px',
-                          fontSize: 10,
-                          borderRadius: 4,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          whiteSpace: 'nowrap',
-                          border: 'none',
-                          marginLeft: 4,
-                          flexShrink: 0,
-                        };
+                  <div
+                    style={{
+                      flex: 1,
+                      minWidth: 0,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {(() => {
+                      const badgeBaseStyle: React.CSSProperties = {
+                        height: 18,
+                        padding: '0 5px',
+                        fontSize: 10,
+                        borderRadius: 4,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        whiteSpace: 'nowrap',
+                        border: 'none',
+                        flexShrink: 0,
+                      };
 
-                        const renderBadge = (
-                          text: string,
-                          light: { bg: string; color: string },
-                          icon?: React.ReactNode,
-                          dark?: { bg: string; color: string },
-                        ) => {
-                          const col = isDark && dark ? dark : light;
-                          return (
-                            <span style={{ ...badgeBaseStyle, backgroundColor: col.bg, color: col.color }}>
-                              {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
-                              {text}
-                            </span>
-                          );
-                        };
-
+                      const renderBadge = (
+                        text: string,
+                        light: { bg: string; color: string },
+                        icon?: React.ReactNode,
+                        dark?: { bg: string; color: string },
+                      ) => {
+                        const col = isDark && dark ? dark : light;
                         return (
-                          <div style={{ display: 'flex', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 1, overflow: 'hidden' }}>
-                              {application.code === 'master-data' &&
-                                renderBadge(
-                                  'BASE',
-                                  { bg: '#f0f5ff', color: '#2f54eb' },
-                                  undefined,
-                                  { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
-                                )}
-                              {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
-                                [
-                                  'kuaizhizao',
-                                  'kuaierp',
-                                  'kuaimes',
-                                  'kuaicaiwu',
-                                  'kuaireport',
-                                  'bi',
-                                  'kuaicrm',
-                                  'kuaiplm',
-                                  'kuaisrm',
-                                  'kuaiasms',
-                                  ...OTHER_PLACEHOLDER_CODES,
-                                  ...INDUSTRY_VALUE_PACK_CODES,
-                                ].includes(application.code) &&
-                                renderBadge(
-                                  'APP',
-                                  { bg: '#f9f0ff', color: '#722ed1' },
-                                  undefined,
-                                  {
-                                    bg: `color-mix(in srgb, #722ed1 22%, ${themeToken.colorFillTertiary})`,
-                                    color: '#e9d5ff',
-                                  },
-                                )}
-                              {application.code === 'kuaiai' &&
-                                renderBadge(
-                                  'AI',
-                                  { bg: '#fff7e6', color: '#fa8c16' },
-                                  undefined,
-                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
-                                )}
-                              {['kuaizhizao'].includes(application.code) &&
-                                renderBadge(
-                                  t('pages.system.applications.editionIntegratedTag'),
-                                  { bg: '#fff7e6', color: '#d46b08' },
-                                  undefined,
-                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
-                                )}
-                              {['kuaierp', 'kuaimes'].includes(application.code) &&
-                                renderBadge(
-                                  t('pages.system.applications.editionSplitTag'),
-                                  { bg: '#f0f9ff', color: '#1677ff' },
-                                  undefined,
-                                  { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
-                                )}
-                              {INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
-                                renderBadge(
-                                  t('pages.system.applications.valuePackTag'),
-                                  { bg: '#fff7e6', color: '#ad6800' },
-                                  undefined,
-                                  { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
-                                )}
-                              {application.is_dedicated &&
-                                renderBadge(
-                                  t('pages.system.applications.dedicatedTag'),
-                                  { bg: '#f4f0ff', color: '#531dab' },
-                                  undefined,
-                                  { bg: themeToken.colorFillTertiary, color: '#d3adf7' },
-                                )}
-                              {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
-                                renderBadge(
-                                  t('pages.system.applications.otherCategoryTag'),
-                                  { bg: '#f6ffed', color: '#389e0d' },
-                                  undefined,
-                                  { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
-                                )}
-                              {(application.is_pro || ['bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
-                                <Tooltip title={t('pages.system.applications.proLockedTag')}>
-                                  <span
-                                    style={{
-                                      height: 18,
-                                      width: 18,
-                                      borderRadius: 4,
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      marginLeft: 4,
-                                      flexShrink: 0,
-                                      backgroundColor: themeToken.colorFillTertiary,
-                                      color: themeToken.colorTextSecondary,
-                                      cursor: 'help',
-                                    }}
-                                  >
-                                    <LockOutlined style={{ fontSize: 11 }} />
-                                  </span>
-                                </Tooltip>
-                              )}
-                            </div>
+                          <span style={{ ...badgeBaseStyle, backgroundColor: col.bg, color: col.color }}>
+                            {icon && <span style={{ display: 'inline-flex', marginRight: 4 }}>{icon}</span>}
+                            {text}
+                          </span>
+                        );
+                      };
+
+                      const typeBadges = (
+                        <>
+                          {application.code === 'master-data' &&
+                            renderBadge(
+                              'BASE',
+                              { bg: '#f0f5ff', color: '#2f54eb' },
+                              undefined,
+                              { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
+                            )}
+                          {!INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
+                            [
+                              'kuaizhizao',
+                              'kuaierp',
+                              'kuaimes',
+                              'kuaicaiwu',
+                              'kuaireport',
+                              'bi',
+                              'kuaicrm',
+                              'kuaiplm',
+                              'kuaisrm',
+                              'kuaiasms',
+                              ...OTHER_PLACEHOLDER_CODES,
+                              ...INDUSTRY_VALUE_PACK_CODES,
+                            ].includes(application.code) &&
+                            renderBadge(
+                              'APP',
+                              { bg: '#f9f0ff', color: '#722ed1' },
+                              undefined,
+                              {
+                                bg: `color-mix(in srgb, #722ed1 22%, ${themeToken.colorFillTertiary})`,
+                                color: '#e9d5ff',
+                              },
+                            )}
+                          {application.code === 'kuaiai' &&
+                            renderBadge(
+                              'AI',
+                              { bg: '#fff7e6', color: '#fa8c16' },
+                              undefined,
+                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                            )}
+                          {['kuaizhizao'].includes(application.code) &&
+                            renderBadge(
+                              t('pages.system.applications.editionIntegratedTag'),
+                              { bg: '#fff7e6', color: '#d46b08' },
+                              undefined,
+                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                            )}
+                          {['kuaierp', 'kuaimes'].includes(application.code) &&
+                            renderBadge(
+                              t('pages.system.applications.editionSplitTag'),
+                              { bg: '#f0f9ff', color: '#1677ff' },
+                              undefined,
+                              { bg: themeToken.colorInfoBg, color: themeToken.colorInfoText },
+                            )}
+                          {INDUSTRY_VALUE_PACK_CODES.includes(application.code) &&
+                            renderBadge(
+                              t('pages.system.applications.valuePackTag'),
+                              { bg: '#fff7e6', color: '#ad6800' },
+                              undefined,
+                              { bg: themeToken.colorWarningBg, color: themeToken.colorWarningText },
+                            )}
+                          {application.is_dedicated &&
+                            renderBadge(
+                              t('pages.system.applications.dedicatedTag'),
+                              { bg: '#f4f0ff', color: '#531dab' },
+                              undefined,
+                              { bg: themeToken.colorFillTertiary, color: '#d3adf7' },
+                            )}
+                          {OTHER_PLACEHOLDER_CODES.includes(application.code) &&
+                            renderBadge(
+                              t('pages.system.applications.otherCategoryTag'),
+                              { bg: '#f6ffed', color: '#389e0d' },
+                              undefined,
+                              { bg: themeToken.colorSuccessBg, color: themeToken.colorSuccessText },
+                            )}
+                          {(application.is_pro || ['bi', 'kuaiiot'].includes(application.code)) && !application.can_access && (
+                            <Tooltip title={t('pages.system.applications.proLockedTag')}>
+                              <span
+                                style={{
+                                  height: 18,
+                                  width: 18,
+                                  borderRadius: 4,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  flexShrink: 0,
+                                  backgroundColor: themeToken.colorFillTertiary,
+                                  color: themeToken.colorTextSecondary,
+                                  cursor: 'help',
+                                }}
+                              >
+                                <LockOutlined style={{ fontSize: 11 }} />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </>
+                      );
+
+                      return (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 4, overflow: 'hidden' }}>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                fontSize: 16,
+                                color: themeToken.colorTextHeading,
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                flexShrink: 1,
+                                minWidth: 0,
+                              }}
+                            >
+                              {resolveApplicationDisplayName(application, t)}
+                            </span>
                             <div style={{ flex: 1, minWidth: 8 }} />
-                            <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                               {application.is_installed
                                 ? renderBadge(
                                     t('pages.system.applications.installed'),
@@ -1709,9 +1737,20 @@ const ApplicationListPage: React.FC = () => {
                                 )}
                             </div>
                           </div>
-                        );
-                      })()}
-                    </div>
+                          <div
+                            style={{
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              alignItems: 'center',
+                              gap: 4,
+                              marginBottom: 6,
+                            }}
+                          >
+                            {typeBadges}
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     <div
                       style={{

@@ -1082,13 +1082,12 @@ const MoldsPage: React.FC = () => {
               fieldProps={{ precision: 0 }}
             />
           </Col>
-          <Col span={24}>
-            <CustomFieldsFormSection
-              customFields={moldFormCustomFields}
-              customFieldValues={moldFormCustomFieldValues}
-              gridColumns={2}
-            />
-          </Col>
+          <CustomFieldsFormSection
+            customFields={moldFormCustomFields}
+            customFieldValues={moldFormCustomFieldValues}
+            gridColumns={2}
+            gridMode="col"
+          />
           <Col span={24}>
             <DocumentAttachmentsField category="mold_attachments" />
           </Col>

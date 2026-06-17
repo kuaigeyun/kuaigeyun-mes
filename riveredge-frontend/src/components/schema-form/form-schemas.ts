@@ -66,4 +66,6 @@ export interface FieldConfig {
   initialValue?: unknown;
   /** 当指定字段等于某值时显示本字段 */
   visibleWhen?: { field: string; equals: unknown };
+  /** slot=customFields 时：自定义字段半宽栏数（未设则从 schema 其它字段 colSpan 推断） */
+  slotGridColumns?: 1 | 2 | 3 | 4;
 }

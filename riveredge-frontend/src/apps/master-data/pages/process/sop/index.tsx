@@ -1166,12 +1166,13 @@ const SOPPage: React.FC = () => {
                 fieldProps={{ showSearch: true, filterOption: (i: string, o: any) => (o?.label ?? '').toLowerCase().includes((i || '').toLowerCase()) }}
               />
             </Col>
+            <CustomFieldsFormSection
+              customFields={sopFormCustomFields}
+              customFieldValues={sopFormCustomFieldValues}
+              gridColumns={2}
+              gridMode="col"
+            />
           </Row>
-          <CustomFieldsFormSection
-            customFields={sopFormCustomFields}
-            customFieldValues={sopFormCustomFieldValues}
-            gridColumns={2}
-          />
           <ProFormTextArea
             name="content"
             label={t('app.master-data.sop.remarkLabel')}

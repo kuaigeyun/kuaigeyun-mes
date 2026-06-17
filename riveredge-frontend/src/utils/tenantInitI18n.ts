@@ -17,6 +17,7 @@ export const TENANT_INIT_ITEM_NAME_I18N: Record<string, string> = {
   operation_preset: 'pages.system.configCenter.tenantInit.item.operation_preset',
   variant_attribute_preset: 'pages.system.configCenter.tenantInit.item.variant_attribute_preset',
   menu_sync: 'pages.system.configCenter.tenantInit.item.menu_sync',
+  kuaiai_faq_preset: 'pages.system.configCenter.tenantInit.item.kuaiai_faq_preset',
 };
 
 export const TENANT_INIT_ITEM_DESC_I18N: Record<string, string> = {
@@ -35,6 +36,7 @@ export const TENANT_INIT_ITEM_DESC_I18N: Record<string, string> = {
   operation_preset: 'pages.system.configCenter.tenantInit.itemDesc.operation_preset',
   variant_attribute_preset: 'pages.system.configCenter.tenantInit.itemDesc.variant_attribute_preset',
   menu_sync: 'pages.system.configCenter.tenantInit.itemDesc.menu_sync',
+  kuaiai_faq_preset: 'pages.system.configCenter.tenantInit.itemDesc.kuaiai_faq_preset',
 };
 
 /** Bootstrap 弹窗「应用注册」步骤标题（与 item.application 文案不同） */

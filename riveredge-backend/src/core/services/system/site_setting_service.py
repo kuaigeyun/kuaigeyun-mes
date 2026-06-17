@@ -41,6 +41,7 @@ _PLATFORM_FALLBACK_KEYS = {
     "login_guest_enabled": "login_guest_enabled",
     "login_client_win_enabled": "login_client_win_enabled",
     "login_client_android_enabled": "login_client_android_enabled",
+    "login_quick_enabled": "login_quick_enabled",
 }
 
 # 平台未配置时的默认值（新租户未设置时使用）
@@ -53,6 +54,7 @@ _PLATFORM_FALLBACK_BOOL_KEYS = {
     "login_guest_enabled",
     "login_client_win_enabled",
     "login_client_android_enabled",
+    "login_quick_enabled",
     "login_decoration_enabled",
     "login_background_enabled",
 }

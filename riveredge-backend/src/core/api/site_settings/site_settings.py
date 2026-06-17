@@ -26,7 +26,9 @@ from infra.schemas.tenant import (
     TenantListResponse,
     TenantAdminAccountCreate,
     TenantCreate,
+    TenantUpdate,
 )
+from infra.models.tenant import TenantStatus
 from infra.services.tenant_service import TenantService, schedule_initialize_tenant_data
 from infra.services.package_service import PackageService
 
@@ -68,6 +70,12 @@ class BranchOrganizationCapabilityResponse(BaseModel):
     can_create_branch_organization: bool
 
 
+class BranchOrganizationUpdateRequest(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    domain: Optional[str] = Field(None, min_length=1, max_length=100)
+    status: Optional[TenantStatus] = None
+
+
 class TenantDomainAvailabilityResponse(BaseModel):
     domain: str
     available: bool
@@ -107,6 +115,7 @@ _LOGIN_PAGE_SETTING_KEYS = {
     "login_guest_enabled",
     "login_client_win_enabled",
     "login_client_android_enabled",
+    "login_quick_enabled",
 }
 
 
@@ -481,4 +490,51 @@ async def create_branch_organization_from_site_settings(
         tenant_id=tenant_id,
         current_user=current_user,
     )
+
+
+@router.put("/branch-organizations/{branch_org_id}", response_model=TenantResponse)
+async def update_branch_organization_from_site_settings(
+    branch_org_id: int,
+    data: BranchOrganizationUpdateRequest,
+    tenant_id: int = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+):
+    if not bool(getattr(current_user, "is_tenant_admin", False)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅组织管理员可修改分支组织")
+
+    current_tenant = await Tenant.get_or_none(id=tenant_id)
+    if not current_tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="当前组织不存在")
+    if bool(current_tenant.is_subtenant):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="分支组织不允许修改分支组织")
+
+    branch_org = await Tenant.get_or_none(id=branch_org_id)
+    if not branch_org or not bool(branch_org.is_subtenant):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分支组织不存在")
+    if branch_org.parent_tenant_id != current_tenant.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权修改该分支组织")
+
+    update_payload = data.model_dump(exclude_unset=True)
+    if not update_payload:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="请提供要修改的字段")
+
+    if "domain" in update_payload:
+        normalized_domain = _normalize_tenant_domain(update_payload["domain"])
+        domain_taken = await Tenant.filter(domain=normalized_domain).exclude(id=branch_org_id).exists()
+        if domain_taken:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"组织域名 {normalized_domain} 已被占用",
+            )
+        update_payload["domain"] = normalized_domain
+
+    tenant_service = TenantService()
+    tenant = await tenant_service.update_tenant(
+        branch_org_id,
+        TenantUpdate(**update_payload),
+        skip_tenant_filter=True,
+    )
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分支组织不存在")
+    return tenant
 

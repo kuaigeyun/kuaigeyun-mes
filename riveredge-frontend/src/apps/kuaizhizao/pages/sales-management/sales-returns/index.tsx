@@ -1058,13 +1058,13 @@ const SalesReturnsPage: React.FC = () => {
               fieldProps={{ showSearch: true, allowClear: true, loading: dictOptionsLoading }}
             />
           </Col>
+          <CustomFieldsFormSection
+            customFields={salesReturnFormCustomFields}
+            customFieldValues={salesReturnFormCustomFieldValues}
+            gridColumns={3}
+            gridMode="col"
+          />
         </Row>
-
-        <CustomFieldsFormSection
-          customFields={salesReturnFormCustomFields}
-          customFieldValues={salesReturnFormCustomFieldValues}
-          gridColumns={3}
-        />
 
         <UniTableDetail
           name="items"

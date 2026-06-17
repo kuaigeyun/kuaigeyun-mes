@@ -47,7 +47,7 @@ class CustomFieldService:
         field_data = data.model_dump()
         config = field_data.get("config", {}) or {}
         
-        if data.field_type == "select" and config.get("dictionary_code"):
+        if data.field_type in ("select", "multiselect") and config.get("dictionary_code"):
             dictionary_code = config["dictionary_code"]
             # 验证数据字典是否存在
             dictionary = await DataDictionaryService.get_dictionary_by_code(
@@ -219,7 +219,7 @@ class CustomFieldService:
             field_type = update_data.get("field_type", field.field_type)
             config = update_data.get("config", field.get_config()) or {}
             
-            if field_type == "select" and config.get("dictionary_code"):
+            if field_type in ("select", "multiselect") and config.get("dictionary_code"):
                 dictionary_code = config["dictionary_code"]
                 # 验证数据字典是否存在
                 dictionary = await DataDictionaryService.get_dictionary_by_code(
@@ -362,7 +362,7 @@ class CustomFieldService:
         result = {}
         for field in fields:
             value_obj = next((v for v in values if v.custom_field_id == field.id), None)
-            result[field.code] = value_obj.get_value() if value_obj else None
+            result[field.code] = value_obj.get_stored_value(field.field_type) if value_obj else None
         
         return result
     
@@ -419,7 +419,7 @@ class CustomFieldService:
         custom_fields = await CustomField.filter(
             tenant_id=tenant_id,
             deleted_at__isnull=True,
-            field_type="select"
+            field_type__in=["select", "multiselect"],
         ).all()
         
         updated_count = 0
